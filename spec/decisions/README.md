@@ -31,6 +31,8 @@ corresponding specification document.
 - [0024: Separately named random and periodic placement laws](0024-random-and-periodic-placement.md)
 - [0025: Phase 9 SciML and GPU interface contract](0025-phase-9-sciml-and-gpu-interface.md)
 - [0026: Phase 10 PottsToolkit typed API and compiler contract](0026-phase-10-typed-api-and-compiler.md)
+- [0027: Phase 13 transition-kernel verification and algorithm characterization](0027-phase-13-transition-kernel-verification.md)
+- [0028: Phase 13 entry, evidence, and API-freeze policy](0028-phase-13-entry-and-freeze-policy.md)
 
 ## Record Template
 

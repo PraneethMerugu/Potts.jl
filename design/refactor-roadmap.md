@@ -18,8 +18,10 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 9: SciML Integration | Complete | [Phase 9 completion audit](audits/phase-9-completion-audit.md); SciML semantics and CPU/Metal/ROCm qualification pass authoritative CI |
 | Phase 10: PottsToolkit Typed API and Compiler | Complete | [Phase 10 completion audit](audits/phase-10-completion-audit.md); sole Level 2 semantic path, legacy deletion, reference workloads, schema `2.0.0` Metal/ROCm artifacts, and exact-head authoritative CI |
 | Phase 11: PottsToolkit Level 1 DSL | Complete | [Phase 11 completion audit](audits/phase-11-completion-audit.md); exact-head package-family, integration, documentation, x86_64/ARM64 CPU, real-Metal, and real-ROCm CI is green |
-| Phase 12: Performance Recovery and Backend Qualification | In progress | [Phase 12 entry audit](audits/phase-12-entry-audit.md), [chunk plan](audits/phase-12-chunk-plan.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
-| Phases 13-15 | Not started | Ordered by their own entry gates |
+| Phase 12: Performance Recovery and Backend Qualification | CPU closure addendum in progress | Core recovery merged in [PR #12](https://github.com/PraneethMerugu/Potts.jl/pull/12); [completion audit](audits/phase-12-completion-audit.md), [chunk plan](audits/phase-12-chunk-plan.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
+| Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Not started | [Accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md) and [chunk plan](audits/phase-12-5-chunk-plan.md) |
+| Phase 13: Algorithmic Conformance and API Freeze | Entry interview complete; implementation not started | [Accepted transition-kernel contract](../spec/transition-kernel-verification.md), [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md), and [chunk plan](audits/phase-13-transition-kernel-chunk-plan.md); blocked on Phase 12.CPU, Phase 12 closure, and Phase 12.5 |
+| Phases 14-15 | Not started | Ordered by their own entry gates |
 
 ## Objective
 
@@ -644,10 +646,69 @@ Complete D6 and D7 before declaring the public API candidate.
 - CPU, AMDGPU, and Metal claims are backed by real hardware results rather than compilation
   alone.
 
-## Phase 13: API Freeze and Full Conformance
+## Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study
+
+Phase 12.5 is a roadmap-level phase, distinct from the internal work packages in the Phase 12 chunk
+plan. It begins only after Phase 12 closes and must resolve before Phase 13 freezes the public API.
 
 ### Deliverables
 
+- Reconstruct the published Sultan et al. model and measurement conditions wherever the paper
+  specifies them, recording every irreducible ambiguity rather than inventing an exact match.
+- Define and implement the separately named `TiledCheckerboardCPM` algorithm with deterministic
+  sub-round snapshots, exact reconciled public boundaries, expected-proposal-budget MCS
+  normalization, and schedule-independent counter RNG identities.
+- Execute proposals sequentially within each tile and concurrently across nonconflicting active
+  tiles, with topology-derived halos and validated tile-switching policies.
+- Provide an open tiled-component protocol for dependency radius, snapshot-visible cell state,
+  scratch requirements, device-callable energy contributions, and deterministic reconciliation.
+- Qualify volume, surface/perimeter, adhesion, prescribed-field chemotaxis, directional motility,
+  Act-like history, and first-class HST-compatible state where applicable.
+- Provide semantically identical shared-memory and device-global storage strategies, full 2D and 3D
+  execution, and CPU, Metal, and ROCm qualification through KernelAbstractions with measured
+  backend-specific specialization.
+- Add a normal PottsToolkit spelling, expert configuration, provenance, documentation, benchmark
+  fixtures, statistical validation, native profiles, and repeated paper-scale measurements.
+- Decide from predeclared evidence whether to promote, retain experimentally, or reject the engine.
+
+### Exit gate
+
+- Exact state/accounting invariants and the predeclared statistical-equivalence battery pass.
+- Repeated runs reproduce trajectories on the same backend and agree statistically across qualified
+  backends.
+- Unobserved stepping remains GPU-resident, allocation-free, transfer-free, and free of host
+  synchronization; observation is an explicit boundary and does not alter the stochastic schedule.
+- The engine improves at least two representative paper-scale GPU workloads by 2x over
+  `CheckerboardSweepCPM`, improves the supported GPU matrix geometric mean, and does not obtain speed
+  by weakening physics, precision, or MCS normalization.
+- Existing algorithms retain their semantics and pass the accepted Phase 12 regression budgets.
+- Comparisons with Sultan et al. distinguish matched absolute throughput from speedup ratios against
+  different serial baselines; unmatched hardware or semantics are labeled descriptive.
+- CPU, Metal, and ROCm have repeated correctness, performance, memory, compilation, and native-code
+  evidence on the exact completion revision.
+- `TiledCheckerboardCPM` is explicitly promoted, marked experimental, or rejected before Phase 13.
+
+## Phase 13: Algorithmic Conformance, API Freeze, and Full Conformance
+
+Phase 13 implementation begins only after Phase 12.CPU and the remaining Phase 12 closure gate pass
+and Phase 12.5 records a promote, experimental, or reject disposition. Its accepted algorithmic
+work is detailed in the
+[transition-kernel contract](../spec/transition-kernel-verification.md) and
+[Phase 13 chunk plan](audits/phase-13-transition-kernel-chunk-plan.md).
+
+### Deliverables
+
+- Implement an independent finite-state oracle for primitive proposal, internal-round, and complete
+  normalized-MCS transition kernels without reusing optimized proposal, delta, conflict, or commit
+  code.
+- Verify the declared sequential process and characterize the production checkerboard scheduler in
+  lifted scheduler state without assuming kinetic, detailed-balance, or stationary equivalence.
+- Assign checkerboard an evidence-supported guarantee label using transition support, total
+  variation, stationarity, probability currents, relaxation, and observable drift/diffusion.
+- Qualify applicable empirical transition rows on CPU, Metal, and ROCm through independent replicas
+  and corroborate tiny-state findings with realistic-scale ensembles.
+- Archive machine-readable matrices, raw counts, thresholds, parameter grids, analysis programs,
+  provenance, and paper-figure inputs.
 - Review every export, extension point, constructor, report, display, and error type.
 - Mark the final stable, experimental, and internal surfaces explicitly.
 - Run Aqua, ambiguity checks, representative JET/inference checks, allocation assertions, device
@@ -661,6 +722,10 @@ Complete D6 and D7 before declaring the public API candidate.
 
 ### Exit gate
 
+- Sequential execution passes its applicable independent reference obligations.
+- Checkerboard has a scoped evidence-supported guarantee rather than an inherited equivalence claim.
+- CPU, Metal, and ROCm pass applicable empirical transition tests, and realistic-model claims have
+  larger-ensemble corroboration.
 - All accepted core semantics have conformance evidence.
 - Every required public extension function is documented by its contract and tested.
 - Clean environments can install, load, test, and exercise each package independently.
