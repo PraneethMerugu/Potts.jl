@@ -76,18 +76,29 @@ gates on real Metal and ROCm hardware.
 Exit: intrinsics remain an internal implementation variant and never become a scientific algorithm
 or sole implementation.
 
-## 12.5: CPU specialization and scaling
+## 12.CPU: CPU specialization and scaling
 
+- Treat merged Phase 12 commit `ac68b366ba33eb9edb3e87bb3a0073db445c32e6` as the immediate
+  regression baseline while retaining `7eae976b77ac5095979db12db463387656f9d58c` as the fixed Phase
+  11 recovery baseline.
 - Profile x86_64 and ARM64 separately.
-- Measure one-thread latency and the accepted thread-count scaling matrix.
+- Measure one-thread latency and the accepted `1, 2, 4, ..., physical cores` scaling matrix on the
+  authoritative runners. Scientifically sequential algorithms remain one-thread references; extra
+  Julia threads cannot change their transition process.
 - Add CPU-specific iteration, vectorization, reduction, or grain policies only behind the same
   scientific protocol.
 - Compare conservative and tuned CPU configurations separately.
+- Require fixed-configuration replay, semantic-RNG identity, exact accounting, and statistical
+  agreement across qualified thread configurations before retaining a parallel CPU policy.
+- Retain raw profiles and repeated paired records for `Float32`; separately qualify CPU `Float64`
+  correctness and performance under the accepted Phase 12 contract.
 
 Exit: CPU remains a first-class engine target, with no representative regression over the accepted
-baseline and no GPU-shaped implementation retained where a justified CPU method is better.
+baseline and no GPU-shaped implementation retained where a justified CPU method is better. A
+standalone Phase 12.CPU completion audit records either the retained specialization or the
+evidence-backed decision that the existing path is the qualified implementation.
 
-## 12.6: Full regression and paper-comparison qualification
+## 12.Close: Full regression and paper-comparison qualification
 
 - Run repeated full matrices in separate CPU, Metal, and ROCm processes.
 - Apply independent compilation, first-MCS, memory, residency, and steady-throughput gates.

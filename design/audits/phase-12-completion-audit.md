@@ -1,6 +1,6 @@
 # Phase 12 performance recovery and backend qualification completion audit
 
-Status: Closure candidate; final PR-head CI and merge pending
+Status: Core recovery merged; Phase 12.CPU closure addendum pending
 
 Date: 2026-07-22
 
@@ -138,7 +138,10 @@ paper-scale contract.
 - [x] Scientific correctness, semantic accounting, residency, and native GPU evidence.
 - [x] Raw failures, raw samples, and pair-level ratios retained rather than threshold edits.
 - [x] Exact candidate CI, GPU validation, and documentation green.
-- [ ] Run the same release gates on the final audit/comparator PR head and merge it.
+- [x] Run the same release gates on the final audit/comparator PR head and merge it in
+  [PR #12](https://github.com/PraneethMerugu/Potts.jl/pull/12) as
+  `ac68b366ba33eb9edb3e87bb3a0073db445c32e6`.
 
-Once the final unchecked item is green on this PR head and the PR is merged, Phase 12 is complete
-and Phase 12.5 may begin.
+This audit closes the merged core recovery work. The subsequently separated Phase 12.CPU addendum
+must still qualify the accepted physical-core scaling matrix and record its own completion audit
+before Phase 12.5 implementation begins.
