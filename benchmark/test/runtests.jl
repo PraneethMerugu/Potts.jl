@@ -5,7 +5,8 @@ using .Phase12Comparison
 
 function synthetic_record(process_id; steady = 1.0, first_mcs = 2.0,
         memory = 1000, backend = "cpu", hardware_id = "cpu-arm64-reference",
-        fingerprint = "model-fingerprint", device_allocations = 0)
+        fingerprint = "model-fingerprint", device_allocations = 0,
+        julia_threads = 1)
     return Dict(
         "schema_version" => PHASE12_SCHEMA_VERSION,
         "record_kind" => "phase12-performance-run",
@@ -18,7 +19,7 @@ function synthetic_record(process_id; steady = 1.0, first_mcs = 2.0,
             "julia_version" => "1.12.6",
             "architecture" => "aarch64",
             "os" => "Darwin",
-            "julia_threads" => 1,
+            "julia_threads" => julia_threads,
             "precision" => "Float32",
             "profile" => "full",
             "tuning_policy" => "conservative",
@@ -54,6 +55,35 @@ function synthetic_record(process_id; steady = 1.0, first_mcs = 2.0,
             ),
         ),
     )
+end
+
+@testset "Phase 12 CPU scaling summary" begin
+    groups = Dict{Int, Vector{Any}}()
+    for threads in (1, 2, 4)
+        groups[threads] = Any[synthetic_record(
+            "scaling-$threads-$process";
+            steady = 1 / min(threads, 2),
+            julia_threads = threads,
+            hardware_id = "cpu-arm64-reference-$threads-physical-threads")
+            for process in 1:3]
+    end
+    result = summarize_cpu_scaling(groups)
+    @test result["comparable"]
+    @test result["thread_counts"] == [1, 2, 4]
+    @test result["scaling"]["2"]["algorithm_geometric_mean_speedups"][
+        "SequentialCPM"] ≈ 2
+    @test result["scaling"]["4"]["workloads"]["migration_2d"][
+        "parallel_efficiency"] ≈ 0.5
+
+    wrong_commit = deepcopy(groups)
+    wrong_commit[4][1]["provenance"]["implementation_commit"] = "other"
+    result = summarize_cpu_scaling(wrong_commit)
+    @test !result["comparable"]
+    @test any(contains("implementation commits"), result["issues"])
+
+    result = summarize_cpu_scaling(Dict(2 => groups[2]))
+    @test !result["comparable"]
+    @test any(contains("requires one thread"), result["issues"])
 end
 
 function synthetic_cold_record(process_id; scale = 1.0, hardware_id = "cpu-arm64-reference")

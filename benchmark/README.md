@@ -95,6 +95,17 @@ carry the pair subject, index, and ordinal; only these paired warm records make 
 Subject-only `Benchmarks` workflow records remain authoritative for the independent cold-start and
 offline-precompile tiers.
 
+Both paired subjects execute the workflow revision's single immutable benchmark harness while their
+path-pinned projects load the baseline or candidate implementation checkout. Records therefore
+retain separate harness and implementation commits and reject either a dirty subject or dirty
+harness; analysis-only harness evolution does not make scientific implementation revisions
+incomparable.
+
+Phase 12.CPU dispatches that paired workflow independently at `1`, `2`, `4`, `8`, and `physical`
+threads where the requested count exists on the runner. A thread-count result is never compared as
+if it were the same comparison identity as another count; scaling summaries are derived only after
+each fixed-thread baseline/candidate gate has been evaluated independently.
+
 Cold latency is measured in independent fresh processes and never inferred from the order-dependent
 first workload in a warm matrix. The cold workload uses the same conservative differential-adhesion
 model for all four compatible algorithms:

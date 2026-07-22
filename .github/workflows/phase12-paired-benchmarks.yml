@@ -28,7 +28,7 @@ on:
         type: choice
         required: true
         default: '1'
-        options: ['1', physical]
+        options: ['1', '2', '4', '8', physical]
       pairs:
         description: Balanced fresh-process A/B pairs
         type: choice

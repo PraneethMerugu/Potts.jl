@@ -37,10 +37,10 @@ pair_id = "$run_id-$run_attempt-$backend-$profile-$precision-paired"
 
 function worker_command(root)
     project = joinpath(root, "benchmark")
-    worker = joinpath(project, "performance_worker.jl")
+    worker = joinpath(@__DIR__, "performance_worker.jl")
     command = `$(Base.julia_cmd()) --project=$project --startup-file=no $worker --backend=$backend --profile=$profile --precision=$precision`
-    # Backend environments in JULIA_LOAD_PATH are source-relative.  Each subject
-    # must therefore run from its own checkout rather than from the harness tree.
+    # Each subject loads its own path-pinned package implementation while both
+    # subjects execute this one immutable harness checkout.
     return Cmd(command; dir = root)
 end
 
@@ -53,6 +53,7 @@ function run_subject!(label, root, pair_index, ordinal)
         "POTTS_BENCHMARK_PAIR_INDEX" => string(pair_index),
         "POTTS_BENCHMARK_PAIR_SUBJECT" => label,
         "POTTS_BENCHMARK_PAIR_ORDINAL" => string(ordinal),
+        "POTTS_BENCHMARK_SUBJECT_ROOT" => root,
     )
     run(addenv(command, environment...))
 end

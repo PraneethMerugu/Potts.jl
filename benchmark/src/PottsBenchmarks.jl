@@ -37,7 +37,9 @@ Phase11ExtensionEnergy(value::Real) = Phase10QualificationEnergy(Float32(value))
 const SCHEMA_VERSION = "1.0.0"
 const PHASE10_SCHEMA_VERSION = "2.1.0"
 const PHASE12_WORKLOAD_SET_VERSION = "paper-core-1.0.0"
-const REPOSITORY_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const HARNESS_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const REPOSITORY_ROOT = normpath(get(
+    ENV, "POTTS_BENCHMARK_SUBJECT_ROOT", HARNESS_ROOT))
 const RESULTS_ROOT = joinpath(REPOSITORY_ROOT, "benchmark", "results")
 
 struct LifecycleQualificationDouble{Key} <: AbstractLifecycleEffect end
@@ -3589,8 +3591,8 @@ end
 
 function benchmark_harness_files()
     roots = [
-        joinpath(REPOSITORY_ROOT, "benchmark", "performance_worker.jl"),
-        joinpath(REPOSITORY_ROOT, "benchmark", "src"),
+        joinpath(HARNESS_ROOT, "benchmark", "performance_worker.jl"),
+        joinpath(HARNESS_ROOT, "benchmark", "src"),
     ]
     files = String[]
     for root in roots
@@ -3617,10 +3619,10 @@ function benchmark_environment_files()
     return sort!(files)
 end
 
-function file_set_checksum(files)
+function file_set_checksum(files, root = REPOSITORY_ROOT)
     bytes = UInt8[]
     for file in files
-        append!(bytes, codeunits(relpath(file, REPOSITORY_ROOT)))
+        append!(bytes, codeunits(relpath(file, root)))
         append!(bytes, read(file))
     end
     return bytes2hex(sha256(bytes))
@@ -3649,17 +3651,21 @@ end
 
 function provenance(backend::String, device::String)
     commit = command_output(`git -C $REPOSITORY_ROOT rev-parse HEAD`)
+    harness_commit = command_output(`git -C $HARNESS_ROOT rev-parse HEAD`)
     implementation_commit = command_output(`git -C $REPOSITORY_ROOT log -1 --format=%H -- Project.toml src ext lib test integration`)
     dirty_status = command_output(`git -C $REPOSITORY_ROOT status --short`; default = "")
+    harness_dirty_status = command_output(
+        `git -C $HARNESS_ROOT status --short`; default = "")
     source_checksum = source_tree_checksum()
-    harness_checksum = file_set_checksum(benchmark_harness_files())
+    harness_checksum = file_set_checksum(benchmark_harness_files(), HARNESS_ROOT)
     environment_checksum = file_set_checksum(benchmark_environment_files())
     cpu_model = _cpu_model()
     return Dict(
         "git_commit" => commit,
-        "harness_commit" => commit,
+        "harness_commit" => harness_commit,
         "implementation_commit" => implementation_commit,
         "git_dirty" => !isempty(dirty_status),
+        "harness_git_dirty" => !isempty(harness_dirty_status),
         "source_tree_sha256" => source_checksum,
         "implementation_tree_sha256" => source_checksum,
         "harness_tree_sha256" => harness_checksum,
