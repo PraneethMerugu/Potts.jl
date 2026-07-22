@@ -545,6 +545,8 @@ function compare_record_groups(baseline::AbstractVector, candidate::AbstractVect
         algorithm => exp(mean(log, ratios)) for (algorithm, ratios) in steady_ratios)
     geometric_mean_passed = all(<=(1), values(algorithm_geometric_means))
     passed &= geometric_mean_passed
+    paired_record = isnothing(paired) ? Dict("available" => false) :
+                    merge(Dict("available" => true), paired)
     return Dict(
         "schema_version" => PHASE12_SCHEMA_VERSION,
         "contract_version" => PHASE12_CONTRACT_VERSION,
@@ -555,7 +557,7 @@ function compare_record_groups(baseline::AbstractVector, candidate::AbstractVect
         "algorithm_geometric_mean_steady_seconds_ratios" => algorithm_geometric_means,
         "geometric_mean_passed" => geometric_mean_passed,
         "residency_issues" => residency_issues,
-        "paired_evidence" => paired,
+        "paired_evidence" => paired_record,
         "baseline" => baseline_aggregate,
         "candidate" => candidate_aggregate,
         "workloads" => comparisons,

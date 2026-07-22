@@ -1,4 +1,5 @@
 using Test
+using TOML
 
 include(joinpath(@__DIR__, "..", "src", "Phase12Comparison.jl"))
 using .Phase12Comparison
@@ -162,6 +163,10 @@ end
     @test result["comparable"]
     @test result["passed"]
     @test result["algorithm_geometric_mean_steady_seconds_ratios"]["SequentialCPM"] < 1
+    @test !result["paired_evidence"]["available"]
+    io = IOBuffer()
+    TOML.print(io, result; sorted = true)
+    @test !isempty(take!(io))
 
     regression = [synthetic_record("regression-$index"; steady = 1.2,
                       first_mcs = 2.0, memory = 1000)
@@ -255,6 +260,7 @@ end
     result = compare_record_groups(paired_baseline, paired_candidate;
         minimum_processes = 4)
     @test result["passed"]
+    @test result["paired_evidence"]["available"]
     @test result["paired_evidence"]["comparable"]
     @test result["paired_evidence"]["pairs"] == 4
     @test result["paired_evidence"]["orders"] == [
