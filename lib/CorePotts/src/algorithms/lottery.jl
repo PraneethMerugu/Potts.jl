@@ -325,66 +325,59 @@ end
     end
 end
 
-function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R,
-        <:LotteryCPM}, ::LotteryCPM) where {S, C, R}
-    next_mcs = integrator.mcs + UInt64(1)
-    workspace = integrator.algorithm_workspace
-    site_count = length(workspace.sites)
-    fill_kernel = _checkerboard_clear_claims!(
-        integrator.plan.backend, integrator.plan.block_size)
-    accounting_clear = _lottery_clear_accounting!(
-        integrator.plan.backend, integrator.plan.block_size)
-    launch!(integrator.plan, accounting_clear, workspace.accounting;
-        ndrange = length(workspace.accounting))
-    order_kernel = _lottery_round_order!(integrator.plan.backend, 1)
-    launch!(integrator.plan, order_kernel, workspace.round_order, integrator.rng,
-        integrator.seed, next_mcs, workspace.round_count; ndrange = 1)
-    candidates = _lottery_candidates!(integrator.plan.backend, integrator.plan.block_size)
-    priorities = _lottery_priorities!(integrator.plan.backend, integrator.plan.block_size)
-    claim_priorities = _lottery_claim_priorities!(
-        integrator.plan.backend, integrator.plan.block_size)
-    claim_ties = _lottery_claim_ties!(
-        integrator.plan.backend, integrator.plan.block_size)
-    select_conflicts = _lottery_select_conflicts!(
-        integrator.plan.backend, integrator.plan.block_size)
-    evaluate = _lottery_evaluate!(integrator.plan.backend, integrator.plan.block_size)
-    commit = _lottery_commit!(integrator.plan.backend, integrator.plan.block_size)
+function _lottery_execution_kernels(plan, site_count)
+    return (
+        fill = _fixed_execution_kernel(plan, _checkerboard_clear_claims!),
+        accounting_clear = _fixed_execution_kernel(plan, _lottery_clear_accounting!),
+        candidates = _execution_kernel(plan, _lottery_candidates!, site_count),
+        priorities = _execution_kernel(plan, _lottery_priorities!, site_count),
+        claim_priorities = _execution_kernel(
+            plan, _lottery_claim_priorities!, site_count),
+        claim_ties = _execution_kernel(plan, _lottery_claim_ties!, site_count),
+        select_conflicts = _execution_kernel(
+            plan, _lottery_select_conflicts!, site_count),
+        evaluate = _execution_kernel(plan, _lottery_evaluate!, site_count),
+        commit = _execution_kernel(plan, _lottery_commit!, site_count),
+    )
+end
+
+function _perform_lottery_mcs!(integrator, next_mcs, workspace, kernels, site_count)
     T = typeof(integrator.algorithm.temperature)
     half_interval = one(T) / (T(2) * T(workspace.round_count))
     for ordinal in UInt32(1):workspace.round_count
         subround = Base.unsafe_trunc(UInt8, ordinal - UInt32(1))
         _advance_mechanics!(integrator, next_mcs, subround, UInt8(0), half_interval)
-        launch!(integrator.plan, fill_kernel, workspace.cell_max_priority,
+        launch!(integrator.plan, kernels.fill, workspace.cell_max_priority,
             workspace.cell_min_identity;
             ndrange = length(workspace.cell_max_priority))
-        launch!(integrator.plan, priorities, workspace.sites, workspace.round_order,
+        launch!(integrator.plan, kernels.priorities, workspace.sites, workspace.round_order,
             workspace.tickets, workspace.priorities, integrator.rng, integrator.seed,
             next_mcs, ordinal;
             ndrange = site_count)
-        launch!(integrator.plan, candidates, workspace.sites, workspace.neighbor_indices,
+        launch!(integrator.plan, kernels.candidates, workspace.sites, workspace.neighbor_indices,
             workspace.neighbor_offsets, workspace.round_order, workspace.attempts,
             workspace.tickets, workspace.selected, workspace.dispositions,
             workspace.accounting, scientific_execution(integrator.state),
             integrator.proposal_relation, proposal_law(integrator.algorithm),
             integrator.rng, integrator.seed, next_mcs, ordinal,
             workspace.round_count; ndrange = site_count)
-        launch!(integrator.plan, claim_priorities, workspace.attempts,
+        launch!(integrator.plan, kernels.claim_priorities, workspace.attempts,
             workspace.priorities, workspace.selected, workspace.cell_max_priority;
             ndrange = site_count)
-        launch!(integrator.plan, claim_ties, workspace.attempts,
+        launch!(integrator.plan, kernels.claim_ties, workspace.attempts,
             workspace.priorities, workspace.selected, workspace.cell_max_priority,
             workspace.cell_min_identity; ndrange = site_count)
-        launch!(integrator.plan, select_conflicts, workspace.attempts,
+        launch!(integrator.plan, kernels.select_conflicts, workspace.attempts,
             workspace.priorities, workspace.selected, workspace.dispositions,
             workspace.cell_max_priority, workspace.cell_min_identity,
             workspace.accounting; ndrange = site_count)
-        launch!(integrator.plan, evaluate, workspace.attempts, workspace.selected,
+        launch!(integrator.plan, kernels.evaluate, workspace.attempts, workspace.selected,
             workspace.transactions, workspace.dispositions, workspace.accounting,
             workspace.round_order,
             scientific_execution(integrator.state), integrator.components,
             integrator.algorithm, integrator.rng, integrator.seed, next_mcs, ordinal;
             ndrange = site_count)
-        launch!(integrator.plan, commit, workspace.transactions,
+        launch!(integrator.plan, kernels.commit, workspace.transactions,
             workspace.dispositions, scientific_execution(integrator.state);
             ndrange = site_count)
         _advance_mechanics!(integrator, next_mcs, subround, UInt8(1), half_interval)
@@ -392,6 +385,21 @@ function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R,
     run_compiled_lifecycle!(integrator, integrator.lifecycle, next_mcs)
     integrator.mcs = next_mcs
     return integrator
+end
+
+
+function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R,
+        <:LotteryCPM}, ::LotteryCPM) where {S, C, R}
+    next_mcs = integrator.mcs + UInt64(1)
+    workspace = integrator.algorithm_workspace
+    site_count = length(workspace.sites)
+    kernels = _lottery_execution_kernels(integrator.plan, site_count)
+    launch!(integrator.plan, kernels.accounting_clear, workspace.accounting;
+        ndrange = length(workspace.accounting))
+    order_kernel = _lottery_round_order!(integrator.plan.backend, 1)
+    launch!(integrator.plan, order_kernel, workspace.round_order, integrator.rng,
+        integrator.seed, next_mcs, workspace.round_count; ndrange = 1)
+    return _perform_lottery_mcs!(integrator, next_mcs, workspace, kernels, site_count)
 end
 
 function _current_mcs_report(integrator::ScientificPottsIntegrator, ::LotteryCPM)

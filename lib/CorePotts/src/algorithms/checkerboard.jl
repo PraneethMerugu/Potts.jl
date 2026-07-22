@@ -504,6 +504,63 @@ end
     end
 end
 
+function _checkerboard_execution_kernels(plan, color_size)
+    return (
+        candidates = _execution_kernel(plan, _checkerboard_candidates!, color_size),
+        clear_claims = _fixed_execution_kernel(plan, _checkerboard_clear_claims!),
+        claim_priorities = _execution_kernel(
+            plan, _checkerboard_claim_priorities!, color_size),
+        claim_ties = _execution_kernel(plan, _checkerboard_claim_ties!, color_size),
+        select_conflicts = _execution_kernel(
+            plan, _checkerboard_select_conflicts!, color_size),
+        evaluation = _execution_kernel(plan, _checkerboard_evaluate!, color_size),
+        commit = _execution_kernel(plan, _checkerboard_commit!, color_size),
+    )
+end
+
+function _perform_checkerboard_mcs!(integrator, next_mcs, workspace, kernels, color_size)
+    for ordinal in UInt32(1):workspace.color_count
+        _advance_checkerboard_mechanics!(integrator, next_mcs, ordinal, UInt8(0))
+        launch!(integrator.plan, kernels.clear_claims, workspace.cell_max_priority,
+            workspace.cell_min_identity;
+            ndrange = length(workspace.cell_max_priority))
+        launch!(integrator.plan, kernels.candidates, workspace.sites,
+            workspace.color_order, workspace.color_offsets, workspace.attempts,
+            workspace.priorities, workspace.selected, workspace.dispositions,
+            scientific_execution(integrator.state), integrator.proposal_relation,
+            proposal_law(integrator.algorithm), integrator.rng, integrator.seed,
+            next_mcs, ordinal;
+            ndrange = color_size)
+        launch!(integrator.plan, kernels.claim_priorities, workspace.color_order,
+            workspace.color_offsets, workspace.attempts, workspace.priorities,
+            workspace.cell_max_priority, ordinal;
+            ndrange = color_size)
+        launch!(integrator.plan, kernels.claim_ties, workspace.color_order,
+            workspace.color_offsets, workspace.attempts, workspace.priorities,
+            workspace.cell_max_priority, workspace.cell_min_identity, ordinal;
+            ndrange = color_size)
+        launch!(integrator.plan, kernels.select_conflicts, workspace.color_order,
+            workspace.color_offsets, workspace.attempts, workspace.priorities,
+            workspace.selected, workspace.dispositions,
+            workspace.cell_max_priority, workspace.cell_min_identity, ordinal;
+            ndrange = color_size)
+        launch!(integrator.plan, kernels.evaluation, workspace.color_order,
+            workspace.color_offsets, workspace.attempts, workspace.selected,
+            workspace.transactions, workspace.dispositions,
+            scientific_execution(integrator.state), integrator.components,
+            integrator.algorithm, integrator.rng, integrator.seed, next_mcs, ordinal;
+            ndrange = color_size)
+        launch!(integrator.plan, kernels.commit, workspace.color_order,
+            workspace.color_offsets, workspace.transactions, workspace.dispositions,
+            scientific_execution(integrator.state), ordinal;
+            ndrange = color_size)
+        _advance_checkerboard_mechanics!(integrator, next_mcs, ordinal, UInt8(1))
+    end
+    run_compiled_lifecycle!(integrator, integrator.lifecycle, next_mcs)
+    integrator.mcs = next_mcs
+    return integrator
+end
+
 function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R,
         <:CheckerboardSweepCPM}, ::CheckerboardSweepCPM) where {S, C, R}
     next_mcs = integrator.mcs + UInt64(1)
@@ -511,60 +568,10 @@ function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R,
     order_kernel = _checkerboard_order_kernel!(integrator.plan.backend, 1)
     launch!(integrator.plan, order_kernel, workspace.color_order, integrator.rng,
         integrator.seed, next_mcs, workspace.color_count; ndrange = 1)
-    candidates_kernel = _checkerboard_candidates!(
-        integrator.plan.backend, integrator.plan.block_size)
-    clear_claims_kernel = _checkerboard_clear_claims!(
-        integrator.plan.backend, integrator.plan.block_size)
-    claim_priorities_kernel = _checkerboard_claim_priorities!(
-        integrator.plan.backend, integrator.plan.block_size)
-    claim_ties_kernel = _checkerboard_claim_ties!(
-        integrator.plan.backend, integrator.plan.block_size)
-    select_conflicts_kernel = _checkerboard_select_conflicts!(
-        integrator.plan.backend, integrator.plan.block_size)
-    evaluation_kernel = _checkerboard_evaluate!(
-        integrator.plan.backend, integrator.plan.block_size)
-    commit_kernel = _checkerboard_commit!(
-        integrator.plan.backend, integrator.plan.block_size)
-    for ordinal in UInt32(1):workspace.color_count
-        _advance_checkerboard_mechanics!(integrator, next_mcs, ordinal, UInt8(0))
-        launch!(integrator.plan, clear_claims_kernel, workspace.cell_max_priority,
-            workspace.cell_min_identity;
-            ndrange = length(workspace.cell_max_priority))
-        launch!(integrator.plan, candidates_kernel, workspace.sites,
-            workspace.color_order, workspace.color_offsets, workspace.attempts,
-            workspace.priorities, workspace.selected, workspace.dispositions,
-            scientific_execution(integrator.state), integrator.proposal_relation,
-            proposal_law(integrator.algorithm), integrator.rng, integrator.seed,
-            next_mcs, ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        launch!(integrator.plan, claim_priorities_kernel, workspace.color_order,
-            workspace.color_offsets, workspace.attempts, workspace.priorities,
-            workspace.cell_max_priority, ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        launch!(integrator.plan, claim_ties_kernel, workspace.color_order,
-            workspace.color_offsets, workspace.attempts, workspace.priorities,
-            workspace.cell_max_priority, workspace.cell_min_identity, ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        launch!(integrator.plan, select_conflicts_kernel, workspace.color_order,
-            workspace.color_offsets, workspace.attempts, workspace.priorities,
-            workspace.selected, workspace.dispositions,
-            workspace.cell_max_priority, workspace.cell_min_identity, ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        launch!(integrator.plan, evaluation_kernel, workspace.color_order,
-            workspace.color_offsets, workspace.attempts, workspace.selected,
-            workspace.transactions, workspace.dispositions,
-            scientific_execution(integrator.state), integrator.components,
-            integrator.algorithm, integrator.rng, integrator.seed, next_mcs, ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        launch!(integrator.plan, commit_kernel, workspace.color_order,
-            workspace.color_offsets, workspace.transactions, workspace.dispositions,
-            scientific_execution(integrator.state), ordinal;
-            ndrange = Int(workspace.maximum_color_size))
-        _advance_checkerboard_mechanics!(integrator, next_mcs, ordinal, UInt8(1))
-    end
-    run_compiled_lifecycle!(integrator, integrator.lifecycle, next_mcs)
-    integrator.mcs = next_mcs
-    return integrator
+    color_size = Int(workspace.maximum_color_size)
+    kernels = _checkerboard_execution_kernels(integrator.plan, color_size)
+    return _perform_checkerboard_mcs!(
+        integrator, next_mcs, workspace, kernels, color_size)
 end
 
 function _current_mcs_report(integrator::ScientificPottsIntegrator,

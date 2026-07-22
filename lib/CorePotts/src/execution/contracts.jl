@@ -337,6 +337,19 @@ function ExecutionPlan(backend::KernelAbstractions.Backend; block_size::Integer 
         ExplicitObservationSynchronization(), Int(block_size), metrics)
 end
 
+const CPU_SERIAL_GRAIN_LIMIT = 1024
+
+"""Instantiate a bulk kernel with the qualified backend-specific grain policy."""
+@inline function _execution_kernel(
+        plan::ExecutionPlan{<:KernelAbstractions.CPU}, kernel, ndrange::Integer)
+    ndrange <= CPU_SERIAL_GRAIN_LIMIT && return kernel(plan.backend)
+    return kernel(plan.backend, plan.block_size)
+end
+@inline _execution_kernel(plan::ExecutionPlan, kernel, ::Integer) =
+    kernel(plan.backend, plan.block_size)
+@inline _fixed_execution_kernel(plan::ExecutionPlan, kernel) =
+    kernel(plan.backend, plan.block_size)
+
 @inline function launch!(plan::ExecutionPlan, kernel, args...; ndrange, workgroupsize = nothing)
     plan.metrics.launches += 1
     if workgroupsize === nothing

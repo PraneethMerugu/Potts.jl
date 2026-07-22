@@ -101,6 +101,13 @@ end
     @test output == UInt32[4, 6, 8, 10]
     @test metrics.launches == 2
     @test metrics.host_synchronizations == 1
+
+    cpu_grained_output = similar(input)
+    cpu_grained_kernel = CorePotts._execution_kernel(
+        plan, _phase5_increment!, length(input))
+    launch!(plan, cpu_grained_kernel, cpu_grained_output, input;
+        ndrange = length(input))
+    @test cpu_grained_output == UInt32[2, 3, 4, 5]
     record_transfer!(plan, :host_to_device)
     record_transfer!(plan, :device_to_host)
     @test metrics.host_to_device_transfers == 1
