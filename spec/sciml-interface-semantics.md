@@ -735,10 +735,11 @@ checkpoint state to carry declared fields. The model owns field meaning, discret
 units, and coupling law; the problem binds immutable initial field data or a typed initializer.
 
 PDE evolution, secretion, uptake, and operator splitting are deferred to a separately scoped
-evolving-field semantics phase after the paper core unless a required paper experiment promotes
-them. Phase 9 reserves completed-MCS phases, immutable transaction snapshots, timestamps,
-observation, and checkpoint ownership, but does not freeze speculative coupled-problem or split-
-integrator types.
+evolving-field semantics phase after the Phase 13 core. A selected Phase 14 published model
+promotes only the subset it requires through Decision 0029's source, semantic, sequential-reference,
+and conformance gates. Phase 9 reserves completed-MCS phases, immutable transaction snapshots,
+timestamps, observation, and checkpoint ownership, but does not freeze speculative universal
+coupled-problem or split-integrator types.
 
 Future Lie, Strang, subcycled, asynchronous, or other splitting choices are explicitly named and
 specify visibility, substeps, source/sink timing, conservation/error claims, RNG, checkpoint phase,

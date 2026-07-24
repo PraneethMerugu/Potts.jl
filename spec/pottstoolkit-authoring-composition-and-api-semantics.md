@@ -1024,7 +1024,8 @@ diagnostics are accumulated when doing so remains safe and meaningful.
 The surface accepted here remains breakable during Phase 11 implementation. DSL and IR version 1.0
 are frozen only after:
 
-- All five required paper reference models have natural Level 1 spellings.
+- All five required compiler/API reference workloads have natural Level 1 spellings. These are
+  authoring qualification fixtures, not claims of published-model reproduction.
 - Equivalent Level 1 and Level 2 models normalize to equal scientific meaning.
 - The complete paths execute on CPU, Metal, and ROCm under the claimed capabilities.
 - Rule, trigger, random-draw, query, lifecycle, and custom-physics downstream fixtures pass.

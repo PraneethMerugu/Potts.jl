@@ -9,9 +9,9 @@ two independently testable packages:
 - **CorePotts**: the scientific execution engine and advanced extension interface.
 
 The historical `Potts` umbrella package and pre-freeze engine have been removed. MakiePotts remains
-deferred source for its Phase 14 migration and is not part of the Phase 13 workspace or compatibility
-guarantee. The obsolete NeuralPotts implementation was removed; a redesigned experimental satellite
-may return in Phase 14 or later.
+deferred source for its Phase 14.4 migration and is not part of the Phase 13 workspace or
+compatibility guarantee. The obsolete NeuralPotts implementation was removed; a redesigned
+experimental satellite may return only through the Phase 14.4-or-later scope and conformance gate.
 
 ## Installation
 

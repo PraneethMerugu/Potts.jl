@@ -349,10 +349,11 @@ stamp. A field update becomes visible only at a declared synchronization point. 
 partway through a simultaneous batch.
 
 The exact Lie, Strang, or other operator splitting; PDE substeps; secretion; uptake; and conservation
-laws belong to a separately scoped evolving-field semantics phase after the paper core unless a
-required paper experiment promotes them explicitly. The present contract does not freeze a
-speculative coupled-problem or split-integrator API. The compiled model nevertheless reports every
-CPM/field synchronization point and rejects sampling a field whose time relation is undefined.
+laws belong to a separately scoped evolving-field semantics phase after the Phase 13 core. A
+selected Phase 14 published model promotes only the laws it actually requires through Decision
+0029's reference-first semantic gate. The present contract does not freeze a speculative universal
+coupled-problem or split-integrator API. The compiled model nevertheless reports every CPM/field
+synchronization point and rejects sampling a field whose time relation is undefined.
 
 ### Backend Residency
 
@@ -367,8 +368,8 @@ The following do not block the Cartesian refactor:
 - Arbitrary custom exterior boundary programs
 - Hexagonal and graph-lattice surface quadrature
 - Crofton estimators as native defaults
-- Full secretion and uptake laws
-- PDE solver selection and operator splitting
+- Secretion, uptake, PDE stepping, or operator-splitting families not promoted by the selected
+  published-model corpus
 - Membrane-local or moving-mesh fields
 - Every possible spatial aggregation
 

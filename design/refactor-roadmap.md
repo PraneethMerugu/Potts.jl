@@ -21,7 +21,8 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phases 14-15 | Not started | Ordered by their own entry gates |
+| Phase 14: Model-Driven Capability Completion and Documentation | Not started | [Decision 0029](../spec/decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md) and the Phase 14.0 entry gate |
+| Phase 15: Paper and Release Qualification | Not started | Begins only after every Phase 14 exit gate passes |
 
 ## Objective
 
@@ -45,7 +46,9 @@ new consumers are prohibited.
 5. Package code and tests precede full documentation and tutorial migration.
 6. Performance is measured from the beginning; optimization follows profiling and preserves the
    accepted contract.
-7. Breaking changes are allowed until the paper API freeze. No migration layer is required.
+7. Breaking changes are allowed until the paper API freeze. After the freeze, incompatible API or
+   frozen-contract changes require the explicit versioned release decision and invalidation policy
+   in Decision 0028; additive Phase 14 work follows Decision 0029.
 8. One migrated subsystem has one implementation. Temporary comparison code lives in test,
    benchmark, or archival baselines rather than the released package.
 9. Scientific invariants and taxonomies may be closed, but scientific families and execution
@@ -69,11 +72,19 @@ new consumers are prohibited.
 - PottsToolkit Level 2 typed modeling and Level 1 DSL
 - SciML problem, integrator, solution, callback, saving, observation, remake, and ensemble behavior
 - Snapshots, checkpoints, initialization, paper workloads, and archived benchmark evidence
+- A biology-first Documenter manual with 12--15 guided tutorials and a clear Learn, Examples,
+  Published Models, Concepts and Guarantees, and API progression
+- A release portfolio of 4--6 paper-faithful published models, including flagship work associated
+  with Glazier, Wortel, and Jiang, under the
+  [published-model reproduction contract](../spec/published-model-reproduction-semantics.md)
+- The reusable modeling primitives required by that preregistered portfolio, potentially including
+  separately configurable spatial and execution roles, evolving fields, accepted-copy site state,
+  general per-cell dynamics, dynamic relationships, degradable structures, staged protocols, and
+  research observables
 
 ### Deferred without blocking the paper release
 
-- Stable auxiliary length and focal-point families beyond their required first-class architecture;
-  volume and surface auxiliary families remain on the paper critical path
+- Scientific mechanisms not required by the selected 4--6-model release portfolio
 - Hexagonal, rhombic-dodecahedral, irregular, and graph-lattice engines
 - Crofton surface estimators
 - Validated CC3D, Morpheus, and Artistoo compatibility presets
@@ -97,6 +108,10 @@ unrelated earlier work.
 | D5 | Coordinates, rasterization, random placement, periodic placement, and initialization finalization — resolved by Decisions 0021 and 0024 | Initialization replacement |
 | D6 | Extension registration, semantic fingerprints, cache invalidation, and expert escape-hatch contract — resolved by Decisions 0017 and 0026 | Compiler/API freeze |
 | D7 | Final Level 1 model declarations, fragments, phase spelling, and displays; principal Level 2 model/problem names are resolved by Decision 0026 | PottsToolkit API candidate |
+| D8 | Published-model portfolio, fidelity vocabulary, documentation information architecture, and post-freeze policy — resolved at the policy level by Decision 0029; exact papers, target results, source revisions, and licenses are pinned per model in Phase 14.0 | Phase 14.1 capability implementation |
+| D9 | Observable semantics and update ordering for every missing model capability, including accepted-copy, per-MCS, lifecycle, field-splitting, dynamic-relationship, and staged-protocol boundaries | Each corresponding Phase 14.1 implementation |
+| D10 | Compatibility and evidence-invalidation assessment for every post-freeze addition; any incompatible frozen-contract change requires an explicit versioned release decision under Decision 0028 | Public API or contract change |
+| D11 | Preregistered per-model validation targets, tolerances, ensemble sizes, stopping rules, source baselines, and fidelity limits | Final Phase 14.3 reproduction runs |
 
 Every gate produces an accepted specification update or decision record plus its required evidence.
 Implementation convenience MUST NOT decide a gate implicitly.
@@ -132,7 +147,17 @@ Implementation convenience MUST NOT decide a gate implicitly.
        |
 13. API freeze and full conformance
        |
-14. Documentation, tutorials, and satellites
+14. Model-driven capability completion and documentation
+       |
+  14.0 corpus, source, and requirements audit
+       |
+  14.1 reusable scientific capabilities and conformance
+       |
+  14.2 Learn and Examples
+       |
+  14.3 Published Models
+       |
+  14.4 full manual and satellites
        |
 15. Paper reproduction and release qualification
 ```
@@ -743,45 +768,212 @@ detailed in the
 After this gate, incompatible API changes require an explicit release decision. Before this gate,
 compatibility shims remain unnecessary.
 
-## Phase 14: Documentation, Tutorials, and Satellites
+## Phase 14: Model-Driven Capability Completion and Documentation
 
-### Deliverables
+Phase 14 is governed by
+[Decision 0029](../spec/decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md)
+and the [Published-Model Reproduction Semantics](../spec/published-model-reproduction-semantics.md).
+It does not reopen Phase 13 indiscriminately. Existing frozen contracts remain frozen; additive
+capabilities are admitted only through accepted semantics, sequential CPU reference use, version
+impact review, conformance, persistence, inspection, and the claimed backend evidence.
 
-- Rebuild conceptual documentation in Level 1 through Level 4 progression.
-- Manually migrate every tutorial and example to the frozen API, correcting historical scientific
-  mistakes rather than translating syntax mechanically.
-- Make numerical tutorial assertions runnable in CI and expensive rendering independently runnable.
-- Generate API documentation and ensure no exported stable symbol is unexplained.
-- Replace tracked generated documentation and large media with reproducible artifact references.
-- Migrate MakiePotts against the frozen observation and solution APIs.
-- Migrate only the NeuralPotts features that are explicitly in paper scope; leave the remainder
-  Experimental without constraining stable packages.
+The five Phase 10 reference workloads and Phase 13 realistic-model battery remain valid compiler and
+algorithm evidence. They are not evidence that the published biological models below have already
+been reproduced.
 
-### Exit gate
+### Phase 14.0: Corpus, Sources, and Adversarial Requirements Audit
 
-- Every documentation example and tutorial uses only the final API and passes from a clean setup.
-- No generated `docs/build` product is tracked in the source branch.
-- MakiePotts does not cause hidden synchronization beyond requested observations.
-- Documentation states guarantee profiles, backend support, precision, and algorithm family
-  wherever results could otherwise be misinterpreted.
+#### Deliverables
+
+- Select and freeze a 4--6-model release portfolio. It MUST include at least one flagship model
+  associated with each of Glazier, Wortel, and Jiang. The initial target set contains:
+  - a foundational Glazier--Graner differential-adhesion/cell-sorting model;
+  - a Wortel cell-migration/Act-CPM model;
+  - a Jiang collective-tumor-migration model; and
+  - a Glazier--Jiang angiogenesis model.
+- Pin the exact papers, figures or tables, supplements, source-simulator revisions, datasets,
+  licenses, and permitted assets. Record an authority order and every conflict or unavailable input.
+- Create one versioned model record per selected paper with domain, topology, all spatial roles,
+  parameters and units, initialization, attempt budget, algorithm, update schedule, field splitting,
+  lifecycle behavior, seeds, replicates, observations, analyses, and target results.
+- Build a model-to-capability requirements matrix that classifies every requirement as:
+  - already supported and conforming;
+  - expressible through an existing stable extension protocol;
+  - requiring an additive reusable CorePotts or PottsToolkit capability;
+  - requiring an incompatible frozen-contract decision; or
+  - paper-specific assembly or analysis that belongs with the reusable model source.
+- Audit at minimum the known pressure points: independent proposal/contact/surface/query relations;
+  source-specific MCS attempt budgets; accepted-copy site history; evolving reaction--diffusion
+  fields, secretion, uptake, and named splitting; vector cell state and history; dynamic focal or
+  relationship graphs; degradable structures; staged protocols; and paper-defined observables.
+- Give each missing semantic family an owner, specification/decision dependency, conformance plan,
+  persistence impact, API layer, backend claim, and implementation chunk. Unknowns remain explicit;
+  implementation convenience MUST NOT settle them.
+
+#### Exit gate
+
+- D8 is complete for the exact portfolio, and every selected result has a source record and named
+  validation target.
+- Every paper mechanism and execution detail is mapped; no required behavior is hidden in a page,
+  private simulator, or unowned “model glue” category.
+- Every proposed change to a Phase 13 contract is classified as additive or incompatible. An
+  incompatible change has an explicit D10 release decision before implementation.
+- The release portfolio can change only through an owner-approved scope amendment recording the
+  scientific and release-claim impact.
+
+### Phase 14.1: Modeling Primitives and Conformance
+
+#### Deliverables
+
+- Write and accept D9 semantics before implementing each required capability. At minimum, specify
+  snapshots, update order, atomicity, normalized time, semantic randomness, lifecycle behavior,
+  checkpoint representation, inspection, and failure behavior.
+- Implement the smallest reusable capability justified by the corpus in CorePotts or PottsToolkit.
+  Paper-specific parameters and analysis remain in model source; reusable scientific behavior does
+  not.
+- Exercise every capability first through an ordinary sequential CPU reference path and one
+  complete model-level vertical slice. Add PottsToolkit Level 2 and natural Level 1 spelling where
+  the capability belongs in ordinary biological authoring.
+- Extend semantic manifests, fingerprints, reports, persistence, restart, SciML observation and
+  saving, capability preflight, and backend adaptation without silently changing frozen meanings.
+- Add exact, invariant, randomized reference, lifecycle, restart, and statistical conformance as
+  applicable. Dynamic fields and auxiliary state MUST remain backend-resident during advertised GPU
+  execution and become visible only at declared synchronization points.
+- Qualify only the backend/capability pairs that will be advertised. CPU reference support is
+  mandatory; Metal and ROCm support may be explicitly Unsupported for a new capability, but it
+  cannot be implied by the Phase 13 core matrix.
+- Measure compilation, allocation, synchronization, transfer, memory, and steady-state performance
+  for the completed vertical slices. Optimize only after reference agreement.
+
+#### Exit gate
+
+- Every mechanism required by the selected portfolio is expressible through public, documented
+  model or extension APIs without reaching into private storage or kernels.
+- Every new stable contract is Accepted, versioned, reference implemented, mapped to conformance
+  evidence, and covered by the D10 compatibility assessment.
+- Checkpoint/restart reproduces dynamic fields, site state, per-cell state, relationships,
+  staged-protocol position, semantic time, and RNG continuation wherever present.
+- Advertised CPU, Metal, and ROCm support has the corresponding real-hardware evidence; unsupported
+  combinations fail before execution with actionable diagnostics.
+- Existing Phase 12 correctness-qualified performance gates still pass; adding a model capability
+  does not excuse a regression in models that do not use it.
+- The selected models reach complete bounded smoke runs before documentation presentation work
+  begins.
+
+### Phase 14.2: Learn and Examples
+
+#### Deliverables
+
+- Rebuild the manual as one Documenter site organized as Learn, Examples, Published Models,
+  Concepts and Guarantees, and API.
+- Create 12--15 guided tutorials for the primary audience of biologists and new CPM users. Progress
+  through Beginner, Model Builder, Research Workflows, and Advanced Extensions, using 2D before 3D
+  and CPU-portable defaults with explicit GPU callouts.
+- Teach model construction, initialization, adhesion and constraints, fields and chemotaxis,
+  algorithms and guarantees, reproducibility, lifecycle, observation, analysis, persistence,
+  performance/backends, extensions, and a complete research workflow.
+- Build Examples as focused, original, citable programs. Paper-inspired simplifications are labeled
+  Inspired Example and remain separate from Published Models.
+- Keep reusable Julia sources separate from prose and execute their numerical assertions in pull-
+  request CI. Separate expensive animation, dashboards, and large data generation from fast checks.
+- Rewrite or cite content and retain only licensed assets. Add a contribution template requiring
+  provenance, scientific scope, support, validation, runtime, and maintenance ownership.
+
+#### Exit gate
+
+- The guided sequence is coherent from first simulation through reproducible research and advanced
+  extension, with no prerequisite taught only after its first use.
+- Every fast tutorial and example executes from the clean documentation environment on the final
+  API, and all expensive outputs have reproducible commands and artifact identities.
+- No Inspired Example is presented as a reproduction, and every literature-derived choice has
+  visible provenance.
+
+### Phase 14.3: Published Models
+
+#### Deliverables
+
+- Implement the selected 4--6 published models as reusable Julia model programs backed only by
+  accepted library behavior and explicit paper-specific assembly and analysis.
+- For every model, reproduce a named paper figure, table, statistic, or described result as closely
+  as the pinned source permits. Report mechanistic, execution, parameter, output, and result
+  fidelity separately.
+- Materialize every consequential default in a machine-readable model manifest, including spatial
+  roles, attempt budget, update schedule, parameters, initialization checksum, semantic seeds,
+  algorithm, precision, backend, replicates, observables, and analysis version.
+- Complete D11 before final runs. Preserve exploratory runs separately; final tolerances, sample
+  sizes, stopping rules, exclusions, and source baselines cannot be changed after results are seen
+  without a new study version.
+- Use Quantitative Reproduction as the release target whenever the source exposes a quantitative
+  endpoint. Use Qualitative Reproduction only for an intrinsically qualitative or irreducibly
+  underspecified target, never as a post-failure downgrade.
+- Record deviations and sensitivity analyses for consequential ambiguities. Obtain collaborator
+  review for the Glazier, Wortel, and Jiang flagships and apply `Author Reviewed` only when the
+  recorded scope and result were actually reviewed. An unavailable collaborator requires the
+  recorded owner-approved exception in Decision 0029; review attempts and the missing badge remain
+  visible.
+- Archive raw results, manifests, environments, source records, analysis programs, output
+  checksums, figures, and animations through content-addressed artifacts or a release archive.
+
+#### Exit gate
+
+- Every selected model passes its preregistered release-status target from a clean pinned
+  environment and exposes retrievable evidence.
+- Every page links to its reusable source, manifest, validation plan, raw evidence, generated
+  outputs, deviations, backend limitations, and author-review status.
+- Each Glazier-, Wortel-, and Jiang-associated flagship has collaborator review or the explicit
+  owner-approved unavailable-reviewer exception.
+- No simplified or failed model is silently substituted, removed, or described as reproduced. Any
+  portfolio or target-status change has the required owner-approved scope amendment.
+
+### Phase 14.4: Full Manual and Satellites
+
+#### Deliverables
+
+- Complete Concepts and Guarantees plus Level 1 through Level 4 API progression, with every stable
+  export documented and every experimental/internal surface visibly separated.
+- State algorithm guarantees, backend support, precision, synchronization/observation boundaries,
+  reproducibility, and evidence level wherever a result could otherwise be misinterpreted.
+- Replace tracked generated documentation and large media with reproducible artifact references;
+  retain only small licensed source assets.
+- Migrate MakiePotts against frozen observation and solution APIs, with no hidden observation,
+  synchronization, transfer, or stochastic-schedule change.
+- Restore or redesign only NeuralPotts capabilities that have explicit Phase 14 scope and
+  conformance; keep the remainder Experimental without constraining CorePotts or PottsToolkit.
+- Validate all navigation, cross-references, doctests, source links, artifact retrieval, clean
+  builds, and deployment configuration.
+
+#### Exit gate
+
+- Every documentation page uses the final API and passes its applicable clean-build or executable
+  check.
+- No generated `docs/build` product or unlicensed/irreproducible large output is tracked.
+- Published-model statuses and support claims agree with their manifests and archived evidence.
+- MakiePotts introduces no hidden synchronization beyond requested observation boundaries.
+- All Phase 14.0--14.4 gates pass; completing prose alone cannot close Phase 14.
 
 ## Phase 15: Paper and Release Qualification
 
 The Phase 12.5 tiled engine is excluded from fastest-engine and production-backend claims. Phase 15
 may report its negative/experimental result or reproduce its research measurements, but must not
-use it as release evidence without a separately accepted promotion gate.
+use it as release evidence without a separately accepted promotion gate. Phase 15 consumes the
+frozen Phase 14 corpus, manifests, validation plans, capability versions, and evidence statuses. It
+qualifies a release; it does not repair model semantics or choose easier validation targets after
+observing results.
 
 ### Deliverables
 
 - Freeze the paper Project and Manifest, experiment configurations, semantic seeds, model
-  fingerprints, initial checksums, and analysis programs.
-- Re-run publication workloads on recorded CPU and GPU systems.
+  fingerprints, initial checksums, published-model manifests, capability contract versions, and
+  analysis programs.
+- Re-run bounded publication and published-model workloads on recorded CPU and claimed GPU systems;
+  verify the checksums and provenance of archived full ensembles.
 - Archive raw conformance, benchmark, profiler, environment, and hardware reports.
 - Produce paper figures and tables only from archived machine-readable results.
 - Re-run clean-install, checkpoint/restart, documentation, tutorial, and backend smoke tests from
   release candidates.
 - Audit paper claims against exact versus approximate algorithms and semantically matched external
-  comparisons.
+  comparisons. Audit every published-model claim against its fidelity dimensions, registered
+  validation plan, deviations, and actual evidence status.
 - Tag package versions and archive the reproducibility bundle only after every release gate passes.
 
 ### Exit gate
@@ -789,6 +981,8 @@ use it as release evidence without a separately accepted promotion gate.
 - Publication workloads reproduce from a clean environment.
 - CPU, AMDGPU, and Metal claims have current real-hardware evidence.
 - Paper tables and figures trace to archived raw results and code.
+- Every selected published model retains its Phase 14 release status under the release candidate,
+  or the release stops for an explicit scope and claim amendment.
 - Documentation, packages, manifests, and paper describe the same frozen API and semantics.
 - No legacy engine or DSL path remains.
 
@@ -801,6 +995,7 @@ The minimum validation run grows with the implementation:
 | Specification or decision | Consistency review, affected evidence mapping, decision record |
 | Repository or dependency | Independent load/test, clean instantiate, extension load, smoke workload |
 | State or scientific protocol | Unit, invariant, reference comparison, inference check |
+| Evolving field, site, auxiliary, or relationship state | Update-order and snapshot fixtures, lifecycle, exact restart, semantic RNG, residency and synchronization checks |
 | Kernel or execution | CPU plus available GPU, allocation, synchronization, device code, benchmark |
 | RNG or algorithm | Known-answer, schedule identity, reproducibility profile, statistical battery |
 | Lifecycle or persistence | Transaction faults, capacity, continuation, corruption/failure cases |
@@ -808,6 +1003,7 @@ The minimum validation run grows with the implementation:
 | SciML | Interface behavior, saving/callback boundaries, remake, ensemble, failure codes |
 | Performance optimization | Full applicable conformance plus before/after raw measurements |
 | Documentation/tutorial | Executable assertions, clean environment, generated-output check |
+| Published model | Pinned source and license record, manifest validation, registered result test, clean reproduction, evidence and output checksums |
 
 No performance result excuses a conformance failure. No CPU result qualifies a GPU backend.
 
@@ -841,11 +1037,37 @@ The refactor MUST NOT begin by rewriting the DSL, tuning individual kernels, or 
 source file at once. Those actions depend on interfaces and evidence established earlier in this
 critical path.
 
+## Current Phase 14 Critical Path
+
+With Phases 0--13 complete, the next executable sequence is:
+
+1. Pin the exact 4--6 papers and source records, including target results, licensing, source
+   revisions, and unresolved ambiguities.
+2. Complete the model-to-capability matrix and D10 compatibility assessment before editing frozen
+   interfaces.
+3. Resolve D9 separately for each missing semantic family. Begin with the highest-risk vertical
+   slices—evolving spatial state, accepted-copy history, general cell dynamics, and dynamic
+   relationships—rather than designing a universal framework in advance.
+4. Run one selected model end to end through each new sequential CPU reference capability,
+   PottsToolkit lowering, persistence, and bounded validation before optimizing or adding GPU
+   support.
+5. Close all required capability rows and bounded model smokes before building the Learn/Examples
+   presentation layer.
+6. Register D11 and complete the full published-model studies before applying reproduction labels.
+7. Complete the full manual and satellites, then hand the frozen manifests and evidence to Phase
+   15.
+
+Source collection, license review, documentation information architecture, and artifact planning
+MAY proceed together during Phase 14.0. Scientific implementation begins only after the applicable
+source, semantic, and freeze-impact gates are closed.
+
 ## Completion Definition
 
 The roadmap is complete only when every required phase exit gate passes. “Mostly refactored” does
 not qualify. Explicitly deferred or experimental features do not block completion when they remain
-outside stable APIs and paper claims.
+outside stable APIs, the selected published-model portfolio, and paper claims. A selected model or
+required mechanism is not deferred merely because its implementation is difficult; changing that
+scope requires the recorded owner-approved amendment defined by Decision 0029.
 
 This roadmap is maintained as execution evidence. If implementation reveals that a phase boundary
 is wrong, the roadmap MAY be revised, but accepted semantics and scientific guarantees require the
