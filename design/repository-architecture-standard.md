@@ -33,9 +33,9 @@ compatibility bounds, and package-local tests. Repository co-location MUST NOT p
 cross-package dependencies.
 
 During the Phase 13 freeze, only PottsToolkit and CorePotts are paper-core workspace packages.
-MakiePotts source is intentionally outside that workspace until its Phase 14 migration. The
+MakiePotts source is intentionally outside that workspace until the Phase 14.4 migration. The
 pre-freeze NeuralPotts implementation is absent; the experimental package identity may be restored
-only by the Phase 14-or-later redesign required by the accepted scope map.
+only by the Phase 14.4-or-later redesign required by the accepted scope map.
 
 ## Dependency Direction
 
@@ -285,7 +285,7 @@ paper-release standard.
 
 ## Paper Reproduction
 
-Paper reproduction is an application environment:
+The Potts.jl methods/performance paper reproduction is an application environment:
 
 ```text
 paper/
@@ -302,6 +302,36 @@ in the repository. Large raw results belong in content-addressed artifacts or ar
 Generated figures MAY be committed only when publication tooling requires them and their generating
 program and provenance are also retained.
 
+Published biological model reproductions are documentation products with reusable executable model
+sources and independent evidence. They do not share an ambiguous `paper/` label with the
+Potts.jl publication environment:
+
+```text
+docs/
+  models/
+    tutorials/
+    examples/
+    published/
+      <model-id>/
+        model.jl
+        reproduction.toml
+        validate.jl
+  evidence/
+    published/
+      <model-id>/
+        README.md
+        Artifacts.toml
+```
+
+Paper-specific assembly, parameter tables, staged schedules, and analyses MAY live with a published
+model. A reusable proposal, scientific component, state transition, field evolution law, lifecycle
+operation, relationship update, or backend implementation MUST live in CorePotts or PottsToolkit
+with package-owned tests.
+
+Large source datasets, raw ensembles, animations, and evidence bundles use content-addressed
+artifacts or archived releases. The checked-in evidence binding records immutable identities and
+retrieval instructions; it is not a second generated-results tree.
+
 ## Documentation and Tutorials
 
 Documentation contains source and its reproducible build environment:
@@ -312,16 +342,35 @@ docs/
   Manifest.toml
   make.jl
   src/
-  tutorials/
+    learn/
+    examples/
+    published-models/
+    concepts/
+    api/
+  models/
+    tutorials/
+    examples/
+    published/
+  evidence/
 ```
 
 `docs/build/` is generated and MUST be ignored. Small intentional documentation assets MAY remain in
 `docs/src/assets/`. Generated videos, Zarr stores, HDF5 stores, and other large tutorial products
 belong in artifacts or release assets.
 
-Each tutorial SHOULD have one canonical executable Julia source. Numerical assertions run in
-ordinary CI independently of expensive animation and publication rendering. Tutorials are manually
-migrated only after the libraries, tests, and API candidate are stable.
+The Documenter navigation is Learn, Examples, Published Models, Concepts and Guarantees, and API.
+Learn progresses through Beginner, Model Builder, Research Workflows, and Advanced Extensions.
+
+Each tutorial, example, and published model SHOULD have one canonical executable Julia source.
+Pages explain and include those sources rather than becoming the only executable implementation.
+Numerical assertions run in ordinary CI independently of expensive animation and publication
+rendering. Published-model sources additionally provide the manifest, registered validation, and
+evidence links required by the
+[published-model reproduction contract](../spec/published-model-reproduction-semantics.md).
+
+Tutorials are manually rebuilt after the Phase 13 API freeze. Missing scientific mechanisms exposed
+by the selected published-model corpus follow the Phase 14.0 and 14.1 specification and conformance
+gates before the corresponding documentation is presented as supported.
 
 ## Examples
 
@@ -339,6 +388,11 @@ examples/
 Examples SHOULD share an environment where practical. A dashboard or notebook receives a separate
 project only when it genuinely requires a distinct application stack. Scientific implementation
 logic MUST live in the packages, not be stranded in an example.
+
+`examples/` remains a convenient collection of focused standalone programs. Its supported programs
+MUST also be linked from the Documenter Examples section so the public learning path remains inside
+the documentation site. A literature-inspired simplification is labeled Inspired Example and is
+not duplicated into Published Models.
 
 ## Scripts and Generated Files
 

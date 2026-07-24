@@ -23,8 +23,9 @@ evidence archive.
 ## Scope
 
 Lottery and tiled checkerboard algorithms are later protocol consumers and are not part of the
-initial Phase 13 paper-core qualification matrix. Visualization and neural-model satellites are
-deferred to Phase 14 or later and are not part of this API-freeze documentation.
+initial Phase 13 paper-core qualification matrix. The Phase 14 model-driven manual, published-model
+portfolio, visualization migration, and any redesigned neural-model satellite are not part of this
+API-freeze documentation.
 
 Start with [Getting Started](@ref), then consult the
 [scientific contract identities and algorithm guarantees](@ref scientific-contract-identities).

@@ -33,6 +33,7 @@ corresponding specification document.
 - [0026: Phase 10 PottsToolkit typed API and compiler contract](0026-phase-10-typed-api-and-compiler.md)
 - [0027: Phase 13 transition-kernel verification and algorithm characterization](0027-phase-13-transition-kernel-verification.md)
 - [0028: Phase 13 entry, evidence, and API-freeze policy](0028-phase-13-entry-and-freeze-policy.md)
+- [0029: Phase 14 model-driven capability and documentation policy](0029-phase-14-model-driven-capability-and-documentation-policy.md)
 
 ## Record Template
 

@@ -1,6 +1,6 @@
 # Potts.jl Semantics Specification
 
-Version: `0.3-draft`
+Version: `0.4-draft`
 
 Status: Draft
 
@@ -84,6 +84,7 @@ behavior.
 - [SciML Problem, Integrator, Solution, and Ensemble Semantics](sciml-interface-semantics.md)
 - [Numerical and Cross-Backend Semantics](numerical-and-cross-backend-semantics.md)
 - [Transition-Kernel Verification and Algorithm Characterization](transition-kernel-verification.md)
+- [Published-Model Reproduction Semantics](published-model-reproduction-semantics.md)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
@@ -110,6 +111,7 @@ Refactor execution evidence:
 - [Phase 10 Implementation Chunk Plan](../design/audits/phase-10-chunk-plan.md)
 - [Phase 10 Completion Audit](../design/audits/phase-10-completion-audit.md)
 - [Phase 13 Algorithmic Conformance and API Freeze Plan](../design/audits/phase-13-transition-kernel-chunk-plan.md)
+- [Phase 14 Model-Driven Capability and Documentation Decision](decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
 - [JuliaGPU and Open-Protocol Community Validation](../design/audits/juliagpu-open-protocol-research.md)
@@ -117,8 +119,11 @@ Refactor execution evidence:
 - [Phase 0 Paper-Scope Map](../design/audits/phase-0-paper-scope-map.md)
 
 Future documents will cover the remaining algorithm proofs, final rule-language details, and the
-separately scoped evolving-field semantics required for PDE stepping, secretion, uptake, and named
-operator splitting.
+Phase 14 capability contracts required by the selected published-model corpus, including evolving
+fields, accepted-copy site state, general cell-dynamical state, dynamic relationship graphs,
+degradable structures, staged protocols, and research observables. Each contract follows the
+normal change process before implementation; this roadmap revision does not guess those observable
+semantics in advance of the Phase 14.0 source and requirements audit.
 
 ## Conformance Principle
 

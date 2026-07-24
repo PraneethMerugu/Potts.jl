@@ -15,9 +15,9 @@ makedocs(
     ),
     doctest = true,
     warnonly = false,
-    # Phase 14 owns the manual migration of deferred tutorials and satellites. Phase 13 builds
-    # only the frozen paper-core pages listed below, so unlisted historical tutorial drafts must
-    # not execute as if they were already part of the supported documentation surface.
+    # Phase 14 owns the model-driven capability audit, manual documentation rebuild, published
+    # models, and satellite migration. Phase 13 builds only the frozen paper-core pages listed
+    # below, so unlisted historical drafts must not execute as if they were already supported.
     pagesonly = true,
     # Phase 13 freezes the curated inventory recorded in its owner packet. Export status alone is
     # not a stability claim, so Documenter's broad export check would enforce the wrong boundary.

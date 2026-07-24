@@ -59,8 +59,11 @@ The accepted phase order is:
    qualified replacement slice and caller/test migration, before broad component expansion.
 9. Implement the Level 1 rule DSL over the typed API.
 10. Tune performance and verify that no legacy path was restored.
-11. Manually migrate documentation and tutorials.
-12. Run paper-release qualification.
+11. Freeze the published-model corpus; specify and implement only the additional reusable
+    capabilities it requires through reference-first, post-freeze change control.
+12. Manually rebuild Learn, Examples, Published Models, Concepts and Guarantees, API documentation,
+    and in-scope satellites.
+13. Run paper-release qualification.
 
 Each phase ends with one working implementation for its migrated subsystem. A temporary parallel
 path is removed before the phase is complete.
@@ -234,19 +237,40 @@ list every exception.
 
 ## Documentation Phase
 
-Full documentation and tutorial migration occurs after libraries, tests, and the API candidate are
-stable.
+Full documentation work begins after libraries, tests, and the Phase 13 API candidate are stable.
+The selected published-model corpus is then audited adversarially before tutorial presentation work.
+If the corpus exposes a missing reusable scientific mechanism, that mechanism is specified,
+reference-implemented, tested, persisted, inspected, and qualified under the post-freeze policy
+before documentation relies on it. Existing frozen contracts are not reopened implicitly.
 
 Tutorials are manually rebuilt rather than mechanically rewritten. Historical scientific mistakes
 are corrected. Every tutorial executes in CI, with expensive rendering separable from code and
 numerical assertions.
 
-Documentation follows progressive disclosure:
+The Documenter site follows this top-level information architecture:
+
+1. Learn
+2. Examples
+3. Published Models
+4. Concepts and Guarantees
+5. API
+
+Learn follows progressive disclosure:
 
 1. Level 1 for ordinary biological modeling
 2. Level 2 for typed Julia modeling
 3. Level 3 for scientific extension
 4. Level 4 for hardware and engine work
+
+The initial release contains 12--15 guided tutorials and 4--6 selected published models. Simplified
+literature-inspired programs remain Examples. A Published Model targets a named paper result and
+must satisfy the source, manifest, fidelity, preregistration, clean-execution, and evidence
+requirements in
+[Published-Model Reproduction Semantics](../spec/published-model-reproduction-semantics.md).
+
+Reusable scientific logic lives in the packages. Documentation-owned model source may assemble
+components, record paper parameters and schedules, and implement paper-specific analysis, but it
+does not contain a private simulator or hidden state transition.
 
 Benchmark numbers in papers or documentation come from versioned artifacts with hardware and
 software context. No exported symbol, example, conceptual page, or tutorial remains stale at
@@ -265,12 +289,18 @@ The refactor is complete only when:
 - Correctness, performance, compilation, and memory gates pass.
 - The 95% DSL-coverage target passes.
 - Documentation and tutorials use only the final API.
+- The selected 4--6-model portfolio passes its registered release-status validations with visible
+  fidelity, deviations, backend support, and evidence links.
+- Every reusable mechanism required by the portfolio has accepted semantics, sequential CPU
+  reference evidence, persistence/inspection coverage, and qualification for every claimed backend.
 - Publication workloads reproduce from a clean environment.
 - Paper benchmarks emit archived machine-readable results.
 
 “Mostly refactored” is not sufficient. Experimental satellite features may remain separate, and
 explicitly Deferred, Experimental, or Unsupported future features do not block release when they do
-not leak provisional behavior into stable interfaces.
+not leak provisional behavior into stable interfaces, the selected published-model portfolio, or
+paper claims. A selected model is not deferred or simplified without the explicit owner-approved
+scope amendment required by Decision 0029.
 
 ## Primary Guidance
 

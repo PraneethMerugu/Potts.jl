@@ -133,8 +133,9 @@ operators require their own explicit aggregation semantics.
 
 Resolved for field identity, geometry, sampling, boundary independence, and immutable transaction
 snapshots by [Cartesian Surface, Queries, and Fields](cartesian-surface-queries-and-fields.md).
-Operator splitting, secretion, uptake, and PDE substeps remain in a separately scoped evolving-field
-semantics phase after the paper core unless an explicitly required paper experiment promotes them.
+Operator splitting, secretion, uptake, and PDE substeps remain unresolved for the general case. A
+selected Phase 14 published model promotes only its required subset through the source audit,
+accepted semantics, sequential CPU reference, and conformance process in Decision 0029.
 
 ## Algorithms
 
