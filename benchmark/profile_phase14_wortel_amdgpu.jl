@@ -17,7 +17,7 @@ AMDGPU.@device_code dir=directory begin
     SciMLBase.step!(run.coupled)
     PottsBenchmarks.KernelAbstractions.synchronize(run.backend)
 end
-files = filter(isfile, (joinpath(directory, name) for name in readdir(directory)))
+files = filter(isfile, map(name -> joinpath(directory, name), readdir(directory)))
 isempty(files) &&
     error("Phase 14 ROCm device-code capture produced no files")
 all(iszero ∘ filesize, files) &&
