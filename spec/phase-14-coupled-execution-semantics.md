@@ -145,6 +145,24 @@ An uncoupled model does not need an `MCSPlan`. It retains the Phase 13 path and 
 The implementation MUST NOT normalize an omitted plan into new semantic data that changes an
 uncoupled model fingerprint.
 
+### Generic fragment references
+
+Under Decision 0033, a complex model plan SHOULD reference named typed operations exported by
+generic `ModelFragment` values rather than fragment-private leaf declarations:
+
+```julia
+Phase(:field, Advance(field_coupling.advance))
+Phase(:uptake, Exchange(field_coupling.uptake))
+Phase(:cell_dynamics, Advance(signaling.advance))
+```
+
+Lowering resolves each export to one canonical process identity before plan validation. Missing,
+private, category-incompatible, or multiply resolved exports fail before execution.
+
+Fragment hierarchy does not weaken the one-plan rule. A fragment cannot carry a hidden local
+schedule. Convenience plan entries, when admitted, expand into this root plan before ordering,
+conflict, fingerprint, continuation, and backend checks.
+
 ## Positional One-MCS State Machine
 
 For current MCS `m`, `step!(integrator, 1)` executes:

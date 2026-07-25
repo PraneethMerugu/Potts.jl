@@ -13,7 +13,9 @@ their registered Provisional status.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
-[Decision 0032](decisions/0032-phase-14-gpu-native-promotion.md)
+[Decision 0032](decisions/0032-phase-14-gpu-native-promotion.md), plus the generic authoring
+boundary in
+[Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md)
 
 Registry:
 [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
@@ -39,6 +41,8 @@ The kernel must:
 - preserve exact update order, transaction atomicity, lifecycle safety, continuation, and
   qualification boundaries;
 - provide natural biological authoring façades;
+- support generic hierarchical composition whose root complexity follows meaningful subsystems
+  rather than private declaration leaves;
 - have one canonical model representation before execution; and
 - leave every Phase 13 meaning unchanged for models that do not opt into Phase 14 declarations.
 
@@ -74,6 +78,11 @@ record.
 An authoring façade MUST either lower completely or reject with an actionable diagnostic. Runtime
 lexical lookup, untyped symbol dictionaries, hidden closures with unregistered semantics, and
 partially lowered adapter objects are prohibited.
+
+Authoring hierarchy is not canonical runtime hierarchy. `ModelFragment` composition, lexical
+namespaces, named requirements, and named exports are resolved before execution. The canonical
+model retains qualified identities and authoring provenance but has no fragment-local clock,
+scheduler, persistence store, backend state, or runtime dispatch boundary.
 
 ## Contract 1: State
 
@@ -451,6 +460,61 @@ events, and paper observations.
 Every façade MUST expose its lowered canonical representation through inspection. It MAY add
 defaults only when those defaults are stable, documented, fingerprinted, and source-appropriate.
 
+### Generic hierarchical composition
+
+Flat `PottsModel(declarations...)` remains the concise spelling for small models and all frozen
+Phase 13 use. Complex coupled models compose through the existing `ModelFragment` concept. No
+separate `CoupledModel`, `Subsystem`, field runtime, relationship runtime, or paper-specific core
+model type is introduced.
+
+A fragment provides:
+
+- one stable identity, version, and lexical namespace;
+- named typed requirements;
+- private declarations and nested fragments;
+- named typed exports;
+- compatibility, provenance, and backend requirements; and
+- no independent clock, scheduler, persistence format, or runtime state.
+
+A named requirement describes the semantic category and all compatibility information necessary
+to validate a binding, including owner, schema, units, lifecycle obligations, capabilities, and
+backend requirements where applicable. A named export refers to one admitted state, process
+operation, observation, relation, parameter, or other registered semantic value. Neither boundary
+uses untyped runtime name lookup.
+
+The exact requirement/export constructor names remain Provisional. The stable semantic rule is
+that fragments connect through named typed ports and lower those references to canonical qualified
+identities before fingerprinting or execution.
+
+Plans reference exported process operations:
+
+```julia
+Phase(:field, Advance(secretome.advance))
+Phase(:uptake, Exchange(secretome.uptake))
+Phase(:signaling, Advance(signaling.advance))
+```
+
+The property-like spelling denotes an immutable exported semantic reference, never mutable
+fragment storage. Private declarations cannot be referenced outside the fragment.
+
+There is still exactly one normalized root plan. Fragments may export operations, and a documented
+convenience façade may contribute fully inspectable plan entries, but no fragment owns a hidden
+local scheduler. Convenience entries are expanded and conflict-checked in the root plan.
+Dependencies validate explicit order and never topologically choose scientific order.
+
+Equivalent explicit leaves and fragment-packaged declarations normalize to the same scientific
+fingerprint. Fragment paths remain in composition reports and diagnostics. A different binding,
+namespace, law, schedule, or exported declaration changes canonical identity normally.
+
+Paper-specific builders may be supplied in tutorial or paper-example modules only after the same
+model is expressed through this generic API. Selected paper or author names MUST NOT enter the
+stable CorePotts or PottsToolkit export surface merely to hide authoring complexity.
+
+Backend requirements are derived transitively after complete fragment lowering. A fragment cannot
+hide host fallback, synchronization, transfer, allocation, unsupported storage, or an unqualified
+law. Decision 0032 applies unchanged to every stable execution capability reached through a
+fragment.
+
 ### Illustrative direct-kernel spelling
 
 The exact Julia constructors are Provisional, but the semantic shape is:
@@ -638,6 +702,12 @@ to exact by successful execution.
 - spatial: distinct proposal/contact/focal/field/query relations;
 - algorithm: source-attempt identity.
 
+The generic authoring fixture groups Wang's leaves into reusable field-coupling, intracellular
+signaling, focal-relationship, motility/history, observation, and protocol fragments. These are
+ordinary `ModelFragment` values with named typed requirements and exports; none has a Wang-specific
+CorePotts or PottsToolkit type. One root plan references their exported operations and makes the
+complete source order visible.
+
 The Wang lowering MUST encode the accepted order as Potts and accepted-copy focal-topology commit;
 scaled secretome field solve with diffusion followed by constant-medium concentration in each
 substep; centroid sampling; self-polarity derivation; secretome uptake/calibration; same-MCS ODE
@@ -659,6 +729,11 @@ complete.
 
 Morpheus parity is construct-level semantic compatibility, not identical XML, GUI, plotting, or job
 workflow.
+
+Generic authoring parity additionally requires that nested Morpheus-style systems map to the same
+`ModelFragment` requirement/export boundary used by hand-authored Wang and CNV models. An adapter
+may construct fragments and bindings but cannot introduce adapter-only hierarchy, symbol lookup,
+or scheduling semantics.
 
 The stable initial kernel targets:
 
@@ -688,6 +763,11 @@ Before runtime implementation resumes broadly:
 - Every old contract has a recorded v2 disposition.
 - Every capability and Morpheus row maps to the kernel or derived adapter boundary.
 - The six lowering sketches above remain complete and unambiguous.
+- No selected-model or author name is a stable CorePotts or PottsToolkit export.
+- Complex Wang, CNV, and Morpheus fixtures use the same nested-fragment, named-requirement,
+  named-export, and one-root-plan semantics.
+- Fragment packaging versus equivalent explicit declarations has canonical fingerprint identity.
+- Private access, incompatible bindings, and hidden plan authorities reject before execution.
 - The candidate kernel API has canonicalization and conflict-validation tests.
 - Registry v1 prototype exports are removed, internalized, or deliberately retained only as
   registry v2 façades; they are not added to the frozen Phase 13 surface.

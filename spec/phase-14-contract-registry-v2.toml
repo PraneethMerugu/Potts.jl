@@ -1,10 +1,11 @@
-schema_version = "2.0.0"
+schema_version = "2.1.0"
 registry_version = "phase14-contract-registry-v2"
-status = "phase14.1-owner-approved-simplified-gpu-native-contract-set; Wortel CPU-reference slice passed; Wortel Metal/ROCm closure required; individual contracts provisional"
-registered_at = "2026-07-24"
+status = "phase14.1-owner-approved-simplified generic-hierarchical GPU-native contract set; Wortel CPU/Metal/ROCm passed; Wang order accepted and implementation current; individual contracts provisional"
+registered_at = "2026-07-25"
 supersedes = "phase-14-contract-registry-v1.toml"
 architecture_decision = "decisions/0031-phase-14-single-semantic-kernel.md"
 gpu_promotion_decision = "decisions/0032-phase-14-gpu-native-promotion.md"
+generic_authoring_decision = "decisions/0033-phase-14-generic-hierarchical-authoring.md"
 gpu_implementation_plan = "../design/audits/phase-14-gpu-native-implementation-plan.md"
 kernel_specification = "phase-14-semantic-kernel.md"
 source_records = "../design/audits/phase-14-model-source-records-v1.toml"
@@ -68,6 +69,18 @@ candidate_values = [
     "DelayState",
     "PhaseObservation",
 ]
+
+[authoring_composition]
+root_model = "PottsModel retains flat order-independent declarations for small models and Phase 13 compatibility."
+hierarchy = "ModelFragment is the sole generic hierarchical composition unit; no CoupledModel, paper-specific core model, or independent domain runtime is admitted."
+requirements = "Fragment requirements are named and typed by semantic category, owner, schema, units, lifecycle obligations, capabilities, and backend needs as applicable."
+exports = "Fragment exports are named immutable references to admitted declarations or operations; private fragment declarations are inaccessible externally."
+plan = "Exactly one normalized root plan references exported operations and owns all order, cadence, stages, snapshots, lifecycle commit, observations, and stable boundaries."
+lowering = "Bindings, nested fragments, export paths, and convenience entries resolve completely to the canonical seven-area model before execution."
+identity = "Equivalent explicit-leaf and fragment-packaged models have the same scientific fingerprint; composition paths remain diagnostic provenance."
+paper_boundary = "Selected paper or author names are forbidden as stable CorePotts/PottsToolkit exports; example-layer builders use only the generic API and do not count as generic conformance evidence."
+backend_boundary = "Backend requirements propagate transitively from the lowered fragment graph; no fragment may hide fallback, transfer, synchronization, allocation, or unsupported laws."
+acceptance_fixtures = ["nested binding and privacy", "named requirement/export mismatch truth tables", "direct-versus-fragment fingerprint identity", "fragment substitution", "one-root-plan expansion", "Wang", "CNV", "Morpheus", "CPU/Metal/ROCm preflight and qualification"]
 
 [adapter_boundary]
 stable_core_dependency = "none"

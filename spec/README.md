@@ -132,6 +132,7 @@ Refactor execution evidence:
 - [Phase 14 D9 Work-Item Registry](../design/audits/phase-14-d9-work-items-v1.toml)
 - [Phase 14 Semantic-Architecture Simplification Audit](../design/audits/phase-14-semantics-simplification-audit.md)
 - [Phase 14 Focused Semantic-Architecture Interview](../design/audits/phase-14-semantics-focused-interview.md)
+- [Phase 14 Generic Authoring Simplification Audit](../design/audits/phase-14-generic-authoring-simplification-audit.md)
 - [Phase 14 GPU-Native Implementation and Qualification Plan](../design/audits/phase-14-gpu-native-implementation-plan.md)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
@@ -146,7 +147,9 @@ still follows the normal prototype, conformance, persistence, and backend change
 acceptance or implementation claims. Decision 0031 and the completed focused interview consolidate
 those requirements into registry v2's seven-area kernel. Decision 0032 requires every stable
 Phase 14 execution capability to pass a sequential CPU reference and backend-resident,
-real-hardware Metal and ROCm qualification. The
+real-hardware Metal and ROCm qualification. Decision 0033 requires complex models to use the same
+generic hierarchical `ModelFragment` composition, named typed requirements/exports, and one
+explicit root plan; paper-specific builders cannot substitute for that API evidence. The
 [Wortel Act-CPM vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
 now passes on CPU, Metal, and ROCm. Wang is open, and its exact
 [source/runtime execution order](../design/audits/phase-14-wang-order-audit.md) is accepted before

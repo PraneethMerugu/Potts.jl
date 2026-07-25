@@ -86,6 +86,8 @@ trajectories use preregistered local, invariant, and statistical comparisons.
 Deliver:
 
 - `GPUQualified`/`GPURequiredForPromotion` backend dispositions derived from `SemanticModel`;
+- transitive backend requirements derived after generic `ModelFragment` requirement/export
+  resolution, with no fragment-local override or fallback;
 - capability reports at state/law/storage/backend granularity;
 - residency, allocation, synchronization, and transfer instrumentation;
 - reusable CPU/Metal/ROCm test matrix and artifact schema;
@@ -95,6 +97,8 @@ Deliver:
 Gate:
 
 - a deliberately unsupported law fails before mutation;
+- equivalent explicit-leaf and fragment-packaged models produce identical backend preflight and
+  qualification requirements;
 - an advertised law cannot pass without both hardware evidence records; and
 - an uncoupled Phase 13 model remains byte- and result-identical.
 

@@ -831,27 +831,44 @@ model = PottsModel(
 ### Merks vasculogenesis
 
 ```julia
-model = PottsModel(
-    Endothelial,
-    Medium,
+chemo_coupling = ModelFragment(
+    :chemo_coupling,
     chemo,
     chemo_dynamics,
-    chemo_exchange,
+    chemo_exchange;
+    exports = (
+        advance = chemo_dynamics,
+        exchange = chemo_exchange,
+        field = chemo,
+    ),
+)
+
+vascular_mechanics = ModelFragment(
+    :vascular_mechanics,
     Adhesion(...),
     Volume(...),
     Elongation(...),
-    Chemotaxis(chemo, ...),
-    MCSPlan(
-        Phase(:field_pre,
-            Advance(chemo_dynamics; interval = HalfMCS())),
-        PottsAttempts(),
-        Phase(:field_exchange,
-            Exchange(chemo_exchange)),
-        Phase(:field_post,
-            Advance(chemo_dynamics; interval = HalfMCS())),
-        LifecyclePhase(),
-        ObservationPhase(),
-    ),
+    Chemotaxis(chemo_coupling.field, ...);
+    requires = (chemo = chemo_coupling.field,),
+)
+
+vascular_plan = MCSPlan(
+    Phase(:field_pre,
+        Advance(chemo_coupling.advance; interval = HalfMCS())),
+    PottsAttempts(),
+    Phase(:field_exchange,
+        Exchange(chemo_coupling.exchange)),
+    Phase(:field_post,
+        Advance(chemo_coupling.advance; interval = HalfMCS())),
+    LifecyclePhase(),
+    ObservationPhase(),
+)
+
+model = compose(
+    PottsModel(Endothelial, Medium),
+    chemo_coupling,
+    vascular_mechanics,
+    vascular_plan,
 )
 ```
 
@@ -860,51 +877,112 @@ The actual paper split may be Lie rather than Strang and remains a source-audit 
 ### Wang collective migration
 
 ```julia
-model = PottsModel(
-    Tumor,
-    Medium,
-    polarity,
-    rac,
-    sensed_secretome,
-    centroid_history,
-    junctions,
-    migration_protocol,
-    focal_strength,
+secretome_coupling = ModelFragment(
+    :secretome_coupling,
     secretome,
+    sensed_secretome,
     secretome_dynamics,
-    secretome_uptake,
-    rac_dynamics,
-    centroid_sample,
-    polarity_from_history,
-    focal_topology_on_accept,
-    focal_parameter_update,
-    neighbor_alignment,
-    protrusion_drive,
-    wang_observations,
-    MCSPlan(
-        PottsAttempts(on_accept = (focal_topology_on_accept,)),
-        Phase(:secretome_field_solve,
-            Advance(secretome_dynamics; interval = OneMCS())),
-        Phase(:sample_centroids,
-            Sample(centroid_sample)),
-        Phase(:update_self_polarity,
-            Update(polarity_from_history)),
-        Phase(:secretome_uptake,
-            Exchange(secretome_uptake)),
-        Phase(:intracellular_dynamics,
-            Advance(rac_dynamics; interval = OneMCS())),
-        Phase(:retune_focal_relationships,
-            Update(focal_parameter_update);
-            schedule = PeriodicMCS(10, 10)),
-        Phase(:align_neighbor_polarity,
-            Update(neighbor_alignment)),
-        Phase(:update_protrusion,
-            Update(protrusion_drive)),
-        LifecyclePhase(),
-        ObservationPhase(wang_observations...),
+    secretome_uptake;
+    requires = (
+        cells = migrating_cells,
+        medium = extracellular_medium,
+    ),
+    exports = (
+        advance = secretome_dynamics,
+        uptake = secretome_uptake,
+        signal = sensed_secretome,
     ),
 )
+
+intracellular_signaling = ModelFragment(
+    :intracellular_signaling,
+    rac,
+    rac_dynamics;
+    requires = (
+        cells = migrating_cells,
+        signal = secretome_coupling.signal,
+    ),
+    exports = (
+        advance = rac_dynamics,
+        activity = rac,
+    ),
+)
+
+focal_adhesions = ModelFragment(
+    :focal_adhesions,
+    junctions,
+    focal_strength,
+    focal_topology_on_accept,
+    focal_parameter_update;
+    requires = (cells = migrating_cells,),
+    exports = (
+        relationships = junctions,
+        topology = focal_topology_on_accept,
+        retune = focal_parameter_update,
+    ),
+)
+
+directed_motility = ModelFragment(
+    :directed_motility,
+    polarity,
+    centroid_history,
+    centroid_sample,
+    polarity_from_history,
+    neighbor_alignment,
+    protrusion_drive;
+    requires = (
+        cells = migrating_cells,
+        activity = intracellular_signaling.activity,
+        adhesions = focal_adhesions.relationships,
+    ),
+    exports = (
+        sample = centroid_sample,
+        derive = polarity_from_history,
+        align = neighbor_alignment,
+        force = protrusion_drive,
+    ),
+)
+
+migration_plan = MCSPlan(
+    PottsAttempts(on_accept = (focal_adhesions.topology,)),
+    Phase(:secretome_field_solve,
+        Advance(secretome_coupling.advance; interval = OneMCS())),
+    Phase(:sample_centroids,
+        Sample(directed_motility.sample)),
+    Phase(:update_self_polarity,
+        Update(directed_motility.derive)),
+    Phase(:secretome_uptake,
+        Exchange(secretome_coupling.uptake)),
+    Phase(:intracellular_dynamics,
+        Advance(intracellular_signaling.advance; interval = OneMCS())),
+    Phase(:retune_focal_relationships,
+        Update(focal_adhesions.retune);
+        schedule = PeriodicMCS(10, 10)),
+    Phase(:align_neighbor_polarity,
+        Update(directed_motility.align)),
+    Phase(:update_protrusion,
+        Update(directed_motility.force)),
+    LifecyclePhase(),
+    ObservationPhase(migration_observations...),
+)
+
+model = compose(
+    PottsModel(Tumor, Medium),
+    secretome_coupling,
+    intracellular_signaling,
+    focal_adhesions,
+    directed_motility,
+    migration_protocol,
+    migration_observations,
+    migration_plan,
+)
 ```
+
+These are generic fragments and named typed exports, not Wang-specific library types. The same
+field-coupling, fixed-step signaling, dynamic-relationship, history/motility, observation, and plan
+composition mechanisms must serve unrelated models and Morpheus compatibility fixtures. A
+paper-example module may package the complete assembly later, but that wrapper is not core API
+evidence.
 
 This is the accepted source-order lowering shape. The field solve follows Potts and precedes every
 Wang cell process. Its CompuCell3D-compatible numerical profile performs diffusion and then the
@@ -941,27 +1019,25 @@ host-managed relationship graphs, per-MCS transfers, and silent fallback are dis
 
 ### CNV
 
-CNV composes the same public families:
+CNV composes the same generic fragment and named-port boundary at greater scale:
 
 ```julia
-model = PottsModel(
-    retinal_cell_types...,
-    oxygen,
-    vegf,
-    bruch_membrane_state,
+model = compose(
+    PottsModel(retinal_cell_types...),
+    oxygen_coupling,
+    vegf_coupling,
+    degradable_membrane,
     vascular_relationships,
-    oxygen_dynamics,
-    vegf_dynamics,
-    field_exchange,
-    bruch_membrane_degradation,
-    vascular_relationship_dynamics,
-    growth_and_phenotype_events...,
+    phenotype_and_lifecycle,
+    cnv_observations,
     cnv_plan,
 )
 ```
 
 The paper model source MAY assemble many declarations and parameters, but it cannot implement a
-private solver, hidden mutation callback, or uncheckpointed process state.
+private solver, hidden mutation callback, or uncheckpointed process state. Each fragment must expose
+named typed operations used by `cnv_plan`, lower completely to the canonical kernel, and propagate
+its CPU/Metal/ROCm requirements.
 
 ## Problem Construction and Solving
 

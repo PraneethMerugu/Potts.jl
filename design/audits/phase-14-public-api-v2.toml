@@ -1,7 +1,8 @@
 schema_version = "1.0.0"
 status = "wortel-vertical-slice-provisional"
 authority = "spec/phase-14-semantic-kernel.md"
-policy = "These additive exports are excluded from the immutable Phase 13 inventory and must be reviewed here explicitly. Registry-v1 prototype spellings are not allowed."
+generic_authoring_decision = "spec/decisions/0033-phase-14-generic-hierarchical-authoring.md"
+policy = "These additive exports are excluded from the immutable Phase 13 inventory and must be reviewed here explicitly. Registry-v1 prototype spellings and selected-paper-specific CorePotts/PottsToolkit exports are not allowed. Complex models reuse the existing ModelFragment surface through the Provisional named typed requirement/export extension rather than introducing a paper or domain model hierarchy."
 
 [modules]
 CorePotts = [
