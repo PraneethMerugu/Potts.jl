@@ -94,6 +94,9 @@ end
         initial = -1.0f0,
         invariant = CorePotts.ActivityBounds(0.0f0, 10.0f0),
         ownership = AcceptedCopyManaged())
+    @test_throws ArgumentError SiteProperty(:invalid_nothing;
+        initial = nothing, invariant = !isnothing,
+        ownership = PreserveAtSite())
     site_state = initialize_site_property(
         property, zeros(UInt8, fixture.domain.dims))
     update = AcceptedCopyUpdate(
