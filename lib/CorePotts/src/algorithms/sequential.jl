@@ -480,7 +480,9 @@ function _validate_algorithm_workspace(workspace::CoupledAttemptWorkspace,
                 "coupled attempt state must share the scientific execution backend"))
     end
     if !(plan.backend isa KernelAbstractions.CPU)
-        isbitstype(typeof(workspace)) || throw(ArgumentError(
+        kernel = _sequential_mcs_kernel!(plan.backend, 1)
+        device_workspace = KernelAbstractions.argconvert(kernel, workspace)
+        isbitstype(typeof(device_workspace)) || throw(ArgumentError(
             "GPU coupled attempt workspace must lower to an isbits array tree"))
     end
     return workspace
@@ -515,7 +517,7 @@ function _validate_scientific_initialization(state, proposal_relation, component
         "scientific semantic addressing requires 1:typemax(UInt32) mutable sites"))
     if algorithm isa BudgetedSequentialCPM
         attempt_total = try
-            _attempt_total(algorithm, mutable_count)
+            _checked_attempt_total(algorithm, mutable_count)
         catch error
             error isa OverflowError || rethrow()
             throw(ArgumentError("budgeted sequential attempt count overflows Int"))
@@ -622,6 +624,13 @@ end
     candidate_count
 
 @inline function _attempt_total(algorithm::BudgetedSequentialCPM,
+        candidate_count::Int)
+    # Host initialization proves this product fits UInt32. Keeping checked arithmetic out of the
+    # device kernel also avoids backend compiler-specific overflow exception paths.
+    return candidate_count * Int(algorithm.budget.multiplier)
+end
+
+function _checked_attempt_total(algorithm::BudgetedSequentialCPM,
         candidate_count::Int)
     return Base.checked_mul(candidate_count, Int(algorithm.budget.multiplier))
 end
