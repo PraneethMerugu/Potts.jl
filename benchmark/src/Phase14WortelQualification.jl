@@ -88,8 +88,13 @@ function _phase14_build_wortel(name::String, dims::NTuple{2, Int};
     isequal(KernelAbstractions.get_backend(activity), backend) ||
         error("$name activity was not allocated directly on the scientific backend")
     if require_gpu_native
-        isbits(runtime.workspace) ||
-            error("$name compiled coupled workspace is not a device-valid immutable value")
+        backend_module = getfield(
+            Main, name == "metal" ? :Metal : :AMDGPU)
+        device_workspace = name == "metal" ?
+            backend_module.mtlconvert(runtime.workspace) :
+            backend_module.rocconvert(runtime.workspace)
+        isbits(device_workspace) ||
+            error("$name kernel-adapted coupled workspace is not a device-valid immutable value")
     end
 
     components = Adapt.adapt(adaptor, ScientificComponentSet(
