@@ -118,8 +118,18 @@ end
 function _state_block(state::RelationshipState)
     declaration = state.declaration
     metadata = (declaration = _declaration_record(declaration),
-        realized_capacity = declaration.capacity.value)
-    payload = (edges = Tuple(state.edges),)
+        realized_capacity = declaration.capacity.value,
+        storage = :canonical_soa)
+    count = _relationship_count(state)
+    payload = (
+        endpoint_a = copy(Adapt.adapt(Array, @view(state.endpoint_a[1:count]))),
+        generation_a = copy(Adapt.adapt(Array, @view(state.generation_a[1:count]))),
+        endpoint_b = copy(Adapt.adapt(Array, @view(state.endpoint_b[1:count]))),
+        generation_b = copy(Adapt.adapt(Array, @view(state.generation_b[1:count]))),
+        edge_payload = copy(Adapt.adapt(Array, @view(state.payload[1:count]))),
+        count = UInt32(count),
+        publication_epoch = copy(
+            Adapt.adapt(Array, state.publication_epoch)))
     return _checkpoint_block(:relationship_set, declaration.name,
         :relationship_set, metadata, payload)
 end
@@ -450,8 +460,21 @@ function _restore_block!(state::CellHistoryState, block)
     state.latest_sample_mcs = block.payload.latest_sample_mcs
 end
 function _restore_block!(state::RelationshipState, block)
-    empty!(state.edges)
-    append!(state.edges, block.payload.edges)
+    count = Int(block.payload.count)
+    count <= length(state.endpoint_a) || throw(
+        CheckpointCompatibilityError(:relationship_capacity,
+            string(length(state.endpoint_a)), string(count)))
+    clear_relationships!(state)
+    count > 0 && begin
+        copyto!(@view(state.endpoint_a[1:count]), block.payload.endpoint_a)
+        copyto!(@view(state.generation_a[1:count]), block.payload.generation_a)
+        copyto!(@view(state.endpoint_b[1:count]), block.payload.endpoint_b)
+        copyto!(@view(state.generation_b[1:count]), block.payload.generation_b)
+        copyto!(@view(state.payload[1:count]), block.payload.edge_payload)
+        fill!(@view(state.active[1:count]), UInt8(1))
+    end
+    state.count[1] = UInt32(count)
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::EvolvingFieldState, block)
     size(state.values) == size(block.payload.values) || throw(

@@ -1,8 +1,8 @@
-schema_version = "1.2.0"
+schema_version = "1.3.0"
 status = "accepted-implementation-entry"
 accepted_at = "2026-07-25"
 revised_at = "2026-07-25"
-revision = 3
+revision = 4
 model_id = "wang-2025-collective-tumor-migration"
 gate = "G3-B"
 scope = "source-backed sequential CPU reference through backend-adaptable canonical state, processes, workspaces, and one root plan"
@@ -170,7 +170,7 @@ schema = "undirected generation-aware cell pair with strength, target length, an
 logical_type = "integer endpoints/generations plus profile floating type payload"
 storage = "registered-specialized"
 physical_layout = "bounded canonical SoA: endpoint_a, generation_a, endpoint_b, generation_b, strength, target_length, maximum_length, active"
-initialization = "empty; accepted-copy topology follows source FocalPointPlasticity eligibility"
+initialization = "empty; accepted-copy topology follows the registered FocalPointPlasticity profile. A newly accepted link starts with strength 0, target length 0, and maximum length 100000 before the later source-mcs%10 retune."
 lifecycle = "remove stale endpoint generation before slot reuse"
 persistence = ["active edges", "canonical order", "payload", "endpoint generations", "capacity"]
 adaptation = ["CPU", "Metal", "ROCm"]
@@ -239,6 +239,9 @@ reads = ["ownership", "cell geometry", "motility_force", "focal_relationships"]
 writes = ["ownership", "cell geometry", "contact-neighbor graph", "focal_relationships"]
 snapshot = "accepted-copy transaction snapshot for topology; preceding completed-MCS snapshot for force and relationship energy"
 commit = "ordered sequential Potts commit with accepted-copy relationship transaction"
+topology_policy = "For an actionable proposal with a finite gaining cell, inspect NeighborOrder-3 sites around the recipient in the topology RNG permutation. The first finite distinct eligible cell with no existing link and degree below the type-pair maximum four becomes the proposed neighbor. A candidate contributes activation energy -50 and short-circuits ordinary focal spring evaluation for that proposal. Only acceptance creates the canonical generation-aware link. After an accepted copy, endpoint extinction removes all incident links; otherwise each affected endpoint removes at most the first canonical link whose centroid distance exceeds its stored maximum length."
+rng_namespace = "wang/focal-topology/neighbor-permutation"
+source_rng_policy = "CompuCell3D 4.2.5 uses std::random_shuffle over NeighborOrder-3 directions in ordinary runs and unshuffled direction order in test/generate mode. The source-faithful CPU oracle records both modes and the pinned runtime seed behavior. The portable profile uses the registered semantic Philox namespace and compares eligible-set/distribution behavior rather than claiming bitwise std::rand replay."
 backend_requirements = ["CPU", "Metal", "ROCm"]
 
 [[process]]
@@ -516,7 +519,7 @@ cases = ["inactive mode", "reset mode without field mutation", "per-site cap", "
 id = "relationship-graph"
 kind = "exact"
 profiles = ["source_faithful_cpu", "portable"]
-cases = ["create", "duplicate rejection", "degree capacity", "remove", "retune without topology change", "accepted/rejected/no-op proposal", "stale endpoint generation", "canonical order", "restart"]
+cases = ["create", "duplicate rejection", "degree capacity", "remove", "retune without topology change", "accepted/rejected/no-op proposal", "NeighborOrder-3 eligible-neighbor truth table", "activation-energy short circuit", "accepted-copy initial payload 0/0/100000", "one overlength removal per affected endpoint", "endpoint extinction removes every incident link", "stale endpoint generation", "canonical order", "restart"]
 
 [[conformance]]
 id = "polarity-and-force"
@@ -539,10 +542,10 @@ cases = ["Adapt round trip", "descriptor-free execution views", "device-storage 
 [[runtime_oracles]]
 id = "wang-potts-boundary-and-attempt-accounting"
 status = "required-before-g3b-closure"
-blocks = ["full source-faithful Potts trace", "G3-B completion claim"]
+blocks = ["full source-faithful Potts trace", "source-faithful FocalPointPlasticity topology trace", "G3-B completion claim"]
 does_not_block = ["state substrate", "history", "field", "exchange", "ODE", "relationship storage", "observation reducers"]
-question = "Confirm default CompuCell3D 4.2.5 Potts boundary behavior and exact attempted-copy count/order for the 256x256 Wang XML."
-evidence_target = "small exact-runtime trace with attempted source/target coordinates at boundary sites and total attempts per MCS"
+question = "Confirm default CompuCell3D 4.2.5 Potts boundary behavior, exact attempted-copy count/order, and FocalPointPlasticity proposal/acceptance/removal behavior for the Wang XML. Capture ordinary shuffled and test-mode unshuffled NeighborOrder-3 selection, activation-energy short circuit, initial 0/0/100000 payload, degree-four rejection, accepted/rejected/no-op visibility, overlength removal order, and endpoint extinction."
+evidence_target = "small exact-runtime trace with attempted source/target coordinates, total attempts per MCS, eligible neighbor set/order, chosen link endpoint, focal energy contribution, accepted-copy link inventory, and post-copy removal inventory"
 
 [[runtime_oracles]]
 id = "wang-roadrunner-numerical-profile"

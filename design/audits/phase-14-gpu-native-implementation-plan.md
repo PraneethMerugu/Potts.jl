@@ -157,7 +157,7 @@ G3 is executed through three non-substitutable gates:
   fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
   backend requirements, and the generic Wang lowering/order fixture. Evidence:
   [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
-- **G3-B — Wang sequential CPU reference: current; revision-3 implementation and closure
+- **G3-B — Wang sequential CPU reference: current; revision-4 implementation and closure
   protocol frozen.** The
   [G3-B entry packet](phase-14-g3b-entry-packet.md) and
   [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the

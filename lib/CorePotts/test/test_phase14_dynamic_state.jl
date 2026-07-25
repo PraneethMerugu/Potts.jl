@@ -350,6 +350,181 @@ end
         ownership, 2)
 end
 
+@testset "Phase 14 bounded portable relationship transaction" begin
+    fixture = _scientific_fixture(Float32, (4, 4))
+    tracker = BoundaryMeasureTracker(
+        fixture.boundary.metric, fixture.boundary.relation)
+    compiled = compile_scientific_state(
+        fixture.state, fixture.domain, tracker)
+    declaration = RelationshipSet(
+        :portable_junctions;
+        edge = Float32, maximum_degree = 1,
+        capacity = RelationshipCapacity(2))
+    state = RelationshipState(declaration)
+    workspace = CorePotts.RelationshipTransactionWorkspace(state)
+    first = CellEndpoint(
+        CellID(1), CorePotts.generation(fixture.state, CellID(1)))
+    second = CellEndpoint(
+        CellID(2), CorePotts.generation(fixture.state, CellID(2)))
+    CorePotts.stage_relationship_requests!(
+        workspace, declaration,
+        (CreateRelationship(second, first, 2.0f0),))
+    plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    @test CorePotts.apply_relationship_requests!(
+        plan, compiled, state, workspace) === state
+    @test CorePotts.synchronize_relationship_status!(
+        plan, workspace) === workspace
+    @test length(state.edges) == 1
+    @test only(state.edges).left == first
+    @test relationship_payload(state, first, second) == 2.0f0
+    @test state.count[1] == 1
+    @test state.active == UInt8[1, 0]
+    @test state.publication_epoch[1] == 1
+    @test plan.metrics.launches == 3
+    @test plan.metrics.host_to_device_transfers == 0
+    @test plan.metrics.device_to_host_transfers == 0
+    execution_view = CorePotts.RelationshipExecutionState(state)
+    @test !hasproperty(execution_view, :declaration)
+    adapted_view = CorePotts.Adapt.adapt(Array, execution_view)
+    @test adapted_view.endpoint_a isa Vector{UInt32}
+
+    before_payload = copy(state.payload)
+    before_epoch = only(state.publication_epoch)
+    stale_second = CellEndpoint(
+        CellID(2), CellGeneration(value(second.generation) + 1))
+    CorePotts.stage_relationship_requests!(
+        workspace, declaration,
+        (RetuneRelationship(
+            first, stale_second, 4.0f0),))
+    CorePotts.apply_relationship_requests!(
+        plan, compiled, state, workspace)
+    @test_throws ArgumentError CorePotts.synchronize_relationship_status!(
+        plan, workspace)
+    @test state.payload == before_payload
+    @test only(state.publication_epoch) == before_epoch
+    @test workspace.status[1] == 2
+    @test workspace.failing_request[1] == 1
+
+    CorePotts.stage_relationship_requests!(
+        workspace, declaration,
+        (RetuneRelationship(first, second, 5.0f0),))
+    CorePotts.apply_relationship_requests!(
+        plan, compiled, state, workspace)
+    CorePotts.synchronize_relationship_status!(plan, workspace)
+    @test relationship_payload(state, first, second) == 5.0f0
+    @test state.publication_epoch[1] == 2
+
+    CorePotts.stage_relationship_requests!(
+        workspace, declaration,
+        (RemoveRelationship(first, second),))
+    CorePotts.apply_relationship_requests!(
+        plan, compiled, state, workspace)
+    CorePotts.synchronize_relationship_status!(plan, workspace)
+    @test isempty(state.edges)
+    @test state.count[1] == 0
+    @test state.publication_epoch[1] == 3
+
+    elastic_declaration = RelationshipSet(
+        :elastic_junctions;
+        edge = CorePotts.ElasticLinkParameters{Float32},
+        maximum_degree = 1,
+        capacity = RelationshipCapacity(2))
+    elastic_state = RelationshipState(elastic_declaration)
+    @test elastic_state.payload isa CorePotts.ElasticLinkColumns
+    elastic_workspace =
+        CorePotts.RelationshipTransactionWorkspace(elastic_state)
+    initial_parameters =
+        CorePotts.ElasticLinkParameters(20.0f0, 8.0f0, 12.0f0)
+    CorePotts.stage_relationship_requests!(
+        elastic_workspace, elastic_declaration,
+        (CreateRelationship(first, second, initial_parameters),))
+    elastic_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    CorePotts.apply_relationship_requests!(
+        elastic_plan, compiled, elastic_state, elastic_workspace)
+    CorePotts.synchronize_relationship_status!(
+        elastic_plan, elastic_workspace)
+    @test elastic_state.payload.strength == Float32[20, 0]
+    @test elastic_state.payload.target_length == Float32[8, 0]
+    @test elastic_state.payload.maximum_length == Float32[12, 0]
+    @test relationship_payload(
+        elastic_state, first, second) == initial_parameters
+    @test CorePotts.Adapt.adapt(
+        Array, CorePotts.RelationshipExecutionState(
+            elastic_state)).payload isa CorePotts.ElasticLinkColumns
+
+    retune = CorePotts.ElasticLinkRetune(
+        :elastic_retune, elastic_declaration, :cells;
+        property = :volume_strength,
+        strength = 50.0f0, target_length = 8.0f0,
+        maximum_length = 12.0f0)
+    cpu_elastic_state = deepcopy(elastic_state)
+    cpu_logical = deepcopy(fixture.state)
+    cpu_retune_workspace = CorePotts.ElasticLinkRetuneWorkspace(
+        cpu_elastic_state,
+        property_values(cpu_logical, :volume_strength))
+    @test CorePotts.apply_elastic_link_retune!(
+        cpu_logical, cpu_elastic_state, retune,
+        cpu_retune_workspace) === cpu_elastic_state
+    @test property_values(
+        cpu_logical, :volume_strength) == Float32[50, 50]
+    @test cpu_elastic_state.payload.strength == Float32[50, 0]
+    @test cpu_elastic_state.publication_epoch[1] == 2
+
+    execution = CorePotts.scientific_execution(compiled)
+    portable_retune_workspace =
+        CorePotts.ElasticLinkRetuneWorkspace(
+            elastic_state,
+            execution.core.properties.volume_strength)
+    portable_retune_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    @test CorePotts.apply_elastic_link_retune!(
+        portable_retune_plan, compiled, elastic_state,
+        retune, portable_retune_workspace) === elastic_state
+    @test CorePotts.synchronize_elastic_retune_status!(
+        portable_retune_plan,
+        portable_retune_workspace) === portable_retune_workspace
+    @test execution.core.properties.volume_strength ==
+        Float32[50, 50]
+    @test elastic_state.payload.strength == Float32[50, 0]
+    @test elastic_state.publication_epoch[1] == 2
+    @test portable_retune_plan.metrics.launches == 3
+    @test portable_retune_plan.metrics.host_to_device_transfers == 0
+    @test portable_retune_plan.metrics.device_to_host_transfers == 0
+
+    property_before_failure =
+        copy(execution.core.properties.volume_strength)
+    strength_before_failure =
+        copy(elastic_state.payload.strength)
+    epoch_before_failure = only(elastic_state.publication_epoch)
+    elastic_state.generation_b[1] += UInt64(1)
+    CorePotts.apply_elastic_link_retune!(
+        portable_retune_plan, compiled, elastic_state,
+        retune, portable_retune_workspace)
+    @test_throws ArgumentError CorePotts.synchronize_elastic_retune_status!(
+        portable_retune_plan, portable_retune_workspace)
+    @test execution.core.properties.volume_strength ==
+        property_before_failure
+    @test elastic_state.payload.strength ==
+        strength_before_failure
+    @test only(elastic_state.publication_epoch) ==
+        epoch_before_failure
+
+    cleanup_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    @test CorePotts.cleanup_relationships!(
+        cleanup_plan, compiled, elastic_state,
+        elastic_workspace) === elastic_state
+    @test CorePotts.synchronize_relationship_status!(
+        cleanup_plan, elastic_workspace) === elastic_workspace
+    @test isempty(elastic_state.edges)
+    @test elastic_state.count[1] == 0
+    @test elastic_state.publication_epoch[1] ==
+        epoch_before_failure + 1
+    @test cleanup_plan.metrics.launches == 3
+end
+
 @testset "Phase 14 coupled checkpoint all authoritative state families" begin
     fixture = _scientific_fixture(Float32, (4, 4))
     tracker = BoundaryMeasureTracker(
@@ -407,7 +582,7 @@ end
 
     fill!(site_state.values, 9.0f0)
     fill!(history_state.values, 9.0f0)
-    empty!(relationship_state.edges)
+    CorePotts.clear_relationships!(relationship_state)
     fill!(field_state.values, 9.0f0)
     set_global_property!(global_state, 9.0f0)
     fill!(membrane_state.values, 9.0f0)

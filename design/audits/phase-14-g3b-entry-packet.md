@@ -1,6 +1,6 @@
 # Phase 14.1 G3-B Wang Entry Packet
 
-Status: accepted implementation entry, revision 3; fail-closed G3-B exit protocol registered
+Status: accepted implementation entry, revision 4; fail-closed G3-B exit protocol registered
 
 Date: 2026-07-25
 
@@ -247,6 +247,14 @@ credit toward the final claim. G3-C still owns real Metal and ROCm numerical/run
 qualification; G3-B cannot claim either backend merely because portable kernels ran through the
 KernelAbstractions CPU backend.
 
+Revision 4 resolves the accepted-copy focal-topology ambiguity exposed during implementation.
+The pinned 4.2.5 plugin uses a randomized NeighborOrder-3 scan, a first-eligible neighbor rule,
+activation-energy short circuit, acceptance-only creation, initial `0/0/100000` link parameters,
+and at-most-one overlength removal per affected surviving endpoint. The
+[primary-source audit](phase-14-g3b-focal-topology-source-audit.md) records the exact source
+commit and hashes. Portable execution uses a registered semantic Philox namespace and does not
+claim bitwise replay of the plugin's implicit `std::rand` state.
+
 ## Entry verdict
 
 G3-B is ready to implement now. The first code slice should establish generic cell state/history
@@ -286,7 +294,7 @@ advancement, semantic-RNG initialization, CPU/portable agreement, conditional pu
 zero-byte warm execution, exact target-122 start, and checkpoint epoch restore. The pinned
 RoadRunner trace and assembled Wang visibility remain open.
 
-All remaining implementation proceeds only against revision 3 of the machine-readable contract.
+All remaining implementation proceeds only against revision 4 of the machine-readable contract.
 The old three-argument forcing-array exchange overload remains compatibility-only historical
 prototype behavior. The mode-bound immediate transaction is the Wang execution target and owns
 the frozen cross-domain write ABI.

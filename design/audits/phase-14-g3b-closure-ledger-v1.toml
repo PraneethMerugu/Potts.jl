@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 gate = "G3-B"
 model_id = "wang-2025-collective-tumor-migration"
 contract = "phase-14-g3b-entry-contract-v1.toml"
-contract_revision = 3
+contract_revision = 4
 overall_status = "open"
 updated_at = "2026-07-25"
 completion_rule = "overall_status may become passed only when all requirement rows are passed and scripts/check_phase14_g3b_closure.jl passes on the recorded clean commit"
@@ -10,7 +10,7 @@ completion_rule = "overall_status may become passed only when all requirement ro
 [[requirement]]
 id = "source-provenance-lock"
 status = "partial"
-evidence = ["phase-14-model-source-records-v1.toml", "phase-14-source-closure-v1.toml"]
+evidence = ["phase-14-model-source-records-v1.toml", "phase-14-source-closure-v1.toml", "phase-14-g3b-focal-topology-source-audit.md"]
 remaining = ["hash-complete executable source archive", "pinned foreign-runtime environment manifest"]
 
 [[requirement]]
@@ -22,25 +22,25 @@ remaining = ["assembled 11-process Wang model", "target-MCS 0:500 smoke", "assem
 [[requirement]]
 id = "sequential-cpu-conformance"
 status = "partial"
-evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
-remaining = ["relationship graph", "polarity/force", "observation", "assembled-model conformance"]
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md"]
+remaining = ["accepted-copy focal topology/energy", "polarity/force", "observation", "assembled-model conformance"]
 
 [[requirement]]
 id = "order-and-boundaries"
 status = "partial"
-evidence = ["phase-14-wang-order-audit.md", "phase-14-wang-order-oracle-v1.toml", "phase-14-g3b-intracellular-evidence.md"]
-remaining = ["assembled ordinary and 120/210/211 traces", "foreign Potts attempt-accounting trace"]
+evidence = ["phase-14-wang-order-audit.md", "phase-14-wang-order-oracle-v1.toml", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-focal-topology-source-audit.md"]
+remaining = ["assembled ordinary and 120/210/211 traces", "foreign Potts/FPP attempt-and-topology trace"]
 
 [[requirement]]
 id = "transaction-and-failure-atomicity"
 status = "partial"
-evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
-remaining = ["Potts/relationship transaction matrix", "remaining mutating-process failure matrix"]
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md"]
+remaining = ["accepted-copy Potts/relationship transaction matrix", "remaining mutating-process failure matrix"]
 
 [[requirement]]
 id = "completed-mcs-restart"
 status = "partial"
-evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md"]
 remaining = ["assembled restart targets 0,120,121,210,211,212,500", "all partial-phase rejection points"]
 
 [[requirement]]
@@ -52,8 +52,8 @@ remaining = ["remaining process allocation rows", "whole non-observing MCS trans
 [[requirement]]
 id = "portable-abi-readiness"
 status = "partial"
-evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
-remaining = ["relationship/alignment/force/observation execution views", "complete-plan Adapt and launch/transfer trace"]
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md"]
+remaining = ["accepted-copy topology and alignment/force/observation execution views", "complete-plan Adapt and launch/transfer trace"]
 
 [[requirement]]
 id = "foreign-runtime-oracles"

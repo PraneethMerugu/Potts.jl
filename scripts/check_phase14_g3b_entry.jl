@@ -17,10 +17,16 @@ const EXCHANGE_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-exchange-evidence.md")
 const INTRACELLULAR_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-intracellular-evidence.md")
+const RELATIONSHIP_EVIDENCE_PATH = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-relationship-evidence.md")
 const CLOSURE_LEDGER_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-closure-ledger-v1.toml")
 const CONTINUOUS_SOURCE_PATH = joinpath(
     REPO, "lib", "CorePotts", "src", "coupled", "continuous.jl")
+const RELATIONSHIP_SOURCE_PATH = joinpath(
+    REPO, "lib", "CorePotts", "src", "coupled", "relationships.jl")
+const DYNAMIC_STATE_SOURCE_PATH = joinpath(
+    REPO, "lib", "CorePotts", "src", "coupled", "dynamic_state.jl")
 const failures = String[]
 
 check(condition, message) = condition || push!(failures, message)
@@ -33,6 +39,8 @@ isfile(FIELD_EVIDENCE_PATH) || error("missing G3-B atomic-field evidence")
 isfile(EXCHANGE_EVIDENCE_PATH) || error("missing G3-B exchange evidence")
 isfile(INTRACELLULAR_EVIDENCE_PATH) ||
     error("missing G3-B intracellular evidence")
+isfile(RELATIONSHIP_EVIDENCE_PATH) ||
+    error("missing G3-B relationship evidence")
 isfile(CLOSURE_LEDGER_PATH) || error("missing G3-B closure ledger")
 
 contract = TOML.parsefile(CONTRACT_PATH)
@@ -42,13 +50,18 @@ closure_audit = read(CLOSURE_AUDIT_PATH, String)
 field_evidence = read(FIELD_EVIDENCE_PATH, String)
 exchange_evidence = read(EXCHANGE_EVIDENCE_PATH, String)
 intracellular_evidence = read(INTRACELLULAR_EVIDENCE_PATH, String)
+relationship_evidence = read(RELATIONSHIP_EVIDENCE_PATH, String)
 closure_ledger = TOML.parsefile(CLOSURE_LEDGER_PATH)
 continuous_source = read(CONTINUOUS_SOURCE_PATH, String)
+relationship_source = read(RELATIONSHIP_SOURCE_PATH, String)
+dynamic_state_source = read(DYNAMIC_STATE_SOURCE_PATH, String)
+implementation_source =
+    continuous_source * relationship_source * dynamic_state_source
 
 check(contract["status"] == "accepted-implementation-entry",
     "G3-B entry contract is not accepted")
-check(contract["schema_version"] == "1.2.0" && contract["revision"] == 3,
-    "G3-B entry checker requires revision-3 schema 1.2.0")
+check(contract["schema_version"] == "1.3.0" && contract["revision"] == 4,
+    "G3-B entry checker requires revision-4 schema 1.3.0")
 check(contract["entry_decision"]["implementation_may_start"] === true,
     "G3-B entry contract does not permit implementation")
 check(contract["entry_decision"]["architecture_interview_required"] === false,
@@ -75,6 +88,10 @@ check(occursin("50/50 intracellular assertions", intracellular_evidence) &&
       occursin("RoadRunner", intracellular_evidence) &&
       occursin("real GPU qualification remain open", intracellular_evidence),
     "G3-B intracellular evidence is missing or overclaims closure")
+check(occursin("51/51 assertions", relationship_evidence) &&
+      occursin("accepted-copy topology/energy integration", relationship_evidence) &&
+      occursin("Real Metal", relationship_evidence),
+    "G3-B relationship evidence is missing or overclaims closure")
 for required_source in (
         "WANG_PORTABLE_REDUCTION_WIDTH = 256",
         "_exchange_device_reduce_cells!",
@@ -87,8 +104,13 @@ for required_source in (
         "synchronize_field_advance_status!",
         "AffineCellAdvance",
         "UniformCellInitialization",
-        "synchronize_affine_cell_status!")
-    check(occursin(required_source, continuous_source),
+        "synchronize_affine_cell_status!",
+        "RelationshipExecutionState",
+        "RelationshipTransactionWorkspace",
+        "_relationship_apply_transaction!",
+        "_elastic_retune_apply!",
+        "_relationship_cleanup_transaction!")
+    check(occursin(required_source, implementation_source),
         "portable field/exchange source is missing '$required_source'")
 end
 
@@ -196,6 +218,12 @@ process_by_id = Dict(row["id"] => row for row in contract["process"])
 phases = [process_by_id[id]["phase"] for id in contract["plan"]["ordered_processes"]]
 check(phases == collect(1:length(phases)),
     "G3-B root-plan process phases are not canonical and contiguous")
+potts_process = process_by_id["potts_metropolis"]
+check(occursin("NeighborOrder-3", potts_process["topology_policy"]) &&
+      occursin("activation energy -50", potts_process["topology_policy"]) &&
+      occursin("std::random_shuffle", potts_process["source_rng_policy"]) &&
+      occursin("semantic Philox", potts_process["source_rng_policy"]),
+    "G3-B focal-topology eligibility or RNG profile is not frozen")
 
 required_backends = Set(["CPU", "Metal", "ROCm"])
 for row in contract["state"]

@@ -340,8 +340,17 @@ function _publish_state!(destination::CellHistoryState,
 end
 function _publish_state!(destination::RelationshipState,
         source::RelationshipState)
-    empty!(destination.edges)
-    append!(destination.edges, source.edges)
+    length(destination.endpoint_a) == length(source.endpoint_a) ||
+        throw(DimensionMismatch(
+            "relationship state capacities differ during publication"))
+    copyto!(destination.endpoint_a, source.endpoint_a)
+    copyto!(destination.generation_a, source.generation_a)
+    copyto!(destination.endpoint_b, source.endpoint_b)
+    copyto!(destination.generation_b, source.generation_b)
+    copyto!(destination.payload, source.payload)
+    copyto!(destination.active, source.active)
+    copyto!(destination.count, source.count)
+    copyto!(destination.publication_epoch, source.publication_epoch)
     return destination
 end
 _publish_state!(destination, source) = copyto!(destination, source)

@@ -54,7 +54,7 @@ delay/event/mapping/adapter assertions.
 The complete CorePotts package suite then passed 3,209/3,209 assertions on Julia 1.12.6. The G3-B
 entry, G3-A, Phase 14.0, Phase 13 API-inventory, and repository-structure gates also pass. This is
 a working-tree implementation baseline; the final closure packet still requires the exact clean
-commit and artifact hashes registered by revision 3.
+commit and artifact hashes registered by the current closure contract.
 
 ## Explicitly open
 

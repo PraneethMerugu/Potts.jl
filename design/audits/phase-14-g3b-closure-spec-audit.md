@@ -1,6 +1,6 @@
 # Phase 14.1 G3-B Closure Specification Audit
 
-Status: accepted closure protocol incorporated into G3-B entry contract revision 3
+Status: accepted closure protocol and focal-topology correction incorporated into revision 4
 
 Date: 2026-07-25
 
@@ -147,7 +147,7 @@ allocations in the scientific transition.
 
 G3-B cannot close until:
 
-1. all twelve revision-3 closure rows pass in the machine-readable ledger;
+1. all twelve closure rows pass in the machine-readable ledger;
 2. every registered Wang state and process has a generic canonical declaration and sequential CPU
    implementation in one assembled model;
 3. every source-faithful conformance row passes both its primitive fixture and its assembled-model
@@ -196,3 +196,10 @@ warm path, schedule boundary, and checkpoint-epoch tests. Its bounded evidence i
 [phase-14-g3b-intracellular-evidence.md](phase-14-g3b-intracellular-evidence.md). The RoadRunner
 oracle and assembled Wang trace remain open, so this is not intracellular source-runtime closure
 or G3-B closure.
+
+Revision 4 additionally freezes the previously underspecified FocalPointPlasticity
+accepted-copy law. The [source audit](phase-14-g3b-focal-topology-source-audit.md) records
+NeighborOrder-3 first-eligible selection, ordinary `std::random_shuffle` versus test-mode order,
+activation-energy short circuit, acceptance-only creation, initial payload, degree limits, and
+post-copy removal behavior. The Potts foreign-runtime oracle now covers those topology effects;
+static source inspection alone does not close it.
