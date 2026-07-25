@@ -1,5 +1,6 @@
 using SciMLBase
 using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
+    AffineCellAdvance, AffineCellRuntime, AffineCellWorkspace,
     AlgebraicAssignment, AlgebraicConstraint, AngularMembrane, AtMCSEnd,
     CellDomain, CellDynamics, CellEndpoint, CellHistory, CompatibilityItem,
     ConstantConcentration, ContinuousClock, ContinuousEvent,
@@ -25,8 +26,10 @@ using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
     ScheduledParameter, ScheduledPotts, ScheduledProcess, ScheduledSystem,
     SetTo, SiteDynamics, SiteProperty, StagedProtocol, StateVariable,
     SteadyStateAdvance, SymbolIdentity, SymbolMap, SymbolRef, SynchronousRule,
-    SystemClock, UnsupportedContinuousProfile, Update, Uptake,
+    SystemClock, UniformCellInitialization, UnsupportedContinuousProfile,
+    Update, Uptake,
     adapt_continuous_model, advance_continuous_system!, advance_field!,
+    apply_affine_cell_advance!, apply_uniform_cell_initialization!,
     apply_field_exchange!, apply_relationship_dynamics!, apply_site_dynamics!,
     apply_symbol_map!, continuous_profile_report, create_relationship!,
     delay_value, execute_event!, global_property_value, global_time,
@@ -998,6 +1001,247 @@ end
         steady_field.values)
     @test steady_field.diagnostics.residual <=
         steady_field.diagnostics.threshold
+end
+
+@testset "Phase 14 affine intracellular state and advancement" begin
+    requester = ComponentIdentity(
+        :affine_intracellular_test, v"1.0.0", :test)
+    schema = PropertySchema(
+        PropertyDescriptor(
+            :rac, Float32, ConstantInitializer(0.0f0);
+            requester),
+        PropertyDescriptor(
+            :a, Float32, ConstantInitializer(1.0f0);
+            requester),
+        PropertyDescriptor(
+            :signal, Float32, ConstantInitializer(0.0f0);
+            requester),
+        PropertyDescriptor(
+            :intracellular_time, Float32, ConstantInitializer(0.0f0);
+            requester))
+    owners = reshape(OwnerRef[
+        CellOwner(1), CellOwner(1), CellOwner(2),
+        MediumOwner(1), MediumOwner(1), MediumOwner(1),
+        MediumOwner(1), MediumOwner(1), MediumOwner(1),
+    ], 3, 3)
+    logical = LogicalPottsState(
+        owners, CellCapacity(2);
+        cell_types = Dict(
+            CellID(1) => CellTypeID(2),
+            CellID(2) => CellTypeID(2)),
+        medium_domains = [MediumID(1)],
+        property_schema = schema)
+    rac = property_values(logical, :rac)
+    signal = property_values(logical, :signal)
+    intracellular_time =
+        property_values(logical, :intracellular_time)
+    rac .= Float32[25, 30]
+    process = AffineCellAdvance(
+        :rac_advance, :cells;
+        state = :rac, constant = :a, input = :signal,
+        time = :intracellular_time,
+        decay = 0.1f0, duration = 2880.0f0)
+    workspace = AffineCellWorkspace(logical, process)
+    @test Set(CorePotts.process_reads(process)) == Set((
+        (:cell_property, :rac),
+        (:cell_property, :a),
+        (:cell_property, :signal),
+        (:cell_property, :intracellular_time)))
+    @test Set(CorePotts.process_writes(process)) == Set((
+        (:cell_property, :rac),
+        (:cell_property, :intracellular_time)))
+
+    namespace = RNGNamespaceIdentity(
+        UInt128(0x77616e672f7261635f696e69745f7631))
+    initializer = UniformCellInitialization(
+        :rac_initialization, :cells;
+        property = :rac, lower = 0.0f0, upper = 30.0f0,
+        namespace)
+    initialization_logical = deepcopy(logical)
+    property_values(initialization_logical, :rac) .= 0.0f0
+    initialization_workspace =
+        AffineCellWorkspace(initialization_logical, process)
+    @test apply_uniform_cell_initialization!(
+        initialization_logical, initializer,
+        initialization_workspace, UInt64(0x1400)) ===
+        initialization_logical
+    initialized_rac =
+        property_values(initialization_logical, :rac)
+    @test all(value -> 0.0f0 < value < 30.0f0, initialized_rac)
+    @test initialization_workspace.publication_epoch[1] == 1
+    repeat_logical = deepcopy(logical)
+    property_values(repeat_logical, :rac) .= 0.0f0
+    repeat_workspace = AffineCellWorkspace(repeat_logical, process)
+    apply_uniform_cell_initialization!(
+        repeat_logical, initializer,
+        repeat_workspace, UInt64(0x1400))
+    @test property_values(repeat_logical, :rac) == initialized_rac
+
+    initialization_domain = CartesianDomain(
+        (3, 3); spacing = (1.0f0, 1.0f0))
+    initialization_relation = first_shell_relation(
+        SurfaceRole(), Val(2); spacing = (1.0f0, 1.0f0))
+    initialization_tracker = BoundaryMeasureTracker(
+        BoundaryEdgeCount(), initialization_relation)
+    portable_initialization_logical = deepcopy(logical)
+    property_values(
+        portable_initialization_logical, :rac) .= 0.0f0
+    portable_initialization = compile_scientific_state(
+        portable_initialization_logical,
+        initialization_domain, initialization_tracker)
+    portable_initialization_execution =
+        CorePotts.scientific_execution(portable_initialization)
+    portable_initialization_workspace = AffineCellWorkspace(
+        portable_initialization_execution.core.properties.rac,
+        portable_initialization_execution.core.properties.intracellular_time)
+    initialization_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    apply_uniform_cell_initialization!(
+        initialization_plan, portable_initialization,
+        initializer, portable_initialization_workspace,
+        UInt64(0x1400))
+    CorePotts.synchronize_affine_cell_status!(
+        initialization_plan, portable_initialization_workspace)
+    @test portable_initialization_execution.core.properties.rac ==
+        initialized_rac
+    @test portable_initialization_workspace.publication_epoch[1] == 1
+    @test initialization_plan.metrics.launches == 3
+
+    # Source start(): one registered advance before finalized target MCS 0.
+    @test apply_affine_cell_advance!(
+        logical, process, workspace) === logical
+    @test rac ≈ Float32[10, 10]
+    @test intracellular_time == Float32[2880, 2880]
+    @test workspace.publication_epoch[1] == 1
+
+    # Target 211/source 210 calibrates without publishing signal.
+    signal .= 0.0f0
+    apply_affine_cell_advance!(logical, process, workspace)
+    @test rac ≈ Float32[10, 10]
+    @test intracellular_time == Float32[5760, 5760]
+
+    # Target 212/source 211 reads the same-MCS published signal.
+    signal .= Float32[0, 4]
+    apply_affine_cell_advance!(logical, process, workspace)
+    @test rac[1] ≈ 10.0f0
+    @test rac[2] ≈ 50.0f0
+    @test intracellular_time == Float32[8640, 8640]
+    @test workspace.publication_epoch[1] == 3
+
+    short_process = AffineCellAdvance(
+        :short_affine, :cells;
+        state = :rac, constant = :a, input = :signal,
+        time = :intracellular_time,
+        decay = 0.1f0, duration = 2.0f0)
+    short_workspace = AffineCellWorkspace(logical, short_process)
+    rac .= Float32[4, 7]
+    signal .= Float32[0, 2]
+    expected = Float32[
+        10 + (4 - 10) * exp(-0.2),
+        30 + (7 - 30) * exp(-0.2)]
+    apply_affine_cell_advance!(
+        logical, short_process, short_workspace)
+    @test rac ≈ expected rtol = 4eps(Float32)
+
+    failure_before_rac = copy(rac)
+    failure_before_time = copy(intracellular_time)
+    signal[2] = Float32(NaN)
+    @test_throws ArgumentError apply_affine_cell_advance!(
+        logical, short_process, short_workspace)
+    @test rac == failure_before_rac
+    @test intracellular_time == failure_before_time
+    @test short_workspace.status[1] == 1
+    @test short_workspace.failing_index[1] == 2
+    signal[2] = 2.0f0
+
+    affine_allocation_probe(state, process, workspace) =
+        @allocated apply_affine_cell_advance!(
+            state, process, workspace)
+    apply_affine_cell_advance!(
+        logical, short_process, short_workspace)
+    @test affine_allocation_probe(
+        logical, short_process, short_workspace) == 0
+
+    schedule = PeriodicMCS(122, 1; stop = 500)
+    @test !CorePotts.is_due(schedule, 121)
+    @test CorePotts.is_due(schedule, 122)
+    @test CorePotts.is_due(schedule, 500)
+    @test !CorePotts.is_due(schedule, 501)
+
+    phase_logical = deepcopy(logical)
+    property_values(phase_logical, :rac) .= Float32[4, 7]
+    property_values(phase_logical, :signal) .= Float32[0, 2]
+    property_values(
+        phase_logical, :intracellular_time) .= 0.0f0
+    affine_runtime = AffineCellRuntime(
+        short_process, phase_logical)
+    affine_snapshot = CoupledState(
+        globals = (affine_runtime,))
+    affine_candidate = deepcopy(affine_snapshot)
+    phase_candidate = deepcopy(phase_logical)
+    @test CorePotts.execute_affine_cell_process!(
+        affine_candidate, affine_snapshot,
+        phase_candidate, short_process) ==
+        (:rac, :intracellular_time)
+    @test property_values(phase_logical, :rac) == Float32[4, 7]
+    @test property_values(phase_candidate, :rac) ≈
+        expected rtol = 4eps(Float32)
+    @test affine_snapshot.globals[1].workspace.publication_epoch[1] == 0
+    @test affine_candidate.globals[1].workspace.publication_epoch[1] == 1
+    affine_block = CorePotts._state_block(
+        affine_candidate.globals[1])
+    @test propertynames(affine_block.payload) ==
+        (:publication_epoch,)
+    affine_candidate.globals[1].workspace.publication_epoch[1] = 99
+    CorePotts._restore_block!(
+        affine_candidate.globals[1], affine_block)
+    @test affine_candidate.globals[1].workspace.publication_epoch[1] == 1
+
+    portable_logical = deepcopy(logical)
+    property_values(portable_logical, :rac) .= Float32[4, 7]
+    property_values(portable_logical, :signal) .= Float32[0, 2]
+    property_values(portable_logical, :intracellular_time) .= 0.0f0
+    domain = CartesianDomain(
+        (3, 3); spacing = (1.0f0, 1.0f0))
+    relation = first_shell_relation(
+        SurfaceRole(), Val(2); spacing = (1.0f0, 1.0f0))
+    tracker = BoundaryMeasureTracker(
+        BoundaryEdgeCount(), relation)
+    compiled = compile_scientific_state(
+        portable_logical, domain, tracker)
+    execution = CorePotts.scientific_execution(compiled)
+    portable_workspace = AffineCellWorkspace(
+        execution.core.properties.rac,
+        execution.core.properties.intracellular_time)
+    plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    @test apply_affine_cell_advance!(
+        plan, compiled, short_process,
+        portable_workspace) === compiled
+    @test CorePotts.synchronize_affine_cell_status!(
+        plan, portable_workspace) === portable_workspace
+    @test execution.core.properties.rac ≈ expected rtol = 4eps(Float32)
+    @test execution.core.properties.intracellular_time ==
+        Float32[2, 2]
+    @test portable_workspace.publication_epoch[1] == 1
+    @test plan.metrics.launches == 3
+    @test plan.metrics.host_to_device_transfers == 0
+    @test plan.metrics.device_to_host_transfers == 0
+    @test CorePotts.Adapt.adapt(
+        Array, portable_workspace).candidate_state isa Vector{Float32}
+
+    portable_before = copy(execution.core.properties.rac)
+    portable_time_before =
+        copy(execution.core.properties.intracellular_time)
+    execution.core.properties.signal[2] = Float32(NaN)
+    apply_affine_cell_advance!(
+        plan, compiled, short_process, portable_workspace)
+    @test_throws ArgumentError CorePotts.synchronize_affine_cell_status!(
+        plan, portable_workspace)
+    @test execution.core.properties.rac == portable_before
+    @test execution.core.properties.intracellular_time ==
+        portable_time_before
+    @test portable_workspace.publication_epoch[1] == 1
 end
 
 @testset "Phase 14 delay, event, mapping, adapter, and multirate semantics" begin

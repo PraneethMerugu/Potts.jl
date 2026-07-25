@@ -157,13 +157,17 @@ G3 is executed through three non-substitutable gates:
   fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
   backend requirements, and the generic Wang lowering/order fixture. Evidence:
   [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
-- **G3-B — Wang sequential CPU reference: current; implementation entry frozen.** The
+- **G3-B — Wang sequential CPU reference: current; revision-3 implementation and closure
+  protocol frozen.** The
   [G3-B entry packet](phase-14-g3b-entry-packet.md) and
   [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the
   source-backed state/process inventory, device-ready storage ABI, numerical profiles, conformance
-  matrix, and three remaining foreign-runtime oracles. Replace every structural fixture law with
+  matrix, three remaining foreign-runtime oracles, and twelve-row fail-closed
+  [closure ledger](phase-14-g3b-closure-ledger-v1.toml). Replace every structural fixture law with
   the registered Wang state, field, ODE, relationship, observation, and lifecycle implementation
-  and close exact/invariant/restart conformance. The first implementation increment, the
+  in one assembled model and close exact/invariant/restart conformance. Isolated primitive
+  evidence cannot substitute for the assembled-model, runtime-oracle, or clean-commit claim
+  gates. The first implementation increment, the
   backend-adaptable bounded [cell-history substrate](phase-14-g3b-history-evidence.md), passes its
   sequential CPU gate; this does not close G3-B or qualify a GPU backend.
 - **G3-C — Wang Metal/ROCm qualification: pending G3-B.** Close the identical canonical model on
@@ -209,6 +213,13 @@ Gate:
 - device-code, allocation, synchronization, transfer, and memory evidence on real Metal and ROCm;
   and
 - Wang bounded-model correctness and performance profiles on sequential CPU, Metal, and ROCm.
+
+G3-B may be called complete only when `scripts/check_phase14_g3b_closure.jl` passes on the exact
+clean commit recorded by the evidence packet. The checker requires every registered closure row,
+including the complete 11-process assembly, all-process failure/allocation matrices, assembled
+restart/order traces, bounded observation schema, three raw foreign-runtime oracles, and frozen
+regression/API evidence. KernelAbstractions CPU execution proves portable shape only; real
+Metal/ROCm qualification remains G3-C.
 
 Failure of any required backend leaves Wang Provisional and prevents G4 from opening. CPU
 correctness cannot compensate for a missing or host-assisted GPU path, and GPU agreement cannot

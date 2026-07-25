@@ -1,6 +1,6 @@
 # Phase 14.1 G3-B Wang Entry Packet
 
-Status: accepted implementation entry, revision 2; G3-B implementation may continue
+Status: accepted implementation entry, revision 3; fail-closed G3-B exit protocol registered
 
 Date: 2026-07-25
 
@@ -25,11 +25,18 @@ The CPU reference is an oracle for the same canonical model that will run on Met
 not permission to build CPU-owned arrays, host callbacks, a second runtime, or paper-specific
 public types.
 
-Revision 2 closes the pre-field implementation audit. In particular, it resolves the source-MCS
+Revision 2 closed the pre-field implementation audit. In particular, it resolved the source-MCS
 zero mapping, makes five field substeps internal to one atomic process, removes internal substep
 checkpoints, requires two field staging grids, makes exchange mode a root-plan binding, normalizes
 the shared uptake multiplier to global state, and freezes deterministic reduction and
 cross-domain-publication requirements.
+
+Revision 3 leaves those semantics unchanged and strengthens only the exit proof. It registers a
+[machine-readable closure ledger](phase-14-g3b-closure-ledger-v1.toml), twelve non-substitutable
+closure requirements, assembled-model evidence, all-process failure/allocation matrices,
+hash-addressed foreign-runtime artifacts, exact restart rejection points, and a fail-closed claim
+checker. Primitive results and KernelAbstractions CPU results remain useful increments but cannot
+be promoted into a Wang, foreign-runtime, GPU, or paper-reproduction claim.
 
 ## Source time mapping
 
@@ -96,8 +103,9 @@ fixed order and a visible commit dependency.
 
 The exact source-label boundary consequences remain, with normalized targets made explicit:
 
-- At source MCS 120 / target 121, Potts uses focal strength zero; the later retune writes 20 for
-  source MCS 121 / target 122.
+- At source MCS 120 / target 121, Potts uses focal strength zero; the later phase of that same
+  target transition retunes to 20, so source MCS 121 / target 122 is the first Potts step that
+  reads 20.
 - At source MCS 210 / target 211, uptake calibrates and mutates the field but does not write `s`;
   the ODE reads zero. The later retune writes the scanned strength and the same-MCS force update
   sees it.
@@ -193,6 +201,12 @@ G3-B closes the source-faithful rows on sequential CPU and the portable structur
 rows. Warm field and exchange execution on CPU must allocate zero bytes after construction.
 G3-C then executes the identical canonical model on Metal and ROCm without redesign.
 
+Revision 3 strengthens the allocation gate: the final closure packet must report every process and
+the complete non-observing sequential CPU MCS transition at zero bytes after construction and
+warm-up. Field and exchange already meet that rule; their local results do not waive the remaining
+rows. Caller-owned observation serialization and checkpoint output buffers are measured
+separately.
+
 The field and exchange conformance profile preregisters local Float32 tolerances in the
 machine-readable contract. Integer schedules, periodic index mapping, exact Medium overwrite,
 identity/generation state, status, and publication epochs remain exact. Balance uses the registered
@@ -214,6 +228,24 @@ claim:
 
 Original source seed identities, archived pickle/UMAP execution, and final paper-classification
 tolerances belong to Phase 14.3 rather than this implementation gate.
+
+## Completion-claim protocol
+
+The accepted exit is deliberately narrower than “the pieces exist.” Before the exact phrase
+`G3-B complete` may appear:
+
+1. the one generic Wang declaration must lower to the registered complete 11-process plan;
+2. isolated and assembled source-faithful CPU conformance must both pass;
+3. the portable state/plan tree must pass the structural KernelAbstractions CPU gate;
+4. all-process transaction, failure, allocation, observation, and restart matrices must pass;
+5. all three foreign-runtime oracles must be closed from pinned raw artifacts;
+6. regression/API/fingerprint gates must pass on the exact clean commit; and
+7. `scripts/check_phase14_g3b_closure.jl` must print `PASS`.
+
+The live ledger may use only `pending`, `partial`, or `passed`. A `partial` row is never treated as
+credit toward the final claim. G3-C still owns real Metal and ROCm numerical/runtime
+qualification; G3-B cannot claim either backend merely because portable kernels ran through the
+KernelAbstractions CPU backend.
 
 ## Entry verdict
 
@@ -248,7 +280,13 @@ and conditional commits. This closes the reusable portable execution design on t
 Metal/ROCm execution evidence remains the G3-C promotion step and cannot change the ABI or
 reduction order.
 
-Field/exchange implementation proceeds only against revision 2 of the machine-readable contract.
+The generic
+[intracellular evidence](phase-14-g3b-intracellular-evidence.md) now records exact affine
+advancement, semantic-RNG initialization, CPU/portable agreement, conditional publication,
+zero-byte warm execution, exact target-122 start, and checkpoint epoch restore. The pinned
+RoadRunner trace and assembled Wang visibility remain open.
+
+All remaining implementation proceeds only against revision 3 of the machine-readable contract.
 The old three-argument forcing-array exchange overload remains compatibility-only historical
 prototype behavior. The mode-bound immediate transaction is the Wang execution target and owns
-the revision-2 cross-domain write ABI.
+the frozen cross-domain write ABI.

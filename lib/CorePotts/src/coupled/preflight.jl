@@ -46,6 +46,7 @@ function _capability_for_state(state)
     state isa ContinuousSystemState && return :continuous_system
     state isa GlobalPropertyState && return :global_property
     state isa FieldExchangeState && return :field_exchange_state
+    state isa AffineCellRuntime && return :affine_cell_runtime
     state isa MembranePropertyState && return :membrane_property
     state isa DelayStateStorage && return :delay_state
     state isa EventRuntimeState && return :continuous_event

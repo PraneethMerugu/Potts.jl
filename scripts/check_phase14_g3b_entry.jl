@@ -15,6 +15,10 @@ const FIELD_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-field-evidence.md")
 const EXCHANGE_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-exchange-evidence.md")
+const INTRACELLULAR_EVIDENCE_PATH = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-intracellular-evidence.md")
+const CLOSURE_LEDGER_PATH = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-closure-ledger-v1.toml")
 const CONTINUOUS_SOURCE_PATH = joinpath(
     REPO, "lib", "CorePotts", "src", "coupled", "continuous.jl")
 const failures = String[]
@@ -27,6 +31,9 @@ isfile(ENTRY_PACKET_PATH) || error("missing G3-B entry packet")
 isfile(CLOSURE_AUDIT_PATH) || error("missing G3-B closure specification audit")
 isfile(FIELD_EVIDENCE_PATH) || error("missing G3-B atomic-field evidence")
 isfile(EXCHANGE_EVIDENCE_PATH) || error("missing G3-B exchange evidence")
+isfile(INTRACELLULAR_EVIDENCE_PATH) ||
+    error("missing G3-B intracellular evidence")
+isfile(CLOSURE_LEDGER_PATH) || error("missing G3-B closure ledger")
 
 contract = TOML.parsefile(CONTRACT_PATH)
 order = TOML.parsefile(ORDER_PATH)
@@ -34,12 +41,14 @@ entry_packet = read(ENTRY_PACKET_PATH, String)
 closure_audit = read(CLOSURE_AUDIT_PATH, String)
 field_evidence = read(FIELD_EVIDENCE_PATH, String)
 exchange_evidence = read(EXCHANGE_EVIDENCE_PATH, String)
+intracellular_evidence = read(INTRACELLULAR_EVIDENCE_PATH, String)
+closure_ledger = TOML.parsefile(CLOSURE_LEDGER_PATH)
 continuous_source = read(CONTINUOUS_SOURCE_PATH, String)
 
 check(contract["status"] == "accepted-implementation-entry",
     "G3-B entry contract is not accepted")
-check(contract["schema_version"] == "1.1.0" && contract["revision"] == 2,
-    "G3-B entry checker requires revision-2 schema 1.1.0")
+check(contract["schema_version"] == "1.2.0" && contract["revision"] == 3,
+    "G3-B entry checker requires revision-3 schema 1.2.0")
 check(contract["entry_decision"]["implementation_may_start"] === true,
     "G3-B entry contract does not permit implementation")
 check(contract["entry_decision"]["architecture_interview_required"] === false,
@@ -62,6 +71,10 @@ check(occursin("portable fixed-tree kernelabstractions reference accepted",
       occursin("zero-byte warm sequential CPU", exchange_evidence) &&
       occursin("exchange transaction evidence", entry_packet),
     "G3-B exchange evidence is missing or overclaims portable closure")
+check(occursin("50/50 intracellular assertions", intracellular_evidence) &&
+      occursin("RoadRunner", intracellular_evidence) &&
+      occursin("real GPU qualification remain open", intracellular_evidence),
+    "G3-B intracellular evidence is missing or overclaims closure")
 for required_source in (
         "WANG_PORTABLE_REDUCTION_WIDTH = 256",
         "_exchange_device_reduce_cells!",
@@ -71,7 +84,10 @@ for required_source in (
         "_periodic_field_device_substep!",
         "_field_device_commit!",
         "synchronize_field_exchange_status!",
-        "synchronize_field_advance_status!")
+        "synchronize_field_advance_status!",
+        "AffineCellAdvance",
+        "UniformCellInitialization",
+        "synchronize_affine_cell_status!")
     check(occursin(required_source, continuous_source),
         "portable field/exchange source is missing '$required_source'")
 end
@@ -123,6 +139,20 @@ expected_oracles = Set([
     "wang-roadrunner-numerical-profile",
     "wang-field-numerical-profile",
 ])
+expected_closure_requirements = Set([
+    "source-provenance-lock",
+    "canonical-wang-assembly",
+    "sequential-cpu-conformance",
+    "order-and-boundaries",
+    "transaction-and-failure-atomicity",
+    "completed-mcs-restart",
+    "steady-state-resource-contract",
+    "portable-abi-readiness",
+    "foreign-runtime-oracles",
+    "observation-schema",
+    "regression-and-api-freeze",
+    "evidence-reproducibility",
+])
 
 check(state_ids == expected_states, "G3-B state registry is incomplete")
 check(workspace_ids == expected_workspaces, "G3-B workspace registry is incomplete")
@@ -132,6 +162,35 @@ check(conformance_ids == expected_conformance,
     "G3-B conformance registry is incomplete")
 check(oracle_ids == expected_oracles,
     "G3-B runtime-oracle registry is incomplete")
+closure_requirement_ids =
+    unique_ids(contract["closure_requirement"], "closure requirement registry")
+check(closure_requirement_ids == expected_closure_requirements,
+    "G3-B closure requirement registry is incomplete")
+
+ledger_ids = unique_ids(closure_ledger["requirement"], "closure ledger")
+check(ledger_ids == expected_closure_requirements,
+    "G3-B closure ledger does not match the closure requirement registry")
+check(closure_ledger["contract_revision"] == contract["revision"],
+    "G3-B closure ledger targets a stale contract revision")
+allowed_closure_statuses = Set(["pending", "partial", "passed"])
+for row in closure_ledger["requirement"]
+    check(row["status"] in allowed_closure_statuses,
+        "closure row '$(row["id"])' has an invalid status")
+    check(!isempty(row["evidence"]),
+        "closure row '$(row["id"])' has no evidence pointer")
+end
+all_passed = all(
+    row -> row["status"] == "passed", closure_ledger["requirement"])
+check((closure_ledger["overall_status"] == "passed") == all_passed,
+    "closure overall status must be passed exactly when every row is passed")
+check(contract["closure_protocol"]["status"] in ("open", "passed") &&
+      contract["closure_protocol"]["status"] ==
+          closure_ledger["overall_status"],
+    "G3-B contract and ledger closure statuses disagree")
+check(occursin("every closure_requirement",
+          contract["closure_protocol"]["completion_rule"]) &&
+      occursin("clean commit", contract["closure_protocol"]["evidence_rule"]),
+    "G3-B closure protocol is not fail-closed and commit-addressed")
 
 process_by_id = Dict(row["id"] => row for row in contract["process"])
 phases = [process_by_id[id]["phase"] for id in contract["plan"]["ordered_processes"]]

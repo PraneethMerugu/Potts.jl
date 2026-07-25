@@ -172,6 +172,19 @@ function _state_block(state::FieldExchangeState)
         :field_exchange_state, metadata, payload)
 end
 
+function _state_block(state::AffineCellRuntime)
+    payload = (
+        publication_epoch = copy(Adapt.adapt(
+            Array, state.workspace.publication_epoch)),)
+    metadata = (
+        capacity = length(state.workspace.candidate_state),
+        state_type = string(eltype(state.workspace.candidate_state)),
+        time_type = string(eltype(state.workspace.candidate_time)))
+    return _checkpoint_block(
+        :affine_cell_runtime, state.name,
+        :affine_cell_runtime, metadata, payload)
+end
+
 function _state_block(state::MembranePropertyState)
     declaration = state.declaration
     metadata = (declaration = _declaration_record(declaration),
@@ -238,6 +251,8 @@ _checkpoint_arrays(::ContinuousSystemState) = ()
 _checkpoint_arrays(::GlobalPropertyState) = ()
 _checkpoint_arrays(state::FieldExchangeState) = (
     state.value, state.initialized, state.publication_epoch)
+_checkpoint_arrays(state::AffineCellRuntime) =
+    (state.workspace.publication_epoch,)
 _checkpoint_arrays(state::MembranePropertyState) = (
     state.values, state.generations, state.active)
 _checkpoint_arrays(::DelayStateStorage) = ()
@@ -407,7 +422,8 @@ function _find_state(state::CoupledState, block::CoupledCheckpointBlock)
         family === :cell_history ? state.histories :
         family === :relationship_set ? state.relationships :
         family === :evolving_field ? state.fields :
-        family in (:continuous_system, :global_property, :field_exchange_state) ?
+        family in (:continuous_system, :global_property,
+            :field_exchange_state, :affine_cell_runtime) ?
             state.globals :
         family === :membrane_property ? state.membranes :
         family in (:delay_state, :continuous_event) ? state.delays :
@@ -469,6 +485,14 @@ function _restore_block!(state::FieldExchangeState, block)
     copyto!(state.value, block.payload.value)
     copyto!(state.initialized, block.payload.initialized)
     copyto!(state.publication_epoch, block.payload.publication_epoch)
+end
+function _restore_block!(state::AffineCellRuntime, block)
+    length(state.workspace.candidate_state) == block.metadata.capacity || throw(
+        CheckpointCompatibilityError(:affine_cell_capacity,
+            string(length(state.workspace.candidate_state)),
+            string(block.metadata.capacity)))
+    copyto!(state.workspace.publication_epoch,
+        block.payload.publication_epoch)
 end
 function _restore_block!(state::MembranePropertyState, block)
     size(state.values) == size(block.payload.values) || throw(

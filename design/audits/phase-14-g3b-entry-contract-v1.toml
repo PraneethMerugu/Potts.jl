@@ -1,8 +1,8 @@
-schema_version = "1.1.0"
+schema_version = "1.2.0"
 status = "accepted-implementation-entry"
 accepted_at = "2026-07-25"
 revised_at = "2026-07-25"
-revision = 2
+revision = 3
 model_id = "wang-2025-collective-tumor-migration"
 gate = "G3-B"
 scope = "source-backed sequential CPU reference through backend-adaptable canonical state, processes, workspaces, and one root plan"
@@ -61,6 +61,8 @@ uptake_local_atol = 3.814697265625e-6
 uptake_local_rtol = 3.814697265625e-6
 balance_rule = "absolute error <= 64*eps(Float32)*max(1, reference mass)"
 exact_quantities = ["integer schedules", "periodic index mapping", "Medium overwrite value 1.0f0", "uptake cap 1.0f0 for exact branch fixtures", "cell slot/generation identity", "status and commit epoch"]
+registration_rule = "Every comparison declares the reference runtime, arithmetic profile, observable, absolute/relative rule, and aggregation rule before the first paper-scale run. A changed tolerance creates a new evidence revision and invalidates no earlier raw artifact."
+oracle_rule = "Foreign-runtime microfixtures are generated from controlled non-paper-scale inputs. Potts.jl does not choose tolerances by inspecting the Wang paper-scale outputs."
 
 [capacities]
 cell_capacity = "construction-time parameter, fixed before execution"
@@ -384,6 +386,79 @@ post_field_phase = false
 post_exchange_phase = false
 partial_mcs_restart = false
 
+[closure_protocol]
+status = "open"
+ledger = "phase-14-g3b-closure-ledger-v1.toml"
+claim_checker = "../../scripts/check_phase14_g3b_closure.jl"
+completion_claim = "G3-B complete"
+completion_rule = "The completion claim is permitted only when every closure_requirement has status passed in the closure ledger, every referenced evidence artifact exists, every registered command exits successfully, and all three runtime-oracle rows are closed with immutable raw artifacts."
+primitive_rule = "Passing a reusable primitive or a KernelAbstractions CPU oracle may close only that named increment. It cannot close the canonical Wang assembly, a foreign-runtime oracle, G3-B, or any real GPU backend."
+profile_boundary = "G3-B requires the source-faithful sequential CPU model and portable structural/device-readiness evidence over the identical canonical plan. Real Metal and ROCm numerical execution, residency, device code, transfer, memory, and performance qualification are exclusively G3-C and may not redesign G3-B semantics."
+stable_boundary_rule = "Only a completed target MCS after required observations is restartable. A closure fixture must reject capture after every earlier process phase and every internal field substep."
+failure_rule = "Every mutating process proves candidate-only failure behavior, deterministic failure class and canonical first failing identity where applicable, unchanged authoritative state and semantic time, and unchanged publication epoch."
+allocation_rule = "After construction and warm-up, every process in the canonical sequential CPU plan and the complete non-observing target-MCS transition allocate zero bytes. Caller-owned observation serialization and checkpoint output buffers are measured separately and may not hide process allocation."
+evidence_rule = "Each closure artifact records the exact clean commit, dirty-state policy, Julia and package/runtime versions, platform, exact command, input hashes, raw output hash, assertion totals, and claim boundary."
+
+[[closure_requirement]]
+id = "source-provenance-lock"
+scope = "Pinned Wang source revision, XML/Python/SBML inputs, paper identity, runtime/container identities, and cryptographic hashes."
+required_evidence = ["source archive manifest", "license/provenance record", "runtime version manifest"]
+
+[[closure_requirement]]
+id = "canonical-wang-assembly"
+scope = "One generic declaration lowers to one canonical 11-process root plan with all nine registered state families and no Wang-specific public runtime API."
+required_evidence = ["canonical inspection artifact", "lowering fingerprint", "direct-versus-fragment identity", "bounded target-MCS 0:500 smoke"]
+
+[[closure_requirement]]
+id = "sequential-cpu-conformance"
+scope = "Every source_faithful_cpu conformance row passes against the assembled model, not merely isolated primitives."
+required_evidence = ["per-row assertion ledger", "assembled bounded-model trace", "analytic and invariant fixtures"]
+
+[[closure_requirement]]
+id = "order-and-boundaries"
+scope = "Exact source k to target k+1 mapping, process order, attempt budget, and source 120/210/211 visibility are observed in the assembled trace."
+required_evidence = ["ordinary-MCS trace", "target 121/122 trace", "target 211/212 trace", "attempt accounting trace"]
+
+[[closure_requirement]]
+id = "transaction-and-failure-atomicity"
+scope = "Every mutating process and the Potts/relationship and field/cell/global cross-domain transactions satisfy the closure failure rule."
+required_evidence = ["failure matrix", "publication-epoch trace", "authoritative-state before/after hashes"]
+
+[[closure_requirement]]
+id = "completed-mcs-restart"
+scope = "Uninterrupted and restarted runs agree at declared target boundaries 0, 120, 121, 210, 211, 212, and 500; every partial-MCS capture point rejects."
+required_evidence = ["checkpoint schema fingerprint", "restart comparison matrix", "partial-boundary rejection matrix"]
+
+[[closure_requirement]]
+id = "steady-state-resource-contract"
+scope = "The complete sequential CPU transition and each process meet the allocation rule with preallocated bounded workspaces and deterministic overflow."
+required_evidence = ["per-process allocation table", "whole-transition allocation result", "capacity and overflow truth table"]
+
+[[closure_requirement]]
+id = "portable-abi-readiness"
+scope = "All canonical state, workspaces, process views, status, and transactions adapt together and execute through descriptor-free KernelAbstractions CPU oracles without host callbacks, scalar loops, hidden transfers, or runtime symbol lookup."
+required_evidence = ["Adapt tree inventory", "device-storage validation", "launch/transfer trace", "conditional-publication fixtures"]
+
+[[closure_requirement]]
+id = "foreign-runtime-oracles"
+scope = "The Potts boundary/attempt, RoadRunner, and CC3D field runtime oracles are closed from pinned raw artifacts before any complete-Wang claim."
+required_evidence = ["three closed runtime-oracle records", "raw input/output hashes", "comparison reports under preregistered tolerances"]
+
+[[closure_requirement]]
+id = "observation-schema"
+scope = "All G3-B observations have typed bounded schemas, exact source labels, deterministic ordering/reduction, restart continuity, and declared host-publication boundaries."
+required_evidence = ["schema fingerprint", "record-order fixture", "target 91/271 fixtures", "restart continuity fixture"]
+
+[[closure_requirement]]
+id = "regression-and-api-freeze"
+scope = "G3-A identity/lowering, Phase 13 API inventory and fingerprints, prior checkpoints, full CorePotts behavior, and repository structure remain accepted."
+required_evidence = ["full test reports", "API diff report", "fingerprint checks", "structure checks"]
+
+[[closure_requirement]]
+id = "evidence-reproducibility"
+scope = "The closure packet is commit-addressed, hash-complete, independently rerunnable, and contains no unsupported GPU or paper-reproduction claim."
+required_evidence = ["closure ledger", "exact command manifest", "artifact hashes", "claim-boundary audit"]
+
 [boundary_expectations.source_mcs_120]
 target_mcs = 121
 potts_focal_strength = 0.0
@@ -497,16 +572,18 @@ items = [
 
 [acceptance]
 g3b_requires = [
-    "every state and process above implemented through generic canonical declarations",
-    "all source_faithful_cpu conformance rows pass",
-    "portable device-readiness structural conformance passes before G3-C begins",
-    "all three required runtime oracles are closed",
+    "every closure_requirement row is passed in the machine-readable closure ledger",
+    "every state and process above is implemented through generic canonical declarations and exercised in one assembled target-MCS 0:500 model",
+    "all source_faithful_cpu conformance rows pass in isolation and through the assembled model",
+    "portable device-readiness structural conformance passes over the identical canonical state/plan before G3-C begins",
+    "all three required runtime oracles are closed from pinned raw artifacts",
     "source MCS labels map exactly to normalized target MCS without a hidden source step in initialization",
-    "restart passes at every declared completed-MCS stable boundary and partial-MCS capture rejects",
-    "field and exchange CPU warm paths allocate zero bytes with caller-owned observation and checkpoint outputs excluded",
-    "field/exchange failure atomicity and cross-domain publication tests pass",
+    "restart passes at every declared completed-MCS stable boundary and every partial-MCS capture point rejects",
+    "every sequential CPU process and the complete non-observing MCS transition allocate zero bytes after construction and warm-up",
+    "every mutating process proves failure atomicity; Potts/relationship and field/cell/global writes prove one logical publication",
     "all G3-B numerical tolerances and deterministic reduction identities are registered before paper-scale result inspection",
-    "G3-A identity, lowering, API inventory, and Phase 13 behavior remain unchanged",
+    "G3-A identity, lowering, API inventory, Phase 13 behavior, prior checkpoints, and repository structure remain unchanged",
+    "the claim checker passes on the exact clean commit named by the closure evidence",
 ]
 g3c_inherits = [
     "identical canonical model and logical storage",

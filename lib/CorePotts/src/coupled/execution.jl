@@ -674,6 +674,10 @@ function _execute_phase!(integrator::CoupledIntegrator,
                 candidate, snapshot, potts_candidate, potts_snapshot,
                 process, _invocation_interval(invocation), target_mcs)
             output === nothing || push!(written_cell_properties, output)
+        elseif process isa AffineCellAdvance
+            outputs = execute_affine_cell_process!(
+                candidate, snapshot, potts_candidate, process)
+            append!(written_cell_properties, outputs)
         elseif process isa CellDynamics
             execute_cell_dynamics!(
                 potts_candidate, potts_snapshot, process,

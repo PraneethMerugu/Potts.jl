@@ -1,0 +1,80 @@
+schema_version = "1.0.0"
+gate = "G3-B"
+model_id = "wang-2025-collective-tumor-migration"
+contract = "phase-14-g3b-entry-contract-v1.toml"
+contract_revision = 3
+overall_status = "open"
+updated_at = "2026-07-25"
+completion_rule = "overall_status may become passed only when all requirement rows are passed and scripts/check_phase14_g3b_closure.jl passes on the recorded clean commit"
+
+[[requirement]]
+id = "source-provenance-lock"
+status = "partial"
+evidence = ["phase-14-model-source-records-v1.toml", "phase-14-source-closure-v1.toml"]
+remaining = ["hash-complete executable source archive", "pinned foreign-runtime environment manifest"]
+
+[[requirement]]
+id = "canonical-wang-assembly"
+status = "pending"
+evidence = ["phase-14-g3a-generic-authoring-evidence.md"]
+remaining = ["assembled 11-process Wang model", "target-MCS 0:500 smoke", "assembly inspection fingerprint"]
+
+[[requirement]]
+id = "sequential-cpu-conformance"
+status = "partial"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["relationship graph", "polarity/force", "observation", "assembled-model conformance"]
+
+[[requirement]]
+id = "order-and-boundaries"
+status = "partial"
+evidence = ["phase-14-wang-order-audit.md", "phase-14-wang-order-oracle-v1.toml", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["assembled ordinary and 120/210/211 traces", "foreign Potts attempt-accounting trace"]
+
+[[requirement]]
+id = "transaction-and-failure-atomicity"
+status = "partial"
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["Potts/relationship transaction matrix", "remaining mutating-process failure matrix"]
+
+[[requirement]]
+id = "completed-mcs-restart"
+status = "partial"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["assembled restart targets 0,120,121,210,211,212,500", "all partial-phase rejection points"]
+
+[[requirement]]
+id = "steady-state-resource-contract"
+status = "partial"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["remaining process allocation rows", "whole non-observing MCS transition", "overflow matrix"]
+
+[[requirement]]
+id = "portable-abi-readiness"
+status = "partial"
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md"]
+remaining = ["relationship/alignment/force/observation execution views", "complete-plan Adapt and launch/transfer trace"]
+
+[[requirement]]
+id = "foreign-runtime-oracles"
+status = "pending"
+evidence = ["phase-14-g3b-entry-contract-v1.toml"]
+remaining = ["Potts boundary/attempt oracle", "RoadRunner oracle", "CC3D field oracle"]
+
+[[requirement]]
+id = "observation-schema"
+status = "pending"
+evidence = ["phase-14-g3b-entry-contract-v1.toml"]
+remaining = ["typed bounded observation implementation", "ordering/restart/target 91 and 271 fixtures"]
+
+[[requirement]]
+id = "regression-and-api-freeze"
+status = "partial"
+evidence = ["phase-14-g3a-generic-authoring-evidence.md"]
+remaining = ["full clean-commit CorePotts report after assembly", "final API/fingerprint/checkpoint/structure diff"]
+
+[[requirement]]
+id = "evidence-reproducibility"
+status = "partial"
+evidence = ["phase-14-g3b-closure-spec-audit.md", "phase-14-g3b-closure-ledger-v1.toml"]
+remaining = ["clean closure commit", "exact command and artifact hash manifest", "passing closure checker"]
