@@ -302,8 +302,8 @@ function commit_accepted_copy_updates!(workspace::CoupledAttemptWorkspace,
             workspace.site_states, _effect_property(effect))
         old = @inbounds state.values[site]
         value = _assignment_value(effect.gained, old)
-        # Constructor/preflight validates literal writes. Runtime invariant checks remain a host
-        # reference responsibility; device execution is not claimed for this workspace.
+        # Constructor/preflight validates literal writes. The hot path stays branch-free on both
+        # host and device; dynamic invariant predicates remain a host-reference responsibility.
         @inbounds state.values[site] = convert(eltype(state.values), value)
     end
     return nothing

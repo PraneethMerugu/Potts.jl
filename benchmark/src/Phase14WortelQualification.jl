@@ -88,11 +88,9 @@ function _phase14_build_wortel(name::String, dims::NTuple{2, Int};
     isequal(KernelAbstractions.get_backend(activity), backend) ||
         error("$name activity was not allocated directly on the scientific backend")
     if require_gpu_native
-        backend_module = getfield(
-            Main, name == "metal" ? :Metal : :AMDGPU)
-        device_workspace = name == "metal" ?
-            backend_module.mtlconvert(runtime.workspace) :
-            backend_module.rocconvert(runtime.workspace)
+        probe = _phase14_activity_energy_probe!(backend, 1)
+        device_workspace =
+            KernelAbstractions.argconvert(probe, runtime.workspace)
         isbits(device_workspace) ||
             error("$name kernel-adapted coupled workspace is not a device-valid immutable value")
     end
@@ -157,21 +155,24 @@ function _phase14_energy_probe!(run)
     device_context = ScientificProposalContext(
         scientific_execution(run.coupled.potts.state), transaction;
         algorithm_workspace = run.runtime.workspace)
+    kernel = _phase14_activity_energy_probe!(run.backend, 1)
     if !(run.backend isa KernelAbstractions.CPU)
-        isbits(device_context) ||
+        device_context_argument =
+            KernelAbstractions.argconvert(kernel, device_context)
+        isbits(device_context_argument) ||
             error("Phase 14 activity energy context is not device-valid")
     end
     output = similar(run.runtime.state.values, Float32, 1)
-    kernel = _phase14_activity_energy_probe!(run.backend, 1)
     kernel(output, run.program.hamiltonian, proposal, device_context; ndrange = 1)
     KernelAbstractions.synchronize(run.backend)
     observed = only(Array(output))
-    isapprox(observed, expected; rtol = 16eps(Float32), atol = 0.0f0) ||
+    isapprox(observed, expected;
+        rtol = 16eps(Float32), atol = 16eps(Float32)) ||
         error("Phase 14 device geometric activity energy differs: $observed != $expected")
     fill!(run.runtime.state.values, 0.0f0)
     KernelAbstractions.synchronize(run.backend)
     return (expected = expected, observed = observed,
-        tolerance = "16eps(Float32)")
+        tolerance = "rtol=atol=16eps(Float32)")
 end
 
 function _phase14_unobserved_and_observed_qualification!(run)

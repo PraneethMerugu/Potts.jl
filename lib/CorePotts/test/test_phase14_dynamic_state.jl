@@ -53,6 +53,10 @@ using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
         energies = (fixture.volume, fixture.contact, fixture.boundary,))
     algorithm = BudgetedSequentialCPM(
         AttemptsPerSite(2); temperature = 1000.0f0)
+    @test CorePotts._checked_attempt_total(algorithm, 7) == 14
+    @test CorePotts._attempt_total(algorithm, 7) == 14
+    @test_throws OverflowError CorePotts._checked_attempt_total(
+        algorithm, typemax(Int))
     integrator = init_scientific(state, fixture.proposal_relation,
         components, algorithm; seed = 0x1401)
     step!(integrator)
