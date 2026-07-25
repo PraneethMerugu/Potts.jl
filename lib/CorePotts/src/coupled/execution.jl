@@ -108,13 +108,15 @@ end
 Advance(process; interval, active = nothing, label::Symbol = :advance) =
     Advance(process, interval, active, label)
 
-struct Exchange{P, A} <: AbstractProcessInvocation
+struct Exchange{P, A, M} <: AbstractProcessInvocation
     process::P
     active::A
+    mode::M
     label::Symbol
 end
-Exchange(process; active = nothing, label::Symbol = :exchange) =
-    Exchange(process, active, label)
+Exchange(process; active = nothing, mode = nothing,
+        label::Symbol = :exchange) =
+    Exchange(process, active, mode, label)
 
 struct Sample{P, A} <: AbstractProcessInvocation
     process::P
@@ -640,6 +642,7 @@ function execute_process!(candidate::CoupledState, snapshot::CoupledState,
 end
 
 _invocation_interval(invocation::Advance) = invocation.interval
+_invocation_interval(invocation::Exchange) = invocation.mode
 _invocation_interval(invocation::AbstractProcessInvocation) = nothing
 
 function _execute_phase!(integrator::CoupledIntegrator,
@@ -665,7 +668,13 @@ function _execute_phase!(integrator::CoupledIntegrator,
     for invocation in phase.invocations
         _invocation_active(invocation, stage, target_mcs) || continue
         process = invocation_process(invocation)
-        if process isa CellDynamics
+        if process isa FieldExchange &&
+                _invocation_interval(invocation) !== nothing
+            output = execute_field_exchange!(
+                candidate, snapshot, potts_candidate, potts_snapshot,
+                process, _invocation_interval(invocation), target_mcs)
+            output === nothing || push!(written_cell_properties, output)
+        elseif process isa CellDynamics
             execute_cell_dynamics!(
                 potts_candidate, potts_snapshot, process,
                 target_mcs, _invocation_interval(invocation))

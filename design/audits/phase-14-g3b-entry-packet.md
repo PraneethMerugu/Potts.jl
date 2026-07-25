@@ -234,6 +234,14 @@ post-substep Medium reset, preflight stability rejection, failure atomicity, and
 execution. Backend-native execution, backend status publication, the CC3D microtrace, and
 exchange/calibration remain open; this evidence is not a GPU qualification claim.
 
+The
+[exchange transaction evidence](phase-14-g3b-exchange-evidence.md) records the generic
+root-plan-mode and immediate field/cell/global transaction: inactive/reset/calibrate/publish
+boundaries, maximum calibration, source-faithful CPU reductions, checkpoint state, failure
+atomicity, and zero-byte warm publication now pass. Portable fixed-tree kernels, device
+conditional publication, and foreign-runtime comparison remain open.
+
 Field/exchange implementation proceeds only against revision 2 of the machine-readable contract.
-The remaining provisional forcing-array exchange is historical prototype behavior: it is not the
-Wang exchange target and must not determine the final cross-domain write ABI.
+The old three-argument forcing-array exchange overload remains compatibility-only historical
+prototype behavior. The mode-bound immediate transaction is the Wang execution target and owns
+the revision-2 cross-domain write ABI.

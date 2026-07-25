@@ -6,15 +6,18 @@ using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
     ContinuousModelAdapter, ContinuousSystem,
     ContinuousSystemState, CoupledAttemptWorkspace, CoupledPhase, CoupledState,
     CreateRelationship, DelayState, DelayStateStorage, DifferentialEquation,
-    DirectLaw, EventAssignment, EventRuntimeState, EveryGlobal,
-    EvolvingFieldState, ExactSample, ExactSemanticMapping, ExplicitEuler,
-    FieldDynamics, FieldExchange, FillMembrane, FixedStep,
+    DirectLaw, EventAssignment, EventRuntimeState, EveryGlobal, Exchange,
+    CalibrateExchange, EvolvingFieldState, ExactSample, ExactSemanticMapping,
+    ExplicitEuler, FieldDynamics, FieldExchange, FieldExchangeFailure,
+    FieldExchangeState, FillMembrane, FixedStep,
     FromExecutionSnapshot, FromTriggerSnapshot, GlobalClock, GlobalDomain,
     GlobalProperty, Heun, HistoryLagUnavailableError, InputRef, Lag,
-    LifecyclePhase, MCSDuration, MCSPlan, MCSRange, MembraneProperty,
+    InactiveExchange, LifecyclePhase, MaximumCalibration, MCSDuration,
+    MCSPlan, MCSRange, MembraneProperty,
     MissingUntilFull, MorpheusSemanticProfile, MultirateSchedule,
     ObservationPhase, ObservationTransform, OnRising, OnceWhenTrue,
-    PhaseObservation, PottsAttempts, PreserveAtSite, ProtocolStage, RK4,
+    PhaseObservation, PlanModeSchedule, PottsAttempts, PreserveAtSite, ProtocolStage,
+    PublishExchange, ResetExchange, RK4,
     ReactionDiffusion, RecordSchema, RelationshipCapacity,
     RelationshipDynamics, RelationshipSet, RelationshipState,
     RemoveRelationship, RepeatInitialSample, RetuneRelationship, RootTrigger,
@@ -594,6 +597,189 @@ end
     @test exchange_field.forcing[1] == -0.25
     @test all(iszero, exchange_field.forcing[2:end])
 
+    exchange_owners = reshape(OwnerRef[
+        CellOwner(1), CellOwner(1), CellOwner(2), MediumOwner(1)
+    ], 2, 2)
+    exchange_ownership = LogicalPottsState(
+        exchange_owners, CellCapacity(2);
+        cell_types = Dict(
+            CellID(1) => CellTypeID(1),
+            CellID(2) => CellTypeID(1)),
+        medium_domains = [MediumID(1)])
+    transaction_field = EvolvingFieldState(
+        :transaction_field,
+        reshape(Float32[0.5, 1.0, 400.0, 2.0], 2, 2))
+    signal = Float32[7, 8]
+    transaction_exchange = FieldExchange(:transaction_exchange;
+        field = :transaction_field,
+        sinks = (
+            Uptake(:cells; maximum = 1.0f0,
+                relative_rate = 0.0025f0, output = :signal),),
+        calibration = MaximumCalibration(4.0f0, :uptake_multiplier))
+    exchange_runtime = FieldExchangeState(
+        :uptake_multiplier, transaction_field, exchange_ownership)
+    initial_transaction_field = copy(transaction_field.values)
+
+    @test !apply_field_exchange!(
+        transaction_field, transaction_exchange, exchange_ownership,
+        signal, exchange_runtime, InactiveExchange, 1)
+    @test transaction_field.values == initial_transaction_field
+    @test signal == Float32[7, 8]
+    @test exchange_runtime.publication_epoch[1] == 0
+
+    @test apply_field_exchange!(
+        transaction_field, transaction_exchange, exchange_ownership,
+        signal, exchange_runtime, ResetExchange, 122)
+    @test transaction_field.values == initial_transaction_field
+    @test signal == zeros(Float32, 2)
+    @test exchange_runtime.publication_epoch[1] == 1
+
+    signal .= Float32[5, 6]
+    field_mass_before_calibration = sum(Float64, transaction_field.values)
+    @test apply_field_exchange!(
+        transaction_field, transaction_exchange, exchange_ownership,
+        signal, exchange_runtime, CalibrateExchange, 211)
+    @test transaction_field.values ≈
+        reshape(Float32[0.49875, 0.9975, 399.0, 2.0], 2, 2)
+    @test signal == Float32[5, 6]
+    @test exchange_runtime.value[1] == 4.0f0
+    @test exchange_runtime.initialized[1] == 1
+    @test exchange_runtime.publication_epoch[1] == 2
+    @test field_mass_before_calibration -
+          sum(Float64, transaction_field.values) ≈ 1.00375
+
+    field_mass_before_publish = sum(Float64, transaction_field.values)
+    @test apply_field_exchange!(
+        transaction_field, transaction_exchange, exchange_ownership,
+        signal, exchange_runtime, PublishExchange, 212)
+    @test signal[1] ≈ 0.00748125f0
+    @test signal[2] ≈ 3.99f0
+    @test field_mass_before_publish -
+          sum(Float64, transaction_field.values) ≈
+          1.001240625 atol = 64eps(Float32)
+    @test exchange_runtime.publication_epoch[1] == 3
+
+    checkpoint_block = CorePotts._state_block(exchange_runtime)
+    @test propertynames(checkpoint_block.payload) ==
+        (:value, :initialized, :publication_epoch)
+    exchange_runtime.value[1] = 99.0f0
+    exchange_runtime.initialized[1] = 0
+    exchange_runtime.publication_epoch[1] = 99
+    CorePotts._restore_block!(exchange_runtime, checkpoint_block)
+    @test exchange_runtime.value[1] == 4.0f0
+    @test exchange_runtime.initialized[1] == 1
+    @test exchange_runtime.publication_epoch[1] == 3
+    adapted_exchange_runtime =
+        CorePotts.Adapt.adapt(Array, exchange_runtime)
+    @test adapted_exchange_runtime.value isa Vector{Float32}
+    @test adapted_exchange_runtime.initialized isa Vector{UInt8}
+    @test adapted_exchange_runtime.workspace.raw_totals isa Vector{Float64}
+
+    uninitialized_field = EvolvingFieldState(
+        :uninitialized_field, ones(Float32, 2, 2))
+    uninitialized_runtime = FieldExchangeState(
+        :uptake_multiplier, uninitialized_field, exchange_ownership)
+    uninitialized_signal = Float32[2, 3]
+    uninitialized_before = copy(uninitialized_field.values)
+    @test_throws FieldExchangeFailure apply_field_exchange!(
+        uninitialized_field, transaction_exchange, exchange_ownership,
+        uninitialized_signal, uninitialized_runtime, PublishExchange, 212)
+    @test uninitialized_field.values == uninitialized_before
+    @test uninitialized_signal == Float32[2, 3]
+    @test uninitialized_runtime.publication_epoch[1] == 0
+
+    zero_field = EvolvingFieldState(
+        :zero_field, zeros(Float32, 2, 2))
+    zero_runtime = FieldExchangeState(
+        :uptake_multiplier, zero_field, exchange_ownership)
+    zero_signal = Float32[2, 3]
+    @test_throws FieldExchangeFailure apply_field_exchange!(
+        zero_field, transaction_exchange, exchange_ownership,
+        zero_signal, zero_runtime, CalibrateExchange, 211)
+    @test all(iszero, zero_field.values)
+    @test zero_signal == Float32[2, 3]
+    @test zero_runtime.initialized[1] == 0
+    @test zero_runtime.publication_epoch[1] == 0
+
+    exchange_allocation_probe(
+            field, process, potts, output, runtime) =
+        @allocated apply_field_exchange!(
+            field, process, potts, output, runtime, PublishExchange, 213)
+    @test exchange_allocation_probe(
+        transaction_field, transaction_exchange, exchange_ownership,
+        signal, exchange_runtime) == 0
+
+    mode_schedule = PlanModeSchedule(
+        MCSRange(1, 121) => InactiveExchange,
+        MCSRange(122, 210) => ResetExchange,
+        MCSRange(211, 211) => CalibrateExchange,
+        MCSRange(212, 500) => PublishExchange)
+    @test CorePotts.mode_at(mode_schedule, 1) === InactiveExchange
+    @test CorePotts.mode_at(mode_schedule, 121) === InactiveExchange
+    @test CorePotts.mode_at(mode_schedule, 122) === ResetExchange
+    @test CorePotts.mode_at(mode_schedule, 210) === ResetExchange
+    @test CorePotts.mode_at(mode_schedule, 211) === CalibrateExchange
+    @test CorePotts.mode_at(mode_schedule, 212) === PublishExchange
+    @test CorePotts.mode_at(mode_schedule, 500) === PublishExchange
+    @test_throws ArgumentError CorePotts.mode_at(mode_schedule, 501)
+    @test_throws ArgumentError PlanModeSchedule(
+        MCSRange(1, 2) => InactiveExchange,
+        MCSRange(4, 5) => PublishExchange)
+    exchange_invocation = Exchange(
+        transaction_exchange; mode = mode_schedule)
+    @test exchange_invocation.mode === mode_schedule
+    @test Set(CorePotts.process_writes(transaction_exchange)) == Set((
+        (:field, :transaction_field),
+        (:cell_property, :signal),
+        (:global, :uptake_multiplier)))
+
+    exchange_requester = ComponentIdentity(
+        :field_exchange_transaction_test, v"1.0.0", :test)
+    exchange_schema = PropertySchema(
+        PropertyDescriptor(
+            :signal, Float32, ConstantInitializer(0.0f0);
+            requester = exchange_requester))
+    exchange_potts_snapshot = LogicalPottsState(
+        exchange_owners, CellCapacity(2);
+        cell_types = Dict(
+            CellID(1) => CellTypeID(1),
+            CellID(2) => CellTypeID(1)),
+        medium_domains = [MediumID(1)],
+        property_schema = exchange_schema)
+    property_values(exchange_potts_snapshot, :signal) .= Float32[5, 6]
+    exchange_potts_candidate = deepcopy(exchange_potts_snapshot)
+    scheduled_field = EvolvingFieldState(
+        :transaction_field,
+        reshape(Float32[0.5, 1.0, 400.0, 2.0], 2, 2))
+    scheduled_runtime = FieldExchangeState(
+        :uptake_multiplier, scheduled_field, exchange_potts_snapshot)
+    scheduled_snapshot = CoupledState(
+        fields = (scheduled_field,), globals = (scheduled_runtime,))
+    scheduled_candidate = deepcopy(scheduled_snapshot)
+    @test CorePotts.execute_field_exchange!(
+        scheduled_candidate, scheduled_snapshot,
+        exchange_potts_candidate, exchange_potts_snapshot,
+        transaction_exchange, mode_schedule, 211) === :signal
+    @test scheduled_snapshot.fields[1].values ==
+        reshape(Float32[0.5, 1.0, 400.0, 2.0], 2, 2)
+    @test scheduled_snapshot.globals[1].initialized[1] == 0
+    @test scheduled_candidate.globals[1].initialized[1] == 1
+    @test property_values(exchange_potts_candidate, :signal) ==
+        Float32[5, 6]
+
+    published_snapshot = deepcopy(scheduled_candidate)
+    published_potts_snapshot = deepcopy(exchange_potts_candidate)
+    published_candidate = deepcopy(published_snapshot)
+    published_potts_candidate = deepcopy(published_potts_snapshot)
+    CorePotts.execute_field_exchange!(
+        published_candidate, published_snapshot,
+        published_potts_candidate, published_potts_snapshot,
+        transaction_exchange, mode_schedule, 212)
+    @test property_values(published_potts_candidate, :signal)[1] ≈
+        0.00748125f0
+    @test property_values(published_potts_candidate, :signal)[2] ≈ 3.99f0
+    @test published_candidate.globals[1].publication_epoch[1] == 2
+
     wang_field = EvolvingFieldState(
         :wang_secretome, zeros(Float32, 2, 2))
     wang_dynamics = FieldDynamics(:wang_secretome_dynamics;
@@ -606,11 +792,19 @@ end
     @test wang_field.workspace.first !== wang_field.values
     @test wang_field.workspace.second !== wang_field.values
     @test wang_field.workspace.first !== wang_field.workspace.second
+    adapted_wang_field = CorePotts.Adapt.adapt(Array, wang_field)
+    @test adapted_wang_field.values isa Matrix{Float32}
+    @test adapted_wang_field.workspace.first isa Matrix{Float32}
+    @test adapted_wang_field.workspace.second isa Matrix{Float32}
+    @test adapted_wang_field.workspace.status isa Vector{UInt32}
+    @test adapted_wang_field.publication_epoch isa Vector{UInt64}
     advance_field!(wang_field, wang_dynamics, 1.0f0, ownership)
     @test wang_field.values[1] == 0.0f0
     @test all(==(1.0f0), wang_field.values[2:end])
     @test wang_field.diagnostics.steps == 5
     @test wang_field.diagnostics.mode === :transient
+    @test wang_field.publication_epoch[1] == 1
+    @test wang_field.workspace.status[1] == 0
 
     authoritative_before_failure = copy(wang_field.values)
     failure_dynamics = FieldDynamics(:nonfinite_field;
@@ -624,6 +818,9 @@ end
         wang_field, failure_dynamics, 1.0f0, ownership)
     @test wang_field.values == authoritative_before_failure
     @test wang_field.time == 1.0f0
+    @test wang_field.publication_epoch[1] == 1
+    @test wang_field.workspace.status[1] == 1
+    @test wang_field.workspace.failing_index[1] > 0
 
     unstable_dynamics = FieldDynamics(:unstable_field;
         field = :wang_secretome,
@@ -633,6 +830,9 @@ end
     @test_throws ArgumentError advance_field!(
         wang_field, unstable_dynamics, 1.0f0, ownership)
     @test wang_field.values == authoritative_before_failure
+    @test wang_field.publication_epoch[1] == 1
+    @test wang_field.workspace.status[1] == 2
+    @test wang_field.workspace.failing_index[1] == 0
 
     allocation_field = EvolvingFieldState(
         :allocation_probe, zeros(Float32, 256, 256))

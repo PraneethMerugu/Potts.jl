@@ -134,7 +134,8 @@ function _state_block(state::EvolvingFieldState)
         values = copy(Adapt.adapt(Array, state.values)),
         forcing = copy(Adapt.adapt(Array, state.forcing)),
         time = state.time,
-        diagnostics = state.diagnostics)
+        diagnostics = state.diagnostics,
+        publication_epoch = copy(Adapt.adapt(Array, state.publication_epoch)))
     return _checkpoint_block(:evolving_field, state.name,
         :evolving_field, metadata, payload)
 end
@@ -156,6 +157,19 @@ function _state_block(state::GlobalPropertyState)
         value = state.value, semantic_time = state.semantic_time)
     return _checkpoint_block(:global_property, declaration.name,
         :global_property, metadata, payload)
+end
+
+function _state_block(state::FieldExchangeState)
+    metadata = (
+        value_type = string(eltype(state.value)),
+        accumulator_type = string(eltype(state.workspace.raw_totals)),
+        capacity = length(state.workspace.raw_totals))
+    payload = (
+        value = copy(Adapt.adapt(Array, state.value)),
+        initialized = copy(Adapt.adapt(Array, state.initialized)),
+        publication_epoch = copy(Adapt.adapt(Array, state.publication_epoch)))
+    return _checkpoint_block(:field_exchange_state, state.name,
+        :field_exchange_state, metadata, payload)
 end
 
 function _state_block(state::MembranePropertyState)
@@ -218,9 +232,12 @@ _checkpoint_arrays(state::SitePropertyState) = (state.values,)
 _checkpoint_arrays(state::CellHistoryState) = (
     state.values, state.heads, state.fills, state.generations)
 _checkpoint_arrays(::RelationshipState) = ()
-_checkpoint_arrays(state::EvolvingFieldState) = (state.values, state.forcing)
+_checkpoint_arrays(state::EvolvingFieldState) = (
+    state.values, state.forcing, state.publication_epoch)
 _checkpoint_arrays(::ContinuousSystemState) = ()
 _checkpoint_arrays(::GlobalPropertyState) = ()
+_checkpoint_arrays(state::FieldExchangeState) = (
+    state.value, state.initialized, state.publication_epoch)
 _checkpoint_arrays(state::MembranePropertyState) = (
     state.values, state.generations, state.active)
 _checkpoint_arrays(::DelayStateStorage) = ()
@@ -390,7 +407,8 @@ function _find_state(state::CoupledState, block::CoupledCheckpointBlock)
         family === :cell_history ? state.histories :
         family === :relationship_set ? state.relationships :
         family === :evolving_field ? state.fields :
-        family in (:continuous_system, :global_property) ? state.globals :
+        family in (:continuous_system, :global_property, :field_exchange_state) ?
+            state.globals :
         family === :membrane_property ? state.membranes :
         family in (:delay_state, :continuous_event) ? state.delays :
         throw(CheckpointCompatibilityError(:block_family,
@@ -427,6 +445,7 @@ function _restore_block!(state::EvolvingFieldState, block)
     copyto!(state.forcing, block.payload.forcing)
     state.time = block.payload.time
     state.diagnostics = block.payload.diagnostics
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::ContinuousSystemState, block)
     propertynames(state.values) == propertynames(block.payload.values) || throw(
@@ -441,6 +460,15 @@ function _restore_block!(state::GlobalPropertyState, block)
     set_global_property!(
         state, block.payload.value;
         semantic_time = block.payload.semantic_time)
+end
+function _restore_block!(state::FieldExchangeState, block)
+    length(state.workspace.raw_totals) == block.metadata.capacity || throw(
+        CheckpointCompatibilityError(:field_exchange_capacity,
+            string(length(state.workspace.raw_totals)),
+            string(block.metadata.capacity)))
+    copyto!(state.value, block.payload.value)
+    copyto!(state.initialized, block.payload.initialized)
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::MembranePropertyState, block)
     size(state.values) == size(block.payload.values) || throw(

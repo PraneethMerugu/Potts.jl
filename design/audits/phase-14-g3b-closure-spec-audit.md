@@ -136,9 +136,12 @@ two preallocated staging grids, applies ordered post-substep constraints, reject
 nonfinite work before publication, and allocates zero bytes after warm-up. Its evidence is recorded
 in [phase-14-g3b-field-evidence.md](phase-14-g3b-field-evidence.md).
 
-That does not validate the provisional exchange path. `FieldExchange` still treats uptake as
-future forcing, omits cell/global outputs from its declared write set, and cannot execute the Wang
-cross-domain transaction. It remains historical prototype behavior and must be replaced by the
-typed revision-2 exchange transaction. The field also remains CPU-only evidence until its
-validation status and publication path execute backend-natively and pass the registered device
-gates.
+The sequential CPU exchange transaction has also been replaced against revision 2. Its mode-bound
+path declares field/cell/global writes, uses preallocated candidates, publishes one logical epoch,
+and records the calibration state required for restart. Evidence is recorded in
+[phase-14-g3b-exchange-evidence.md](phase-14-g3b-exchange-evidence.md). The legacy three-argument
+forcing overload remains compatibility-only prototype behavior.
+
+Field and exchange remain CPU-only numerical evidence until their fixed-tree reductions,
+validation status, and conditional publication execute backend-natively and pass the registered
+device gates.

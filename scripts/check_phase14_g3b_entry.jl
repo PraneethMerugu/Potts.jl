@@ -13,6 +13,8 @@ const CLOSURE_AUDIT_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-closure-spec-audit.md")
 const FIELD_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-field-evidence.md")
+const EXCHANGE_EVIDENCE_PATH = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-exchange-evidence.md")
 const failures = String[]
 
 check(condition, message) = condition || push!(failures, message)
@@ -22,12 +24,14 @@ isfile(ORDER_PATH) || error("missing Wang order authority")
 isfile(ENTRY_PACKET_PATH) || error("missing G3-B entry packet")
 isfile(CLOSURE_AUDIT_PATH) || error("missing G3-B closure specification audit")
 isfile(FIELD_EVIDENCE_PATH) || error("missing G3-B atomic-field evidence")
+isfile(EXCHANGE_EVIDENCE_PATH) || error("missing G3-B exchange evidence")
 
 contract = TOML.parsefile(CONTRACT_PATH)
 order = TOML.parsefile(ORDER_PATH)
 entry_packet = read(ENTRY_PACKET_PATH, String)
 closure_audit = read(CLOSURE_AUDIT_PATH, String)
 field_evidence = read(FIELD_EVIDENCE_PATH, String)
+exchange_evidence = read(EXCHANGE_EVIDENCE_PATH, String)
 
 check(contract["status"] == "accepted-implementation-entry",
     "G3-B entry contract is not accepted")
@@ -49,6 +53,10 @@ check(occursin("portable backend execution remains open", field_evidence) &&
 check(occursin("atomic field evidence", entry_packet) &&
       occursin("not a GPU qualification claim", entry_packet),
     "G3-B entry packet does not bound the field evidence claim")
+check(occursin("portable fixed-tree execution remains open", exchange_evidence) &&
+      occursin("zero-byte warm sequential CPU", exchange_evidence) &&
+      occursin("exchange transaction evidence", entry_packet),
+    "G3-B exchange evidence is missing or overclaims portable closure")
 
 function unique_ids(rows, label)
     ids = [row["id"] for row in rows]
