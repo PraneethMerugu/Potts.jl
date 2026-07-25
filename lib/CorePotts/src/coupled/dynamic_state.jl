@@ -47,10 +47,12 @@ function SiteProperty(name::Symbol; initial,
         version::VersionNumber = DYNAMIC_STATE_CONTRACT_VERSION)
     isempty(String(name)) && throw(ArgumentError("site-property identity must not be empty"))
     initializer = initial isa AbstractSiteInitializer ? initial : FillSites(initial)
+    has_initial_value = initializer isa FillSites ||
+        initializer isa SiteValues && !isempty(initializer.values)
     initial_value = initializer isa FillSites ? initializer.value :
         initializer isa SiteValues && !isempty(initializer.values) ?
         first(initializer.values) : nothing
-    initial_value === nothing || site_value_valid(invariant, initial_value) ||
+    !has_initial_value || site_value_valid(invariant, initial_value) ||
         throw(ArgumentError("site-property initial value violates its invariant"))
     return SiteProperty(name, initializer, invariant, ownership,
         visibility, persistence, version)
