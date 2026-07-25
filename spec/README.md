@@ -153,8 +153,13 @@ explicit root plan; paper-specific builders cannot substitute for that API evide
 [Wortel Act-CPM vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
 now passes on CPU, Metal, and ROCm. Wang is open, and its exact
 [source/runtime execution order](../design/audits/phase-14-wang-order-audit.md) is accepted before
-implementation. The seven contracts remain Provisional outside proven scope. Registry v1 spellings
-remain internal historical prototypes and are not compatibility commitments.
+implementation. The revision-2
+[G3-B entry packet](../design/audits/phase-14-g3b-entry-packet.md) and
+[closure specification audit](../design/audits/phase-14-g3b-closure-spec-audit.md) additionally
+freeze source MCS `0:499` to normalized target MCS `1:500`, atomic field/exchange publication,
+completed-MCS-only restart, and deterministic reduction/device-readiness gates. The seven contracts
+remain Provisional outside proven scope. Registry v1 spellings remain internal historical
+prototypes and are not compatibility commitments.
 
 ## Conformance Principle
 

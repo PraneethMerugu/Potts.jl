@@ -53,8 +53,9 @@ validated authoring graph. It is deliberately not a qualification claim; runtime
 rejects unsupported law/storage/backend tuples.
 
 CorePotts process invocations now accept an explicit integer-MCS schedule as their root-plan
-activation. Wang's focal retuning is therefore represented by `PeriodicMCS(10, 10)` in the sole
-plan instead of a hidden subsystem scheduler.
+activation. Because CompuCell3D source MCS `k` maps to normalized target MCS `k+1`, Wang's source
+`mcs % 10 == 0` focal retuning is represented by `PeriodicMCS(1, 10; stop = 491)` in the sole plan
+instead of a hidden subsystem scheduler.
 
 ## Conformance evidence
 
@@ -86,8 +87,8 @@ motility—compose with one root plan, lower through the ordinary PottsToolkit p
 - lifecycle; and
 - final observation.
 
-The fixture checks the MCS 120, 210, and 211 retuning boundary and contains no paper-specific
-CorePotts or PottsToolkit export.
+The fixture checks source MCS 0, 120, 210, and 211 through normalized target MCS 1, 121, 211, and
+212 and contains no paper-specific CorePotts or PottsToolkit export.
 
 ## Reproducer
 
@@ -102,7 +103,7 @@ julia --project=. scripts/validate_wang_order_oracle.jl \
 
 Recorded local result on Julia 1.12.6:
 
-- dedicated G3-A gate: 39/39 assertions passed;
+- dedicated G3-A gate: 40/40 assertions passed;
 - complete CorePotts suite: 3,023/3,023 tests passed;
 - complete PottsToolkit suite: 702/702 tests passed;
 - Phase 14 architecture checker: passed;

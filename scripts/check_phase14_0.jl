@@ -38,6 +38,7 @@ matrix = load_toml("design/audits/phase-14-model-capability-matrix-v1.toml")
 work = load_toml("design/audits/phase-14-d9-work-items-v1.toml")
 morpheus = load_toml("design/audits/phase-14-morpheus-continuous-semantics-v1.toml")
 wang_order = load_toml("design/audits/phase-14-wang-order-oracle-v1.toml")
+g3b_entry = load_toml("design/audits/phase-14-g3b-entry-contract-v1.toml")
 wang_order_evidence = load_toml("design/evidence/phase-14/wang-order/index.toml")
 old_registry = load_toml("spec/phase-14-contract-registry-v1.toml")
 registry = load_toml("spec/phase-14-contract-registry-v2.toml")
@@ -63,6 +64,10 @@ check(isfile(generic_authoring_audit_path),
 wang_order_audit_path = joinpath(
     REPO, "design", "audits", "phase-14-wang-order-audit.md")
 check(isfile(wang_order_audit_path), "missing Wang execution-order audit")
+g3b_closure_audit_path = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-closure-spec-audit.md")
+check(isfile(g3b_closure_audit_path),
+    "missing G3-B closure specification audit")
 
 source_rows = sources["models"]
 closure_rows = closures["models"]
@@ -109,6 +114,14 @@ check(wang_order_evidence["status"] == "pass",
 check(wang_order["history_discrepancy"]["classification"] ==
       "paper-t-minus-5_source-t-minus-4",
     "Wang paper/source history discrepancy is not registered")
+check(g3b_entry["schema_version"] == "1.1.0" &&
+      g3b_entry["revision"] == 2,
+    "G3-B entry contract is not the corrected revision-2 closure contract")
+check(g3b_entry["source_time_mapping"]["source_first"] == 0 &&
+      g3b_entry["source_time_mapping"]["target_first"] == 1 &&
+      g3b_entry["source_time_mapping"]["source_last"] == 499 &&
+      g3b_entry["source_time_mapping"]["target_last"] == 500,
+    "G3-B source MCS mapping is not 0:499 -> target 1:500")
 check(occursin("phase14.1-owner-approved-simplified", registry["status"]), "contract registry is not the owner-approved simplified Phase 14.1 set")
 expected_contracts = Set([
     "state",
@@ -487,7 +500,7 @@ if isempty(failures)
     println("  Decisions 0031–0033 and all 15 owner choices accepted; generic hierarchical authoring enforced")
     println("  no selected-paper names exported; Wang sketch uses generic fragments and one root plan")
     println("  Wortel CPU/Metal/ROCm G2 passed")
-    println("  Wang source/runtime order accepted, including the explicit paper t-5 versus source t-4 history variant")
+    println("  Wang source/runtime order and source 0:499 -> target 1:500 mapping accepted, including the explicit paper t-5 versus source t-4 history variant")
     println("  D10 additive classification preserved; Mermaid.jl remains out of scope")
 else
     println(stderr, "Phase 14 architecture closure failed with $(length(failures)) issue(s):")

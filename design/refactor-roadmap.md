@@ -21,7 +21,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phase 14: Model-Driven Capability Completion and Documentation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A generic authoring/lowering complete; Wang G3-B implementation entry frozen and CPU reference current | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [semantic simplification audit](audits/phase-14-semantics-simplification-audit.md), [generic authoring audit](audits/phase-14-generic-authoring-simplification-audit.md), [G3-A evidence](audits/phase-14-g3a-generic-authoring-evidence.md), [G3-B entry packet](audits/phase-14-g3b-entry-packet.md), [Wortel vertical-slice evidence](audits/phase-14-wortel-vertical-slice-evidence.md), [Wang order audit](audits/phase-14-wang-order-audit.md), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [accepted Decisions 0031–0033](../spec/decisions/0033-phase-14-generic-hierarchical-authoring.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
+| Phase 14: Model-Driven Capability Completion and Documentation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A generic authoring/lowering complete; Wang G3-B revision-2 implementation entry frozen and CPU reference current | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [semantic simplification audit](audits/phase-14-semantics-simplification-audit.md), [generic authoring audit](audits/phase-14-generic-authoring-simplification-audit.md), [G3-A evidence](audits/phase-14-g3a-generic-authoring-evidence.md), [G3-B entry packet](audits/phase-14-g3b-entry-packet.md), [G3-B closure spec audit](audits/phase-14-g3b-closure-spec-audit.md), [Wortel vertical-slice evidence](audits/phase-14-wortel-vertical-slice-evidence.md), [Wang order audit](audits/phase-14-wang-order-audit.md), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [accepted Decisions 0031–0033](../spec/decisions/0033-phase-14-generic-hierarchical-authoring.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Paper and Release Qualification | Not started | Begins only after every Phase 14 exit gate passes |
 
 ## Objective
@@ -1110,10 +1110,13 @@ sequence is:
 3. **Complete.** Close Wortel on real Metal and ROCm: device-resident activity/history state,
    accepted-copy transaction and decay kernels, observations, preflight, restart, replay,
    residency, transfer, allocation, and steady-state performance. No host fallback qualifies.
-4. **G3-A complete; G3-B current with implementation entry frozen.** The Decision 0033 generic
+4. **G3-A complete; G3-B current with revision-2 implementation entry frozen.** The Decision 0033 generic
    fragment-port and one-root-plan authoring boundary and Wang generic lowering fixture pass. The
    [G3-B entry packet](audits/phase-14-g3b-entry-packet.md) freezes the real state/process map,
-   device-ready storage, numerical profiles, conformance matrix, and remaining runtime oracles.
+   source `0:499` to normalized target `1:500` mapping, atomic field/exchange storage, plan-resolved
+   exchange modes, numerical profiles, conformance matrix, and remaining runtime oracles. The
+   [closure specification audit](audits/phase-14-g3b-closure-spec-audit.md) records the resolved
+   contradictions and strengthened evidence gate.
    Implement Wang under the accepted source/runtime order and close its sequential CPU reference,
    then its Metal and ROCm gate. Open one additional field-coupled model only after Wang passes.
    Every later stable capability follows the same reference-then-device promotion sequence.

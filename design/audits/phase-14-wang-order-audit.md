@@ -81,6 +81,9 @@ is proven directly from the pinned C++ source.
 
 ## Wang read/write and boundary consequences
 
+All MCS numbers in this source-evidence section are CompuCell3D source labels. The normalized
+Potts.jl mapping is recorded in the implementation constraint below.
+
 | Stage | Reads | Writes | Earliest consumer |
 | --- | --- | --- | --- |
 | Potts | prior force, focal links/parameters, ownership | ownership, geometry, neighbors, link lifecycle | same-MCS field and Python |
@@ -115,7 +118,13 @@ This discrepancy is now explicit rather than being normalized away during implem
 
 ## Accepted implementation constraint
 
-The Wang CPU reference must encode this order in one inspectable `PlanSpec`, with the MCS 120,
-210, and 211 visibility boundaries tested directly. GPU implementations must execute the same
-semantic plan with backend-resident state; kernel fusion is permitted only when it preserves these
-read/write snapshots and next-MCS visibility rules.
+The labels in this audit are CompuCell3D source labels. Potts.jl MCS 0 is the finalized initial
+condition, while the foreign runtime performs a real Potts/field/Python iteration labelled MCS 0.
+The Wang implementation therefore maps source MCS `k` to normalized target MCS `k+1`; `source_mcs`
+is exactly derived output/provenance metadata rather than another clock. Source `0:499` maps to
+target `1:500`, and no source `step()` work is hidden in initialization.
+
+The Wang CPU reference must encode this order in one inspectable `PlanSpec`, with source MCS
+120/210/211 and normalized target MCS 121/211/212 visibility boundaries tested directly. GPU
+implementations must execute the same semantic plan with backend-resident state; kernel fusion is
+permitted only when it preserves these read/write snapshots and next-source-MCS visibility rules.

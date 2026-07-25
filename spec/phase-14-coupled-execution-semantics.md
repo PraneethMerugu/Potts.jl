@@ -390,10 +390,10 @@ A `StagedProtocol` contains named `ProtocolStage` values over explicit target-MC
 
 ```julia
 protocol = StagedProtocol(
-    ProtocolStage(:relax; mcs = MCSRange(1, 119)),
-    ProtocolStage(:initial_adhesion; mcs = MCSRange(120, 209)),
-    ProtocolStage(:switch_calibration; mcs = MCSRange(210, 210)),
-    ProtocolStage(:stimulated; mcs = MCSRange(211, 500)),
+    ProtocolStage(:relax; mcs = MCSRange(1, 120)),
+    ProtocolStage(:initial_adhesion; mcs = MCSRange(121, 210)),
+    ProtocolStage(:switch_calibration; mcs = MCSRange(211, 211)),
+    ProtocolStage(:stimulated; mcs = MCSRange(212, 500)),
 )
 ```
 
@@ -437,8 +437,12 @@ meaning. Every covered stage has exactly one compatible value.
 Components and processes read the value selected for the target MCS. A value change is visible from
 the first phase of the new stage unless the source requires a separately named in-MCS update phase.
 Wang uses the latter rule: the scheduled value is an input to its ten-MCS focal-retuning phase,
-while Potts reads the previously published per-relationship payload. Thus MCS 120 Potts reads 0,
-MCS 210 Potts reads 20, and MCS 211 is the first Potts step to read the scanned payload.
+while Potts reads the previously published per-relationship payload.
+
+CompuCell3D source MCS `k` maps to normalized target MCS `k+1`; the source label is exactly derived
+metadata, not a second clock. Thus source MCS 120 / target 121 Potts reads 0, source MCS 210 /
+target 211 Potts reads 20, and source MCS 211 / target 212 is the first Potts step to read the
+scanned payload. Source `step()` work, including source MCS 0, cannot be hidden in initialization.
 
 ### Process activation
 
@@ -447,6 +451,13 @@ RNG draws, solver advances, or diagnostics other than bounded inactive accountin
 
 Activation is determined from the selected protocol stage, not from runtime declaration order or an
 arbitrary predicate. State-dependent conditions belong to triggers or process eligibility laws.
+
+A process whose scientific operation changes across exact MCS ranges MAY receive a typed
+plan-resolved mode table. The complete nonoverlapping ranges and mode identities are plan data and
+fingerprint inputs. The process law receives the already resolved immutable mode; it MUST NOT
+implement an undeclared `target_mcs` branch or maintain its own cadence counter. Wang exchange uses
+this rule for inactive, reset, calibrate, and publish modes because its mode boundaries do not
+coincide exactly with every focal-parameter stage boundary.
 
 ## Continuous Clocks
 

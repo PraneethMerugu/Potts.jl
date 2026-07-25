@@ -118,7 +118,9 @@
     directed_motility = PottsToolkit.bind(
         directed_motility, directed_motility.cells => tumor)
 
-    retune_cadence = CorePotts.PeriodicMCS(10, 10)
+    # CC3D source MCS k maps to normalized target MCS k+1. The source
+    # mcs % 10 == 0 cadence over 0:499 is therefore target 1:10:491.
+    retune_cadence = CorePotts.PeriodicMCS(1, 10; stop = 491)
     migration_plan = CorePotts.MCSPlan(
         CorePotts.PottsAttempts(
             on_accept = (focal_adhesions.topology,)),
@@ -175,11 +177,13 @@
         if entry isa CorePotts.PottsAttempts)).on_accept ==
           (focal_adhesions.topology,)
     @test CorePotts.is_due(
-        only(phases[6].invocations).active, 120)
+        only(phases[6].invocations).active, 1)
     @test CorePotts.is_due(
-        only(phases[6].invocations).active, 210)
-    @test !CorePotts.is_due(
+        only(phases[6].invocations).active, 121)
+    @test CorePotts.is_due(
         only(phases[6].invocations).active, 211)
+    @test !CorePotts.is_due(
+        only(phases[6].invocations).active, 212)
 
     public_names = Set(names(PottsToolkit; all = false))
     @test !any(name -> occursin(r"Wang|Jiang|Glazier|Wortel|Merks|CNV"i,

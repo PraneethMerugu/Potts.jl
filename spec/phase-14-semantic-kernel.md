@@ -7,9 +7,10 @@ registered vertical-slice gates pass
 
 Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24 and its
 real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang is open; its exact
-[source/runtime order](../design/audits/phase-14-wang-order-audit.md) is accepted. This proves only
-the bounded Wortel subset and Wang order authority and does not promote the seven contracts beyond
-their registered Provisional status.
+[source/runtime order](../design/audits/phase-14-wang-order-audit.md) and revision-2
+[G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) are accepted. This proves
+only the bounded Wortel subset and Wang implementation-entry authority and does not promote the
+seven contracts beyond their registered Provisional status.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
@@ -224,6 +225,16 @@ inlined into a law's canonical representation.
 Field evolution and exchange are process laws over field and cell/site state. Geometry, boundary
 conditions, diffusion/reaction law, source/sink reduction order, units, split order, and failure
 behavior MUST be explicit.
+
+Internal field substeps may feed later internal substeps but remain staging operations. They do not
+create process commits, plan entries, semantic clocks, or checkpoint positions. If preserving the
+pre-process authoritative field through all internal steps requires additional staging storage,
+that storage is a declared preallocated workspace rather than hidden allocation.
+
+An exchange that mutates field state and produces cell/global outputs owns one typed cross-domain
+write set. Every candidate output and status validates before one logical publication epoch. A
+process-specific execution view may address only those declared targets; it is not an unrestricted
+integrator callback.
 
 Phase-local forcing that has no future relevance MUST disappear at its declared commit boundary.
 Any accumulator that affects future execution is state and therefore must be declared and
@@ -696,7 +707,7 @@ to exact by successful execution.
 - process: fixed-step ODE/rules, uptake, focal creation/retuning, polarity alignment, and
   protrusion-drive mapping;
 - plan: relaxation/switch stages, per-MCS history and ten-MCS focal cadence, source plugin order,
-  and observations at MCS 90 and 270;
+  and observations at source MCS 90 and 270 / normalized target MCS 91 and 271;
 - lifecycle: generation-safe state and relationship cleanup;
 - observation: geometric features, migration modes, and parameter-map primitives;
 - spatial: distinct proposal/contact/focal/field/query relations;
@@ -712,8 +723,26 @@ The Wang lowering MUST encode the accepted order as Potts and accepted-copy foca
 scaled secretome field solve with diffusion followed by constant-medium concentration in each
 substep; centroid sampling; self-polarity derivation; secretome uptake/calibration; same-MCS ODE
 advance; ten-MCS focal retuning; synchronous neighbor-polarity alignment; protrusion-force
-publication; lifecycle; and observations. The MCS 120, 210, and 211 read/write visibility
-boundaries are direct conformance fixtures, not model-level assumptions.
+publication; lifecycle; and observations.
+
+CompuCell3D's source label MCS `k` maps to normalized Potts.jl target MCS `k+1`: Potts.jl MCS 0 is
+the finalized initial condition, whereas CompuCell3D executes a real Potts/field/Python iteration
+labelled MCS 0. Source labels are exactly derived observation/provenance metadata, not a second
+clock. No source `step()` work may be hidden in initialization. Consequently, source MCS 120, 210,
+and 211 correspond to normalized target MCS 121, 211, and 212 and are direct read/write visibility
+fixtures.
+
+The five Wang field substeps are one numerical process. They read one immutable post-Potts
+ownership/type snapshot, stage through two scratch grids, and publish only once after all five
+substeps validate. A Medium constant-concentration operation is an exact post-substep reservoir
+constraint, not additive forcing. Internal substeps and post-field/post-exchange phases are not
+stable checkpoints.
+
+Wang exchange mode is resolved by the root plan: inactive, reset-only, calibrate, or publish. The
+exchange law may not branch on an undeclared process-local MCS scheduler. Calibrate and publish
+atomically couple a staged field mutation, per-cell uptake reduction, cell-signal output, and one
+global multiplier/status. A deterministic reduction profile and zero/nonfinite calibration
+failure policy are mandatory.
 
 Wang is one indivisible CPU/Metal/ROCm vertical slice. Its secretome field is part of Wang and
 cannot be deferred to the later general field-model slice. Every Wang state family, process law,

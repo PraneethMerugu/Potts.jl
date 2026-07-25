@@ -13,6 +13,12 @@ Authority note: Cell, field, exchange, solver, and splitting requirements now sp
 `state`, `process`, and `plan` contracts in the
 [Phase 14 Single Semantic Kernel](phase-14-semantic-kernel.md).
 
+Wang correction note: the accepted G3-B revision-2 contract supersedes this document's prototype
+forcing-array implementation shape. Wang Medium concentration is an exact post-diffusion
+constraint in every internal substep; uptake immediately mutates a staged field and atomically
+publishes cell/global outputs. Five field substeps form one process commit, and only completed MCS
+boundaries are stable checkpoints. CompuCell3D source MCS `k` maps to normalized target MCS `k+1`.
+
 ## Purpose
 
 This document defines deterministic per-cell continuous dynamics, evolving spatial fields,

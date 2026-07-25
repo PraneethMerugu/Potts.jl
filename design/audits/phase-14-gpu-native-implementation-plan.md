@@ -161,7 +161,7 @@ G3 is executed through three non-substitutable gates:
   [G3-B entry packet](phase-14-g3b-entry-packet.md) and
   [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the
   source-backed state/process inventory, device-ready storage ABI, numerical profiles, conformance
-  matrix, and two remaining foreign-runtime oracles. Replace every structural fixture law with
+  matrix, and three remaining foreign-runtime oracles. Replace every structural fixture law with
   the registered Wang state, field, ODE, relationship, observation, and lifecycle implementation
   and close exact/invariant/restart conformance. The first implementation increment, the
   backend-adaptable bounded [cell-history substrate](phase-14-g3b-history-evidence.md), passes its
@@ -177,9 +177,13 @@ Deliver:
 - synchronous rule and mapping kernels;
 - ordinary CPU and backend-resident Metal/ROCm evolving-field state and preallocated solver
   workspaces for the Wang two-dimensional periodic secretome profile;
+- one authoritative logical 256×256 field plus two same-shape staging grids so all five internal
+  substeps preserve process failure atomicity;
 - the source-compatible scaled field step: diffusion followed by medium constant-concentration
   enforcement in every substep;
-- deterministic secretome uptake and calibration reductions that publish before the same-MCS ODE;
+- a root-plan-resolved inactive/reset/calibrate/publish exchange mode table, typed cross-domain
+  field/cell/global writes, and deterministic secretome uptake/calibration reductions that publish
+  before the same-source-MCS ODE;
 - bounded relationship graph in canonical structure-of-arrays form;
 - deterministic focal-topology request generation plus accepted-copy conflict resolution and
   commit with Potts ownership;
@@ -197,8 +201,10 @@ Gate:
 - relationship create/remove/retune, accepted-copy visibility, and capacity truth tables on all
   three backends;
 - lifecycle generation/reuse rejection on all three backends;
-- exact source-order and MCS 120, 210, and 211 visibility fixtures on all three backends;
-- restart from every declared stable boundary on all three backends;
+- exact source-order, source-MCS-to-target-MCS `k -> k+1` mapping, and source 120/210/211
+  (target 121/211/212) visibility fixtures on all three backends;
+- restart from completed-MCS stable boundaries and rejection of internal-substep/mid-phase capture
+  on all three backends;
 - no unobserved transfer, scalar host loop, host callback, or host fallback on either GPU;
 - device-code, allocation, synchronization, transfer, and memory evidence on real Metal and ROCm;
   and

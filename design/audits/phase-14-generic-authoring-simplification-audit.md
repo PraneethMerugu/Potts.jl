@@ -257,7 +257,7 @@ workflow = MCSPlan(
     Phase(:uptake, Exchange(secretome.uptake)),
     Phase(:signaling, Advance(signaling.advance)),
     Phase(:retune, Update(adhesions.retune);
-        schedule = PeriodicMCS(10, 10)),
+        schedule = PeriodicMCS(1, 10; stop = 491)),
     Phase(:alignment, Update(motility.align)),
     Phase(:force, Update(motility.force)),
     LifecyclePhase(),
@@ -301,7 +301,8 @@ lower completely through fragments to the same kernel.
 ### Automatic dependency ordering
 
 Dependencies validate a declared plan but cannot infer a scientifically meaningful order.
-Especially for Wang, two valid dependency orders can have different MCS 120/210/211 behavior.
+Especially for Wang, two valid dependency orders can have different source MCS 120/210/211
+(normalized target 121/211/212) behavior.
 
 ### Opaque convenience bundles
 

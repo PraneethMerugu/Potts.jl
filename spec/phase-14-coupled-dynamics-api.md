@@ -215,12 +215,16 @@ Within-MCS order and across-MCS experimental stages are distinct. `MCSPlan` defi
 
 ```julia
 migration_protocol = StagedProtocol(
-    ProtocolStage(:relax; mcs = MCSRange(1, 119)),
-    ProtocolStage(:initial_adhesion; mcs = MCSRange(120, 209)),
-    ProtocolStage(:switch_calibration; mcs = MCSRange(210, 210)),
-    ProtocolStage(:stimulated; mcs = MCSRange(211, 500)),
+    ProtocolStage(:relax; mcs = MCSRange(1, 120)),
+    ProtocolStage(:initial_adhesion; mcs = MCSRange(121, 210)),
+    ProtocolStage(:switch_calibration; mcs = MCSRange(211, 211)),
+    ProtocolStage(:stimulated; mcs = MCSRange(212, 500)),
 )
 ```
+
+These are normalized target-MCS ranges. The Wang source label is derived as
+`source_mcs = target_mcs - 1`; it is not another scheduler clock. CompuCell3D source MCS `0:499`
+therefore maps to target MCS `1:500`.
 
 The stage for target MCS `m` is selected before the first phase that advances MCS `m`. Stage ranges
 MUST be explicit, positive, ordered by their numerical boundaries, and non-overlapping. Gaps require
@@ -484,6 +488,31 @@ Potts declaration.
 The discretization identity, stencil/order, field layout, solver, interval, tolerances, precision,
 continuous clock, and split placement appear in the manifest and model fingerprint.
 
+Substep constraints are distinct from PDE forcing:
+
+```julia
+secretome_dynamics = FieldDynamics(
+    :secretome_dynamics,
+    secretome,
+    ReactionDiffusion(diffusion = 1.0f0);
+    stepping = FixedStep(ExplicitEuler(); substeps = 5),
+    post_substep = (
+        ConstantConcentration(Medium, 1.0f0),
+    ),
+)
+```
+
+Every internal substep reads the preceding staged field, applies its numerical law, applies the
+ordered post-substep constraints, and feeds that constrained result to the next substep. All
+internal substeps share the process-entry Potts snapshot and publish one field result at the
+process boundary. The exact `post_substep` constructor spelling remains Provisional; its position,
+order, reservoir accounting, and fingerprint meaning do not.
+
+Strict process failure atomicity requires an authoritative grid plus enough staging grids to avoid
+overwriting the authoritative input before every internal step validates. The Wang five-substep
+profile uses two staging grids. Internal buffers, buffer roles, and substep counters are execution
+workspace and are not stable checkpoint state.
+
 ### FieldExchange
 
 Cell-dependent secretion, uptake, and source/sink behavior are declared independently of the PDE:
@@ -513,8 +542,9 @@ secretome_uptake = FieldExchange(
 )
 ```
 
-For Wang, `ConstantConcentration(Medium, 1.0f0)` belongs to the forcing profile of
-`secretome_dynamics`, where it is enforced after diffusion in every scaled field substep.
+For Wang, `ConstantConcentration(Medium, 1.0f0)` belongs to the numerical profile of
+`secretome_dynamics` as a post-substep reservoir constraint, where it is enforced after diffusion
+in every scaled field substep. It is not an additive forcing array.
 `secretome_uptake` therefore contains only the later Python-equivalent cell uptake. A model whose
 source applies a concentration reservoir at a distinct exchange boundary may instead place that
 constraint in its named exchange process; the two plan identities are not interchangeable.
@@ -522,6 +552,33 @@ constraint in its named exchange process; the two plan identities are not interc
 An exchange phase reads one ownership, geometry, cell-property, and field snapshot. It constructs
 source/sink contributions and cell outputs with an explicit reduction law. It then publishes all
 declared outputs atomically.
+
+An exchange that immediately removes field mass declares the field itself as a write, not a future
+forcing array. If it also writes cell or global state, lowering constructs one typed cross-domain
+write set. Candidate field values, per-cell outputs, global outputs, and status validate before
+one logical publication epoch; later phases cannot observe a partially published exchange.
+
+Time-dependent exchange behavior is supplied by the root plan. For Wang the same generic exchange
+law admits four plan-resolved modes:
+
+```julia
+secretome_mode = PlanModeSchedule(
+    MCSRange(1, 121) => InactiveExchange(),
+    MCSRange(122, 210) => ResetOutput(0.0f0),
+    MCSRange(211, 211) => CalibrateMaximum(target = 4.0f0),
+    MCSRange(212, 500) => ApplyCalibration(),
+)
+
+Exchange(secretome_uptake; mode = secretome_mode)
+```
+
+This spelling is illustrative and Provisional. Canonical lowering MUST expose the exact mode table:
+inactive on targets 1–121, reset-only on 122–210, calibrate on 211, and uptake/publish on
+212–500. A process-local `if target_mcs ...` scheduler is rejected.
+
+The calibration multiplier is normalized as one global property because the source writes the
+same value to every cell. A zero or nonfinite maximum raw uptake causes structured failure before
+the candidate field, multiplier, or signal publishes.
 
 Source/sink accumulation MUST specify:
 
@@ -950,18 +1007,24 @@ migration_plan = MCSPlan(
     Phase(:sample_centroids,
         Sample(directed_motility.sample)),
     Phase(:update_self_polarity,
-        Update(directed_motility.derive)),
+        Update(directed_motility.derive;
+            active = PeriodicMCS(122, 1; stop = 500))),
     Phase(:secretome_uptake,
-        Exchange(secretome_coupling.uptake)),
+        Exchange(secretome_coupling.uptake;
+            mode = secretome_mode)),
     Phase(:intracellular_dynamics,
-        Advance(intracellular_signaling.advance; interval = OneMCS())),
+        Advance(intracellular_signaling.advance;
+            interval = OneMCS(),
+            active = PeriodicMCS(122, 1; stop = 500))),
     Phase(:retune_focal_relationships,
         Update(focal_adhesions.retune);
-        schedule = PeriodicMCS(10, 10)),
+        schedule = PeriodicMCS(1, 10; stop = 491)),
     Phase(:align_neighbor_polarity,
-        Update(directed_motility.align)),
+        Update(directed_motility.align;
+            active = PeriodicMCS(122, 1; stop = 500))),
     Phase(:update_protrusion,
-        Update(directed_motility.force)),
+        Update(directed_motility.force;
+            active = PeriodicMCS(122, 1; stop = 500))),
     LifecyclePhase(),
     ObservationPhase(migration_observations...),
 )
@@ -998,18 +1061,21 @@ cell observes another cell's newly aligned polarity.
 
 Focal-link creation and removal are accepted-copy relationship effects committed with Potts
 ownership, not a post-Potts relationship phase. The ten-MCS focal phase only retunes the
-relationships that already exist. `PeriodicMCS(10, 10)` denotes the positive target-MCS portion of
-the source `mcs % 10 == 0` cadence; initialization owns any source-MCS-zero effect.
+relationships that already exist. Because source MCS `k` maps to target MCS `k+1`,
+`PeriodicMCS(1, 10; stop = 491)` denotes source `mcs % 10 == 0` over source `0:499`. No source
+`step()` retune is hidden in initialization.
 
-The staged protocol uses `:initial_adhesion` at MCS 120, `:switch_calibration` at MCS 210, and
-`:stimulated` from MCS 211. Consequently, Potts at MCS 120 still reads focal strength 0, Potts at
-MCS 210 still reads 20, and Potts at MCS 211 is the first to read the scanned strength and force
-published at MCS 210. Direct fixtures at MCS 120, 210, and 211 are mandatory.
+The staged protocol uses `:initial_adhesion` from target MCS 121/source MCS 120,
+`:switch_calibration` at target 211/source 210, and `:stimulated` from target 212/source 211.
+Consequently, Potts at source MCS 120 still reads focal strength 0, Potts at source MCS 210 still
+reads 20, and source MCS 211 is the first Potts step to read the scanned strength and force
+published at source MCS 210. Direct fixtures at source 120/210/211 and target 121/211/212 are
+mandatory.
 
 `focal_strength` is the scheduled target read only by `focal_parameter_update`. Potts energy reads
 the last published focal payload on each relationship, never the upcoming scheduled target.
-Reading `focal_strength` directly from Potts would violate both the MCS 120 and MCS 210 source
-boundaries.
+Reading `focal_strength` directly from Potts would violate both the source MCS 120 and source MCS
+210 boundaries.
 
 This sketch is not a CPU-only reference target. Before the Wang vertical slice passes, every state,
 law, process, plan entry, accepted-copy effect, observation reducer, and persistence block used
@@ -1190,8 +1256,9 @@ This candidate cannot become Accepted until:
 
 1. the Wortel source fixes accepted protrusion, retraction, decay, and observation ordering;
 2. the Merks source or an explicit ambiguity plan fixes its PDE stencil and split order;
-3. the accepted Wang CompuCell3D order is encoded in one inspectable plan and its MCS 120, 210,
-   and 211 visibility boundaries pass directly;
+3. the accepted Wang CompuCell3D order is encoded in one inspectable plan, source MCS `k` maps
+   exactly to normalized target MCS `k+1`, and source 120/210/211 (target 121/211/212) visibility
+   boundaries pass directly;
 4. the CNV scenario audit identifies the minimum field, relationship, degradation, and lifecycle
    process set;
 5. direct SciML and ModelingToolkit prototypes demonstrate stable mappings without symbolic object

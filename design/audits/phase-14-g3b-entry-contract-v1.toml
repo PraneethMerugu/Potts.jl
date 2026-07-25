@@ -1,6 +1,8 @@
-schema_version = "1.0.0"
+schema_version = "1.1.0"
 status = "accepted-implementation-entry"
 accepted_at = "2026-07-25"
+revised_at = "2026-07-25"
+revision = 2
 model_id = "wang-2025-collective-tumor-migration"
 gate = "G3-B"
 scope = "source-backed sequential CPU reference through backend-adaptable canonical state, processes, workspaces, and one root plan"
@@ -21,16 +23,44 @@ open_runtime_oracles_block_generic_primitives = false
 open_runtime_oracles_block_complete_wang_claim = true
 cpu_oracle_is_architectural_authority = false
 cpu_oracle_purpose = "deterministic semantic and numerical reference for the identical canonical model later qualified on Metal and ROCm"
+internal_substeps_are_stable_boundaries = false
+only_completed_mcs_is_checkpointable = true
+exchange_mode_must_be_plan_resolved = true
+cross_domain_writes_must_publish_as_one_logical_transaction = true
+
+[source_time_mapping]
+rule = "CompuCell3D source MCS k maps to normalized target MCS k+1."
+reason = "Potts.jl MCS 0 is the finalized initial condition, while CompuCell3D 4.2.5 executes a real Potts/field/Python iteration labelled MCS 0."
+source_first = 0
+source_last = 499
+target_first = 1
+target_last = 500
+source_label_is_clock = false
+source_label_derivation = "source_mcs = completed_target_mcs - 1"
+initialization_rule = "Only the registered source start() hooks, including the one RoadRunner advance, occur before finalized Potts.jl MCS 0. No source step() Potts attempt, field substep, history sample, exchange, retune, or observation is hidden in initialization."
+fingerprint_rule = "Schedules fingerprint normalized target MCS ranges; paper observations may additionally publish the exactly derived source_mcs label."
 
 [profiles.source_faithful_cpu]
 floating_precision = "mixed source-compatible: Float32 field and source-runtime-equivalent Float64 cell algebra/ODE oracle"
 purpose = "foreign-runtime agreement and exact/invariant/restart conformance"
 backend = "sequential CPU"
+field_arithmetic = "pinned CC3D 4.2.5 DiffusionSolverFE Float32 evaluation, compared under the registered source-local tolerance"
 
 [profiles.portable]
 floating_precision = "Float32"
 backends = ["CPU", "Metal", "ROCm"]
 purpose = "one portable numerical profile used for cross-backend conformance and G3-C qualification"
+field_arithmetic = "for each canonical (x,y): pair_x=left+right; pair_y=down+up; lap=(pair_x+pair_y)-4.0f0*center; diffused=muladd(0.2f0,lap,center); output=is_medium ? 1.0f0 : diffused. Every operation is Float32; fast-math reassociation and alternative contraction are forbidden."
+same_backend_replay = "bitwise for schedule, ownership, reset values, reduction topology, and status; floating results follow the registered deterministic reduction tree"
+cross_backend_comparison = "preregistered tolerance and invariant comparison, not unconditional bitwise equality"
+
+[numerical_tolerances]
+field_local_atol = 9.5367431640625e-7
+field_local_rtol = 9.5367431640625e-7
+uptake_local_atol = 3.814697265625e-6
+uptake_local_rtol = 3.814697265625e-6
+balance_rule = "absolute error <= 64*eps(Float32)*max(1, reference mass)"
+exact_quantities = ["integer schedules", "periodic index mapping", "Medium overwrite value 1.0f0", "uptake cap 1.0f0 for exact branch fixtures", "cell slot/generation identity", "status and commit epoch"]
 
 [capacities]
 cell_capacity = "construction-time parameter, fixed before execution"
@@ -43,13 +73,13 @@ overflow_rule = "deterministic failure status; never allocate, drop, or reorder 
 [[state]]
 id = "secretome"
 owner = "field"
-schema = "scalar concentration on 256x256x1 square lattice"
+schema = "scalar concentration on a logical 256x256 square lattice; source provenance retains the singleton CC3D z extent 256x256x1"
 logical_type = "Float32"
 storage = "current"
-physical_layout = "contiguous backend-resident grid plus same-shape ping-pong grid"
-initialization = "zero before startup; medium sites are set to 1 by every field substep"
+physical_layout = "one authoritative contiguous backend-resident Matrix{Float32}; two same-shape staging grids are workspace, not state"
+initialization = "zero at finalized Potts.jl MCS 0; target MCS 1/source MCS 0 performs the first five diffusion/reset substeps"
 lifecycle = "lattice lifetime; no division or death policy"
-persistence = ["field values", "published buffer index", "completed field substep boundary"]
+persistence = ["authoritative field values", "semantic field time at completed MCS"]
 adaptation = ["CPU", "Metal", "ROCm"]
 source = "fpp_polarity_force.xml DiffusionSolverFE/secretome"
 
@@ -94,16 +124,16 @@ source = "cell.dict['s'] and RR['s']"
 
 [[state]]
 id = "uptake_multiplier"
-owner = "cell"
-schema = "positive scalar calibration multiplier"
+owner = "global"
+schema = "one positive scalar calibration multiplier shared by every eligible cell"
 logical_type = "Float64 source profile; Float32 portable profile"
 storage = "current"
-physical_layout = "structure-of-arrays multiplier[cell]"
+physical_layout = "backend-resident one-element value plus initialized status"
 initialization = "unset status plus zero value"
-lifecycle = "reset on create and retirement"
-persistence = ["multiplier", "initialized status", "cell generation"]
+lifecycle = "model lifetime; no cell lifecycle policy"
+persistence = ["multiplier", "initialized status"]
 adaptation = ["CPU", "Metal", "ROCm"]
-source = "cell.dict['multiply']"
+source = "cell.dict['multiply']; source writes the identical global value into every cell, so normalized state stores it once"
 
 [[state]]
 id = "intracellular_state"
@@ -125,7 +155,7 @@ schema = "scalar focal-point spring strength"
 logical_type = "Float64 source profile; Float32 portable profile"
 storage = "current"
 physical_layout = "structure-of-arrays strength[cell]"
-initialization = "zero before the MCS 0 retune"
+initialization = "zero at finalized Potts.jl MCS 0; the first retune is target MCS 1/source MCS 0 after that target's Potts and ODE positions"
 lifecycle = "zero on create and retirement"
 persistence = ["strength", "cell generation"]
 adaptation = ["CPU", "Metal", "ROCm"]
@@ -158,16 +188,23 @@ adaptation = ["CPU", "Metal", "ROCm"]
 source = "lambdaVecX/Y and output attributes"
 
 [[workspace]]
-id = "field_ping_pong"
-layout = "same shape and element type as secretome"
-capacity = "exact lattice dimensions"
+id = "field_staging"
+layout = "two same-shape Float32 grids: field substep ping-pong; exchange candidate field and per-site removal contributions"
+capacity = "two times the exact 256x256 logical lattice dimensions"
 steady_state_allocation = false
 adaptation = ["CPU", "Metal", "ROCm"]
 
 [[workspace]]
 id = "cell_reduction"
-layout = "per-cell uptake totals plus bounded global maximum reduction scratch"
-capacity = "cell_capacity plus backend reduction scratch determined at construction"
+layout = "per-cell uptake totals, active/generation validation, and fixed-tree global maximum scratch"
+capacity = "cell_capacity plus a construction-time fixed reduction tree; portable Wang reduction width is 256"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "phase_status"
+layout = "backend-resident validation status, failure code, failing index, and one logical publication epoch"
+capacity = "constant per coupled integrator"
 steady_state_allocation = false
 adaptation = ["CPU", "Metal", "ROCm"]
 
@@ -195,7 +232,7 @@ adaptation = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "potts_metropolis"
 phase = 1
-trigger = "every MCS 0:499"
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
 reads = ["ownership", "cell geometry", "motility_force", "focal_relationships"]
 writes = ["ownership", "cell geometry", "contact-neighbor graph", "focal_relationships"]
 snapshot = "accepted-copy transaction snapshot for topology; preceding completed-MCS snapshot for force and relationship energy"
@@ -205,18 +242,19 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "secretome_field_advance"
 phase = 2
-trigger = "every MCS 0:499"
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
 reads = ["secretome", "post-Potts ownership/type field"]
 writes = ["secretome"]
-snapshot = "process-entry snapshot for each substep"
-commit = "atomic synchronous commit per substep"
-numerical_policy = "five Float32 nearest-neighbor periodic forward-Euler substeps; diffusion coefficient 0.2 per substep; then set every Medium site to concentration 1 after each substep"
+snapshot = "one process-entry post-Potts ownership/type snapshot remains immutable across all five internal substeps; substep n reads the staged result of substep n-1"
+commit = "one atomic synchronous process commit after all five internal substeps and validation; no internal substep is externally visible or checkpointable"
+numerical_policy = "five Float32 four-neighbor x/y-periodic forward-Euler substeps on a logical 256x256 Matrix; coefficient 0.2f0 per substep; each substep computes diffusion from its input snapshot and then exactly overwrites every Medium output site with 1.0f0 before that output feeds the next substep"
+failure_policy = "nonfinite input/output, shape/ownership mismatch, invalid coefficient/profile, or workspace/backend mismatch writes a deterministic status and canonical first failing index. The authoritative field is unchanged until all five staged substeps pass validation; failure advances no publication epoch."
 backend_requirements = ["CPU", "Metal", "ROCm"]
 
 [[process]]
 id = "centroid_sample"
 phase = 3
-trigger = "every MCS 0:499"
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
 reads = ["post-Potts cell centroid"]
 writes = ["centroid_history"]
 snapshot = "completed-Potts snapshot"
@@ -226,7 +264,7 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "self_polarity_from_history"
 phase = 4
-trigger = "MCS > 120"
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
 reads = ["centroid_history including current sample"]
 writes = ["self_polarity"]
 snapshot = "completed centroid_sample snapshot"
@@ -237,18 +275,20 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "secretome_signal_exchange"
 phase = 5
-trigger = "120 < MCS < 210 reset s=0; MCS == 210 calibrate; MCS > 210 uptake and publish s"
+trigger = "plan-resolved mode: inactive on target 1:121/source 0:120; reset on target 122:210/source 121:209; calibrate on target 211/source 210; publish on target 212:500/source 211:499"
 reads = ["secretome", "ownership", "cell volume", "uptake_multiplier"]
 writes = ["secretome", "signal", "uptake_multiplier"]
-snapshot = "completed field and polarity snapshot"
-commit = "deterministic cell-id-ordered CPU oracle; conflict-free site-parallel mutation plus deterministic per-cell/global reductions for portable profile"
-numerical_policy = "for every cell-owned site remove min(1, 0.0025*C); raw uptake is removed_total/cell_volume. At MCS 210 set the same global multiplier 4/max(raw uptake) for every cell without writing s. After MCS 210 publish s=raw uptake*multiplier."
+snapshot = "completed field snapshot plus one post-Potts ownership, generation, and volume snapshot; the plan supplies an immutable exchange mode"
+commit = "one cross-domain logical transaction publishes the candidate field, per-cell signal writes, global multiplier/status, and publication epoch only after every reduction and invariant passes"
+numerical_policy = "reset mode writes s=0 without field mutation. Calibrate and publish modes remove min(1,0.0025*C) from every eligible cell-owned site in a staged candidate field; raw uptake is removed_total/post-Potts cell volume. Calibrate mode sets one global multiplier 4/max(raw uptake) without writing s. Publish mode requires initialized multiplier and writes s=raw uptake*multiplier. A zero/nonfinite calibration maximum is a structured domain failure and commits nothing."
+reduction_policy = "source-faithful CPU accumulates Float32 removals into Float64 in ascending canonical linear-site order for each ascending active cell slot. Portable profile accumulates Float32 and launches one fixed-width-256 reduction group per active cell; lane l visits matching canonical sites l,l+256,... in ascending order and a fixed pairwise tree combines lanes. Global maximum uses a fixed pairwise tree. Floating atomics and scheduler-dependent sums are forbidden."
+failure_policy = "stale generation, nonpositive active-cell volume, nonfinite concentration/removal/total, zero or nonfinite calibration maximum, uninitialized multiplier in publish mode, capacity mismatch, or backend status failure commits nothing and reports the deterministic failure class plus canonical first failing site/cell when applicable."
 backend_requirements = ["CPU", "Metal", "ROCm"]
 
 [[process]]
 id = "intracellular_advance"
 phase = 6
-trigger = "one startup advance before MCS 0; then every MCS > 120"
+trigger = "one registered source start() advance before finalized Potts.jl MCS 0; then normalized target MCS 122:500, corresponding to source MCS > 120"
 reads = ["signal", "intracellular_state"]
 writes = ["intracellular_state"]
 snapshot = "completed secretome_signal_exchange snapshot"
@@ -260,18 +300,18 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "focal_parameter_retune"
 phase = 7
-trigger = "MCS % 10 == 0"
+trigger = "PeriodicMCS(1,10; stop=491), corresponding exactly to source MCS % 10 == 0 over source 0:499"
 reads = ["MCS", "focal_relationships"]
 writes = ["focal_strength", "focal_relationships payload only"]
 snapshot = "completed intracellular_advance snapshot"
 commit = "atomic synchronous relationship retune distinct from accepted-copy topology"
-numerical_policy = "strength=0 for MCS<120, 20 for 120<=MCS<210, scanned strength for MCS>=210; target length=8, maximum length=12"
+numerical_policy = "using derived source_mcs=target_mcs-1: strength=0 for source_mcs<120, 20 for 120<=source_mcs<210, scanned strength for source_mcs>=210; target length=8, maximum length=12"
 backend_requirements = ["CPU", "Metal", "ROCm"]
 
 [[process]]
 id = "neighbor_polarity_alignment"
 phase = 8
-trigger = "MCS > 120"
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
 reads = ["contact-neighbor graph", "self_polarity snapshot", "focal_strength"]
 writes = ["self_polarity", "motility_force.alignment_fraction"]
 snapshot = "all neighbor means reduced before any aligned polarity is published"
@@ -282,7 +322,7 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "protrusion_force_update"
 phase = 9
-trigger = "MCS > 120"
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
 reads = ["self_polarity", "intracellular_state.rac", "scanned protrusion-force maximum"]
 writes = ["motility_force"]
 snapshot = "completed neighbor_polarity_alignment snapshot"
@@ -303,7 +343,7 @@ backend_requirements = ["CPU", "Metal", "ROCm"]
 [[process]]
 id = "wang_observations"
 phase = 11
-trigger = "per-cell source record every MCS > 120; geometric target at registered MCS values"
+trigger = "per-cell source record on normalized target MCS 122:500/source MCS >120; geometric observation primitives at target 91/source 90 and target 271/source 270; final classifier/UMAP execution remains Phase 14.3"
 reads = ["cell identity", "centroid", "self_polarity", "intracellular_state", "signal", "motility_force", "focal_strength"]
 writes = []
 snapshot = "completed lifecycle snapshot"
@@ -328,15 +368,33 @@ ordered_processes = [
 forbid_fragment_local_schedulers = true
 forbid_hidden_callbacks = true
 forbid_runtime_symbol_lookup = true
+forbid_process_local_mcs_branching = true
+source_mcs_is_derived_metadata = true
 
-[boundary_expectations.mcs_120]
+[plan.exchange_modes]
+target_1_121 = "inactive"
+target_122_210 = "reset"
+target_211 = "calibrate"
+target_212_500 = "publish"
+
+[plan.stable_boundary]
+kind = "completed MCS after required observation"
+internal_field_substeps = false
+post_field_phase = false
+post_exchange_phase = false
+partial_mcs_restart = false
+
+[boundary_expectations.source_mcs_120]
+target_mcs = 121
 potts_focal_strength = 0.0
 self_polarity_runs = false
 intracellular_advance_runs = false
 retune_strength = 20.0
-first_potts_using_retune = 121
+first_source_potts_using_retune = 121
+first_target_potts_using_retune = 122
 
-[boundary_expectations.mcs_210]
+[boundary_expectations.source_mcs_210]
+target_mcs = 211
 potts_focal_strength = 20.0
 field_runs_before_exchange = true
 exchange_removes_field_mass = true
@@ -345,12 +403,15 @@ exchange_writes_signal = false
 ode_signal = 0.0
 retune_writes_scanned_strength = true
 force_reads_scanned_strength = true
-first_potts_using_scanned_strength = 211
+first_source_potts_using_scanned_strength = 211
+first_target_potts_using_scanned_strength = 212
 
-[boundary_expectations.mcs_211]
+[boundary_expectations.source_mcs_211]
+target_mcs = 212
 exchange_writes_signal = true
 ode_reads_same_mcs_signal = true
-potts_uses_force_from_mcs = 210
+potts_uses_force_from_source_mcs = 210
+potts_uses_force_from_target_mcs = 211
 
 [[conformance]]
 id = "history-ring"
@@ -362,19 +423,19 @@ cases = ["ring wrap", "source t-minus-4", "named paper t-minus-5 sensitivity", "
 id = "intracellular-affine-ode"
 kind = "analytic-tolerance"
 profiles = ["source_faithful_cpu", "portable"]
-cases = ["s=0", "constant nonzero s", "startup advance", "MCS 210 zero signal", "MCS 211 same-MCS signal", "restart"]
+cases = ["s=0", "constant nonzero s", "startup advance", "source MCS 210/target 211 zero signal", "source MCS 211/target 212 same-MCS signal", "completed-MCS restart"]
 
 [[conformance]]
 id = "periodic-field"
 kind = "exact-and-tolerance"
 profiles = ["source_faithful_cpu", "portable"]
-cases = ["constant field invariant", "single-site impulse one substep", "five-substep manufactured solution", "periodic edge wrap", "medium reset after every substep", "mass balance without reset", "restart"]
+cases = ["constant field invariant", "single-site impulse one substep", "five-substep manufactured solution", "periodic edge wrap", "singleton source-z collapse", "medium reset after every substep", "reset-every-substep differs from final-only reset", "mass balance without reset", "reservoir overwrite balance", "five-substep failure leaves authoritative field unchanged", "completed-MCS restart"]
 
 [[conformance]]
 id = "uptake-calibration"
 kind = "exact-and-tolerance"
 profiles = ["source_faithful_cpu", "portable"]
-cases = ["per-site cap", "relative uptake branch", "per-cell volume normalization", "deterministic maximum", "MCS 210 no signal write", "MCS 211 signal write", "field mass balance", "restart"]
+cases = ["inactive mode", "reset mode without field mutation", "per-site cap", "relative uptake branch", "per-cell volume normalization", "fixed reduction order", "deterministic maximum and ties", "zero/nonfinite calibration failure atomicity", "source MCS 210/target 211 no signal write", "source MCS 211/target 212 same-MCS signal write", "field mass balance", "cross-domain failure atomicity", "completed-MCS restart"]
 
 [[conformance]]
 id = "relationship-graph"
@@ -392,13 +453,13 @@ cases = ["empty neighbor set", "synchronous neighbor snapshot", "alignment clamp
 id = "wang-plan-boundaries"
 kind = "exact"
 profiles = ["source_faithful_cpu", "portable"]
-cases = ["ordinary order", "MCS 120", "MCS 210", "MCS 211", "restart after every declared stable boundary"]
+cases = ["source-to-target MCS mapping 0->1 and 499->500", "ordinary order", "source observation labels 90/270 map to target 91/271", "source MCS 120/target 121", "source MCS 210/target 211", "source MCS 211/target 212", "restart at completed MCS 0, 120, 121, 210, 211, 212, and 500", "mid-phase and internal-substep checkpoint rejection"]
 
 [[conformance]]
 id = "device-readiness"
 kind = "structural"
 profiles = ["portable"]
-cases = ["Adapt round trip", "device-storage validation", "all capacities preallocated", "no scalar host loop contract", "no hidden callback", "zero unobserved host transfer", "zero steady-state allocation"]
+cases = ["Adapt round trip", "descriptor-free execution views", "device-storage validation", "authoritative field plus two staging grids", "all capacities preallocated", "typed cross-domain write set", "backend status propagation", "no scalar host loop contract", "no hidden callback or process-local MCS branch", "zero unobserved host transfer", "zero warm allocation on the sequential CPU path", "zero steady-state allocation"]
 
 [[runtime_oracles]]
 id = "wang-potts-boundary-and-attempt-accounting"
@@ -416,6 +477,14 @@ does_not_block = ["generic fixed-step/closed-form cell state substrate", "portab
 question = "Record libRoadRunner integrator identity, tolerances, and rac outputs for the pinned affine Antimony model over a 2880-unit invocation."
 evidence_target = "exact CC3D 4.2.5 startup and stepped rac trace for fixed rac0 and s values"
 
+[[runtime_oracles]]
+id = "wang-field-numerical-profile"
+status = "required-before-g3b-closure"
+blocks = ["source-faithful field tolerance registration", "G3-B completion claim"]
+does_not_block = ["generic periodic Float32 stencil", "portable five-substep field implementation", "exchange transaction substrate"]
+question = "Record exact CC3D 4.2.5 DiffusionSolverFE outputs for impulse, periodic-edge, and reset-every-substep distinguishing fixtures under the Wang XML profile."
+evidence_target = "small canonical Float32 field arrays or checksums before and after one complete five-substep XML solve, including a pattern that differs from final-only Medium reset"
+
 [deferred]
 items = [
     "recovery of original NumPy and CompuCell3D seed identities",
@@ -430,8 +499,13 @@ items = [
 g3b_requires = [
     "every state and process above implemented through generic canonical declarations",
     "all source_faithful_cpu conformance rows pass",
-    "both required runtime oracles are closed",
-    "restart passes at every declared stable boundary",
+    "portable device-readiness structural conformance passes before G3-C begins",
+    "all three required runtime oracles are closed",
+    "source MCS labels map exactly to normalized target MCS without a hidden source step in initialization",
+    "restart passes at every declared completed-MCS stable boundary and partial-MCS capture rejects",
+    "field and exchange CPU warm paths allocate zero bytes with caller-owned observation and checkpoint outputs excluded",
+    "field/exchange failure atomicity and cross-domain publication tests pass",
+    "all G3-B numerical tolerances and deterministic reduction identities are registered before paper-scale result inspection",
     "G3-A identity, lowering, API inventory, and Phase 13 behavior remain unchanged",
 ]
 g3c_inherits = [

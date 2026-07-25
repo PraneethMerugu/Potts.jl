@@ -2,7 +2,8 @@ using SciMLBase
 using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
     AlgebraicAssignment, AlgebraicConstraint, AngularMembrane, AtMCSEnd,
     CellDomain, CellDynamics, CellEndpoint, CellHistory, CompatibilityItem,
-    ContinuousClock, ContinuousEvent, ContinuousModelAdapter, ContinuousSystem,
+    ConstantConcentration, ContinuousClock, ContinuousEvent,
+    ContinuousModelAdapter, ContinuousSystem,
     ContinuousSystemState, CoupledAttemptWorkspace, CoupledPhase, CoupledState,
     CreateRelationship, DelayState, DelayStateStorage, DifferentialEquation,
     DirectLaw, EventAssignment, EventRuntimeState, EveryGlobal,
@@ -592,6 +593,59 @@ end
     apply_field_exchange!(exchange_field, exchange, ownership)
     @test exchange_field.forcing[1] == -0.25
     @test all(iszero, exchange_field.forcing[2:end])
+
+    wang_field = EvolvingFieldState(
+        :wang_secretome, zeros(Float32, 2, 2))
+    wang_dynamics = FieldDynamics(:wang_secretome_dynamics;
+        field = :wang_secretome,
+        law = ReactionDiffusion(diffusion = 0.0f0, decay = 0.0f0),
+        method = FixedStep(ExplicitEuler(); substeps = 5),
+        clock,
+        post_substep = (
+            ConstantConcentration(:medium, 1.0f0),))
+    @test wang_field.workspace.first !== wang_field.values
+    @test wang_field.workspace.second !== wang_field.values
+    @test wang_field.workspace.first !== wang_field.workspace.second
+    advance_field!(wang_field, wang_dynamics, 1.0f0, ownership)
+    @test wang_field.values[1] == 0.0f0
+    @test all(==(1.0f0), wang_field.values[2:end])
+    @test wang_field.diagnostics.steps == 5
+    @test wang_field.diagnostics.mode === :transient
+
+    authoritative_before_failure = copy(wang_field.values)
+    failure_dynamics = FieldDynamics(:nonfinite_field;
+        field = :wang_secretome,
+        law = ReactionDiffusion(
+            diffusion = 0.0f0, decay = 0.0f0,
+            reaction = _ -> Float32(NaN)),
+        method = FixedStep(ExplicitEuler(); substeps = 5),
+        clock)
+    @test_throws ArgumentError advance_field!(
+        wang_field, failure_dynamics, 1.0f0, ownership)
+    @test wang_field.values == authoritative_before_failure
+    @test wang_field.time == 1.0f0
+
+    unstable_dynamics = FieldDynamics(:unstable_field;
+        field = :wang_secretome,
+        law = ReactionDiffusion(diffusion = 1.0f0, decay = 0.0f0),
+        method = FixedStep(ExplicitEuler(); substeps = 1),
+        clock)
+    @test_throws ArgumentError advance_field!(
+        wang_field, unstable_dynamics, 1.0f0, ownership)
+    @test wang_field.values == authoritative_before_failure
+
+    allocation_field = EvolvingFieldState(
+        :allocation_probe, zeros(Float32, 256, 256))
+    allocation_dynamics = FieldDynamics(:allocation_probe_dynamics;
+        field = :allocation_probe,
+        law = ReactionDiffusion(diffusion = 1.0f0, decay = 0.0f0),
+        method = FixedStep(ExplicitEuler(); substeps = 5),
+        clock)
+    advance_field!(allocation_field, allocation_dynamics, 1.0f0)
+    field_allocation_probe(state, process) =
+        @allocated advance_field!(state, process, 1.0f0)
+    @test field_allocation_probe(
+        allocation_field, allocation_dynamics) == 0
 
     steady_field = EvolvingFieldState(:steady, zeros(Float64, 3, 3))
     fill!(steady_field.forcing, 1.0)

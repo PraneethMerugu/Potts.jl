@@ -10,6 +10,13 @@ authority_order = [
 evidence = "../evidence/phase-14/wang-order/index.toml"
 foreign_fixture = "../../integration/external/wang_order/wang_order_oracle.cc3d"
 
+[normalized_time_mapping]
+rule = "Potts.jl normalized target MCS = CompuCell3D source MCS + 1"
+source_range = "0:499"
+target_range = "1:500"
+source_label_role = "exactly derived observation and provenance metadata; never a second clock"
+initialization_exclusion = "No source step() Potts, field, Python, or retune work is hidden before finalized Potts.jl MCS 0."
+
 canonical_mcs_order = [
     "potts_metropolis",
     "xml_diffusion_solver_fe",

@@ -478,16 +478,16 @@ algorithm = "CompuCell3D 4.2.5 sequential CPM plus ordered Python steppables"
 attempt_budget = "CompuCell3D 4.2.5 MCS semantics; exact attempt accounting requires a source-runtime microfixture"
 temperature = "25"
 precision = "CompuCell3D 4.2.5 CPU baseline"
-simulation_horizon = "500 MCS"
+simulation_horizon = "500 CompuCell3D iterations labelled source MCS 0:499; normalized Potts.jl target MCS 1:500"
 initialization = "BlobInitializer centered at (128,128), radius 33, width 5, gap 0, one cell type"
 initialization_checksum = "source BlobInitializer and XML are version-pinned; the realized logical-state checksum is generated during Phase 14.3"
-staged_protocol = "relax through MCS 120; establish initial adhesion/polarity regime; switch signal and scanned focal strength at MCS 210"
+staged_protocol = "source labels: relax through MCS 120; establish initial adhesion/polarity regime; switch signal and scanned focal strength at MCS 210. Normalized target MCS equals source MCS + 1."
 update_schedule = "accepted exact order: Potts; XML DiffusionSolverFE then BlobInitializer; migration/secretome/history frequency 1; ODE frequency 1; focal parameters when mcs%10==0; polarity/force/output frequency 1; then restart/snapshot/steering housekeeping"
 field_splitting = "DiffusionSolverFE runs after Potts and before all Wang Python steppables; each scaled CPU substep diffuses then applies constant-concentration secretion; Python uptake follows the completed field solve"
 lifecycle = "no cell division or death in the primary target"
 seed_policy = "the source launches 50 repeats per scan combination but does not materialize NumPy or CompuCell3D seed identities; Potts.jl will preregister a paired semantic-seed ensemble"
 source_replicates = "50 repeats for each of 231 scan combinations"
-observation_schedule = "per-cell records after relaxation; geometric features at MCS 90 and 270; Figure 3 classification at MCS 270"
+observation_schedule = "source labels: per-cell records after relaxation; geometric features at source MCS 90 and 270 (normalized targets 91 and 271); Figure 3 classification at source MCS 270"
 analysis = "geometric feature extraction followed by a saved two-step clustering pipeline; archived source includes notebooks, scalers, clustering models, UMAP model, and Figure 3 data"
 mechanisms = ["dynamic focal-point links", "centroid displacement history", "vector polarity", "contact-neighbor polarity alignment", "per-cell ODE state", "secretome uptake", "Hill-scaled protrusion drive", "staged parameter switch"]
 mechanism_traceability = [
@@ -505,14 +505,14 @@ parameters = [
     "target surface = 25; lambda surface = 4",
     "J(medium,medium) = -1; J(medium,cell) = -2; J(cell,cell) = -6",
     "initial focal strength = 20; scanned focal strength after switch",
-    "relax_step = 120; switch_step = 210",
+    "source relax_step = 120 and switch_step = 210; normalized target boundaries = 121 and 211",
     "source polarity displacement = x(t)-x(t-4) because current x(t) is appended before index -5; paper Equation 11 x(t)-x(t-5) is a named sensitivity variant",
     "neighbor-polarity scale beta = 0.4 in the primary source",
     "protrusion Hill threshold = 40; exponent = 4",
     "focal-strength scan = 0:50:1000 (21 values)",
     "protrusion-force scan = 0:30:300 (11 values)",
     "50 repeats per 231 scan combinations",
-    "geometric analysis timepoints = 90 and 270 MCS",
+    "geometric analysis source timepoints = 90 and 270 MCS; normalized targets = 91 and 271",
     "Antimony step size = 2880",
 ]
 parameter_ownership = "Every listed value remains explicit paper-v0 assembly; scan, ODE, field, relationship, history, force, staging, and analysis meanings are governed by the mapped capability contracts."
