@@ -1,6 +1,6 @@
 # Phase 14.1 G3-B Atomic Field Evidence
 
-Status: sequential CPU primitive accepted; portable backend execution remains open
+Status: sequential CPU and portable KernelAbstractions reference accepted; Metal/ROCm execution remains open
 
 Date: 2026-07-25
 
@@ -23,6 +23,16 @@ The implementation now provides:
 - process failure atomicity: invalid staged values never overwrite authoritative field values,
   field time, or published diagnostics.
 
+The portable profile now additionally provides:
+
+- one backend-native kernel per internal substep;
+- the same fixed periodic arithmetic and exact post-substep Medium reset;
+- backend-resident status and canonical failing index;
+- a conditional field commit and authoritative backend publication epoch;
+- no host scalar access or transfer during unobserved execution; and
+- one explicit stable-boundary synchronization that publishes host semantic time/diagnostics or
+  raises the recorded failure.
+
 The two staging arrays remain execution workspace and are excluded from checkpoints. Generic
 accumulated forcing remains authoritative only for models that declare it; the Wang profile uses
 no such forcing.
@@ -38,7 +48,10 @@ The focused Phase 14 test run passed:
 - all Phase 14 dynamic-state test sets, including 35 assertions in the continuous-system/field
   set.
 
-Thirteen assertions in that field set directly cover the new primitive:
+The original thirteen assertions cover the sequential primitive. The later portable gate adds
+direct CPU-versus-KernelAbstractions equality, eight-launch accounting, zero transfer accounting,
+deferred semantic-time publication, and nonfinite staged failure with unchanged authoritative
+values and epoch.
 
 - the two staging arrays are distinct from each other and the authoritative array;
 - five substeps produce exact Medium concentration 1 and leave the cell site unchanged;
@@ -54,11 +67,9 @@ pass after this slice.
 
 G3-B still requires:
 
-1. a backend-native field kernel and backend-resident validation/publication status;
-2. CPU/Metal/ROCm adaptation and device-tree tests for the complete execution view;
-3. the registered CC3D 4.2.5 field microtrace oracle;
-4. tolerance-based impulse, periodic-edge, and reset-order comparisons against that oracle;
-5. exchange/calibration and its typed cross-domain transaction; and
-6. completed-MCS restart evidence in the assembled Wang plan.
+1. Metal/ROCm adaptation and device-tree compilation evidence for the complete execution view;
+2. the registered CC3D 4.2.5 field microtrace oracle;
+3. tolerance-based impulse, periodic-edge, and reset-order comparisons against that oracle; and
+4. completed-MCS restart evidence in the assembled Wang plan.
 
 No backend numerical claim may cite this CPU record as a substitute.

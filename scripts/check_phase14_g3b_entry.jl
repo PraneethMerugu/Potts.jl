@@ -15,6 +15,8 @@ const FIELD_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-field-evidence.md")
 const EXCHANGE_EVIDENCE_PATH = joinpath(
     REPO, "design", "audits", "phase-14-g3b-exchange-evidence.md")
+const CONTINUOUS_SOURCE_PATH = joinpath(
+    REPO, "lib", "CorePotts", "src", "coupled", "continuous.jl")
 const failures = String[]
 
 check(condition, message) = condition || push!(failures, message)
@@ -32,6 +34,7 @@ entry_packet = read(ENTRY_PACKET_PATH, String)
 closure_audit = read(CLOSURE_AUDIT_PATH, String)
 field_evidence = read(FIELD_EVIDENCE_PATH, String)
 exchange_evidence = read(EXCHANGE_EVIDENCE_PATH, String)
+continuous_source = read(CONTINUOUS_SOURCE_PATH, String)
 
 check(contract["status"] == "accepted-implementation-entry",
     "G3-B entry contract is not accepted")
@@ -47,16 +50,31 @@ check(occursin("source mcs `k` maps to normalized target mcs `k+1`",
 check(occursin("typed cross-domain write set", closure_audit) &&
       occursin("completed-mcs", lowercase(closure_audit)),
     "G3-B closure audit omits publication or persistence closure")
-check(occursin("portable backend execution remains open", field_evidence) &&
+check(occursin("portable kernelabstractions reference accepted",
+          lowercase(field_evidence)) &&
       occursin("allocates exactly zero bytes", field_evidence),
     "atomic-field evidence overclaims backend closure or omits allocation evidence")
 check(occursin("atomic field evidence", entry_packet) &&
       occursin("not a GPU qualification claim", entry_packet),
     "G3-B entry packet does not bound the field evidence claim")
-check(occursin("portable fixed-tree execution remains open", exchange_evidence) &&
+check(occursin("portable fixed-tree kernelabstractions reference accepted",
+          lowercase(exchange_evidence)) &&
       occursin("zero-byte warm sequential CPU", exchange_evidence) &&
       occursin("exchange transaction evidence", entry_packet),
     "G3-B exchange evidence is missing or overclaims portable closure")
+for required_source in (
+        "WANG_PORTABLE_REDUCTION_WIDTH = 256",
+        "_exchange_device_reduce_cells!",
+        "_exchange_device_calibrate_maximum!",
+        "_exchange_device_commit_field!",
+        "_exchange_device_commit_signal!",
+        "_periodic_field_device_substep!",
+        "_field_device_commit!",
+        "synchronize_field_exchange_status!",
+        "synchronize_field_advance_status!")
+    check(occursin(required_source, continuous_source),
+        "portable field/exchange source is missing '$required_source'")
+end
 
 function unique_ids(rows, label)
     ids = [row["id"] for row in rows]

@@ -780,6 +780,142 @@ end
     @test property_values(published_potts_candidate, :signal)[2] ≈ 3.99f0
     @test published_candidate.globals[1].publication_epoch[1] == 2
 
+    portable_owners = reshape(OwnerRef[
+        CellOwner(1), CellOwner(1), CellOwner(2),
+        MediumOwner(1), MediumOwner(1), MediumOwner(1),
+        MediumOwner(1), MediumOwner(1), MediumOwner(1),
+    ], 3, 3)
+    portable_potts_snapshot = LogicalPottsState(
+        portable_owners, CellCapacity(2);
+        cell_types = Dict(
+            CellID(1) => CellTypeID(1),
+            CellID(2) => CellTypeID(1)),
+        medium_domains = [MediumID(1)],
+        property_schema = exchange_schema)
+    property_values(portable_potts_snapshot, :signal) .= Float32[5, 6]
+    portable_domain = CartesianDomain(
+        (3, 3); spacing = (1.0f0, 1.0f0))
+    portable_surface = first_shell_relation(
+        SurfaceRole(), Val(2); spacing = (1.0f0, 1.0f0))
+    portable_tracker = BoundaryMeasureTracker(
+        BoundaryEdgeCount(), portable_surface)
+    portable_scientific = compile_scientific_state(
+        portable_potts_snapshot, portable_domain, portable_tracker)
+    portable_field = EvolvingFieldState(
+        :transaction_field,
+        reshape(Float32[0.5, 1.0, 400.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+            3, 3))
+    portable_runtime = FieldExchangeState(
+        :uptake_multiplier, portable_field, portable_potts_snapshot;
+        accumulator_type = Float32)
+    portable_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    @test apply_field_exchange!(
+        portable_plan, portable_field, transaction_exchange,
+        portable_scientific, portable_runtime, CalibrateExchange, 211)
+    @test CorePotts.synchronize_field_exchange_status!(
+        portable_plan, portable_runtime) === portable_runtime
+    @test portable_field.values[1:3] ≈
+        Float32[0.49875, 0.9975, 399.0]
+    @test all(==(2.0f0), portable_field.values[4:end])
+    @test portable_runtime.value[1] == 4.0f0
+    @test portable_runtime.initialized[1] == 1
+    @test portable_runtime.publication_epoch[1] == 1
+    @test portable_field.publication_epoch[1] == 1
+    @test apply_field_exchange!(
+        portable_plan, portable_field, transaction_exchange,
+        portable_scientific, portable_runtime, PublishExchange, 212)
+    CorePotts.synchronize_field_exchange_status!(
+        portable_plan, portable_runtime)
+    portable_signal = CorePotts.scientific_execution(
+        portable_scientific).core.properties.signal
+    @test portable_signal[1] ≈ 0.00748125f0
+    @test portable_signal[2] ≈ 3.99f0
+    @test portable_runtime.publication_epoch[1] == 2
+    @test portable_field.publication_epoch[1] == 2
+    @test portable_plan.metrics.host_to_device_transfers == 0
+    @test portable_plan.metrics.device_to_host_transfers == 0
+    @test portable_plan.metrics.launches == 15
+
+    portable_zero_field = EvolvingFieldState(
+        :transaction_field, zeros(Float32, 3, 3))
+    portable_zero_runtime = FieldExchangeState(
+        :uptake_multiplier, portable_zero_field, portable_potts_snapshot;
+        accumulator_type = Float32)
+    zero_portable_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    apply_field_exchange!(
+        zero_portable_plan, portable_zero_field, transaction_exchange,
+        portable_scientific, portable_zero_runtime, CalibrateExchange, 211)
+    @test_throws FieldExchangeFailure CorePotts.synchronize_field_exchange_status!(
+        zero_portable_plan, portable_zero_runtime)
+    @test all(iszero, portable_zero_field.values)
+    @test portable_zero_runtime.initialized[1] == 0
+    @test portable_zero_runtime.publication_epoch[1] == 0
+
+    portable_field_initial = reshape(
+        Float32[0.5, 1.0, 0.25, 0, 0, 0, 0, 0, 0], 3, 3)
+    portable_field_dynamics = FieldDynamics(
+        :portable_field_dynamics;
+        field = :portable_secretome,
+        law = ReactionDiffusion(
+            diffusion = 0.1f0, decay = 0.0f0),
+        method = FixedStep(ExplicitEuler(); substeps = 5),
+        clock,
+        post_substep = (
+            ConstantConcentration(:medium, 1.0f0),))
+    portable_field_cpu = EvolvingFieldState(
+        :portable_secretome, portable_field_initial)
+    portable_field_kernel = EvolvingFieldState(
+        :portable_secretome, portable_field_initial)
+    advance_field!(
+        portable_field_cpu, portable_field_dynamics, 1.0f0,
+        portable_potts_snapshot)
+    portable_field_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    CorePotts.advance_field!(
+        portable_field_plan, portable_field_kernel,
+        portable_field_dynamics, 1.0f0,
+        CorePotts.scientific_execution(
+            portable_scientific).core.ownership)
+    @test portable_field_kernel.time == 0.0f0
+    @test CorePotts.synchronize_field_advance_status!(
+        portable_field_plan, portable_field_kernel,
+        portable_field_dynamics, 1.0f0) === portable_field_kernel
+    @test portable_field_kernel.values == portable_field_cpu.values
+    @test portable_field_kernel.time == 1.0f0
+    @test portable_field_kernel.publication_epoch[1] == 1
+    @test portable_field_plan.metrics.launches == 8
+    @test portable_field_plan.metrics.host_to_device_transfers == 0
+    @test portable_field_plan.metrics.device_to_host_transfers == 0
+
+    overflowing_initial = zeros(Float32, 3, 3)
+    overflowing_initial[1] = floatmax(Float32)
+    overflowing_field = EvolvingFieldState(
+        :portable_secretome, overflowing_initial)
+    overflowing_dynamics = FieldDynamics(
+        :overflowing_field_dynamics;
+        field = :portable_secretome,
+        law = ReactionDiffusion(
+            diffusion = 1.0f0, decay = 0.0f0),
+        method = FixedStep(ExplicitEuler(); substeps = 5),
+        clock,
+        post_substep = (
+            ConstantConcentration(:medium, 1.0f0),))
+    overflowing_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 256)
+    CorePotts.advance_field!(
+        overflowing_plan, overflowing_field,
+        overflowing_dynamics, 1.0f0,
+        CorePotts.scientific_execution(
+            portable_scientific).core.ownership)
+    @test_throws ArgumentError CorePotts.synchronize_field_advance_status!(
+        overflowing_plan, overflowing_field,
+        overflowing_dynamics, 1.0f0)
+    @test overflowing_field.values == overflowing_initial
+    @test overflowing_field.time == 0.0f0
+    @test overflowing_field.publication_epoch[1] == 0
+
     wang_field = EvolvingFieldState(
         :wang_secretome, zeros(Float32, 2, 2))
     wang_dynamics = FieldDynamics(:wang_secretome_dynamics;

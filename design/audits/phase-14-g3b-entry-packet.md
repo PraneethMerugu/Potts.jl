@@ -239,7 +239,14 @@ The
 root-plan-mode and immediate field/cell/global transaction: inactive/reset/calibrate/publish
 boundaries, maximum calibration, source-faithful CPU reductions, checkpoint state, failure
 atomicity, and zero-byte warm publication now pass. Portable fixed-tree kernels, device
-conditional publication, and foreign-runtime comparison remain open.
+conditional publication, and their KernelAbstractions CPU oracle now pass; Metal/ROCm execution
+and foreign-runtime comparison remain open.
+
+The same field/exchange state ABI now executes a portable KernelAbstractions reference: five
+ordered field substeps, width-256 per-cell uptake trees, a fixed global maximum, backend status,
+and conditional commits. This closes the reusable portable execution design on the CPU backend;
+Metal/ROCm execution evidence remains the G3-C promotion step and cannot change the ABI or
+reduction order.
 
 Field/exchange implementation proceeds only against revision 2 of the machine-readable contract.
 The old three-argument forcing-array exchange overload remains compatibility-only historical

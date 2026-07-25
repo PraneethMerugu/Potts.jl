@@ -142,6 +142,6 @@ and records the calibration state required for restart. Evidence is recorded in
 [phase-14-g3b-exchange-evidence.md](phase-14-g3b-exchange-evidence.md). The legacy three-argument
 forcing overload remains compatibility-only prototype behavior.
 
-Field and exchange remain CPU-only numerical evidence until their fixed-tree reductions,
-validation status, and conditional publication execute backend-natively and pass the registered
-device gates.
+Field and exchange now pass their portable KernelAbstractions CPU oracle with fixed-tree
+reductions, backend status, and conditional publication. Metal/ROCm execution remains a later
+promotion gate and may not alter this ABI or reduction order.

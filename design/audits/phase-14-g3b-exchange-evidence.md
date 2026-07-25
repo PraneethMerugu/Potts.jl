@@ -1,6 +1,6 @@
 # Phase 14.1 G3-B Exchange Transaction Evidence
 
-Status: sequential CPU transaction accepted; portable fixed-tree execution remains open
+Status: sequential CPU and portable fixed-tree KernelAbstractions reference accepted; Metal/ROCm execution remains open
 
 Date: 2026-07-25
 
@@ -28,13 +28,24 @@ The implementation now provides:
   no workspace; and
 - zero-byte warm sequential CPU publish execution.
 
+The portable profile now additionally provides:
+
+- exactly one 256-lane workgroup per cell;
+- ascending lane-strided canonical site visits;
+- an explicitly unrolled pairwise Float32 shared-memory reduction tree;
+- one explicitly unrolled fixed-tree global maximum;
+- integer-only status and failing-index atomics;
+- conditional field, signal, calibration, and epoch publication;
+- no host scalar access or unobserved transfer; and
+- explicit stable-boundary status synchronization.
+
 The coupled phase runner recognizes a mode-bound `Exchange` invocation and executes field, cell,
 and global writes against one phase candidate. Later phases cannot observe a partial exchange.
 
 ## Executed evidence
 
-The focused Phase 14 run passes 104 assertions in the continuous-system/field-coupling set.
-Relative to the previous 35-assertion field checkpoint, 69 additional assertions cover:
+The focused Phase 14 run now passes 136 assertions in the continuous-system/field-coupling set.
+The exchange assertions cover:
 
 - exact mode boundaries at target MCS 1, 121, 122, 210, 211, 212, and 500;
 - schedule gap and out-of-range rejection;
@@ -52,6 +63,10 @@ Relative to the previous 35-assertion field checkpoint, 69 additional assertions
 - Adapt-visible authoritative and workspace arrays; and
 - exactly zero warmed CPU allocations.
 
+The portable assertions additionally compare calibrate/publish results against the sequential
+oracle, prove 15 ordered launches, prove zero host/device transfers before the declared boundary,
+and prove zero-maximum conditional-publication failure.
+
 The implementation preserves the earlier field, G3-A, Phase 14.0, Phase 13 API, and repository
 structure gates.
 
@@ -59,12 +74,10 @@ structure gates.
 
 G3-B still requires:
 
-1. portable width-256 per-cell and fixed global-maximum reduction kernels;
-2. backend-native integer status/failing-index propagation and conditional publication;
-3. Metal/ROCm device-tree compilation evidence without host closures or scalar indexing;
-4. stale generation and backend/capacity failure fixtures;
-5. source-runtime uptake/calibration fixtures;
-6. assembled completed-MCS restart at targets 210, 211, and 212; and
-7. the CC3D numerical field oracle needed to interpret exchange input equivalence.
+1. Metal/ROCm device-tree compilation evidence without host closures or scalar indexing;
+2. stale-generation and backend/capacity failure fixtures;
+3. source-runtime uptake/calibration fixtures;
+4. assembled completed-MCS restart at targets 210, 211, and 212; and
+5. the CC3D numerical field oracle needed to interpret exchange input equivalence.
 
 No portable or foreign-runtime numerical claim may cite this sequential CPU record alone.
