@@ -85,9 +85,24 @@ behavior.
 - [Numerical and Cross-Backend Semantics](numerical-and-cross-backend-semantics.md)
 - [Transition-Kernel Verification and Algorithm Characterization](transition-kernel-verification.md)
 - [Published-Model Reproduction Semantics](published-model-reproduction-semantics.md)
+- [Phase 14 Single Semantic Kernel](phase-14-semantic-kernel.md)
+- [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
+
+The following Phase 14 documents are superseded design and prototype evidence. They are not
+independent semantic authorities:
+
+- [Coupled Dynamics and ModelingToolkit API](phase-14-coupled-dynamics-api.md)
+- [Coupled Execution and MCS Plan](phase-14-coupled-execution-semantics.md)
+- [Dynamic State Ownership](phase-14-dynamic-state-semantics.md)
+- [Spatial Roles and Source Attempts](phase-14-spatial-and-attempt-semantics.md)
+- [Cell and Field Dynamics](phase-14-cell-and-field-dynamics-semantics.md)
+- [Continuous Systems and Morpheus Compatibility](phase-14-continuous-systems-and-morpheus-compatibility.md)
+- [Relationships and Coupled Lifecycle](phase-14-relationship-and-lifecycle-semantics.md)
+- [Coupled Persistence and Paper Observation](phase-14-coupled-persistence-and-observation-semantics.md)
+- [Contract Registry v1](phase-14-contract-registry-v1.toml)
 
 Engineering realization is described separately in:
 
@@ -112,18 +127,30 @@ Refactor execution evidence:
 - [Phase 10 Completion Audit](../design/audits/phase-10-completion-audit.md)
 - [Phase 13 Algorithmic Conformance and API Freeze Plan](../design/audits/phase-13-transition-kernel-chunk-plan.md)
 - [Phase 14 Model-Driven Capability and Documentation Decision](decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md)
+- [Phase 14.0 Completion Audit](../design/audits/phase-14-0-corpus-and-requirements-audit.md)
+- [Phase 14 Source Closure and Sensitivity Envelopes](../design/audits/phase-14-source-closure-v1.toml)
+- [Phase 14 D9 Work-Item Registry](../design/audits/phase-14-d9-work-items-v1.toml)
+- [Phase 14 Semantic-Architecture Simplification Audit](../design/audits/phase-14-semantics-simplification-audit.md)
+- [Phase 14 Focused Semantic-Architecture Interview](../design/audits/phase-14-semantics-focused-interview.md)
+- [Phase 14 GPU-Native Implementation and Qualification Plan](../design/audits/phase-14-gpu-native-implementation-plan.md)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
 - [JuliaGPU and Open-Protocol Community Validation](../design/audits/juliagpu-open-protocol-research.md)
 - [Phase 0 Current-Code Audit](../design/audits/phase-0-current-code-audit.md)
 - [Phase 0 Paper-Scope Map](../design/audits/phase-0-paper-scope-map.md)
 
-Future documents will cover the remaining algorithm proofs, final rule-language details, and the
-Phase 14 capability contracts required by the selected published-model corpus, including evolving
-fields, accepted-copy site state, general cell-dynamical state, dynamic relationship graphs,
-degradable structures, staged protocols, and research observables. Each contract follows the
-normal change process before implementation; this roadmap revision does not guess those observable
-semantics in advance of the Phase 14.0 source and requirements audit.
+Phase 14.0 froze the published-model requirements and registered Provisional D9 contracts for
+evolving fields, accepted-copy site state, general continuous state, dynamic relationship graphs,
+degradable structures, staged protocols, events, mappings, and research observables. Each contract
+still follows the normal prototype, conformance, persistence, and backend change process before
+acceptance or implementation claims. Decision 0031 and the completed focused interview consolidate
+those requirements into registry v2's seven-area kernel. Decision 0032 requires every stable
+Phase 14 execution capability to pass a sequential CPU reference and backend-resident,
+real-hardware Metal and ROCm qualification. The
+[Wortel Act-CPM CPU-reference vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
+now passes; its Metal/ROCm closure is current, and Wang remains gated until that closure passes.
+The seven contracts remain Provisional outside proven scope. Registry v1 spellings remain internal
+historical prototypes and are not compatibility commitments.
 
 ## Conformance Principle
 

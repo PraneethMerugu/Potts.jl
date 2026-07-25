@@ -1,0 +1,568 @@
+schema_version = "1.0.0"
+registry_version = "phase14-contract-registry-v1"
+status = "phase14.0-frozen-historical-contract-set; superseded by phase14-contract-registry-v2"
+registered_at = "2026-07-24"
+superseded_by = "phase-14-contract-registry-v2.toml"
+superseding_decision = "decisions/0031-phase-14-single-semantic-kernel.md"
+gpu_promotion_superseded_by = "decisions/0032-phase-14-gpu-native-promotion.md"
+umbrella_spec = "phase-14-coupled-dynamics-api.md"
+source_records = "../design/audits/phase-14-model-source-records-v1.toml"
+source_closure_records = "../design/audits/phase-14-source-closure-v1.toml"
+capability_matrix = "../design/audits/phase-14-model-capability-matrix-v1.toml"
+morpheus_compatibility_matrix = "../design/audits/phase-14-morpheus-continuous-semantics-v1.toml"
+d9_work_items = "../design/audits/phase-14-d9-work-items-v1.toml"
+freeze_assessment = "decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"
+default_implementation_status = "specified-only"
+default_backend_status = "historical-not-claimed; stable promotion is governed by Decision 0032 and registry v2"
+freeze_rule = "An uncoupled Phase 13 model retains its existing API, fingerprint, checkpoint, result, RNG, and algorithm identities."
+
+[coverage]
+existing_or_paper_specific_capability_ids = [
+    "core-contact-volume-surface",
+    "elongation-equivalence",
+    "paper-initialization",
+]
+coverage_rule = "Every additive or stable-extension capability not listed here must appear in at least one contract capability_ids entry."
+
+[statuses]
+provisional = "candidate semantics requiring source closure, prototypes, conformance fixtures, and owner acceptance"
+accepted = "owner-approved normative contract; implementation maturity remains separately reported"
+
+[backend_statuses]
+reference_required = "ordinary sequential CPU reference is required before the contract can become production implemented"
+not_claimed = "the contract makes no support claim for this backend"
+unsupported = "preflight must reject the contract/backend combination"
+qualified = "the named contract version has applicable real-hardware evidence"
+
+[[contracts]]
+id = "coupled-mcs-plan"
+version = "0.1.0-provisional"
+family = "execution"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-execution-semantics.md"
+public_values = ["MCSPlan", "Phase", "PottsAttempts", "LifecyclePhase", "ObservationPhase"]
+source_models = ["graner-glazier-1992-sorting", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["staged-protocol", "accepted-copy-site-history", "evolving-fields", "field-coupling", "cell-state-history", "dynamic-relationships", "degradable-structures", "lifecycle-state-machine", "paper-observables"]
+reads = ["declared phase snapshots", "compiled process dependency metadata"]
+writes = ["declared process state", "plan diagnostics", "completed-MCS state"]
+snapshot = "one immutable snapshot per Phase; PottsAttempts retains algorithm transaction snapshots"
+persistence = "stable checkpoint only after completed ObservationPhase; plan identity and completed position required"
+fingerprint = "expanded phase identities, invocation identities, versions, and intervals"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; uncoupled execution remains unchanged"
+acceptance_requires = [
+    "read/write conflict validator",
+    "exact phase-order fixtures",
+    "terminal failure fixtures",
+    "restart from every completed-MCS boundary",
+    "Wortel and Wang source-order transcription",
+]
+
+[[contracts]]
+id = "staged-protocol"
+version = "0.1.0-provisional"
+family = "execution"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-execution-semantics.md"
+public_values = ["StagedProtocol", "ProtocolStage", "MCSRange", "ScheduledParameter", "During"]
+source_models = ["graner-glazier-1992-sorting", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["staged-protocol"]
+reads = ["target MCS", "immutable stage ranges", "scheduled parameter bindings"]
+writes = ["current stage identity", "stage-local clock"]
+snapshot = "stage selected before the first phase for one target MCS and immutable through that MCS"
+persistence = "current stage and stage-local clock are derivable but recorded and verified"
+fingerprint = "stage ranges, scheduled bindings, and process enablement"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive"
+acceptance_requires = [
+    "boundary and gap fixtures",
+    "stage-switch restart fixtures",
+    "Wang relax/switch protocol transcription",
+    "Graner observation-annealing disposition",
+]
+
+[[contracts]]
+id = "continuous-clock"
+version = "0.1.0-provisional"
+family = "time"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-execution-semantics.md"
+public_values = ["ContinuousClock", "ContinuousInterval", "OneMCS", "HalfMCS"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["evolving-fields", "cell-state-history"]
+reads = ["completed and target MCS", "declared continuous scale"]
+writes = ["continuous process-local semantic time"]
+snapshot = "continuous interval materialized before process advancement"
+persistence = "continuous process time and clock identity required"
+fingerprint = "per-MCS scale and semantic unit"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; public Potts time remains integer MCS"
+acceptance_requires = ["unit/scale validation", "fractional interval fixtures", "restart fixtures"]
+
+[[contracts]]
+id = "spatial-roles"
+version = "0.1.0-provisional"
+family = "spatial"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-spatial-and-attempt-semantics.md"
+public_values = ["SpatialRoles"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["spatial-role-relations"]
+reads = ["role-typed CorePotts relations"]
+writes = []
+snapshot = "immutable model relation descriptors"
+persistence = "relation identities and realized offsets in manifest; no new execution state"
+fingerprint = "every explicit role, relation identity, offsets, metric, and boundary behavior"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; omitted declaration retains current first-shell lowering and fingerprint"
+acceptance_requires = ["2D and 3D lowering fixtures", "foreign-neighborhood microfixtures"]
+
+[[contracts]]
+id = "budgeted-sequential-cpm"
+version = "0.1.0-provisional"
+family = "algorithm"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-spatial-and-attempt-semantics.md"
+public_values = ["BudgetedSequentialCPM", "AttemptsPerSite"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["source-attempt-budget"]
+reads = ["ordered current state", "attempt budget", "semantic RNG addresses"]
+writes = ["ordinary accepted Potts transactions", "attempt accounting"]
+snapshot = "ordered current-state sequential attempts"
+persistence = "algorithm identity and budget required; no partial-MCS state appears at a stable checkpoint"
+fingerprint = "algorithm version, budget law, acceptance law, proposal law, and RNG contract"
+cpu = "reference_required"
+metal = "unsupported"
+rocm = "unsupported"
+freeze_impact = "new algorithm identity; SequentialCPM v1 remains exact N"
+acceptance_requires = ["exact N versus kN accounting", "reference RNG fixture", "D10 additive decision"]
+
+[[contracts]]
+id = "site-property"
+version = "0.1.0-provisional"
+family = "state"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-dynamic-state-semantics.md"
+public_values = ["SiteProperty"]
+source_models = ["wortel-2021-act-cpm", "shirinifard-2012-cnv"]
+capability_ids = ["accepted-copy-site-history", "degradable-structures"]
+reads = ["site-indexed typed state"]
+writes = ["only through declared accepted-copy or phase processes"]
+snapshot = "phase or accepted-copy transaction snapshot"
+persistence = "authoritative site array, schema, and semantic time required"
+fingerprint = "identity, value schema, invariant, initialization, ownership-change law, and persistence"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive"
+acceptance_requires = ["ownership-change truth table", "initialization fixtures", "restart fixtures"]
+
+[[contracts]]
+id = "accepted-copy-update"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-execution-semantics.md"
+public_values = ["AcceptedCopyUpdate"]
+source_models = ["wortel-2021-act-cpm"]
+capability_ids = ["accepted-copy-site-history"]
+reads = ["accepted actionable proposal", "precommit site state", "staged ownership transaction"]
+writes = ["declared local state only"]
+snapshot = "same attempt snapshot and staged transaction used by commit"
+persistence = "no pending effect at stable completed-MCS checkpoint"
+fingerprint = "effect identity, eligibility, read/write sets, gained/lost laws, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive transaction hook; cannot alter acceptance"
+acceptance_requires = ["accepted/rejected/no-op truth table", "Artistoo activity microfixture", "restart"]
+
+[[contracts]]
+id = "cell-history"
+version = "0.1.0-provisional"
+family = "state"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-dynamic-state-semantics.md"
+public_values = ["CellHistory", "HistorySample"]
+source_models = ["wang-2025-collective-tumor-migration"]
+capability_ids = ["cell-state-history"]
+reads = ["declared property or observable from one phase snapshot"]
+writes = ["one bounded generation-aware ring buffer"]
+snapshot = "named HistorySample phase"
+persistence = "samples, head, fill state, cell generations, and schema required"
+fingerprint = "source, length, initialization, lifecycle, sampling, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive"
+acceptance_requires = ["ring-order fixtures", "periodic centroid fixtures", "division/retirement fixtures", "restart"]
+
+[[contracts]]
+id = "cell-dynamics"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-cell-and-field-dynamics-semantics.md"
+public_values = ["CellDynamics", "FixedStep", "AdaptiveStep"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["cell-state-history"]
+reads = ["materialized cell inputs", "mapped CellProperty state", "parameters", "continuous clock"]
+writes = ["mapped CellProperty state", "process semantic time", "solver diagnostics"]
+snapshot = "all Potts-derived inputs frozen for one advance invocation"
+persistence = "state and all stepping state required by the claimed continuation profile"
+fingerprint = "law, mappings, compilation, stepper, tolerances, interval, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; SciMLBase boundary with optional ModelingToolkit extension"
+acceptance_requires = ["direct RHS prototype", "ModelingToolkit prototype", "analytic ODE fixtures", "fixed-step restart"]
+
+[[contracts]]
+id = "field-dynamics"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-cell-and-field-dynamics-semantics.md"
+public_values = ["FieldDynamics", "SteadyStateAdvance"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["evolving-fields"]
+reads = ["field snapshot", "discretization", "boundary conditions", "source/sink inputs", "continuous clock"]
+writes = ["field values", "field semantic time", "solver diagnostics"]
+snapshot = "field and forcing frozen for one advance invocation"
+persistence = "authoritative field values and all state required by continuation claim"
+fingerprint = "law, boundary, discretization, solver, interval, precision, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; immutable sampled Field remains unchanged"
+acceptance_requires = ["analytic and manufactured solutions", "MethodOfLines prototype", "split-order fixtures", "restart"]
+
+[[contracts]]
+id = "field-exchange"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-cell-and-field-dynamics-semantics.md"
+public_values = ["FieldExchange", "ConstantConcentration", "Uptake", "ByCellVolume"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["field-coupling"]
+reads = ["ownership", "cell geometry", "cell properties", "field snapshot"]
+writes = ["declared field forcing or concentration", "declared cell outputs"]
+snapshot = "one exchange-phase snapshot"
+persistence = "no pending exchange at stable checkpoint; published outputs persist through owning state"
+fingerprint = "source/sink laws, normalization, reduction, clipping, output mapping, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive"
+acceptance_requires = ["mass/source balance fixtures", "overlap and medium fixtures", "CompuCell3D uptake microfixture"]
+
+[[contracts]]
+id = "relationship-set"
+version = "0.1.0-provisional"
+family = "state"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-dynamic-state-semantics.md"
+public_values = ["RelationshipSet"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["dynamic-relationships"]
+reads = ["generation-aware canonical graph state"]
+writes = ["only through declared relationship transactions"]
+snapshot = "phase or Potts-attempt graph snapshot"
+persistence = "edges, payloads, endpoint generations, capacities, and schema required"
+fingerprint = "endpoint scopes, payload schema, capacities, lifecycle policies, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "new state family; fixed focal-point v1 unchanged"
+acceptance_requires = ["canonical-order fixtures", "capacity fixtures", "endpoint lifecycle fixtures", "restart"]
+
+[[contracts]]
+id = "relationship-dynamics"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-relationship-and-lifecycle-semantics.md"
+public_values = ["RelationshipDynamics", "StableRelationshipPriority"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["dynamic-relationships"]
+reads = ["relationship snapshot", "cell generations", "geometry", "declared query relation", "parameters"]
+writes = ["relationship create/remove/retune transaction"]
+snapshot = "one common relationship phase snapshot"
+persistence = "no pending transaction at stable checkpoint; graph state authoritative"
+fingerprint = "eligibility, creation, removal, update, conflict, RNG, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive dynamic component"
+acceptance_requires = ["create/remove/retune fixtures", "CompuCell3D focal-link microfixture", "lifecycle interaction"]
+
+[[contracts]]
+id = "site-dynamics"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-relationship-and-lifecycle-semantics.md"
+public_values = ["SiteDynamics"]
+source_models = ["wortel-2021-act-cpm", "shirinifard-2012-cnv"]
+capability_ids = ["accepted-copy-site-history", "degradable-structures"]
+reads = ["site-property snapshot", "optional ownership, fields, and cell state"]
+writes = ["one declared site-property transaction"]
+snapshot = "one common site-dynamics phase snapshot"
+persistence = "no pending transaction at stable checkpoint; site state authoritative"
+fingerprint = "target, eligibility, update law, schedule, RNG, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive"
+acceptance_requires = ["Act decay fixture", "degradation conflict fixture", "restart"]
+
+[[contracts]]
+id = "coupled-persistence"
+version = "0.1.0-provisional"
+family = "persistence"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-persistence-and-observation-semantics.md"
+public_values = ["CoupledCheckpoint", "CoupledCheckpointExtension", "COUPLED_CHECKPOINT_SCHEMA_VERSION"]
+source_models = ["wortel-2021-act-cpm", "merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["accepted-copy-site-history", "evolving-fields", "field-coupling", "cell-state-history", "dynamic-relationships", "degradable-structures", "lifecycle-state-machine", "staged-protocol", "continuous-state-domains", "continuous-system-language", "multirate-global-scheduling", "continuous-events-and-delays", "cross-domain-symbol-mapping", "continuous-model-adapters"]
+reads = ["all authoritative coupled state at completed ObservationPhase"]
+writes = ["canonical coupled checkpoint extension"]
+snapshot = "completed MCS only"
+persistence = "this contract defines the additive extension and compatibility profile"
+fingerprint = "extension schema and every required contract version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "new extension/schema identity; existing uncoupled checkpoint bytes unchanged"
+acceptance_requires = ["canonical schema", "memory/HDF5/Zarr round trip", "corruption fixtures", "exact continuation"]
+
+[[contracts]]
+id = "paper-observation"
+version = "0.1.0-provisional"
+family = "observation"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-coupled-persistence-and-observation-semantics.md"
+public_values = ["PhaseObservation", "ObservationTransform"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["paper-observables"]
+reads = ["declared completed or explicitly named intermediate snapshot"]
+writes = ["immutable observation records"]
+snapshot = "completed MCS by default; intermediate source-specific observations require an explicit identity"
+persistence = "observation schedule state sufficient to prevent duplicates/skips"
+fingerprint = "observable, snapshot phase, schedule, analysis schema, and transform version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive observation identities; existing saveat behavior unchanged"
+acceptance_requires = ["hand-worked observable fixtures", "restart scheduling", "paper analysis schema registration"]
+
+[[contracts]]
+id = "coupled-lifecycle"
+version = "0.1.0-provisional"
+family = "lifecycle"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-relationship-and-lifecycle-semantics.md"
+public_values = ["LifecycleEvent", "typed state-dependent trigger and effect extension protocols"]
+source_models = ["shirinifard-2012-cnv"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["lifecycle-state-machine"]
+reads = ["PreLifecycleSnapshot including declared fields, site state, cell state, histories, and relationships"]
+writes = ["existing typed lifecycle transactions plus declared coupled-state lifecycle policies"]
+snapshot = "existing completed-MCS PreLifecycleSnapshot after all post-attempt coupled phases"
+persistence = "existing lifecycle state plus coupled state affected by accepted lifecycle policies"
+fingerprint = "trigger/effect identities, coupled-state requirements, conflict policy, schedules, and versions"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive trigger/effect/state-policy extensions; existing lifecycle phase and effects remain unchanged"
+acceptance_requires = [
+    "CNV minimum lifecycle source transcription",
+    "field/state trigger fixtures",
+    "division/death cleanup across every coupled state family",
+    "restart and capacity failure fixtures",
+]
+
+[[contracts]]
+id = "continuous-state-domains"
+version = "0.1.0-provisional"
+family = "state"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["GlobalProperty", "MembraneProperty", "GlobalDomain", "CellDomain", "FieldDomain", "MembraneDomain"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["continuous-state-domains"]
+reads = ["typed state in one declared global, cell, field, or membrane domain"]
+writes = ["only registered state through owning system, event, lifecycle, initialization, or restore transaction"]
+snapshot = "domain state participates in the invoking tick/event/lifecycle common snapshot"
+persistence = "global and membrane authoritative values, generations, material coordinates, clocks, schemas, and policies required"
+fingerprint = "domain, state schema, initializer, invariant, remapping/lifecycle, persistence, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive state domains; CellProperty and Field remain unchanged"
+acceptance_requires = ["global-state fixtures", "membrane remapping/conservation", "division/death/reuse", "checkpoint restart", "downstream domain extension"]
+
+[[contracts]]
+id = "continuous-system"
+version = "0.1.0-provisional"
+family = "process"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["ContinuousSystem", "DifferentialEquation", "SynchronousRule", "AlgebraicAssignment", "FunctionDefinition", "AlgebraicConstraint", "StochasticDifferentialEquation", "ReactionStatement", "DeterministicReaction", "DiscreteJumpProcess", "HybridReaction"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["continuous-system-language"]
+reads = ["registered state, mapped inputs, parameters, clocks, and semantic RNG"]
+writes = ["mapped authoritative state and process-clock state through one scheduled transaction"]
+snapshot = "solver stages follow their numerical contract; synchronous rules share one pre-tick snapshot"
+persistence = "authoritative state and all future-relevant stepping state required by the continuation profile"
+fingerprint = "domain, resolved statements, law identities, solver, clock, RNG, mappings, and versions"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive general system contract; CellDynamics and FieldDynamics lower to it"
+acceptance_requires = ["Euler/Heun/RK4 analytic fixtures", "synchronous cyclic rules", "assignment graph", "DAE/SDE/reaction/jump profiles", "restart", "Morpheus system fixtures"]
+
+[[contracts]]
+id = "delay-state"
+version = "0.1.0-provisional"
+family = "state"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["DelayState", "ExactSample", "PiecewiseConstantDelay", "LinearDelayInterpolation"]
+source_models = ["wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["continuous-events-and-delays"]
+reads = ["one registered authoritative source on one declared sample grid"]
+writes = ["bounded generation-aware delay history at scheduled ticks"]
+snapshot = "each sample observes one named scheduler snapshot; reads use declared interpolation"
+persistence = "delay samples, clocks, interpolation, initialization, lifecycle state, and generations required"
+fingerprint = "source, delay, clock, sample grid, interpolation, initialization, lifecycle, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; CellHistory may share implementation only after semantic equivalence"
+acceptance_requires = ["exact-grid delay", "interpolation fixtures", "initial fill", "division/death/reuse", "restart", "Morpheus DelayProperty fixture"]
+
+[[contracts]]
+id = "continuous-event"
+version = "0.1.0-provisional"
+family = "event"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["ContinuousEvent", "SampledTrigger", "RootTrigger", "EventAssignment", "LifecycleRequest", "EventBatch"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["continuous-events-and-delays"]
+reads = ["one trigger or execution snapshot with explicit trigger-memory state"]
+writes = ["synchronous state assignments, delayed-event queue entries, or typed lifecycle requests"]
+snapshot = "sampled triggers evaluate only on schedule ticks; root triggers use the declared solver/root contract"
+persistence = "trigger memory, future delayed events, stored trigger values, requests crossing the completed boundary, and exact root state required"
+fingerprint = "condition/root, memory, schedule, delay, priority, value time, cascade, assignments, RNG, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive; sampled events do not reinterpret existing integer-MCS lifecycle events"
+acceptance_requires = ["integrate-and-fire", "run-and-tumble", "trigger-memory truth tables", "delays/priorities/cascades", "root fixtures", "lifecycle request", "restart"]
+
+[[contracts]]
+id = "multirate-schedule"
+version = "0.1.0-provisional"
+family = "execution"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["GlobalClock", "MCSDuration", "SystemClock", "SystemStep", "EveryGlobal", "MultirateSchedule", "ScheduledSystem", "ScheduledEvent", "ScheduledPotts", "ScheduledLifecycle", "TimedLifecyclePhase", "TimedLifecycleCapability"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["multirate-global-scheduling"]
+reads = ["exact clocks, enabled schedules, explicit priorities, target MCS, and completed schedule state"]
+writes = ["internal scheduled subtransactions and completed clock/schedule state"]
+snapshot = "each equal-time priority group has one common snapshot; groups publish in explicit semantic priority"
+persistence = "completed clocks and schedule identities required; no in-flight timeline at stable checkpoint"
+fingerprint = "global/MCS/system clocks, every entry, schedule, priority, relative Potts position, lifecycle timing, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive MCSPlan mode; positional plans and integer public time remain unchanged"
+acceptance_requires = ["clock conversion", "many ticks per MCS", "same-time order", "one Potts entry", "timed lifecycle", "terminal failure", "restart", "Morpheus time-scale fixture"]
+
+[[contracts]]
+id = "symbol-mapping"
+version = "0.1.0-provisional"
+family = "mapping"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["SymbolIdentity", "SymbolRef", "SymbolMap", "InputRef"]
+source_models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["cross-domain-symbol-mapping"]
+reads = ["qualified global, cell, field, site, relationship, or membrane source snapshot"]
+writes = ["one declared destination input or state transaction"]
+snapshot = "mapping schedule names the source snapshot and destination visibility boundary"
+persistence = "declaration fingerprints; only authoritative destinations and stateful schedule data persist"
+fingerprint = "resolved identities, source/destination domains, filter, aggregation, normalization, units, empty law, schedule, and version"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive compiler/mapping layer"
+acceptance_requires = ["scope/shadow fixtures", "dependency cycles", "global/cell", "field/cell", "neighbor/cell", "membrane/cell", "conservation", "backend preflight"]
+
+[[contracts]]
+id = "continuous-model-adapter"
+version = "0.1.0-provisional"
+family = "adapter"
+semantic_status = "provisional"
+implementation_status = "specified-only"
+specification = "phase-14-continuous-systems-and-morpheus-compatibility.md"
+public_values = ["ContinuousModelAdapter", "CompatibilityReport", "MorpheusSemanticProfile", "SBMLSemanticProfile", "ExactSemanticMapping", "QualifiedNumericalMapping", "ExplicitApproximation", "PartialMapping", "RejectedMapping"]
+source_models = []
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["continuous-model-adapters"]
+reads = ["pinned external model plus explicit domain/profile/identity"]
+writes = ["immutable normalized declarations and construct-level compatibility report"]
+snapshot = "construction-time only"
+persistence = "source checksum, adapter/profile/dependency identities and lowered contracts fingerprint; external object graph excluded"
+fingerprint = "source content/version, construct map, transformations, numerical choices, adapter/profile version, and lowered model"
+cpu = "reference_required"
+metal = "not_claimed"
+rocm = "not_claimed"
+freeze_impact = "additive optional PottsToolkit extensions; no CorePotts dependency"
+acceptance_requires = ["ModelingToolkit construct map", "pinned SBML suite subset", "loss/rejection fixtures", "source checksum", "optional MorpheusML fixture", "no silent execution of partial mappings"]

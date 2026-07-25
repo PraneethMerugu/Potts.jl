@@ -1,0 +1,415 @@
+schema_version = "2.0.0"
+registry_version = "phase14-contract-registry-v2"
+status = "phase14.1-owner-approved-simplified-gpu-native-contract-set; Wortel CPU-reference slice passed; Wortel Metal/ROCm closure required; individual contracts provisional"
+registered_at = "2026-07-24"
+supersedes = "phase-14-contract-registry-v1.toml"
+architecture_decision = "decisions/0031-phase-14-single-semantic-kernel.md"
+gpu_promotion_decision = "decisions/0032-phase-14-gpu-native-promotion.md"
+gpu_implementation_plan = "../design/audits/phase-14-gpu-native-implementation-plan.md"
+kernel_specification = "phase-14-semantic-kernel.md"
+source_records = "../design/audits/phase-14-model-source-records-v1.toml"
+source_closure_records = "../design/audits/phase-14-source-closure-v1.toml"
+capability_matrix = "../design/audits/phase-14-model-capability-matrix-v1.toml"
+morpheus_compatibility_matrix = "../design/audits/phase-14-morpheus-continuous-semantics-v1.toml"
+d9_work_items = "../design/audits/phase-14-d9-work-items-v1.toml"
+freeze_assessment = "decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"
+freeze_rule = "An uncoupled Phase 13 model retains its existing API, normalization, fingerprint, checkpoint, result, RNG, algorithm, and qualification identities."
+authority_rule = "Every authoring route lowers completely to one canonical semantic model before execution. No facade, adapter, report, or storage envelope is a second model authority."
+stable_boundary = "completed MCS after required observation"
+
+[coverage]
+existing_or_paper_specific_capability_ids = [
+    "core-contact-volume-surface",
+    "elongation-equivalence",
+    "paper-initialization",
+]
+derived_tooling_capability_ids = ["continuous-model-adapters"]
+coverage_rule = "Every remaining capability must appear in at least one kernel contract capability_ids entry. Adapter capabilities are derived tooling over the kernel and must not create another runtime."
+
+[statuses]
+provisional = "owner-approved architecture whose observable contract still requires its registered vertical-slice implementation and conformance gate"
+accepted = "normative contract with completed source, implementation, continuation, conformance, and owner gates"
+experimental = "extension point outside stable Phase 14 compatibility until a source-backed promotion gate passes"
+
+[backend_statuses]
+reference_required = "ordinary sequential CPU reference is required before the contract can become production implemented"
+qualification_required = "a backend-resident implementation and applicable real-hardware evidence are required before stable promotion"
+not_claimed = "the contract makes no support claim for this backend"
+unsupported = "preflight must reject the contract/backend combination before mutation"
+qualified = "the named contract version has applicable real-hardware evidence"
+
+[gpu_native_policy]
+stable_targets = ["CPU", "Metal", "ROCm"]
+deferred_targets = ["CUDA"]
+portable_floating_precision = "Float32"
+paper_fidelity_precision = "CPU Float64 is a separate evidence profile and does not replace Metal or ROCm qualification"
+residency_rule = "Simulation state, fields, graphs, queues, histories, and accumulators remain device-resident; scalar host loops, hidden fallback, per-MCS transfer, and steady-state allocation fail qualification."
+allowed_host_boundaries = ["pre-launch authoring and complete lowering", "explicit observation", "checkpoint", "user snapshot", "analysis"]
+promotion_rule = "Every stable or release Phase 14 execution capability requires sequential CPU reference evidence and real-hardware Metal and ROCm qualification for the exact contract/law/storage/algorithm combination."
+
+[canonical_model]
+areas = ["state", "process", "plan", "lifecycle", "observation", "spatial-roles", "potts-algorithm-identities"]
+derived_projections = ["fingerprint", "continuation", "checkpoint-envelope", "backend-preflight", "inspection", "compatibility-report"]
+single_authorities = ["global-time", "mcs-duration", "schedule-order", "read-write-sets", "snapshots", "semantic-identity"]
+
+[authoring_facades]
+rule = "A facade may add biological vocabulary and documented defaults, but must lower completely to the canonical model and may not own separate execution, persistence, clocks, or identity."
+candidate_values = [
+    "SiteProperty",
+    "CellHistory",
+    "FieldDynamics",
+    "FieldExchange",
+    "RelationshipSet",
+    "RelationshipDynamics",
+    "SiteDynamics",
+    "ContinuousSystem",
+    "StagedProtocol",
+    "ContinuousEvent",
+    "DelayState",
+    "PhaseObservation",
+]
+
+[adapter_boundary]
+stable_core_dependency = "none"
+optional_authoring_targets = ["ModelingToolkit"]
+future_optional_targets = ["SBML", "MorpheusML"]
+explicit_non_scope = ["Mermaid.jl"]
+report_levels = ["exact-semantic", "qualified-numerical", "explicit-approximation", "partial", "rejected"]
+
+[experimental_scope]
+families = [
+    "adaptive-integration",
+    "solver-located-root-events",
+    "differential-algebraic-equations",
+    "stochastic-differential-equations",
+    "deterministic-reaction-systems",
+    "discrete-jump-processes",
+    "hybrid-reactions",
+]
+promotion_rule = "A family requires a selected source or mandatory compatibility fixture, exact observable semantics, continuation and failure behavior, a CPU reference, backend-resident Metal and ROCm qualification if promoted to stable execution, conformance evidence, and owner acceptance."
+
+[[contracts]]
+id = "state"
+version = "0.2.0-provisional"
+family = "kernel"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["StateSpec", "StateOwner", "GlobalOwner", "CellOwner", "SiteOwner", "FieldOwner", "MembraneOwner", "RelationshipOwner", "CurrentStorage", "HistoryStorage"]
+source_models = ["wortel-2021-act-cpm", "merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["accepted-copy-site-history", "cell-state-history", "dynamic-relationships", "degradable-structures", "continuous-state-domains", "continuous-events-and-delays"]
+reads = ["declared owner/schema/storage/lifecycle metadata", "declared snapshot identities"]
+writes = ["authoritative typed state only through registered processes and lifecycle commits"]
+snapshot = "every read names a plan-provided phase, transaction, process, or completed-MCS snapshot"
+persistence = "all future-relevant state, history, delay, generation, and storage-policy metadata are derived into the coupled envelope"
+fingerprint = "qualified identity, owner, schema, storage, initialization, lifecycle, continuation, backend policy, and version"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive; existing Phase 13 state and property meanings remain unchanged"
+acceptance_requires = [
+    "owner-domain and schema validation",
+    "history and delay ordering fixtures",
+    "creation/division/retirement/reuse fixtures",
+    "derived continuation codec",
+    "facade-versus-direct normalization identity",
+    "device adaptation and residency fixtures",
+    "Metal and ROCm restart and transfer evidence",
+    "Wortel CPU then Metal/ROCm closure before Wang",
+]
+
+[[contracts]]
+id = "process"
+version = "0.2.0-provisional"
+family = "kernel"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["ProcessSpec", "ProcessLaw", "AtomicCommit", "AcceptedCopyCommit", "SequentialCommit", "ReadOnlyCommit", "FixedStep", "SteadyStateStep"]
+source_models = ["merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["accepted-copy-site-history", "evolving-fields", "field-coupling", "cell-state-history", "dynamic-relationships", "degradable-structures", "continuous-system-language", "continuous-events-and-delays", "cross-domain-symbol-mapping"]
+reads = ["ordered qualified state references at one declared snapshot", "law, trigger, numerical, RNG, and backend metadata"]
+writes = ["declared state references", "typed lifecycle requests", "process diagnostics"]
+snapshot = "one immutable declared input snapshot per invocation; visibility changes only at the declared commit"
+persistence = "future-relevant solver, trigger, RNG, queue, and accumulator state are derived into continuation"
+fingerprint = "identity, law/version, ordered reads/writes, snapshot, commit, trigger, solver, RNG, failure, and backend requirements"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive; accepted-copy hooks cannot alter a completed acceptance decision and immutable sampled fields remain valid"
+acceptance_requires = [
+    "read/write and conflict validation",
+    "accepted/rejected/no-op copy truth table",
+    "fixed-step analytic and synchronous-rule fixtures",
+    "field mass/balance and split fixtures",
+    "mapping and relationship fixtures",
+    "unsupported experimental-family rejection",
+    "device kernels with no scalar host loop or fallback",
+    "real-hardware Metal and ROCm process evidence",
+    "Wortel, Wang, and field-model CPU-plus-device vertical slices",
+]
+
+[[contracts]]
+id = "plan"
+version = "0.2.0-provisional"
+family = "kernel"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["ExecutionPlan", "PlanEntry", "ExactTime", "MCSDuration", "EveryMCS", "During", "StableBoundary"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["staged-protocol", "evolving-fields", "field-coupling", "cell-state-history", "lifecycle-state-machine", "multirate-global-scheduling", "continuous-events-and-delays"]
+reads = ["one exact global clock", "one MCS-duration mapping", "ordered entries, windows, cadence, priority, snapshots, and bindings"]
+writes = ["current semantic time", "completed plan position", "derived invocation schedule and diagnostics"]
+snapshot = "entry snapshots and commits are explicit; stage selection is immutable over its declared window"
+persistence = "exact time, completed position, active bindings, trigger memory, and stable-boundary identity are derived into continuation"
+fingerprint = "exact time mapping, entries, ordering, windows, cadence, priorities, snapshots, commits, and bindings"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive; public Potts progress remains integer MCS and uncoupled stepping is unchanged"
+acceptance_requires = [
+    "one-clock validation",
+    "exact order and same-time conflict fixtures",
+    "stage-boundary and gap fixtures",
+    "multirate conversion fixtures",
+    "restart from every completed-MCS boundary",
+    "no hidden synchronization or per-entry host transfer on Metal and ROCm",
+    "real-hardware same-time and multirate schedule fixtures",
+    "six-model lowering sketches",
+]
+
+[[contracts]]
+id = "lifecycle"
+version = "0.2.0-provisional"
+family = "kernel"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["LifecyclePolicy", "LifecycleRequest", "LifecycleCommit"]
+source_models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+capability_ids = ["dynamic-relationships", "degradable-structures", "lifecycle-state-machine"]
+reads = ["typed requests", "declared commit snapshot", "state inheritance and cleanup policies"]
+writes = ["cell identities/generations", "declared owned state", "relationships", "trackers", "lifecycle diagnostics"]
+snapshot = "requests are collected and resolved from one declared plan snapshot, then committed atomically"
+persistence = "pending future-relevant requests, policy identities, generations, and completed lifecycle position are derived into continuation"
+fingerprint = "request/effect identities, priority/conflict law, inheritance, cleanup, commit boundary, and version"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive requests reuse the frozen lifecycle transaction law; ordinary completed-MCS lifecycle remains unchanged"
+acceptance_requires = [
+    "request conflict truth table",
+    "division/death/transition inheritance fixtures",
+    "relationship and delayed-event cleanup",
+    "slot-generation reuse rejection",
+    "CNV and Wang source-order fixtures",
+    "restart continuation",
+    "device-resident request buffers and atomic Metal/ROCm commit fixtures",
+]
+
+[[contracts]]
+id = "observation"
+version = "0.2.0-provisional"
+family = "kernel"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["ObservationSpec", "ObservationTransform", "RequiredObservation", "BestEffortTelemetry"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["paper-observables"]
+reads = ["one declared plan snapshot", "typed inputs and pure transform metadata"]
+writes = ["typed result records and evidence provenance only"]
+snapshot = "observation cadence and snapshot are plan entries; observations never mutate scientific state"
+persistence = "future-relevant reducer/output continuation is derived; completed required outputs are verified on restore"
+fingerprint = "identity, inputs, snapshot, cadence, transform, schema, units, provenance, evidence role, and failure policy"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive; existing SciML saving and result meanings remain unchanged"
+acceptance_requires = [
+    "hand-worked transform and empty-case fixtures",
+    "required failure is terminal",
+    "best-effort telemetry exclusion from scientific claims",
+    "paper schema and provenance fixtures",
+    "restart without duplicate or skipped observations",
+    "device reductions with bounded declared result transfers on Metal and ROCm",
+]
+
+[[contracts]]
+id = "spatial-roles"
+version = "0.2.0-provisional"
+family = "spatial"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["SpatialRoles"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["spatial-role-relations"]
+reads = ["role-typed relation declarations"]
+writes = []
+snapshot = "immutable model relation descriptors"
+persistence = "relation identities and realized offsets are derived into manifest; no new runtime state"
+fingerprint = "proposal, contact, surface, connectivity, query, and field relation identities, offsets, metrics, boundaries, and versions"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "additive; omitted declarations preserve current Phase 13 first-shell lowering and fingerprint"
+acceptance_requires = [
+    "2D and 3D realized-offset identity",
+    "boundary-resolution fixtures",
+    "foreign-neighborhood microfixtures",
+    "omitted-declaration Phase 13 byte identity",
+    "device relation adaptation and realized-offset identity on Metal and ROCm",
+]
+
+[[contracts]]
+id = "potts-algorithm-identities"
+version = "0.2.0-provisional"
+family = "algorithm"
+semantic_status = "provisional"
+implementation_status = "wortel-cpu-reference-proven"
+specification = "phase-14-semantic-kernel.md"
+public_values = ["BudgetedSequentialCPM", "AttemptsPerSite"]
+source_models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+capability_ids = ["source-attempt-budget"]
+reads = ["ordered current state", "exact attempt-budget law", "semantic RNG addresses"]
+writes = ["ordinary accepted Potts transactions", "attempt accounting"]
+snapshot = "ordered current-state sequential attempts"
+persistence = "algorithm identity and exact budget persist; partial-MCS continuation remains prohibited"
+fingerprint = "algorithm version, exact budget law, proposal, acceptance, update, and RNG contracts"
+cpu = "reference_required"
+metal = "qualification_required"
+rocm = "qualification_required"
+freeze_impact = "new identity only; SequentialCPM v1 remains exactly N attempts"
+acceptance_requires = [
+    "exact N versus kN accounting",
+    "reference semantic RNG fixture",
+    "continuation at completed-MCS boundaries",
+    "SequentialCPM v1 non-regression",
+    "exact budget, RNG, replay, residency, and performance on real Metal and ROCm",
+]
+
+[[old_contract_dispositions]]
+old_id = "coupled-mcs-plan"
+disposition = "merged"
+target = "plan"
+
+[[old_contract_dispositions]]
+old_id = "staged-protocol"
+disposition = "merged"
+target = "plan"
+
+[[old_contract_dispositions]]
+old_id = "continuous-clock"
+disposition = "merged"
+target = "plan"
+
+[[old_contract_dispositions]]
+old_id = "spatial-roles"
+disposition = "retained"
+target = "spatial-roles"
+
+[[old_contract_dispositions]]
+old_id = "budgeted-sequential-cpm"
+disposition = "merged"
+target = "potts-algorithm-identities"
+
+[[old_contract_dispositions]]
+old_id = "site-property"
+disposition = "merged"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "accepted-copy-update"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "cell-history"
+disposition = "merged"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "cell-dynamics"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "field-dynamics"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "field-exchange"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "relationship-set"
+disposition = "merged"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "relationship-dynamics"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "site-dynamics"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "coupled-persistence"
+disposition = "derived"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "paper-observation"
+disposition = "merged"
+target = "observation"
+
+[[old_contract_dispositions]]
+old_id = "coupled-lifecycle"
+disposition = "merged"
+target = "lifecycle"
+
+[[old_contract_dispositions]]
+old_id = "continuous-state-domains"
+disposition = "merged"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "continuous-system"
+disposition = "facade"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "delay-state"
+disposition = "merged"
+target = "state"
+
+[[old_contract_dispositions]]
+old_id = "continuous-event"
+disposition = "merged"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "multirate-schedule"
+disposition = "merged"
+target = "plan"
+
+[[old_contract_dispositions]]
+old_id = "symbol-mapping"
+disposition = "internalized"
+target = "process"
+
+[[old_contract_dispositions]]
+old_id = "continuous-model-adapter"
+disposition = "derived-tooling"
+target = "process"

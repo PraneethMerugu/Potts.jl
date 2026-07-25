@@ -1,0 +1,45 @@
+schema_version = "1.0.0"
+status = "wortel-vertical-slice-provisional"
+authority = "spec/phase-14-semantic-kernel.md"
+policy = "These additive exports are excluded from the immutable Phase 13 inventory and must be reviewed here explicitly. Registry-v1 prototype spellings are not allowed."
+
+[modules]
+CorePotts = [
+    "ActivityHamiltonian",
+    "ActivityProgram",
+    "AttemptsPerSite",
+    "BudgetedSequentialCPM",
+    "CoupledCheckpoint",
+    "CoupledInspectionReport",
+    "CoupledMemoryCheckpointStore",
+    "CoupledSemanticManifest",
+    "LifecycleSpec",
+    "ObservationSpec",
+    "PHASE14_CONTRACT_SET_VERSION",
+    "PHASE14_CONTRACT_VERSIONS",
+    "PHASE14_SEMANTIC_KERNEL_VERSION",
+    "Phase14ContractVersions",
+    "PlanEntrySpec",
+    "PlanSpec",
+    "ProcessSpec",
+    "SemanticModel",
+    "SpatialRoles",
+    "StateSpec",
+    "UnsupportedCoupledCapabilities",
+    "canonical_coupled_model",
+    "coupled_backend_report",
+    "coupled_manifest",
+    "coupled_model_fingerprint",
+    "coupled_state_fingerprint",
+    "inspect_coupled",
+    "phase14_contract_versions",
+    "preflight_coupled",
+    "realize_activity",
+    "semantic_model_fingerprint",
+]
+PottsToolkit = [
+    "Act",
+    "AttemptsPerSite",
+    "BudgetedSequentialCPM",
+    "SpatialRoles",
+]

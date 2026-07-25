@@ -16,6 +16,18 @@ function Phase(name::Symbol; namespace::Namespace = Namespace(), after = ())
     return Phase(identity, identities)
 end
 
+function Phase(name::Symbol, invocation::CorePotts.AbstractProcessInvocation,
+        invocations::CorePotts.AbstractProcessInvocation...;
+        namespace::Namespace = Namespace(), after = ())
+    isempty(after) || throw(ArgumentError(
+        "coupled process phases use explicit MCSPlan position, not rule-phase `after` dependencies"))
+    identity = SemanticName(name; namespace)
+    qualified = isempty(identity.namespace.parts) ? identity.name :
+        Symbol(join(String.((identity.namespace.parts..., identity.name)), "__"))
+    return CorePotts.CoupledPhase(
+        qualified, (invocation, invocations...))
+end
+
 semantic_identity(phase::Phase) = phase.name
 
 function Base.show(io::IO, phase::Phase)

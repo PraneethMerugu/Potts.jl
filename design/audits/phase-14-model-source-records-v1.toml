@@ -1,0 +1,529 @@
+schema_version = "1.0.0"
+record_set_version = "phase14-source-records-v1"
+status = "accepted"
+registered_at = "2026-07-24"
+governing_decision = "0029-phase-14-model-driven-capability-and-documentation-policy"
+governing_specification = "published-model-reproduction-semantics"
+portfolio_size = 6
+portfolio_change_policy = "owner-approved scope amendment after freeze"
+default_release_status = "Reimplementation in Progress"
+artifact_policy = "Do not copy third-party figures, media, code, or data into Potts.jl until the recorded license permits it."
+source_closure_records = "phase-14-source-closure-v1.toml"
+owner_approval = "accepted through the completed Phase 14 owner interview and the explicit instruction to finish Phase 14.0"
+
+[classification]
+verified = "confirmed directly from the paper, supplement, or pinned source release"
+inferred = "derived from a source description but not stated unambiguously"
+unknown = "not available from the audited sources"
+not_applicable = "the field does not apply to this model"
+
+[[models]]
+id = "graner-glazier-1992-sorting"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Glazier"]
+title = "Simulation of Biological Cell Sorting Using a Two-Dimensional Extended Potts Model"
+citation = "F. Graner and J. A. Glazier, Physical Review Letters 69(13), 2013-2016 (1992)."
+doi = "10.1103/PhysRevLett.69.2013"
+paper_url = "https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.69.2013"
+paper_sha256 = "08fe534e89465bcdbebe862149831fe5ecf5d78d6e371b6d8d1de7d09e42f3c5"
+paper_hash_scope = "APS full-text PDF retrieved 2026-07-24"
+supplementary_sources = []
+data_sources = ["raw Figure 2 numerical data unavailable; a provenance-bearing digitization is required by gg1992-source-envelope-v1"]
+primary_target = "Figure 2 boundary-length fractions over 5-4000 MCS, using the paper's homotypic, heterotypic, and aggregate-edge definitions"
+secondary_targets = ["Figure 1 qualitative sorting time series at the reported MCS values"]
+target_kind = "quantitative-primary"
+source_simulator = "custom source implementation"
+source_simulator_version = "unknown"
+source_revision = "unavailable"
+source_code_url = ""
+source_archive_url = ""
+source_archive_checksum = ""
+source_code_license = "unavailable"
+paper_asset_license = "APS copyrighted article; no figure reuse is presumed"
+permitted_repository_assets = ["independently generated Potts.jl model source", "independently generated analysis", "derived numerical results with citation"]
+authority_order = ["paper", "author clarification", "later implementations as non-authoritative cross-checks"]
+domain = "two-dimensional square lattice"
+dimensions = []
+lattice_spacing = "dimensionless; not reported"
+boundary_conditions = "unknown"
+proposal_relation = "next-nearest-neighbor square-lattice relation; exact offset convention requires confirmation"
+contact_relation = "next-nearest-neighbor square-lattice relation"
+surface_relation = "boundary-length relation defined by the paper; exact normalization requires reconstruction"
+query_relation = "same as the audited neighborhood unless source clarification separates it"
+field_relation = "not applicable"
+algorithm = "ordered sequential modified Metropolis copy attempts"
+attempt_budget = "16 times the number of lattice sites per MCS"
+temperature = "10"
+precision = "unknown"
+simulation_horizon = "at least 10000 MCS"
+initialization = "rounded aggregate with randomly intermixed dark and light cells"
+initialization_checksum = "unavailable"
+staged_protocol = "two T=0 annealing MCS before each displayed or measured configuration; exact observation ordering requires confirmation"
+update_schedule = "one-site copy attempt followed by immediate accept/reject; no other dynamic state reported"
+field_splitting = "not applicable"
+lifecycle = "none reported"
+seed_policy = "not reported"
+source_replicates = "not reported"
+observation_schedule = "Figure 1 at initial, 1, 100, 1000, 4000, and 10000 MCS; Figure 2 over 5-4000 MCS"
+analysis = "fractions of homotypic, heterotypic, and aggregate-edge boundary lengths; paper reports logarithmic fits with R > 0.97"
+mechanisms = ["differential adhesion", "area constraint", "two cell types", "thermal fluctuations", "annealed observation"]
+mechanism_traceability = [
+    "differential adhesion=>core-contact-volume-surface",
+    "area constraint=>core-contact-volume-surface",
+    "two cell types=>paper-initialization",
+    "thermal fluctuations=>core-contact-volume-surface,source-attempt-budget",
+    "annealed observation=>staged-protocol,paper-observables",
+]
+parameters = [
+    "lambda_area = 1",
+    "target area: unknown",
+    "J(dark,dark) = 2",
+    "J(dark,light) = 11",
+    "J(light,light) = 14",
+    "J(dark,medium) = 16",
+    "J(light,medium) = 16",
+]
+parameter_ownership = "Every listed value remains explicit published-model assembly; contact normalization, attempt semantics, staging, and observation meaning are governed by the mapped capability contracts."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "staged-protocol", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "lattice dimensions, cell counts, target area, and exact rounded-mask construction",
+    "boundary conditions",
+    "whether next-nearest neighbor means the full Moore shell for every scientific role",
+    "replicate count, seeds, error treatment, and raw Figure 2 values",
+    "whether each plotted observation is preceded by two T=0 MCS without advancing the reported MCS clock",
+]
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "gg1992-figure2-boundary-kinetics-v1"
+sensitivity_plan_id = "gg1992-source-envelope-v1"
+license_disposition = "citation-only paper; clean-room implementation and independently generated evidence only"
+
+[[models]]
+id = "mombach-1995-3d-sorting"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Glazier"]
+title = "Quantitative Comparison between Differential Adhesion Models and Cell Sorting in the Presence and Absence of Fluctuations"
+citation = "J. C. M. Mombach, J. A. Glazier, R. C. Raphael, and M. Zajac, Physical Review Letters 75, 2244-2247 (1995)."
+doi = "10.1103/PhysRevLett.75.2244"
+paper_url = "https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.75.2244"
+paper_sha256 = "1b0614397bb3c785d6e1ec1866f325870cbc528613d7ce1b061decc544010c74"
+paper_hash_scope = "APS full-text PDF retrieved 2026-07-24"
+supplementary_sources = []
+data_sources = ["raw Figure 4 numerical data unavailable; a provenance-bearing digitization is required by mombach1995-source-envelope-v1"]
+primary_target = "Figure 4 experimental-versus-simulation boundary-length time courses for complete and partial sorting"
+secondary_targets = ["Figure 2 complete-sorting morphology at 4000 MCS", "Figure 3 low-fluctuation partial-sorting morphology at 4000 MCS"]
+target_kind = "quantitative-primary"
+source_simulator = "custom source implementation"
+source_simulator_version = "unknown"
+source_revision = "unavailable"
+source_code_url = ""
+source_archive_url = ""
+source_archive_checksum = ""
+source_code_license = "unavailable"
+paper_asset_license = "APS copyrighted article; no figure reuse is presumed"
+permitted_repository_assets = ["independently generated Potts.jl model source", "independently generated analysis", "derived numerical results with citation"]
+authority_order = ["paper", "author clarification", "later implementations as non-authoritative cross-checks"]
+domain = "three-dimensional cubic lattice, reported as 100 cubed"
+dimensions = [100, 100, 100]
+lattice_spacing = "dimensionless; not reported"
+boundary_conditions = "unknown"
+proposal_relation = "source neighborhood not stated unambiguously in the audited text"
+contact_relation = "source neighborhood not stated unambiguously in the audited text"
+surface_relation = "paper boundary-length observable; exact discrete estimator requires reconstruction"
+query_relation = "unknown"
+field_relation = "not applicable"
+algorithm = "sequential modified Metropolis CPM"
+attempt_budget = "source MCS normalization not yet verified"
+temperature = "32 for complete sorting; 4 for low-fluctuation partial sorting"
+precision = "unknown"
+simulation_horizon = "4000 MCS for the named morphology targets"
+initialization = "mixed aggregate with approximately 30 light cells per dark cell"
+initialization_checksum = "unavailable"
+staged_protocol = "two temperature conditions; experimental time is rescaled to the simulated ordering curve"
+update_schedule = "one-site copy attempt followed by immediate accept/reject; no other dynamic state reported"
+field_splitting = "not applicable"
+lifecycle = "none reported"
+seed_policy = "not reported"
+source_replicates = "not reported"
+observation_schedule = "time course through 4000 MCS"
+analysis = "normalized boundary-length/order-parameter trajectories compared with experiment after a reported time rescaling"
+mechanisms = ["three-dimensional differential adhesion", "volume constraint", "unequal cell sizes", "temperature-dependent arrest"]
+mechanism_traceability = [
+    "three-dimensional differential adhesion=>core-contact-volume-surface,spatial-role-relations",
+    "volume constraint=>core-contact-volume-surface",
+    "unequal cell sizes=>paper-initialization",
+    "temperature-dependent arrest=>core-contact-volume-surface,source-attempt-budget,paper-observables",
+]
+parameters = [
+    "light-cell target volume = 100 lattice sites",
+    "dark-cell target volume = 580 lattice sites",
+    "light:dark count ratio approximately 30:1",
+    "reported light-medium surface tension = 4.5",
+    "reported dark-medium surface tension = 7.0",
+    "reported dark-light surface tension = 0.5",
+]
+parameter_ownership = "Every listed value remains explicit published-model assembly; the unresolved surface-tension conversion is governed by the registered Mombach sensitivity envelope and cannot silently define a library contact law."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "exact cell count and aggregate geometry; OCR of the paper is ambiguous",
+    "boundary conditions and all spatial relations",
+    "mapping from reported surface tensions to contact-energy matrix entries",
+    "volume-constraint strength and exact volume law",
+    "MCS attempt budget, seeds, replicate count, and precision",
+    "digitizable Figure 4 values and the exact experimental-to-simulation time rescaling",
+]
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "mombach1995-figure4-order-kinetics-v1"
+sensitivity_plan_id = "mombach1995-source-envelope-v1"
+license_disposition = "citation-only paper; clean-room implementation and independently generated evidence only"
+
+[[models]]
+id = "merks-2006-vasculogenesis"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Glazier"]
+title = "Cell elongation is key to in silico replication of in vitro vasculogenesis and subsequent remodeling"
+citation = "R. M. H. Merks, S. V. Brodsky, M. S. Goligorsky, S. A. Newman, and J. A. Glazier, Developmental Biology 289(1), 44-54 (2006)."
+doi = "10.1016/j.ydbio.2005.10.003"
+paper_url = "https://pmc.ncbi.nlm.nih.gov/articles/PMC2562951/"
+paper_sha256 = ""
+paper_hash_scope = "freely accessible author manuscript; checksum not registered because no reusable publisher PDF endpoint was accepted for this audit"
+supplementary_sources = []
+data_sources = ["raw Figure 5 numerical data and original image-analysis outputs unavailable; a provenance-bearing digitization is required by merks2006-source-envelope-v1"]
+primary_target = "Figure 5 time evolution of lacuna and branch-point counts, including the reported in-vitro and in-silico ensembles"
+secondary_targets = ["Figure 6 dependence of network morphology on target cell length", "Figure 4 qualitative time sequence"]
+target_kind = "quantitative-primary"
+source_simulator = "custom Cellular Potts implementation"
+source_simulator_version = "unknown"
+source_revision = "unavailable"
+source_code_url = ""
+source_archive_url = ""
+source_archive_checksum = ""
+source_code_license = "unavailable; the paper refers to software available on request"
+paper_asset_license = "article is openly accessible; exact reuse license for figures and manuscript assets must be confirmed"
+permitted_repository_assets = ["independently generated Potts.jl model source", "independently generated analysis", "derived numerical results with citation"]
+authority_order = ["paper and equations", "original source implementation if obtained", "author clarification", "later Tissue Simulation Toolkit implementations as non-authoritative cross-checks"]
+domain = "two-dimensional square lattice"
+dimensions = [500, 500]
+lattice_spacing = "2 micrometers per lattice site"
+boundary_conditions = "unknown"
+proposal_relation = "paper implementation neighborhood requires confirmation"
+contact_relation = "paper implementation neighborhood requires confirmation"
+surface_relation = "cell boundary relation used by contact energy"
+query_relation = "neighborhood used for autocrine chemotaxis"
+field_relation = "finite-difference morphogen field; exact stencil and boundary conditions require source confirmation"
+algorithm = "sequential modified Metropolis CPM coupled to morphogen evolution"
+attempt_budget = "source MCS normalization not yet verified"
+temperature = "paper value requires extraction and confirmation"
+precision = "unknown"
+simulation_horizon = "paper maps 1 MCS to 30 seconds"
+initialization = "282 randomly positioned endothelial cells in a 333 by 333 pixel central region of a 500 by 500 lattice"
+initialization_checksum = "unavailable"
+staged_protocol = "initial random seeding followed by coupled CPM and morphogen evolution"
+update_schedule = "CPM copy dynamics plus autocrine secretion, diffusion, decay, chemotactic response, and elongation constraint; exact split order is unresolved"
+field_splitting = "unknown"
+lifecycle = "no division or death in the bounded target unless source review shows otherwise"
+seed_policy = "not reported"
+source_replicates = "Figure 5 reports in-silico n=10 and in-vitro n=28"
+observation_schedule = "time series in physical time using 30 seconds per MCS"
+analysis = "network lacuna count and branch-point count; exact image-processing definitions require recovery"
+mechanisms = ["cell elongation constraint", "autocrine chemoattractant", "chemotaxis", "diffusion", "decay", "contact and area constraints"]
+mechanism_traceability = [
+    "cell elongation constraint=>elongation-equivalence",
+    "autocrine chemoattractant=>field-coupling,cross-domain-symbol-mapping",
+    "chemotaxis=>field-coupling,spatial-role-relations",
+    "diffusion=>evolving-fields,continuous-system-language,multirate-global-scheduling",
+    "decay=>evolving-fields,continuous-system-language",
+    "contact and area constraints=>core-contact-volume-surface",
+]
+parameters = [
+    "cell count = 282",
+    "lattice dimensions = 500 by 500",
+    "initial placement region = 333 by 333",
+    "lattice spacing = 2 micrometers",
+    "target cell length approximately 100 micrometers for the primary case",
+    "morphogen decay = 1.8e-4 per second",
+    "morphogen diffusion approximately 1e-13 square meters per second",
+    "1 MCS = 30 seconds",
+]
+parameter_ownership = "Every listed value remains explicit published-model assembly; solver, splitting, unit conversion, and elongation interpretation are governed by the mapped capability contracts and the Merks sensitivity envelope."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-system-language", "multirate-global-scheduling", "cross-domain-symbol-mapping", "elongation-equivalence", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "original simulator source and exact revision",
+    "proposal, contact, query, and field relations and boundary conditions",
+    "exact elongation law equivalence to current Potts.jl Elongation",
+    "field discretization, time step, splitting order, secretion law, and chemotactic law",
+    "attempt budget, temperature, seeds, precision, and initialization algorithm",
+    "exact lacuna and branch-point analysis programs and source numerical data",
+]
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "merks2006-figure5-network-kinetics-v1"
+sensitivity_plan_id = "merks2006-source-envelope-v1"
+license_disposition = "citation-only manuscript and figures pending a specific reuse grant; clean-room implementation and independently generated evidence only"
+
+[[models]]
+id = "wortel-2021-act-cpm"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Wortel"]
+title = "Local actin dynamics couple speed and persistence in a cellular Potts model of cell migration"
+citation = "I. M. N. Wortel, I. Niculescu, P. M. Kolijn, N. S. Gov, R. J. de Boer, and J. Textor, Biophysical Journal 120(13), 2609-2622 (2021)."
+doi = "10.1016/j.bpj.2021.04.036"
+paper_url = "https://pmc.ncbi.nlm.nih.gov/articles/PMC8390880/"
+paper_sha256 = "1e261a4203cf91b4a11b80648bf405878bf7069c2b749860743b697475ee0dc0"
+paper_hash_scope = "article PDF retrieved 2026-07-24"
+supplementary_sources = ["Zenodo v1.0.0 source archive at https://doi.org/10.5281/zenodo.4738810"]
+data_sources = ["figures/figure2/data/CPM2D-speedpersistence-all.txt at Git c980498712e4f4401aacd7689009f2fcbf250d2e, sha256 cf76fbefb565fd6dbf41b064bba85ca1670651d6b1a1967f418d8a4e255305a7"]
+primary_target = "Figure 2B-D speed-persistence relationship and migration-mode structure over Act-model parameters"
+secondary_targets = ["Figure 3 comparison of two- and three-dimensional behavior", "Figure 5 constrained skin-migration case"]
+target_kind = "quantitative-primary"
+source_simulator = "Artistoo"
+source_simulator_version = "Artistoo 0.9.1 from the archived source tree and built JavaScript"
+source_revision = "2020-ucsp v1.0.0; Git commit c980498712e4f4401aacd7689009f2fcbf250d2e"
+source_code_url = "https://github.com/ingewortel/2020-ucsp/tree/v1.0.0"
+source_archive_url = "https://doi.org/10.5281/zenodo.4738810"
+source_archive_checksum = "md5:fc91523a59694cd27fd911500e57929c"
+source_code_license = "MIT"
+paper_asset_license = "do not reuse article figures; regenerate outputs from permitted source and recorded results"
+permitted_repository_assets = ["clean-room Potts.jl implementation", "independently generated results and figures", "source-derived parameter transcription with citation"]
+authority_order = ["paper and supplement for scientific intent", "Zenodo v1.0.0 source for implementation detail", "author clarification", "newer GitHub revisions only as non-authoritative cross-checks"]
+domain = "two-dimensional 150 by 150 periodic lattice for the primary Figure 2 target"
+dimensions = [150, 150]
+lattice_spacing = "dimensionless lattice pixels"
+boundary_conditions = "periodic in x and y"
+proposal_relation = "Artistoo 0.9.1 two-dimensional CPM neighborhood from the archived built source; foreign-runtime microfixture required before equivalence claim"
+contact_relation = "Artistoo 0.9.1 contact neighborhood from the archived built source"
+surface_relation = "Artistoo 0.9.1 perimeter constraint on the primary two-dimensional square lattice"
+query_relation = "same-cell activity neighborhood used by the geometric mean"
+field_relation = "not applicable to Figure 2"
+algorithm = "Artistoo sequential CPM"
+attempt_budget = "Artistoo 0.9.1 MCS normalization; exact proposal-count equivalence remains a foreign-runtime microfixture"
+temperature = "20"
+precision = "JavaScript Number in the source baseline"
+simulation_horizon = "500 MCS burn-in followed by 50000 MCS runtime"
+initialization = "one cell seeded at the midpoint of a 150 by 150 periodic field; target volume 500"
+initialization_checksum = "to be generated after the source baseline is made deterministic"
+staged_protocol = "51 explicit MAX_ACT/LAMBDA_ACT pairs; 500-MCS burn-in; 50000-MCS measurement; statistics logged every 5 MCS"
+update_schedule = "on accepted protrusion, mark the gained site maximally active; decay site activity each MCS"
+field_splitting = "not applicable"
+lifecycle = "single persistent cell for the primary target"
+seed_policy = "simulation numbers 1 through 30 are passed directly as the Artistoo seed for every parameter pair"
+source_replicates = "30 simulations per parameter pair, analyzed as six groups of five tracks"
+observation_schedule = "cell properties recorded every 5 MCS in the reported analysis"
+analysis = "celltrackR v0.3.1 under R 3.6.1; speed from instantaneous steps and persistence from autocovariance half-life"
+mechanisms = ["accepted-copy site activity", "per-MCS activity decay", "geometric-mean same-cell activity neighborhood", "activity-biased protrusion", "area and perimeter constraints"]
+mechanism_traceability = [
+    "accepted-copy site activity=>accepted-copy-site-history",
+    "per-MCS activity decay=>accepted-copy-site-history,staged-protocol",
+    "geometric-mean same-cell activity neighborhood=>accepted-copy-site-history,spatial-role-relations",
+    "activity-biased protrusion=>accepted-copy-site-history,core-contact-volume-surface",
+    "area and perimeter constraints=>core-contact-volume-surface",
+]
+parameters = [
+    "field = 150 by 150, periodic",
+    "T = 20",
+    "J = [[0,20],[20,100]]",
+    "target volume = 500; lambda volume = 30",
+    "target perimeter = 260; lambda perimeter = 2",
+    "burn-in = 500 MCS; runtime = 50000 MCS; log interval = 5 MCS",
+    "51 exact MAX_ACT/LAMBDA_ACT pairs in figures/figure2/settings/params2D.txt",
+    "max_act controls site-memory lifetime in MCS",
+    "lambda_act controls activity-bias strength",
+]
+parameter_ownership = "Every listed value remains explicit published-model assembly; accepted-copy, decay, neighborhood, and constraint equivalence are governed by the mapped capabilities."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "accepted-copy-site-history", "source-attempt-budget", "staged-protocol", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "whether Potts.jl's discrete perimeter relation can match the Artistoo source exactly",
+    "the paper-era R/celltrackR dependency environment must be pinned during Phase 14.3",
+    "final numerical/statistical tolerances remain a D11 preregistration item",
+]
+source_closure = "pinned-source-transcribed"
+validation_target_id = "wortel2021-figure2-speed-persistence-v1"
+sensitivity_plan_id = "not-required-pinned-source"
+license_disposition = "MIT source may be inspected or reused with notice; project policy fetches/cites upstream and commits clean-room Potts.jl code and generated evidence"
+
+[[models]]
+id = "shirinifard-2012-cnv"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Glazier", "Jiang"]
+title = "Adhesion Failures Determine the Pattern of Choroidal Neovascularization in the Eye: A Computer Simulation Study"
+citation = "A. Shirinifard, J. A. Glazier, M. Swat, J. S. Gens, F. Family, Y. Jiang, and H. E. Grossniklaus, PLOS Computational Biology 8(5), e1002440 (2012)."
+doi = "10.1371/journal.pcbi.1002440"
+paper_url = "https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002440"
+paper_sha256 = "83c28fa7834dc8359cfae4a4f9d372bf5af2075f4098fd7ac4cd3fc0fac3e435"
+paper_hash_scope = "PLOS printable PDF retrieved 2026-07-24"
+supplementary_sources = ["Text S3 methods at its PLOS DOI", "Text S6 scenario-ID-38 archive at https://doi.org/10.1371/journal.pcbi.1002440.s016"]
+data_sources = ["Text S6 40x40-OuterRetina-BrM-CC.txt input, fetched by archive checksum", "raw ten-replica Figure 7 trajectories and nine seed identities unavailable"]
+primary_target = "Figure 7 ten-replica dynamics for adhesion scenario ID 38, including CNV initiation frequency, onset-time range, and stalk-cell range"
+secondary_targets = ["Figure 8 scenario-ID-38 morphology", "Video S1 simulation ID 902 morphology", "Table 7 classification only as a later stretch target"]
+target_kind = "quantitative-primary"
+source_simulator = "CompuCell3D"
+source_simulator_version = "3.4.2"
+source_revision = "Text S6 source archive for adhesion scenario ID 38"
+source_code_url = "https://doi.org/10.1371/journal.pcbi.1002440.s016"
+source_archive_url = "https://doi.org/10.1371/journal.pcbi.1002440.s016"
+source_archive_checksum = "sha256:fc4884fa62b40a8c999b33663dd8a3eccdae5f3fc11dc579892e7e64e747da4d"
+source_code_license = "PLOS article page states Creative Commons Attribution for the article and supporting information; no separate software license or historical CC version is named"
+paper_asset_license = "Creative Commons Attribution with source credit; preserve provenance and regenerate figures where practical"
+permitted_repository_assets = ["clean-room Potts.jl implementation", "source-derived parameters with attribution", "independently generated results and figures"]
+authority_order = ["paper tables and Text S3 for scientific intent", "Text S6 scenario-ID-38 source for implementation detail", "CompuCell3D 3.4.2 behavior", "author clarification"]
+domain = "three-dimensional retinal tissue lattice"
+dimensions = [40, 40, 35]
+lattice_spacing = "3 micrometers per voxel side"
+boundary_conditions = "periodic x and y; no-flux z"
+proposal_relation = "CompuCell3D 3.4.2 Potts NeighborOrder 4"
+contact_relation = "paper Tables 10-11 and source XML"
+surface_relation = "CompuCell3D 3.4.2 surface/contact conventions"
+query_relation = "process-specific neighborhoods in the Python steppables"
+field_relation = "SteadyStateDiffusionSolver and process-specific diffusion stencils"
+algorithm = "CompuCell3D 3.4.2 sequential CPM with Python steppables"
+attempt_budget = "CompuCell3D 3.4.2 MCS semantics; exact attempt accounting requires source-runtime microfixture"
+temperature = "type-specific CellMotility values in the source XML rather than one global Potts temperature"
+precision = "CompuCell3D 3.4.2 CPU baseline"
+simulation_horizon = "one simulated year; configurations stored every six simulated hours"
+initialization = "retinal geometry loaded from 40x40-OuterRetina-BrM-CC.txt and scenario-ID-38 XML"
+initialization_checksum = "40x40-OuterRetina-BrM-CC.txt sha256 cc4b3fccdf8ceb898d59eef5eeb04db9a323d860cf0f14ca8faa53a3d4308a17; logical-state checksum is generated during Phase 14.3"
+staged_protocol = "tip-cell invasion, BrM hole formation, vascular growth, and long-horizon tissue evolution"
+update_schedule = "CompuCell3D built-in Potts/plugins and field steppables plus one frequency-1 Python VolumeParamSteppable; source order is pinned but its 3.4.2 runtime realization requires microfixtures"
+field_splitting = "frequency-1 custom SteadyStateDiffusionSolver for oxygen; FlexibleDiffusionSolverFE for VEGF1, MMP, and VEGF2; VEGF2 performs 12 extra field steps per MCS"
+lifecycle = "cell growth, division, death, phenotype changes, and tip/stalk behavior"
+seed_policy = "Text S6 simulation ID 902 declares RandomSeed 498377; the other nine Figure 7 seed identities are unavailable and require a preregistered replacement ensemble"
+source_replicates = "10 replicas for Figure 7; 9 of 10 initiate CNV in the reported scenario"
+observation_schedule = "every six simulated hours; named Figure 7 statistics over one simulated year"
+analysis = "stalk-cell totals and location, contacts with POS, RPE counts, RPE-BrM contact, POS-BrM contact, onset time, and CNV morphology"
+mechanisms = ["labile adhesion", "plastic spring adhesion", "oxygen and VEGF fields", "chemotaxis", "tip and stalk phenotypes", "growth and death", "BrM hole and degradation", "three-dimensional tissue geometry"]
+mechanism_traceability = [
+    "labile adhesion=>core-contact-volume-surface",
+    "plastic spring adhesion=>dynamic-relationships",
+    "oxygen and VEGF fields=>evolving-fields,field-coupling,continuous-system-language,multirate-global-scheduling",
+    "chemotaxis=>field-coupling,cross-domain-symbol-mapping,spatial-role-relations",
+    "tip and stalk phenotypes=>continuous-state-domains,cell-state-history,lifecycle-state-machine,continuous-events-and-delays",
+    "growth and death=>lifecycle-state-machine,continuous-events-and-delays",
+    "BrM hole and degradation=>degradable-structures,field-coupling",
+    "three-dimensional tissue geometry=>paper-initialization,spatial-role-relations",
+]
+parameters = [
+    "scenario ID = 38",
+    "domain = 40 by 40 by 35; 3 micrometers per voxel",
+    "400 MCS approximately one day; 146000 MCS approximately one year",
+    "source simulation ID 902 seed = 498377",
+    "Potts/contact NeighborOrder = 4; focal-point NeighborOrder = 1",
+    "VEGF2 ExtraTimesPerMCS = 12",
+    "RRl = 3",
+    "RRp = 3",
+    "RBl = 2",
+    "RBp = 2",
+    "ROl = 3",
+    "9 of 10 reported replicas initiate CNV",
+    "reported one-year stalk-cell range = 10 to 45",
+    "reported onset-time range = two weeks to four months after BrM-hole formation",
+]
+parameter_ownership = "Every listed value remains explicit scenario-ID-38 assembly; foreign-runtime component, field, relationship, lifecycle, and timing meanings are governed by the mapped capability contracts."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-state-domains", "continuous-system-language", "multirate-global-scheduling", "continuous-events-and-delays", "cross-domain-symbol-mapping", "dynamic-relationships", "degradable-structures", "cell-state-history", "lifecycle-state-machine", "staged-protocol", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "CompuCell3D 3.4.2 attempt, neighborhood, and update-order behavior",
+    "the nine Figure 7 replica seeds not represented by simulation ID 902",
+    "custom steady-state solver convergence behavior must be qualified directly against the supplied C++",
+    "final Table 8-12 parameter provenance table remains Phase 14.3 model-manifest work",
+]
+source_closure = "pinned-source-transcribed-with-foreign-runtime"
+validation_target_id = "shirinifard2012-figure7-scenario38-v1"
+sensitivity_plan_id = "cnv-foreign-runtime-envelope-v1"
+license_disposition = "fetch Text S6 by DOI and checksum; do not vendor its code or retinal input; commit clean-room code and generated evidence"
+
+[[models]]
+id = "wang-2025-collective-tumor-migration"
+source_record_version = "1.0.0"
+portfolio_status = "frozen"
+release_status = "Reimplementation in Progress"
+author_coverage = ["Jiang"]
+title = "Protrusion force and cell-cell adhesion-induced polarity alignment govern collective migration modes"
+citation = "H. Wang, C. Ardila, A. Jindal, V. Aggarwal, W. Wang, J. Vande Geest, Y. Jiang, J. Xing, and S. Sant, Biophysical Journal 124(10), 1674-1692 (2025)."
+doi = "10.1016/j.bpj.2025.04.010"
+paper_url = "https://pmc.ncbi.nlm.nih.gov/articles/PMC12256861/"
+paper_sha256 = ""
+paper_hash_scope = "freely accessible article inspected 2026-07-24; checksum not registered because no reusable publisher PDF endpoint was accepted for this audit"
+supplementary_sources = ["Zenodo paper-v0 at https://doi.org/10.5281/zenodo.14928214", "Git source revision 60ebcf013aafefdff39ebe566114ee79f2a6e54d"]
+data_sources = ["s3_model_analysis/20250129-msmm-model-analysis/12222021_force_fpp_scan_cluster/{geo_270.csv,geo_props.csv,scaled_geo_diff.csv}", "s3_model_analysis/clustering_models/{scaler1.pkl,kmean1.pkl,umap2.pkl,kmean2.pkl}", "s4_figures/Figure3/{Directional,Radial} source trajectories"]
+primary_target = "Figure 3 simulated radial-versus-directional migration modes and the migration-mode map over protrusion-force and focal-adhesion strength"
+secondary_targets = ["Figures 4-5 perturbation comparisons after the primary source-only target passes", "supplemental beta-sensitivity scan"]
+target_kind = "quantitative-primary"
+source_simulator = "CompuCell3D"
+source_simulator_version = "4.2.5, declared in the pinned XML"
+source_revision = "paper-v0; Git commit 60ebcf013aafefdff39ebe566114ee79f2a6e54d"
+source_code_url = "https://github.com/xing-lab-pitt/tumor-migration-model/tree/paper-v0"
+source_archive_url = "https://doi.org/10.5281/zenodo.14928214"
+source_archive_checksum = "md5:12f8f5759b335c36ce988851e46c3f68; sha256:1aa5c426a24075091761c2fc80873b1d7582b32bc038d761e71630c867c3e984"
+source_code_license = "CC-BY-4.0"
+paper_asset_license = "reuse only under the applicable article or Zenodo terms with attribution; regenerate Potts.jl figures"
+permitted_repository_assets = ["clean-room Potts.jl implementation", "source-derived parameters with attribution", "independently generated results and figures", "analysis definitions reimplemented with citation"]
+authority_order = ["paper and supplement for scientific intent", "Zenodo paper-v0 source and data for implementation detail", "CompuCell3D 4.2.5 behavior", "author clarification", "moving GitHub branch only as a non-authoritative cross-check"]
+domain = "two-dimensional 256 by 256 periodic lattice"
+dimensions = [256, 256]
+lattice_spacing = "model units; physical mapping not required for the primary target"
+boundary_conditions = "periodic in x and y for the secretome field; Potts boundary behavior requires source-baseline confirmation"
+proposal_relation = "CompuCell3D NeighborOrder 2"
+contact_relation = "CompuCell3D contact NeighborOrder 4"
+surface_relation = "CompuCell3D Surface plugin"
+query_relation = "NeighborTracker first-contact graph for polarity alignment"
+field_relation = "DiffusionSolverFE periodic relation for a constant-concentration secretome field"
+algorithm = "CompuCell3D 4.2.5 sequential CPM plus ordered Python steppables"
+attempt_budget = "CompuCell3D 4.2.5 MCS semantics; exact attempt accounting requires a source-runtime microfixture"
+temperature = "25"
+precision = "CompuCell3D 4.2.5 CPU baseline"
+simulation_horizon = "500 MCS"
+initialization = "BlobInitializer centered at (128,128), radius 33, width 5, gap 0, one cell type"
+initialization_checksum = "source BlobInitializer and XML are version-pinned; the realized logical-state checksum is generated during Phase 14.3"
+staged_protocol = "relax through MCS 120; establish initial adhesion/polarity regime; switch signal and scanned focal strength at MCS 210"
+update_schedule = "registered order: migration/secretome/history frequency 1, ODE frequency 1, focal parameters frequency 10, then ODE/polarity/force/output frequency 1; ordering relative to built-in Potts and DiffusionSolverFE requires a source-runtime microfixture"
+field_splitting = "DiffusionSolverFE runs a periodic x/y secretome field with constant medium concentration; exact built-in placement relative to Python steppables is a source-runtime microfixture"
+lifecycle = "no cell division or death in the primary target"
+seed_policy = "the source launches 50 repeats per scan combination but does not materialize NumPy or CompuCell3D seed identities; Potts.jl will preregister a paired semantic-seed ensemble"
+source_replicates = "50 repeats for each of 231 scan combinations"
+observation_schedule = "per-cell records after relaxation; geometric features at MCS 90 and 270; Figure 3 classification at MCS 270"
+analysis = "geometric feature extraction followed by a saved two-step clustering pipeline; archived source includes notebooks, scalers, clustering models, UMAP model, and Figure 3 data"
+mechanisms = ["dynamic focal-point links", "five-MCS centroid history", "vector polarity", "contact-neighbor polarity alignment", "per-cell ODE state", "secretome uptake", "Hill-scaled protrusion drive", "staged parameter switch"]
+mechanism_traceability = [
+    "dynamic focal-point links=>dynamic-relationships",
+    "five-MCS centroid history=>cell-state-history",
+    "vector polarity=>continuous-state-domains,cell-state-history",
+    "contact-neighbor polarity alignment=>spatial-role-relations,cross-domain-symbol-mapping,cell-state-history",
+    "per-cell ODE state=>continuous-system-language,continuous-state-domains,multirate-global-scheduling",
+    "secretome uptake=>evolving-fields,field-coupling,cross-domain-symbol-mapping",
+    "Hill-scaled protrusion drive=>continuous-system-language,core-contact-volume-surface",
+    "staged parameter switch=>staged-protocol,continuous-events-and-delays",
+]
+parameters = [
+    "target volume = 50.24; lambda volume = 4",
+    "target surface = 25; lambda surface = 4",
+    "J(medium,medium) = -1; J(medium,cell) = -2; J(cell,cell) = -6",
+    "initial focal strength = 20; scanned focal strength after switch",
+    "relax_step = 120; switch_step = 210",
+    "polarity history = 5 MCS",
+    "neighbor-polarity scale beta = 0.4 in the primary source",
+    "protrusion Hill threshold = 40; exponent = 4",
+    "focal-strength scan = 0:50:1000 (21 values)",
+    "protrusion-force scan = 0:30:300 (11 values)",
+    "50 repeats per 231 scan combinations",
+    "geometric analysis timepoints = 90 and 270 MCS",
+    "Antimony step size = 2880",
+]
+parameter_ownership = "Every listed value remains explicit paper-v0 assembly; scan, ODE, field, relationship, history, force, staging, and analysis meanings are governed by the mapped capability contracts."
+capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-state-domains", "continuous-system-language", "multirate-global-scheduling", "continuous-events-and-delays", "cross-domain-symbol-mapping", "dynamic-relationships", "cell-state-history", "staged-protocol", "paper-observables", "paper-initialization"]
+unresolved_ambiguities = [
+    "CompuCell3D and NumPy seed identities",
+    "precise steppable order relative to Potts attempts and DiffusionSolverFE",
+    "portable definition of the archived pickled clustering and UMAP transformations",
+    "final classifier tolerance and transparent cross-check thresholds remain D11 preregistration items",
+]
+source_closure = "pinned-source-transcribed-with-foreign-runtime"
+validation_target_id = "wang2025-figure3-migration-map-v1"
+sensitivity_plan_id = "wang-foreign-runtime-envelope-v1"
+license_disposition = "fetch/cite upstream data and binary analysis models; commit clean-room code and generated evidence; vendor no pickle without attribution and security review"

@@ -8,6 +8,8 @@ const POLICY_PATH = joinpath(
     ROOT, "design", "audits", "phase-13-api-freeze-policy.toml")
 const PHASE11_COMPONENT_PATH = joinpath(
     ROOT, "design", "audits", "phase-11-stable-component-inventory.toml")
+const PHASE14_PUBLIC_API_PATH = joinpath(
+    ROOT, "design", "audits", "phase-14-public-api-v2.toml")
 const DEFAULT_OUTPUT = joinpath(
     ROOT, "design", "audits", "phase-13-api-inventory.toml")
 
@@ -19,6 +21,16 @@ function exported_names(module_value::Module)
     self = nameof(module_value)
     return sort!([name for name in names(module_value; all = false, imported = false)
                   if name != self]; by = string)
+end
+
+function phase13_exports(module_value::Module, module_name::String)
+    actual = Set(exported_names(module_value))
+    registry = TOML.parsefile(PHASE14_PUBLIC_API_PATH)
+    allowed = Set(Symbol.(registry["modules"][module_name]))
+    missing = sort!(collect(setdiff(allowed, actual)); by = string)
+    require(isempty(missing),
+        "$module_name is missing registered Phase 14 exports: $(join(missing, ", "))")
+    return sort!(collect(setdiff(actual, allowed)); by = string)
 end
 
 function binding_kind(module_value::Module, name::Symbol)
@@ -145,8 +157,8 @@ function build_inventory()
     VERSION == v"1.12.6" ||
         error("Phase 13 API inventory requires Julia 1.12.6; found $VERSION")
     policy = TOML.parsefile(POLICY_PATH)
-    toolkit_exports = exported_names(PottsToolkit)
-    core_exports = exported_names(CorePotts)
+    toolkit_exports = phase13_exports(PottsToolkit, "PottsToolkit")
+    core_exports = phase13_exports(CorePotts, "CorePotts")
     toolkit_classes = classify_toolkit(policy, toolkit_exports)
     core_classes = classify_core(policy, core_exports, toolkit_classes)
     toolkit_entries, toolkit_counts, toolkit_undocumented =

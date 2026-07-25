@@ -20,6 +20,8 @@ mktempdir() do directory
 end
 
 inventory = TOML.parsefile(INVENTORY)
+phase14_registry = TOML.parsefile(joinpath(
+    ROOT, "design", "audits", "phase-14-public-api-v2.toml"))
 for module_name in ("CorePotts", "PottsToolkit")
     module_inventory = inventory["modules"][module_name]
     isempty(module_inventory["undocumented_stable"]) || error(
@@ -27,6 +29,13 @@ for module_name in ("CorePotts", "PottsToolkit")
         join(module_inventory["undocumented_stable"], ", "))
     sum(values(module_inventory["counts"])) == module_inventory["export_count"] ||
         error("$module_name API classifications do not cover every export")
+    module_value = module_name == "CorePotts" ? CorePotts : PottsToolkit
+    frozen = Set(Symbol(entry["name"]) for entry in module_inventory["exports"])
+    allowed = Set(Symbol.(phase14_registry["modules"][module_name]))
+    actual = Set(exported_names(module_value))
+    actual == union(frozen, allowed) || error(
+        "$module_name exports differ from the frozen Phase 13 inventory plus " *
+        "the reviewed Phase 14 v2 allowlist")
 end
 
-println("Phase 13 API inventory is current, exhaustive, and every stable binding is documented")
+println("Phase 13 API inventory is unchanged; additive exports exactly match the reviewed Phase 14 v2 allowlist")

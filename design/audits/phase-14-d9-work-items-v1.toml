@@ -1,0 +1,139 @@
+schema_version = "1.0.0"
+registry_version = "phase14-d9-work-items-v1"
+status = "accepted-phase14.1-simplified-gpu-native-planning"
+registered_at = "2026-07-24"
+contract_registry = "../../spec/phase-14-contract-registry-v2.toml"
+freeze_assessment = "../../spec/decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"
+architecture_decision = "../../spec/decisions/0031-phase-14-single-semantic-kernel.md"
+gpu_promotion_decision = "../../spec/decisions/0032-phase-14-gpu-native-promotion.md"
+gpu_implementation_plan = "phase-14-gpu-native-implementation-plan.md"
+rule = "Every work item implements a vertical slice through the single semantic kernel. A work item does not create a new semantic authority or accept its provisional D9 behavior before the registered CPU-reference plus real-hardware Metal and ROCm conformance gates pass."
+
+[[work_items]]
+id = "d9-spatial-and-attempt-semantics"
+semantic_family = "independent spatial roles and source-specific attempt budgets"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["spatial-roles", "potts-algorithm-identities"]
+capabilities = ["spatial-role-relations", "source-attempt-budget"]
+owner = "CorePotts algorithms and spatial protocols; PottsToolkit lowering"
+implementation_chunk = "14.1-A"
+first_proving_models = ["graner-glazier-1992-sorting", "wang-2025-collective-tumor-migration"]
+source_gate = "The 1992 exact neighborhood remains inside its registered sensitivity envelope; Wang provides the pinned multi-relation microfixture."
+conformance_plan = ["2D and 3D realized-offset identity", "exact N versus kN accounting", "RNG-address continuation", "foreign-runtime relation and attempt microfixtures", "uncoupled Phase 13 byte identity", "real-hardware Metal and ROCm relation, budget, replay, residency, transfer, allocation, and performance evidence"]
+persistence_impact = "relation identities and new algorithm identity are fingerprinted; completed-MCS checkpoint boundary remains unchanged"
+api_layer = "CorePotts stable protocols plus PottsToolkit Level 2 explicit-role spelling"
+backend_claim = "CPU reference plus real-hardware Metal and ROCm qualification required before stable promotion; CUDA deferred"
+d10_classification = "additive; SequentialCPM v1 and current default role lowering remain unchanged"
+
+[[work_items]]
+id = "d9-accepted-copy-site-state"
+semantic_family = "accepted-copy site history and per-MCS site dynamics"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "plan"]
+capabilities = ["accepted-copy-site-history"]
+owner = "CorePotts auxiliary state, transactions, and lifecycle"
+implementation_chunk = "14.1-B"
+first_proving_models = ["wortel-2021-act-cpm"]
+source_gate = "Wortel Figure 2 source is pinned and transcribed; Artistoo accepted-copy and perimeter equivalence require source-runtime microfixtures."
+conformance_plan = ["accepted/rejected/no-op truth table", "activity decay order", "geometric-mean neighborhood edge cases", "division/death/reuse policy", "checkpoint continuation", "Artistoo microfixture", "device-resident transaction, decay, observation, restart, replay, transfer, allocation, and performance fixtures on Metal and ROCm"]
+persistence_impact = "site array, activity age, decay phase, synchronization epoch, and schema identity enter the coupled checkpoint"
+api_layer = "CorePotts SiteProperty/accepted-copy protocol plus PottsToolkit Act component"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm state, transaction, decay, observation, restart, and residency qualification required before stable promotion"
+d10_classification = "additive transaction hook that cannot alter an already completed acceptance decision"
+
+[[work_items]]
+id = "d9-field-dynamics-and-exchange"
+semantic_family = "evolving fields, solvers, splitting, secretion, uptake, and cell-field exchange"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "plan"]
+capabilities = ["evolving-fields", "field-coupling"]
+owner = "CorePotts field execution and PottsToolkit biological field authoring"
+implementation_chunk = "14.1-C"
+first_proving_models = ["merks-2006-vasculogenesis", "wang-2025-collective-tumor-migration", "shirinifard-2012-cnv"]
+source_gate = "Merks remains a sensitivity-envelope target; Wang and CNV provide pinned finite-difference, uptake, subcycling, and foreign-runtime microfixtures."
+conformance_plan = ["analytic diffusion and decay", "manufactured solutions", "mass/source balance", "overlap and medium behavior", "split-order fixtures", "source-solver microfixtures", "restart", "backend-resident evolution, exchange, reduction, restart, transfer, allocation, and performance on Metal and ROCm"]
+persistence_impact = "field values, solver identity/state, semantic field time, split position, and authoritative accumulators enter the coupled checkpoint"
+api_layer = "CorePotts solver/exchange protocols plus PottsToolkit field declarations and optional SciML tooling"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm evolution, exchange, reduction, restart, and performance qualification required before stable promotion"
+d10_classification = "additive; immutable sampled Field meaning remains unchanged"
+
+[[work_items]]
+id = "d9-cell-and-continuous-state"
+semantic_family = "typed cell/global/field/membrane state, bounded history, and continuous systems"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "plan", "lifecycle"]
+capabilities = ["cell-state-history", "continuous-state-domains", "continuous-system-language"]
+owner = "CorePotts state and continuous execution; PottsToolkit authoring"
+implementation_chunk = "14.1-D and 14.1-G"
+first_proving_models = ["wang-2025-collective-tumor-migration", "shirinifard-2012-cnv"]
+source_gate = "Wang fixes the first per-cell ODE/history slice; Morpheus microfixtures independently prove global, cell, field, membrane, rule, equation, and delay semantics."
+conformance_plan = ["ring-history ordering", "Euler/Heun/RK4 analytic systems", "synchronous cyclic rules", "assignment graph", "division/death/reuse", "Morpheus system and delay fixtures", "fixed-step restart", "device-resident state/solver kernels, restart, replay, residency, transfer, allocation, and performance on Metal and ROCm"]
+persistence_impact = "all authoritative state domains, histories, solver state, and declared policies enter the coupled checkpoint and fingerprint"
+api_layer = "CorePotts state/process/plan kernel with PottsToolkit biological and equation-style facades plus optional ModelingToolkit lowering"
+backend_claim = "CPU reference plus Metal and ROCm device-resident qualification is required for every stable state/solver pair; unimplemented advanced families remain Experimental"
+d10_classification = "additive state and system families; no second problem/integrator hierarchy and no ModelingToolkit authority over runtime state"
+
+[[work_items]]
+id = "d9-relationship-dynamics"
+semantic_family = "dynamic relationship graphs and retuned focal interactions"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "lifecycle"]
+capabilities = ["dynamic-relationships"]
+owner = "CorePotts relationship state and lifecycle cleanup"
+implementation_chunk = "14.1-D"
+first_proving_models = ["wang-2025-collective-tumor-migration", "shirinifard-2012-cnv"]
+source_gate = "Wang pins link retuning frequency and parameters; CNV pins creation/capacity/lifecycle cases subject to CompuCell3D 3.4.2 microfixtures."
+conformance_plan = ["canonical order", "capacity", "create/remove/retune", "endpoint retirement", "division policy", "CompuCell3D focal-link microfixture", "restart", "bounded device-resident graph/update kernels, cleanup, restart, allocation, and performance on Metal and ROCm"]
+persistence_impact = "relationship identity, endpoints, parameters, ordering, and lifecycle state enter the coupled checkpoint"
+api_layer = "new CorePotts RelationshipSet and dynamics protocol plus PottsToolkit components"
+backend_claim = "CPU reference plus bounded backend-resident Metal and ROCm graph, update, lifecycle, restart, and performance qualification required before stable promotion"
+d10_classification = "additive new relationship state; FocalPointSpringHamiltonian v1 remains fixed"
+
+[[work_items]]
+id = "d9-degradable-and-lifecycle-state"
+semantic_family = "degradable structures and state-dependent lifecycle programs"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "lifecycle"]
+capabilities = ["degradable-structures", "lifecycle-state-machine"]
+owner = "CorePotts auxiliary lattice state, lifecycle transactions, and PottsToolkit rule programs"
+implementation_chunk = "14.1-E"
+first_proving_models = ["shirinifard-2012-cnv"]
+source_gate = "Text S6 pins BrM degradation, phenotype timers, death, growth, and division; exact foreign ordering requires the registered source-runtime microfixtures."
+conformance_plan = ["degradation conflict truth table", "trigger/effect ordering", "state inheritance", "death cleanup", "ID reuse", "timed lifecycle", "checkpoint continuation", "device-resident request buffers, atomic commits, cleanup, restart, allocation, and performance on Metal and ROCm"]
+persistence_impact = "structure state, timers, pending lifecycle requests, inheritance policies, and schedule identity enter the coupled checkpoint"
+api_layer = "CorePotts state/lifecycle protocols plus PottsToolkit declarative programs"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm structure, request-buffer, lifecycle-commit, cleanup, restart, and performance qualification required before stable promotion"
+d10_classification = "additive state and trigger/effect families reusing the frozen lifecycle transaction law"
+
+[[work_items]]
+id = "d9-protocol-observation-and-persistence"
+semantic_family = "explicit staged protocols, paper observations, manifests, and coupled persistence"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "plan", "observation"]
+capabilities = ["staged-protocol", "paper-observables"]
+owner = "CorePotts execution/persistence and PottsToolkit observation authoring"
+implementation_chunk = "14.1-F"
+first_proving_models = ["wortel-2021-act-cpm", "wang-2025-collective-tumor-migration"]
+source_gate = "Every selected model has a frozen validation-target identity; final tolerances and ensemble stopping rules remain D11/Phase 14.3 work."
+conformance_plan = ["stage-boundary order", "hand-worked observables", "canonical coupled schema", "Memory/HDF5/Zarr round trip", "corruption rejection", "exact continuation", "uncoupled checkpoint byte identity", "device reductions and bounded declared observation/checkpoint transfers on Metal and ROCm"]
+persistence_impact = "new coupled envelope only; CanonicalCheckpoint v1 bytes, checksum, restore, and storage payload remain unchanged for uncoupled models"
+api_layer = "CorePotts canonical plan and derived persistence plus PottsToolkit observation facades"
+backend_claim = "CPU reference plus Metal and ROCm qualification required; simulation state remains device-resident and bounded host transfer occurs only at declared observation, checkpoint, snapshot, or analysis boundaries"
+d10_classification = "additive schedules, observation identities, and coupled envelope; no mutation of frozen uncoupled artifacts"
+
+[[work_items]]
+id = "d9-events-multirate-mapping-and-adapters"
+semantic_family = "events, delays, multirate clocks, typed cross-domain mapping, and external model lowering"
+specification = "../../spec/phase-14-semantic-kernel.md"
+contracts = ["state", "process", "plan", "lifecycle"]
+capabilities = ["multirate-global-scheduling", "continuous-events-and-delays", "cross-domain-symbol-mapping", "continuous-model-adapters"]
+owner = "CorePotts event/schedule/mapping protocols and PottsToolkit optional adapters"
+implementation_chunk = "14.1-G"
+first_proving_models = ["wang-2025-collective-tumor-migration", "shirinifard-2012-cnv"]
+source_gate = "Pinned paper sources fix selected schedules and mappings; the registered Morpheus matrix supplies independent construct-level parity fixtures."
+conformance_plan = ["exact clock conversion", "same-time priority/conflict", "sampled versus root events", "delays/cascades", "typed reductions", "scope/shadow rejection", "ModelingToolkit construct map", "SBML subset", "Morpheus compatibility reports", "device-resident stable execution constructs, queues, mappings, restart, allocation, and performance on Metal and ROCm"]
+persistence_impact = "clocks, queues, delay buffers, mapping identities, adapter checksums, and compatibility identities enter the coupled checkpoint"
+api_layer = "CorePotts single semantic kernel; optional PottsToolkit ModelingToolkit/SBML/MorpheusML lowering and compatibility tooling"
+backend_claim = "CPU reference plus Metal and ROCm qualification is required for every stable execution construct; adapters remain host control-plane only and must lower completely before device launch"
+d10_classification = "additive plan entries and derived adapter tooling; public Potts time remains integer MCS and ordinary lifecycle timing is unchanged"
+future_non_scope = "Mermaid.jl integration is not a Phase 14.0 or Phase 14.1 deliverable; a later optional external-orchestration extension may use public boundaries without becoming part of this work item."

@@ -23,6 +23,7 @@ include("level1_queries.jl")
 include("level1_runtime.jl")
 include("level1_fields.jl")
 include("level1_core_api.jl")
+include("level1_activity.jl")
 include("level1_observables.jl")
 include("level1_units.jl")
 
@@ -57,6 +58,7 @@ export ProvenanceEntry
 export SemanticFingerprint, ExecutionFingerprint
 export SemanticManifest
 export AbstractLevel1Declaration, Volume, Surface
+export Act
 export FluctuatingVolumePressure, FluctuatingSurfaceTension
 export AcceptanceTemperature, IndependentNoise
 export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit
@@ -92,8 +94,57 @@ export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition
 export UnsupportedTransition, ResetOnRetirement
 export ConstitutiveMeanInitialization, StationaryMechanicalInitialization
 export PreserveMechanicalInitialization
-export SequentialCPM, SequentialEquilibrium, CheckerboardSweepCPM,
+export SequentialCPM, AttemptsPerSite, BudgetedSequentialCPM,
+       SequentialEquilibrium, CheckerboardSweepCPM,
        TiledCheckerboardCPM, LotteryCPM
+export SpatialRoles
+# Registry-v1 Phase 14 façades are internalized; `Act` is the first retained v2 façade.
+#=
+export FillSites, SiteValues, InitializeFromOwnership,
+       PreserveAtSite, ResetChangedSites, AcceptedCopyManaged, SiteProperty,
+       SetTo, PreserveSiteValue, AcceptedCopyUpdate,
+       SaturatingSubtract, SetSiteValue, SiteDynamics,
+       Lag, RepeatInitialSample, MissingUntilFull, ExplicitInitialHistory,
+       ResetChildHistory, CopyParentHistory, PreserveHistory, ResetHistory,
+       CellHistory, HistorySample, RelationshipCapacity,
+       RemoveIncidentEdges, RejectEndpointRetirement, RelationshipSet
+export MCSPlan, PottsAttempts, LifecyclePhase, ObservationPhase,
+       Advance, Exchange, Sample, Update,
+       MCSRange, During, ProtocolStage, StagedProtocol,
+       ScheduledParameter, ContinuousClock, ContinuousInterval, OneMCS, HalfMCS,
+       GlobalClock, MCSDuration, AtMCSStart, AtMCSEnd, AtMCSOffset,
+       ScheduledSystem, ScheduledEvent, ScheduledProcess, ScheduledPotts,
+       TimedLifecyclePhase, ScheduledLifecycle, MultirateSchedule
+export GlobalDomain, CellDomain, FieldDomain, MembraneDomain,
+       GlobalProperty, MembraneProperty,
+       AngularMembrane, FillMembrane, ConservativeMembraneRemap,
+       PartitionMembraneByGeometry, PreserveMembrane, ResetMembrane,
+       StateVariable, InputVariable, Constant, IntermediateVariable,
+       ObservableVariable, TimeVariable, DirectLaw,
+       DifferentialEquation, SynchronousRule, AlgebraicAssignment,
+       FunctionDefinition, AlgebraicConstraint, StochasticDifferentialEquation,
+       ReactionStatement, DeterministicReaction, DiscreteJumpProcess,
+       HybridReaction, ExplicitEuler, Heun, RK4, SystemStep, FixedStep,
+       AdaptiveStep, SystemClock, ContinuousSystem, CellDynamics,
+       ReactionDiffusion, FieldDynamics, ByCellVolume, ConstantConcentration,
+       Uptake, FieldExchange, SteadyStateAdvance
+export StableRelationshipPriority, CreateRelationship, RemoveRelationship,
+       RetuneRelationship, RelationshipDynamics
+export ExactSample, PiecewiseConstantDelay, LinearDelayInterpolation,
+       RepeatInitialDelay, EveryGlobal, DelayState,
+       WhileTrue, OnRising, OnceWhenTrue, PersistentTrigger,
+       SampledTrigger, RootTrigger, EventAssignment,
+       FromTriggerSnapshot, FromExecutionSnapshot,
+       NoImmediateCascade, CascadeUntilStable, LifecycleRequest,
+       ContinuousEvent, SymbolIdentity, SymbolRef, InputRef, IdentityMap,
+       SymbolMap, ExactSemanticMapping, QualifiedNumericalMapping,
+       ExplicitApproximation, PartialMapping, RejectedMapping,
+       CompatibilityItem, MorpheusSemanticProfile, SBMLSemanticProfile,
+       ContinuousModelAdapter
+export CompletedMCS, NamedPhaseSnapshot, RequiredObservation,
+       BestEffortTelemetry, RecordSchema, PhaseObservation,
+       ObservationTransform
+=#
 export AbstractScientificObservable, CellVolume, CellTypeObservable
 export CellBoundaryMeasure, CellPropertyValues, ObservationSet
 export CellValue, CellValues, CellFrame, CellSeries

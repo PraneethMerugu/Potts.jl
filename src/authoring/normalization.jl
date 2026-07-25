@@ -691,6 +691,13 @@ function _canonical_write(io::IO, value::NamedTuple)
     return _canonical_close(io)
 end
 
+function _canonical_write(io::IO, value::Pair)
+    _canonical_open(io, value)
+    _canonical_write(io, first(value))
+    _canonical_write(io, last(value))
+    return _canonical_close(io)
+end
+
 function _canonical_write(io::IO, value::AbstractArray)
     _canonical_open(io, value)
     _canonical_write(io, eltype(value))
@@ -857,6 +864,107 @@ function _canonical_write(io::IO, value::Union{AbstractPropertyInvariant,
         CorePotts.AbstractDivisionGeometry})
     fieldcount(typeof(value)) == 0 && return (
         _canonical_open(io, value); _canonical_close(io))
+    return _canonical_fields(io, value)
+end
+
+function _canonical_write(io::IO, value::Union{
+        CorePotts.AbstractSiteInitializer,
+        CorePotts.AbstractSiteOwnershipPolicy,
+        CorePotts.NoSiteInvariant,
+        CorePotts.AbstractAcceptedCopyAssignment,
+        CorePotts.AbstractSiteUpdateLaw,
+        CorePotts.AbstractHistoryFill,
+        CorePotts.AbstractHistoryDivisionPolicy,
+        CorePotts.AbstractHistoryTransitionPolicy,
+        CorePotts.AbstractEndpointLifecyclePolicy,
+        CorePotts.RelationshipCapacity,
+        CorePotts.AlwaysAcceptedCopy,
+        CorePotts.CoupledPhase,
+        CorePotts.PottsAttempts,
+        CorePotts.LifecyclePhase,
+        CorePotts.ObservationPhase,
+        CorePotts.Advance,
+        CorePotts.Exchange,
+        CorePotts.Sample,
+        CorePotts.Update,
+        CorePotts.MCSRange,
+        CorePotts.During,
+        CorePotts.ProtocolStage,
+        CorePotts.ContinuousInterval,
+        CorePotts.OneMCS,
+        CorePotts.HalfMCS,
+        CorePotts.EveryGlobal,
+        CorePotts.AbstractDelayInterpolation,
+        CorePotts.RepeatInitialDelay,
+        CorePotts.AbstractTriggerMemory,
+        CorePotts.SampledTrigger,
+        CorePotts.RootTrigger,
+        CorePotts.EventAssignment,
+        CorePotts.FromTriggerSnapshot,
+        CorePotts.FromExecutionSnapshot,
+        CorePotts.NoImmediateCascade,
+        CorePotts.CascadeUntilStable,
+        CorePotts.LifecycleRequest,
+        CorePotts.SymbolIdentity,
+        CorePotts.SymbolRef,
+        CorePotts.InputRef,
+        CorePotts.IdentityMap,
+        CorePotts.AbstractCompatibilityLevel,
+        CorePotts.CompatibilityItem,
+        CorePotts.MorpheusSemanticProfile,
+        CorePotts.SBMLSemanticProfile,
+        CorePotts.GlobalClock,
+        CorePotts.MCSDuration,
+        CorePotts.AbstractMCSPosition,
+        CorePotts.AbstractScheduledEntry,
+        CorePotts.TimedLifecyclePhase,
+        CorePotts.MultirateSchedule,
+        CorePotts.AbstractObservationPhase,
+        CorePotts.AbstractObservationFailurePolicy,
+        CorePotts.AbstractObservationSchema})
+    return _canonical_fields(io, value)
+end
+
+function _canonical_write(io::IO, law::CorePotts.DirectLaw)
+    _canonical_open(io, law)
+    _canonical_write(io, law.name)
+    _canonical_write(io, law.version)
+    return _canonical_close(io)
+end
+
+function _canonical_write(io::IO, value::Union{
+        CorePotts.AbstractContinuousDomain,
+        CorePotts.AngularMembrane,
+        CorePotts.FillMembrane,
+        CorePotts.ConservativeMembraneRemap,
+        CorePotts.PartitionMembraneByGeometry,
+        CorePotts.PreserveMembrane,
+        CorePotts.ResetMembrane,
+        CorePotts.StateVariable,
+        CorePotts.InputVariable,
+        CorePotts.Constant,
+        CorePotts.IntermediateVariable,
+        CorePotts.ObservableVariable,
+        CorePotts.TimeVariable,
+        CorePotts.AbstractContinuousStatement,
+        CorePotts.AbstractReactionInterpretation,
+        CorePotts.AbstractFixedStepper,
+        CorePotts.SystemStep,
+        CorePotts.FixedStep,
+        CorePotts.AdaptiveStep,
+        CorePotts.SystemClock,
+        CorePotts.ReactionDiffusion,
+        CorePotts.ByCellVolume,
+        CorePotts.ConstantConcentration,
+        CorePotts.Uptake,
+        CorePotts.SteadyStateAdvance})
+    return _canonical_fields(io, value)
+end
+
+function _canonical_write(io::IO, value::Union{
+        CorePotts.StableRelationshipPriority,
+        CorePotts.AbstractRelationshipRequest,
+        CorePotts.RelationshipPolicyBundle})
     return _canonical_fields(io, value)
 end
 

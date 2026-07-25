@@ -1,6 +1,49 @@
 """Open family for ordered one-proposal-at-a-time scientific algorithms."""
 abstract type AbstractSequentialCPMAlgorithm <: AbstractPottsAlgorithm end
 
+"""Positive integer source-defined copy-attempt multiplier."""
+struct AttemptsPerSite
+    multiplier::UInt32
+
+    function AttemptsPerSite(multiplier::Integer)
+        0 < multiplier <= typemax(UInt32) || throw(ArgumentError(
+            "attempts-per-site multiplier must be positive and fit UInt32"))
+        return new(UInt32(multiplier))
+    end
+end
+
+Base.Int(budget::AttemptsPerSite) = Int(budget.multiplier)
+
+"""
+CPU-reference sequential CPM whose public MCS contains exactly `budget.multiplier * N`
+ordered attempts for `N` mutable recipient sites.
+"""
+struct BudgetedSequentialCPM{T <: AbstractFloat} <: AbstractSequentialCPMAlgorithm
+    temperature::T
+    budget::AttemptsPerSite
+
+    function BudgetedSequentialCPM(temperature::T,
+            budget::AttemptsPerSite) where {T <: AbstractFloat}
+        isfinite(temperature) && temperature >= zero(T) || throw(ArgumentError(
+            "budgeted sequential CPM temperature must be finite and non-negative"))
+        return new{T}(temperature, budget)
+    end
+end
+
+function BudgetedSequentialCPM(budget::AttemptsPerSite;
+        temperature::AbstractFloat = 20.0f0, proposal = nothing)
+    if proposal !== nothing
+        proposal isa SequentialReference || throw(ArgumentError(
+            "the initial BudgetedSequentialCPM contract accepts only SequentialReference proposal semantics"))
+        temperature = proposal.temperature
+    end
+    return BudgetedSequentialCPM(temperature, budget)
+end
+
+BudgetedSequentialCPM(; budget::AttemptsPerSite = AttemptsPerSite(1),
+    temperature::AbstractFloat = 20.0f0, proposal = nothing) =
+    BudgetedSequentialCPM(budget; temperature, proposal)
+
 """Conventional modified-Metropolis CPM with exactly `N` selections per MCS."""
 struct SequentialCPM{T <: AbstractFloat} <: AbstractSequentialCPMAlgorithm
     temperature::T
@@ -57,6 +100,8 @@ LotteryCPM(; temperature::AbstractFloat = 20.0f0) = LotteryCPM(temperature)
 
 component_identity(::SequentialCPM) =
     ComponentIdentity(:sequential_cpm, SEQUENTIAL_ALGORITHM_CONTRACT_VERSION, :algorithm)
+component_identity(::BudgetedSequentialCPM) = ComponentIdentity(
+    :budgeted_sequential_cpm, BUDGETED_SEQUENTIAL_ALGORITHM_CONTRACT_VERSION, :algorithm)
 component_identity(::SequentialEquilibrium) =
     ComponentIdentity(
         :sequential_equilibrium, SEQUENTIAL_ALGORITHM_CONTRACT_VERSION, :algorithm)
@@ -110,6 +155,46 @@ algorithm_guarantees(::SequentialCPM) = AlgorithmGuaranteeProfile(
     evidence_version = PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
     api_status = :stable,
     paper_scope = :phase13_core,
+)
+
+algorithm_guarantees(algorithm::BudgetedSequentialCPM) = AlgorithmGuaranteeProfile(
+    proposal_process = (
+        recipient = :uniform_with_replacement,
+        donor = :uniform_direction_with_boundary_no_ops,
+    ),
+    equilibrium_status = :not_claimed,
+    kinetic_interpretation = :source_budgeted_sequential_cpm,
+    transaction_semantics = (
+        snapshot = :ordered_current_state,
+        conflicts = :not_applicable,
+        commit = :immediate_serial,
+    ),
+    mcs_normalization = (
+        kind = :exact_integer_attempts_per_site,
+        multiplier = algorithm.budget.multiplier,
+    ),
+    reproducibility_scope = :strict_same_backend_exact_continuation,
+    compatible_component_scopes = (
+        supported = (:energy, :drive, :hard_constraint, :kinetic_modifier,
+            :mechanical, :moment_focal),
+        rejected = (),
+    ),
+    validation_evidence = (:exact_budget_accounting, :strict_replay,
+        :checkpoint_continuation, :wortel_gpu_native_qualification),
+    backend_contract = (:cpu, :metal, :amdgpu),
+    dimensions = (2, 3),
+    guarantee_label = :unqualified,
+    qualified_domain = (
+        implementation = :ordered_backend_resident_device_chain,
+        multiplier = algorithm.budget.multiplier,
+        real_type = :float32,
+        backends = (:cpu, :metal, :amdgpu),
+    ),
+    maximum_observed_discrepancy = 0.0,
+    tested_backends = (:cpu, :metal, :amdgpu),
+    evidence_version = PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+    api_status = :stable,
+    paper_scope = :later_protocol_consumer,
 )
 
 algorithm_guarantees(::SequentialEquilibrium) = AlgorithmGuaranteeProfile(
@@ -220,6 +305,9 @@ algorithm_guarantees(::LotteryCPM) = AlgorithmGuaranteeProfile(
 function algorithm_component_compatibility(::SequentialEquilibrium,
         components::ScientificComponentSet, moment_tracker = nothing)
     messages = _scientific_interface_messages(components)
+    any(_non_equilibrium_energy, components.energies) &&
+        (messages = (messages...,
+            "SequentialEquilibrium rejects non-equilibrium energy components",))
     isempty(components.drives) || (messages = (messages...,
         "SequentialEquilibrium rejects nonconservative drive components",))
     isempty(components.kinetic_modifiers) || (messages = (messages...,
@@ -229,7 +317,10 @@ function algorithm_component_compatibility(::SequentialEquilibrium,
     return messages
 end
 
+_non_equilibrium_energy(::Any) = false
+
 @inline acceptance_law(::SequentialCPM) = ConventionalMetropolis()
+@inline acceptance_law(::BudgetedSequentialCPM) = ConventionalMetropolis()
 @inline acceptance_law(::SequentialEquilibrium) = MetropolisHastings()
 
 """Accounting for one completed normalized MCS."""
@@ -313,11 +404,17 @@ function _validate_sequential_components(::SequentialCPM, components)
     return components
 end
 
+function _validate_sequential_components(::BudgetedSequentialCPM, components)
+    return components
+end
+
 function _validate_sequential_components(::AbstractSequentialCPMAlgorithm, components)
     return components
 end
 
 function _validate_sequential_components(::SequentialEquilibrium, components)
+    any(_non_equilibrium_energy, components.energies) && throw(ArgumentError(
+        "SequentialEquilibrium does not admit non-equilibrium energy components"))
     isempty(components.drives) || throw(ArgumentError(
         "SequentialEquilibrium does not admit nonconservative drive components"))
     isempty(components.kinetic_modifiers) || throw(ArgumentError(
@@ -374,6 +471,23 @@ function _default_execution_plan(state::CompiledScientificState)
     return ExecutionPlan(backend)
 end
 
+function _validate_algorithm_workspace(workspace::CoupledAttemptWorkspace,
+        state::CompiledScientificState, plan::ExecutionPlan)
+    storage_backend = KernelAbstractions.get_backend(state.potts.storage.active)
+    for site_state in workspace.site_states
+        isequal(KernelAbstractions.get_backend(site_state.values), storage_backend) ||
+            throw(ArgumentError(
+                "coupled attempt state must share the scientific execution backend"))
+    end
+    if !(plan.backend isa KernelAbstractions.CPU)
+        isbitstype(typeof(workspace)) || throw(ArgumentError(
+            "GPU coupled attempt workspace must lower to an isbits array tree"))
+    end
+    return workspace
+end
+_validate_algorithm_workspace(
+    workspace, state::CompiledScientificState, plan::ExecutionPlan) = workspace
+
 _contains_float64_type(::Type{Float64}) = true
 function _contains_float64_type(type::Type)
     type isa DataType || return false
@@ -399,7 +513,22 @@ function _validate_scientific_initialization(state, proposal_relation, component
     mutable_count = length(state.domain.storage.mutable_sites)
     0 < mutable_count <= typemax(UInt32) || throw(ArgumentError(
         "scientific semantic addressing requires 1:typemax(UInt32) mutable sites"))
+    if algorithm isa BudgetedSequentialCPM
+        attempt_total = try
+            _attempt_total(algorithm, mutable_count)
+        catch error
+            error isa OverflowError || rethrow()
+            throw(ArgumentError("budgeted sequential attempt count overflows Int"))
+        end
+        attempt_total <= typemax(UInt32) || throw(ArgumentError(
+            "budgeted sequential semantic addressing requires k*N <= typemax(UInt32)"))
+    end
     _validate_scientific_interfaces(components, algorithm)
+    for component in _all_scientific_components(components)
+        component_supports_backend(component, plan.capabilities) ||
+            throw(UnsupportedBackendCapability(
+                plan.capabilities.family, component_identity(component).key))
+    end
     _validate_mechanical_components(state, components.mechanics)
     _requires_device_float64(state, proposal_relation, components, algorithm) &&
         require_capability(plan.capabilities, DeviceFloat64Capability())
@@ -429,9 +558,11 @@ function init_scientific(state::CompiledScientificState,
         rng::AbstractRNGContract = Philox4x32x10V1(), plan::ExecutionPlan =
             _default_execution_plan(state), connectivity_workspace = nothing,
         moment_tracker = nothing, lifecycle = NoCompiledLifecycle(),
-        initialize_mechanics::Bool = true)
+        initialize_mechanics::Bool = true,
+        algorithm_workspace = NoAlgorithmWorkspace())
     _validate_scientific_initialization(
         state, proposal_relation, components, algorithm, seed, rng, plan)
+    _validate_algorithm_workspace(algorithm_workspace, state, plan)
     _validate_sequential_components(algorithm, components)
     _validate_zero_temperature(algorithm, components)
 
@@ -453,8 +584,14 @@ function init_scientific(state::CompiledScientificState,
     if workspace isa ConnectivityWorkspace
         record_allocation!(plan, domain, workspace_bytes(workspace))
     end
+    if algorithm_workspace isa CoupledAttemptWorkspace
+        for site_state in algorithm_workspace.site_states
+            record_allocation!(
+                plan, domain, _array_bytes(site_state.values))
+        end
+    end
     integrator = ScientificPottsIntegrator(state, components, proposal_relation, algorithm, rng,
-        plan, workspace, moment_tracker, NoAlgorithmWorkspace(), lifecycle, report_storage,
+        plan, workspace, moment_tracker, algorithm_workspace, lifecycle, report_storage,
         UInt64(seed), UInt64(0))
     return initialize_mechanics ? _initialize_mechanics!(integrator) : integrator
 end
@@ -471,10 +608,22 @@ function init_scientific(state::CompiledScientificState,
         plan, forwarded...)
 end
 
+@inline _algorithm_rng_operation(::AbstractSequentialCPMAlgorithm) = UInt16(0)
+@inline _algorithm_rng_operation(::BudgetedSequentialCPM) = UInt16(0x1401)
+
 @inline function _attempt_address(stream::RNGStream, mcs::UInt64,
-        attempt::UInt32)
-    return _rng_address_unchecked(stream, mcs, UInt8(0), UInt16(0), GlobalEntity,
+        attempt::UInt32, algorithm::AbstractSequentialCPMAlgorithm)
+    return _rng_address_unchecked(stream, mcs, UInt8(0),
+        _algorithm_rng_operation(algorithm), GlobalEntity,
         attempt, UInt64(0), UInt8(0), UInt16(0))
+end
+
+@inline _attempt_total(::AbstractSequentialCPMAlgorithm, candidate_count::Int) =
+    candidate_count
+
+@inline function _attempt_total(algorithm::BudgetedSequentialCPM,
+        candidate_count::Int)
+    return Base.checked_mul(candidate_count, Int(algorithm.budget.multiplier))
 end
 
 @inline function _unchecked_acceptance_inputs(evaluation::ScientificCopyEvaluation{T}) where {T}
@@ -486,11 +635,13 @@ end
 end
 
 @kernel function _sequential_mcs_kernel!(report, state, components, proposal_relation,
-        algorithm, rng, seed, mcs, connectivity_workspace, moment_tracker)
+        algorithm, rng, seed, mcs, connectivity_workspace, moment_tracker,
+        algorithm_workspace)
     kernel_index = @index(Global, Linear)
     @inbounds if kernel_index == 1
         mutable_sites = state.domain.storage.mutable_sites
         candidate_count = length(mutable_sites)
+        attempt_total = _attempt_total(algorithm, candidate_count)
         direction_total = UInt32(direction_count(proposal_relation))
         realized = UInt64(0)
         same_owner = UInt64(0)
@@ -502,14 +653,16 @@ end
         proposal_process = proposal_law(algorithm)
         accepted_law = acceptance_law(algorithm)
         # init_scientific proves candidate_count fits UInt32; the loop proves each attempt ID.
-        for raw_attempt in 1:candidate_count
+        for raw_attempt in 1:attempt_total
             attempt_id = Base.unsafe_trunc(UInt32, raw_attempt)
-            recipient_address = _attempt_address(ProposalRecipientStream, mcs, attempt_id)
+            recipient_address = _attempt_address(
+                ProposalRecipientStream, mcs, attempt_id, algorithm)
             mutable_index = bounded_uint(
                 rng, seed, recipient_address,
                 Base.unsafe_trunc(UInt32, candidate_count)) + UInt32(1)
             recipient = Int(@inbounds mutable_sites[Int(mutable_index)])
-            direction_address = _attempt_address(ProposalDirectionStream, mcs, attempt_id)
+            direction_address = _attempt_address(
+                ProposalDirectionStream, mcs, attempt_id, algorithm)
             direction = bounded_uint(rng, seed, direction_address, direction_total) + UInt32(1)
             attempt = construct_proposal_attempt(proposal_process, state, state.domain,
                 proposal_relation, recipient, direction, mcs, attempt_id)
@@ -529,7 +682,8 @@ end
             transaction = _stage_copy_transaction_unchecked(
                 state, state.boundary_tracker, proposal; moment_tracker)
             context = ScientificProposalContext(
-                state, transaction, connectivity_workspace, attempt_id)
+                state, transaction, connectivity_workspace, attempt_id,
+                algorithm_workspace)
             evaluation = evaluate_copy(
                 components, proposal, context, typeof(algorithm.temperature))
             if !evaluation.constraints_allowed
@@ -539,10 +693,13 @@ end
             inputs = _unchecked_acceptance_inputs(evaluation)
             probability = _acceptance_probability(
                 accepted_law, inputs, algorithm.temperature)
-            acceptance_address = _attempt_address(AcceptanceStream, mcs, attempt_id)
+            acceptance_address = _attempt_address(
+                AcceptanceStream, mcs, attempt_id, algorithm)
             draw = uniform_open01(
                 typeof(algorithm.temperature), rng, seed, acceptance_address)
             if draw < probability
+                commit_accepted_copy_updates!(
+                    algorithm_workspace, proposal, transaction, state)
                 _commit_staged!(state, transaction)
                 accepted += UInt64(1)
             else
@@ -552,8 +709,8 @@ end
         @inbounds begin
             report[1] = mcs
             report[2] = UInt64(1)
-            report[3] = Base.unsafe_trunc(UInt64, candidate_count)
-            report[4] = Base.unsafe_trunc(UInt64, candidate_count)
+            report[3] = Base.unsafe_trunc(UInt64, attempt_total)
+            report[4] = Base.unsafe_trunc(UInt64, attempt_total)
             report[5] = realized
             report[6] = same_owner
             report[7] = boundary
@@ -588,7 +745,7 @@ function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R, 
         scientific_execution(integrator.state), integrator.components,
         integrator.proposal_relation, integrator.algorithm, integrator.rng,
         integrator.seed, next_mcs, integrator.connectivity_workspace,
-        integrator.moment_tracker; ndrange = 1)
+        integrator.moment_tracker, integrator.algorithm_workspace; ndrange = 1)
     _advance_mechanics!(integrator, next_mcs, UInt8(0), UInt8(1), half_interval)
     run_compiled_lifecycle!(integrator, integrator.lifecycle, next_mcs)
     integrator.mcs = next_mcs
@@ -623,6 +780,8 @@ function _standard_current_mcs_report(integrator::ScientificPottsIntegrator)
 end
 
 _current_mcs_report(integrator::ScientificPottsIntegrator, ::SequentialCPM) =
+    _standard_current_mcs_report(integrator)
+_current_mcs_report(integrator::ScientificPottsIntegrator, ::BudgetedSequentialCPM) =
     _standard_current_mcs_report(integrator)
 _current_mcs_report(integrator::ScientificPottsIntegrator, ::SequentialEquilibrium) =
     _standard_current_mcs_report(integrator)

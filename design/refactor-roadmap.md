@@ -21,7 +21,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phase 14: Model-Driven Capability Completion and Documentation | Not started | [Decision 0029](../spec/decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md) and the Phase 14.0 entry gate |
+| Phase 14: Model-Driven Capability Completion and Documentation | Phase 14.0 complete; seven-area architecture accepted; Wortel CPU-reference slice passed; Wortel Metal/ROCm closure is current | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [semantic simplification audit](audits/phase-14-semantics-simplification-audit.md), [Wortel vertical-slice evidence](audits/phase-14-wortel-vertical-slice-evidence.md), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [accepted Decisions 0031 and 0032](../spec/decisions/0032-phase-14-gpu-native-promotion.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Paper and Release Qualification | Not started | Begins only after every Phase 14 exit gate passes |
 
 ## Objective
@@ -109,9 +109,10 @@ unrelated earlier work.
 | D6 | Extension registration, semantic fingerprints, cache invalidation, and expert escape-hatch contract — resolved by Decisions 0017 and 0026 | Compiler/API freeze |
 | D7 | Final Level 1 model declarations, fragments, phase spelling, and displays; principal Level 2 model/problem names are resolved by Decision 0026 | PottsToolkit API candidate |
 | D8 | Published-model portfolio, fidelity vocabulary, documentation information architecture, and post-freeze policy — resolved at the policy level by Decision 0029; exact papers, target results, source revisions, and licenses are pinned per model in Phase 14.0 | Phase 14.1 capability implementation |
-| D9 | Observable semantics and update ordering for every missing model capability, including accepted-copy, per-MCS, lifecycle, field-splitting, dynamic-relationship, and staged-protocol boundaries | Each corresponding Phase 14.1 implementation |
+| D9 | Observable semantics and update ordering for every missing capability through the single state/process/plan/lifecycle/observation kernel, focused spatial/algorithm contracts, and derived adapter evidence | Each corresponding Phase 14.1 vertical slice |
 | D10 | Compatibility and evidence-invalidation assessment for every post-freeze addition; any incompatible frozen-contract change requires an explicit versioned release decision under Decision 0028 | Public API or contract change |
 | D11 | Preregistered per-model validation targets, tolerances, ensemble sizes, stopping rules, source baselines, and fidelity limits | Final Phase 14.3 reproduction runs |
+| D12 | GPU-native promotion profile, portable precision, residency boundaries, real-hardware Metal/ROCm evidence, and explicit deferred-backend policy — resolved by Decision 0032 | Stable promotion of every new Phase 14 execution capability |
 
 Every gate produces an accepted specification update or decision record plus its required evidence.
 Implementation convenience MUST NOT decide a gate implicitly.
@@ -806,6 +807,10 @@ been reproduced.
   source-specific MCS attempt budgets; accepted-copy site history; evolving reaction--diffusion
   fields, secretion, uptake, and named splitting; vector cell state and history; dynamic focal or
   relationship graphs; degradable structures; staged protocols; and paper-defined observables.
+- Maintain a separate Morpheus model-semantic compatibility matrix for global/per-cell/field/
+  membrane systems, differential equations, synchronous rules, assignments, functions, delays,
+  events, multirate clocks, typed mappers/reporters, lifecycle requests, and external-system
+  adapters. Product-level GUI, XML editing, plotting, and job-management parity is not required.
 - Give each missing semantic family an owner, specification/decision dependency, conformance plan,
   persistence impact, API layer, backend claim, and implementation chunk. Unknowns remain explicit;
   implementation convenience MUST NOT settle them.
@@ -821,40 +826,80 @@ been reproduced.
 - The release portfolio can change only through an owner-approved scope amendment recording the
   scientific and release-claim impact.
 
+#### Completion evidence
+
+Phase 14.0 complete as of 2026-07-24. The
+[completion audit](audits/phase-14-0-corpus-and-requirements-audit.md) freezes six versioned source
+records and named validation targets; the
+[source-closure registry](audits/phase-14-source-closure-v1.toml) records exact transcriptions or
+bounded sensitivity plans plus license dispositions; the
+[D9 work-item registry](audits/phase-14-d9-work-items-v1.toml) owns every missing semantic family;
+and [Decision 0030](../spec/decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md) accepts
+the additive D10 assessment. Individual Phase 14.1 D9 contracts remain Provisional until their
+prototype and conformance gates pass. The
+[semantic simplification audit](audits/phase-14-semantics-simplification-audit.md) found that the
+requirements remain sound but the candidate surface has overlapping semantic authorities.
+The [focused owner interview](audits/phase-14-semantics-focused-interview.md) accepted all 15
+recommended decisions. [Decision 0031](../spec/decisions/0031-phase-14-single-semantic-kernel.md)
+and [registry v2](../spec/phase-14-contract-registry-v2.toml) therefore replace the 24-contract
+candidate decomposition with one seven-area semantic kernel. The architecture checks and Wortel
+CPU-reference vertical slice now pass. [Decision 0032](../spec/decisions/0032-phase-14-gpu-native-promotion.md)
+and the [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md) require
+backend-resident Metal and ROCm qualification for every stable Phase 14 execution capability.
+Wortel GPU closure is therefore the current gate; Wang does not open until it passes.
+
 ### Phase 14.1: Modeling Primitives and Conformance
 
 #### Deliverables
 
-- Write and accept D9 semantics before implementing each required capability. At minimum, specify
-  snapshots, update order, atomicity, normalized time, semantic randomness, lifecycle behavior,
-  checkpoint representation, inspection, and failure behavior.
+- Implement every required capability through the single state/process/plan/lifecycle/observation
+  kernel. Spatial roles and Potts algorithm identities remain focused contracts. No façade may own
+  a second clock, scheduler, runtime, persistence scheme, or identity graph.
+- Derive fingerprints, continuation/checkpoint requirements, preflight, inspection, and
+  compatibility reports from the canonical kernel rather than authoring parallel descriptions.
+- Keep equation-style `ContinuousSystem` declarations as façades that lower completely to the
+  kernel. Qualify sampled events separately; adaptive, root, DAE, SDE, reaction, and jump families
+  remain Experimental until their source-backed promotion gates pass.
 - Implement the smallest reusable capability justified by the corpus in CorePotts or PottsToolkit.
   Paper-specific parameters and analysis remain in model source; reusable scientific behavior does
   not.
-- Exercise every capability first through an ordinary sequential CPU reference path and one
-  complete model-level vertical slice. Add PottsToolkit Level 2 and natural Level 1 spelling where
-  the capability belongs in ordinary biological authoring.
+- Prove each slice first through an ordinary sequential CPU reference path and then through
+  backend-resident Metal and ROCm execution before opening the next slice: Wortel, then Wang, then
+  one field model. Add PottsToolkit Level 2 and natural Level 1 façades only when they normalize
+  identically to the direct kernel spelling.
 - Extend semantic manifests, fingerprints, reports, persistence, restart, SciML observation and
   saving, capability preflight, and backend adaptation without silently changing frozen meanings.
 - Add exact, invariant, randomized reference, lifecycle, restart, and statistical conformance as
-  applicable. Dynamic fields and auxiliary state MUST remain backend-resident during advertised GPU
-  execution and become visible only at declared synchronization points.
-- Qualify only the backend/capability pairs that will be advertised. CPU reference support is
-  mandatory; Metal and ROCm support may be explicitly Unsupported for a new capability, but it
-  cannot be implied by the Phase 13 core matrix.
+  applicable. All simulation state, dynamic fields, relationships, queues, and auxiliary state
+  MUST remain backend-resident during GPU execution. Hidden scalar host loops, host fallback,
+  per-MCS transfers, and steady-state allocation cannot qualify.
+- Require CPU reference support plus real-hardware Metal and ROCm evidence for every stable or
+  release Phase 14 execution capability. Unsupported backend pairs may remain Experimental, but
+  cannot be promoted as part of the stable portfolio and cannot inherit a Phase 13 claim.
+- Use the portable GPU qualification profile (`Float32` where floating-point state is involved);
+  retain CPU `Float64` paper-fidelity studies as a separate evidence profile. Host work is limited
+  to pre-launch authoring/lowering and explicit observation, checkpoint, snapshot, and analysis
+  boundaries with bounded, measured transfers.
 - Measure compilation, allocation, synchronization, transfer, memory, and steady-state performance
   for the completed vertical slices. Optimize only after reference agreement.
 
 #### Exit gate
 
-- Every mechanism required by the selected portfolio is expressible through public, documented
-  model or extension APIs without reaching into private storage or kernels.
+- Every mechanism required by the selected portfolio lowers to the one public, inspectable
+  canonical kernel without private storage access or a parallel runtime.
+- The stable kernel subset passes the registered Morpheus time-scale, ODE, synchronous-rule,
+  delay, sampled-event, mapper, field-coupling, and lifecycle microfixtures with derived
+  construct-level compatibility reports.
 - Every new stable contract is Accepted, versioned, reference implemented, mapped to conformance
   evidence, and covered by the D10 compatibility assessment.
 - Checkpoint/restart reproduces dynamic fields, site state, per-cell state, relationships,
   staged-protocol position, semantic time, and RNG continuation wherever present.
-- Advertised CPU, Metal, and ROCm support has the corresponding real-hardware evidence; unsupported
-  combinations fail before execution with actionable diagnostics.
+- Every stable Phase 14 execution capability has sequential CPU reference evidence and
+  corresponding real-hardware Metal and ROCm evidence. Unsupported combinations remain
+  Experimental and fail before execution with actionable diagnostics.
+- GPU qualification demonstrates backend residency, absence of hidden host fallback and per-MCS
+  transfers, bounded declared synchronization, deterministic replay or stated statistical
+  equivalence, checkpoint/restart, and measured allocation, transfer, and steady-state performance.
 - Existing Phase 12 correctness-qualified performance gates still pass; adding a model capability
   does not excuse a regression in models that do not use it.
 - The selected models reach complete bounded smoke runs before documentation presentation work
@@ -1039,27 +1084,33 @@ critical path.
 
 ## Current Phase 14 Critical Path
 
-With Phases 0--13 complete, the next executable sequence is:
+With Phases 0--13, Phase 14.0, and the Wortel CPU-reference slice complete, the next executable
+sequence is:
 
-1. Pin the exact 4--6 papers and source records, including target results, licensing, source
-   revisions, and unresolved ambiguities.
-2. Complete the model-to-capability matrix and D10 compatibility assessment before editing frozen
-   interfaces.
-3. Resolve D9 separately for each missing semantic family. Begin with the highest-risk vertical
-   slices—evolving spatial state, accepted-copy history, general cell dynamics, and dynamic
-   relationships—rather than designing a universal framework in advance.
-4. Run one selected model end to end through each new sequential CPU reference capability,
-   PottsToolkit lowering, persistence, and bounded validation before optimizing or adding GPU
-   support.
+1. **Complete.** Enforce Decision 0031 and registry v2: one canonical state/process/plan/lifecycle/observation
+   kernel, focused spatial/algorithm contracts, derived tooling, and complete v1 dispositions.
+   Evacuate the paused registry v1 prototype exports before changing the frozen Phase 13 API
+   inventory; retain only deliberate v2 façades.
+2. **Complete for the Phase 14.1 capability gate.** Complete Wortel Act-CPM end to end through accepted-copy state, decay, plan, observation,
+   persistence, preflight, inspection, and restart. Direct-kernel and biological façade spellings
+   must normalize identically.
+3. **Current.** Close Wortel on real Metal and ROCm: device-resident activity/history state,
+   accepted-copy transaction and decay kernels, observations, preflight, restart, replay,
+   residency, transfer, allocation, and steady-state performance. No host fallback qualifies.
+4. Open Wang only after Wortel passes CPU, Metal, and ROCm; open one field-coupled model only after
+   Wang passes the same gate. Every later stable capability follows the same reference-then-device
+   promotion sequence.
 5. Close all required capability rows and bounded model smokes before building the Learn/Examples
    presentation layer.
 6. Register D11 and complete the full published-model studies before applying reproduction labels.
 7. Complete the full manual and satellites, then hand the frozen manifests and evidence to Phase
    15.
 
-Source collection, license review, documentation information architecture, and artifact planning
-MAY proceed together during Phase 14.0. Scientific implementation begins only after the applicable
-source, semantic, and freeze-impact gates are closed.
+Source collection, license review, and the portfolio-level freeze-impact gates closed in Phase
+14.0. Scientific implementation now proceeds only in the accepted Wortel CPU → Wortel
+Metal/ROCm → Wang CPU → Wang Metal/ROCm → field-model CPU → field-model Metal/ROCm order, with
+each slice constrained by the Provisional v2 kernel contracts, Decision 0032, and its registered
+conformance gate.
 
 ## Completion Definition
 

@@ -420,7 +420,8 @@ function _compile_checkpoint_lifecycle(prototype, state, plan)
 end
 
 function _restore_checkpoint(checkpoint::CanonicalCheckpoint,
-        prototype::ScientificPottsIntegrator, adaptor; exact::Bool)
+        prototype::ScientificPottsIntegrator, adaptor; exact::Bool,
+        algorithm_workspace = NoAlgorithmWorkspace())
     validate_checkpoint(checkpoint)
     schema = prototype.state.potts.descriptor.property_schema
     checkpoint.schema_fingerprint == _canonical_digest(schema) || throw(
@@ -450,11 +451,24 @@ function _restore_checkpoint(checkpoint::CanonicalCheckpoint,
         CheckpointCompatibilityError(:backend, string(checkpoint.profile.backend),
             string(plan.capabilities.family)))
     lifecycle = _compile_checkpoint_lifecycle(prototype, state, plan)
-    integrator = init_scientific(state, prototype.proposal_relation,
-        Adapt.adapt(adaptor, prototype.components), prototype.algorithm;
-        seed = checkpoint.seed, rng = prototype.rng, plan,
-        moment_tracker = prototype.moment_tracker, lifecycle,
-        initialize_mechanics = false)
+    adapted_components = Adapt.adapt(adaptor, prototype.components)
+    integrator = if prototype.algorithm isa AbstractSequentialCPMAlgorithm
+        init_scientific(state, prototype.proposal_relation,
+            adapted_components, prototype.algorithm;
+            seed = checkpoint.seed, rng = prototype.rng, plan,
+            moment_tracker = prototype.moment_tracker, lifecycle,
+            initialize_mechanics = false, algorithm_workspace)
+    else
+        algorithm_workspace isa NoAlgorithmWorkspace || throw(
+            CheckpointCompatibilityError(:algorithm_workspace,
+                "no workspace for $(typeof(prototype.algorithm))",
+                string(typeof(algorithm_workspace))))
+        init_scientific(state, prototype.proposal_relation,
+            adapted_components, prototype.algorithm;
+            seed = checkpoint.seed, rng = prototype.rng, plan,
+            moment_tracker = prototype.moment_tracker, lifecycle,
+            initialize_mechanics = false)
+    end
     integrator.mcs = checkpoint.mcs
     return integrator
 end

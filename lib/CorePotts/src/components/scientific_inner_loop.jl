@@ -72,35 +72,53 @@ struct NoConnectivityWorkspace end
 
 """One immutable pre-copy view shared by every component in a proposal evaluation."""
 struct ScientificProposalContext{S <: ScientificExecutionState,
-    T <: StagedCopyTransaction, W}
+    T <: StagedCopyTransaction, W, A}
     state::S
     transaction::T
     connectivity_workspace::W
     workspace_epoch::UInt32
+    algorithm_workspace::A
 end
 
 function ScientificProposalContext(state::CompiledScientificState,
         transaction::StagedCopyTransaction;
-        connectivity_workspace = NoConnectivityWorkspace(), workspace_epoch::Integer = 1)
+        connectivity_workspace = NoConnectivityWorkspace(), workspace_epoch::Integer = 1,
+        algorithm_workspace = nothing)
     return ScientificProposalContext(
-        scientific_execution(state), transaction; connectivity_workspace, workspace_epoch)
+        scientific_execution(state), transaction; connectivity_workspace, workspace_epoch,
+        algorithm_workspace)
 end
 
 function ScientificProposalContext(state::ScientificExecutionState,
         transaction::StagedCopyTransaction;
-        connectivity_workspace = NoConnectivityWorkspace(), workspace_epoch::Integer = 1)
+        connectivity_workspace = NoConnectivityWorkspace(), workspace_epoch::Integer = 1,
+        algorithm_workspace = nothing)
     0 < workspace_epoch <= typemax(UInt32) || throw(ArgumentError(
         "proposal workspace epoch must be positive and fit UInt32"))
     connectivity_workspace isa ConnectivityWorkspace &&
         validate_workspace(connectivity_workspace, state)
     return ScientificProposalContext(
-        state, transaction, connectivity_workspace, UInt32(workspace_epoch))
+        state, transaction, connectivity_workspace, UInt32(workspace_epoch),
+        algorithm_workspace)
 end
+
+ScientificProposalContext(state::ScientificExecutionState,
+        transaction::StagedCopyTransaction, connectivity_workspace,
+        workspace_epoch::Integer) =
+    ScientificProposalContext(state, transaction; connectivity_workspace,
+        workspace_epoch)
+
+ScientificProposalContext(state::ScientificExecutionState,
+        transaction::StagedCopyTransaction, connectivity_workspace,
+        workspace_epoch::Integer, algorithm_workspace) =
+    ScientificProposalContext(state, transaction; connectivity_workspace,
+        workspace_epoch, algorithm_workspace)
 
 function Adapt.adapt_structure(to, context::ScientificProposalContext)
     return ScientificProposalContext(
         Adapt.adapt(to, context.state), context.transaction,
-        Adapt.adapt(to, context.connectivity_workspace), context.workspace_epoch)
+        Adapt.adapt(to, context.connectivity_workspace), context.workspace_epoch,
+        Adapt.adapt(to, context.algorithm_workspace))
 end
 
 @inline proposal_energy_change(component::QuadraticVolumeHamiltonian,
