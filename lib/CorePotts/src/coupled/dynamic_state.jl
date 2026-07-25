@@ -103,8 +103,14 @@ function initialize_site_property(property::SiteProperty,
             "InitializeFromOwnership must return one value per lattice site"))
         generated
     end
-    all(value -> site_value_valid(property.invariant, value), values) ||
-        throw(ArgumentError("site-property initialization violates its invariant"))
+    # FillSites is validated once when the declaration is constructed. Revalidating the
+    # materialized array is redundant and, on GPU backends, would compile a reduction whose
+    # closure can accidentally retain host-only declaration metadata.
+    if !(initializer isa FillSites)
+        invariant = property.invariant
+        all(value -> site_value_valid(invariant, value), values) ||
+            throw(ArgumentError("site-property initialization violates its invariant"))
+    end
     return SitePropertyState(property, values, semantic_time)
 end
 
