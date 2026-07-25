@@ -189,8 +189,9 @@ end
 Immutable, kernel-valid view of one site property.
 
 The host-facing `SitePropertyState` remains mutable because it owns semantic time. Kernels receive
-only this descriptor-free execution view, so a coupled attempt workspace is an isbits tree whose
-array storage can remain on Metal or ROCm.
+only this descriptor-free execution view, so after the backend's ordinary kernel-argument
+adaptation a coupled attempt workspace is an isbits tree whose array storage remains on Metal or
+ROCm.
 """
 struct SitePropertyExecutionState{Name, O <: AbstractSiteOwnershipPolicy,
         A <: AbstractArray}
