@@ -78,6 +78,22 @@ end
         energies = (fixture.volume, fixture.contact, fixture.boundary,))
     property = SiteProperty(:activity; initial = 0.0f0,
         ownership = AcceptedCopyManaged())
+    fill_checks = Ref(0)
+    validated_fill = SiteProperty(:validated_fill; initial = 2.0f0,
+        invariant = value -> begin
+            fill_checks[] += 1
+            value >= 0.0f0
+        end,
+        ownership = PreserveAtSite())
+    @test fill_checks[] == 1
+    validated_fill_state = initialize_site_property(
+        validated_fill, zeros(UInt8, fixture.domain.dims))
+    @test fill_checks[] == 1
+    @test all(==(2.0f0), validated_fill_state.values)
+    @test_throws ArgumentError SiteProperty(:invalid_activity;
+        initial = -1.0f0,
+        invariant = CorePotts.ActivityBounds(0.0f0, 10.0f0),
+        ownership = AcceptedCopyManaged())
     site_state = initialize_site_property(
         property, zeros(UInt8, fixture.domain.dims))
     update = AcceptedCopyUpdate(
