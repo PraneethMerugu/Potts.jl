@@ -148,6 +148,7 @@ acceptance_requires = [
     "unsupported experimental-family rejection",
     "device kernels with no scalar host loop or fallback",
     "real-hardware Metal and ROCm process evidence",
+    "Wang secretome field, uptake, and exact split order qualified inside the Wang slice rather than deferred to the later field-model slice",
     "Wortel, Wang, and field-model CPU-plus-device vertical slices",
 ]
 
@@ -176,6 +177,7 @@ acceptance_requires = [
     "exact order and same-time conflict fixtures",
     "stage-boundary and gap fixtures",
     "multirate conversion fixtures",
+    "Wang exact Potts/field/history/uptake/ODE/focal/alignment/force order and MCS 120/210/211 visibility on CPU, Metal, and ROCm",
     "restart from every completed-MCS boundary",
     "no hidden synchronization or per-entry host transfer on Metal and ROCm",
     "real-hardware same-time and multirate schedule fixtures",

@@ -848,7 +848,9 @@ and the [GPU-native implementation plan](audits/phase-14-gpu-native-implementati
 backend-resident Metal and ROCm qualification for every stable Phase 14 execution capability.
 Wortel GPU closure passed on real Metal and ROCm on 2026-07-25. Wang is therefore open; its
 [source/runtime order audit](audits/phase-14-wang-order-audit.md) is accepted and implementation is
-the current gate.
+the current gate. Wang's periodic secretome field, per-substep constant-concentration enforcement,
+uptake, and field/ODE split order belong to the Wang CPU/Metal/ROCm gate; the later field-model
+slice broadens that already-qualified substrate and cannot defer or supply a missing Wang path.
 
 ### Phase 14.1: Modeling Primitives and Conformance
 

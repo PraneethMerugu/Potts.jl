@@ -30,12 +30,12 @@ For one experienced contributor, the expected implementation effort is approxima
 | --- | ---: | --- |
 | Common device state/workspace substrate | 1–2 weeks | type-stable adaptation across every state family |
 | Wortel Act Metal/ROCm closure | 1–2 weeks | atomic accepted-copy coupling and Metal numerical profile |
-| Wang history/ODE/relationship/multirate slice | 2–3 weeks | bounded dynamic graph and deterministic transactions |
-| First field model | 2–3 weeks | stencils, reductions, splitting, and mass balance |
+| Wang history/ODE/relationship/multirate/secretome slice | 3–5 weeks | bounded dynamic graph, field kernels, and deterministic transactions |
+| First additional field model | 1–2 weeks | broadening Wang's field substrate to new boundaries, splitting, and mass balance |
 | Remaining lifecycle/event/mapping breadth | 2–4 weeks | bounded queues, conflicts, and deterministic reductions |
 | Hardware qualification and performance closure | 1–2 weeks, overlapping | real-hardware availability and backend compiler defects |
 
-The realistic total is **8–12 engineer-weeks**, or roughly **6–9 calendar weeks** with parallel
+The realistic total is **9–13 engineer-weeks**, or roughly **7–10 calendar weeks** with parallel
 Metal/ROCm qualification and prompt hardware access. The Act slice alone is moderate: about
 one week for a first correct device path and another several days for qualification and evidence.
 Dynamic relationships and event/lifecycle queues dominate uncertainty.
@@ -140,35 +140,62 @@ Gate:
 
 Only after G2 passes may Wang implementation begin.
 
-### G3 — Wang GPU closure
+### G3 — Wang CPU/Metal/ROCm closure
+
+G3 includes every execution capability required by Wang. In particular, Wang's secretome field is
+not deferred to G4. Each reusable law is implemented and proven first through the ordinary
+sequential CPU reference, then through backend-resident Metal and ROCm production paths over the
+same canonical plan.
 
 Deliver:
 
 - device cell state and bounded ring histories;
 - fixed-step Euler/Heun/RK4 kernels for the admitted per-cell systems;
 - synchronous rule and mapping kernels;
+- ordinary CPU and backend-resident Metal/ROCm evolving-field state and preallocated solver
+  workspaces for the Wang two-dimensional periodic secretome profile;
+- the source-compatible scaled field step: diffusion followed by medium constant-concentration
+  enforcement in every substep;
+- deterministic secretome uptake and calibration reductions that publish before the same-MCS ODE;
 - bounded relationship graph in canonical structure-of-arrays form;
-- deterministic request generation, conflict resolution, and commit;
+- deterministic focal-topology request generation plus accepted-copy conflict resolution and
+  commit with Potts ownership;
+- ten-MCS relationship retuning distinct from accepted-copy topology mutation;
 - device-safe endpoint retirement and lifecycle cleanup;
-- exact multirate launch schedule with device-resident process state; and
+- exact Potts/field/history/uptake/ODE/focal/alignment/force launch schedule with device-resident
+  process state; and
 - bounded observation reducers.
 
 Gate:
 
-- analytic ODE/history fixtures on all backends;
-- relationship create/remove/retune and capacity truth tables;
-- lifecycle generation/reuse rejection;
-- same-time schedule ordering;
-- restart from every declared stable boundary;
-- no unobserved transfers; and
-- Wang bounded model smoke and performance profiles on Metal and ROCm.
+- analytic ODE/history fixtures on sequential CPU, Metal, and ROCm;
+- periodic diffusion, per-substep constant concentration, uptake, calibration, and field-balance
+  fixtures on sequential CPU, Metal, and ROCm;
+- relationship create/remove/retune, accepted-copy visibility, and capacity truth tables on all
+  three backends;
+- lifecycle generation/reuse rejection on all three backends;
+- exact source-order and MCS 120, 210, and 211 visibility fixtures on all three backends;
+- restart from every declared stable boundary on all three backends;
+- no unobserved transfer, scalar host loop, host callback, or host fallback on either GPU;
+- device-code, allocation, synchronization, transfer, and memory evidence on real Metal and ROCm;
+  and
+- Wang bounded-model correctness and performance profiles on sequential CPU, Metal, and ROCm.
 
-### G4 — Field-model GPU closure
+Failure of any required backend leaves Wang Provisional and prevents G4 from opening. CPU
+correctness cannot compensate for a missing or host-assisted GPU path, and GPU agreement cannot
+compensate for a missing CPU reference.
+
+### G4 — General field-model CPU/Metal/ROCm closure
+
+G4 reuses the field state, periodic stencil, constant-concentration, uptake, and split-order
+substrate already qualified by Wang. It broadens field semantics for the next selected field model;
+it is not the first implementation of fields and cannot retroactively supply a missing Wang
+capability.
 
 Deliver:
 
-- device-resident evolving fields and solver workspaces;
-- boundary-aware diffusion/reaction stencils;
+- reusable backend-resident evolving fields and solver workspaces beyond the Wang profile;
+- additional boundary-aware diffusion/reaction stencils;
 - deterministic or explicitly qualified secretion/uptake reductions;
 - cell/field exchange kernels;
 - exact split-order execution;
@@ -177,12 +204,13 @@ Deliver:
 
 Gate:
 
-- manufactured solutions and analytic decay/diffusion;
-- mass/source/sink balance;
-- periodic, no-flux, and admitted fixed boundary fixtures;
-- split-order, overlap, and empty-domain truth tables;
-- checkpoint/restart; and
-- bounded selected-field-model smoke and performance profiles on both GPUs.
+- manufactured solutions and analytic decay/diffusion on sequential CPU, Metal, and ROCm;
+- mass/source/sink balance on all three backends;
+- periodic, no-flux, and admitted fixed boundary fixtures on all three backends;
+- split-order, overlap, and empty-domain truth tables on all three backends;
+- checkpoint/restart on all three backends; and
+- bounded selected-field-model correctness and performance profiles on sequential CPU, Metal, and
+  ROCm.
 
 ### G5 — Remaining selected-model capabilities
 

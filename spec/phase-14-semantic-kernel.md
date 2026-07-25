@@ -638,6 +638,20 @@ to exact by successful execution.
 - spatial: distinct proposal/contact/focal/field/query relations;
 - algorithm: source-attempt identity.
 
+The Wang lowering MUST encode the accepted order as Potts and accepted-copy focal-topology commit;
+scaled secretome field solve with diffusion followed by constant-medium concentration in each
+substep; centroid sampling; self-polarity derivation; secretome uptake/calibration; same-MCS ODE
+advance; ten-MCS focal retuning; synchronous neighbor-polarity alignment; protrusion-force
+publication; lifecycle; and observations. The MCS 120, 210, and 211 read/write visibility
+boundaries are direct conformance fixtures, not model-level assumptions.
+
+Wang is one indivisible CPU/Metal/ROCm vertical slice. Its secretome field is part of Wang and
+cannot be deferred to the later general field-model slice. Every Wang state family, process law,
+accepted-copy effect, scheduler entry, observation reducer, checkpoint block, and Potts coupling
+MUST have an ordinary sequential CPU reference plus backend-resident production execution on Metal
+and ROCm before the slice passes. A host field or ODE solve, host-managed relationship graph,
+per-MCS transfer, scalar host loop, or silent fallback makes the Wang backend profile unsupported.
+
 Each sketch MUST become an executable lowering fixture before its vertical slice is considered
 complete.
 
@@ -707,9 +721,10 @@ evidence closed the second half on 2026-07-25 by proving:
 ### Expansion gates
 
 Wortel has passed both its CPU reference and Metal/ROCm closure, so Wang is open for the
-history/ODE/relationship/multirate breadth. Only after Wang passes the same CPU-plus-device gate may
-the first field model open broad field solver and exchange work. Every later stable execution
-capability follows the same reference-then-device promotion rule.
+history/ODE/relationship/multirate breadth and its required periodic secretome field. Only after
+that complete Wang CPU/Metal/ROCm slice passes may the first additional field model open broader
+boundary, solver, and exchange work. Every later stable execution capability follows the same
+reference-then-device promotion rule.
 
 ## Phase 13 Freeze Impact
 

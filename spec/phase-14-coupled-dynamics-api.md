@@ -215,8 +215,9 @@ Within-MCS order and across-MCS experimental stages are distinct. `MCSPlan` defi
 
 ```julia
 migration_protocol = StagedProtocol(
-    ProtocolStage(:relax; mcs = MCSRange(1, 120)),
-    ProtocolStage(:pre_signal; mcs = MCSRange(121, 210)),
+    ProtocolStage(:relax; mcs = MCSRange(1, 119)),
+    ProtocolStage(:initial_adhesion; mcs = MCSRange(120, 209)),
+    ProtocolStage(:switch_calibration; mcs = MCSRange(210, 210)),
     ProtocolStage(:stimulated; mcs = MCSRange(211, 500)),
 )
 ```
@@ -231,8 +232,9 @@ Piecewise model data uses `ScheduledParameter` rather than mutating `ModelParame
 focal_strength = ScheduledParameter(
     :focal_strength,
     migration_protocol;
-    relax = 20.0f0,
-    pre_signal = 20.0f0,
+    relax = 0.0f0,
+    initial_adhesion = 20.0f0,
+    switch_calibration = lambda_fpp,
     stimulated = lambda_fpp,
 )
 ```
@@ -322,12 +324,17 @@ Processes in one phase do not see each other's writes. Sequential dependence req
 separately named phases:
 
 ```julia
-Phase(:field_exchange, Exchange(secretome_exchange)),
+Phase(:field_exchange, Exchange(secretome_uptake)),
 Phase(:cell_signaling, Advance(rac_dynamics; interval = 1.0f0)),
 ```
 
 Tuple order within one `Phase` is representational and cannot resolve write conflicts. Phase names
 are semantic identities and appear in inspection, fingerprints, checkpoints, and evidence.
+
+A phase MAY declare an integer-MCS schedule. An omitted schedule means every MCS. The schedule is
+evaluated before the phase snapshot is captured, and a phase that is not due performs no reads,
+writes, clock advance, or publication. The normalized schedule is part of the plan fingerprint;
+process-local frequency counters are not a second scheduling authority.
 
 ### PottsAttempts
 
@@ -491,12 +498,9 @@ sensed_secretome = CellProperty(
     retirement = Reset(),
 )
 
-secretome_exchange = FieldExchange(
-    :secretome_exchange,
+secretome_uptake = FieldExchange(
+    :secretome_uptake,
     secretome;
-    sources = (
-        ConstantConcentration(Medium, 1.0f0),
-    ),
     sinks = (
         Uptake(
             Tumor;
@@ -508,6 +512,12 @@ secretome_exchange = FieldExchange(
     ),
 )
 ```
+
+For Wang, `ConstantConcentration(Medium, 1.0f0)` belongs to the forcing profile of
+`secretome_dynamics`, where it is enforced after diffusion in every scaled field substep.
+`secretome_uptake` therefore contains only the later Python-equivalent cell uptake. A model whose
+source applies a concentration reservoir at a distinct exchange boundary may instead place that
+constraint in its named exchange process; the two plan identities are not interchangeable.
 
 An exchange phase reads one ownership, geometry, cell-property, and field snapshot. It constructs
 source/sink contributions and cell outputs with an explicit reduction law. It then publishes all
@@ -713,7 +723,16 @@ metadata, not by requiring identical Julia types.
 
 A ModelingToolkit-authored law does not imply GPU support.
 
-Initial stable execution is sequential CPU. A GPU claim requires proof that:
+Every stable Phase 14 execution capability, and every capability used by a release published
+model, requires all three of:
+
+1. an ordinary sequential CPU reference implementation;
+2. backend-resident production execution on Metal; and
+3. backend-resident production execution on ROCm.
+
+Implementation proceeds CPU first so the reference fixes semantics, but CPU-first does not permit
+a CPU-only stable or release claim. Metal and ROCm are mandatory qualification targets for the
+same canonical model. Qualification requires proof that:
 
 - the compiled numerical function is device compatible;
 - state and input arrays remain backend-resident;
@@ -853,31 +872,72 @@ model = PottsModel(
     focal_strength,
     secretome,
     secretome_dynamics,
-    secretome_exchange,
+    secretome_uptake,
     rac_dynamics,
     centroid_sample,
     polarity_from_history,
-    junction_update,
+    focal_topology_on_accept,
+    focal_parameter_update,
     neighbor_alignment,
     protrusion_drive,
+    wang_observations,
     MCSPlan(
-        PottsAttempts(),
-        Phase(:sample_centroids, centroid_sample),
-        Phase(:update_self_polarity, polarity_from_history),
-        Phase(:field_exchange, Exchange(secretome_exchange)),
+        PottsAttempts(on_accept = (focal_topology_on_accept,)),
+        Phase(:secretome_field_solve,
+            Advance(secretome_dynamics; interval = OneMCS())),
+        Phase(:sample_centroids,
+            Sample(centroid_sample)),
+        Phase(:update_self_polarity,
+            Update(polarity_from_history)),
+        Phase(:secretome_uptake,
+            Exchange(secretome_uptake)),
         Phase(:intracellular_dynamics,
             Advance(rac_dynamics; interval = OneMCS())),
-        Phase(:update_junctions, junction_update),
-        Phase(:align_neighbor_polarity, neighbor_alignment),
-        Phase(:update_protrusion, protrusion_drive),
+        Phase(:retune_focal_relationships,
+            Update(focal_parameter_update);
+            schedule = PeriodicMCS(10, 10)),
+        Phase(:align_neighbor_polarity,
+            Update(neighbor_alignment)),
+        Phase(:update_protrusion,
+            Update(protrusion_drive)),
         LifecyclePhase(),
-        ObservationPhase(),
+        ObservationPhase(wang_observations...),
     ),
 )
 ```
 
-This plan is not accepted until its phase order is checked against CompuCell3D 4.2.5 and the pinned
-Python steppable registration order.
+This is the accepted source-order lowering shape. The field solve follows Potts and precedes every
+Wang cell process. Its CompuCell3D-compatible numerical profile performs diffusion and then the
+medium `ConstantConcentration` operation inside every scaled field substep. The separately named
+uptake phase runs only after the completed field solve and publishes calibration or signal state
+before the same-MCS ODE advance.
+
+The source's migration steppable is decomposed into separately named phases because current
+centroids are appended before polarity is derived and uptake publishes before the ODE. This
+decomposition preserves source visibility; combining these invocations into one immutable-snapshot
+phase would not. Neighbor means and aligned-polarity writes remain one synchronous process so no
+cell observes another cell's newly aligned polarity.
+
+Focal-link creation and removal are accepted-copy relationship effects committed with Potts
+ownership, not a post-Potts relationship phase. The ten-MCS focal phase only retunes the
+relationships that already exist. `PeriodicMCS(10, 10)` denotes the positive target-MCS portion of
+the source `mcs % 10 == 0` cadence; initialization owns any source-MCS-zero effect.
+
+The staged protocol uses `:initial_adhesion` at MCS 120, `:switch_calibration` at MCS 210, and
+`:stimulated` from MCS 211. Consequently, Potts at MCS 120 still reads focal strength 0, Potts at
+MCS 210 still reads 20, and Potts at MCS 211 is the first to read the scanned strength and force
+published at MCS 210. Direct fixtures at MCS 120, 210, and 211 are mandatory.
+
+`focal_strength` is the scheduled target read only by `focal_parameter_update`. Potts energy reads
+the last published focal payload on each relationship, never the upcoming scheduled target.
+Reading `focal_strength` directly from Potts would violate both the MCS 120 and MCS 210 source
+boundaries.
+
+This sketch is not a CPU-only reference target. Before the Wang vertical slice passes, every state,
+law, process, plan entry, accepted-copy effect, observation reducer, and persistence block used
+above MUST execute through the same canonical model on sequential CPU, Metal, and ROCm. GPU state
+MUST remain backend resident during unobserved stepping; host field solves, host ODE loops,
+host-managed relationship graphs, per-MCS transfers, and silent fallback are disqualifying.
 
 ### CNV
 
@@ -1054,7 +1114,8 @@ This candidate cannot become Accepted until:
 
 1. the Wortel source fixes accepted protrusion, retraction, decay, and observation ordering;
 2. the Merks source or an explicit ambiguity plan fixes its PDE stencil and split order;
-3. the Wang source baseline fixes CompuCell3D steppable, field, Potts, and observation order;
+3. the accepted Wang CompuCell3D order is encoded in one inspectable plan and its MCS 120, 210,
+   and 211 visibility boundaries pass directly;
 4. the CNV scenario audit identifies the minimum field, relationship, degradation, and lifecycle
    process set;
 5. direct SciML and ModelingToolkit prototypes demonstrate stable mappings without symbolic object

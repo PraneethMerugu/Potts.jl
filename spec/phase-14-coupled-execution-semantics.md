@@ -372,8 +372,9 @@ A `StagedProtocol` contains named `ProtocolStage` values over explicit target-MC
 
 ```julia
 protocol = StagedProtocol(
-    ProtocolStage(:relax; mcs = MCSRange(1, 120)),
-    ProtocolStage(:pre_signal; mcs = MCSRange(121, 210)),
+    ProtocolStage(:relax; mcs = MCSRange(1, 119)),
+    ProtocolStage(:initial_adhesion; mcs = MCSRange(120, 209)),
+    ProtocolStage(:switch_calibration; mcs = MCSRange(210, 210)),
     ProtocolStage(:stimulated; mcs = MCSRange(211, 500)),
 )
 ```
@@ -405,8 +406,9 @@ stage-local clock are available to qualified scheduled laws.
 focal_strength = ScheduledParameter(
     :focal_strength,
     protocol;
-    relax = 20.0f0,
-    pre_signal = 20.0f0,
+    relax = 0.0f0,
+    initial_adhesion = 20.0f0,
+    switch_calibration = scanned_strength,
     stimulated = scanned_strength,
 )
 ```
@@ -416,6 +418,9 @@ meaning. Every covered stage has exactly one compatible value.
 
 Components and processes read the value selected for the target MCS. A value change is visible from
 the first phase of the new stage unless the source requires a separately named in-MCS update phase.
+Wang uses the latter rule: the scheduled value is an input to its ten-MCS focal-retuning phase,
+while Potts reads the previously published per-relationship payload. Thus MCS 120 Potts reads 0,
+MCS 210 Potts reads 20, and MCS 211 is the first Potts step to read the scanned payload.
 
 ### Process activation
 
@@ -575,7 +580,9 @@ Before acceptance, the contract requires:
 9. terminal failure tests for every phase category;
 10. completed-MCS checkpoint/restart tests at every protocol boundary;
 11. an external downstream process fixture using only public protocols;
-12. CPU reference execution through one complete Wortel or Wang vertical slice; and
+12. sequential CPU reference plus backend-resident Metal and ROCm execution through every complete
+    release vertical slice, including all Wang field, ODE, history, relationship, plan,
+    observation, and persistence capabilities; and
 13. backend preflight tests that reject every unqualified process/backend combination before
     execution.
 
@@ -587,13 +594,17 @@ Before acceptance, the contract requires:
   distinct semantic identity derived from process identity, phase identity, and explicit invocation
   label. Continuous intervals for the same process cannot overlap, and its completed clock must
   equal the plan-implied endpoint.
-- The first stable `AcceptedCopyUpdate` writer targets one or more declared `SiteProperty` instances
-  at transaction-local gained or lost sites. Arbitrary cell, field, relationship, lifecycle, solver,
-  and observation mutation is outside that hook. A later state family requires an additive contract.
+- `AcceptedCopyUpdate` targets one or more declared `SiteProperty` instances at transaction-local
+  gained or lost sites. Wang additionally requires a distinct typed accepted-copy relationship
+  effect that emits bounded focal-topology requests and commits them atomically with ownership.
+  This does not authorize arbitrary cell, field, lifecycle, solver, or observation mutation inside
+  Potts evaluation; each admitted state family has its own read/write, capacity, conflict, and
+  backend contract.
 - Only `BestEffortTelemetry` may use nonfatal observation failure, under the restrictions above.
 
-The remaining open items are source transcriptions rather than architectural choices:
+The remaining open items are implementation or source-transcription closures rather than
+architectural choices:
 
-- exact Wortel activity eligibility and update order;
-- exact Wang CompuCell3D steppable ordering; and
+- executable CPU/Metal/ROCm lowering of the accepted Wang CompuCell3D order and boundary fixtures;
+- CompuCell3D attempt-budget accounting for the Wang source profile; and
 - whether Graner--Glazier observation annealing mutates the continuing source trajectory.
