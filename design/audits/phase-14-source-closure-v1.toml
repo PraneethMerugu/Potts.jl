@@ -175,8 +175,9 @@ transcribed_execution = [
     "231 scan combinations: focal strength 0:50:1000 and protrusion force 0:30:300",
     "50 repeats per scan combination; geometric features at MCS 90 and 270",
     "relax_step=120 and switch_step=210",
-    "registered order: migration/secretome/history every MCS, ODE every MCS, focal parameters every 10 MCS, polarity/force/output every MCS",
-    "five-MCS displacement polarity, Antimony step size 2880, Hill threshold 40 with exponent 4, neighbor-polarity scale 0.4",
+    "exact order: Potts, DiffusionSolverFE, BlobInitializer, migration/secretome/history, ODE, focal parameters when mcs%10==0, polarity/force/output, housekeeping",
+    "source displacement is x(t)-x(t-4) after append while paper Equation 11 states x(t)-x(t-5); both are registered as source baseline and paper-intent sensitivity variant",
+    "Antimony step size 2880, Hill threshold 40 with exponent 4, neighbor-polarity scale 0.4",
 ]
 source_file_sha256 = [
     "ParameterScanSpecs.json=258d44a0e68d9187476f68bf1059af67e15a8393b5e32b5b3523147acad98918",
@@ -188,7 +189,7 @@ source_file_sha256 = [
 ]
 sensitivity_axes = [
     "missing CompuCell3D and NumPy seeds replaced by a preregistered paired semantic-seed ensemble",
-    "foreign steppable/Potts/field order checked by source-runtime microfixtures",
+    "source x(t)-x(t-4) displacement compared with the paper-intent x(t)-x(t-5) variant",
     "archived binary classifier outputs compared with a transparent registered geometric-observable table rather than silently re-trained",
 ]
 failure_rule = "Paper-exact classifier agreement and transparent mechanistic observables are reported independently; a match in one does not erase disagreement in the other."

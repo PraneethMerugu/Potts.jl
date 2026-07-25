@@ -56,6 +56,7 @@ include("conformance/RealisticAnalysisArchiveComparison.jl")
         include("conformance/test_phase13_metal_realistic_qualification_archive.jl")
         include("conformance/test_phase13_rocm_realistic_qualification_archive.jl")
         include("conformance/test_phase13_rocm_device_code_archive.jl")
+        include("conformance/test_phase14_wang_order.jl")
         include("conformance/test_phase9_distributed.jl")
     end
 end

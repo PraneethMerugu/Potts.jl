@@ -138,10 +138,12 @@ driver, geometric feature calculation, two-step clustering, saved transforms, an
 The source fixes 231 combinations—21 focal strengths and 11 protrusion forces—50 repeats per
 combination, and analysis at MCS 90 and 270. The XML identifies CompuCell3D 4.2.5 and uses distinct
 orders for proposal, contact, focal activation, focal search, field, and cell-neighbor queries.
-The registered Python order and frequencies make five-MCS centroid history, cell ODE state, field
-uptake, ten-MCS focal-link retuning, neighbor polarity alignment, and Hill-scaled protrusion drive
-explicit. Missing foreign RNG seeds and built-in scheduler placement remain named microfixture
-gates.
+The registered Python order and frequencies make centroid history, cell ODE state, field uptake,
+ten-MCS focal-link retuning, neighbor polarity alignment, and Hill-scaled protrusion drive explicit.
+The [accepted order audit](phase-14-wang-order-audit.md) and exact CompuCell3D 4.2.5 runtime oracle
+close built-in scheduler placement. They also expose a paper/source discrepancy: Equation 11 says
+`x(t)-x(t-5)`, while the source appends `x(t)` and selects `[-5]`, yielding `x(t)-x(t-4)`.
+Missing foreign RNG seeds remain an explicit later reproduction gate.
 
 Authority: paper and supplement for intent, Zenodo `paper-v0` for implementation evidence,
 CompuCell3D 4.2.5 for simulator behavior, then author clarification.
@@ -233,7 +235,8 @@ validation under Decision 0032.
 
 Phase 14.1 may now begin one vertical slice at a time after that slice's Provisional D9 contract is
 accepted through its registered CPU, Metal, and ROCm prototype and conformance evidence. The
-Wortel CPU reference is complete, but its Metal/ROCm closure is the current gate and blocks Wang.
+Wortel CPU, Metal, and ROCm gate passed on 2026-07-25; Wang is open and its exact execution-order
+audit is accepted.
 This closure does not claim a published-model reproduction, claim Morpheus parity, or add
 Mermaid.jl to the roadmap. Automatic MorpheusML import remains optional after hand-authored
 semantic parity.

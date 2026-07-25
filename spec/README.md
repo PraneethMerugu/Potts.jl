@@ -147,10 +147,11 @@ acceptance or implementation claims. Decision 0031 and the completed focused int
 those requirements into registry v2's seven-area kernel. Decision 0032 requires every stable
 Phase 14 execution capability to pass a sequential CPU reference and backend-resident,
 real-hardware Metal and ROCm qualification. The
-[Wortel Act-CPM CPU-reference vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
-now passes; its Metal/ROCm closure is current, and Wang remains gated until that closure passes.
-The seven contracts remain Provisional outside proven scope. Registry v1 spellings remain internal
-historical prototypes and are not compatibility commitments.
+[Wortel Act-CPM vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
+now passes on CPU, Metal, and ROCm. Wang is open, and its exact
+[source/runtime execution order](../design/audits/phase-14-wang-order-audit.md) is accepted before
+implementation. The seven contracts remain Provisional outside proven scope. Registry v1 spellings
+remain internal historical prototypes and are not compatibility commitments.
 
 ## Conformance Principle
 

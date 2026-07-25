@@ -5,10 +5,11 @@ Version: `0.2-provisional`
 Status: Accepted architecture; individual Phase 14.1 contracts remain Provisional until their
 registered vertical-slice gates pass
 
-Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24. Its
-real-hardware Metal/ROCm closure is the next permitted vertical slice; Wang remains gated. This
-proves only the CPU Wortel-scoped subset and does not promote the seven contracts beyond their
-registered Provisional status.
+Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24 and its
+real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang is open; its exact
+[source/runtime order](../design/audits/phase-14-wang-order-audit.md) is accepted. This proves only
+the bounded Wortel subset and Wang order authority and does not promote the seven contracts beyond
+their registered Provisional status.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
@@ -626,11 +627,12 @@ to exact by successful execution.
 
 ### Wang 2025 collective tumor migration
 
-- state: cell ODE state, five-MCS centroid history, field state, and focal relationships;
+- state: cell ODE state, bounded centroid history with registered source/paper offset variants,
+  field state, and focal relationships;
 - process: fixed-step ODE/rules, uptake, focal creation/retuning, polarity alignment, and
   protrusion-drive mapping;
-- plan: relaxation/switch stages, five/ten-MCS cadences, source plugin order, and observations at
-  MCS 90 and 270;
+- plan: relaxation/switch stages, per-MCS history and ten-MCS focal cadence, source plugin order,
+  and observations at MCS 90 and 270;
 - lifecycle: generation-safe state and relationship cleanup;
 - observation: geometric features, migration modes, and parameter-map primitives;
 - spatial: distinct proposal/contact/focal/field/query relations;
@@ -690,8 +692,8 @@ The first vertical slice MUST prove:
 - restart matches uninterrupted execution; and
 - unsupported backends reject before mutation.
 
-The CPU-reference evidence closes only the first half of this gate. Wortel opens Wang only after
-real-hardware Metal and ROCm evidence also proves:
+The CPU-reference evidence closed the first half of this gate. Real-hardware Metal and ROCm
+evidence closed the second half on 2026-07-25 by proving:
 
 - backend-resident activity state, accepted-copy updates, per-MCS decay, and neighborhood
   reductions without scalar host loops or hidden fallback;
@@ -704,7 +706,7 @@ real-hardware Metal and ROCm evidence also proves:
 
 ### Expansion gates
 
-Only after Wortel passes both its CPU reference and Metal/ROCm closure may Wang open the
+Wortel has passed both its CPU reference and Metal/ROCm closure, so Wang is open for the
 history/ODE/relationship/multirate breadth. Only after Wang passes the same CPU-plus-device gate may
 the first field model open broad field solver and exchange work. Every later stable execution
 capability follows the same reference-then-device promotion rule.

@@ -37,6 +37,8 @@ closures = load_toml("design/audits/phase-14-source-closure-v1.toml")
 matrix = load_toml("design/audits/phase-14-model-capability-matrix-v1.toml")
 work = load_toml("design/audits/phase-14-d9-work-items-v1.toml")
 morpheus = load_toml("design/audits/phase-14-morpheus-continuous-semantics-v1.toml")
+wang_order = load_toml("design/audits/phase-14-wang-order-oracle-v1.toml")
+wang_order_evidence = load_toml("design/evidence/phase-14/wang-order/index.toml")
 old_registry = load_toml("spec/phase-14-contract-registry-v1.toml")
 registry = load_toml("spec/phase-14-contract-registry-v2.toml")
 wortel_evidence_path = joinpath(
@@ -49,6 +51,9 @@ check(isfile(gpu_plan_path), "missing Phase 14 GPU-native implementation plan")
 gpu_decision_path = joinpath(
     REPO, "spec", "decisions", "0032-phase-14-gpu-native-promotion.md")
 check(isfile(gpu_decision_path), "missing Phase 14 GPU-native promotion decision")
+wang_order_audit_path = joinpath(
+    REPO, "design", "audits", "phase-14-wang-order-audit.md")
+check(isfile(wang_order_audit_path), "missing Wang execution-order audit")
 
 source_rows = sources["models"]
 closure_rows = closures["models"]
@@ -88,6 +93,13 @@ check(closure_ids == expected_models, "source-closure rows differ from the froze
 check(matrix["status"] == "accepted-requirements-baseline", "capability matrix is not an accepted requirements baseline")
 check(work["status"] == "accepted-phase14.1-simplified-gpu-native-planning", "D9 work-item registry is not accepted for the simplified GPU-native Phase 14.1 architecture")
 check(morpheus["status"] == "accepted-requirements-baseline", "Morpheus matrix is not an accepted requirements baseline")
+check(wang_order["status"] == "accepted-source-and-runtime-order",
+    "Wang execution-order authority is not accepted")
+check(wang_order_evidence["status"] == "pass",
+    "Wang CompuCell3D 4.2.5 runtime oracle did not pass")
+check(wang_order["history_discrepancy"]["classification"] ==
+      "paper-t-minus-5_source-t-minus-4",
+    "Wang paper/source history discrepancy is not registered")
 check(occursin("phase14.1-owner-approved-simplified", registry["status"]), "contract registry is not the owner-approved simplified Phase 14.1 set")
 expected_contracts = Set([
     "state",
@@ -343,6 +355,7 @@ phase14_markdown = [
     joinpath(REPO, "spec/decisions/0031-phase-14-single-semantic-kernel.md"),
     gpu_decision_path,
     gpu_plan_path,
+    wang_order_audit_path,
     joinpath(REPO, "design/audits/phase-14-semantics-simplification-audit.md"),
     joinpath(REPO, "design/audits/phase-14-semantics-focused-interview.md"),
 ]
@@ -386,7 +399,8 @@ if isempty(failures)
     println("  all $(length(old_contract_ids)) registry v1 contracts dispositioned into $(length(contract_ids)) registry v2 semantic areas")
     println("  $(length(contract_ids)) provisional kernel contracts covered by $(length(work_ids)) vertical work items")
     println("  $(length(morpheus_feature_ids)) Morpheus semantic requirements traced to registered contracts")
-    println("  Decisions 0031/0032 and all 15 owner choices accepted; Wortel CPU-reference passed and Metal/ROCm closure is current")
+    println("  Decisions 0031/0032 and all 15 owner choices accepted; Wortel CPU/Metal/ROCm G2 passed")
+    println("  Wang source/runtime order accepted, including the explicit paper t-5 versus source t-4 history variant")
     println("  D10 additive classification preserved; Mermaid.jl remains out of scope")
 else
     println(stderr, "Phase 14 architecture closure failed with $(length(failures)) issue(s):")

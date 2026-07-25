@@ -448,8 +448,8 @@ title = "Protrusion force and cell-cell adhesion-induced polarity alignment gove
 citation = "H. Wang, C. Ardila, A. Jindal, V. Aggarwal, W. Wang, J. Vande Geest, Y. Jiang, J. Xing, and S. Sant, Biophysical Journal 124(10), 1674-1692 (2025)."
 doi = "10.1016/j.bpj.2025.04.010"
 paper_url = "https://pmc.ncbi.nlm.nih.gov/articles/PMC12256861/"
-paper_sha256 = ""
-paper_hash_scope = "freely accessible article inspected 2026-07-24; checksum not registered because no reusable publisher PDF endpoint was accepted for this audit"
+paper_sha256 = "69fad81266dd41e1ba1e69fba3a7bed88efbac9dec2818e055cb4fd15beaa600"
+paper_hash_scope = "PMC-rendered 7,684,284-byte reference PDF fetched 2026-07-25 for private audit; not vendored because it is outside the PMC OA redistribution collection"
 supplementary_sources = ["Zenodo paper-v0 at https://doi.org/10.5281/zenodo.14928214", "Git source revision 60ebcf013aafefdff39ebe566114ee79f2a6e54d"]
 data_sources = ["s3_model_analysis/20250129-msmm-model-analysis/12222021_force_fpp_scan_cluster/{geo_270.csv,geo_props.csv,scaled_geo_diff.csv}", "s3_model_analysis/clustering_models/{scaler1.pkl,kmean1.pkl,umap2.pkl,kmean2.pkl}", "s4_figures/Figure3/{Directional,Radial} source trajectories"]
 primary_target = "Figure 3 simulated radial-versus-directional migration modes and the migration-mode map over protrusion-force and focal-adhesion strength"
@@ -482,17 +482,17 @@ simulation_horizon = "500 MCS"
 initialization = "BlobInitializer centered at (128,128), radius 33, width 5, gap 0, one cell type"
 initialization_checksum = "source BlobInitializer and XML are version-pinned; the realized logical-state checksum is generated during Phase 14.3"
 staged_protocol = "relax through MCS 120; establish initial adhesion/polarity regime; switch signal and scanned focal strength at MCS 210"
-update_schedule = "registered order: migration/secretome/history frequency 1, ODE frequency 1, focal parameters frequency 10, then ODE/polarity/force/output frequency 1; ordering relative to built-in Potts and DiffusionSolverFE requires a source-runtime microfixture"
-field_splitting = "DiffusionSolverFE runs a periodic x/y secretome field with constant medium concentration; exact built-in placement relative to Python steppables is a source-runtime microfixture"
+update_schedule = "accepted exact order: Potts; XML DiffusionSolverFE then BlobInitializer; migration/secretome/history frequency 1; ODE frequency 1; focal parameters when mcs%10==0; polarity/force/output frequency 1; then restart/snapshot/steering housekeeping"
+field_splitting = "DiffusionSolverFE runs after Potts and before all Wang Python steppables; each scaled CPU substep diffuses then applies constant-concentration secretion; Python uptake follows the completed field solve"
 lifecycle = "no cell division or death in the primary target"
 seed_policy = "the source launches 50 repeats per scan combination but does not materialize NumPy or CompuCell3D seed identities; Potts.jl will preregister a paired semantic-seed ensemble"
 source_replicates = "50 repeats for each of 231 scan combinations"
 observation_schedule = "per-cell records after relaxation; geometric features at MCS 90 and 270; Figure 3 classification at MCS 270"
 analysis = "geometric feature extraction followed by a saved two-step clustering pipeline; archived source includes notebooks, scalers, clustering models, UMAP model, and Figure 3 data"
-mechanisms = ["dynamic focal-point links", "five-MCS centroid history", "vector polarity", "contact-neighbor polarity alignment", "per-cell ODE state", "secretome uptake", "Hill-scaled protrusion drive", "staged parameter switch"]
+mechanisms = ["dynamic focal-point links", "centroid displacement history", "vector polarity", "contact-neighbor polarity alignment", "per-cell ODE state", "secretome uptake", "Hill-scaled protrusion drive", "staged parameter switch"]
 mechanism_traceability = [
     "dynamic focal-point links=>dynamic-relationships",
-    "five-MCS centroid history=>cell-state-history",
+    "centroid displacement history=>cell-state-history",
     "vector polarity=>continuous-state-domains,cell-state-history",
     "contact-neighbor polarity alignment=>spatial-role-relations,cross-domain-symbol-mapping,cell-state-history",
     "per-cell ODE state=>continuous-system-language,continuous-state-domains,multirate-global-scheduling",
@@ -506,7 +506,7 @@ parameters = [
     "J(medium,medium) = -1; J(medium,cell) = -2; J(cell,cell) = -6",
     "initial focal strength = 20; scanned focal strength after switch",
     "relax_step = 120; switch_step = 210",
-    "polarity history = 5 MCS",
+    "source polarity displacement = x(t)-x(t-4) because current x(t) is appended before index -5; paper Equation 11 x(t)-x(t-5) is a named sensitivity variant",
     "neighbor-polarity scale beta = 0.4 in the primary source",
     "protrusion Hill threshold = 40; exponent = 4",
     "focal-strength scan = 0:50:1000 (21 values)",
@@ -519,7 +519,6 @@ parameter_ownership = "Every listed value remains explicit paper-v0 assembly; sc
 capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-state-domains", "continuous-system-language", "multirate-global-scheduling", "continuous-events-and-delays", "cross-domain-symbol-mapping", "dynamic-relationships", "cell-state-history", "staged-protocol", "paper-observables", "paper-initialization"]
 unresolved_ambiguities = [
     "CompuCell3D and NumPy seed identities",
-    "precise steppable order relative to Potts attempts and DiffusionSolverFE",
     "portable definition of the archived pickled clustering and UMAP transformations",
     "final classifier tolerance and transparent cross-check thresholds remain D11 preregistration items",
 ]

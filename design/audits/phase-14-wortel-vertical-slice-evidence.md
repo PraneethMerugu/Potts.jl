@@ -1,9 +1,8 @@
 # Phase 14 Wortel Act-CPM Vertical-Slice Evidence
 
-Status: CPU reference passed; Metal/ROCm implementation and qualification harness complete;
-real-hardware G2 records pending
+Status: G2 passed on CPU, real Metal, and real ROCm; Wang gate open
 
-Date: 2026-07-24
+Date: 2026-07-24; G2 closure updated 2026-07-25
 
 Normative architecture:
 [Phase 14 Single Semantic Kernel](../../spec/phase-14-semantic-kernel.md)
@@ -12,9 +11,8 @@ This record closes the first implementation gate after Decision 0031. It proves 
 Act-CPM mechanism and its semantic-kernel projections. It does **not** claim reproduction of
 Wortel et al. Figure 2 or validation of the full 51-parameter/30-seed experiment. Decision 0032
 preserves this CPU evidence and requires the Phase 14.1 backend-resident Metal/ROCm G2 records
-before Wang may open. The production path and real-hardware harness now exist, but this record does
-not mark G2 passed until both required CI artifacts are archived. Full published-model reproduction
-remains Phase 14.3 evidence work.
+before Wang may open. Both required hardware jobs and artifacts passed and were inspected on
+2026-07-25, so G2 is closed. Full published-model reproduction remains Phase 14.3 evidence work.
 
 ## Source-backed semantics implemented
 
@@ -98,8 +96,16 @@ The Metal and ROCm jobs each run a 128×128 Float32 Act workload and archive:
 - scientific/activity memory and synchronized warm-MCS timing; and
 - backend-native device code containing both the ordered Potts/Act kernel and decay kernel.
 
-G2 remains open until both real-hardware jobs pass and their uploaded artifacts are inspected.
-No documentation or preflight status should imply that an unavailable or failing backend passed.
+G2 passed in [GPU Validation run 30141545845](https://github.com/PraneethMerugu/Potts.jl/actions/runs/30141545845)
+at exact head `fedf56056ae166369095cf0b34ee3d79f0358fec`:
+
+- Metal job `89635604612` passed, including the Wortel qualification and device-code capture;
+- ROCm job `89635604619` passed, including the Wortel qualification and device-code capture; and
+- retained artifacts `gpu-smoke-metal-dc0c6b81514231a905b1432bd3e06fc57a0e7b1f` and
+  `gpu-smoke-rocm-dc0c6b81514231a905b1432bd3e06fc57a0e7b1f` were inspected.
+
+This closes the Decision 0032 prerequisite and opens the Wang slice. It does not qualify any Wang
+capability or broaden the bounded Wortel profile.
 
 ## Remaining published-model work
 

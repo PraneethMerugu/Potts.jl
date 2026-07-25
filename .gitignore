@@ -19,6 +19,8 @@
 .history/
 *.log
 *.tmp
+__pycache__/
+*.py[cod]
 
 # Generated benchmark and profiler evidence
 /benchmark/results/

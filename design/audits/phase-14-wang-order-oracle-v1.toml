@@ -1,0 +1,123 @@
+schema_version = "1.0.0"
+status = "accepted-source-and-runtime-order"
+accepted_at = "2026-07-25"
+model_id = "wang-2025-collective-tumor-migration"
+authority_order = [
+    "paper and supplement for scientific intent",
+    "Zenodo paper-v0 and Git 60ebcf013aafefdff39ebe566114ee79f2a6e54d for model implementation",
+    "CompuCell3D 4.2.5 source and exact runtime oracle for scheduler behavior",
+]
+evidence = "../evidence/phase-14/wang-order/index.toml"
+foreign_fixture = "../../integration/external/wang_order/wang_order_oracle.cc3d"
+
+canonical_mcs_order = [
+    "potts_metropolis",
+    "xml_diffusion_solver_fe",
+    "xml_blob_initializer_step_noop_after_start",
+    "python_migration_history_and_secretome",
+    "python_intracellular_ode",
+    "python_focal_parameters_if_mcs_mod_10_is_zero",
+    "python_polarity_force_and_output",
+    "restart_snapshot_screenshot_and_steering",
+]
+python_start_order = [
+    "migration_history_and_polarity_initialization",
+    "intracellular_ode_and_force_initialization_then_one_sbml_timestep",
+    "focal_parameters_default_start",
+    "polarity_force_output_default_start",
+]
+wang_run_before_mcs_steppables = []
+xml_steppable_order = ["DiffusionSolverFE", "BlobInitializer"]
+normal_python_registration_order = [
+    "migration_racdir_fppSteppable",
+    "OdeSteppable",
+    "FocalPointPlasticityParams",
+    "OdeUpdateParams",
+]
+
+[scheduler_proof]
+pre_mcs_before_compiled_step = "CompuCellSetup/simulation_setup.py:480-486"
+normal_python_after_compiled_step = "CompuCellSetup/simulation_setup.py:492-493"
+potts_before_xml_steppables = "CompuCell3D/core/CompuCell3D/Simulator.cpp:386-394"
+xml_declaration_order = "CompuCell3D/core/CompuCell3D/ClassRegistry.cpp:94-124"
+xml_frequency_iteration = "CompuCell3D/core/CompuCell3D/ClassRegistry.cpp:72-77"
+python_registration_and_frequency_iteration = "cc3d/core/SteppableRegistry.py:155-175"
+diffusion_then_secretion_per_substep = "CompuCell3D/core/CompuCell3D/steppables/PDESolvers/DiffusionSolverFE_CPU.cpp:821-858"
+live_oracle = "noncommuting Python digit append plus pre-MCS field overwrite; 11/11 rows pass on exact CC3D 4.2.5"
+
+[history_discrepancy]
+status = "accepted-source-faithful-with-paper-sensitivity-axis"
+paper_meaning = "x(t) - x(t-5), explicitly stated in Equation 11"
+source_meaning = "append x(t), then select Python index -5, which is x(t-4)"
+classification = "paper-t-minus-5_source-t-minus-4"
+implementation_rule = "The exact paper-v0 reproduction path preserves source t-minus-4; paper-intent t-minus-5 is a named sensitivity variant and may not silently replace it."
+
+[boundary_mcs_120]
+potts_uses_focal_strength = 0.0
+history_and_ode_active = false
+focal_parameter_process_runs = true
+focal_strength_written_after_potts = 20.0
+first_potts_mcs_using_focal_strength_20 = 121
+
+[boundary_mcs_210]
+potts_uses_focal_strength = 20.0
+field_solver_runs_before_python_uptake = true
+calibration_uptake_writes_multiplier = true
+calibration_uptake_writes_signal_s = false
+ode_reads_signal_s = 0.0
+focal_parameter_process_runs_after_ode = true
+polarity_force_process_reads_new_scanned_focal_strength = true
+first_potts_mcs_using_scanned_focal_strength = 211
+
+[boundary_mcs_211]
+python_uptake_writes_signal_s_before_ode = true
+ode_reads_same_mcs_signal_s = true
+potts_uses_force_written_at_end_of_mcs_210 = true
+
+[[processes]]
+id = "potts_metropolis"
+cadence_mcs = 1
+activation = "all MCS 0:499"
+reads = ["ownership", "component parameters", "lambdaVec force", "focal-link state"]
+writes = ["ownership", "cell geometry", "neighbor graph", "focal-link lifecycle"]
+visibility = "Consumes Python force and focal parameters written at the end of the preceding MCS."
+
+[[processes]]
+id = "xml_diffusion_solver_fe"
+cadence_mcs = 1
+activation = "all MCS 0:499, after Potts"
+reads = ["secretome field", "post-Potts ownership/type field"]
+writes = ["secretome field"]
+visibility = "Within each scaled substep, diffusion precedes constant-concentration secretion; all Python steppables see the completed solve."
+
+[[processes]]
+id = "python_migration_history_and_secretome"
+cadence_mcs = 1
+activation = "history all MCS; polarity and signal branches use strict boundary predicates"
+reads = ["post-Potts center of mass", "secretome field", "cell volume", "centroid history"]
+writes = ["x/y snapshot", "centroid history", "self polarity", "secretome uptake", "signal s after MCS 210", "calibration multiplier at MCS 210"]
+visibility = "ODE in the same MCS sees signal written here; Potts cannot see updated polarity until the next MCS."
+
+[[processes]]
+id = "python_intracellular_ode"
+cadence_mcs = 1
+activation = "step only when MCS > 120; start performs one initial SBML timestep"
+reads = ["cell signal s", "prior SBML state"]
+writes = ["SBML rac/a", "cell rac/a"]
+visibility = "Polarity/force in the same MCS sees new rac/a."
+
+[[processes]]
+id = "python_focal_parameters"
+cadence_mcs = 10
+activation = "MCS divisible by 10"
+reads = ["MCS", "current focal links"]
+writes = ["cell focal strength", "parameters of existing focal links"]
+visibility = "Same-MCS polarity/force sees the new value; Potts and link mechanics first see it on the next MCS."
+
+[[processes]]
+id = "python_polarity_force_and_output"
+cadence_mcs = 1
+activation = "step body only when MCS > 120"
+reads = ["neighbor graph", "snapshot of all neighbor self polarities", "focal strength", "rac", "post-Potts center of mass"]
+writes = ["aligned polarity", "force observables", "lambdaVec force", "per-MCS output file"]
+visibility = "All neighbor means are collected before any aligned polarity is written; the new lambdaVec affects the next Potts MCS."

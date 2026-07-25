@@ -21,7 +21,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phase 14: Model-Driven Capability Completion and Documentation | Phase 14.0 complete; seven-area architecture accepted; Wortel CPU-reference slice passed; Wortel Metal/ROCm closure is current | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [semantic simplification audit](audits/phase-14-semantics-simplification-audit.md), [Wortel vertical-slice evidence](audits/phase-14-wortel-vertical-slice-evidence.md), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [accepted Decisions 0031 and 0032](../spec/decisions/0032-phase-14-gpu-native-promotion.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
+| Phase 14: Model-Driven Capability Completion and Documentation | Phase 14.0 complete; seven-area architecture accepted; Wortel CPU/Metal/ROCm G2 passed; Wang execution-order authority accepted and implementation current | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [semantic simplification audit](audits/phase-14-semantics-simplification-audit.md), [Wortel vertical-slice evidence](audits/phase-14-wortel-vertical-slice-evidence.md), [Wang order audit](audits/phase-14-wang-order-audit.md), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [accepted Decisions 0031 and 0032](../spec/decisions/0032-phase-14-gpu-native-promotion.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Paper and Release Qualification | Not started | Begins only after every Phase 14 exit gate passes |
 
 ## Objective
@@ -846,7 +846,9 @@ candidate decomposition with one seven-area semantic kernel. The architecture ch
 CPU-reference vertical slice now pass. [Decision 0032](../spec/decisions/0032-phase-14-gpu-native-promotion.md)
 and the [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md) require
 backend-resident Metal and ROCm qualification for every stable Phase 14 execution capability.
-Wortel GPU closure is therefore the current gate; Wang does not open until it passes.
+Wortel GPU closure passed on real Metal and ROCm on 2026-07-25. Wang is therefore open; its
+[source/runtime order audit](audits/phase-14-wang-order-audit.md) is accepted and implementation is
+the current gate.
 
 ### Phase 14.1: Modeling Primitives and Conformance
 
@@ -1094,12 +1096,12 @@ sequence is:
 2. **Complete for the Phase 14.1 capability gate.** Complete Wortel Act-CPM end to end through accepted-copy state, decay, plan, observation,
    persistence, preflight, inspection, and restart. Direct-kernel and biological façade spellings
    must normalize identically.
-3. **Current.** Close Wortel on real Metal and ROCm: device-resident activity/history state,
+3. **Complete.** Close Wortel on real Metal and ROCm: device-resident activity/history state,
    accepted-copy transaction and decay kernels, observations, preflight, restart, replay,
    residency, transfer, allocation, and steady-state performance. No host fallback qualifies.
-4. Open Wang only after Wortel passes CPU, Metal, and ROCm; open one field-coupled model only after
-   Wang passes the same gate. Every later stable capability follows the same reference-then-device
-   promotion sequence.
+4. **Current.** Implement Wang after the accepted source/runtime order audit, then close its CPU,
+   Metal, and ROCm gate. Open one field-coupled model only after Wang passes. Every later stable
+   capability follows the same reference-then-device promotion sequence.
 5. Close all required capability rows and bounded model smokes before building the Learn/Examples
    presentation layer.
 6. Register D11 and complete the full published-model studies before applying reproduction labels.
