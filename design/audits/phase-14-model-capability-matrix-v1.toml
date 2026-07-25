@@ -1,0 +1,363 @@
+schema_version = "1.0.0"
+matrix_version = "phase14-model-capability-v1"
+status = "accepted-requirements-baseline"
+registered_at = "2026-07-24"
+source_records = "phase-14-model-source-records-v1.toml"
+source_closure_records = "phase-14-source-closure-v1.toml"
+d9_work_items = "phase-14-d9-work-items-v1.toml"
+gpu_policy_decision = "../../spec/decisions/0032-phase-14-gpu-native-promotion.md"
+gpu_implementation_plan = "phase-14-gpu-native-implementation-plan.md"
+backend_promotion_rule = "Every stable Phase 14 execution capability requires a sequential CPU reference and backend-resident real-hardware Metal and ROCm qualification; host-only authoring and declared observation/checkpoint/analysis boundaries are not execution capabilities."
+
+[classes]
+supported = "already supported and conforming"
+stable_extension = "expressible through an existing stable extension protocol"
+additive = "requires an additive reusable CorePotts or PottsToolkit capability"
+incompatible = "requires an incompatible frozen-contract decision"
+paper_specific = "paper-specific assembly or analysis in reusable model source"
+
+[[capabilities]]
+id = "core-contact-volume-surface"
+name = "Contact, volume, surface, temperature, and external-drive laws"
+classification = "stable_extension"
+models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "Phase 13 froze the component protocol and admitted contact and volume in the qualified core; surface, drive, and other published components remain stable extensions with their existing component conformance."
+required_work = "Transcribe each paper law and prove exact source-equivalence where a source simulator uses a different normalization."
+owner = "CorePotts scientific components"
+decision_dependency = "D9 only if an audited source law is not expressible by the frozen component protocol"
+conformance_plan = "hand-derived deltas, randomized logical-state comparisons, and foreign-simulator microfixtures where available"
+persistence_impact = "parameters and component versions already belong in the scientific manifest"
+api_layer = "CorePotts stable extension plus PottsToolkit Level 2 spelling"
+backend_claim = "Existing evidence is retained per exact component version; every new stable Phase 14 component composition requires CPU, Metal, and ROCm qualification"
+implementation_chunk = "14.1-A"
+freeze_impact = "additive component instances only; no frozen meaning may change"
+unresolved = ["surface/contact normalization equivalence for every foreign simulator"]
+
+[[capabilities]]
+id = "spatial-role-relations"
+name = "Independent proposal, contact, surface, connectivity, query, and field relations"
+classification = "stable_extension"
+models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "CorePotts has role-typed relations, but PottsToolkit lowering currently materializes first-shell relations for proposal, contact, surface, connectivity, and query roles."
+required_work = "Expose explicit role relations in Level 2 without changing the existing default and materialize them in manifests."
+owner = "PottsToolkit lowering and CorePotts spatial protocols"
+decision_dependency = "D9 spatial-role authoring and normalization"
+conformance_plan = "offset-set identity, boundary-resolution, lowering, fingerprint, and source microfixture tests in 2D and 3D"
+persistence_impact = "checkpoint/manifests must preserve relation identities and offsets; state payload is unchanged"
+api_layer = "PottsToolkit Level 2 with direct CorePotts stable protocol fallback"
+backend_claim = "CPU, Metal, and ROCm qualification required per exact stable relation and boundary combination"
+implementation_chunk = "14.1-A"
+freeze_impact = "additive authoring fields; current first-shell default remains unchanged"
+unresolved = ["paper-specific source neighborhoods for the three paper-only records"]
+
+[[capabilities]]
+id = "source-attempt-budget"
+name = "Source-specific sequential attempt budgets and normalized time"
+classification = "additive"
+models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "SequentialCPM and SequentialReference freeze one MCS as exactly N independent attempts; Graner-Glazier explicitly reports 16N."
+required_work = "Define a separately named/versioned sequential attempt-schedule contract or an explicitly typed normalized-time wrapper. Do not change SequentialCPM v1."
+owner = "CorePotts algorithms"
+decision_dependency = "D9 attempt schedule; D10 confirms additive new identity and rejects mutation of frozen SequentialCPM"
+conformance_plan = "exact attempt accounting, RNG address identity, continuation, time/observation scheduling, and N-versus-kN equivalence fixtures"
+persistence_impact = "algorithm identity and attempt multiplier persist at completed-MCS boundaries; partial-MCS continuation is prohibited"
+api_layer = "CorePotts algorithm plus PottsToolkit solve spelling"
+backend_claim = "Sequential CPU reference plus exact-budget real-hardware Metal and ROCm qualification required before stable promotion"
+implementation_chunk = "14.1-A"
+freeze_impact = "additive only if separately identified; modifying SequentialCPM v1 is incompatible and prohibited without a new D10 decision"
+unresolved = ["attempt normalization for Artistoo and both CompuCell3D versions", "whether 16N is required only for the 1992 model"]
+
+[[capabilities]]
+id = "accepted-copy-site-history"
+name = "Accepted-copy site state with per-MCS decay and neighborhood reduction"
+classification = "additive"
+models = ["wortel-2021-act-cpm"]
+current_evidence = "No frozen component owns mutable per-site auxiliary state or an accepted-copy callback."
+required_work = "Add versioned site-state storage, accepted-copy staging/commit hooks, deterministic decay, and geometric-mean same-cell neighborhood reduction."
+owner = "CorePotts auxiliary state and transaction lifecycle"
+decision_dependency = "D9 accepted-copy and per-MCS auxiliary-state semantics"
+conformance_plan = "single-accept exact fixtures, rejected/no-op invariants, decay timing, neighborhood edge cases, restart identity, and Artistoo microfixtures"
+persistence_impact = "site activity array, semantic age, decay phase, and synchronization epoch must checkpoint"
+api_layer = "CorePotts reusable protocol and PottsToolkit Act component"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm transaction, decay, observation, restart, and performance qualification required"
+implementation_chunk = "14.1-B"
+freeze_impact = "additive transaction hooks; frozen CopyProposal and algorithm outcomes remain unchanged"
+unresolved = ["accepted-protrusion versus all accepted-copy semantics at medium/cell interfaces"]
+
+[[capabilities]]
+id = "evolving-fields"
+name = "Evolving reaction-diffusion fields with explicit solvers and named splitting"
+classification = "additive"
+models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "CellCenteredField is a backend-adaptable immutable snapshot and can be sampled by energies; no public evolution contract exists."
+required_work = "Add versioned field evolution, time stepping, boundary handling, convergence/failure behavior, and named CPM-field split schedules."
+owner = "CorePotts fields and execution"
+decision_dependency = "D9 field snapshots, solver semantics, splitting, synchronization, and failure behavior"
+conformance_plan = "analytic diffusion/decay cases, manufactured solutions, mass and positivity invariants, split-order fixtures, restart, and source-solver microfixtures"
+persistence_impact = "field values, solver state, semantic field time, split position, and synchronization epoch must checkpoint"
+api_layer = "CorePotts solver protocol plus PottsToolkit field declarations"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm evolution, restart, transfer, allocation, and performance qualification required"
+implementation_chunk = "14.1-C"
+freeze_impact = "additive; current immutable field snapshot remains valid"
+unresolved = ["minimum solver family needed for the Merks and CNV sources", "steady-state versus transient solver compatibility"]
+
+[[capabilities]]
+id = "field-coupling"
+name = "Cell secretion, uptake, degradation, chemotaxis, and per-cell field response"
+classification = "additive"
+models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "Field sampling and immutable occupancy/response components exist, but source/sink accumulation and per-cell uptake state do not."
+required_work = "Define reusable source/sink laws, occupancy snapshots, reduction order, unit conversion, and coupling to cell properties or ODE state."
+owner = "CorePotts field coupling and PottsToolkit biology authoring"
+decision_dependency = "D9 field-cell coupling atomicity and update order"
+conformance_plan = "single-cell source/sink balance, overlapping occupancy, boundary cases, reduction determinism, restart, and source microfixtures"
+persistence_impact = "coupled cell state and any explicitly cross-MCS authoritative accumulator must checkpoint; ordinary phase-local forcing is absent at the stable boundary"
+api_layer = "CorePotts extension protocols plus PottsToolkit Level 1/2 components"
+backend_claim = "CPU, Metal, and ROCm exchange, reduction, synchronization, restart, and performance qualification required"
+implementation_chunk = "14.1-C"
+freeze_impact = "additive"
+unresolved = ["whether CNV requires ECM-bound field species beyond the initial solver scope"]
+
+[[capabilities]]
+id = "cell-state-history"
+name = "Typed vector/scalar cell state, bounded history, and per-MCS dynamics"
+classification = "additive"
+models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "CellProperty already accepts isbits vector values; bounded history windows and general ordered per-MCS continuous dynamics are not a frozen public capability."
+required_work = "Reuse CellProperty for vector state; add bounded centroid history, deterministic update programs, and SciMLBase-compatible small ODE stepping with optional ModelingToolkit authoring."
+owner = "CorePotts cell state and lifecycle"
+decision_dependency = "D9 snapshot, inactive-slot, ordering, ODE-step, and RNG semantics"
+conformance_plan = "five-MCS history fixtures, vector normalization edge cases, ODE analytic cases, slot reuse/generation, restart, and Wang source microfixtures"
+persistence_impact = "all state columns, histories, integrator state, generations, and update position must checkpoint"
+api_layer = "CorePotts state protocol plus PottsToolkit declarative cell dynamics"
+backend_claim = "Every stable state/solver pair requires CPU, Metal, and ROCm device-resident dynamics and restart qualification"
+implementation_chunk = "14.1-D"
+freeze_impact = "additive property kinds and update programs"
+unresolved = ["exact fixed-step algorithm and source-time mapping for the Wang intracellular model", "adaptive-integrator continuation remains experimental"]
+
+[[capabilities]]
+id = "dynamic-relationships"
+name = "Dynamic focal-point and relationship graphs"
+classification = "additive"
+models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "FocalPointSpringHamiltonian v1 stores a fixed tuple and prohibits stale/extinct endpoints; source models create, remove, and retune links."
+required_work = "Add a versioned dynamic graph with creation/removal eligibility, capacity, parameter updates, endpoint lifecycle, deterministic iteration, and inspection."
+owner = "CorePotts relationship state"
+decision_dependency = "D9 relationship snapshots, mutation phase, conflicts, endpoint lifecycle, and RNG"
+conformance_plan = "create/remove/retune exact fixtures, capacity and duplicate invariants, cell death/reuse, ordering, restart, and CompuCell3D microfixtures"
+persistence_impact = "graph topology, endpoint generations, link parameters, and completed schedule position must checkpoint; phase-local mutation queues are absent"
+api_layer = "CorePotts graph protocol plus PottsToolkit focal-relationship component"
+backend_claim = "CPU reference plus bounded backend-resident Metal and ROCm graph/update/lifecycle/restart qualification required"
+implementation_chunk = "14.1-D"
+freeze_impact = "new dynamic component identity; fixed focal-point v1 remains unchanged"
+unresolved = ["exact CompuCell3D activation/removal rules and neighbor-order timing"]
+
+[[capabilities]]
+id = "degradable-structures"
+name = "Mutable lattice structures and cell-driven degradation"
+classification = "additive"
+models = ["shirinifard-2012-cnv"]
+current_evidence = "Initial layouts and lifecycle events exist, but no general public law covers cell-driven mutation of BrM/ECM site state."
+required_work = "Define typed structural site state, permitted mutations, occupancy interaction, rates, and staged transaction visibility."
+owner = "CorePotts auxiliary lattice state and lifecycle"
+decision_dependency = "D9 degradable-structure atomicity, occupancy, update order, and persistence"
+conformance_plan = "single-site degradation, simultaneous actors, boundary/occupancy invariants, restart, and scenario-ID-38 microfixtures"
+persistence_impact = "structural state and semantic time must checkpoint; rates remain model data and phase-local mutations are absent"
+api_layer = "CorePotts reusable site-state protocol plus paper-specific CNV assembly"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm structure mutation, transaction, restart, and performance qualification required"
+implementation_chunk = "14.1-E"
+freeze_impact = "additive"
+unresolved = ["whether structure mutation can reuse accepted-copy site state or needs a distinct contract"]
+
+[[capabilities]]
+id = "lifecycle-state-machine"
+name = "Field- and state-dependent growth, division, death, and phenotype transitions"
+classification = "additive"
+models = ["shirinifard-2012-cnv"]
+current_evidence = "Phase 8 lifecycle effects and schedules exist, but the audited CNV model requires coupled state-dependent triggers and long-running process state."
+required_work = "Compose existing effects under a typed state-machine trigger/schedule protocol without embedding hidden behavior in model scripts."
+owner = "CorePotts lifecycle and PottsToolkit rule programs"
+decision_dependency = "D9 trigger snapshots, effect order, division state inheritance, death cleanup, and RNG"
+conformance_plan = "trigger boundary cases, division/death/type transitions, relationship and field cleanup, restart, and CNV source fixtures"
+persistence_impact = "state-machine state, semantic RNG identities, and completed lifecycle position must checkpoint; trigger plans are absent"
+api_layer = "PottsToolkit declarative rules over CorePotts lifecycle protocols"
+backend_claim = "CPU reference plus backend-resident Metal and ROCm request-buffer, lifecycle-commit, cleanup, restart, and performance qualification required"
+implementation_chunk = "14.1-E"
+freeze_impact = "prefer additive trigger/program identities; existing effects remain unchanged"
+unresolved = ["minimum CNV lifecycle subset needed for the scenario-ID-38 target"]
+
+[[capabilities]]
+id = "staged-protocol"
+name = "Explicit multi-phase experimental protocols and observation ordering"
+classification = "additive"
+models = ["graner-glazier-1992-sorting", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "MCS schedules and lifecycle events exist, but parameter switches, annealed observations, burn-in, and coupled phase position are not one inspectable manifest contract."
+required_work = "Define typed phases, parameter transitions, pre/post observation hooks, nested field/cell updates, and phase-aware restart."
+owner = "CorePotts execution schedules and PottsToolkit protocol authoring"
+decision_dependency = "D9 staged-protocol ordering and D11 observation timing"
+conformance_plan = "boundary-MCS fixtures, pre/post snapshots, parameter switch identity, annealed observation, interruption/restart, and manifest round-trip"
+persistence_impact = "completed phase identity, local clock, scheduled transitions, and last published observation coordinate must checkpoint; no pending phase persists"
+api_layer = "PottsToolkit Level 2 protocol over CorePotts schedules"
+backend_claim = "CPU, Metal, and ROCm qualification required for every contained stable entry; the plan cannot mask an unsupported entry"
+implementation_chunk = "14.1-F"
+freeze_impact = "additive"
+unresolved = ["whether the 1992 annealing steps advance source time"]
+
+[[capabilities]]
+id = "elongation-equivalence"
+name = "Principal-axis elongation constraint matching the Merks source"
+classification = "stable_extension"
+models = ["merks-2006-vasculogenesis"]
+current_evidence = "Potts.jl exposes an Elongation component using unwrapped moments, but no evidence yet establishes equality to the 2006 equation and source implementation."
+required_work = "Transcribe the paper equation and compare deltas over exact logical states; add a new version only if the existing law differs."
+owner = "CorePotts scientific components"
+decision_dependency = "D9 only if a distinct law is required; D10 if anyone proposes changing the existing component meaning"
+conformance_plan = "hand-derived shapes, rotational cases, periodic unwrapping, source cross-check, and randomized delta agreement"
+persistence_impact = "none beyond component version and parameters"
+api_layer = "existing CorePotts/PottsToolkit Elongation if equivalent"
+backend_claim = "CPU, Metal, and ROCm evidence may be inherited only for the exact accepted component version and composition"
+implementation_chunk = "14.1-A"
+freeze_impact = "audit first; changing the existing component is incompatible, adding a distinct version is additive"
+unresolved = ["original source implementation unavailable"]
+
+[[capabilities]]
+id = "paper-initialization"
+name = "Paper-specific geometry and initial-state assembly"
+classification = "paper_specific"
+models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "Coordinates, masks, rejection placement, and imported logical layouts are available; each paper needs a checked assembly and checksum."
+required_work = "Keep paper geometry in reusable model source; add only generally reusable parsers or layout combinators."
+owner = "Published-model source"
+decision_dependency = "D11 initialization and ambiguity registration"
+conformance_plan = "cell count/type/volume invariants, deterministic seed fixtures, logical-state checksum, and source snapshot comparison"
+persistence_impact = "manifest must record all defaults, source asset checksums, and final logical initialization checksum"
+api_layer = "published model plus existing public initialization APIs"
+backend_claim = "Host construction is an allowed pre-launch boundary; the completed state must adapt to and remain resident on qualified Metal and ROCm execution"
+implementation_chunk = "14.3 per-model"
+freeze_impact = "none unless an initializer reveals a reusable missing protocol"
+unresolved = ["missing source initialization for the three paper-only records"]
+
+[[capabilities]]
+id = "paper-observables"
+name = "Paper-defined observables, analysis, and validation targets"
+classification = "paper_specific"
+models = ["graner-glazier-1992-sorting", "mombach-1995-3d-sorting", "merks-2006-vasculogenesis", "wortel-2021-act-cpm", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+current_evidence = "PottsObservableHandle and SciML saving exist; paper metrics and archival analysis programs do not."
+required_work = "Implement transparent, versioned analysis beside each model; promote only broadly reusable primitive measurements such as contact matrices, centroid tracks, and graph morphology."
+owner = "Published-model analysis with PottsToolkit observation primitives"
+decision_dependency = "D11 per-model targets, tolerances, ensembles, exclusions, and stopping rules"
+conformance_plan = "hand-worked arrays/images, source-data replay, unit tests for each statistic, schema validation, and content-addressed outputs"
+persistence_impact = "observation schedule and enough state to resume without duplicate or missed samples must checkpoint"
+api_layer = "PottsToolkit observation primitives plus published-model analysis"
+backend_claim = "Analysis may run on the host only at declared bounded boundaries; stable simulation reducers and state require Metal and ROCm qualification"
+implementation_chunk = "14.1-F primitives and 14.3 per-model analyses"
+freeze_impact = "additive observation primitives; paper analysis is not stable core API by default"
+unresolved = ["digitization/source-data plan for Graner, Mombach, and Merks", "transparent replacement or pinning strategy for Wang pickled classifiers"]
+
+[[capabilities]]
+id = "continuous-state-domains"
+name = "Typed global and membrane state domains for continuous systems"
+classification = "additive"
+models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "CellProperty and Field cover per-cell and field state; mutable global state and per-cell membrane-lattice state are not public state families."
+required_work = "Add GlobalProperty, MembraneProperty, material-coordinate remapping, lifecycle policies, persistence, and state-domain extension protocols."
+owner = "CorePotts state protocols and PottsToolkit continuous-system authoring"
+decision_dependency = "D9 continuous state-domain semantics; D10 additive state identities"
+conformance_plan = "scope, remapping, conservation, division/death, generation reuse, persistence, and downstream-domain extension fixtures"
+persistence_impact = "global and membrane authoritative values, generations, material coordinates, and semantic times checkpoint in typed coupled blocks"
+api_layer = "CorePotts state protocols plus PottsToolkit declarations"
+backend_claim = "Every stable state domain and remapping/solver pair requires CPU, Metal, and ROCm device-resident qualification"
+implementation_chunk = "14.1-G"
+freeze_impact = "additive; existing CellProperty and Field identities remain unchanged"
+unresolved = ["which selected paper first proves membrane state; Morpheus compatibility fixtures remain the independent driver"]
+
+[[capabilities]]
+id = "continuous-system-language"
+name = "Global/per-cell/field/membrane differential, rule, assignment, function, DAE, stochastic, reaction, and jump systems"
+classification = "additive"
+models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "The initial CellDynamics and FieldDynamics candidates cover mapped ODE/PDE advances but not global systems, synchronous recurrence rules, reactive assignments, DAEs, or stochastic systems."
+required_work = "Normalize all supported statement families, including deterministic reactions and discrete/hybrid jumps, into one ContinuousSystem contract with explicit domains, solvers, clocks, RNG, failures, and persistence."
+owner = "CorePotts continuous execution and PottsToolkit authoring"
+decision_dependency = "D9 mathematical-statement and snapshot semantics"
+conformance_plan = "analytic ODEs, cyclic synchronous rules, assignment graphs, DAE fixtures, stochastic/reaction/jump stream isolation, lifecycle, and restart"
+persistence_impact = "registered authoritative state and future-relevant solver state checkpoint; symbolic objects and reconstructible caches do not"
+api_layer = "CorePotts process protocols plus PottsToolkit ContinuousSystem/CellDynamics/FieldDynamics conveniences"
+backend_claim = "Every stable statement/solver pair requires CPU reference plus Metal and ROCm device-resident qualification; advanced unimplemented families remain Experimental"
+implementation_chunk = "14.1-G"
+freeze_impact = "additive generalization before the provisional CellDynamics API is accepted"
+unresolved = ["first stable DAE and stochastic solver subset is implementation maturity, not architecture"]
+
+[[capabilities]]
+id = "multirate-global-scheduling"
+name = "Global time, MCS duration, system-local clocks, and multirate scheduler"
+classification = "additive"
+models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "ContinuousClock maps one MCS interval but the positional MCSPlan cannot schedule several system/event ticks or timed lifecycle boundaries inside one MCS."
+required_work = "Add exact GlobalClock/MCSDuration/SystemClock mapping and MultirateSchedule entries with explicit same-time priorities and one PottsAttempts entry per MCS."
+owner = "CorePotts execution scheduling"
+decision_dependency = "D9 multirate time, visibility, failure, and lifecycle boundaries; D10 opt-in lifecycle-timing extension"
+conformance_plan = "many-ticks-per-MCS, many-MCS-per-unit, equal-time order, incommensurate schedules, failure, lifecycle, and exact restart"
+persistence_impact = "completed clocks and schedule identities checkpoint; no in-flight timeline is stable"
+api_layer = "CorePotts MCSPlan lowering plus PottsToolkit clock/schedule spelling"
+backend_claim = "CPU, Metal, and ROCm qualification required for every contained stable scheduled entry and same-time synchronization path"
+implementation_chunk = "14.1-G"
+freeze_impact = "additive opt-in timeline; ordinary positional plans and integer public Potts time remain unchanged"
+unresolved = ["source-specific same-time priorities require source transcription"]
+
+[[capabilities]]
+id = "continuous-events-and-delays"
+name = "Sampled/root events, trigger memory, delayed assignments, and fixed delay state"
+classification = "additive"
+models = ["shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "Lifecycle events exist only at integer MCS boundaries; no general continuous-system event or fixed-delay contract exists."
+required_work = "Add sampled Morpheus-compatible events, separate root events, trigger memory, priority/cascade semantics, delayed queues, DelayState, and typed LifecycleRequest."
+owner = "CorePotts event, delay, RNG, and lifecycle scheduling"
+decision_dependency = "D9 event snapshots/timing/conflicts and D10 timed lifecycle extension"
+conformance_plan = "integrate-and-fire, run-and-tumble, sampled versus root distinction, simultaneous events, delay, cascade, lifecycle request, and restart"
+persistence_impact = "trigger memory, future delayed events, delay histories, and future-relevant root/solver state checkpoint"
+api_layer = "CorePotts event/delay protocols plus PottsToolkit declarations"
+backend_claim = "Stable sampled events and bounded delay queues require CPU, Metal, and ROCm qualification; unimplemented root-event families remain Experimental"
+implementation_chunk = "14.1-G"
+freeze_impact = "additive; accepted MCS-boundary lifecycle remains the ordinary default"
+unresolved = ["Morpheus release-specific trigger/history/persistent mapping must be pinned per compatibility fixture"]
+
+[[capabilities]]
+id = "cross-domain-symbol-mapping"
+name = "Qualified symbols and typed mappers/reporters across global, cell, field, site, relationship, and membrane domains"
+classification = "additive"
+models = ["merks-2006-vasculogenesis", "shirinifard-2012-cnv", "wang-2025-collective-tumor-migration"]
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "Individual field and query reductions exist, but no unified symbol dependency graph or cross-domain mapping contract composes continuous systems."
+required_work = "Add qualified SymbolIdentity/SymbolRef, static dependency resolution, SymbolMap, domain reductions, empty/unit/normalization laws, and compatibility shadow lowering."
+owner = "PottsToolkit normalization with CorePotts typed mapping protocols"
+decision_dependency = "D9 symbol scope, snapshots, reductions, conflicts, and visibility"
+conformance_plan = "scope shadowing, graph cycles, global/cell, field/cell, neighborhood/cell, membrane/cell, conservation, and restart"
+persistence_impact = "mapping declarations fingerprint; only authoritative destination state and stateful schedule data checkpoint"
+api_layer = "PottsToolkit authoring and compiler over CorePotts access/reduction protocols"
+backend_claim = "CPU, Metal, and ROCm qualification required per stable source, destination, reduction, and synchronization combination"
+implementation_chunk = "14.1-G"
+freeze_impact = "additive; existing explicit typed accessors remain valid"
+unresolved = ["no architecture ambiguity; source models choose exact mappings and schedules"]
+
+[[capabilities]]
+id = "continuous-model-adapters"
+name = "ModelingToolkit, SBML, and optional MorpheusML semantic adapters"
+classification = "additive"
+models = []
+compatibility_targets = ["morpheus-continuous-semantics-v1"]
+current_evidence = "The candidate ModelingToolkit lowering covers explicit ODE/PDE maps but has no construct-level compatibility report or general adapter protocol."
+required_work = "Add ContinuousModelAdapter, compatibility levels/reports, canonical source identity, construct maps, and loss/rejection rules."
+owner = "PottsToolkit optional extensions"
+decision_dependency = "D9 adapter identity, compatibility vocabulary, and failure semantics"
+conformance_plan = "ModelingToolkit system families, pinned SBML suite subset, construct rejection, source checksums, and optional MorpheusML fixtures"
+persistence_impact = "adapter/source identity and lowered semantic contracts fingerprint; external object graphs do not checkpoint"
+api_layer = "PottsToolkit package extensions; no CorePotts dependency"
+backend_claim = "Adapter authoring may run on the host before launch; every lowered stable execution contract still requires Metal and ROCm qualification"
+implementation_chunk = "14.1-G adapter follow-up"
+freeze_impact = "additive optional tooling"
+unresolved = ["automatic MorpheusML import is optional after hand-authored semantic parity"]

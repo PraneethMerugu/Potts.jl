@@ -135,7 +135,8 @@ Resolved for field identity, geometry, sampling, boundary independence, and immu
 snapshots by [Cartesian Surface, Queries, and Fields](cartesian-surface-queries-and-fields.md).
 Operator splitting, secretion, uptake, and PDE substeps remain unresolved for the general case. A
 selected Phase 14 published model promotes only its required subset through the source audit,
-accepted semantics, sequential CPU reference, and conformance process in Decision 0029.
+single-kernel semantics, sequential CPU reference, backend-resident Metal/ROCm qualification, and
+conformance process in Decisions 0029, 0031, and 0032.
 
 ## Algorithms
 

@@ -97,6 +97,45 @@ using Unitful
     @test_throws ArgumentError PottsToolkit.Layout(:not_a_layout)
 end
 
+@testset "Level 1 Act façade canonical equivalence" begin
+    neighborhood = CorePotts.static_relation(
+        CorePotts.SpatialQueryRole(),
+        CorePotts.offsets(CorePotts.MooreTopology{2}()))
+    algorithm = CorePotts.BudgetedSequentialCPM(
+        CorePotts.AttemptsPerSite(16); temperature = 20.0f0)
+    façade = PottsToolkit.Act(
+        maximum_activity = 40.0f0,
+        strength = 120.0f0,
+        neighborhood = neighborhood,
+        algorithm = algorithm,
+        observation_every = 5)
+    lowered = PottsToolkit.lower(façade)
+    direct = CorePotts.ActivityProgram(
+        maximum = 40.0f0,
+        strength = 120.0f0,
+        relation = neighborhood,
+        algorithm = algorithm,
+        observation_cadence = 5)
+    @test CorePotts.canonical_coupled_model(façade) ==
+        CorePotts.canonical_coupled_model(direct)
+    @test CorePotts.semantic_model_fingerprint(
+        CorePotts.canonical_coupled_model(façade)) ==
+        CorePotts.semantic_model_fingerprint(
+            CorePotts.canonical_coupled_model(direct))
+    @test lowered.property.name == :activity
+    @test lowered.hamiltonian.reduction isa CorePotts.GeometricActivity
+    integer_parameters = PottsToolkit.Act(
+        maximum_activity = 40,
+        strength = 120,
+        neighborhood = neighborhood)
+    @test PottsToolkit.lower(integer_parameters).hamiltonian.maximum == 40.0
+    @test_throws ArgumentError PottsToolkit.Act(
+        maximum_activity = 40.0,
+        strength = 120.0,
+        neighborhood = neighborhood,
+        algorithm = CorePotts.SequentialEquilibrium())
+end
+
 @testset "Level 1 addressed procedural layouts" begin
     medium = PottsToolkit.Medium(:layout_medium)
     cell = PottsToolkit.CellType(:layout_cell)

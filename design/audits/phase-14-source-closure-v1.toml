@@ -1,0 +1,194 @@
+schema_version = "1.0.0"
+record_version = "phase14-source-closure-v1"
+status = "accepted"
+closed_at = "2026-07-24"
+source_records = "phase-14-model-source-records-v1.toml"
+owner_approval = "The project owner's completed Phase 14 interview selected option A for every portfolio, fidelity, source, architecture, testing, and documentation question and subsequently directed completion of Phase 14.0."
+portfolio_ids = [
+    "graner-glazier-1992-sorting",
+    "mombach-1995-3d-sorting",
+    "merks-2006-vasculogenesis",
+    "wortel-2021-act-cpm",
+    "shirinifard-2012-cnv",
+    "wang-2025-collective-tumor-migration",
+]
+portfolio_change_policy = "Any replacement, removal, target change, or fidelity reduction requires an owner-approved scope amendment that records affected collaborator coverage and release claims."
+closure_rule = "Unavailable original inputs do not acquire invented values. A paper-only record closes Phase 14.0 only with named ambiguities, an authority order, a preregistered sensitivity envelope, and an explicit limit on later reproduction claims."
+asset_rule = "No third-party article image, movie, source archive, binary model, or dataset is committed merely because it is downloadable. The per-model disposition below governs vendoring, fetch-at-build, and citation-only use."
+
+[[models]]
+id = "graner-glazier-1992-sorting"
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "gg1992-figure2-boundary-kinetics-v1"
+validation_target = "Digitized Figure 2 homotypic, heterotypic, and aggregate-edge boundary fractions from 5 through 4000 MCS, with the paper's reported logarithmic trend as a secondary check."
+baseline_policy = "Digitize the cited paper panel into a provenance-bearing derived table; retain digitization uncertainty and do not redistribute the APS panel."
+claim_boundary = "Quantitative Reproduction is unavailable until the initialization and execution envelope is narrowed by source recovery, author clarification, or a registered result showing robustness across every consequential ambiguity. Until then the model remains Reimplementation in Progress."
+authority_order = ["1992 paper", "author clarification", "later implementations as non-authoritative sensitivity references"]
+license_disposition = "citation-only article; independently authored Potts.jl code, analyses, derived numerical tables, and generated figures may be committed; no APS figure or unavailable source code is vendored"
+sensitivity_plan_id = "gg1992-source-envelope-v1"
+sensitivity_axes = [
+    "lattice dimensions, cell counts, target area, and rounded-mask construction varied as a coupled initialization family",
+    "periodic versus no-flux boundary handling",
+    "full Moore versus explicitly enumerated next-nearest proposal/contact/surface relations",
+    "reported 16N attempt budget held fixed while testing alternative source-time interpretations",
+    "two T=0 annealing MCS treated either as observation-only work or source-time-advancing work",
+    "replicate and seed ensembles large enough to separate initialization uncertainty from trajectory noise",
+]
+failure_rule = "If a named Figure 2 conclusion changes sign, rank, or fitted trend across an unresolved axis, the record is inconclusive and cannot receive a reproduction label."
+clarification_questions = [
+    "What lattice, cell counts, target area, boundary conditions, and initialization procedure generated Figures 1 and 2?",
+    "Did the two T=0 MCS advance the reported clock, and were they run before every sampled point?",
+    "What seeds, replicate count, and exact boundary estimator produced Figure 2?",
+]
+
+[[models]]
+id = "mombach-1995-3d-sorting"
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "mombach1995-figure4-order-kinetics-v1"
+validation_target = "Digitized Figure 4 experimental and simulated normalized boundary/order trajectories for the high- and low-fluctuation conditions, retaining the paper's time-rescaling uncertainty."
+baseline_policy = "Create a cited digitization with per-point extraction uncertainty; do not redistribute APS panels or claim that digitization recovers missing simulation semantics."
+claim_boundary = "No unique source configuration is claimed. Quantitative Reproduction requires either source/author closure or success across the registered contact-energy, time, initialization, and neighborhood envelope."
+authority_order = ["1995 paper", "author clarification", "later implementations as non-authoritative sensitivity references"]
+license_disposition = "citation-only article; only independently authored code, analyses, digitized numerical facts with provenance, and newly generated outputs may be committed"
+sensitivity_plan_id = "mombach1995-source-envelope-v1"
+sensitivity_axes = [
+    "all contact-energy matrices consistent with the reported surface-tension differences, with the gauge and medium terms recorded",
+    "proposal, contact, and surface relations independently varied over source-plausible 3D neighborhoods",
+    "periodic and no-flux boundary families",
+    "volume-law strength and exact volume penalty",
+    "MCS attempt normalization and reported experimental-to-simulation time rescaling",
+    "aggregate construction, exact cell count, and replicate/seed ensemble",
+]
+failure_rule = "A parameterization that matches morphology but not the registered Figure 4 trajectories is not accepted as the paper model; disagreement among plausible contact-energy mappings remains a visible source limitation."
+clarification_questions = [
+    "What contact matrix, volume strength, neighborhood relations, boundaries, and MCS attempt budget were used?",
+    "What aggregate construction, exact cell counts, seeds, and number of simulations underlie Figure 4?",
+    "How was experimental time rescaled and how was normalized boundary length computed?",
+]
+
+[[models]]
+id = "merks-2006-vasculogenesis"
+source_closure = "closed-with-registered-ambiguity"
+validation_target_id = "merks2006-figure5-network-kinetics-v1"
+validation_target = "Figure 5 lacuna-count and branch-point-count time courses for the reported in-silico n=10 and in-vitro n=28 ensembles."
+baseline_policy = "Digitize the open author manuscript's numerical curves with uncertainty and separately reconstruct the image-analysis definition; later Tissue Simulation Toolkit code is a cross-check, not source authority."
+claim_boundary = "Quantitative Reproduction requires recovered or author-confirmed network-analysis definitions and a field/elongation implementation within the registered sensitivity envelope. Otherwise only explicitly bounded partial fidelity may be reported."
+authority_order = ["paper equations and methods", "original requested source if recovered", "author clarification", "later Tissue Simulation Toolkit implementations as non-authoritative cross-checks"]
+license_disposition = "citation-only manuscript and figures unless a specific reuse license is confirmed; commit clean-room Potts.jl code, independently implemented analysis, derived numerical tables with citation, and generated outputs only"
+sensitivity_plan_id = "merks2006-source-envelope-v1"
+sensitivity_axes = [
+    "proposal, contact, chemotaxis-query, and finite-difference field relations",
+    "periodic versus no-flux CPM and morphogen boundaries",
+    "field timestep, diffusion/decay discretization, secretion law, chemotactic response, and CPM-field split order",
+    "current Potts.jl elongation law versus a separately versioned source-equivalent law",
+    "temperature and MCS attempt budget",
+    "random placement algorithm and seed ensemble for 282 cells",
+    "lacuna and branch-point segmentation, pruning, and boundary handling",
+]
+failure_rule = "A network-looking morphology cannot substitute for the two registered Figure 5 time courses; analysis-definition uncertainty and simulation uncertainty are reported separately."
+clarification_questions = [
+    "Can the original simulator and Figure 5 image-analysis programs or numerical data be recovered?",
+    "What neighborhoods, boundaries, temperature, attempt budget, field step, and split order were used?",
+    "What exact elongation energy and initialization algorithm generated the n=10 ensemble?",
+]
+
+[[models]]
+id = "wortel-2021-act-cpm"
+source_closure = "pinned-source-transcribed"
+validation_target_id = "wortel2021-figure2-speed-persistence-v1"
+validation_target = "Figure 2 two-dimensional speed and autocovariance-half-life persistence over the exact 51-pair MAX_ACT/LAMBDA_ACT grid, using 30 simulations per pair and six analysis groups of five."
+baseline_policy = "Use the archived aggregate table as an implementation baseline and regenerate Potts.jl results from independently authored code; preserve the exact source configuration and analysis identities."
+claim_boundary = "Phase 14.0 closes the source record, not the reproduction claim. Quantitative Reproduction still requires preregistered tolerances, clean execution, archived results, and collaborator review."
+authority_order = ["paper and supplement", "Zenodo v1.0.0 / Git c980498712e4f4401aacd7689009f2fcbf250d2e", "Inge Wortel clarification"]
+license_disposition = "MIT source may be inspected and reused with its notice; project policy commits clean-room Potts.jl code and generated results, cites/fetches upstream source, and does not copy article figures"
+sensitivity_plan_id = "not-required-pinned-source"
+transcribed_execution = [
+    "Artistoo package identity 0.9.1 with the archived built JavaScript",
+    "150 by 150 periodic two-dimensional field; one cell; T=20",
+    "J=[[0,20],[20,100]], target volume 500 with lambda 30, target perimeter 260 with lambda 2",
+    "500 MCS burn-in, 50000 MCS runtime, centroid/statistic output every 5 MCS",
+    "51 explicit MAX_ACT/LAMBDA_ACT pairs from params2D.txt",
+    "30 simulations per pair with simulation numbers 1 through 30 used as Artistoo seeds",
+    "six groups of five tracks for speed and persistence estimation",
+]
+source_file_sha256 = [
+    "figures/figure2/settings/conf-2D.js=c42a88bf3351b6dacd7cfe529180d9ce6576cfacfedaf61986d352ecc64215b2",
+    "figures/figure2/settings/params2D.txt=2c39973c010907f13328be1a09a26a2be0ada337f4aed9c2f27f01e6b56a6b46",
+    "figures/settings.env=7c63609724a6e8c31c0ace2f8b77a1f8ffbf34379a760aa3c099e51a993e597a",
+    "figures/scripts/simulation/simple-track.js=46184e00f69f7aa7940aba086e4a5932f45f1d2a10083eb160d5f231e1bd9171",
+    "figures/scripts/analysis/analyze-speed-persistence-combined.R=c9a314e590b3e9a027d22e90c931e4b29fd520c6d43f769d66648f286eb39e41",
+    "figures/figure2/data/CPM2D-speedpersistence-all.txt=cf76fbefb565fd6dbf41b064bba85ca1670651d6b1a1967f418d8a4e255305a7",
+]
+residual_unknowns = [
+    "the paper-era R/celltrackR environment must be recreated and pinned during Phase 14.3",
+    "source-to-Potts numerical tolerances remain a D11 preregistration item",
+]
+
+[[models]]
+id = "shirinifard-2012-cnv"
+source_closure = "pinned-source-transcribed-with-foreign-runtime"
+validation_target_id = "shirinifard2012-figure7-scenario38-v1"
+validation_target = "Figure 7 scenario-ID-38 ten-replica initiation frequency, onset-time interval, and one-year stalk-cell interval, with the archived simulation ID 902 as the exact source microfixture."
+baseline_policy = "Use the six-file Text S6 archive checksum and per-file checksums as source authority; treat CompuCell3D 3.4.2 and the supplied custom oxygen solver as a pinned foreign-runtime dependency."
+claim_boundary = "The archive closes mechanism and one-run source transcription, but not the missing ten-replica seed identities. Quantitative Reproduction requires a registered replacement ensemble and comparison to the paper's aggregate intervals."
+authority_order = ["paper tables and Text S3", "Text S6 scenario-ID-38 source", "CompuCell3D 3.4.2 plus supplied SteadyStateDiffusionSolver.cpp", "Glazier/Jiang clarification"]
+license_disposition = "PLOS labels the article and supporting information Creative Commons Attribution; because the historical version is not named on the article page and code-specific licensing is not separate, fetch Text S6 by DOI with checksum and do not vendor its source or retinal input; commit clean-room code and generated results"
+sensitivity_plan_id = "cnv-foreign-runtime-envelope-v1"
+transcribed_execution = [
+    "40 by 40 by 35 lattice at 3 micrometers per voxel; periodic x/y and no-flux z",
+    "146000 MCS with 400 MCS approximately one day; source seed 498377 for simulation ID 902",
+    "Potts NeighborOrder 4, contact NeighborOrder 4, focal-point NeighborOrder 1",
+    "oxygen steady-state solver every MCS; VEGF1 and MMP finite-difference fields; VEGF2 with 12 extra field steps per MCS",
+    "source output every 100 MCS, corresponding to six simulated hours",
+    "tip-to-stalk conversion at MCS 400, hypoxia-dependent state timers, stalk growth/division, cell death, dynamic focal links, and BrM degradation",
+]
+source_archive_sha256 = "fc4884fa62b40a8c999b33663dd8a3eccdae5f3fc11dc579892e7e64e747da4d"
+source_file_sha256 = [
+    "902-JRB-28_JRR-40_JRP-16_LRB60_LRR300_r1.xml=74ae7bdfca67956fe3c019838226a566d653d0d26123205331308e134a3d92d4",
+    "angio_growth_19112010_11_16_47.py=601faaaf133913118032469de54aaccc990b864f2a50c05f999153ac524e8b0c",
+    "angio_growth_plugins_19112010_11_16_47.py=70f304bcae513d1ae2acb42decaf39fc0d5c18d45545b3e8babd23aa6b1bbef6",
+    "angio_growth_steppables_19112010_11_16_47.py=08225d55def23a99ca68e080a596b6e5209f977071898a09d3aacd49fbf8e392",
+    "SteadyStateDiffusionSolver.cpp=e1c8923e1f7c99aec2b2f6c163fcd54129b230039fcf1f171775df52c7d78030",
+    "40x40-OuterRetina-BrM-CC.txt=cc4b3fccdf8ceb898d59eef5eeb04db9a323d860cf0f14ca8faa53a3d4308a17",
+]
+sensitivity_axes = [
+    "unknown nine additional Figure 7 seed identities replaced by a preregistered Potts semantic-seed ensemble",
+    "CompuCell3D 3.4.2 proposal/attempt and plugin-order behavior tested with foreign-runtime microfixtures",
+    "custom steady-state oxygen convergence and mixed-boundary behavior compared directly against the supplied C++ source",
+]
+failure_rule = "The simulation-ID-902 microfixture and the ten-run aggregate are separate gates; matching one cannot compensate for failing the other."
+
+[[models]]
+id = "wang-2025-collective-tumor-migration"
+source_closure = "pinned-source-transcribed-with-foreign-runtime"
+validation_target_id = "wang2025-figure3-migration-map-v1"
+validation_target = "Figure 3 migration-mode map at MCS 270 over 21 focal-strength values from 0 to 1000 and 11 protrusion-force values from 0 to 300, with 50 repeats per combination; the displayed 0-to-500 focal subset remains a presentation choice."
+baseline_policy = "Retain the archived scaler, two k-means models, and UMAP model as the paper-exact classifier baseline while also preregistering transparent geometric cross-checks; neither may silently replace the other."
+claim_boundary = "Phase 14.0 closes the pinned source and analysis identity. Quantitative Reproduction still requires seed registration, a compatible CompuCell3D 4.2.5 baseline, and exact-versus-transparent classifier reporting."
+authority_order = ["paper and supplement", "Zenodo paper-v0 / Git 60ebcf013aafefdff39ebe566114ee79f2a6e54d", "CompuCell3D 4.2.5", "Yi Jiang clarification"]
+license_disposition = "Zenodo paper-v0 is recorded as CC-BY-4.0; fetch/cite upstream data and binary analysis models, commit clean-room Potts.jl code and generated results, and vendor no pickled model without an explicit attribution and security review"
+sensitivity_plan_id = "wang-foreign-runtime-envelope-v1"
+transcribed_execution = [
+    "256 by 256 by 1 lattice, 500 MCS, T=25, Potts NeighborOrder 2",
+    "contact NeighborOrder 4, focal-point activation NeighborOrder 1 and plugin NeighborOrder 3",
+    "periodic x/y secretome field with constant medium concentration, diffusion coefficient 1, and zero decay",
+    "231 scan combinations: focal strength 0:50:1000 and protrusion force 0:30:300",
+    "50 repeats per scan combination; geometric features at MCS 90 and 270",
+    "relax_step=120 and switch_step=210",
+    "registered order: migration/secretome/history every MCS, ODE every MCS, focal parameters every 10 MCS, polarity/force/output every MCS",
+    "five-MCS displacement polarity, Antimony step size 2880, Hill threshold 40 with exponent 4, neighbor-polarity scale 0.4",
+]
+source_file_sha256 = [
+    "ParameterScanSpecs.json=258d44a0e68d9187476f68bf1059af67e15a8393b5e32b5b3523147acad98918",
+    "fpp_polarity_force.xml=f90cce0a696c674649617f606d3ad0055de3787f80ce92fa2e4fee7e2c013b09",
+    "fpp_polarity_force.py=fea06064140cbc372740ee1008f5a4af77a92454648e1f0473cbdc3a431a327f",
+    "fpp_polarity_force_Steppables.py=c045bc7fc46652db9ec340076d733d89cb75a002a045343b103af77c21b9f04e",
+    "cc3d_simulation_scan_array.ipynb=2d7adbcb6fe572ebdfc673e5c9644dd71a33ed93dabf6035ca287ce623dbbfbb",
+    "feature_calc_6_simple_corr_edit.py=e8ad45197eea6e4bae24516ffd2fa5ecc1d7da0cb1e4333a9a49e4d2f6db676d",
+]
+sensitivity_axes = [
+    "missing CompuCell3D and NumPy seeds replaced by a preregistered paired semantic-seed ensemble",
+    "foreign steppable/Potts/field order checked by source-runtime microfixtures",
+    "archived binary classifier outputs compared with a transparent registered geometric-observable table rather than silently re-trained",
+]
+failure_rule = "Paper-exact classifier agreement and transparent mechanistic observables are reported independently; a match in one does not erase disagreement in the other."

@@ -34,6 +34,9 @@ corresponding specification document.
 - [0027: Phase 13 transition-kernel verification and algorithm characterization](0027-phase-13-transition-kernel-verification.md)
 - [0028: Phase 13 entry, evidence, and API-freeze policy](0028-phase-13-entry-and-freeze-policy.md)
 - [0029: Phase 14 model-driven capability and documentation policy](0029-phase-14-model-driven-capability-and-documentation-policy.md)
+- [0030: Phase 14 coupled dynamics and freeze impact](0030-phase-14-coupled-dynamics-and-freeze-impact.md)
+- [0031: Phase 14 single semantic kernel](0031-phase-14-single-semantic-kernel.md)
+- [0032: Phase 14 GPU-native promotion](0032-phase-14-gpu-native-promotion.md)
 
 ## Record Template
 

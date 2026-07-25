@@ -22,11 +22,13 @@ include("state/semantics.jl")
 include("state/types.jl")
 include("state/logical.jl")
 include("spatial/cartesian.jl")
+include("spatial/roles.jl")
 include("state/lifecycle.jl")
 include("lifecycle/scientific.jl")
 include("execution/dispatch.jl")
 include("rng/semantic.jl")
 include("execution/contracts.jl")
+include("coupled/dynamic_state.jl")
 
 include("protocols/scientific.jl")
 include("components/scientific_components.jl")
@@ -37,6 +39,7 @@ include("components/scientific_queries.jl")
 include("components/scientific_focal_points.jl")
 include("components/scientific_elongation.jl")
 include("components/scientific_inner_loop.jl")
+include("coupled/semantic_kernel.jl")
 include("components/scientific_mechanics.jl")
 include("lifecycle/compiled.jl")
 include("algorithms/sequential.jl")
@@ -44,7 +47,16 @@ include("algorithms/checkerboard.jl")
 include("algorithms/tiled_checkerboard.jl")
 include("algorithms/tiled_checkerboard_device.jl")
 include("algorithms/lottery.jl")
+include("coupled/activity.jl")
+include("coupled/execution.jl")
+include("coupled/continuous.jl")
+include("coupled/relationships.jl")
+include("coupled/events.jl")
+include("coupled/multirate.jl")
+include("coupled/observations.jl")
 include("persistence/scientific.jl")
+include("coupled/persistence.jl")
+include("coupled/preflight.jl")
 include("reference/engine.jl")
 
 include("initialization/logical.jl")
@@ -65,6 +77,8 @@ export ScientificContractVersions, scientific_contract_versions,
        CHECKERBOARD_SCHEDULER_CONTRACT_VERSION,
        LOTTERY_ALGORITHM_CONTRACT_VERSION,
        TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION
+export Phase14ContractVersions, phase14_contract_versions,
+       PHASE14_CONTRACT_VERSIONS, PHASE14_CONTRACT_SET_VERSION
 export AbstractTopology, VonNeumannTopology, MooreTopology, NoFluxVonNeumannTopology,
        NoFluxMooreTopology, ExtendedVonNeumannTopology, ExtendedMooreTopology,
        NoFluxExtendedVonNeumannTopology, NoFluxExtendedMooreTopology
@@ -83,6 +97,7 @@ export AbstractBoundaryCondition, PeriodicBoundary, ClosedBoundary, FixedExterio
        realize_neighbor, fixed_owner,
        validate_relation_domain, domain_storage_valid, domain_semantics_report,
        relation_semantics_report
+export SpatialRoles
 export AbstractPottsProblem, AbstractPottsAlgorithm, PottsModel, PottsProblem,
        PottsIntegrator, PottsSolution
 export default_parameters, realize_components, proposal_relation, boundary_tracker,
@@ -259,6 +274,7 @@ export ScientificComponentSet, NoConnectivityWorkspace, ScientificProposalContex
        ScientificCopyEvaluation, evaluate_copy, acceptance_inputs,
        scientific_components_report
 export AbstractSequentialCPMAlgorithm, SequentialCPM, SequentialEquilibrium,
+       AttemptsPerSite, BudgetedSequentialCPM,
        CheckerboardSweepCPM, TiledCheckerboardCPM, TiledSharedMemoryMode,
        TiledSharedMemoryAuto, TiledSharedMemoryRequired, TiledSharedMemoryDisabled,
        TiledLayout, tiled_layout, tiled_color, tiled_tile_sites, tiled_color_order,
@@ -326,5 +342,112 @@ export AbstractInitialOverlapPolicy, RejectInitialOverlap, StableInitialPriority
        initialization_report,
        finalize_initial_state, CellCapacityError
 export AbstractTracker
+export PHASE14_SEMANTIC_KERNEL_VERSION,
+       StateSpec, ProcessSpec, PlanEntrySpec, PlanSpec,
+       LifecycleSpec, ObservationSpec, SemanticModel,
+       canonical_coupled_model, semantic_model_fingerprint,
+       ActivityHamiltonian, ActivityProgram, realize_activity
+# Derived tooling is public and inspectable, but is not an authoring language.
+export CoupledCheckpoint, CoupledMemoryCheckpointStore,
+       CoupledSemanticManifest, CoupledInspectionReport,
+       UnsupportedCoupledCapabilities, coupled_backend_report,
+       preflight_coupled, coupled_model_fingerprint,
+       coupled_state_fingerprint, coupled_manifest, inspect_coupled
+
+# Registry-v1 prototype spellings remain internal while their retained behavior is migrated.
+#=
+export AbstractMCSPlanEntry, AbstractProcessInvocation, CoupledPhase,
+       PottsAttempts, LifecyclePhase, ObservationPhase, MCSPlan,
+       Advance, Exchange, Sample, Update, invocation_process,
+       invocation_reads, invocation_writes, process_reads, process_writes,
+       MCSRange, During, ProtocolStage, StagedProtocol, stage_for,
+       stage_local_mcs, ScheduledParameter, scheduled_value,
+       ContinuousClock, ContinuousInterval, OneMCS, HalfMCS, interval_value,
+       NoStagedProtocol, CoupledState, publish_coupled_state!,
+       CoupledObservationState, CoupledPhaseFailure, CoupledIntegrator,
+       init_coupled, execute_process!
+export AbstractContinuousDomain, GlobalDomain, CellDomain, FieldDomain,
+       MembraneDomain, GlobalProperty, MembraneProperty,
+       GlobalPropertyState, initialize_global_property,
+       set_global_property!, global_property_value,
+       AngularMembrane, FillMembrane, ConservativeMembraneRemap,
+       PartitionMembraneByGeometry, PreserveMembrane, ResetMembrane,
+       MembranePropertyState, initialize_membrane_property,
+       membrane_values, set_membrane_values!,
+       StateVariable, InputVariable, Constant, IntermediateVariable,
+       ObservableVariable, TimeVariable, DirectLaw,
+       AbstractContinuousStatement, DifferentialEquation, SynchronousRule,
+       AlgebraicAssignment, FunctionDefinition, AlgebraicConstraint,
+       StochasticDifferentialEquation, AbstractReactionInterpretation,
+       ReactionStatement, DeterministicReaction, DiscreteJumpProcess,
+       HybridReaction, AbstractFixedStepper, ExplicitEuler, Heun, RK4,
+       SystemStep, FixedStep, AdaptiveStep, SystemClock,
+       ContinuousSystem, ContinuousSystemState, advance_continuous_system!,
+       ContinuousProfileRow, ContinuousProfileReport,
+       UnsupportedContinuousProfile, continuous_profile_report,
+       preflight_continuous,
+       CellDynamics, EvolvingFieldState, ReactionDiffusion, FieldDynamics,
+       advance_field!, ByCellVolume, ConstantConcentration, Uptake,
+       FieldExchange, apply_field_exchange!, SteadyStateAdvance,
+       MaximumAbsoluteResidual
+export StableRelationshipPriority, AbstractRelationshipRequest,
+       CreateRelationship, RemoveRelationship, RetuneRelationship,
+       RelationshipPolicyBundle, RelationshipDynamics,
+       apply_relationship_dynamics!, apply_coupled_lifecycle!
+export AbstractDelayInterpolation, ExactSample, PiecewiseConstantDelay,
+       LinearDelayInterpolation, RepeatInitialDelay, EveryGlobal,
+       DelayState, DelayStateStorage, sample_delay!, delay_value,
+       AbstractTriggerMemory, WhileTrue, OnRising, OnceWhenTrue,
+       PersistentTrigger, SampledTrigger, RootTrigger, EventAssignment,
+       FromTriggerSnapshot, FromExecutionSnapshot, NoImmediateCascade,
+       CascadeUntilStable, LifecycleRequest, EventBatch, ContinuousEvent,
+       QueuedEvent, EventRuntimeState, execute_event!, locate_root,
+       SymbolIdentity, SymbolRef, SymbolMap, InputRef, IdentityMap,
+       apply_symbol_map!, AbstractCompatibilityLevel,
+       ExactSemanticMapping, QualifiedNumericalMapping,
+       ExplicitApproximation, PartialMapping, RejectedMapping,
+       CompatibilityItem, CompatibilityReport, MorpheusSemanticProfile,
+       SBMLSemanticProfile, ContinuousModelAdapter, adapt_continuous_model
+export GlobalClock, MCSDuration, AbstractMCSPosition, AtMCSStart, AtMCSEnd,
+       AtMCSOffset, AbstractScheduledEntry, ScheduledSystem, ScheduledEvent,
+       ScheduledProcess, ScheduledPotts, TimedLifecyclePhase,
+       ScheduledLifecycle, MultirateSchedule, global_time
+export COUPLED_EXTENSION_BLOCK_VERSION, CoupledCheckpointBlock,
+       CoupledCheckpointExtension, CoupledCheckpoint,
+       CoupledMemoryCheckpointStore
+export AbstractObservationPhase, CompletedMCS, NamedPhaseSnapshot,
+       AbstractObservationFailurePolicy, RequiredObservation,
+       BestEffortTelemetry, AbstractObservationSchema, RecordSchema,
+       PhaseObservation, PaperObservationRecord, ObservationFailureRecord,
+       execute_observation!, ObservationTransform
+export CoupledCapabilityRow, CoupledBackendReport,
+       UnsupportedCoupledCapabilities, coupled_backend_report,
+       preflight_coupled
+export CoupledSemanticManifest, CoupledInspectionReport,
+       coupled_model_fingerprint, coupled_state_fingerprint,
+       coupled_manifest, inspect_coupled
+export AbstractSiteInitializer, FillSites, SiteValues, InitializeFromOwnership,
+       AbstractSiteOwnershipPolicy, PreserveAtSite, ResetChangedSites,
+       AcceptedCopyManaged, NoSiteInvariant, site_value_valid,
+       SiteProperty, SitePropertyState, initialize_site_property,
+       site_property_value, SiteInvariantError,
+       AbstractAcceptedCopyAssignment, SetTo, PreserveSiteValue,
+       AlwaysAcceptedCopy, AcceptedCopyUpdate, AcceptedCopyContext,
+       CoupledAttemptWorkspace, commit_accepted_copy_updates!,
+       AbstractSiteUpdateLaw, SaturatingSubtract, SetSiteValue,
+       SiteDynamics, apply_site_dynamics!,
+       Lag, HistoryValue, HistoryLagUnavailableError,
+       AbstractHistoryFill, RepeatInitialSample, MissingUntilFull,
+       ExplicitInitialHistory, AbstractHistoryDivisionPolicy,
+       ResetChildHistory, CopyParentHistory, AbstractHistoryTransitionPolicy,
+       PreserveHistory, ResetHistory, CellHistory, HistorySample,
+       CellHistoryState, initialize_cell_history, history_value,
+       maybe_history_value, sample_history!,
+       CellEndpoint, RelationshipCapacity, AbstractEndpointLifecyclePolicy,
+       RemoveIncidentEdges, RejectEndpointRetirement, RelationshipSet,
+       RelationshipEdge, RelationshipState, RelationshipCapacityError,
+       create_relationship!, remove_relationship!, retune_relationship!,
+       relationship_edges, relationship_payload, retire_relationship_endpoint!
+=#
 
 end

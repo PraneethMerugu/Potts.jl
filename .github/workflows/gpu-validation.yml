@@ -51,6 +51,10 @@ jobs:
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=metal
       - name: Qualify Metal device execution and invariants
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=metal --profile=smoke
+      - name: Qualify Phase 14 Wortel Metal GPU-native slice
+        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=metal --profile=paper
+      - name: Capture Phase 14 Wortel Metal device code
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_phase14_wortel_metal.jl
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-metal-${{ github.sha }}
@@ -88,6 +92,10 @@ jobs:
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=amdgpu
       - name: Qualify ROCm device execution and invariants
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=amdgpu --profile=smoke
+      - name: Qualify Phase 14 Wortel ROCm GPU-native slice
+        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=amdgpu --profile=paper
+      - name: Capture Phase 14 Wortel ROCm device code
+        run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_phase14_wortel_amdgpu.jl
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-rocm-${{ github.sha }}

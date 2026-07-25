@@ -1,0 +1,262 @@
+schema_version = "1.0.0"
+matrix_version = "phase14-morpheus-continuous-semantics-v1"
+status = "accepted-requirements-baseline"
+registered_at = "2026-07-24"
+governing_specification = "../../spec/phase-14-semantic-kernel.md"
+contract_registry = "../../spec/phase-14-contract-registry-v2.toml"
+target = "Morpheus model-semantic compatibility for continuous, rule-based, event, and cross-domain coupling; GUI, XML editing, plotting, and job management are excluded."
+reference_release = "Morpheus v2.4.1 / MorpheusML 5"
+legacy_fixture_policy = "Published MorpheusML 4 models remain compatibility fixtures and are translated under their pinned source semantics."
+claim_rule = "A row is covered only when Potts.jl can express the same observable model semantics through public APIs and passes a pinned Morpheus microfixture; similar vocabulary is insufficient."
+implementation_rule = "Acceptance of this requirements matrix does not claim that any row is implemented, qualified, or parity-proven."
+
+[classifications]
+covered_existing = "the Phase 13/14 candidate contracts already define the semantic family"
+specified_extension = "this audit adds a reusable Phase 14 contract"
+adapter_required = "core semantics are expressible, but automatic source translation requires an optional adapter"
+separate_product = "not part of model-semantic compatibility"
+
+[[sources]]
+id = "morpheus-v2.4.1"
+url = "https://gitlab.com/morpheus.lab/morpheus/-/releases/v2.4.1"
+evidence = "pinned current compatibility release and first stable MorpheusML 5 release family"
+
+[[sources]]
+id = "morpheus-time-scales"
+url = "https://morpheus.gitlab.io/faq/modeling/time-scales/"
+evidence = "global time, MCSDuration, system time-scaling, and system-local time"
+
+[[sources]]
+id = "morpheus-equation-rule-function"
+url = "https://morpheus.gitlab.io/faq/modeling/equation-rule-function/"
+evidence = "reactive equations, synchronous recurrence rules, and pure functions are distinct"
+
+[[sources]]
+id = "morpheus-cell-cycle"
+url = "https://morpheus.gitlab.io/model/m0033/"
+evidence = "per-cell ODE systems coupled to CPM division with independently controlled time scale and numerical step"
+
+[[sources]]
+id = "morpheus-integrate-fire"
+url = "https://morpheus.gitlab.io/model/m2004/"
+evidence = "sampled condition event resetting continuous state"
+
+[[sources]]
+id = "morpheus-sbml"
+url = "https://morpheus.gitlab.io/courses/sbml-import/"
+evidence = "SBML Level 3 core import target and global or CellType placement"
+
+[[sources]]
+id = "morpheus-formalisms"
+url = "https://gitlab.com/morpheus.lab/morpheus/-/wikis/formalisms"
+evidence = "System solvers, synchronous equations/rules, delay properties, stochastic and reaction-diffusion systems"
+
+[[sources]]
+id = "morpheus-field-cell"
+url = "https://morpheus.gitlab.io/model/m5481/"
+evidence = "field reaction terms that depend on cell occupancy and cell properties"
+
+[[sources]]
+id = "morpheus-run-tumble"
+url = "https://morpheus.gitlab.io/model/m0025/"
+evidence = "scheduled stochastic events, intermediate values, and synchronous scalar/vector assignments"
+
+[[features]]
+id = "global-time-and-mcs-duration"
+name = "Global time, MCS duration, and system-local time scaling"
+classification = "specified_extension"
+source_ids = ["morpheus-time-scales", "morpheus-cell-cycle"]
+required_contract_ids = ["plan"]
+phase14_status = "specified-only"
+semantic_requirement = "Map every completed integer MCS to one exact global-time interval while preserving integer public Potts time."
+acceptance_fixture = "M0033 time-scale microfixture with independent MCS duration, system step, and time scaling"
+
+[[features]]
+id = "global-system-scope"
+name = "One mutable global continuous/rule system"
+classification = "specified_extension"
+source_ids = ["morpheus-sbml", "morpheus-formalisms"]
+required_contract_ids = ["state", "process"]
+phase14_status = "specified-only"
+semantic_requirement = "Global state is authoritative typed state, not a closure or mutable dictionary."
+acceptance_fixture = "M2004 integrate-and-fire global system"
+
+[[features]]
+id = "per-cell-system-scope"
+name = "One system instance per active cell identity and generation"
+classification = "covered_existing"
+source_ids = ["morpheus-cell-cycle"]
+required_contract_ids = ["state", "process", "plan", "lifecycle"]
+phase14_status = "specified-only"
+semantic_requirement = "All eligible cells advance from one common input snapshot with explicit division, transition, retirement, and reuse policies."
+acceptance_fixture = "M0033 per-cell oscillator and division"
+
+[[features]]
+id = "field-system-scope"
+name = "Reaction-diffusion systems over spatial fields"
+classification = "covered_existing"
+source_ids = ["morpheus-field-cell", "morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "specified-only"
+semantic_requirement = "Field geometry, boundary, reaction, diffusion, source/sink, and split order are explicit."
+acceptance_fixture = "field-cell consumption and reaction-diffusion microfixtures"
+
+[[features]]
+id = "membrane-system-scope"
+name = "Per-cell membrane-lattice state and dynamics"
+classification = "specified_extension"
+source_ids = ["morpheus-formalisms"]
+required_contract_ids = ["state", "process"]
+phase14_status = "specified-only"
+semantic_requirement = "Membrane state owns a generation-aware material coordinate and explicit remapping law under shape change."
+acceptance_fixture = "static membrane diffusion followed by one accepted-copy remap"
+
+[[features]]
+id = "differential-equations"
+name = "Coupled ordinary differential equations"
+classification = "covered_existing"
+source_ids = ["morpheus-cell-cycle", "morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "specified-only"
+semantic_requirement = "Coupled equations read one stage state and advance atomically with an explicit solver and step."
+acceptance_fixture = "Euler, Heun, and RK4 analytic systems"
+
+[[features]]
+id = "synchronous-rules"
+name = "Synchronous recurrence rules"
+classification = "specified_extension"
+source_ids = ["morpheus-equation-rule-function", "morpheus-formalisms"]
+required_contract_ids = ["process"]
+phase14_status = "specified-only"
+semantic_requirement = "Every rule in one tick reads the same pre-tick snapshot and all results commit together."
+acceptance_fixture = "permuted cyclic rule system and cellular-automaton microfixture"
+
+[[features]]
+id = "reactive-assignments-and-functions"
+name = "Reactive algebraic assignments and pure parametric functions"
+classification = "specified_extension"
+source_ids = ["morpheus-equation-rule-function"]
+required_contract_ids = ["process"]
+phase14_status = "specified-only"
+semantic_requirement = "Acyclic reactive assignments follow the dependency graph; functions are pure and do not own state."
+acceptance_fixture = "dependency-order and invalid-cycle fixtures"
+
+[[features]]
+id = "implicit-algebraic-systems"
+name = "Implicit algebraic constraints and DAEs"
+classification = "specified_extension"
+source_ids = ["morpheus-sbml", "morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "experimental-first"
+semantic_requirement = "Implicit systems use an explicit DAE contract and consistent initialization; they are never approximated as assignment rules."
+acceptance_fixture = "index-1 DAE analytic fixture and unsupported-index rejection"
+
+[[features]]
+id = "fixed-delays"
+name = "Constant-delay state"
+classification = "specified_extension"
+source_ids = ["morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "specified-only"
+semantic_requirement = "Delay history has explicit sample grid, interpolation, initialization, lifecycle, persistence, and clock."
+acceptance_fixture = "integer-step delay recurrence and restart"
+
+[[features]]
+id = "sampled-events"
+name = "Condition events evaluated on declared scheduler ticks"
+classification = "specified_extension"
+source_ids = ["morpheus-integrate-fire", "morpheus-run-tumble"]
+required_contract_ids = ["process", "plan"]
+phase14_status = "specified-only"
+semantic_requirement = "Trigger memory, evaluation schedule, assignment snapshot, delay, priority, and cascade behavior are explicit."
+acceptance_fixture = "M2004 reset and M0025 stochastic run-and-tumble events"
+
+[[features]]
+id = "root-events"
+name = "Solver-located continuous root events"
+classification = "specified_extension"
+source_ids = ["morpheus-sbml"]
+required_contract_ids = ["process", "plan"]
+phase14_status = "experimental-first"
+semantic_requirement = "Root location, tolerance, simultaneous roots, assignments, restart, and lifecycle-request timing are explicit."
+acceptance_fixture = "analytic threshold crossing and interrupted-versus-restored root event"
+
+[[features]]
+id = "stochastic-systems"
+name = "Semantically addressed stochastic rules, differential systems, reactions, and jump processes"
+classification = "specified_extension"
+source_ids = ["morpheus-run-tumble", "morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "experimental-first"
+semantic_requirement = "Random draws use declared operation/reaction identities and fixed, adaptive, or accepted-jump coordinates; scheduler order cannot shift streams, and discrete reactions are not silently replaced by deterministic rates."
+acceptance_fixture = "run-and-tumble distribution, exact jump process, hybrid reaction, and stream-isolation fixtures"
+
+[[features]]
+id = "symbol-scopes"
+name = "Global, system, cell, field, membrane, and observation symbol scopes"
+classification = "specified_extension"
+source_ids = ["morpheus-sbml", "morpheus-formalisms"]
+required_contract_ids = ["state", "process"]
+phase14_status = "specified-only"
+semantic_requirement = "Every reference resolves to a stable qualified identity; compatibility shadowing is lowered explicitly."
+acceptance_fixture = "same spelling in global and two cell-type scopes"
+
+[[features]]
+id = "mappers-and-reporters"
+name = "Typed reductions and mappings across global, cell, neighborhood, field, and membrane domains"
+classification = "specified_extension"
+source_ids = ["morpheus-field-cell", "morpheus-formalisms"]
+required_contract_ids = ["process"]
+phase14_status = "specified-only"
+semantic_requirement = "Source snapshot, domain, filter, aggregation, empty law, normalization, destination, and timing are explicit."
+acceptance_fixture = "cell-to-global sum, field-to-cell mean, and neighbor-cell average"
+
+[[features]]
+id = "lifecycle-coupling"
+name = "Continuous/rule/event state driving division, death, and transitions"
+classification = "specified_extension"
+source_ids = ["morpheus-cell-cycle", "morpheus-run-tumble"]
+required_contract_ids = ["state", "process", "plan", "lifecycle"]
+phase14_status = "specified-only"
+semantic_requirement = "A continuous event emits a typed lifecycle request committed at an explicitly scheduled lifecycle boundary."
+acceptance_fixture = "M0033 threshold-driven division with state inheritance"
+
+[[features]]
+id = "sbml-derived-systems"
+name = "SBML-derived global or per-cell continuous systems"
+classification = "adapter_required"
+source_ids = ["morpheus-sbml"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "specified-only"
+semantic_requirement = "The adapter reports supported, transformed, approximated, and rejected SBML constructs; silent semantic loss is prohibited."
+acceptance_fixture = "pinned SBML semantic-suite subset plus one BioModels oscillator"
+
+[[features]]
+id = "continuous-persistence"
+name = "Exact restart of continuous, event, delay, mapping, and multirate state"
+classification = "covered_existing"
+source_ids = ["morpheus-time-scales", "morpheus-sbml"]
+required_contract_ids = ["state", "process", "plan", "lifecycle", "observation"]
+phase14_status = "specified-only"
+semantic_requirement = "Completed-MCS checkpoints derive every future-relevant kernel value and plan position while leaving CanonicalCheckpoint v1 unchanged."
+acceptance_fixture = "uninterrupted-versus-restored global, per-cell, field, delay, sampled-event, delayed-event, and timed-lifecycle trajectories"
+
+[[features]]
+id = "morpheusml-automatic-import"
+name = "Automatic MorpheusML file translation"
+classification = "adapter_required"
+source_ids = ["morpheus-formalisms"]
+required_contract_ids = ["state", "process", "plan"]
+phase14_status = "optional-after-core"
+semantic_requirement = "Translation is not required for hand-authored semantic parity, but any importer emits a complete compatibility report."
+acceptance_fixture = "round-trip semantic manifest for selected Morpheus fixtures"
+
+[[features]]
+id = "gui-and-job-workflow"
+name = "XML GUI, plotting, job queues, and remote execution"
+classification = "separate_product"
+source_ids = []
+required_contract_ids = []
+phase14_status = "outside-model-semantic-parity"
+semantic_requirement = "None; documentation and Julia workflows may differ."
+acceptance_fixture = "not applicable"

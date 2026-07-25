@@ -278,6 +278,32 @@ function _lower_component(component::Adhesion{T}, context::_LoweringContext{T}) 
 end
 
 _lower_component(::PrescribedField, context::_LoweringContext) = _LoweredComponents()
+_lower_component(::CorePotts.SpatialRoles, context::_LoweringContext) =
+    _LoweredComponents()
+_lower_component(::Union{
+        CorePotts.SiteProperty,
+        CorePotts.AcceptedCopyUpdate,
+        CorePotts.SiteDynamics,
+        CorePotts.CellHistory,
+        CorePotts.RelationshipSet,
+        CorePotts.MCSPlan,
+        CorePotts.StagedProtocol,
+        CorePotts.ScheduledParameter,
+        CorePotts.ContinuousClock,
+        CorePotts.GlobalProperty,
+        CorePotts.MembraneProperty,
+        CorePotts.ContinuousSystem,
+        CorePotts.CellDynamics,
+        CorePotts.FieldDynamics,
+        CorePotts.FieldExchange,
+        CorePotts.RelationshipDynamics,
+        CorePotts.DelayState,
+        CorePotts.ContinuousEvent,
+        CorePotts.SymbolMap,
+        CorePotts.ContinuousModelAdapter,
+        CorePotts.PhaseObservation,
+        CorePotts.ObservationTransform}, context::_LoweringContext) =
+    _LoweredComponents()
 
 function _prescribed_field(context::_LoweringContext, identity::SemanticName)
     index = findfirst(value -> value isa PrescribedField &&
@@ -459,6 +485,21 @@ end
 
 _observable_symbol(component) = nothing
 
+function _declared_spatial_roles(components::Tuple)
+    entries = Tuple(component for component in components
+        if component isa CorePotts.SpatialRoles)
+    length(entries) <= 1 || throw(ArgumentError(
+        "a model may declare at most one SpatialRoles value"))
+    return isempty(entries) ? nothing : only(entries)
+end
+
+_resolved_spatial_role(::Nothing, field::Symbol, default) = default
+function _resolved_spatial_role(roles::CorePotts.SpatialRoles,
+        field::Symbol, default)
+    value = getfield(roles, field)
+    return value isa CorePotts.OmittedSpatialRole ? default : value
+end
+
 """
     lower(model; dimensions, spacing)
 
@@ -483,6 +524,17 @@ function lower(model::PottsModel; dimensions::Integer,
         CorePotts.ConnectivityRole(), Val(dimensions); spacing = typed_spacing)
     query_relation = CorePotts.first_shell_relation(
         CorePotts.SpatialQueryRole(), Val(dimensions); spacing = typed_spacing)
+    declared_roles = _declared_spatial_roles(normalized.components)
+    proposal_relation = _resolved_spatial_role(
+        declared_roles, :proposal, proposal_relation)
+    contact_relation = _resolved_spatial_role(
+        declared_roles, :contact, contact_relation)
+    surface_relation = _resolved_spatial_role(
+        declared_roles, :surface, surface_relation)
+    connectivity_relation = _resolved_spatial_role(
+        declared_roles, :connectivity, connectivity_relation)
+    query_relation = _resolved_spatial_role(
+        declared_roles, :query, query_relation)
     context = _LoweringContext{T, typeof(normalized.cell_types),
         typeof(normalized.media), typeof(normalized.components), typeof(contact_relation),
         typeof(surface_relation), typeof(connectivity_relation), typeof(query_relation)}(
@@ -509,6 +561,10 @@ function lower(model::PottsModel; dimensions::Integer,
     return LoweredModel(normalized, core_model, schema, lowered.properties,
         (normalized.cell_types..., normalized.media...), cell_type_ids, medium_ids)
 end
+
+"""Return the explicit Phase 14 spatial-role declaration, or `nothing` for a Phase 13 model."""
+spatial_roles(lowered::LoweredModel) =
+    _declared_spatial_roles(lowered.normalized.components)
 
 function _property_overrides(lowered::LoweredModel, cell_type::CellType,
         explicit::NamedTuple)

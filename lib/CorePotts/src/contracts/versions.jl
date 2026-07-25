@@ -32,6 +32,43 @@ const CHECKERBOARD_SCHEDULER_CONTRACT_VERSION = v"1.0.0"
 const LOTTERY_ALGORITHM_CONTRACT_VERSION = v"1.0.0"
 const TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION = v"1.0.0"
 
+# Phase 14 additions are intentionally versioned outside `ScientificContractVersions`: that
+# Phase 13 value is a frozen public artifact and must remain byte-for-byte constructible.
+const PHASE14_CONTRACT_SET_VERSION = v"2.0.0"
+const COUPLED_EXECUTION_CONTRACT_VERSION = v"1.0.0"
+const DYNAMIC_STATE_CONTRACT_VERSION = v"1.0.0"
+const CONTINUOUS_SYSTEM_CONTRACT_VERSION = v"1.0.0"
+const COUPLED_CHECKPOINT_SCHEMA_VERSION = v"1.0.0"
+const BUDGETED_SEQUENTIAL_ALGORITHM_CONTRACT_VERSION = v"1.0.0"
+
+"""Inspectable versions for the seven additive Phase 14 semantic-kernel contracts."""
+struct Phase14ContractVersions
+    status::Symbol
+    contract_set::VersionNumber
+    state::VersionNumber
+    process::VersionNumber
+    plan::VersionNumber
+    lifecycle::VersionNumber
+    observation::VersionNumber
+    spatial_roles::VersionNumber
+    potts_algorithm_identities::VersionNumber
+end
+
+const PHASE14_CONTRACT_VERSIONS = Phase14ContractVersions(
+    :wortel_cpu_reference_proven,
+    PHASE14_CONTRACT_SET_VERSION,
+    v"0.2.0",
+    v"0.2.0",
+    v"0.2.0",
+    v"0.2.0",
+    v"0.2.0",
+    v"0.2.0",
+    v"0.2.0",
+)
+
+"""Return the additive Phase 14 contract-version report without altering the Phase 13 report."""
+phase14_contract_versions() = PHASE14_CONTRACT_VERSIONS
+
 const SCIENTIFIC_CONTRACT_VERSIONS = ScientificContractVersions(
     :phase13_frozen,
     RNG_CONTRACT_VERSION,
