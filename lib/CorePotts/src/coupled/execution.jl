@@ -151,6 +151,10 @@ process_writes(sample::HistorySample) = ((:history, sample.history),)
 function _validate_plan_write_conflicts(entries)
     for phase in entries
         phase isa CoupledPhase || continue
+        all(invocation -> invocation.active === nothing ||
+                invocation.active isa Union{During, AbstractMCSSchedule},
+            phase.invocations) || throw(ArgumentError(
+            "process activation must be During(...), an MCS schedule, or nothing"))
         writes = Tuple(target for invocation in phase.invocations
             for target in invocation_writes(invocation))
         length(unique(writes)) == length(writes) || throw(ArgumentError(
@@ -586,12 +590,13 @@ function init_coupled(potts::ScientificPottsIntegrator, plan::MCSPlan,
         initial_fingerprint)
 end
 
-function _invocation_active(invocation, stage)
+function _invocation_active(invocation, stage, target_mcs)
     invocation.active === nothing && return true
+    invocation.active isa AbstractMCSSchedule &&
+        return is_due(invocation.active, target_mcs)
     invocation.active isa During || throw(ArgumentError(
-        "process activation must be During(...) or nothing"))
-    stage === nothing && return false
-    return stage.name in invocation.active.stages
+        "process activation must be During(...), an MCS schedule, or nothing"))
+    return stage !== nothing && stage.name in invocation.active.stages
 end
 
 function execute_process!(candidate::CoupledState, snapshot::CoupledState,
@@ -641,7 +646,7 @@ function _execute_phase!(integrator::CoupledIntegrator,
         phase::CoupledPhase, target_mcs::UInt64, stage)
     if !(integrator.potts.plan.backend isa KernelAbstractions.CPU)
         for invocation in phase.invocations
-            _invocation_active(invocation, stage) || continue
+            _invocation_active(invocation, stage, target_mcs) || continue
             process = invocation_process(invocation)
             process isa SiteDynamics || throw(ArgumentError(
                 "the GPU-native coupled phase currently admits only qualified site dynamics"))
@@ -658,7 +663,7 @@ function _execute_phase!(integrator::CoupledIntegrator,
     potts_candidate = deepcopy(potts_snapshot)
     written_cell_properties = Symbol[]
     for invocation in phase.invocations
-        _invocation_active(invocation, stage) || continue
+        _invocation_active(invocation, stage, target_mcs) || continue
         process = invocation_process(invocation)
         if process isa CellDynamics
             execute_cell_dynamics!(

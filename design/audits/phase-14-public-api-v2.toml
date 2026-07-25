@@ -42,5 +42,10 @@ PottsToolkit = [
     "Act",
     "AttemptsPerSite",
     "BudgetedSequentialCPM",
+    "FragmentExport",
+    "FragmentPortContract",
+    "FragmentRequirement",
     "SpatialRoles",
+    "fragment_port_contract",
+    "required_backends",
 ]

@@ -151,6 +151,19 @@ not deferred to G4. Each reusable law is implemented and proven first through th
 sequential CPU reference, then through backend-resident Metal and ROCm production paths over the
 same canonical plan.
 
+G3 is executed through three non-substitutable gates:
+
+- **G3-A — generic authoring and lowering: complete.** Implement Decision 0033 named typed
+  fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
+  backend requirements, and the generic Wang lowering/order fixture. Evidence:
+  [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
+- **G3-B — Wang sequential CPU reference: current.** Replace every structural fixture law with
+  the source-backed Wang state, field, ODE, relationship, observation, and lifecycle
+  implementation and close exact/invariant/restart conformance.
+- **G3-C — Wang Metal/ROCm qualification: pending G3-B.** Close the identical canonical model on
+  real Metal and ROCm with residency, device-code, replay, restart, transfer, allocation, memory,
+  and performance evidence.
+
 Deliver:
 
 - device cell state and bounded ring histories;

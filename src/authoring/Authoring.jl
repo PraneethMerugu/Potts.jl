@@ -29,6 +29,8 @@ include("level1_units.jl")
 
 export Namespace, SemanticName, AbstractBiologicalType, CellType, Medium
 export AbstractFragmentRole, CellRole, FieldRole
+export FragmentPortContract, FragmentRequirement, FragmentExport
+export fragment_port_contract, required_backends
 export Binding, BindingTable, PairIdentity, PairwiseLaw
 export AbstractPropertyInvariant, UnboundedProperty, ClosedPropertyInterval
 export PropertyVisibility, PublicProperty, PrivateProperty

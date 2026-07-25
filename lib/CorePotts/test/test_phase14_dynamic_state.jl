@@ -452,6 +452,16 @@ end
         :activate, property; gained = SetTo(1.0f0))
     decay = SiteDynamics(:decay, property;
         update = SaturatingSubtract(0.25f0))
+    periodic_decay = Update(decay; active = PeriodicMCS(2, 2))
+    @test !CorePotts._invocation_active(periodic_decay, nothing, UInt64(1))
+    @test CorePotts._invocation_active(periodic_decay, nothing, UInt64(2))
+    @test CorePotts._invocation_active(periodic_decay, nothing, UInt64(4))
+    @test !CorePotts._invocation_active(periodic_decay, nothing, UInt64(5))
+    @test_throws ArgumentError MCSPlan(
+        PottsAttempts(),
+        CoupledPhase(:invalid_activation, Update(decay; active = :hidden)),
+        LifecyclePhase(),
+        ObservationPhase())
     workspace = CoupledAttemptWorkspace((site_state,), (activation,))
     potts = init_scientific(compiled, fixture.proposal_relation,
         components, SequentialCPM(temperature = 1000.0f0);
