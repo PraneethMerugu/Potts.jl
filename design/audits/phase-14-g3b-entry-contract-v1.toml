@@ -1,0 +1,441 @@
+schema_version = "1.0.0"
+status = "accepted-implementation-entry"
+accepted_at = "2026-07-25"
+model_id = "wang-2025-collective-tumor-migration"
+gate = "G3-B"
+scope = "source-backed sequential CPU reference through backend-adaptable canonical state, processes, workspaces, and one root plan"
+semantic_authority = "../../spec/phase-14-semantic-kernel.md"
+gpu_authority = "../../spec/decisions/0032-phase-14-gpu-native-promotion.md"
+authoring_authority = "../../spec/decisions/0033-phase-14-generic-hierarchical-authoring.md"
+source_record = "phase-14-model-source-records-v1.toml"
+order_authority = "phase-14-wang-order-oracle-v1.toml"
+source_revision = "60ebcf013aafefdff39ebe566114ee79f2a6e54d"
+source_runtime = "CompuCell3D 4.2.5"
+paper_doi = "10.1016/j.bpj.2025.04.010"
+implementation_rule = "No Wang-specific runtime hierarchy or public paper-specific API. Generic state and process declarations lower to one canonical model; physical storage is backend-adapted before execution."
+
+[entry_decision]
+architecture_interview_required = false
+implementation_may_start = true
+open_runtime_oracles_block_generic_primitives = false
+open_runtime_oracles_block_complete_wang_claim = true
+cpu_oracle_is_architectural_authority = false
+cpu_oracle_purpose = "deterministic semantic and numerical reference for the identical canonical model later qualified on Metal and ROCm"
+
+[profiles.source_faithful_cpu]
+floating_precision = "mixed source-compatible: Float32 field and source-runtime-equivalent Float64 cell algebra/ODE oracle"
+purpose = "foreign-runtime agreement and exact/invariant/restart conformance"
+backend = "sequential CPU"
+
+[profiles.portable]
+floating_precision = "Float32"
+backends = ["CPU", "Metal", "ROCm"]
+purpose = "one portable numerical profile used for cross-backend conformance and G3-C qualification"
+
+[capacities]
+cell_capacity = "construction-time parameter, fixed before execution"
+history_capacity = 5
+relationship_maximum_degree = 4
+relationship_capacity = "derived and preallocated from cell_capacity * maximum_degree / 2 plus explicit slack policy"
+observation_capacity = "derived from cell_capacity and declared output schema"
+overflow_rule = "deterministic failure status; never allocate, drop, or reorder silently"
+
+[[state]]
+id = "secretome"
+owner = "field"
+schema = "scalar concentration on 256x256x1 square lattice"
+logical_type = "Float32"
+storage = "current"
+physical_layout = "contiguous backend-resident grid plus same-shape ping-pong grid"
+initialization = "zero before startup; medium sites are set to 1 by every field substep"
+lifecycle = "lattice lifetime; no division or death policy"
+persistence = ["field values", "published buffer index", "completed field substep boundary"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "fpp_polarity_force.xml DiffusionSolverFE/secretome"
+
+[[state]]
+id = "centroid_history"
+owner = "cell"
+schema = "two-component centroid sample"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "bounded-history"
+physical_layout = "structure-of-arrays ring: x[capacity,cell], y[capacity,cell], head[cell], count[cell]"
+initialization = "sample post-Potts centroid once per MCS; no read before more than five real samples exist"
+lifecycle = "initialize active slot; reset on retirement or generation change; source target has no division"
+persistence = ["samples", "head", "count", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict x_list/y_list"
+
+[[state]]
+id = "self_polarity"
+owner = "cell"
+schema = "normalized two-component displacement and pre-normalization magnitude"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays x[cell], y[cell], magnitude[cell]"
+initialization = "zero"
+lifecycle = "zero on create; reset on retirement"
+persistence = ["x", "y", "magnitude", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "x_self_polarity, y_self_polarity, self_polarity"
+
+[[state]]
+id = "signal"
+owner = "cell"
+schema = "nonnegative scalar secretome input s"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays s[cell]"
+initialization = "zero"
+lifecycle = "zero on create and retirement"
+persistence = ["s", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['s'] and RR['s']"
+
+[[state]]
+id = "uptake_multiplier"
+owner = "cell"
+schema = "positive scalar calibration multiplier"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays multiplier[cell]"
+initialization = "unset status plus zero value"
+lifecycle = "reset on create and retirement"
+persistence = ["multiplier", "initialized status", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['multiply']"
+
+[[state]]
+id = "intracellular_state"
+owner = "cell"
+schema = "rac dynamic species, constant a, mapped input s, and semantic ODE time"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays rac[cell], a[cell], time[cell]"
+initialization = "rac sampled uniformly on [0,30), a=1, s=0, followed by one source-equivalent 2880-time-unit advance before MCS 0"
+lifecycle = "initialize with semantic RNG namespace on create; reset on retirement"
+persistence = ["rac", "a", "time", "cell generation", "numerical method identity"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "Antimony RR model and OdeSteppable"
+
+[[state]]
+id = "focal_strength"
+owner = "cell"
+schema = "scalar focal-point spring strength"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays strength[cell]"
+initialization = "zero before the MCS 0 retune"
+lifecycle = "zero on create and retirement"
+persistence = ["strength", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['fpp']"
+
+[[state]]
+id = "focal_relationships"
+owner = "relationship"
+schema = "undirected generation-aware cell pair with strength, target length, and maximum length"
+logical_type = "integer endpoints/generations plus profile floating type payload"
+storage = "registered-specialized"
+physical_layout = "bounded canonical SoA: endpoint_a, generation_a, endpoint_b, generation_b, strength, target_length, maximum_length, active"
+initialization = "empty; accepted-copy topology follows source FocalPointPlasticity eligibility"
+lifecycle = "remove stale endpoint generation before slot reuse"
+persistence = ["active edges", "canonical order", "payload", "endpoint generations", "capacity"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "FocalPointPlasticity Local plugin"
+
+[[state]]
+id = "motility_force"
+owner = "cell"
+schema = "two-component external-potential coefficient plus derived magnitude/coefficient/alignment fraction"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays x[cell], y[cell], magnitude[cell], hill_coefficient[cell], alignment_fraction[cell]"
+initialization = "zero"
+lifecycle = "zero on create and retirement"
+persistence = ["x", "y", "magnitude", "hill_coefficient", "alignment_fraction", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "lambdaVecX/Y and output attributes"
+
+[[workspace]]
+id = "field_ping_pong"
+layout = "same shape and element type as secretome"
+capacity = "exact lattice dimensions"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "cell_reduction"
+layout = "per-cell uptake totals plus bounded global maximum reduction scratch"
+capacity = "cell_capacity plus backend reduction scratch determined at construction"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "polarity_snapshot"
+layout = "SoA snapshot x[cell], y[cell] and neighbor sum/count"
+capacity = "cell_capacity"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "relationship_transactions"
+layout = "bounded create/remove/retune request arrays, conflict keys, status buffer"
+capacity = "derived from relationship_capacity and accepted-copy attempt policy"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "observation_reducers"
+layout = "declared per-cell record columns and bounded geometric accumulators"
+capacity = "cell_capacity plus declared aggregate reducers"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "potts_metropolis"
+phase = 1
+trigger = "every MCS 0:499"
+reads = ["ownership", "cell geometry", "motility_force", "focal_relationships"]
+writes = ["ownership", "cell geometry", "contact-neighbor graph", "focal_relationships"]
+snapshot = "accepted-copy transaction snapshot for topology; preceding completed-MCS snapshot for force and relationship energy"
+commit = "ordered sequential Potts commit with accepted-copy relationship transaction"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "secretome_field_advance"
+phase = 2
+trigger = "every MCS 0:499"
+reads = ["secretome", "post-Potts ownership/type field"]
+writes = ["secretome"]
+snapshot = "process-entry snapshot for each substep"
+commit = "atomic synchronous commit per substep"
+numerical_policy = "five Float32 nearest-neighbor periodic forward-Euler substeps; diffusion coefficient 0.2 per substep; then set every Medium site to concentration 1 after each substep"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "centroid_sample"
+phase = 3
+trigger = "every MCS 0:499"
+reads = ["post-Potts cell centroid"]
+writes = ["centroid_history"]
+snapshot = "completed-Potts snapshot"
+commit = "atomic synchronous commit"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "self_polarity_from_history"
+phase = 4
+trigger = "MCS > 120"
+reads = ["centroid_history including current sample"]
+writes = ["self_polarity"]
+snapshot = "completed centroid_sample snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "normalize current centroid minus ring sample four MCS intervals earlier; zero displacement maps to zero vector"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "secretome_signal_exchange"
+phase = 5
+trigger = "120 < MCS < 210 reset s=0; MCS == 210 calibrate; MCS > 210 uptake and publish s"
+reads = ["secretome", "ownership", "cell volume", "uptake_multiplier"]
+writes = ["secretome", "signal", "uptake_multiplier"]
+snapshot = "completed field and polarity snapshot"
+commit = "deterministic cell-id-ordered CPU oracle; conflict-free site-parallel mutation plus deterministic per-cell/global reductions for portable profile"
+numerical_policy = "for every cell-owned site remove min(1, 0.0025*C); raw uptake is removed_total/cell_volume. At MCS 210 set the same global multiplier 4/max(raw uptake) for every cell without writing s. After MCS 210 publish s=raw uptake*multiplier."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "intracellular_advance"
+phase = 6
+trigger = "one startup advance before MCS 0; then every MCS > 120"
+reads = ["signal", "intracellular_state"]
+writes = ["intracellular_state"]
+snapshot = "completed secretome_signal_exchange snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "drac/dt = a+s-0.1*rac over 2880 time units with a and s constant; source CPU oracle is RoadRunner/CVODE-equivalent and portable execution is tolerance-qualified against the closed-form affine solution"
+rng_namespace = "wang/intracellular/rac-initialization"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "focal_parameter_retune"
+phase = 7
+trigger = "MCS % 10 == 0"
+reads = ["MCS", "focal_relationships"]
+writes = ["focal_strength", "focal_relationships payload only"]
+snapshot = "completed intracellular_advance snapshot"
+commit = "atomic synchronous relationship retune distinct from accepted-copy topology"
+numerical_policy = "strength=0 for MCS<120, 20 for 120<=MCS<210, scanned strength for MCS>=210; target length=8, maximum length=12"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "neighbor_polarity_alignment"
+phase = 8
+trigger = "MCS > 120"
+reads = ["contact-neighbor graph", "self_polarity snapshot", "focal_strength"]
+writes = ["self_polarity", "motility_force.alignment_fraction"]
+snapshot = "all neighbor means reduced before any aligned polarity is published"
+commit = "atomic synchronous commit"
+numerical_policy = "p=min(focal_strength/1000,1)*0.4; normalize p*mean(neighbor self polarity)+(1-p)*self polarity; empty neighbor set contributes zero"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "protrusion_force_update"
+phase = 9
+trigger = "MCS > 120"
+reads = ["self_polarity", "intracellular_state.rac", "scanned protrusion-force maximum"]
+writes = ["motility_force"]
+snapshot = "completed neighbor_polarity_alignment snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "h=rac^4/(40^4+rac^4); lambdaVec=-force_max*h*polarity; reported magnitude=force_max*h"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "relationship_lifecycle_cleanup"
+phase = 10
+trigger = "every completed MCS and every endpoint retirement"
+reads = ["focal_relationships", "cell slot generations"]
+writes = ["focal_relationships"]
+snapshot = "completed process snapshot before observation"
+commit = "deterministic canonical compaction"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "wang_observations"
+phase = 11
+trigger = "per-cell source record every MCS > 120; geometric target at registered MCS values"
+reads = ["cell identity", "centroid", "self_polarity", "intracellular_state", "signal", "motility_force", "focal_strength"]
+writes = []
+snapshot = "completed lifecycle snapshot"
+commit = "read-only device reduction; host publication only at declared observation boundary"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[plan]
+single_root = true
+ordered_processes = [
+    "potts_metropolis",
+    "secretome_field_advance",
+    "centroid_sample",
+    "self_polarity_from_history",
+    "secretome_signal_exchange",
+    "intracellular_advance",
+    "focal_parameter_retune",
+    "neighbor_polarity_alignment",
+    "protrusion_force_update",
+    "relationship_lifecycle_cleanup",
+    "wang_observations",
+]
+forbid_fragment_local_schedulers = true
+forbid_hidden_callbacks = true
+forbid_runtime_symbol_lookup = true
+
+[boundary_expectations.mcs_120]
+potts_focal_strength = 0.0
+self_polarity_runs = false
+intracellular_advance_runs = false
+retune_strength = 20.0
+first_potts_using_retune = 121
+
+[boundary_expectations.mcs_210]
+potts_focal_strength = 20.0
+field_runs_before_exchange = true
+exchange_removes_field_mass = true
+exchange_writes_multiplier = true
+exchange_writes_signal = false
+ode_signal = 0.0
+retune_writes_scanned_strength = true
+force_reads_scanned_strength = true
+first_potts_using_scanned_strength = 211
+
+[boundary_expectations.mcs_211]
+exchange_writes_signal = true
+ode_reads_same_mcs_signal = true
+potts_uses_force_from_mcs = 210
+
+[[conformance]]
+id = "history-ring"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["ring wrap", "source t-minus-4", "named paper t-minus-5 sensitivity", "zero displacement", "restart with each head position"]
+
+[[conformance]]
+id = "intracellular-affine-ode"
+kind = "analytic-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["s=0", "constant nonzero s", "startup advance", "MCS 210 zero signal", "MCS 211 same-MCS signal", "restart"]
+
+[[conformance]]
+id = "periodic-field"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["constant field invariant", "single-site impulse one substep", "five-substep manufactured solution", "periodic edge wrap", "medium reset after every substep", "mass balance without reset", "restart"]
+
+[[conformance]]
+id = "uptake-calibration"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["per-site cap", "relative uptake branch", "per-cell volume normalization", "deterministic maximum", "MCS 210 no signal write", "MCS 211 signal write", "field mass balance", "restart"]
+
+[[conformance]]
+id = "relationship-graph"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["create", "duplicate rejection", "degree capacity", "remove", "retune without topology change", "accepted/rejected/no-op proposal", "stale endpoint generation", "canonical order", "restart"]
+
+[[conformance]]
+id = "polarity-and-force"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["empty neighbor set", "synchronous neighbor snapshot", "alignment clamp", "zero vector normalization", "Hill limits", "force sign", "restart"]
+
+[[conformance]]
+id = "wang-plan-boundaries"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["ordinary order", "MCS 120", "MCS 210", "MCS 211", "restart after every declared stable boundary"]
+
+[[conformance]]
+id = "device-readiness"
+kind = "structural"
+profiles = ["portable"]
+cases = ["Adapt round trip", "device-storage validation", "all capacities preallocated", "no scalar host loop contract", "no hidden callback", "zero unobserved host transfer", "zero steady-state allocation"]
+
+[[runtime_oracles]]
+id = "wang-potts-boundary-and-attempt-accounting"
+status = "required-before-g3b-closure"
+blocks = ["full source-faithful Potts trace", "G3-B completion claim"]
+does_not_block = ["state substrate", "history", "field", "exchange", "ODE", "relationship storage", "observation reducers"]
+question = "Confirm default CompuCell3D 4.2.5 Potts boundary behavior and exact attempted-copy count/order for the 256x256 Wang XML."
+evidence_target = "small exact-runtime trace with attempted source/target coordinates at boundary sites and total attempts per MCS"
+
+[[runtime_oracles]]
+id = "wang-roadrunner-numerical-profile"
+status = "required-before-g3b-closure"
+blocks = ["source-faithful intracellular tolerance registration", "G3-B completion claim"]
+does_not_block = ["generic fixed-step/closed-form cell state substrate", "portable affine-law implementation"]
+question = "Record libRoadRunner integrator identity, tolerances, and rac outputs for the pinned affine Antimony model over a 2880-unit invocation."
+evidence_target = "exact CC3D 4.2.5 startup and stepped rac trace for fixed rac0 and s values"
+
+[deferred]
+items = [
+    "recovery of original NumPy and CompuCell3D seed identities",
+    "portable execution of archived pickle/UMAP/classifier artifacts",
+    "Phase 14.3 ensemble sizes, classifier thresholds, and final paper-figure tolerance",
+    "performance tuning that does not alter frozen logical storage or process contracts",
+    "CUDA qualification",
+    "Mermaid.jl integration",
+]
+
+[acceptance]
+g3b_requires = [
+    "every state and process above implemented through generic canonical declarations",
+    "all source_faithful_cpu conformance rows pass",
+    "both required runtime oracles are closed",
+    "restart passes at every declared stable boundary",
+    "G3-A identity, lowering, API inventory, and Phase 13 behavior remain unchanged",
+]
+g3c_inherits = [
+    "identical canonical model and logical storage",
+    "portable conformance rows on real Metal and ROCm",
+    "residency, device-code, replay, restart, transfer, allocation, memory, and performance evidence",
+]

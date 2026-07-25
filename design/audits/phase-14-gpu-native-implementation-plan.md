@@ -157,9 +157,15 @@ G3 is executed through three non-substitutable gates:
   fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
   backend requirements, and the generic Wang lowering/order fixture. Evidence:
   [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
-- **G3-B — Wang sequential CPU reference: current.** Replace every structural fixture law with
-  the source-backed Wang state, field, ODE, relationship, observation, and lifecycle
-  implementation and close exact/invariant/restart conformance.
+- **G3-B — Wang sequential CPU reference: current; implementation entry frozen.** The
+  [G3-B entry packet](phase-14-g3b-entry-packet.md) and
+  [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the
+  source-backed state/process inventory, device-ready storage ABI, numerical profiles, conformance
+  matrix, and two remaining foreign-runtime oracles. Replace every structural fixture law with
+  the registered Wang state, field, ODE, relationship, observation, and lifecycle implementation
+  and close exact/invariant/restart conformance. The first implementation increment, the
+  backend-adaptable bounded [cell-history substrate](phase-14-g3b-history-evidence.md), passes its
+  sequential CPU gate; this does not close G3-B or qualify a GPU backend.
 - **G3-C — Wang Metal/ROCm qualification: pending G3-B.** Close the identical canonical model on
   real Metal and ROCm with residency, device-code, replay, restart, transfer, allocation, memory,
   and performance evidence.

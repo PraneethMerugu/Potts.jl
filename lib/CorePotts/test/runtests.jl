@@ -30,6 +30,7 @@ using CorePotts
     include("test_scientific_mechanics.jl")
     include("test_sequential_algorithms.jl")
     include("test_phase14_dynamic_state.jl")
+    include("test_phase14_cell_history.jl")
     include("test_checkerboard_algorithms.jl")
     include("test_tiled_checkerboard.jl")
     include("test_lottery_algorithms.jl")

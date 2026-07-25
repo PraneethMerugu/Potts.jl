@@ -467,13 +467,57 @@ end
 HistorySample(history::Union{Symbol, CellHistory}) =
     HistorySample(history isa Symbol ? history : history.name)
 
-mutable struct CellHistoryState{D <: CellHistory, T}
+mutable struct CellHistoryState{D <: CellHistory, V <: AbstractMatrix,
+        H <: AbstractVector{UInt32}, F <: AbstractVector{UInt32},
+        G <: AbstractVector{CellGeneration}}
     declaration::D
-    values::Matrix{T}
-    heads::Vector{UInt32}
-    fills::Vector{UInt32}
-    generations::Vector{CellGeneration}
+    values::V
+    heads::H
+    fills::F
+    generations::G
     latest_sample_mcs::UInt64
+end
+
+function Adapt.adapt_structure(to, state::CellHistoryState)
+    return CellHistoryState(
+        state.declaration,
+        Adapt.adapt(to, state.values),
+        Adapt.adapt(to, state.heads),
+        Adapt.adapt(to, state.fills),
+        Adapt.adapt(to, state.generations),
+        state.latest_sample_mcs)
+end
+
+"""
+Descriptor-free bounded-history view admitted as a kernel argument after backend adaptation.
+
+The declaration and host-owned semantic clock stay in `CellHistoryState`. The execution view
+contains only fixed-capacity arrays and compile-time identity/length metadata.
+"""
+struct CellHistoryExecutionState{Name, Length, V <: AbstractMatrix,
+        H <: AbstractVector{UInt32}, F <: AbstractVector{UInt32},
+        G <: AbstractVector{CellGeneration}}
+    values::V
+    heads::H
+    fills::F
+    generations::G
+end
+
+CellHistoryExecutionState(state::CellHistoryState) =
+    CellHistoryExecutionState{state.declaration.name,
+        Int(state.declaration.length), typeof(state.values),
+        typeof(state.heads), typeof(state.fills), typeof(state.generations)}(
+        state.values, state.heads, state.fills, state.generations)
+
+function Adapt.adapt_structure(to,
+        state::CellHistoryExecutionState{Name, Length}) where {Name, Length}
+    values = Adapt.adapt(to, state.values)
+    heads = Adapt.adapt(to, state.heads)
+    fills = Adapt.adapt(to, state.fills)
+    generations = Adapt.adapt(to, state.generations)
+    return CellHistoryExecutionState{Name, Length, typeof(values),
+        typeof(heads), typeof(fills), typeof(generations)}(
+        values, heads, fills, generations)
 end
 
 function initialize_cell_history(history::CellHistory, samples::AbstractVector{T},
@@ -485,20 +529,22 @@ function initialize_cell_history(history::CellHistory, samples::AbstractVector{T
     values = Matrix{T}(undef, capacity, width)
     heads = zeros(UInt32, capacity)
     fills = zeros(UInt32, capacity)
-    for slot in 1:capacity
-        if history.initial isa RepeatInitialSample
-            @inbounds values[slot, :] .= samples[slot]
-            heads[slot] = UInt32(width)
-            fills[slot] = UInt32(width)
-        elseif history.initial isa MissingUntilFull
-            @inbounds values[slot, :] .= samples[slot]
-        else
-            explicit = history.initial.values
-            size(explicit) == size(values) || throw(ArgumentError(
-                "ExplicitInitialHistory must have capacity by history-length shape"))
-            copyto!(values, explicit)
-            heads[slot] = UInt32(width)
-            fills[slot] = UInt32(width)
+    if history.initial isa ExplicitInitialHistory
+        explicit = history.initial.values
+        size(explicit) == size(values) || throw(ArgumentError(
+            "ExplicitInitialHistory must have capacity by history-length shape"))
+        copyto!(values, explicit)
+        fill!(heads, UInt32(width))
+        fill!(fills, UInt32(width))
+    else
+        for slot in 1:capacity
+            if history.initial isa RepeatInitialSample
+                fill!(@view(values[slot, :]), samples[slot])
+                heads[slot] = UInt32(width)
+                fills[slot] = UInt32(width)
+            else
+                fill!(@view(values[slot, :]), samples[slot])
+            end
         end
     end
     return CellHistoryState(history, values, heads, fills,
@@ -525,6 +571,22 @@ function maybe_history_value(state::CellHistoryState, cell::CellID,
     return HistoryValue(true, @inbounds(state.values[slot, column]))
 end
 
+@inline function maybe_history_value(
+        state::CellHistoryExecutionState{Name, Length}, cell::CellID,
+        generation::CellGeneration, lag::Lag) where {Name, Length}
+    slot = Int(value(cell))
+    if !(1 <= slot <= length(state.generations)) ||
+            @inbounds(state.generations[slot]) != generation
+        return HistoryValue(false, zero(eltype(state.values)))
+    end
+    fill = @inbounds state.fills[slot]
+    lag.value < fill ||
+        return HistoryValue(false, @inbounds(state.values[slot, 1]))
+    head = Int(@inbounds state.heads[slot])
+    column = mod(head - Int(lag.value) - 1, Length) + 1
+    return HistoryValue(true, @inbounds(state.values[slot, column]))
+end
+
 function history_value(state::CellHistoryState, cell::CellID,
         generation::CellGeneration, lag::Lag)
     result = maybe_history_value(state, cell, generation, lag)
@@ -540,23 +602,26 @@ function sample_history!(state::CellHistoryState, samples::AbstractVector,
     length(samples) == capacity && length(active) == capacity &&
         length(generations) == capacity || throw(ArgumentError(
         "history sampling inputs must match history capacity"))
-    candidate_values = copy(state.values)
-    candidate_heads = copy(state.heads)
-    candidate_fills = copy(state.fills)
+    0 <= target_mcs <= typemax(UInt64) || throw(ArgumentError(
+        "history sample MCS must be non-negative and fit UInt64"))
+    # Validate the complete synchronous input before publishing any sample. This preserves
+    # transaction atomicity without allocating full candidate copies on every MCS.
     for slot in 1:capacity
         active[slot] || continue
         state.generations[slot] == generations[slot] || throw(ArgumentError(
             "history sampling uses a stale cell generation"))
-        head = mod(Int(candidate_heads[slot]), Int(state.declaration.length)) + 1
-        @inbounds candidate_values[slot, head] = convert(
-            eltype(candidate_values), samples[slot])
-        candidate_heads[slot] = UInt32(head)
-        candidate_fills[slot] = min(state.declaration.length,
-            candidate_fills[slot] + UInt32(1))
+        convert(eltype(state.values), samples[slot])
     end
-    copyto!(state.values, candidate_values)
-    copyto!(state.heads, candidate_heads)
-    copyto!(state.fills, candidate_fills)
+    width = Int(state.declaration.length)
+    for slot in 1:capacity
+        active[slot] || continue
+        head = mod(Int(@inbounds(state.heads[slot])), width) + 1
+        @inbounds state.values[slot, head] =
+            convert(eltype(state.values), samples[slot])
+        @inbounds state.heads[slot] = UInt32(head)
+        @inbounds state.fills[slot] = min(state.declaration.length,
+            state.fills[slot] + UInt32(1))
+    end
     state.latest_sample_mcs = UInt64(target_mcs)
     return state
 end

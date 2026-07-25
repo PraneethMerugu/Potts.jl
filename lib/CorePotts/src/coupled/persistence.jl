@@ -106,10 +106,10 @@ function _state_block(state::CellHistoryState)
         history_length = size(state.values, 2),
         value_type = string(eltype(state.values)))
     payload = (
-        values = copy(state.values),
-        heads = copy(state.heads),
-        fills = copy(state.fills),
-        generations = copy(state.generations),
+        values = copy(Adapt.adapt(Array, state.values)),
+        heads = copy(Adapt.adapt(Array, state.heads)),
+        fills = copy(Adapt.adapt(Array, state.fills)),
+        generations = copy(Adapt.adapt(Array, state.generations)),
         latest_sample_mcs = state.latest_sample_mcs)
     return _checkpoint_block(:cell_history, declaration.name,
         :cell_history, metadata, payload)
