@@ -1,0 +1,82 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase15a-canonical-structure-2026-07-26"
+phase = "15.A"
+status = "passed_canonical_structure"
+runtime_package = "ProcessBigraphs"
+runtime_version = "0.2.0"
+runtime_uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
+runtime_commit = "91b26a4d7b9466d1a44a4db3ba674f55c29a8275"
+julia = "1.12.6"
+public_release = false
+
+[dependencies]
+ACSets = "0.2.29"
+Catlab = "0.17.6"
+SHA = "stdlib"
+
+[qualification]
+command = "julia --project=<isolated-phase15a-environment> --startup-file=no -e 'using Pkg; Pkg.test(\"ProcessBigraphs\")'"
+result = "passed"
+processbigraphs_tests_passed = 116
+aqua_checks_passed = 10
+implemented_rows = [
+    "canonical-process-bigraph-acset",
+    "compiled-structural-epoch",
+]
+pb0_model_fingerprint = "49614f983db7f29d5c19465db95f5a367211a2ddea514fbf6d653f1fbfc90e30"
+pb0_initial_snapshot_fingerprint = "abb28a87d163574e612fabe68ecfbc57cfb234eb312e66fba564bf71a509e573"
+pb0_final_snapshot_fingerprint = "20b33b31def9e172bc7c9a57d4915f18094689667338e0eed90b70aac9ae4a3a"
+pb0_materialized_state = 24
+pb0_event_count = 4
+
+[canonical_structure]
+schema_version = "1.0.0"
+typed_authoring = "passed"
+direct_acset_authoring = "passed"
+row_renumbering_invariance = "passed"
+declaration_order_invariance = "passed"
+structural_fingerprint_invariance = "passed"
+runtime_fingerprint_invariance = "passed"
+provenance_invariance = "passed"
+trace_invariance = "passed"
+invalid_law_metadata = "rejected_before_runtime"
+
+[compiled_boundary]
+structural_epoch = "private_frozen_copy"
+execution_plan = "immutable_indexed_tables"
+provenance = "stable_semantic_id_to_compiled_index"
+runtime_acset_traversal = false
+checkpoint_acset_traversal = false
+compiled_static_composite_authority = false
+post_compile_authoring_mutation_isolated = true
+
+[claims]
+internal_alpha = false
+structured_cospans = false
+directed_wiring_diagrams = false
+nested_open_composites = false
+independent_julia_specification_oracle = false
+semantic_rng = false
+dynamic_rewriting = false
+algebraicdynamics_extension = false
+gpu_execution = false
+threads_or_dagger_execution = false
+corepotts_adapter = false
+public_parity = false
+
+[policy]
+upstream_python_runtime_executed = false
+live_differential_equivalence_claimed = false
+runtime_authority = "ProcessBigraphs"
+acset_role = "host_side_canonical_authoring_structure"
+row_numbers_semantic = false
+
+[limitations]
+items = [
+    "Phase 15.A admits one static root composite; nested and open composition remain gated.",
+    "Structured-cospan composition and derived directed wiring diagrams are not implemented.",
+    "The independent checked Julia specification oracle and full internal-alpha fixture matrix remain open.",
+    "Semantic RNG, general observers, persisted checkpoint codecs, and dynamic structural transactions remain open.",
+    "No device, Threads, Dagger, scientific-adapter, CorePotts-cutover, or public-release claim is made.",
+    "The compiled-plan boundary proves absence of authoring-structure traversal; it is not a claim that all runtime work allocates zero bytes.",
+]
