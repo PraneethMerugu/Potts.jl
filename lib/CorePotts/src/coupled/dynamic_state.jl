@@ -1008,7 +1008,7 @@ function clear_relationships!(state::RelationshipState)
     fill!(state.endpoint_b, UInt32(0))
     fill!(state.generation_b, UInt64(0))
     fill!(state.active, UInt8(0))
-    state.count[1] = UInt32(0)
+    fill!(state.count, UInt32(0))
     return state
 end
 

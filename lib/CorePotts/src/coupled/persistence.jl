@@ -484,7 +484,7 @@ function _restore_block!(state::RelationshipState, block)
         copyto!(@view(state.payload[1:count]), block.payload.edge_payload)
         fill!(@view(state.active[1:count]), UInt8(1))
     end
-    state.count[1] = UInt32(count)
+    fill!(state.count, UInt32(count))
     copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::EvolvingFieldState, block)

@@ -82,6 +82,20 @@ end
 CorePotts.accepted_copy_effect_allocation_bytes(
     probe::_AcceptedCopyTransactionProbe) = sizeof(probe.counters)
 
+struct _BulkOnlyVector{T} <: AbstractVector{T}
+    storage::Vector{T}
+end
+Base.size(vector::_BulkOnlyVector) = size(vector.storage)
+Base.IndexStyle(::Type{<:_BulkOnlyVector}) = IndexLinear()
+Base.getindex(::_BulkOnlyVector, ::Int) =
+    error("scalar reads are forbidden")
+Base.setindex!(::_BulkOnlyVector, value, ::Int) =
+    error("scalar writes are forbidden")
+Base.fill!(vector::_BulkOnlyVector, value) = begin
+    fill!(vector.storage, value)
+    vector
+end
+
 function CorePotts.synchronize_accepted_copy_effect_status!(
         plan, probe::_AcceptedCopyTransactionProbe)
     @inbounds iszero(probe.counters[5]) || throw(
@@ -845,6 +859,45 @@ end
     @test_throws ErrorException write_checkpoint!(
         store, "stable", checkpoint; fail_after = :payload)
     @test read_checkpoint(store, "stable").checksum == checkpoint.checksum
+end
+
+@testset "Phase 14 relationship persistence uses bulk device writes" begin
+    declaration = RelationshipSet(
+        :bulk_only_edges; edge = Float32,
+        maximum_degree = 2, capacity = RelationshipCapacity(2))
+    host = RelationshipState(declaration)
+    guarded_count = _BulkOnlyVector(UInt32[1])
+    guarded = RelationshipState(
+        host.declaration,
+        host.endpoint_a,
+        host.generation_a,
+        host.endpoint_b,
+        host.generation_b,
+        host.payload,
+        host.active,
+        guarded_count,
+        host.publication_epoch)
+
+    CorePotts.clear_relationships!(guarded)
+    @test guarded_count.storage == UInt32[0]
+
+    block = (payload = (
+        endpoint_a = UInt32[1],
+        generation_a = UInt64[2],
+        endpoint_b = UInt32[2],
+        generation_b = UInt64[3],
+        edge_payload = Float32[4],
+        count = UInt32(1),
+        publication_epoch = UInt64[5]),)
+    CorePotts._restore_block!(guarded, block)
+    @test guarded_count.storage == UInt32[1]
+    @test guarded.endpoint_a == UInt32[1, 0]
+    @test guarded.generation_a == UInt64[2, 0]
+    @test guarded.endpoint_b == UInt32[2, 0]
+    @test guarded.generation_b == UInt64[3, 0]
+    @test guarded.payload == Float32[4, 0]
+    @test guarded.active == UInt8[1, 0]
+    @test guarded.publication_epoch == UInt64[5]
 end
 
 @testset "Phase 14 coupled plan, protocol, and completed-MCS publication" begin
