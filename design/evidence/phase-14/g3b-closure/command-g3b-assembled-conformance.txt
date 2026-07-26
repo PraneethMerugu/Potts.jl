@@ -1,0 +1,3 @@
+Test Summary:                                      | Pass  Total   Time
+Phase 14 G3-B assembled source-faithful boundaries |   44     44  50.8s
+Phase 14 G3-B conformance suite 'assembled': PASS

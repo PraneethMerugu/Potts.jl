@@ -1,0 +1,60 @@
+provenance = "Wang source was retrieved from https://github.com/xing-lab-pitt/tumor-migration-model at the pinned commit; CC3D source was retrieved from the 4.2.5 source archive. No new external runtime execution is required."
+license_note = "This evidence records identities, hashes, and line/symbol indices rather than redistributing third-party source. Consult each upstream project for license terms."
+wang_archive_sha256 = "1aa5c426a24075091761c2fc80873b1d7582b32bc038d761e71630c867c3e984"
+wang_commit = "60ebcf013aafefdff39ebe566114ee79f2a6e54d"
+paper_sha256 = "69fad81266dd41e1ba1e69fba3a7bed88efbac9dec2818e055cb4fd15beaa600"
+schema_version = "1.0.0"
+cc3d_version = "4.2.5"
+cc3d_commit = "4ca1f2919a5da53111d2027d2e00b626aba1cd28"
+cc3d_archive_sha256 = "03448f96cbba3d98eeac45dea6fc336fc0c11895607395e761b6f2c20c50d88f"
+
+[[source]]
+sha256 = "50f2c66d58ff85532bad671d90e6a247a101444a86324cca2b486f5ff98a6ee9"
+relevant = "11-18,27-33,50-55,66-126"
+id = "wang-radial-xml"
+identity = "Wang commit 60ebcf013aafefdff39ebe566114ee79f2a6e54d; radial XML"
+[[source]]
+sha256 = "2633fd41c85b5256b2d2975b9bc60b28271bb1f7dd1c9b72e015788ac847cc30"
+relevant = "36-50,79-147,180-238,241-305"
+id = "wang-radial-steppables"
+identity = "Wang commit 60ebcf013aafefdff39ebe566114ee79f2a6e54d; radial steppables"
+[[source]]
+sha256 = "f50b155ca036c469d135d2bc292b5f9cf3048b2748e032aa42a19c07fec77574"
+relevant = "metropolisFast 793-918; update 1487-1507"
+id = "cc3d-potts"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; Potts3D.cpp"
+[[source]]
+sha256 = "8e71bea1b987abfbdcabcde1cc082814d8367ed154c2341854a36c26a71573a4"
+relevant = "58-70,384-472,945-1039,1124-1183"
+id = "cc3d-boundary"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; BoundaryStrategy.cpp"
+[[source]]
+sha256 = "900adcfcc6559aa1ff897b100689ef00014f9482fb955057b9fc87c7c0c4a94f"
+relevant = "proposal, energy, accepted-copy, and removal symbols indexed by the accepted study"
+id = "cc3d-fpp"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; FocalPointPlasticityPlugin.cpp"
+[[source]]
+sha256 = "7e87a6d130b6195db1da33f3743167faf081c48a66edb4053e03e2a1645324ba"
+relevant = "95-130,571-685"
+id = "cc3d-external-potential"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; ExternalPotentialPlugin.cpp"
+[[source]]
+sha256 = "f75f95843334a809af2a71f06d9486ddd839368455eded5462fd960a1537d130"
+relevant = "80-95,136-183,255-272"
+id = "cc3d-diffusion"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; DiffusionSolverFE.cpp"
+[[source]]
+sha256 = "47cd9884780d9b964b432b7512006c591e0e40f54fcb0584583380d5c18de4ae"
+relevant = "346-448,821-857,867-1275"
+id = "cc3d-diffusion-cpu"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; DiffusionSolverFE_CPU.cpp"
+[[source]]
+sha256 = "57a8135f6d606ef1a1a7f3f7cb771435778a9cde560759014759cc5ccc9108bf"
+relevant = "9-22,30-43"
+id = "cc3d-roadrunner"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; RoadRunnerPy.py"
+[[source]]
+sha256 = "f12bdba99bd7a5734f28c0abe03e57cc1c0a57b3d70df3068d14b2e6e6d81dd5"
+relevant = "457-517,846-862,1009-1017"
+id = "cc3d-sbml-helper"
+identity = "CompuCell3D 4.2.5 commit 4ca1f2919a5da53111d2027d2e00b626aba1cd28; SBMLSolverHelper.py"

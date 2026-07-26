@@ -1,0 +1,106 @@
+tested_commit = bb342cad9ac6ad3fe1beb178a03b10c619a3726a
+tested_tree = 5c8974c8c3795a9b3e3d33a8895c017fe5c8b6e4
+julia_version = 1.12.6
+kernel = Darwin
+architecture = aarch64
+Julia Version 1.12.6
+Commit 15346901f00 (2026-04-09 19:20 UTC)
+Build Info:
+  Official https://julialang.org release
+Platform Info:
+  OS: macOS (arm64-apple-darwin24.0.0)
+  uname: Darwin 24.6.0 Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:29 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T6000 arm64 arm
+  CPU: Apple M1 Pro: 
+              speed         user         nice          sys         idle          irq
+       #1  2400 MHz     159446 s          0 s     127628 s     505153 s          0 s  
+       #2  2400 MHz     157296 s          0 s     122319 s     512681 s          0 s  
+       #3  2400 MHz     152317 s          0 s      41909 s     599986 s          0 s  
+       #4  2400 MHz     107458 s          0 s      26243 s     661513 s          0 s  
+       #5  2400 MHz      75735 s          0 s      14214 s     706315 s          0 s  
+       #6  2400 MHz      71027 s          0 s       9860 s     715845 s          0 s  
+       #7  2400 MHz      32634 s          0 s       5411 s     759067 s          0 s  
+       #8  2400 MHz      24461 s          0 s       3728 s     769114 s          0 s  
+  Memory: 16.0 GB (2271.40625 MB free)
+  Uptime: 1.415436e6 sec
+  Load Avg:  3.939453125  3.7626953125  3.71533203125
+  WORD_SIZE: 64
+  LLVM: libLLVM-18.1.7 (ORCJIT, apple-m1)
+  GC: Built with stock GC
+Threads: 1 default, 1 interactive, 1 GC (on 6 virtual cores)
+Environment:
+  FPATH = /Users/praneethmerugu/.zsh/completions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions
+  HOME = /Users/praneethmerugu
+  HOMEBREW_CELLAR = /opt/homebrew/Cellar
+  HOMEBREW_PREFIX = /opt/homebrew
+  HOMEBREW_REPOSITORY = /opt/homebrew
+  INFOPATH = /opt/homebrew/share/info:/opt/homebrew/share/info:
+  NODE_REPL_TRUSTED_CODE_PATHS = /Users/praneethmerugu/.codex
+  PATH = /Users/praneethmerugu/.codex/tmp/arg0/codex-arg0HgNTjf:/Users/praneethmerugu/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/praneethmerugu/.antigravity-ide/antigravity-ide/bin:/Users/praneethmerugu/.config/opencode:/Users/praneethmerugu/.bun/bin:/Users/praneethmerugu/.antigravity/antigravity/bin:/Users/praneethmerugu/.antigravity/antigravity/bin:/Users/praneethmerugu/.antigravity/antigravity/bin:/Users/praneethmerugu/.juliaup/bin:/opt/homebrew/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/Apple/usr/bin:/Users/praneethmerugu/.cargo/bin:/Users/praneethmerugu/.local/bin:/Users/praneethmerugu/.local/bin:/Users/praneethmerugu/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources
+  TERM = dumb
+  XPC_FLAGS = 0x0
+
+Project PottsToolkit v0.1.0
+Status `~/Documents/Jiang/CPM 1.6/Potts.jl/Manifest.toml`
+  [47edcb42] ADTypes v1.22.2
+  [7d9f7c33] Accessors v0.1.45
+  [79e6a3ab] Adapt v4.7.0
+⌃ [4fba245c] ArrayInterface v7.27.0
+  [a9b6321e] Atomix v1.1.3
+  [38540f10] CommonSolve v0.2.11
+  [a33af91c] CompositionsBase v0.1.2
+  [187b0558] ConstructionBase v1.6.0
+  [047998c1] CorePotts v0.1.0 `lib/CorePotts`
+  [ffbed154] DocStringExtensions v0.9.5
+  [4e289a0a] EnumX v1.0.7
+⌃ [e2ba6199] ExprTools v0.1.10
+  [64ca27bc] FindFirstFunctions v3.2.0
+  [069b7b12] FunctionWrappers v1.1.3
+  [77dc65aa] FunctionWrappersWrappers v1.10.1
+  [46192b85] GPUArraysCore v0.2.0
+  [3587e190] InverseFunctions v0.1.17
+  [82899510] IteratorInterfaceExtensions v1.0.0
+  [63c18a36] KernelAbstractions v0.9.42
+  [e6f89c97] LoggingExtras v1.2.0
+  [1914dd2f] MacroTools v0.5.16
+  [d236fae5] PreallocationTools v1.3.0
+  [aea7be01] PrecompileTools v1.3.4
+  [21216c6a] Preferences v1.5.2
+  [3cdcf5f2] RecipesBase v1.3.4
+  [731186ca] RecursiveArrayTools v4.3.4
+  [189a3867] Reexport v1.2.2
+  [ae029012] Requires v1.3.1
+  [7e49a35a] RuntimeGeneratedFunctions v0.5.22
+⌃ [0bca4576] SciMLBase v3.36.0
+  [a6db7da4] SciMLLogging v2.0.3
+⌃ [c0aeaf25] SciMLOperators v1.24.3
+  [431bcebd] SciMLPublic v1.2.3
+  [53ae85a6] SciMLStructures v1.10.3
+  [90137ffa] StaticArrays v1.9.18
+  [1e83bf80] StaticArraysCore v1.4.4
+  [10745b16] Statistics v1.11.1
+  [2efcf032] SymbolicIndexingInterface v0.3.51
+  [781d530d] TruncatedStacktraces v1.4.0
+  [013be700] UnsafeAtomics v0.3.1
+  [56f22d72] Artifacts v1.11.0
+  [2a0f44e3] Base64 v1.11.0
+  [ade2ca70] Dates v1.11.0
+  [8ba89e20] Distributed v1.11.0
+  [b77e0a4c] InteractiveUtils v1.11.0
+  [ac6e5ff7] JuliaSyntaxHighlighting v1.12.0
+  [8f399da3] Libdl v1.11.0
+  [37e2e46d] LinearAlgebra v1.12.0
+  [56ddb016] Logging v1.11.0
+  [d6f4376e] Markdown v1.11.0
+  [de0858da] Printf v1.11.0
+  [9a3f8284] Random v1.11.0
+  [ea8e919c] SHA v0.7.0
+  [9e88b42a] Serialization v1.11.0
+  [6462fe0b] Sockets v1.11.0
+  [f489334b] StyledStrings v1.11.0
+  [fa267f1f] TOML v1.0.3
+  [cf7118a7] UUIDs v1.11.0
+  [4ec0a83e] Unicode v1.11.0
+  [e66e0078] CompilerSupportLibraries_jll v1.3.0+1
+  [4536629a] OpenBLAS_jll v0.3.29+0
+  [8e850b90] libblastrampoline_jll v5.15.0+0
+Info Packages marked with ⌃ have new versions available and may be upgradable.

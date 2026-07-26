@@ -1,0 +1,3 @@
+Test Summary:                              | Pass  Total   Time
+Phase 14 G3-B assembled observation matrix |   17     17  50.3s
+Phase 14 G3-B conformance suite 'observations': PASS

@@ -1,0 +1,458 @@
+tested_tree = "5c8974c8c3795a9b3e3d33a8895c017fe5c8b6e4"
+environment_artifact_ids = ["environment"]
+claim = "G3-B complete"
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+dirty_state = "clean"
+contract_revision = 7
+schema_version = "1.0.0"
+
+[[proof]]
+artifact_ids = ["command-g3a-generic-authoring"]
+kind = "requirement"
+status = "passed"
+id = "requirement:generic-api-and-composability"
+subject = "generic-api-and-composability"
+command_ids = ["g3a-generic-authoring", "phase13-api-inventory"]
+[[proof]]
+artifact_ids = ["command-g3b-observation-matrix"]
+kind = "requirement"
+status = "passed"
+id = "requirement:observation-schema"
+subject = "observation-schema"
+command_ids = ["g3b-observation-matrix"]
+[[proof]]
+artifact_ids = ["analysis-potts-fpp"]
+kind = "requirement"
+status = "passed"
+id = "requirement:order-and-boundaries"
+subject = "order-and-boundaries"
+command_ids = ["wang-order-oracle", "g3b-assembled-conformance"]
+[[proof]]
+artifact_ids = ["command-corepotts-full"]
+kind = "requirement"
+status = "passed"
+id = "requirement:regression-and-api-freeze"
+subject = "regression-and-api-freeze"
+command_ids = ["corepotts-full", "pottstoolkit-full", "phase13-api-inventory", "repository-structure", "legacy-containment"]
+[[proof]]
+artifact_ids = ["command-g3b-assembled-conformance"]
+kind = "requirement"
+status = "passed"
+id = "requirement:canonical-wang-assembly"
+subject = "canonical-wang-assembly"
+command_ids = ["g3b-assembled-conformance"]
+[[proof]]
+artifact_ids = ["analysis-field"]
+kind = "requirement"
+status = "passed"
+id = "requirement:source-semantic-study"
+subject = "source-semantic-study"
+command_ids = ["g3b-entry-contract", "corepotts-full"]
+[[proof]]
+artifact_ids = ["command-g3b-resource-matrix"]
+kind = "requirement"
+status = "passed"
+id = "requirement:steady-state-resource-contract"
+subject = "steady-state-resource-contract"
+command_ids = ["g3b-resource-matrix"]
+[[proof]]
+artifact_ids = ["source-index"]
+kind = "requirement"
+status = "passed"
+id = "requirement:source-provenance-lock"
+subject = "source-provenance-lock"
+command_ids = ["g3b-entry-contract"]
+[[proof]]
+artifact_ids = ["environment"]
+kind = "requirement"
+status = "passed"
+id = "requirement:evidence-reproducibility"
+subject = "evidence-reproducibility"
+command_ids = ["g3b-entry-contract", "repository-structure"]
+[[proof]]
+artifact_ids = ["command-g3b-failure-matrix"]
+kind = "requirement"
+status = "passed"
+id = "requirement:transaction-and-failure-atomicity"
+subject = "transaction-and-failure-atomicity"
+command_ids = ["g3b-failure-matrix", "corepotts-full"]
+[[proof]]
+artifact_ids = ["command-g3b-restart-matrix"]
+kind = "requirement"
+status = "passed"
+id = "requirement:completed-mcs-restart"
+subject = "completed-mcs-restart"
+command_ids = ["g3b-restart-matrix"]
+[[proof]]
+artifact_ids = ["command-g3b-assembled-conformance"]
+kind = "requirement"
+status = "passed"
+id = "requirement:sequential-cpu-conformance"
+subject = "sequential-cpu-conformance"
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+[[proof]]
+artifact_ids = ["command-g3b-portable-abi"]
+kind = "requirement"
+status = "passed"
+id = "requirement:portable-abi-readiness"
+subject = "portable-abi-readiness"
+command_ids = ["g3b-portable-abi"]
+
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-entry-contract"
+command = "julia --project=. --startup-file=no scripts/check_phase14_g3b_entry.jl"
+output_artifact_ids = ["command-g3b-entry-contract"]
+exit_code = 0
+assertion_count = 0
+validation_count = 1
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "wang-order-oracle"
+command = "julia --project=. --startup-file=no scripts/validate_wang_order_oracle.jl design/evidence/phase-14/wang-order/cc3d-4.2.5-trace.csv"
+output_artifact_ids = ["command-wang-order-oracle"]
+exit_code = 0
+assertion_count = 0
+validation_count = 1
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3a-generic-authoring"
+command = "julia --project=. --startup-file=no scripts/check_phase14_g3a.jl"
+output_artifact_ids = ["command-g3a-generic-authoring"]
+exit_code = 0
+assertion_count = 40
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-assembled-conformance"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite assembled"
+output_artifact_ids = ["command-g3b-assembled-conformance"]
+exit_code = 0
+assertion_count = 44
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-portable-abi"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite portable-abi"
+output_artifact_ids = ["command-g3b-portable-abi"]
+exit_code = 0
+assertion_count = 15
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-failure-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite failure"
+output_artifact_ids = ["command-g3b-failure-matrix"]
+exit_code = 0
+assertion_count = 12
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-restart-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite restart"
+output_artifact_ids = ["command-g3b-restart-matrix"]
+exit_code = 0
+assertion_count = 48
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-resource-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite resources"
+output_artifact_ids = ["command-g3b-resource-matrix"]
+exit_code = 0
+assertion_count = 10
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "g3b-observation-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite observations"
+output_artifact_ids = ["command-g3b-observation-matrix"]
+exit_code = 0
+assertion_count = 17
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "corepotts-full"
+command = "julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test()'"
+output_artifact_ids = ["command-corepotts-full"]
+exit_code = 0
+assertion_count = 3660
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "pottstoolkit-full"
+command = "julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'"
+output_artifact_ids = ["command-pottstoolkit-full"]
+exit_code = 0
+assertion_count = 702
+validation_count = 0
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "phase13-api-inventory"
+command = "julia --project=. --startup-file=no scripts/check_phase13_api_inventory.jl"
+output_artifact_ids = ["command-phase13-api-inventory"]
+exit_code = 0
+assertion_count = 0
+validation_count = 1
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "repository-structure"
+command = "julia --project=. --startup-file=no scripts/check_structure.jl"
+output_artifact_ids = ["command-repository-structure"]
+exit_code = 0
+assertion_count = 0
+validation_count = 1
+[[command]]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+status = "passed"
+id = "legacy-containment"
+command = "julia --project=. --startup-file=no scripts/check_legacy_containment.jl"
+output_artifact_ids = ["command-legacy-containment"]
+exit_code = 0
+assertion_count = 0
+validation_count = 1
+
+[[process_proof]]
+status = "passed"
+process_id = "potts_metropolis"
+id = "process:potts_metropolis"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "secretome_field_advance"
+id = "process:secretome_field_advance"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-field"]
+[[process_proof]]
+status = "passed"
+process_id = "centroid_sample"
+id = "process:centroid_sample"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "self_polarity_from_history"
+id = "process:self_polarity_from_history"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "secretome_signal_exchange"
+id = "process:secretome_signal_exchange"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-field"]
+[[process_proof]]
+status = "passed"
+process_id = "intracellular_advance"
+id = "process:intracellular_advance"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-roadrunner"]
+[[process_proof]]
+status = "passed"
+process_id = "focal_parameter_retune"
+id = "process:focal_parameter_retune"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "neighbor_polarity_alignment"
+id = "process:neighbor_polarity_alignment"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "protrusion_force_update"
+id = "process:protrusion_force_update"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "relationship_lifecycle_cleanup"
+id = "process:relationship_lifecycle_cleanup"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["analysis-potts-fpp"]
+[[process_proof]]
+status = "passed"
+process_id = "wang_observations"
+id = "process:wang_observations"
+facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+command_ids = ["g3b-assembled-conformance", "corepotts-full"]
+artifact_ids = ["command-g3b-observation-matrix"]
+
+[claim_boundaries]
+paper_reproduction_claimed = false
+phase14_3_classifier_closed = false
+real_metal_qualified = false
+performance_qualified = false
+real_rocm_qualified = false
+cc3d_std_rand_bitwise_replay = false
+
+[[study]]
+fixture_artifact_ids = ["command-g3b-assembled-conformance", "command-corepotts-full"]
+source_artifact_ids = ["source-index"]
+status = "accepted"
+source_identity = "Wang 60ebcf013aafefdff39ebe566114ee79f2a6e54d and CC3D 4.2.5/4ca1f2919a5da53111d2027d2e00b626aba1cd28"
+id = "wang-cc3d-potts-fpp-source-study"
+conclusion = "Pinned source determines Potts boundaries, neighborhood sets, FPP topology/energy, and external-potential consumption; controlled Potts.jl fixtures qualify the implementation without a live CC3D oracle."
+uncertainty_artifact_ids = ["analysis-potts-fpp"]
+analysis_artifact_ids = ["analysis-potts-fpp"]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+[[study]]
+fixture_artifact_ids = ["command-g3b-assembled-conformance", "command-corepotts-full"]
+source_artifact_ids = ["source-index"]
+status = "accepted"
+source_identity = "Wang 60ebcf013aafefdff39ebe566114ee79f2a6e54d and CC3D 4.2.5 RoadRunner wrapper source"
+id = "wang-roadrunner-coupling-study"
+conclusion = "The affine law, 2880-unit cadence, startup advance, and publication order are exact; solver-build bitwise equivalence is explicitly unclaimed."
+uncertainty_artifact_ids = ["analysis-roadrunner"]
+analysis_artifact_ids = ["analysis-roadrunner"]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+[[study]]
+fixture_artifact_ids = ["command-g3b-failure-matrix", "command-corepotts-full"]
+source_artifact_ids = ["source-index"]
+status = "accepted"
+source_identity = "Wang 60ebcf013aafefdff39ebe566114ee79f2a6e54d and CC3D 4.2.5 DiffusionSolverFE source"
+id = "wang-cc3d-field-source-study"
+conclusion = "Pinned source determines the five-substep periodic Float32 stencil and per-substep Medium overwrite; controlled fixtures qualify the normalized logical layout."
+uncertainty_artifact_ids = ["analysis-field"]
+analysis_artifact_ids = ["analysis-field"]
+tested_commit = "bb342cad9ac6ad3fe1beb178a03b10c619a3726a"
+
+[[artifact]]
+kind = "command-output"
+sha256 = "ae926adc228105eb8b407f5287efd452ccc55c95df3d07a86433d0d501af660c"
+bytes = 52
+id = "command-g3b-entry-contract"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-entry-contract.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "c30e12fa27b00c1352fc481735104cd37133d66a6395705e87b298cdfb7bf847"
+bytes = 34
+id = "command-wang-order-oracle"
+path = "design/evidence/phase-14/g3b-closure/command-wang-order-oracle.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "19525431ae94648710093d12c20775f88ab010527365225c9d4d1a0c706509f3"
+bytes = 457
+id = "command-g3a-generic-authoring"
+path = "design/evidence/phase-14/g3b-closure/command-g3a-generic-authoring.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "c34aa4e0acc9d566583c2778d8113a634ccb5fa1a4e0b2ed3228c7e182bc9b11"
+bytes = 194
+id = "command-g3b-assembled-conformance"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-assembled-conformance.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "4f91b41c8af4cacf2658393810087623ce2b1deddd9bef1131559030db46e361"
+bytes = 177
+id = "command-g3b-portable-abi"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-portable-abi.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "ffc948a98a21170fdf01f649d9c26e83903a0880a45dafcf7d6490957924668d"
+bytes = 174
+id = "command-g3b-failure-matrix"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-failure-matrix.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "0b0485c0564245feadaf502d1d2b68004048db49760ee64b070fdee64d715440"
+bytes = 152
+id = "command-g3b-restart-matrix"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-restart-matrix.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "ef3e72babfd600c723b86cf30d20fc83a9e0e863c2bb6b4cd981ac2397571c36"
+bytes = 168
+id = "command-g3b-resource-matrix"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-resource-matrix.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "0475931ee4b878ad79ad1b703520109985ae2b0caff806259e2fd54ca8b55cad"
+bytes = 181
+id = "command-g3b-observation-matrix"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-observation-matrix.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "ed1d136589662c639253499dc8e9b60c76c256e24d865bd7c12e9b2f4ab44083"
+bytes = 5773
+id = "command-corepotts-full"
+path = "design/evidence/phase-14/g3b-closure/command-corepotts-full.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "4b4dff1f07962dc0730ae9b0b7d2cbf687a285fe7557fcc96aadf9e0b55737bf"
+bytes = 3751
+id = "command-pottstoolkit-full"
+path = "design/evidence/phase-14/g3b-closure/command-pottstoolkit-full.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "2c73b631311e477e0bc1dc8a01b6e1b9bbeaabdb2ed7c7e8affcdd6eacaa1e60"
+bytes = 103
+id = "command-phase13-api-inventory"
+path = "design/evidence/phase-14/g3b-closure/command-phase13-api-inventory.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "ba3223e176c114f758038ca001da8d71d985bdc9b90f04adb147116c72a47fba"
+bytes = 129
+id = "command-repository-structure"
+path = "design/evidence/phase-14/g3b-closure/command-repository-structure.txt"
+[[artifact]]
+kind = "command-output"
+sha256 = "a249c8467ce5a58ec5795824aeb5b2531244ab7c9447d2d7337abd7e84bb5fdd"
+bytes = 140
+id = "command-legacy-containment"
+path = "design/evidence/phase-14/g3b-closure/command-legacy-containment.txt"
+[[artifact]]
+kind = "source-provenance-index"
+sha256 = "07f94018be7e41691e29e05d56806892c5c5dc84f1208cbe4da45a119c566f59"
+bytes = 3352
+id = "source-index"
+path = "design/evidence/phase-14/g3b-closure/source-index.toml"
+[[artifact]]
+kind = "source-study-analysis"
+sha256 = "c6ffcdb5bad65b96a0e19ff44a1795b4ade55c06c1bcc3fb3db0fba88fc9f88d"
+bytes = 5408
+id = "analysis-potts-fpp"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-potts-fpp-source-study.md"
+[[artifact]]
+kind = "source-study-analysis"
+sha256 = "6a5c8620ec49f56d718b48f0568c436270137d61ce71533661eea36c95e6e882"
+bytes = 3766
+id = "analysis-roadrunner"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-roadrunner-source-study.md"
+[[artifact]]
+kind = "source-study-analysis"
+sha256 = "6245ba25d240ab39a313d368014e89827874ff618d2925edbfa9780254c7ecf4"
+bytes = 4558
+id = "analysis-field"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-field-source-study.md"
+[[artifact]]
+kind = "environment-manifest"
+sha256 = "34afe565c1f62cf15386a5ad2cf4ad814341b12cd564bec726b93decd390c5f2"
+bytes = 5447
+id = "environment"
+path = "design/evidence/phase-14/g3b-closure/environment.txt"
