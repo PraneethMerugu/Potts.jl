@@ -58,8 +58,8 @@ function execute_commands(contract, temporary_root)
         command = row["command"]
         buffer = IOBuffer()
         process = run(pipeline(
-            ignorestatus(Cmd(
-                ["/bin/zsh", "-lc", command];
+            ignorestatus(Cmd(Cmd(
+                ["/bin/zsh", "-lc", command]);
                 dir = REPO)),
             stdout = buffer, stderr = buffer))
         output = String(take!(buffer))
