@@ -1,5 +1,10 @@
 # ProcessBigraphs Phase 14.PB0 Implementation and Closure Audit
 
+> Post-PB0 architecture note: [Decision 0036](../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md)
+> preserves this bounded behavioral evidence but makes the PB0 structural structs provisional
+> façades. Phase 15 must lower them into one canonical ProcessBigraph ACSet and qualify an
+> independent source-derived Julia oracle; no upstream Python runtime will be executed.
+
 Status: PB0 bounded foundation passed; Phase 15 internal alpha remains open
 
 Date: 2026-07-26
@@ -78,7 +83,7 @@ PB0 does not implement or qualify:
   observers, or structural transactions;
 - canonical persisted checkpoint decoding/migration;
 - transfer execution or measurement, GPU kernels, Threads, or Dagger;
-- pinned upstream Python differential oracles;
+- independent source-derived Julia specification-oracle qualification;
 - scientific adapters, whole-cell fixtures, or a CorePotts adapter; or
 - any public package release.
 

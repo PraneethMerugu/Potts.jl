@@ -1,4 +1,4 @@
-schema_version = "1.0.0"
+schema_version = "1.1.0"
 registry_id = "process-bigraphs-pb0-local-v1"
 package_version = "0.1.0"
 maturity = "phase_14_pb0_foundation"
@@ -6,7 +6,10 @@ public_release = false
 internal_alpha = false
 evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
 specification = "../../spec/process-bigraph-runtime-semantics.md"
-decision = "../../spec/decisions/0034-process-bigraph-runtime-platform.md"
+decisions = [
+    "../../spec/decisions/0034-process-bigraph-runtime-platform.md",
+    "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+]
 
 [pins]
 process_bigraph = "305ea826191e9f897f0c6e207bc303bbc44a9eef"
@@ -18,8 +21,16 @@ bigraph_schema_version = "1.4.3"
 implementation_status = ["implemented", "partial"]
 oracle_status = ["direct_passing", "direct_partial"]
 qualification_status = "not_qualified"
-pinned_python_oracles = "not_started"
+independent_julia_specification_oracle = "not_started"
+upstream_runtime_execution = "forbidden"
 device_evidence = "not_started"
+
+[accepted_next_architecture]
+phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
+phase16_direct_dependency = "AlgebraicRewriting.jl"
+phase17_weak_dependency = "AlgebraicDynamics.jl"
+canonical_structure = "one versioned ProcessBigraph ACSet"
+implementation_status = "not_started"
 
 [[features]]
 id = "stable-typed-paths"

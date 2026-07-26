@@ -22,9 +22,9 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; G4 is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
-| Phase 15: Potts Paper/Release Qualification and ProcessBigraphs Internal Alpha | Not started; runtime foundations may enter before Potts Phase 14 closes where the join rules permit | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes serial static composites without a public release |
-| Phase 16: Dynamic Hierarchy and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts needed by the first adapter slice stabilize |
-| Phase 17: Scientific Process Ecosystem and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
+| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | Not started; runtime foundations may enter before Potts Phase 14 closes where the join rules permit | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes canonical ACSet-backed serial static composites without a public release |
+| Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts and canonical structural epoch needed by the first adapter slice stabilize |
+| Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
 | Phase 19: Pinned Parity Closure and First Public ProcessBigraphs Release | Not started | Public release is forbidden until complete pinned parity and the whole-cell-style acceptance composite pass |
 | Phase 20: Whole-Cell Development Program | Not started | Scientific program beyond runtime parity: full-generation and population/environment compositions |
@@ -72,6 +72,12 @@ consumers are prohibited.
 13. Potts release qualification and ProcessBigraphs release qualification are separate gates. The
     Potts paper release does not wait for runtime parity, and `ProcessBigraphs.jl` MUST NOT be
     publicly released before complete pinned parity and a whole-cell-style composite pass.
+14. One ProcessBigraph ACSet is the canonical structural authority. ProcessBigraphs alone owns
+    time, scheduling, numerical state, transactions, commit, RNG, observation, and persistence;
+    AlgebraicJulia structure is compiled out of ordinary hot loops.
+15. Upstream Python runtimes are exact source-audit authorities but are never installed or executed
+    by CI, tests, examples, attestations, or release tooling. Runtime claims use source-audited
+    feature and semantic parity and independent Julia conformance.
 
 ## Scope Classification
 
@@ -118,14 +124,20 @@ the simplest final design for required features.
   observable-behavior parity registry
 - Typed hierarchical stores, stable paths, typed input/output ports, place/link topology, immutable
   committed snapshots, typed deltas, and law-declared update reconciliation
+- A canonical custom ProcessBigraph ACSet, structured-cospan open composition, derived directed
+  wiring diagrams, stable semantic identities independent of ACSet rows, and immutable indexed
+  runtime plans with exact provenance
 - Exact logical time, imminent-event scheduling, distinct temporal processes and zero-time steps,
   deterministic same-time batches, explicit iterative constructs, and atomic commits
 - Structural add, remove, divide, move, and rewire transactions; broader rewrites remain separately
   promoted capabilities
 - Settled-boundary exact restart, versioned process continuation, lineage-stable semantic RNG,
   structured failure, and read-only observation
-- Capability-declared CPU/GPU execution, explicit residency and transfer, a serial semantic oracle,
-  and executor-equivalence contracts
+- Capability-declared CPU/GPU execution, explicit residency and transfer, a serial executor
+  equivalence reference, and executor-equivalence contracts
+- A checked Julia specification oracle independent from production code, source-located golden
+  derivations, exhaustive finite fixtures, and property/metamorphic/invariance/failure evidence;
+  no executable Vivarium or Process-Bigraph Python dependency
 - CorePotts as the flagship spatial-process adapter and PottsToolkit lowering through a strangler
   migration with old/new serial differential evidence
 - SciML, ModelingToolkit, Catalyst, JumpProcesses, COBREXA/JuMP, units/ontology, and SBML adapters
@@ -159,10 +171,11 @@ unrelated earlier work.
 | D12 | GPU-native promotion profile, portable precision, residency boundaries, real-hardware Metal/ROCm evidence, and explicit deferred-backend policy — resolved by Decision 0032 | Stable promotion of every new Phase 14 execution capability |
 | D13 | Generic hierarchical authoring, named typed fragment requirements/exports, one explicit root plan, paper-specific API exclusion, and direct-versus-fragment identity — resolved by Decision 0033 | Wang and later complex-model authoring implementation |
 | D14 | Product identity, pinned Process-Bigraph 2.0 authority, parity meaning, package/dependency boundary, independent development, and no-public-release rule — resolved by Decision 0034 | ProcessBigraphs specification and package incubation |
-| D15 | Versioned runtime semantics for stores, ports, deltas, update laws, exact time, processes, steps, commits, topology, persistence, failure, RNG, observation, and capability declarations | Internal serial alpha |
-| D16 | Per-slice CorePotts adapter ownership, checkpoint compatibility, old/new differential fixtures, cutover, and rollback/invalidation policy | Each strangler-migration slice and internal beta |
-| D17 | Stable serial runnable batches, reconciliation, structural barriers, placement/residency declarations, executor-order invariance, and failure/retry policy | Qualified Threads and Dagger executors |
-| D18 | Complete pinned parity registry, whole-cell-style acceptance result, documentation, production evidence, and presentation/repository disposition | First public ProcessBigraphs release |
+| D15 | Canonical ACSet structure, structured-cospan composition, semantic identity, compiled epoch, independent Julia conformance, and no-upstream-execution policy — resolved by Decision 0036 | ACSet-backed internal serial alpha |
+| D16 | Versioned runtime semantics for stores, ports, deltas, update laws, exact time, processes, steps, commits, topology, persistence, failure, RNG, observation, and capability declarations | Internal serial alpha |
+| D17 | AlgebraicRewriting transaction ownership plus per-slice CorePotts adapter ownership, checkpoint compatibility, old/new local differential fixtures, cutover, and rollback/invalidation policy | Each strangler-migration slice and internal beta |
+| D18 | Stable serial runnable batches, reconciliation, structural barriers, placement/residency declarations, executor-order invariance, and failure/retry policy | Qualified Threads and Dagger executors |
+| D19 | Complete pinned parity registry, whole-cell-style acceptance result, documentation, production evidence, and presentation/repository disposition | First public ProcessBigraphs release |
 
 Every gate produces an accepted specification update or decision record plus its required evidence.
 Implementation convenience MUST NOT decide a gate implicitly.
@@ -840,8 +853,10 @@ Phase 14 is governed by
 and the [Published-Model Reproduction Semantics](../spec/published-model-reproduction-semantics.md).
 Its parallel ProcessBigraphs foundation is governed by
 [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), the
+[AlgebraicJulia foundation decision](../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md),
 [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md),
-and the [completed owner interview](audits/process-bigraph-runtime-owner-interview.md).
+the [runtime owner interview](audits/process-bigraph-runtime-owner-interview.md), and the
+[AlgebraicJulia owner interview](audits/process-bigraph-algebraicjulia-owner-interview.md).
 It does not reopen Phase 13 indiscriminately. Existing frozen contracts remain frozen; additive
 capabilities are admitted only through accepted semantics, sequential CPU reference use, version
 impact review, conformance, persistence, inspection, and the claimed backend evidence.
@@ -1011,8 +1026,8 @@ require a CorePotts dependency cutover.
 
 **Status:** Passed as a bounded foundation on 2026-07-26. The independent package, direct
 microfixtures, implementation audit, and machine-readable evidence pass. This does not claim the
-Phase 15 internal alpha, pinned Python-oracle parity, GPU or parallel executors, dynamic structure,
-the Potts adapter, or a public release.
+Phase 15 ACSet-backed internal alpha, independent source-derived oracle qualification, GPU or
+parallel executors, dynamic structure, the Potts adapter, or a public release.
 
 #### Deliverables
 
@@ -1139,7 +1154,7 @@ the Potts adapter, or a public release.
 - All Potts Phase 14.0--14.4 gates and the separately evidenced Phase 14.PB0 foundation gate pass;
   completing prose alone cannot close the shared Phase 14 program.
 
-## Phase 15: Potts Paper/Release Qualification and ProcessBigraphs Internal Alpha
+## Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha
 
 The Phase 12.5 tiled engine is excluded from fastest-engine and production-backend claims. Phase 15
 may report its negative/experimental result or reproduce its research measurements, but must not
@@ -1148,10 +1163,10 @@ frozen Phase 14 corpus, manifests, validation plans, capability versions, and ev
 qualifies the Potts paper release; it does not repair model semantics or choose easier validation
 targets after observing results.
 
-In parallel, ProcessBigraphs advances from Phase 14.PB0 foundations to an internal serial alpha.
-The Potts release gate and runtime-alpha gate are independent. Potts may release when its gate
-passes even if runtime parity is incomplete. Internal alpha is not permission to publish
-`ProcessBigraphs.jl`.
+In parallel, ProcessBigraphs advances from Phase 14.PB0 foundations to a canonical ACSet-backed
+internal serial alpha. The Potts release gate and runtime-alpha gate are independent. Potts may
+release when its gate passes even if runtime parity is incomplete. Internal alpha is not permission
+to publish `ProcessBigraphs.jl`.
 
 ### Potts workstream deliverables
 
@@ -1181,6 +1196,17 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 
 ### Runtime workstream deliverables
 
+- Add `ACSets.jl` and `Catlab.jl` as direct dependencies with explicit compatibility bounds and
+  recorded resolutions. Define one versioned ProcessBigraph ACSet for composites, nodes, stores,
+  processes, steps, ports, links, containment, schemas, and stable semantic identities.
+- Make structured cospans the open-composite composition law and directed wiring diagrams a derived
+  inspection/dataflow view. Lower typed constructors and AlgebraicJulia-native authoring to the
+  same canonical ACSet and fingerprint.
+- Replace PB0's provisional parallel structural representation with ergonomic typed façades over
+  the canonical ACSet. ACSet row numbers and traversal order remain nonsemantic.
+- Compile each validated authoring ACSet into an immutable structural epoch, indexed execution
+  tables, and an exact provenance map. Ordinary execution performs no ACSet traversal, matching,
+  mutation, or structure-induced allocation.
 - Complete the versioned hierarchical store, immutable committed snapshots, typed paths and ports,
   structural schemas, process and step declarations, exact logical ticks, typed deltas, built-in
   update algebra, and deterministic serial reconciliation/commit.
@@ -1190,8 +1216,12 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
   declare versioned continuation and invalidation schemas.
 - Add semantic RNG addressing by process, logical time, event, draw, and lineage identity, plus a
   read-only observer protocol and canonical runtime fingerprints.
-- Prove the runtime independently with non-Potts static-composite, multirate biochemical, update-law,
-  failure-injection, and checkpoint/replay fixtures.
+- Build a small checked Julia specification oracle independent from production execution. Prove the
+  runtime with source-located derivations, finite truth tables, property/metamorphic/invariance
+  tests, and non-Potts static-composite, multirate biochemical, update-law, failure-injection, and
+  checkpoint/replay fixtures.
+- Keep canonical topology and metadata host-side while numerical state may remain CPU- or
+  GPU-resident through declared, bounded, synchronized, and measured bridges.
 
 ### Adapter and join workstream
 
@@ -1205,22 +1235,28 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 ### Evidence and documentation workstream
 
 - Maintain package-local internal user, process-author, semantic, persistence, failure, and
-  extension documentation for every implemented alpha capability.
+  extension documentation for every implemented alpha capability, with ordinary authoring taught
+  before an advanced AlgebraicJulia track.
 - Bind every parity-registry feature touched by alpha to its exact upstream authority, Julia
-  decision, executable fixture, status, and limitation.
+  decision, source-located derivation, executable Julia fixture, status, and limitation.
 - Run an independent clean package test and CI lane; Potts tests do not count as runtime evidence.
+- Fail closed if CI, tests, examples, attestations, or release tooling install or execute Vivarium,
+  Process-Bigraph Python, or Bigraph-Schema Python.
 
 ### Internal-alpha gate
 
-- Serial static composites and the admitted multirate fixtures pass exact time, same-time visibility,
-  update-order, failure atomicity, settled-restart, semantic RNG, and executor-order-independent
-  serial evidence.
+- Canonical ACSet validity, naturality, isomorphism-invariant fingerprints, structured-cospan
+  composition, derived wiring equivalence, hierarchy compilation, constructor/ACSet round trips,
+  and row-renumbering/declaration-order/parenthesization invariance pass.
+- Serial static composites and the admitted multirate fixtures pass exact time, same-time
+  visibility, update-order, failure atomicity, settled-restart, semantic RNG, and
+  executor-order-independent serial evidence against the independent Julia oracle.
 - No required state mutation bypasses typed deltas or engine-owned transaction buffers.
 - Unsupported placement, continuation, update law, or process capability fails before mutation.
 - The parity registry labels only proven alpha rows accordingly; complete parity and public release
   remain explicitly unclaimed.
 
-## Phase 16: Dynamic Hierarchy and Potts Adapter Internal Beta
+## Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta
 
 ### Potts workstream
 
@@ -1231,6 +1267,12 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 
 ### Runtime workstream
 
+- Add `AlgebraicRewriting.jl` as a direct dependency with an explicit compatibility bound. Lower
+  typed add, remove, divide, move, and rewire operations to checked rewrite rules; raw unrestricted
+  rewriting is not the stable public runtime API.
+- Permit AlgebraicRewriting to discover candidates while ProcessBigraphs assigns semantic match
+  identities, validates preconditions, orders conflicts, chooses the committed match set, and owns
+  the settled structural barrier.
 - Implement recursive composites, place/link topology, ordered step DAGs, fork/join barriers,
   explicit fixed-point/iteration constructs, and structural add, remove, divide, move, and rewire.
 - Add versioned structural transactions, daughter reconstruction, lineage RNG, dynamic process
@@ -1258,13 +1300,14 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 ### Internal-beta gate
 
 - Dynamic hierarchy and all first-stable structural transactions pass serial conformance,
-  deterministic replay, continuation, failure injection, and topology fuzzing.
+  deterministic replay, continuation, failure injection, candidate-order invariance, rewrite
+  naturality, and topology fuzzing.
 - At least one CorePotts vertical slice and its PottsToolkit façade pass old/new differential
   execution and use only the runtime authority after cutover.
 - Phase 13 and attested G3-B artifacts remain unchanged, and no reverse Potts dependency enters the
   runtime.
 
-## Phase 17: Scientific Process Ecosystem and Whole-Cell-Style Composite
+## Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite
 
 ### Potts workstream
 
@@ -1275,6 +1318,9 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 
 ### Runtime and scientific-adapter workstream
 
+- Add an `AlgebraicDynamics.jl` weak-dependency extension that lowers admitted machines and resource
+  sharers into ordinary ProcessBigraphs processes and ports. It owns no scheduler, state,
+  transaction, or checkpoint semantics.
 - Add SciML ODE/DAE integration with explicit frozen, interpolated, event-updated, or continuously
   callable interval inputs and versioned solver continuation/invalidation.
 - Use ModelingToolkit only as optional authoring/compilation lowering to ordinary SciML processes.
@@ -1289,8 +1335,8 @@ passes even if runtime parity is incomplete. Internal alpha is not permission to
 
 - Compose a Julia gene-expression/reaction process, regulation ODE, and E. coli core FBA process
   under one multirate runtime and qualify its state exchange, restart, failure, and provenance.
-- Advance selected pinned vEcoli slices through differential traces after the Julia biochemical/FBA
-  composite passes.
+- Advance selected pinned vEcoli slices through registered source-derived traces after the Julia
+  biochemical/FBA composite passes, without executing the upstream Python runtime.
 - Publish process-family backend matrices. Explicit CPU-only processes are valid; hidden residency
   movement is not.
 - Complete user, adapter-author, solver-invalidation, units, standards-import, and whole-cell
@@ -1346,9 +1392,9 @@ commit, and structural-barrier semantics from Phases 15 and 16 are stable.
 ### Deliverables
 
 - Close every required row in the pinned Process-Bigraph 2.0 parity registry with a versioned Julia
-  semantic decision, implementation, executable oracle, persistence/failure disposition,
-  documentation, and applicable backend evidence.
-- Complete scheduler/update differential fixtures, randomized update-algebra tests,
+  semantic decision, implementation, independent source-derived Julia oracle,
+  persistence/failure disposition, documentation, and applicable backend evidence.
+- Complete scheduler/update source-derived fixtures, randomized update-algebra tests,
   dynamic-topology fuzzing, checkpoint/replay, failure injection, executor equivalence, external
   solver invalidation, jump rescheduling, FBA failure matrices, applicable SBML cases, and long-run
   leak/output-volume tests.
@@ -1362,11 +1408,11 @@ commit, and structural-barrier semantics from Phases 15 and 16 are stable.
 ### Public-release gate
 
 - Every mandatory parity-registry row is qualified against the exact pinned Process-Bigraph and
-  Bigraph-Schema revisions.
+  Bigraph-Schema revisions through the checked independent Julia conformance suite.
 - The Phase 17 whole-cell-style composite and all applicable Phase 18 executor-equivalence gates
   still pass under the release candidate.
-- No claim implies Vivarium 1.x support, exact Python interchange, upstream ownership, or
-  endorsement.
+- No claim implies Vivarium 1.x support, exact Python interchange, live upstream-runtime
+  equivalence, upstream ownership, or endorsement.
 - `ProcessBigraphs.jl` MUST NOT be published, tagged as a public compatibility release, or split
   into a separate repository before this gate passes.
 - A repository split may be considered only after the first complete-parity release.
@@ -1466,7 +1512,7 @@ Potts scientific path                         ProcessBigraphs runtime path
 ----------------------                        ----------------------------
 G4 field CPU/Metal/ROCm                       PB0 bounded foundation [passed]
         |                                                   |
-bounded portfolio smokes                      Phase 15 serial internal alpha
+bounded portfolio smokes                      Phase 15 ACSet-backed serial alpha
         |                                                   |
 14.2 Learn/Examples                                         |
 14.3 Published Models                                       |
@@ -1474,11 +1520,11 @@ bounded portfolio smokes                      Phase 15 serial internal alpha
         |                                                   |
         +---------------- Phase 15 independent gates -------+
         |                                                   |
-Potts paper/release gate                         serial static-composite alpha
+Potts paper/release gate                      canonical static-composite alpha
                                                             |
-                                           Phase 16 dynamic hierarchy + Potts adapter
+                                           Phase 16 algebraic rewriting + Potts adapter
                                                             |
-                                           Phase 17 scientific adapters + whole-cell style
+                                           Phase 17 algebraic/scientific adapters + whole-cell style
                                                             |
                                            Phase 18 Dagger/heterogeneous qualification
                                                             |
@@ -1498,21 +1544,23 @@ The executable sequence and join rules are:
    continuation, and evidence identity may not change.
 3. **Complete parallel runtime gate:** the ProcessBigraphs authority and parity registry are frozen,
    and the independent package plus bounded domain-neutral primitives and non-Potts fixtures pass
-   PB0. No CorePotts dependency or public runtime release was introduced; Phase 15 internal alpha
-   remains a separate gate.
+   PB0. Decision 0036 freezes the upcoming AlgebraicJulia architecture and independent-conformance
+   policy without implementing them. No CorePotts dependency or public runtime release was
+   introduced; Phase 15 internal alpha remains a separate gate.
 4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
    passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
    complete Learn/Examples, preregistered published-model studies, the full manual, and satellites.
 6. **Phase 15 independent gates:** qualify the Potts paper release from frozen Phase 14 evidence
-   while closing ProcessBigraphs serial internal alpha. Failure of one does not rewrite or weaken
-   the other.
+   while closing the ProcessBigraphs ACSet-backed serial internal alpha and independent Julia
+   specification oracle. Failure of one does not rewrite or weaken the other.
 7. **Phase 16 adapter join:** after serial runtime contracts and the relevant Potts evidence are
    stable, cut over one CorePotts slice at a time through old/new differential execution. No model
    may have two runtime authorities.
-8. **Phases 17--18:** add scientific adapters and the whole-cell-style composite before qualifying
-   Dagger. Dagger placement experiments may occur earlier, but qualification waits for stable serial
-   batches, reconciliation, commits, and structural barriers.
+8. **Phases 17--18:** add the AlgebraicDynamics extension, scientific adapters, and the
+   whole-cell-style composite before qualifying Dagger. Dagger placement experiments may occur
+   earlier, but qualification waits for stable serial batches, reconciliation, commits, and
+   structural barriers.
 9. **Phase 19 release join:** publish ProcessBigraphs only when every mandatory pinned-parity row,
    the whole-cell-style composite, applicable executor equivalence, production evidence, and
    complete documentation pass. Presentation to Eran occurs near this gate; repository separation
@@ -1528,7 +1576,7 @@ whole-cell scientific validity are distinct claims with distinct evidence. Expli
 experimental features do not block a given claim when they remain outside its stable APIs, selected
 portfolio, parity registry, and publication language. A selected Potts model changes only through
 the Decision 0029 amendment process; a required runtime parity feature changes only through an
-explicit revision of the pinned authority, parity registry, and Decision 0034 evidence.
+explicit revision of the pinned authority, parity registry, and Decisions 0034/0036 evidence.
 
 This roadmap is maintained as execution evidence. If implementation reveals that a phase boundary
 is wrong, the roadmap MAY be revised, but accepted semantics and scientific guarantees require the

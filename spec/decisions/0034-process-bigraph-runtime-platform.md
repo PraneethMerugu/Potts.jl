@@ -1,8 +1,14 @@
 # Decision 0034: ProcessBigraphs.jl as the Domain-Neutral Runtime Platform
 
-Status: Accepted architecture and roadmap policy; implementation not yet accepted
+Status: Accepted architecture and roadmap policy; bounded PB0 foundation passed; Phase 15 not implemented
 
 Date: 2026-07-26
+
+Amended by
+[Decision 0036](0036-algebraicjulia-process-bigraph-foundation.md): AlgebraicJulia is the mandatory
+structural foundation beginning in Phase 15, and upstream Python runtimes are source authorities
+but are never executed as conformance oracles. This decision's package identity, runtime authority,
+Dagger boundary, migration, and release rules otherwise remain in force.
 
 ## Context
 
@@ -13,7 +19,7 @@ domain-neutral runtime: the current plan, state, lifecycle, and integrator struc
 Potts concepts.
 
 The project goal has expanded. It now includes an independent Julia implementation of the
-Process-Bigraph 2.0 runtime model with feature and observable behavioral parity, a path toward
+Process-Bigraph 2.0 runtime model with source-audited feature and semantic parity, a path toward
 whole-cell development, and continued development of PottsToolkit as the flagship spatial-modeling
 environment. Python declaration interchange is useful but is not the product center.
 
@@ -201,7 +207,8 @@ Spatio-Flux commit `6fece7bb9af8e3b374affe02f30b6b022de1d134` and vEcoli commit
 `60b1570ed20bddd1229e621e670621566c0dafd3` is research context only and cannot create a Vivarium
 1.x parity obligation.
 
-The authoritative feature inventory, oracle requirements, and completion states are in
+The authoritative feature inventory, independent source-derived oracle requirements, and
+completion states are in
 `spec/process-bigraph-parity-registry-v1.toml`.
 
 ## Compatibility and evidence classes
@@ -219,8 +226,9 @@ Every observed upstream behavior and every Julia claim is classified:
 - `deferred_rewrite`: advertised or useful structural behavior not yet promoted.
 
 No feature may be labeled complete without its registered semantic specification, implementation,
-oracle fixtures, conformance evidence, documentation, persistence disposition, failure behavior,
-and applicable backend evidence.
+independent source-derived Julia oracle fixtures, conformance evidence, documentation, persistence
+disposition, failure behavior, and applicable backend evidence. Per Decision 0036, upstream Python
+runtimes are never installed or executed by CI, tests, examples, attestations, or release tooling.
 
 ## Migration constraints
 
@@ -241,7 +249,8 @@ During migration:
 
 - PottsToolkit and the general runtime can progress concurrently without freezing an unproven field
   abstraction or blocking G4.
-- The serial executor becomes the durable semantic oracle; Dagger is replaceable infrastructure.
+- The serial executor remains the durable alternate-executor equivalence reference; the checked
+  Julia specification oracle is structurally independent, and Dagger is replaceable infrastructure.
 - GPU-native means explicit residency and qualified device processes, not a false requirement that
   every whole-cell method execute on every GPU family.
 - Typed deltas and structural transactions make deterministic parallelism, replay, and dynamic
@@ -286,6 +295,10 @@ Before the first public release:
 
 - every required registry feature is `qualified`;
 - all normative scheduler, update, topology, continuation, failure, and replay fixtures pass;
+- the independent Julia specification oracle passes its source-located derivations, finite truth
+  tables, property, metamorphic, invariance, failure, and restart suites;
+- canonical ACSet, structured-cospan, wiring-diagram, compiled-epoch, and
+  AlgebraicRewriting conformance passes;
 - the serial implementation passes randomized update-algebra and dynamic-topology tests;
 - applicable Serial/Threads/Dagger executor equivalence passes;
 - every claimed placement and residency path proves absence of hidden transfer;
@@ -293,4 +306,5 @@ Before the first public release:
 - old/new Potts differential gates pass for every migrated slice;
 - the required whole-cell-style composite passes its scientific, restart, and failure gates;
 - complete user, adapter-author, executor-author, and conformance documentation exists; and
-- no public claim implies Vivarium 1.x support, exact Python interchange, or upstream endorsement.
+- no public claim implies Vivarium 1.x support, exact Python interchange, live upstream-runtime
+  equivalence, or upstream endorsement.

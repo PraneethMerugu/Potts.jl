@@ -1,5 +1,10 @@
 # Process-Bigraph Runtime and Parallel-Roadmap Owner Interview
 
+> Historical interview note: [Decision 0036](../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md)
+> supersedes any answer below that planned executable upstream Python differential oracles. The
+> accepted replacement is mandatory AlgebraicJulia structure plus independent source-derived Julia
+> conformance. The original answers remain here as an audit record.
+
 Status: Complete; all 48 owner decisions resolved
 
 Date: 2026-07-26

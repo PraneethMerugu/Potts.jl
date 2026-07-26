@@ -1,14 +1,20 @@
-schema_version = "1.0.0"
+schema_version = "1.1.0"
 registry_id = "process-bigraph-parity-v1"
 registry_status = "accepted-scope-pb0-implemented-qualification-open"
 registered_at = "2026-07-26"
-decision = "decisions/0034-process-bigraph-runtime-platform.md"
+decisions = [
+    "decisions/0034-process-bigraph-runtime-platform.md",
+    "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+]
 specification = "process-bigraph-runtime-semantics.md"
 audit = "../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md"
-owner_interview = "../design/audits/process-bigraph-runtime-owner-interview.md"
+owner_interviews = [
+    "../design/audits/process-bigraph-runtime-owner-interview.md",
+    "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
+]
 package_name = "ProcessBigraphs.jl"
 incubation_path = "lib/ProcessBigraphs"
-parity_target = "Pinned Process-Bigraph 2.0 feature and observable behavioral parity through idiomatic Julia APIs"
+parity_target = "Source-audited feature and semantic parity with the pinned Process-Bigraph 2.0 baseline through idiomatic Julia APIs"
 legacy_scope = "Vivarium 1.x compatibility is excluded"
 interchange_scope = "Exact Python API and declaration interchange are optional ecosystem work, not parity authorities"
 external_authority = "Development and qualification are independent; Eran Agmon and upstream maintainers are not design or release authorities"
@@ -34,7 +40,7 @@ implemented_direct_rows = [
     "deterministic-conflict-reconciliation",
     "atomic-event-commit",
 ]
-remaining_claim = "No row is oracle_passing or qualified; pinned Python oracles and Phase 15 internal alpha remain open."
+remaining_claim = "No row is oracle_passing or qualified; the AlgebraicJulia migration, independent Julia specification oracle, and Phase 15 internal alpha remain open."
 
 [status_vocabulary]
 allowed = [
@@ -49,8 +55,8 @@ allowed = [
 ]
 not_started = "No accepted design or qualifying implementation evidence."
 specified = "Normative behavior and evidence obligations are accepted; implementation evidence is incomplete."
-implemented = "An implementation exists, but its required pinned oracles and production evidence are incomplete."
-oracle_passing = "Required direct and pinned-oracle fixtures pass; remaining production qualification is incomplete."
+implemented = "An implementation exists, but its required independent source-derived oracles and production evidence are incomplete."
+oracle_passing = "Required direct and independent source-derived oracle fixtures pass; remaining production qualification is incomplete."
 qualified = "Specification, implementation, oracle, failure, persistence, documentation, and applicable backend evidence all pass."
 blocked = "A recorded external or architectural blocker prevents qualification."
 excluded = "Explicitly outside this registry's scope."
@@ -76,7 +82,7 @@ deferred_rewrite = "Structural behavior not promoted until dedicated semantics a
 
 [evidence_vocabulary]
 replay_classes = ["exact", "numerical", "statistical", "unsupported"]
-oracle_kinds = ["direct", "pinned_python", "differential_local", "application", "hardware", "fuzz", "failure_injection"]
+oracle_kinds = ["direct", "independent_julia", "source_derived", "metamorphic", "differential_local", "application", "hardware", "fuzz", "failure_injection"]
 backend_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 behavior_classifications = ["documented", "tested", "incidental", "upstream_discrepancy", "intentional_julia_improvement"]
 
@@ -85,7 +91,7 @@ required_dimensions = [
     "normative specification",
     "implementation",
     "direct semantic tests",
-    "registered pinned oracle when applicable",
+    "registered independent source-derived Julia oracle when applicable",
     "failure atomicity disposition",
     "persistence and continuation disposition",
     "RNG and replay disposition",
@@ -139,14 +145,19 @@ invariants = [
     "A feature cannot be qualified while a required referenced oracle is below qualified.",
     "A feature cannot be qualified without documentation, persistence, failure, and backend dispositions.",
     "The registry cannot be release-ready while any required_for_first_public_release feature is below qualified.",
-    "Advancing a parity source pin requires a registry version change and refreshed affected oracles.",
+    "Advancing a parity source pin requires a registry version change, renewed source audit, and refreshed affected oracles.",
     "Vivarium Core cannot be cited as a parity authority.",
+    "No CI, test, example, attestation, or release command installs or executes an upstream Python runtime.",
+    "ACSet row identity and traversal order are nonsemantic.",
     "Executor completion order, worker count, and device lane cannot be semantic ordering or RNG identities.",
 ]
 
 [release_gates]
 internal_alpha = [
     "serial static composite",
+    "canonical ProcessBigraph ACSet and structured-cospan composition",
+    "typed-constructor and AlgebraicJulia authoring equivalence",
+    "compiled indexed runtime plan with structural provenance",
     "typed paths and hierarchical schemas",
     "ports and topology validation",
     "exact time and imminent-event batches",
@@ -155,6 +166,7 @@ internal_alpha = [
 ]
 internal_beta = [
     "dynamic add/remove/divide/move/rewire",
+    "AlgebraicRewriting-backed atomic structural transactions",
     "Potts adapter differential qualification",
     "dynamic hierarchy failure and replay evidence",
     "applicable alternate-executor equivalence",
@@ -164,7 +176,7 @@ first_public_release = [
     "all required_for_first_public_release features qualified",
     "Julia biochemical/FBA whole-cell-style composite qualified",
     "complete user, adapter-author, executor-author, and conformance documentation",
-    "no Vivarium 1.x, exact Python interchange, or upstream endorsement claim",
+    "no Vivarium 1.x, exact Python interchange, live upstream-runtime-equivalence, or upstream endorsement claim",
 ]
 
 [scheduler_policy]
@@ -177,7 +189,8 @@ process_step_boundary = "Process is positive-time deadline work; Step is zero-ti
 cycle_policy = "reject undeclared cycles; iteration requires an explicit versioned iterative construct"
 
 [executor_policy]
-semantic_oracle = "SerialExecutor"
+equivalence_reference = "SerialExecutor"
+specification_oracle = "independent checked Julia oracle outside the production executor"
 allowed_qualified_executors = ["SerialExecutor", "ThreadsExecutor", "DaggerExecutor"]
 dagger_boundary = "Receives already selected coarse runnable batches and returns typed effects; never owns time, reconciliation, commit, topology, or observation."
 coarse_units = ["process_tick", "solver_call", "field_advance", "partition_batch"]
@@ -192,13 +205,35 @@ core_qualification = "CPU plus applicable named-device microfixtures"
 process_family_rule = "Every process family publishes its own backend and replay matrix"
 potts_non_regression = "Existing CPU/Metal/ROCm Potts requirements remain until separately revised"
 
+[algebraicjulia_policy]
+phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
+phase16_direct_dependency = "AlgebraicRewriting.jl"
+phase17_weak_dependency = "AlgebraicDynamics.jl"
+canonical_structure = "one versioned integrated ProcessBigraph ACSet"
+open_composition = "structured cospans"
+derived_view = "directed wiring diagrams"
+semantic_identity = "stable ProcessBigraph identities and canonical paths"
+row_identity = "nonsemantic"
+runtime_plan = "immutable indexed tables plus exact structural provenance"
+hot_path = "no ACSet traversal, matching, mutation, or structure-induced allocation"
+runtime_authority = "ProcessBigraphs exclusively owns time, scheduling, state, reconciliation, commit, failure, RNG, observation, checkpoint, and replay"
+checkpoint = "ProcessBigraphs-owned versioned envelope; raw ACSet serialization is interchange only"
+
+[conformance_policy]
+upstream_runtime_execution = "forbidden"
+upstream_source_role = "exact pinned source and traceability authority"
+claim_language = "source-audited feature and semantic parity"
+specification_oracle = "small checked Julia implementation structurally independent from the production executor"
+required_methods = ["source-located golden derivations", "exhaustive finite truth tables", "property tests", "metamorphic tests", "invariance tests", "failure injection", "checkpoint/restart"]
+forbidden_runtimes = ["Vivarium", "Process-Bigraph Python", "Bigraph-Schema Python"]
+
 [[sources]]
 id = "process-bigraph"
 kind = "git"
 repository = "https://github.com/vivarium-collective/process-bigraph"
 revision = "305ea826191e9f897f0c6e207bc303bbc44a9eef"
 package_version = "1.5.0"
-authority = "pinned_executable_runtime"
+authority = "pinned_source_audited_runtime_semantics_and_test_intent"
 parity_authority = true
 
 [[sources]]
@@ -207,7 +242,7 @@ kind = "git"
 repository = "https://github.com/vivarium-collective/bigraph-schema"
 revision = "4b208e13620e09e877af52ea07273bc9429a3a17"
 package_version = "1.4.3"
-authority = "pinned_schema_state_apply_divide_serialization"
+authority = "pinned_source_audited_schema_state_apply_divide_serialization"
 parity_authority = true
 
 [[sources]]
@@ -727,6 +762,76 @@ spec_sections = ["Whole-cell acceptance ladder"]
 oracle_ids = ["oracle-whole-cell-composite"]
 
 [[features]]
+id = "canonical-process-bigraph-acset"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["AlgebraicJulia structural foundation"]
+oracle_ids = ["oracle-algebraic-structure"]
+
+[[features]]
+id = "structured-cospan-open-composition"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["AlgebraicJulia structural foundation", "Composites"]
+oracle_ids = ["oracle-algebraic-structure"]
+
+[[features]]
+id = "derived-directed-wiring-view"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["AlgebraicJulia structural foundation"]
+oracle_ids = ["oracle-algebraic-structure"]
+
+[[features]]
+id = "compiled-structural-epoch"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["AlgebraicJulia structural foundation"]
+oracle_ids = ["oracle-algebraic-structure", "oracle-algebraic-invariance"]
+
+[[features]]
+id = "algebraic-rewriting-structural-transactions"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-algebraic-rewriting"]
+
+[[features]]
+id = "algebraicdynamics-scientific-extension"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["AlgebraicJulia structural foundation", "Scientific adapter contract"]
+oracle_ids = ["oracle-algebraicdynamics-extension", "oracle-whole-cell-composite"]
+
+[[features]]
+id = "independent-julia-specification-oracle"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Minimum conformance suite"]
+oracle_ids = ["oracle-independent-specification"]
+
+[[features]]
 id = "python-declaration-interchange"
 classification = "optional_ecosystem"
 status = "not_started"
@@ -758,7 +863,7 @@ oracle_ids = []
 
 [[oracles]]
 id = "oracle-multirate-shared-state"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["temporal-process-protocol", "exact-integer-logical-time", "imminent-event-scheduler", "deferred-sample-hold-compatibility", "same-time-common-snapshot", "adaptive-deadlines"]
@@ -767,7 +872,7 @@ acceptance = "Interval-one and interval-two processes share state; normative imm
 
 [[oracles]]
 id = "oracle-partial-interval"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["exact-integer-logical-time", "actual-elapsed-partial-interval"]
@@ -776,7 +881,7 @@ acceptance = "A forced final partial interval passes actual elapsed time in norm
 
 [[oracles]]
 id = "oracle-update-algebra"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["structural-schema-realization", "same-time-common-snapshot", "typed-process-deltas", "versioned-update-algebra", "deterministic-conflict-reconciliation"]
@@ -785,7 +890,7 @@ acceptance = "Numeric, overwrite, map, array, set, add/remove, and division conf
 
 [[oracles]]
 id = "oracle-step-workflow"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["ordered-reactive-step-protocol", "workflow-cycle-rejection", "explicit-iterative-constructs"]
@@ -794,7 +899,7 @@ acceptance = "Fork/join, silent inputs, wildcard inputs, same-layer writes, and 
 
 [[oracles]]
 id = "oracle-dynamic-topology"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["place-and-link-topology", "structural-add-remove", "structural-divide", "structural-move-rewire", "process-reconfiguration-retirement", "merge-engulf-burst-general-rewrite"]
@@ -803,21 +908,66 @@ acceptance = "Add, execute, move, rewire, divide, daughter reconstruction, and r
 
 [[oracles]]
 id = "oracle-nested-composite"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["typed-hierarchical-store", "stable-typed-paths", "typed-input-output-ports", "place-and-link-topology", "nested-composites-and-bridges"]
 sources = ["process-bigraph", "bigraph-schema"]
-acceptance = "Nested composites, bridges, private paths, typed port bindings, and canonical lowering pass direct and differential fixtures."
+acceptance = "Nested composites, bridges, private paths, typed port bindings, and canonical lowering pass direct, source-derived, and metamorphic fixtures."
 
 [[oracles]]
 id = "oracle-division-lineage"
-kind = "pinned_python"
+kind = "independent_julia"
 status = "not_started"
 required = true
 feature_ids = ["structural-schema-realization", "structural-divide", "semantic-lineage-rng"]
 sources = ["process-bigraph", "bigraph-schema"]
 acceptance = "Typed daughter partitioning, continuation reconstruction, identity allocation, and lineage RNG remain deterministic under reversed task order."
+
+[[oracles]]
+id = "oracle-algebraic-structure"
+kind = "metamorphic"
+status = "not_started"
+required = true
+feature_ids = ["canonical-process-bigraph-acset", "structured-cospan-open-composition", "derived-directed-wiring-view", "compiled-structural-epoch"]
+sources = []
+acceptance = "Typed constructors, ACSets, structured cospans, and derived wiring diagrams round-trip through one schema, compose naturally, compile with exact provenance, and produce isomorphism-invariant semantic fingerprints."
+
+[[oracles]]
+id = "oracle-algebraic-invariance"
+kind = "metamorphic"
+status = "not_started"
+required = true
+feature_ids = ["canonical-process-bigraph-acset", "structured-cospan-open-composition", "derived-directed-wiring-view", "compiled-structural-epoch"]
+sources = []
+acceptance = "ACSet row renumbering, declaration order, traversal order, path aliases, and equivalent composite parenthesization do not alter semantic identity, fingerprints, RNG coordinates, schedules, or committed results."
+
+[[oracles]]
+id = "oracle-algebraic-rewriting"
+kind = "independent_julia"
+status = "not_started"
+required = true
+feature_ids = ["algebraic-rewriting-structural-transactions", "structural-add-remove", "structural-divide", "structural-move-rewire", "process-reconfiguration-retirement"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Typed structural operations lower to checked rewrite rules; candidate match order is nonsemantic; ProcessBigraphs validates and atomically commits one deterministic structural epoch or publishes nothing."
+
+[[oracles]]
+id = "oracle-algebraicdynamics-extension"
+kind = "application"
+status = "not_started"
+required = true
+feature_ids = ["algebraicdynamics-scientific-extension"]
+sources = []
+acceptance = "The weak-dependency extension lowers admitted AlgebraicDynamics machines and resource sharers to ordinary ProcessBigraphs processes and ports without owning time, state, commit, or persistence."
+
+[[oracles]]
+id = "oracle-independent-specification"
+kind = "independent_julia"
+status = "not_started"
+required = true
+feature_ids = ["independent-julia-specification-oracle", "imminent-event-scheduler", "versioned-update-algebra", "deterministic-conflict-reconciliation", "atomic-event-commit", "transactional-failure"]
+sources = ["process-bigraph", "bigraph-schema", "process-bigraph-paper"]
+acceptance = "A small checked Julia oracle independent from production code passes exhaustive finite truth tables and source-located golden derivations for schedules, updates, commits, failures, and traces."
 
 [[oracles]]
 id = "oracle-checkpoint-replay"
@@ -853,7 +1003,7 @@ status = "not_started"
 required = true
 feature_ids = ["temporal-process-protocol", "ordered-reactive-step-protocol", "settled-boundary-checkpoint", "semantic-lineage-rng"]
 sources = ["vecoli-reference"]
-acceptance = "Selected seeded vEcoli slices produce registered differential traces, event order, and continuation behavior."
+acceptance = "Selected seeded vEcoli slices satisfy registered source-derived traces, event order, continuation behavior, and documented deviations without executing the upstream runtime."
 
 [[oracles]]
 id = "oracle-spatio-flux"

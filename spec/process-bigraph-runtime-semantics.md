@@ -2,11 +2,11 @@
 
 Status: Normative design; implementation and parity status are tracked separately
 
-Version: 1.0.0
+Version: 1.1.0
 
 Date: 2026-07-26
 
-Authority: Decision 0034 and `process-bigraph-parity-registry-v1.toml`
+Authority: Decisions 0034 and 0036, and `process-bigraph-parity-registry-v1.toml`
 
 ## Purpose
 
@@ -26,8 +26,8 @@ The initial runtime parity pins are:
 
 | Source | Revision | Role |
 |---|---|---|
-| Process-Bigraph | `305ea826191e9f897f0c6e207bc303bbc44a9eef` (`1.5.0`) | Executable behavior and tests |
-| Bigraph-Schema | `4b208e13620e09e877af52ea07273bc9429a3a17` (`1.4.3`) | Schema, state, apply, divide, and serialization behavior |
+| Process-Bigraph | `305ea826191e9f897f0c6e207bc303bbc44a9eef` (`1.5.0`) | Source-audited behavior and test intent |
+| Bigraph-Schema | `4b208e13620e09e877af52ea07273bc9429a3a17` (`1.4.3`) | Source-audited schema, state, apply, divide, and serialization behavior |
 | Process-Bigraph paper | arXiv `2512.23754` | Architectural intent and discrepancy research |
 
 The exact feature inventory and evidence status are machine-readable in
@@ -36,6 +36,11 @@ unversioned web documentation cannot establish or invalidate parity.
 
 Vivarium 1.x is not a compatibility target. Spatio-Flux and vEcoli are pinned application
 references, not additional runtime authorities.
+
+CI, tests, examples, attestations, and release tooling MUST NOT install or execute Vivarium,
+Process-Bigraph Python, or Bigraph-Schema Python. Exact source pins remain traceability and
+semantic-research authorities. Conformance claims are therefore **source-audited feature and
+semantic parity**, not live upstream-runtime equivalence.
 
 When pinned paper, code, and tests disagree:
 
@@ -63,6 +68,42 @@ The runtime has five semantic layers:
 
 No façade, adapter, executor, emitter, or device representation may become a second state,
 scheduler, topology, or persistence authority.
+
+## AlgebraicJulia structural foundation
+
+The canonical authoring structure is one versioned ProcessBigraph ACSet schema. `ACSets.jl` and
+`Catlab.jl` are required Phase 15 dependencies; `AlgebraicRewriting.jl` is required when Phase 16
+dynamic structure begins; and `AlgebraicDynamics.jl` is a Phase 17 weak-dependency scientific
+extension. AlgebraicJulia supplies structural mathematics and composition, not runtime execution
+authority.
+
+The integrated ACSet represents composites, nodes, stores, processes, steps, ports, links,
+containment, structural schemas, and stable semantic identities. Structured cospans define typed
+open-composite interfaces and composition. Directed wiring diagrams are derived dataflow and
+visualization views. Neither structured cospans nor wiring diagrams form a second canonical model.
+
+Ordinary typed Julia constructors and AlgebraicJulia-native authoring MUST lower to the same
+canonical ACSet and scientific fingerprint. Category-theory knowledge is not required for ordinary
+use. Public APIs MAY accept ACSets and wiring diagrams and expose read-only canonical structure;
+semantic mutation, compilation, execution, commit, and persistence remain ProcessBigraphs APIs.
+
+Stable ProcessBigraph identities and canonical paths are semantic. ACSet row numbers, row order,
+and traversal order are storage-local and MUST NOT enter canonical ordering, fingerprints, RNG
+coordinates, persistence identities, or scientific diagnostics.
+
+Compilation MUST:
+
+1. validate and canonicalize the authoring ACSet;
+2. freeze an immutable structural epoch;
+3. create indexed execution tables and an exact provenance map from semantic identities to
+   compiled locations; and
+4. reject ambiguity before any state mutation.
+
+Ordinary numerical hot paths MUST NOT traverse, match, or mutate the authoring ACSet or allocate
+because of AlgebraicJulia structure. Committed numerical values and backend-resident arrays remain
+ProcessBigraphs-owned state. The canonical ACSet is host-side, placement-independent topology and
+metadata; every CPU/device bridge remains explicit, bounded, synchronized, measured, and
+fingerprinted.
 
 ## Core semantic values
 
@@ -150,8 +191,8 @@ For a requested end time `T`:
 
 ### Normative event algorithm
 
-At a settled boundary with current logical time `t` and target horizon `T`, the serial semantic
-oracle executes:
+At a settled boundary with current logical time `t` and target horizon `T`, the production serial
+reference executor follows:
 
 ```text
 while t < T:
@@ -307,7 +348,7 @@ failure behavior are visible and fingerprinted.
 
 ### Place and link topology
 
-The runtime maintains distinct views:
+The canonical ACSet maintains distinct, jointly validated views:
 
 - **place topology** describes containment, parent/child relationships, and the hierarchical state
   namespace; and
@@ -324,7 +365,9 @@ into one canonical runtime graph with one logical-time authority and one transac
 Private paths remain inaccessible outside the declared interface.
 
 Equivalent explicit and nested constructions MUST have the same scientific fingerprint after
-canonical lowering. Authoring provenance MAY retain the original nesting.
+canonical lowering. Structured-cospan composition and ordinary typed constructors MUST produce
+isomorphic canonical ACSets and identical semantic fingerprints. Authoring provenance MAY retain
+the original nesting and presentation form.
 
 ## Typed deltas and update algebra
 
@@ -397,6 +440,12 @@ Structural requests are computed from the common snapshot and do not alter topol
 or step computation. After ordinary state/step publication, the runtime validates one structural
 transaction against the current committed version and publishes it atomically.
 
+Beginning in Phase 16, typed ProcessBigraphs structural operations lower to
+AlgebraicRewriting rules. AlgebraicRewriting may discover candidate matches, but ProcessBigraphs
+assigns semantic match identities, validates preconditions, deterministically orders conflicts,
+selects the committed match set, and owns publication. Raw unrestricted rewrites are not the stable
+runtime or biological API.
+
 The first stable request families are:
 
 - `add`: create a schema-valid node, process, step, port binding, or composite member with a fresh
@@ -416,7 +465,9 @@ construction.
 
 If any request or derived repair fails, no part of the structural transaction publishes. `merge`,
 `engulf`, `burst`, and unrestricted graph rewrite are deferred until separately specified and
-promoted.
+promoted. A successful transaction creates one new immutable structural epoch, canonical
+fingerprint, and semantic-identity map. Matching and partial rewrite application are never
+observable settled states.
 
 ## Continuation, checkpoint, and replay
 
@@ -449,6 +500,11 @@ A canonical checkpoint includes:
 - placement-independent residency requirements;
 - compatibility mode and quantization policies; and
 - integrity hashes.
+
+The checkpoint is a ProcessBigraphs-owned, versioned envelope. Raw ACSet, structured-cospan, or
+wiring-diagram serialization MAY be offered for structural interchange and inspection, but is not
+a runtime checkpoint, scheduler continuation, or replay contract. A checkpoint may occur before or
+after a complete structural transaction, never during matching or partial rewrite application.
 
 Every stateful process declares a continuation schema and invalidation rules. Serialization of an
 arbitrary Julia closure, task, pointer, solver object, or device allocation is not a portable
@@ -565,7 +621,8 @@ is explicit with measured boundaries.
 
 ## Executor protocol and Dagger boundary
 
-The serial executor is the semantic oracle. An executor receives a fully selected runnable batch:
+The serial executor is the equivalence reference for alternate physical executors. It is not the
+independent specification oracle. An executor receives a fully selected runnable batch:
 
 - exact event and interval identities;
 - immutable typed input projections;
@@ -664,10 +721,10 @@ Registry statuses are:
 - `excluded`; and
 - `not_applicable`.
 
-`qualified` requires the registered specification, implementation, direct tests, pinned upstream
-oracle where applicable, failure and persistence evidence, documentation, and applicable backend
-matrix. An unimplemented compatibility spelling cannot satisfy a behavioral feature; an example
-run alone cannot qualify a semantic family.
+`qualified` requires the registered specification, implementation, direct tests, independent
+source-derived Julia oracle where applicable, failure and persistence evidence, documentation, and
+applicable backend matrix. An unimplemented compatibility spelling cannot satisfy a behavioral
+feature; an example run alone cannot qualify a semantic family.
 
 Maturity gates are:
 
@@ -687,7 +744,7 @@ The runtime progresses through:
 1. runtime microfixtures;
 2. a Julia Catalyst/JumpProcesses gene-expression process, SciML regulation process, and
    COBREXA/JuMP E. coli core FBA process in one multirate composite;
-3. selected pinned vEcoli process slices with differential traces;
+3. selected pinned vEcoli process slices with source-derived registered traces;
 4. a well-stirred JCVI-Syn3A CME/ODE composition;
 5. a full pinned vEcoli generation; and
 6. population/environment composition with PottsToolkit.
@@ -697,8 +754,20 @@ not replace the accepted ladder.
 
 ## Minimum conformance suite
 
+The checked Julia specification oracle MUST be small, auditable, and structurally independent from
+the production executor. Expected results MUST be traced to exact pinned-source locations,
+hand-checkable derivations, or explicit mathematical definitions, including uncertainty records
+where sources disagree. It MUST NOT import or invoke the production scheduler to manufacture its
+expected results.
+
 Before public release, evidence MUST cover:
 
+- ACSet schema validity, naturality, canonical isomorphism, structured-cospan composition,
+  wiring-diagram equivalence, hierarchy compilation, and exact constructor/ACSet round trips;
+- invariance under ACSet row renumbering, declaration and hash-table order, path aliases,
+  equivalent composite parenthesization, task completion order, and worker count;
+- exhaustive finite truth tables where feasible plus property, metamorphic, fuzz, and
+  failure-injection tests;
 - interval-one and interval-two processes sharing state;
 - forced partial final intervals;
 - same-time numeric, overwrite, map, array, add/remove, and divide conflicts in reversed execution
@@ -719,6 +788,9 @@ Before public release, evidence MUST cover:
 - long-run leak and output-volume budgets; and
 - compile latency, memory, event throughput, and checkpoint budgets.
 
+No conformance command may install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema
+Python. Upstream source and test files may be inspected and cited as derivation authorities.
+
 Every result records the runtime commit, source pins, model fingerprint, compatibility mode,
 executor, backend, hardware, numerical/replay class, and evidence artifact.
 
@@ -727,6 +799,7 @@ executor, backend, hardware, numerical/replay class, and evidence artifact.
 - Vivarium 1.x API or behavior compatibility;
 - exact Python API spelling or object representation;
 - complete Python/JSON interchange;
+- direct upstream-runtime-equivalence claims without executing that runtime;
 - REST, Ray, EC2, Python multiprocessing, or Nextflow backend parity;
 - mandatory SQLite, Parquet, dashboard, or visualization implementations in core;
 - formal support for every Milner-bigraph encoding;

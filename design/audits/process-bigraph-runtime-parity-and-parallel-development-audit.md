@@ -1,5 +1,11 @@
 # Process-Bigraph Runtime Parity and Parallel-Development Audit
 
+> Post-audit architecture note: [Decision 0036](../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md)
+> supersedes recommendations below to execute the upstream Python runtime. Exact upstream commits
+> remain source-audit authorities, while conformance uses a structurally independent Julia oracle,
+> source-located derivations, and comprehensive unit/integration evidence. AlgebraicJulia is the
+> required structural foundation beginning in Phase 15.
+
 Status: Pre-interview research complete; no roadmap or contract decision is changed by this audit
 
 Date: 2026-07-26

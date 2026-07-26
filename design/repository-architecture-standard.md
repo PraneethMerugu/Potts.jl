@@ -68,6 +68,10 @@ CorePotts <- NeuralPotts
 More specifically:
 
 - `ProcessBigraphs` MUST NOT depend on `CorePotts`, `PottsToolkit`, `MakiePotts`, or `NeuralPotts`.
+- In Phase 15, `ProcessBigraphs` directly depends on `ACSets.jl` and `Catlab.jl`. Phase 16 adds
+  `AlgebraicRewriting.jl`; Phase 17 admits `AlgebraicDynamics.jl` only through a weak-dependency
+  extension. These packages supply structural mathematics and authoring, not runtime scheduling,
+  numerical-state, transaction, or persistence authority.
 - `CorePotts` depends on `ProcessBigraphs` after the corresponding strangler-migration slice and
   MUST NOT depend on `PottsToolkit`, `MakiePotts`, or `NeuralPotts`.
 - `PottsToolkit` depends on `CorePotts` and MAY depend directly on `ProcessBigraphs` when its
@@ -83,10 +87,13 @@ a reverse dependency, shared ownership of generic runtime contracts, or undeclar
 is not.
 
 `ProcessBigraphs` owns generic paths, ports, state schemas, processes, steps, deltas, clocks,
-composites, scheduling, reconciliation, and commits. CorePotts owns Potts laws, spatial storage,
-workspaces, kernels, lifecycle operations, and algorithms. PottsToolkit owns biological authoring
-façades and lowering. CorePotts is the flagship spatial-process adapter, not the semantic owner of
-the general runtime.
+composites, scheduling, reconciliation, commits, checkpoints, and replay. One custom ProcessBigraph
+ACSet is its canonical authoring structure; structured cospans define open composition and directed
+wiring diagrams are derived views. The ACSet remains host-side topology/metadata and compiles to
+immutable indexed execution tables, so ordinary numerical hot paths do not traverse it. CorePotts
+owns Potts laws, spatial storage, workspaces, kernels, lifecycle operations, and algorithms.
+PottsToolkit owns biological authoring façades and lowering. CorePotts is the flagship
+spatial-process adapter, not the semantic owner of the general runtime.
 
 KernelAbstractions, AcceleratedKernels, Atomix, KernelIntrinsics, Adapt, and physical device-storage
 machinery belong primarily to `CorePotts`. `PottsToolkit` MAY depend directly on a low-level
@@ -285,11 +292,14 @@ Package-local tests verify that package independently. `integration/` verifies c
 semantics, DSL-to-engine equivalence, SciML behavior, reference models, statistical correctness,
 and backend conformance.
 
-`ProcessBigraphs` CI owns its package-local unit, property, scheduler, persistence, and pinned-parity
-conformance lanes. Cross-package CI owns CorePotts adapter equivalence, PottsToolkit lowering, and
-whole-cell-style composite acceptance. A Potts CI lane MUST NOT be treated as evidence that the
-domain-neutral runtime passes independently, and runtime CI MUST NOT silently alter the accepted
-Phase 13 or Potts backend gates.
+`ProcessBigraphs` CI owns its package-local unit, property, metamorphic, AlgebraicJulia-structure,
+scheduler, persistence, and source-derived parity-conformance lanes. Its checked Julia
+specification oracle remains structurally independent from production execution. CI, tests,
+examples, attestations, and release tooling MUST NOT install or execute Vivarium,
+Process-Bigraph Python, or Bigraph-Schema Python. Cross-package CI owns CorePotts adapter
+equivalence, PottsToolkit lowering, and whole-cell-style composite acceptance. A Potts CI lane MUST
+NOT be treated as evidence that the domain-neutral runtime passes independently, and runtime CI
+MUST NOT silently alter the accepted Phase 13 or Potts backend gates.
 
 Backend launchers SHOULD use separate processes or CI jobs while invoking the same shared
 conformance definitions. Scientific fixtures and canonical workload builders MUST NOT be copied

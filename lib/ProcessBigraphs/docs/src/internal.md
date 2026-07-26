@@ -15,7 +15,17 @@ domain-neutral values and bounded serial microfixtures. It does not claim
 dynamic structural transactions, nested composites, bridges that execute
 transfers, persisted checkpoint files, a general observer protocol, semantic
 RNG, Threads/Dagger equivalence, device kernels, scientific adapters, or
-pinned-Python oracle parity.
+independent source-derived Julia oracle qualification.
+
+Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
+model. `ACSets.jl` and `Catlab.jl` become direct dependencies then;
+`AlgebraicRewriting.jl` follows in Phase 16 and `AlgebraicDynamics.jl` enters
+through a Phase 17 weak-dependency extension. These dependencies and the ACSet
+migration are accepted but not implemented in PB0.
+
+The checked specification oracle will be independent from production
+execution. CI, tests, examples, attestations, and release tooling will not
+install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema Python.
 
 ## Semantic values
 

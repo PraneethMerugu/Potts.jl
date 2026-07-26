@@ -16,11 +16,11 @@ Potts.jl is intended to combine three equal identities:
 2. A world-leading high-performance simulation engine
 3. An approachable biological modeling environment
 
-`ProcessBigraphs.jl` is intended to reproduce the features and observable behavior of a pinned
-Process-Bigraph 2.0 authority through idiomatic Julia contracts. Its long-term purpose is to support
-whole-cell and multiscale model development, not merely to provide schema interchange with another
-runtime. Vivarium 1.x compatibility is outside this parity goal unless a later accepted decision
-adds a specific capability on its own merits.
+`ProcessBigraphs.jl` targets source-audited feature and semantic parity with a pinned
+Process-Bigraph 2.0 authority through idiomatic Julia contracts. Its long-term purpose is to
+support whole-cell and multiscale model development, not merely to provide schema interchange with
+another runtime. Vivarium 1.x compatibility is outside this parity goal unless a later accepted
+decision adds a specific capability on its own merits.
 
 The Potts ecosystem MUST remain architecturally hardware agnostic. Until superseded by an accepted
 semantic decision, its first-class release contract is CPU, Apple Metal, and AMD ROCm. NVIDIA CUDA
@@ -54,14 +54,21 @@ MUST NOT silently redefine model behavior.
 typed deltas, logical clocks, composites, scheduling, reconciliation, and commit semantics. It MUST
 NOT depend on CorePotts, PottsToolkit, or another Potts-specific package.
 
+One custom ProcessBigraph ACSet is the canonical structural model. Structured cospans define open
+composition and directed wiring diagrams are derived views. AlgebraicJulia structure compiles into
+ProcessBigraphs-owned immutable runtime tables; ACSet row numbers are nonsemantic and ordinary
+numerical hot paths do not traverse the authoring structure.
+
 CorePotts is the flagship spatial-process adapter for the runtime. PottsToolkit retains its
 biological authoring façades and MAY lower generic composition into `ProcessBigraphs.jl`. Generic
 runtime semantics MUST NOT be duplicated or defined in parallel by the Potts packages after the
 corresponding migration slice is accepted.
 
-The deterministic serial executor is the executable semantic authority. Dagger and other parallel
-executors MAY determine physical placement and concurrent execution of already selected work, but
-MUST NOT define scientific ordering, logical time, visibility, reconciliation, or commit behavior.
+An independent checked Julia specification oracle establishes expected semantic traces. The
+deterministic serial executor is the reference for alternate executor equivalence. Dagger and other
+parallel executors MAY determine physical placement and concurrent execution of already selected
+work, but MUST NOT define scientific ordering, logical time, visibility, reconciliation, or commit
+behavior.
 
 The runtime is GPU-native at its execution boundaries, while each process family declares and
 qualifies its own backend capabilities. Whole-cell composites MAY contain explicit CPU-only
@@ -70,10 +77,12 @@ preflight; hidden movement is a contract violation. These runtime rules do not w
 CPU, Metal, and ROCm release contract.
 
 Runtime development proceeds independently, including independent research and resolution of
-upstream ambiguities. Behavioral parity MUST be established against an explicitly pinned
-Process-Bigraph 2.0 revision through a versioned parity registry and executable conformance
-evidence. Interchange formats and Python bridges MAY be added, but they are not the product center
-or a substitute for feature and behavioral parity.
+upstream ambiguities. Source-audited feature and semantic parity MUST be established against an
+explicitly pinned Process-Bigraph 2.0 revision through a versioned parity registry, source-located
+derivations, and executable Julia conformance evidence. CI, tests, examples, attestations, and
+release tooling MUST NOT install or execute the upstream Python runtimes. Interchange formats and
+Python bridges MAY be added later, but they are not the product center or a substitute for semantic
+parity.
 
 ## SciML Integration
 
@@ -136,11 +145,12 @@ compatibility requirements for the current Potts redesign. Breaking changes are 
 materially improve scientific correctness, API coherence, GPU execution, extensibility, or
 maintainability.
 
-The runtime has a separate compatibility obligation: feature and observable behavioral parity with
-its pinned Process-Bigraph 2.0 authority. Julia API spelling and implementation structure need not
-copy upstream, but deliberate semantic differences MUST be versioned, justified, and covered by
-conformance evidence. The runtime and Potts workstreams MAY advance concurrently; neither workstream
-may silently relax the other's accepted gates.
+The runtime has a separate compatibility obligation: source-audited feature and semantic parity
+with its pinned Process-Bigraph 2.0 authority. Julia API spelling and implementation structure need
+not copy upstream, but deliberate semantic differences MUST be versioned, justified, and covered
+by conformance evidence. This is not a claim of live upstream-runtime equivalence. The runtime and
+Potts workstreams MAY advance concurrently; neither workstream may silently relax the other's
+accepted gates.
 
 Metaprogramming is an implementation tool, not a goal. It MUST be evaluated by generated-code
 quality, compilation latency, clarity, extensibility, and GPU suitability.

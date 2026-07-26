@@ -40,6 +40,7 @@ corresponding specification document.
 - [0033: Phase 14 generic hierarchical authoring](0033-phase-14-generic-hierarchical-authoring.md)
 - [0034: ProcessBigraphs.jl as the domain-neutral runtime platform](0034-process-bigraph-runtime-platform.md)
 - [0035: Wang sequential reference and GPU suitability disposition](0035-wang-sequential-gpu-disposition.md)
+- [0036: AlgebraicJulia as the ProcessBigraphs structural foundation](0036-algebraicjulia-process-bigraph-foundation.md)
 
 ## Record Template
 

@@ -39,11 +39,15 @@ end
 
 registry_path = require_file("spec/process-bigraph-parity-registry-v1.toml")
 decision_path = require_file("spec/decisions/0034-process-bigraph-runtime-platform.md")
+algebraic_decision_path =
+    require_file("spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md")
 semantics_path = require_file("spec/process-bigraph-runtime-semantics.md")
 audit_path = require_file(
     "design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md")
 interview_path = require_file(
     "design/audits/process-bigraph-runtime-owner-interview.md")
+algebraic_interview_path = require_file(
+    "design/audits/process-bigraph-algebraicjulia-owner-interview.md")
 charter_path = require_file("spec/project-charter.md")
 architecture_path = require_file("design/repository-architecture-standard.md")
 roadmap_path = require_file("design/refactor-roadmap.md")
@@ -67,13 +71,21 @@ source_ids = unique_ids(sources, "source registry")
 feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
-check(registry["schema_version"] == "1.0.0", "unexpected parity-registry schema")
+check(registry["schema_version"] == "1.1.0", "unexpected parity-registry schema")
 check(registry["registry_status"] == "accepted-scope-pb0-implemented-qualification-open",
     "parity registry overclaims implementation maturity")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
     "runtime incubation path changed")
+check(registry["decisions"] == [
+    "decisions/0034-process-bigraph-runtime-platform.md",
+    "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+], "parity registry decision authorities changed")
+check(registry["owner_interviews"] == [
+    "../design/audits/process-bigraph-runtime-owner-interview.md",
+    "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
+], "parity registry owner-interview authorities changed")
 
 minimums = registry["checker"]
 check(length(sources) >= minimums["minimum_source_count"],
@@ -108,6 +120,8 @@ end
 allowed_statuses = Set(registry["status_vocabulary"]["allowed"])
 allowed_classes = Set(registry["classification_vocabulary"]["allowed"])
 allowed_oracle_kinds = Set(registry["evidence_vocabulary"]["oracle_kinds"])
+check("pinned_python" ∉ allowed_oracle_kinds,
+    "live pinned-Python oracle kind must not be admitted")
 required_feature_fields = registry["checker"]["required_feature_fields"]
 required_oracle_fields = registry["checker"]["required_oracle_fields"]
 excluded_release_classes = Set([
@@ -152,7 +166,53 @@ for oracle in oracles
         "oracle '$id' references an unknown feature")
     check(Set(get(oracle, "sources", String[])) <= source_ids,
         "oracle '$id' references an unknown source")
+    check(oracle["kind"] != "pinned_python",
+        "oracle '$id' attempts to execute a pinned Python runtime")
 end
+
+required_algebraic_features = Set([
+    "canonical-process-bigraph-acset",
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+    "compiled-structural-epoch",
+    "algebraic-rewriting-structural-transactions",
+    "algebraicdynamics-scientific-extension",
+    "independent-julia-specification-oracle",
+])
+check(required_algebraic_features <= feature_ids,
+    "registry omits an accepted AlgebraicJulia or independent-conformance feature")
+required_algebraic_oracles = Set([
+    "oracle-algebraic-structure",
+    "oracle-algebraic-invariance",
+    "oracle-algebraic-rewriting",
+    "oracle-algebraicdynamics-extension",
+    "oracle-independent-specification",
+])
+check(required_algebraic_oracles <= oracle_ids,
+    "registry omits an accepted AlgebraicJulia or independent-conformance oracle")
+
+algebraic_policy = registry["algebraicjulia_policy"]
+check(algebraic_policy["phase15_direct_dependencies"] == ["ACSets.jl", "Catlab.jl"],
+    "Phase 15 AlgebraicJulia dependencies changed")
+check(algebraic_policy["phase16_direct_dependency"] == "AlgebraicRewriting.jl",
+    "Phase 16 rewriting dependency changed")
+check(algebraic_policy["phase17_weak_dependency"] == "AlgebraicDynamics.jl",
+    "Phase 17 AlgebraicDynamics extension boundary changed")
+check(algebraic_policy["row_identity"] == "nonsemantic",
+    "ACSet row identity became semantic")
+check(occursin("no ACSet traversal", algebraic_policy["hot_path"]),
+    "compiled hot-path boundary no longer excludes ACSet traversal")
+check(occursin("ProcessBigraphs exclusively owns", algebraic_policy["runtime_authority"]),
+    "ProcessBigraphs is no longer the sole runtime authority")
+
+conformance_policy = registry["conformance_policy"]
+check(conformance_policy["upstream_runtime_execution"] == "forbidden",
+    "upstream runtime execution is not fail-closed")
+check(occursin("independent", lowercase(conformance_policy["specification_oracle"])),
+    "independent Julia specification oracle is not required")
+check(Set(conformance_policy["forbidden_runtimes"]) ==
+      Set(["Vivarium", "Process-Bigraph Python", "Bigraph-Schema Python"]),
+    "forbidden upstream runtime list changed")
 
 expected_pb0_implemented = Set([
     "stable-typed-paths",
@@ -195,6 +255,17 @@ check(get(package_project["compat"], "julia", "") == "1.12.6",
 check(Set(keys(get(package_project, "deps", Dict{String,Any}()))) == Set(["SHA"]),
     "PB0 package must have only SHA as a runtime dependency")
 
+package_registry = TOML.parsefile(package_registry_path)
+check(package_registry["schema_version"] == "1.1.0",
+    "package-local parity registry has not adopted Decision 0036")
+check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
+    "package-local parity registry permits upstream runtime execution")
+check(package_registry["accepted_next_architecture"]["implementation_status"] == "not_started",
+    "package-local registry overclaims the AlgebraicJulia migration")
+check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
+      ["ACSets.jl", "Catlab.jl"],
+    "package-local Phase 15 dependency decision changed")
+
 pb0_evidence = TOML.parsefile(pb0_evidence_path)
 check(pb0_evidence["status"] == "passed_bounded_foundation",
     "PB0 evidence does not record its bounded pass")
@@ -204,12 +275,14 @@ check(Set(pb0_evidence["qualification"]["implemented_direct_rows"]) ==
 check(pb0_evidence["pinned_python_oracles"] == "not_run" &&
       pb0_evidence["gpu_evidence"] == "not_run" &&
       pb0_evidence["threads_or_dagger_evidence"] == "not_run",
-    "PB0 evidence must leave Python, GPU, and parallel qualification open")
+    "PB0 evidence must prove Python was not run and leave GPU/parallel qualification open")
 check(!all(feature["status"] == "qualified" for feature in features
           if feature["required_for_first_public_release"]),
     "registry incorrectly declares the first public release ready")
-check(registry["executor_policy"]["semantic_oracle"] == "SerialExecutor",
-    "serial executor is not the semantic oracle")
+check(registry["executor_policy"]["equivalence_reference"] == "SerialExecutor",
+    "serial executor is not the alternate-executor equivalence reference")
+check(occursin("independent", registry["executor_policy"]["specification_oracle"]),
+    "production SerialExecutor is incorrectly serving as the specification oracle")
 check(occursin("never owns time", registry["executor_policy"]["dagger_boundary"]),
     "Dagger boundary does not exclude semantic scheduling authority")
 check(registry["gpu_policy"]["hidden_transfer"] == "fail_preflight",
@@ -228,8 +301,12 @@ check(registry["whole_cell_ladder"]["ordered_gates"] == [
 interview = read(interview_path, String)
 check(occursin("Status: Complete; all 48 owner decisions resolved", interview),
     "owner interview is not complete")
+algebraic_interview = read(algebraic_interview_path, String)
+check(occursin("Status: Complete; all 34 owner decisions resolved", algebraic_interview),
+    "AlgebraicJulia owner interview is not complete")
 
 decision = read(decision_path, String)
+algebraic_decision = read(algebraic_decision_path, String)
 semantics = read(semantics_path, String)
 charter = read(charter_path, String)
 architecture = read(architecture_path, String)
@@ -240,6 +317,10 @@ indices = join(read(path, String) for path in
 for n in 1:48
     check(occursin(Regex("(?m)^$(n)\\."), decision),
         "Decision 0034 is missing owner decision $n")
+end
+for n in 1:34
+    check(occursin(Regex("(?m)^$(n)\\."), algebraic_decision),
+        "Decision 0036 is missing owner decision $n")
 end
 
 for phrase in [
@@ -252,12 +333,14 @@ for phrase in [
     check(occursin(phrase, decision), "Decision 0034 is missing '$phrase'")
 end
 for phrase in [
+    "AlgebraicJulia structural foundation",
     "Imminent-event scheduler",
     "Hierarchical state and schemas",
     "### Reconciliation",
     "Structural transactions",
     "Dagger",
     "Whole-cell acceptance ladder",
+    "source-derived registered traces",
 ]
     check(occursin(phrase, semantics), "runtime semantics are missing '$phrase'")
 end
@@ -265,7 +348,8 @@ check(occursin("ProcessBigraphs.jl", charter),
     "project charter omits ProcessBigraphs.jl")
 check(occursin("`ProcessBigraphs` MUST NOT depend on `CorePotts`", architecture) &&
       occursin("`CorePotts` depends on `ProcessBigraphs`", architecture) &&
-      occursin("`PottsToolkit` depends on `CorePotts`", architecture),
+      occursin("`PottsToolkit` depends on `CorePotts`", architecture) &&
+      occursin("`ACSets.jl` and `Catlab.jl`", architecture),
     "repository architecture omits the target dependency direction")
 for phase in 14:20
     check(occursin("Phase $phase", roadmap), "roadmap omits Phase $phase")
@@ -278,17 +362,44 @@ check(occursin("G3-B", roadmap) && occursin("G4", roadmap) &&
     "roadmap omits the Wang GPU disposition and G3-B-to-G4 boundary")
 check(occursin("0034-process-bigraph-runtime-platform.md", indices),
     "Decision 0034 is absent from specification indexes")
+check(occursin("0036-algebraicjulia-process-bigraph-foundation.md", indices),
+    "Decision 0036 is absent from specification indexes")
 check(occursin("process-bigraph-runtime-semantics.md", indices),
     "runtime semantics are absent from specification indexes")
 check(occursin("process-bigraph-parity-registry-v1.toml", indices),
     "parity registry is absent from specification indexes")
 
 for path in [
-    decision_path, semantics_path, audit_path, interview_path, charter_path,
+    decision_path, algebraic_decision_path, semantics_path, audit_path, interview_path,
+    algebraic_interview_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
     evidence_index_path, pb0_audit_path,
 ]
     check_local_links(path)
+end
+
+for relative_root in [".github", "scripts", "test", "lib/ProcessBigraphs/test"]
+    root = joinpath(ROOT, relative_root)
+    isdir(root) || continue
+    for (directory, _, files) in walkdir(root)
+        for file in files
+            path = joinpath(directory, file)
+            normpath(path) == normpath(@__FILE__) && continue
+            text = try
+                read(path, String)
+            catch
+                continue
+            end
+            forbidden = occursin(
+                r"(?i)(pip|uv|conda)[^\n]*(process-bigraph|bigraph-schema|vivarium)", text) ||
+                occursin(
+                    r"(?i)\b(import|from)\s+(process_bigraph|bigraph_schema|vivarium)", text) ||
+                occursin(
+                    r"(?i)\bpython[0-9.]*\b[^\n]*(process-bigraph|bigraph-schema|vivarium)", text)
+            check(!forbidden,
+                "$(relpath(path, ROOT)) installs or executes a forbidden upstream runtime")
+        end
+    end
 end
 
 if isempty(failures)
@@ -297,9 +408,11 @@ if isempty(failures)
     println("  $(length(features)) classified features")
     println("  $(length(oracles)) registered conformance oracles")
     println("  all 48 owner decisions recorded")
+    println("  all 34 AlgebraicJulia and independent-conformance decisions recorded")
     println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
-    println("  exact-time serial authority, Dagger boundary, GPU transfer policy, and whole-cell ladder frozen")
-    println("  pinned-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
+    println("  canonical ACSet, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
+    println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
+    println("  oracle-passing, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs platform specification failed with $(length(failures)) issue(s):")

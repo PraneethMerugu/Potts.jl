@@ -140,6 +140,8 @@ Refactor execution evidence:
 - [Phase 14 GPU-Native Implementation and Qualification Plan](../design/audits/phase-14-gpu-native-implementation-plan.md)
 - [Process-Bigraph Runtime Parity and Parallel-Development Audit](../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md)
 - [Process-Bigraph Runtime Owner Interview](../design/audits/process-bigraph-runtime-owner-interview.md)
+- [AlgebraicJulia and Independent-Conformance Owner Interview](../design/audits/process-bigraph-algebraicjulia-owner-interview.md)
+- [Decision 0036: AlgebraicJulia as the ProcessBigraphs Structural Foundation](decisions/0036-algebraicjulia-process-bigraph-foundation.md)
 - [ProcessBigraphs PB0 Implementation Audit](../design/audits/process-bigraph-pb0-implementation-audit.md)
 - [ProcessBigraphs PB0 Evidence](../design/evidence/process-bigraph-pb0-evidence-v1.toml)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
@@ -170,13 +172,18 @@ completed-MCS-only restart, and deterministic reduction/device-readiness gates. 
 remain Provisional outside proven scope. Registry v1 spellings remain internal historical
 prototypes and are not compatibility commitments.
 
-Decision 0034 establishes `ProcessBigraphs.jl` as an independent package under `lib/`, with
-feature and observable-behavior parity against exact pinned Process-Bigraph 2.0 sources. Its
-deterministic serial executor is the semantic oracle; Dagger and device executors may run selected
-work but cannot redefine time, visibility, reconciliation, or commit order. Phase 14.PB0 now passes
+Decisions 0034 and 0036 establish `ProcessBigraphs.jl` as an independent package under `lib/`, with
+source-audited feature and semantic parity against exact pinned Process-Bigraph 2.0 sources. One
+custom ProcessBigraph ACSet is the accepted canonical structural foundation, with structured
+cospans for open composition, derived wiring diagrams, and ProcessBigraphs-owned compiled runtime
+plans. Its checked Julia specification oracle is independent from production execution; the
+deterministic serial executor is the equivalence reference for Dagger and device executors, which
+cannot redefine time, visibility, reconciliation, or commit order. Phase 14.PB0 now passes
 as a bounded foundation: the independent package and 11 direct registry rows are implemented and
-locally tested. Pinned Python oracles, the Phase 15 internal alpha, GPU execution, parallel
-executors, structural transactions, the Potts adapter, and public release remain explicitly open.
+locally tested. The AlgebraicJulia migration, independent Julia specification oracle, Phase 15
+internal alpha, GPU execution, parallel executors, structural transactions, the Potts adapter, and
+public release remain explicitly open. CI and release tooling will not execute the upstream Python
+runtimes.
 Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
 algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
 CPU/Metal/ROCm qualification for the reusable field substrate.
