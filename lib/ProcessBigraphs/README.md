@@ -16,11 +16,20 @@ Phase 14.PB0 provides independently testable serial foundations:
 - a bounded imminent-event microfixture runner; and
 - settled-boundary in-memory checkpoint/replay.
 
-The accepted Phase 15 architecture, not yet implemented, adopts `ACSets.jl` and `Catlab.jl`
-directly. One custom ProcessBigraph ACSet will become the canonical structure, structured cospans
-will define open composition, and directed wiring diagrams will be derived views. Typed Julia and
-AlgebraicJulia authoring will lower to the same canonical fingerprint. Structure will compile into
-immutable indexed runtime tables so ordinary numerical hot paths do not traverse the ACSet.
+Phase 15.A implements the first bounded AlgebraicJulia slice. `ACSets.jl` 0.2.29 and `Catlab.jl`
+0.17.6 are direct dependencies, and one versioned `ProcessBigraphACSet` is the canonical structural
+authority. The ordinary `StaticComposite` API is an ergonomic façade that lowers to the same
+canonical model as direct ACSet authoring. Stable semantic identities, rather than ACSet row
+numbers or declaration order, determine fingerprints and compiled provenance.
+
+Validated authoring models compile into a frozen `StructuralEpoch` and an immutable indexed
+`ExecutionPlan`. The serial runtime and checkpoint paths consume that plan and do not traverse the
+ACSet or retain the `StaticComposite` declaration as a second authority. The Phase 14.PB0 model,
+initial-state, final-state, and trace baselines remain exact.
+
+Phase 15.A is not the complete Phase 15 internal alpha. Structured-cospan composition, derived
+wiring diagrams, nested open composites, the independent Julia specification oracle, semantic RNG,
+and the broader multirate/failure fixture matrix remain open Phase 15 work.
 
 Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
@@ -34,7 +43,10 @@ be source-audited feature and semantic parity rather than live upstream-runtime 
 
 The current maturity, limitations, and exact parity pins are recorded in
 [`parity-registry.toml`](parity-registry.toml). Internal contracts and an
-executable example are in [`docs/src/internal.md`](docs/src/internal.md).
+executable example are in [`docs/src/internal.md`](docs/src/internal.md). The bounded closure is
+recorded by the repository
+[Phase 15.A audit](../../design/audits/process-bigraph-phase15a-canonical-structure-audit.md) and
+[evidence record](../../design/evidence/process-bigraph-phase15a-evidence-v1.toml).
 
 Run the package suite with Julia 1.12.6:
 

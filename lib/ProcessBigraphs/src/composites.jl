@@ -20,15 +20,19 @@ function StaticComposite(
 end
 
 struct CompiledComposite
-    declaration::StaticComposite
+    epoch::StructuralEpoch
+    plan::ExecutionPlan
     initial::CommittedSnapshot
-    layers::Tuple
     preflight_report::PreflightReport
     fingerprint::String
 end
 
 model_fingerprint(composite::CompiledComposite) = composite.fingerprint
-step_layers(composite::CompiledComposite) = composite.layers
+step_layers(composite::CompiledComposite) = composite.plan.layers
+structural_epoch(composite::CompiledComposite) = deepcopy(composite.epoch)
+structural_provenance(composite::CompiledComposite) = composite.epoch.provenance
+structural_fingerprint(composite::CompiledComposite) = composite.epoch.fingerprint
+canonical_structure(composite::CompiledComposite) = deepcopy(composite.epoch.structure)
 
 _leaf_type(::LeafSchema{T,N}) where {T,N} = N == 0 ? T : AbstractArray{T,N}
 _leaf_element_type(::LeafSchema{T}) where {T} = T
@@ -196,31 +200,4 @@ function preflight(composite::StaticComposite)
         tuple(transfers...),
     ))
     PreflightReport(tuple(domains...), tuple(transfers...), identity)
-end
-
-function compile_composite(composite::StaticComposite)
-    ids = _validate_identities(composite)
-    all(process -> process.schedule.cadence.scale == composite.scale &&
-        process.schedule.first_due.scale == composite.scale, composite.processes) ||
-        _fail(:time_scale_mismatch, "every process schedule must use the composite scale")
-    layers = _step_layers(composite, ids)
-    _validate_bindings(composite, layers)
-    report = preflight(composite)
-    initial = initial_snapshot(composite.schema, composite.initial_values;
-        time=LogicalTime(0, composite.scale))
-    fingerprint = canonical_fingerprint((
-        :static_composite_v1,
-        canonical_fingerprint(composite.schema),
-        initial.entries,
-        composite.scale,
-        tuple((_declaration_identity(declaration)
-            for declaration in composite.processes)...),
-        tuple((_declaration_identity(declaration)
-            for declaration in composite.steps)...),
-        tuple(sort!(collect(composite.bindings);
-            by=binding -> (binding.owner, binding.port, binding.target))...),
-        layers,
-        report.fingerprint,
-    ))
-    CompiledComposite(composite, initial, layers, report, fingerprint)
 end

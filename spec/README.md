@@ -144,6 +144,8 @@ Refactor execution evidence:
 - [Decision 0036: AlgebraicJulia as the ProcessBigraphs Structural Foundation](decisions/0036-algebraicjulia-process-bigraph-foundation.md)
 - [ProcessBigraphs PB0 Implementation Audit](../design/audits/process-bigraph-pb0-implementation-audit.md)
 - [ProcessBigraphs PB0 Evidence](../design/evidence/process-bigraph-pb0-evidence-v1.toml)
+- [ProcessBigraphs Phase 15.A Canonical-Structure Audit](../design/audits/process-bigraph-phase15a-canonical-structure-audit.md)
+- [ProcessBigraphs Phase 15.A Evidence](../design/evidence/process-bigraph-phase15a-evidence-v1.toml)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
 - [JuliaGPU and Open-Protocol Community Validation](../design/audits/juliagpu-open-protocol-research.md)
@@ -180,10 +182,13 @@ plans. Its checked Julia specification oracle is independent from production exe
 deterministic serial executor is the equivalence reference for Dagger and device executors, which
 cannot redefine time, visibility, reconciliation, or commit order. Phase 14.PB0 now passes
 as a bounded foundation: the independent package and 11 direct registry rows are implemented and
-locally tested. The AlgebraicJulia migration, independent Julia specification oracle, Phase 15
-internal alpha, GPU execution, parallel executors, structural transactions, the Potts adapter, and
-public release remain explicitly open. CI and release tooling will not execute the upstream Python
-runtimes.
+locally tested. Phase 15.A also passes as a bounded canonical-structure slice: ACSets and Catlab are
+direct bounded dependencies, typed and direct ACSet authoring share one canonical model, and the
+runtime consumes an immutable indexed plan rather than traversing the authoring ACSet. The two
+corresponding registry rows are implemented. Structured cospans, derived wiring views, the
+independent Julia specification oracle, the complete Phase 15 internal alpha, GPU execution,
+parallel executors, structural transactions, the Potts adapter, and public release remain
+explicitly open. CI and release tooling will not execute the upstream Python runtimes.
 Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
 algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
 CPU/Metal/ROCm qualification for the reusable field substrate.

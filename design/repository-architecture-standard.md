@@ -95,6 +95,11 @@ owns Potts laws, spatial storage, workspaces, kernels, lifecycle operations, and
 PottsToolkit owns biological authoring façades and lowering. CorePotts is the flagship
 spatial-process adapter, not the semantic owner of the general runtime.
 
+Phase 15.A establishes the first half of that boundary in production code: `ProcessBigraphACSet` is
+canonical, typed and direct ACSet authoring lower through one validator, and the serial runtime and
+checkpoint paths consume a frozen structural epoch plus indexed execution plan. Structured cospans,
+derived wiring diagrams, and nested open composition remain later Phase 15 work.
+
 KernelAbstractions, AcceleratedKernels, Atomix, KernelIntrinsics, Adapt, and physical device-storage
 machinery belong primarily to `CorePotts`. `PottsToolkit` MAY depend directly on a low-level
 performance library only when its own compilation responsibility genuinely requires that library.

@@ -65,10 +65,10 @@ function restore(composite::CompiledComposite, value::SettledCheckpoint)
     )
     canonical_fingerprint(payload) == value.integrity ||
         _fail(:checkpoint_integrity_failure, "checkpoint integrity hash does not match")
-    ids = Tuple(process.id for process in composite.declaration.processes)
+    ids = Tuple(entry.declaration.id for entry in composite.plan.processes)
     Tuple(clock.id for clock in value.process_clocks) == ids ||
         _fail(:checkpoint_process_mismatch, "checkpoint process identities changed")
-    step_ids = Tuple(step.id for step in composite.declaration.steps)
+    step_ids = Tuple(entry.declaration.id for entry in composite.plan.steps)
     Tuple(clock.id for clock in value.step_clocks) == step_ids ||
         _fail(:checkpoint_step_mismatch, "checkpoint step identities changed")
     SerialRuntime(

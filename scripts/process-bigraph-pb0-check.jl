@@ -27,11 +27,12 @@ project = TOML.parsefile(project_path)
 check(project["name"] == "ProcessBigraphs", "package name changed")
 check(project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
     "package UUID changed")
-check(project["version"] == "0.1.0", "unexpected PB0 package version")
+check(project["version"] == "0.2.0",
+    "Phase 15.A package must use its accepted internal 0.2.0 identity")
 check(project["compat"]["julia"] == "1.12.6",
     "PB0 must target exact active Julia 1.12.6")
-check(Set(keys(project["deps"])) == Set(["SHA"]),
-    "PB0 runtime dependencies must remain SHA-only")
+check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),
+    "Phase 15.A dependencies must preserve SHA and add only ACSets/Catlab")
 check(project["compat"]["SHA"] == "0.7", "SHA compatibility is missing")
 check(project["compat"]["Aqua"] == "0.8", "Aqua compatibility is missing")
 check(project["compat"]["Test"] == "1", "Test compatibility is missing")
@@ -46,7 +47,9 @@ required_sources = [
     "effects.jl",
     "capabilities.jl",
     "declarations.jl",
+    "algebraic_structure.jl",
     "composites.jl",
+    "lowering.jl",
     "runtime.jl",
     "checkpoint.jl",
 ]
@@ -67,8 +70,8 @@ for forbidden in ("using CorePotts", "import CorePotts", "using PottsToolkit",
 end
 
 registry = TOML.parsefile(registry_path)
-check(registry["maturity"] == "phase_14_pb0_foundation",
-    "package registry overclaims maturity")
+check(registry["maturity"] == "phase_15a_canonical_structure",
+    "package registry must preserve PB0 evidence within Phase 15.A maturity")
 check(registry["public_release"] == false, "package registry claims a public release")
 check(registry["internal_alpha"] == false, "PB0 registry claims internal alpha")
 check(registry["pins"]["process_bigraph"] ==

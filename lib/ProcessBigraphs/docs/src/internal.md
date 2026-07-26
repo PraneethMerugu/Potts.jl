@@ -1,6 +1,6 @@
-# ProcessBigraphs PB0 internal contracts
+# ProcessBigraphs internal contracts
 
-Status: implemented PB0 foundation; no internal-alpha or public-parity claim
+Status: Phase 15.A canonical structure passed; complete internal alpha and public parity remain open
 
 ## Authority and maturity
 
@@ -10,22 +10,44 @@ baseline is Process-Bigraph commit
 `4b208e13620e09e877af52ea07273bc9429a3a17`. Those projects do not own or
 endorse this implementation.
 
-PB0 is deliberately narrower than the Phase 15 internal alpha. It proves
-domain-neutral values and bounded serial microfixtures. It does not claim
+PB0 remains deliberately narrower than the Phase 15 internal alpha. It proves
+domain-neutral values and bounded serial microfixtures. Phase 15.A additionally proves the
+canonical ACSet-to-compiled-plan boundary described below. Neither slice claims
 dynamic structural transactions, nested composites, bridges that execute
 transfers, persisted checkpoint files, a general observer protocol, semantic
 RNG, Threads/Dagger equivalence, device kernels, scientific adapters, or
 independent source-derived Julia oracle qualification.
 
 Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
-model. `ACSets.jl` and `Catlab.jl` become direct dependencies then;
+model. Phase 15.A directly depends on `ACSets.jl` 0.2.29 and `Catlab.jl` 0.17.6.
 `AlgebraicRewriting.jl` follows in Phase 16 and `AlgebraicDynamics.jl` enters
-through a Phase 17 weak-dependency extension. These dependencies and the ACSet
-migration are accepted but not implemented in PB0.
+through a Phase 17 weak-dependency extension.
 
 The checked specification oracle will be independent from production
 execution. CI, tests, examples, attestations, and release tooling will not
 install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema Python.
+
+## Canonical structure and compilation
+
+`ProcessBigraphACSet` is the sole authoring structure. It carries stable identities and relations
+for the root composite, hierarchical store, actors, processes, steps, ports, bindings,
+containment, and step dependencies. ACSet row numbers are storage-local and nonsemantic.
+
+`canonical_model(::StaticComposite)` lowers the ordinary typed façade into that ACSet.
+`canonical_model(::ProcessBigraphACSet; initial_values, laws, continuations)` admits direct
+AlgebraicJulia authoring through the same validation path. Both paths reconstruct and validate one
+normalized semantic declaration, and equivalent authoring order produces equal structural and
+runtime fingerprints.
+
+`compile_composite` freezes a private structural copy in a `StructuralEpoch` and creates an
+`ExecutionPlan` containing canonical process and step order, layer indices, pre-resolved routes,
+and an exact `StructuralProvenance` map. Public structure accessors return detached copies. Runtime
+and checkpoint code use only the compiled plan; they do not traverse the ACSet or retain
+`StaticComposite` as a parallel authority.
+
+Phase 15.A supports one static root composite. Nested/open composition, structured cospans,
+directed wiring views, and dynamic rewriting are intentionally rejected or absent until their
+later gates.
 
 ## Semantic values
 

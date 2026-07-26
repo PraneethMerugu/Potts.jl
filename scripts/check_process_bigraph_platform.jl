@@ -62,6 +62,17 @@ pb0_audit_path = require_file(
 pb0_evidence_path = require_file(
     "design/evidence/process-bigraph-pb0-evidence-v1.toml")
 pb0_checker_path = require_file("scripts/process-bigraph-pb0-check.jl")
+phase15a_audit_path = require_file(
+    "design/audits/process-bigraph-phase15a-canonical-structure-audit.md")
+phase15a_evidence_path = require_file(
+    "design/evidence/process-bigraph-phase15a-evidence-v1.toml")
+phase15a_checker_path = require_file("scripts/process-bigraph-phase15a-check.jl")
+phase15a_test_path = require_file(
+    "lib/ProcessBigraphs/test/test_phase15a_algebraic_structure.jl")
+algebraic_source_path = require_file(
+    "lib/ProcessBigraphs/src/algebraic_structure.jl")
+lowering_source_path = require_file("lib/ProcessBigraphs/src/lowering.jl")
+runtime_source_path = require_file("lib/ProcessBigraphs/src/runtime.jl")
 
 registry = TOML.parsefile(registry_path)
 sources = registry["sources"]
@@ -72,8 +83,9 @@ feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
 check(registry["schema_version"] == "1.1.0", "unexpected parity-registry schema")
-check(registry["registry_status"] == "accepted-scope-pb0-implemented-qualification-open",
-    "parity registry overclaims implementation maturity")
+check(registry["registry_status"] ==
+      "phase15a-canonical-structure-implemented-alpha-open",
+    "parity registry does not record the bounded Phase 15.A maturity")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
@@ -229,8 +241,13 @@ expected_pb0_implemented = Set([
 ])
 implemented_features = Set(feature["id"] for feature in features
     if feature["status"] == "implemented")
-check(implemented_features == expected_pb0_implemented,
-    "root registry implemented rows must exactly match bounded PB0 direct evidence")
+expected_phase15a_implemented = Set([
+    "canonical-process-bigraph-acset",
+    "compiled-structural-epoch",
+])
+check(implemented_features ==
+      union(expected_pb0_implemented, expected_phase15a_implemented),
+    "root registry implemented rows must exactly match PB0 and Phase 15.A evidence")
 check(all(feature -> feature["status"] ∉ ("oracle_passing", "qualified"), features),
     "PB0 must not claim oracle-passing or qualified runtime features")
 check(all(oracle -> oracle["status"] ∉ ("oracle_passing", "qualified"), oracles),
@@ -238,6 +255,9 @@ check(all(oracle -> oracle["status"] ∉ ("oracle_passing", "qualified"), oracle
 check(all(feature["evidence_status"] == "direct_passing_pb0" for feature in features
     if feature["id"] in expected_pb0_implemented),
     "every PB0 implemented row must cite direct_passing_pb0 evidence")
+check(all(feature["evidence_status"] == "direct_passing_phase15a"
+          for feature in features if feature["id"] in expected_phase15a_implemented),
+    "every Phase 15.A row must cite direct_passing_phase15a evidence")
 
 pb0 = registry["pb0_implementation"]
 check(pb0["status"] == "passed_bounded_foundation",
@@ -252,19 +272,40 @@ check(package_project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
     "PB0 package UUID changed")
 check(get(package_project["compat"], "julia", "") == "1.12.6",
     "PB0 package must target Julia 1.12.6 exactly")
-check(Set(keys(get(package_project, "deps", Dict{String,Any}()))) == Set(["SHA"]),
-    "PB0 package must have only SHA as a runtime dependency")
+check(Set(keys(get(package_project, "deps", Dict{String,Any}()))) ==
+      Set(["ACSets", "Catlab", "SHA"]),
+    "Phase 15.A package dependencies must be ACSets, Catlab, and SHA")
+check(get(package_project["compat"], "ACSets", "") == "0.2.29" &&
+      get(package_project["compat"], "Catlab", "") == "0.17.6",
+    "Phase 15.A AlgebraicJulia compatibility bounds changed")
 
 package_registry = TOML.parsefile(package_registry_path)
 check(package_registry["schema_version"] == "1.1.0",
     "package-local parity registry has not adopted Decision 0036")
 check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
     "package-local parity registry permits upstream runtime execution")
-check(package_registry["accepted_next_architecture"]["implementation_status"] == "not_started",
-    "package-local registry overclaims the AlgebraicJulia migration")
+check(package_registry["maturity"] == "phase_15a_canonical_structure",
+    "package-local registry does not record Phase 15.A maturity")
+check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
+      "passed_canonical_structure",
+    "package-local registry does not close the bounded Phase 15.A slice")
+check(package_registry["accepted_next_architecture"]["phase16_status"] == "not_started",
+    "package-local registry overclaims dynamic AlgebraicRewriting")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
       ["ACSets.jl", "Catlab.jl"],
     "package-local Phase 15 dependency decision changed")
+
+phase15a = registry["phase15a_implementation"]
+check(phase15a["status"] == "passed_canonical_structure",
+    "root registry does not close the bounded Phase 15.A slice")
+check(Set(phase15a["implemented_rows"]) == expected_phase15a_implemented,
+    "Phase 15.A summary does not match implemented registry rows")
+phase15a_evidence = TOML.parsefile(phase15a_evidence_path)
+check(phase15a_evidence["status"] == "passed_canonical_structure",
+    "Phase 15.A evidence does not record its bounded pass")
+check(Set(phase15a_evidence["qualification"]["implemented_rows"]) ==
+      expected_phase15a_implemented,
+    "Phase 15.A evidence rows disagree with the root registry")
 
 pb0_evidence = TOML.parsefile(pb0_evidence_path)
 check(pb0_evidence["status"] == "passed_bounded_foundation",
@@ -373,10 +414,25 @@ for path in [
     decision_path, algebraic_decision_path, semantics_path, audit_path, interview_path,
     algebraic_interview_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
-    evidence_index_path, pb0_audit_path,
+    evidence_index_path, pb0_audit_path, phase15a_audit_path,
 ]
     check_local_links(path)
 end
+
+runtime_source = read(runtime_source_path, String)
+check(!occursin("ACSets", runtime_source) &&
+      !occursin("StaticComposite", runtime_source) &&
+      !occursin("canonical_structure", runtime_source),
+    "runtime hot path traverses an authoring representation")
+algebraic_source = read(algebraic_source_path, String)
+lowering_source = read(lowering_source_path, String)
+check(occursin("@acset_type ProcessBigraphACSet", algebraic_source) &&
+      occursin("StructuralEpoch", algebraic_source) &&
+      occursin("ExecutionPlan", algebraic_source),
+    "canonical ACSet, structural epoch, or execution plan is missing")
+check(occursin("compile_composite(model::CanonicalModel)", lowering_source) &&
+      occursin("reverse_insertion", lowering_source),
+    "typed lowering or row-order invariance hook is missing")
 
 for relative_root in [".github", "scripts", "test", "lib/ProcessBigraphs/test"]
     root = joinpath(ROOT, relative_root)
@@ -410,6 +466,7 @@ if isempty(failures)
     println("  all 48 owner decisions recorded")
     println("  all 34 AlgebraicJulia and independent-conformance decisions recorded")
     println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
+    println("  $(length(expected_phase15a_implemented)) Phase 15.A canonical-structure rows implemented and locally tested")
     println("  canonical ACSet, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
     println("  oracle-passing, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")

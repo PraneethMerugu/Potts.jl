@@ -59,8 +59,8 @@ family_deps = Dict(
         Set(keys(get(TOML.parsefile(INDEPENDENT_PROJECTS[3]), "deps", Dict()))),
     "PottsToolkit" => Set(keys(get(root_project, "deps", Dict()))),
 )
-require(family_deps["ProcessBigraphs"] == Set(["SHA"]),
-    "ProcessBigraphs PB0 must have only SHA as a runtime dependency")
+require(family_deps["ProcessBigraphs"] == Set(["ACSets", "Catlab", "SHA"]),
+    "ProcessBigraphs Phase 15.A must depend directly on ACSets, Catlab, and SHA")
 require(isempty(intersect(family_deps["CorePotts"], Set(["PottsToolkit", "MakiePotts", "NeuralPotts"]))),
     "CorePotts depends on an upward layer")
 require(isempty(intersect(family_deps["ProcessBigraphs"],
