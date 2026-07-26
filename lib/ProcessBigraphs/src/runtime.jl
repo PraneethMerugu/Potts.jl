@@ -22,15 +22,15 @@ end
 function initialize_runtime(composite::CompiledComposite)
     origin = logical_time(composite.initial)
     process_clocks = tuple((ProcessClock(
-        declaration.id,
+        entry.declaration.id,
         origin,
-        origin + declaration.schedule.first_due,
-        deepcopy(declaration.continuation),
-    ) for declaration in composite.declaration.processes)...)
+        origin + entry.declaration.schedule.first_due,
+        deepcopy(entry.declaration.continuation),
+    ) for entry in composite.plan.processes)...)
     step_clocks = tuple((StepClock(
-        declaration.id,
-        deepcopy(declaration.continuation),
-    ) for declaration in composite.declaration.steps)...)
+        entry.declaration.id,
+        deepcopy(entry.declaration.continuation),
+    ) for entry in composite.plan.steps)...)
     SerialRuntime(composite, deepcopy(composite.initial), process_clocks, step_clocks,
         0x0000000000000000, true)
 end
@@ -39,25 +39,18 @@ current_snapshot(runtime::SerialRuntime) = runtime.snapshot
 settled(runtime::SerialRuntime) = runtime.is_settled
 event_count(runtime::SerialRuntime) = runtime.events
 
-_binding(composite::StaticComposite, owner::String, port::Symbol) =
-    only(binding for binding in composite.bindings
-        if binding.owner == owner && binding.port == port)
-
 function _views(
-    compiled::CompiledComposite,
-    declaration,
+    entry::Union{ProcessPlanEntry,StepPlanEntry},
     snapshot::CommittedSnapshot,
 )
     input_values = Pair{Symbol,Any}[]
     output_values = Pair{Symbol,Any}[]
-    for port in ports(declaration.law)
-        binding = _binding(compiled.declaration, declaration.id, port.name)
-        if port.direction === :input
-            push!(input_values, port.name => snapshot[binding.target])
-        else
-            leaf = schema_at(snapshot.schema, binding.target)
-            push!(output_values, port.name => (binding.target, leaf))
-        end
+    for (name, target) in entry.inputs
+        push!(input_values, name => snapshot[target])
+    end
+    for (name, target) in entry.outputs
+        leaf = schema_at(snapshot.schema, target)
+        push!(output_values, name => (target, leaf))
     end
     sort!(input_values; by=first)
     sort!(output_values; by=first)
@@ -83,14 +76,15 @@ end
 
 function _invoke_declaration(
     compiled::CompiledComposite,
-    declaration,
+    entry::Union{ProcessPlanEntry,StepPlanEntry},
     snapshot::CommittedSnapshot,
     start_time::LogicalTime,
     end_time::LogicalTime,
     continuation,
     event_id::String,
 )
-    view, outputs = _views(compiled, declaration, snapshot)
+    declaration = entry.declaration
+    view, outputs = _views(entry, snapshot)
     context = InvocationContext(
         declaration.id,
         event_id,
@@ -126,19 +120,19 @@ function _run_steps(
 )
     candidate = base
     clocks = collect(step_clocks)
-    declarations = Dict(step.id => step for step in runtime.composite.declaration.steps)
+    entries = Dict(entry.declaration.id => entry for entry in runtime.composite.plan.steps)
     clock_positions = Dict(clock.id => index for (index, clock) in enumerate(clocks))
-    for (layer_index, layer) in enumerate(runtime.composite.layers)
+    for (layer_index, layer) in enumerate(runtime.composite.plan.layers)
         common = candidate
         layer_effects = Delta[]
         updates = Pair{Int,Any}[]
         for id in layer
-            declaration = declarations[id]
+            entry = entries[id]
             position = clock_positions[id]
             clock = clocks[position]
             step_event = string(event_id, "/step/", layer_index, "/", id)
             result = try
-                _invoke_declaration(runtime.composite, declaration, common, time, time,
+                _invoke_declaration(runtime.composite, entry, common, time, time,
                     clock.continuation, step_event)
             catch error
                 throw(_runtime_failure(error, :step_invoke, time, id, runtime.snapshot))
@@ -168,18 +162,19 @@ function _run_process_batch(
 )
     common = runtime.snapshot
     clocks = collect(runtime.process_clocks)
-    declarations = runtime.composite.declaration.processes
+    entries = runtime.composite.plan.processes
     effects = Delta[]
     continuations = Pair{Int,Any}[]
     event_ordinal = Base.Checked.checked_add(runtime.events, UInt64(1))
     event_id = string("event/", time.tick, "/", event_ordinal)
 
-    sort!(due_positions; by=position -> declarations[position].id)
+    sort!(due_positions; by=position -> entries[position].declaration.id)
     for position in due_positions
-        declaration = declarations[position]
+        entry = entries[position]
+        declaration = entry.declaration
         clock = clocks[position]
         result = try
-            _invoke_declaration(runtime.composite, declaration, common,
+            _invoke_declaration(runtime.composite, entry, common,
                 clock.last_committed, time, clock.continuation, event_id)
         catch error
             throw(_runtime_failure(error, :process_invoke, time, declaration.id,
@@ -193,12 +188,12 @@ function _run_process_batch(
         reconcile(common, effects, time)
     catch error
         throw(_runtime_failure(error, :process_reconcile, time,
-            join((declarations[position].id for position in due_positions), ","),
+            join((entries[position].declaration.id for position in due_positions), ","),
             runtime.snapshot))
     end
 
     for (position, continuation) in continuations
-        declaration = declarations[position]
+        declaration = entries[position].declaration
         old = clocks[position]
         next_due = partial ? old.next_due : old.next_due + declaration.schedule.cadence
         clocks[position] = ProcessClock(old.id, time, next_due, deepcopy(continuation))
@@ -223,8 +218,9 @@ function _preflight_horizon(runtime::SerialRuntime, target::LogicalTime, policy:
     policy in (:exact, :stop_prior) ||
         _fail(:unknown_horizon_policy, "horizon policy must be exact or stop_prior"; policy)
     policy === :stop_prior && return
-    for (clock, declaration) in zip(runtime.process_clocks,
-        runtime.composite.declaration.processes)
+    for (clock, entry) in zip(runtime.process_clocks,
+        runtime.composite.plan.processes)
+        declaration = entry.declaration
         _requires_partial(clock, declaration.schedule, target) || continue
         declaration.schedule.supports_partial ||
             _fail(:partial_interval_unsupported,

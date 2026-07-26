@@ -1,7 +1,7 @@
 schema_version = "1.1.0"
 registry_id = "process-bigraphs-pb0-local-v1"
-package_version = "0.1.0"
-maturity = "phase_14_pb0_foundation"
+package_version = "0.2.0"
+maturity = "phase_15a_canonical_structure"
 public_release = false
 internal_alpha = false
 evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
@@ -30,7 +30,22 @@ phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
 phase16_direct_dependency = "AlgebraicRewriting.jl"
 phase17_weak_dependency = "AlgebraicDynamics.jl"
 canonical_structure = "one versioned ProcessBigraph ACSet"
-implementation_status = "not_started"
+phase15a_status = "passed_canonical_structure"
+phase16_status = "not_started"
+
+[[features]]
+id = "canonical-process-bigraph-acset"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_phase15a_algebraic_structure.jl"
+limitation = "Static single-root composite scope; structured cospans and derived wiring views remain open."
+
+[[features]]
+id = "compiled-structural-epoch"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_phase15a_algebraic_structure.jl"
+limitation = "Immutable static epoch and indexed serial plan; dynamic AlgebraicRewriting transactions remain Phase 16 work."
 
 [[features]]
 id = "stable-typed-paths"

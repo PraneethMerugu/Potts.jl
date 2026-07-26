@@ -1,13 +1,17 @@
 name = "ProcessBigraphs"
 uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
+ACSets = "227ef7b5-1206-438b-ac65-934d6da304b8"
+Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [compat]
+ACSets = "0.2.29"
 Aqua = "0.8"
+Catlab = "0.17.6"
 SHA = "0.7"
 Test = "1"
 julia = "1.12.6"

@@ -22,7 +22,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; G4 is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
-| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | Not started; runtime foundations may enter before Potts Phase 14 closes where the join rules permit | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes canonical ACSet-backed serial static composites without a public release |
+| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.A canonical structure passed, while the complete runtime alpha and Potts paper gate remain open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes the remaining serial-alpha semantics without a public release |
 | Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts and canonical structural epoch needed by the first adapter slice stabilize |
 | Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
@@ -1168,6 +1168,23 @@ internal serial alpha. The Potts release gate and runtime-alpha gate are indepen
 release when its gate passes even if runtime parity is incomplete. Internal alpha is not permission
 to publish `ProcessBigraphs.jl`.
 
+### ProcessBigraphs Phase 15.A closure status
+
+Phase 15.A is passed as a bounded canonical-structure slice. `ACSets.jl` 0.2.29 and `Catlab.jl`
+0.17.6 are direct dependencies; `ProcessBigraphACSet` is the canonical structure; typed and direct
+ACSet authoring converge on one validated model; ACSet row and declaration order are nonsemantic;
+and compilation produces a frozen structural epoch, indexed execution plan, and exact provenance
+map. Runtime and checkpoint paths consume the plan without traversing the ACSet or retaining the
+PB0 authoring declaration. Exact PB0 fingerprints and traces are preserved.
+
+This closure implements only the `canonical-process-bigraph-acset` and
+`compiled-structural-epoch` registry rows. It does not close the Phase 15 internal-alpha gate.
+Structured cospans, derived directed wiring diagrams, nested open composition, independent Julia
+oracle qualification, semantic RNG/observer work, and the complete multirate/failure/restart
+matrix remain open. See the
+[Phase 15.A audit](audits/process-bigraph-phase15a-canonical-structure-audit.md) and
+[evidence record](evidence/process-bigraph-phase15a-evidence-v1.toml).
+
 ### Potts workstream deliverables
 
 - Freeze the paper Project and Manifest, experiment configurations, semantic seeds, model
@@ -1504,17 +1521,18 @@ critical path.
 
 ## Current Fork/Join Critical Path
 
-Phases 0--13, Phase 14.0, Wortel G2, Wang G3-A, attested Wang G3-B, and the bounded
-ProcessBigraphs PB0 foundation are complete. The remaining work proceeds on independent gates:
+Phases 0--13, Phase 14.0, Wortel G2, Wang G3-A, attested Wang G3-B, the bounded
+ProcessBigraphs PB0 foundation, and ProcessBigraphs Phase 15.A canonical structure are complete.
+The remaining work proceeds on independent gates:
 
 ```text
 Potts scientific path                         ProcessBigraphs runtime path
 ----------------------                        ----------------------------
 G4 field CPU/Metal/ROCm                       PB0 bounded foundation [passed]
         |                                                   |
-bounded portfolio smokes                      Phase 15 ACSet-backed serial alpha
+bounded portfolio smokes                      Phase 15.A canonical structure [passed]
         |                                                   |
-14.2 Learn/Examples                                         |
+14.2 Learn/Examples                         remaining Phase 15 serial alpha
 14.3 Published Models                                       |
 14.4 Manual/Satellites                                      |
         |                                                   |
@@ -1542,18 +1560,20 @@ The executable sequence and join rules are:
 2. **Current Potts gate:** close G4 by qualifying the reusable field substrate on sequential CPU,
    real Metal, and real ROCm. G3-B semantics, RNG, ordering, storage ABI, publication,
    continuation, and evidence identity may not change.
-3. **Complete parallel runtime gate:** the ProcessBigraphs authority and parity registry are frozen,
-   and the independent package plus bounded domain-neutral primitives and non-Potts fixtures pass
-   PB0. Decision 0036 freezes the upcoming AlgebraicJulia architecture and independent-conformance
-   policy without implementing them. No CorePotts dependency or public runtime release was
-   introduced; Phase 15 internal alpha remains a separate gate.
+3. **Complete parallel runtime foundations:** the ProcessBigraphs authority and parity registry are
+   frozen, and the independent package plus bounded domain-neutral primitives and non-Potts
+   fixtures pass PB0. Phase 15.A now implements Decision 0036's canonical ACSet, typed/direct
+   authoring convergence, frozen structural epoch, indexed execution plan, and provenance boundary.
+   No CorePotts dependency or public runtime release was introduced; the complete Phase 15 internal
+   alpha remains a separate gate.
 4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
    passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
    complete Learn/Examples, preregistered published-model studies, the full manual, and satellites.
 6. **Phase 15 independent gates:** qualify the Potts paper release from frozen Phase 14 evidence
-   while closing the ProcessBigraphs ACSet-backed serial internal alpha and independent Julia
-   specification oracle. Failure of one does not rewrite or weaken the other.
+   while completing the remaining ProcessBigraphs serial internal-alpha and independent Julia
+   specification-oracle work after the passed Phase 15.A canonical-structure slice. Failure of one
+   does not rewrite or weaken the other.
 7. **Phase 16 adapter join:** after serial runtime contracts and the relevant Potts evidence are
    stable, cut over one CorePotts slice at a time through old/new differential execution. No model
    may have two runtime authorities.

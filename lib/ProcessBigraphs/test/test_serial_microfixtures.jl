@@ -70,13 +70,20 @@ function increment_fixture(order=("fast", "slow"))
 end
 
 @testset "imminent events, same-time snapshot, and declaration-order invariance" begin
-    left = initialize_runtime(increment_fixture(("fast", "slow")))
+    compiled = increment_fixture(("fast", "slow"))
+    @test model_fingerprint(compiled) ==
+        "49614f983db7f29d5c19465db95f5a367211a2ddea514fbf6d653f1fbfc90e30"
+    @test snapshot_fingerprint(compiled.initial) ==
+        "abb28a87d163574e612fabe68ecfbc57cfb234eb312e66fba564bf71a509e573"
+    left = initialize_runtime(compiled)
     right = initialize_runtime(increment_fixture(("slow", "fast")))
     run_until!(left, LogicalTime(4, TimeScale(1)))
     run_until!(right, LogicalTime(4, TimeScale(1)))
     @test current_snapshot(left)[path("state")] == 24
     @test current_snapshot(right)[path("state")] == 24
     @test materialize(current_snapshot(left)) == materialize(current_snapshot(right))
+    @test snapshot_fingerprint(current_snapshot(left)) ==
+        "20b33b31def9e172bc7c9a57d4915f18094689667338e0eed90b70aac9ae4a3a"
     @test event_count(left) == 4
 end
 

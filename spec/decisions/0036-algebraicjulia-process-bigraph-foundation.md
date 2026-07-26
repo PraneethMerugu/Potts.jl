@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-07-26
 
+Implementation disposition: Phase 15.A passed on 2026-07-26 for Decisions 1, 5, 7--12, and the
+static portion of Decision 23. This bounded slice adds ACSets/Catlab, one canonical ACSet,
+typed/direct-authoring convergence, row-order-invariant identity, and compiled structural
+epoch/plan provenance while preserving PB0 behavior. Structured cospans, wiring diagrams, the
+independent specification oracle, and the complete Phase 15 internal-alpha gate remain open.
+
 ## Context
 
 Phase 14.PB0 proved an independent `ProcessBigraphs.jl` package with typed paths, schemas, ports,
