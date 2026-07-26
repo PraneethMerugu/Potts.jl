@@ -699,18 +699,31 @@ The scientific fingerprint covers:
 `explain(model)` and `explain(prob)` show all of the above plus memory scaling, backend support,
 source-to-target mappings, and every downgraded compatibility row.
 
+## Generic Hierarchical Authoring Boundary
+
+Morpheus-style nested systems, scopes, and symbol dependencies lower through the same
+`ModelFragment` named-requirement/named-export boundary used by hand-authored complex models.
+Adapter-created fragments receive ordinary lexical namespaces, typed bindings, and one root plan.
+
+The adapter cannot introduce an adapter-only subsystem graph, local runtime, symbol resolver, or
+scheduler. A hand-authored fragment and an adapter-produced fragment with equivalent declarations,
+bindings, and plan entries normalize identically apart from the explicitly fingerprinted adapter
+source/provenance record.
+
 ## Backend Contract
 
-The full reference contract is CPU-first. Metal and ROCm are capability-specific. A GPU-qualified
-continuous system requires bounded backend-resident state, device-lowerable statements and events,
-qualified solvers, deterministic conflict handling, no undeclared host synchronization, and
-real-hardware evidence.
+Implementation remains CPU-reference-first, but every stable or release Phase 14 continuous
+capability requires backend-resident Metal and ROCm production implementations under Decision
+0032. Qualification requires bounded backend-resident state, device-lowerable statements and
+events, qualified solvers, deterministic conflict handling, no undeclared host synchronization,
+and real-hardware evidence.
 
 Global host ODE execution may be explicitly synchronized without implying that per-cell, field, or
 membrane systems are GPU-compatible. A plan never silently migrates unsupported ticks to the host.
 
-Membrane systems, DAEs, adaptive/root events, and general SBML adapters begin CPU-only or
-Experimental. This affects implementation maturity, not the final public architecture.
+Membrane systems, DAEs, adaptive/root events, and general SBML adapters may begin Experimental and
+unsupported on Metal or ROCm. They cannot become stable, production implemented, or part of a
+release model while CPU-only.
 
 ## Failure Semantics
 

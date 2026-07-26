@@ -312,6 +312,7 @@ function _execute_timed_lifecycle!(integrator, target)
 end
 
 function _step_multirate!(integrator::CoupledIntegrator)
+    integrator.checkpoint_stable = false
     target = integrator.mcs + UInt64(1)
     timeline = integrator.plan.timeline
     duration = timeline.mcs_duration.value
@@ -344,6 +345,7 @@ function _step_multirate!(integrator::CoupledIntegrator)
         integrator.stage = stage === nothing ? nothing : stage.name
         integrator.stage_local_mcs = stage === nothing ? UInt64(0) :
             stage_local_mcs(stage, target)
+        integrator.checkpoint_stable = true
         return integrator
     catch cause
         failure = CoupledPhaseFailure(target,

@@ -4,6 +4,10 @@ Status: Accepted
 
 Date: 2026-07-24
 
+Amended by [Decision 0035](0035-wang-sequential-gpu-disposition.md): the stable reusable-capability
+policy remains in force, but the assembled paper-faithful sequential Wang model is not a GPU
+promotion target. G4 follows G3-B directly.
+
 ## Context
 
 Decision 0031 required a CPU reference before a new Phase 14 semantic family could stabilize, but
@@ -68,16 +72,16 @@ fallback.
 
 ### Vertical-slice order
 
-The revised proving order is:
+The proving order, as amended by Decision 0035, is:
 
 1. close Wortel Act on Metal and ROCm;
-2. implement and close Wang on CPU, Metal, and ROCm;
-3. implement and close one field model on CPU, Metal, and ROCm; and
-4. close the remaining selected-model capabilities on all three required backends.
+2. close the paper-faithful Wang reference on sequential CPU;
+3. implement and close one algorithm-suitable field model on CPU, Metal, and ROCm; and
+4. close the remaining stable reusable capabilities on all three required backends.
 
-Wang does not open until the Wortel GPU gate passes. A later slice may reuse already qualified
-storage, scheduling, observation, and persistence infrastructure, but it must qualify every new
-law/storage pair it introduces.
+The assembled Wang GPU gate is retired. A later slice may reuse already qualified storage,
+scheduling, observation, and persistence infrastructure, but it must qualify every new
+law/storage pair it promotes.
 
 ## Consequences
 

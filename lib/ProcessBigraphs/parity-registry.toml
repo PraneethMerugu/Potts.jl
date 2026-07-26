@@ -1,0 +1,173 @@
+schema_version = "1.1.0"
+registry_id = "process-bigraphs-pb0-local-v1"
+package_version = "0.1.0"
+maturity = "phase_14_pb0_foundation"
+public_release = false
+internal_alpha = false
+evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
+specification = "../../spec/process-bigraph-runtime-semantics.md"
+decisions = [
+    "../../spec/decisions/0034-process-bigraph-runtime-platform.md",
+    "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+]
+
+[pins]
+process_bigraph = "305ea826191e9f897f0c6e207bc303bbc44a9eef"
+process_bigraph_version = "1.5.0"
+bigraph_schema = "4b208e13620e09e877af52ea07273bc9429a3a17"
+bigraph_schema_version = "1.4.3"
+
+[status_policy]
+implementation_status = ["implemented", "partial"]
+oracle_status = ["direct_passing", "direct_partial"]
+qualification_status = "not_qualified"
+independent_julia_specification_oracle = "not_started"
+upstream_runtime_execution = "forbidden"
+device_evidence = "not_started"
+
+[accepted_next_architecture]
+phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
+phase16_direct_dependency = "AlgebraicRewriting.jl"
+phase17_weak_dependency = "AlgebraicDynamics.jl"
+canonical_structure = "one versioned ProcessBigraph ACSet"
+implementation_status = "not_started"
+
+[[features]]
+id = "stable-typed-paths"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_paths_time_canonical.jl"
+limitation = "No wildcard path syntax in PB0."
+
+[[features]]
+id = "typed-hierarchical-store"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_schema_store_effects.jl"
+limitation = "Flat canonical leaf table under a structural hierarchy; no dynamic topology."
+
+[[features]]
+id = "structural-schema-realization"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_schema_store_effects.jl"
+limitation = "No schema migration or dynamic structural rewrite."
+
+[[features]]
+id = "canonical-state-serialization"
+implementation_status = "partial"
+oracle_status = "direct_partial"
+test = "test/test_paths_time_canonical.jl"
+limitation = "Deterministic canonical encoding/fingerprints exist; canonical decode and persisted file codec do not."
+
+[[features]]
+id = "typed-input-output-ports"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_composite_preflight.jl"
+limitation = "Static one-path bindings only; wildcard, bridge computation, and nested interfaces are deferred."
+
+[[features]]
+id = "temporal-process-protocol"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Fixed schedules only; adaptive deadlines are deferred."
+
+[[features]]
+id = "ordered-reactive-step-protocol"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Static acyclic Step DAG triggered after temporal batches; reactive quiescence is deferred."
+
+[[features]]
+id = "workflow-cycle-rejection"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_composite_preflight.jl"
+limitation = "Explicit iterative constructs are not implemented."
+
+[[features]]
+id = "exact-integer-logical-time"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_paths_time_canonical.jl"
+limitation = "Checked Int64 fast path; promotion beyond Int64 is not implemented."
+
+[[features]]
+id = "imminent-event-scheduler"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Bounded static fixed-schedule microfixture runner, not the Phase 15 executor."
+
+[[features]]
+id = "actual-elapsed-partial-interval"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Fixed schedules only."
+
+[[features]]
+id = "same-time-common-snapshot"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Qualified only in the bounded serial microfixture runner."
+
+[[features]]
+id = "typed-process-deltas"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_schema_store_effects.jl"
+limitation = "Engine-owned transaction buffers and structural requests are deferred."
+
+[[features]]
+id = "versioned-update-algebra"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_schema_store_effects.jl"
+limitation = "Seven built-in version-1 laws; open extension declarations and device laws are deferred."
+
+[[features]]
+id = "deterministic-conflict-reconciliation"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_schema_store_effects.jl"
+limitation = "CPU scalar/collection laws only."
+
+[[features]]
+id = "atomic-event-commit"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Static state and Step layers only; no structural barrier."
+
+[[features]]
+id = "settled-boundary-checkpoint"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Integrity-hashed in-memory checkpoint/replay; no portable file codec."
+
+[[features]]
+id = "transactional-failure"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "Invocation/reconciliation/Step atomicity only; external effects and structural failures are deferred."
+
+[[features]]
+id = "capability-placement-residency"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_composite_preflight.jl"
+limitation = "Declaration and hidden-transfer preflight only; no device execution."
+
+[[features]]
+id = "serial-semantic-executor"
+implementation_status = "partial"
+oracle_status = "direct_passing"
+test = "test/test_serial_microfixtures.jl"
+limitation = "PB0 fixed-schedule static microfixture scope; Phase 15 alpha remains open."

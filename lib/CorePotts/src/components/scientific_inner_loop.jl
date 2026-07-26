@@ -127,6 +127,13 @@ end
 @inline proposal_energy_change(component::UnorderedContactHamiltonian,
     proposal::CopyProposal, context::ScientificProposalContext) =
     energy_change(component, proposal, context.state, context.state.domain)
+@inline proposal_energy_change(
+    component::CellVectorBoundaryPotentialHamiltonian,
+    proposal::CopyProposal,
+    context::ScientificProposalContext) =
+    energy_change(
+        component, proposal, context.state,
+        context.state.domain)
 @inline proposal_energy_change(component::QuadraticBoundaryHamiltonian,
     proposal::CopyProposal, context::ScientificProposalContext) =
     energy_change(component, proposal, context.state)
@@ -319,6 +326,10 @@ scientific_access(::QuadraticVolumeHamiltonian) =
     SnapshotScientificAccess(; cell_wide = true)
 scientific_access(component::UnorderedContactHamiltonian) =
     SnapshotScientificAccess((component.relation,); cell_wide = true)
+scientific_access(
+    component::CellVectorBoundaryPotentialHamiltonian) =
+    SnapshotScientificAccess(
+        (component.relation,); cell_wide = true)
 scientific_access(component::QuadraticBoundaryHamiltonian) =
     SnapshotScientificAccess((component.relation,); cell_wide = true)
 scientific_access(::ExternalFieldOccupancyHamiltonian) =
@@ -343,6 +354,9 @@ tiled_scientific_access(::QuadraticVolumeHamiltonian) =
 tiled_scientific_access(component::UnorderedContactHamiltonian) =
     TiledSnapshotAccess((component.relation,); dependency_radius = 1,
         cell_wide = true, scratch_words = 2)
+tiled_scientific_access(
+    ::CellVectorBoundaryPotentialHamiltonian) =
+    UnsupportedTiledScientificAccess()
 function tiled_scientific_access(component::QuadraticBoundaryHamiltonian)
     component.metric isa BoundaryEdgeCount || return UnsupportedTiledScientificAccess()
     return TiledSnapshotAccess((component.relation,); dependency_radius = 1,

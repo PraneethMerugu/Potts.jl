@@ -226,13 +226,19 @@ AcceptedCopyExecutionEffect(effect::AcceptedCopyUpdate) =
 @inline _effect_property(
     ::AcceptedCopyExecutionEffect{Name, Property}) where {Name, Property} = Property
 
-struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple}
+struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple, X <: Tuple}
     site_states::S
     effects::E
-    CoupledAttemptWorkspace(site_states::S, effects::E, ::Val{:compiled}) where {
-        S <: Tuple, E <: Tuple} = new{S, E}(site_states, effects)
+    transaction_effects::X
+    CoupledAttemptWorkspace(
+        site_states::S, effects::E, transaction_effects::X,
+        ::Val{:compiled}) where {
+        S <: Tuple, E <: Tuple, X <: Tuple} =
+        new{S, E, X}(site_states, effects, transaction_effects)
 
-    function CoupledAttemptWorkspace(site_states::Tuple, effects::Tuple)
+    function CoupledAttemptWorkspace(
+            site_states::Tuple, effects::Tuple,
+            transaction_effects::Tuple = ())
         names = Tuple(state.declaration.name for state in site_states)
         length(unique(names)) == length(names) || throw(ArgumentError(
             "coupled attempt workspace site-property identities must be unique"))
@@ -258,14 +264,18 @@ struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple}
         end
         execution_states = map(SitePropertyExecutionState, site_states)
         execution_effects = map(AcceptedCopyExecutionEffect, effects)
-        return new{typeof(execution_states), typeof(execution_effects)}(
-            execution_states, execution_effects)
+        return new{typeof(execution_states), typeof(execution_effects),
+            typeof(transaction_effects)}(
+            execution_states, execution_effects, transaction_effects)
     end
 end
 
 function Adapt.adapt_structure(to, workspace::CoupledAttemptWorkspace)
     return CoupledAttemptWorkspace(
-        Adapt.adapt(to, workspace.site_states), workspace.effects, Val(:compiled))
+        Adapt.adapt(to, workspace.site_states),
+        workspace.effects,
+        Adapt.adapt(to, workspace.transaction_effects),
+        Val(:compiled))
 end
 
 @inline _site_state_name(state::SitePropertyState) = state.declaration.name
@@ -283,8 +293,68 @@ end
 @inline _assignment_value(::PreserveSiteValue, old) = old
 @inline _assignment_value(assignment::SetTo, old) = assignment.value
 
-@inline commit_accepted_copy_updates!(workspace,
-    proposal, transaction, scientific_state) = nothing
+"""
+Internal staged transaction protocol for accepted-copy extensions.
+
+An extension may mutate only its bounded attempt-local workspace during `prepare`. `preflight`
+returns `false` only after recording a backend-resident failure status. Once every extension has
+passed preflight, `commit` must be infallible and may publish its authoritative state. The default
+methods make ordinary Potts execution and existing accepted-copy site updates exact no-ops.
+"""
+@inline begin_accepted_copy_mcs!(effect, scientific_state, mcs) = nothing
+@inline prepare_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state,
+    rng, seed, mcs, attempt_id) = nothing
+@inline preflight_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state) = true
+@inline commit_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state) = nothing
+
+# Optional host-only binding metadata. Stateful proposal components use this to prove at
+# construction that the matching compiled effect exists and carries identical scientific
+# configuration; stateless accepted-copy effects and probes keep the no-binding default.
+accepted_copy_effect_requirement(component) = nothing
+accepted_copy_effect_binding(effect) = nothing
+accepted_copy_effect_state_valid(effect, coupled_state) = true
+
+@inline begin_accepted_copy_transaction!(
+    workspace, scientific_state, mcs) = nothing
+@inline prepare_accepted_copy_transaction!(
+    workspace, proposal, transaction, scientific_state,
+    rng, seed, mcs, attempt_id) = nothing
+@inline preflight_accepted_copy_transaction!(
+    workspace, proposal, transaction, scientific_state) = true
+@inline commit_accepted_copy_updates!(
+    workspace, proposal, transaction, scientific_state) = nothing
+
+function begin_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, scientific_state, mcs)
+    for effect in workspace.transaction_effects
+        begin_accepted_copy_mcs!(effect, scientific_state, mcs)
+    end
+    return nothing
+end
+
+function prepare_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, proposal, transaction,
+        scientific_state, rng, seed, mcs, attempt_id)
+    for effect in workspace.transaction_effects
+        prepare_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state,
+            rng, seed, mcs, attempt_id)
+    end
+    return nothing
+end
+
+function preflight_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, proposal, transaction,
+        scientific_state)
+    for effect in workspace.transaction_effects
+        preflight_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state) || return false
+    end
+    return true
+end
 
 function commit_accepted_copy_updates!(workspace::CoupledAttemptWorkspace,
         proposal, transaction, scientific_state)
@@ -306,8 +376,50 @@ function commit_accepted_copy_updates!(workspace::CoupledAttemptWorkspace,
         # host and device; dynamic invariant predicates remain a host-reference responsibility.
         @inbounds state.values[site] = convert(eltype(state.values), value)
     end
+    for effect in workspace.transaction_effects
+        commit_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state)
+    end
     return nothing
 end
+
+accepted_copy_effect_backend_valid(effect, scientific_state, plan) = true
+accepted_copy_effect_allocation_bytes(effect) = 0
+synchronize_accepted_copy_effect_status!(plan, effect) = nothing
+rebuild_accepted_copy_effect(effect, coupled_state) = effect
+
+function accepted_copy_workspace_backend_valid(
+        workspace::CoupledAttemptWorkspace, scientific_state, plan)
+    return all(effect -> accepted_copy_effect_backend_valid(
+            effect, scientific_state, plan), workspace.transaction_effects)
+end
+
+function accepted_copy_workspace_state_valid(
+        workspace::CoupledAttemptWorkspace, coupled_state)
+    return all(effect -> accepted_copy_effect_state_valid(
+            effect, coupled_state), workspace.transaction_effects)
+end
+accepted_copy_workspace_state_valid(workspace, coupled_state) = true
+
+accepted_copy_workspace_allocation_bytes(workspace::CoupledAttemptWorkspace) =
+    sum(accepted_copy_effect_allocation_bytes, workspace.transaction_effects;
+        init = 0)
+
+function synchronize_accepted_copy_transaction_status!(
+        plan, workspace::CoupledAttemptWorkspace)
+    for effect in workspace.transaction_effects
+        synchronize_accepted_copy_effect_status!(plan, effect)
+    end
+    return workspace
+end
+synchronize_accepted_copy_transaction_status!(plan, workspace) = workspace
+
+function rebuild_accepted_copy_effects(
+        workspace::CoupledAttemptWorkspace, coupled_state)
+    return map(effect -> rebuild_accepted_copy_effect(effect, coupled_state),
+        workspace.transaction_effects)
+end
+rebuild_accepted_copy_effects(workspace, coupled_state) = ()
 
 abstract type AbstractSiteUpdateLaw end
 struct SaturatingSubtract{T} <: AbstractSiteUpdateLaw
@@ -467,13 +579,57 @@ end
 HistorySample(history::Union{Symbol, CellHistory}) =
     HistorySample(history isa Symbol ? history : history.name)
 
-mutable struct CellHistoryState{D <: CellHistory, T}
+mutable struct CellHistoryState{D <: CellHistory, V <: AbstractMatrix,
+        H <: AbstractVector{UInt32}, F <: AbstractVector{UInt32},
+        G <: AbstractVector{CellGeneration}}
     declaration::D
-    values::Matrix{T}
-    heads::Vector{UInt32}
-    fills::Vector{UInt32}
-    generations::Vector{CellGeneration}
+    values::V
+    heads::H
+    fills::F
+    generations::G
     latest_sample_mcs::UInt64
+end
+
+function Adapt.adapt_structure(to, state::CellHistoryState)
+    return CellHistoryState(
+        state.declaration,
+        Adapt.adapt(to, state.values),
+        Adapt.adapt(to, state.heads),
+        Adapt.adapt(to, state.fills),
+        Adapt.adapt(to, state.generations),
+        state.latest_sample_mcs)
+end
+
+"""
+Descriptor-free bounded-history view admitted as a kernel argument after backend adaptation.
+
+The declaration and host-owned semantic clock stay in `CellHistoryState`. The execution view
+contains only fixed-capacity arrays and compile-time identity/length metadata.
+"""
+struct CellHistoryExecutionState{Name, Length, V <: AbstractMatrix,
+        H <: AbstractVector{UInt32}, F <: AbstractVector{UInt32},
+        G <: AbstractVector{CellGeneration}}
+    values::V
+    heads::H
+    fills::F
+    generations::G
+end
+
+CellHistoryExecutionState(state::CellHistoryState) =
+    CellHistoryExecutionState{state.declaration.name,
+        Int(state.declaration.length), typeof(state.values),
+        typeof(state.heads), typeof(state.fills), typeof(state.generations)}(
+        state.values, state.heads, state.fills, state.generations)
+
+function Adapt.adapt_structure(to,
+        state::CellHistoryExecutionState{Name, Length}) where {Name, Length}
+    values = Adapt.adapt(to, state.values)
+    heads = Adapt.adapt(to, state.heads)
+    fills = Adapt.adapt(to, state.fills)
+    generations = Adapt.adapt(to, state.generations)
+    return CellHistoryExecutionState{Name, Length, typeof(values),
+        typeof(heads), typeof(fills), typeof(generations)}(
+        values, heads, fills, generations)
 end
 
 function initialize_cell_history(history::CellHistory, samples::AbstractVector{T},
@@ -485,20 +641,22 @@ function initialize_cell_history(history::CellHistory, samples::AbstractVector{T
     values = Matrix{T}(undef, capacity, width)
     heads = zeros(UInt32, capacity)
     fills = zeros(UInt32, capacity)
-    for slot in 1:capacity
-        if history.initial isa RepeatInitialSample
-            @inbounds values[slot, :] .= samples[slot]
-            heads[slot] = UInt32(width)
-            fills[slot] = UInt32(width)
-        elseif history.initial isa MissingUntilFull
-            @inbounds values[slot, :] .= samples[slot]
-        else
-            explicit = history.initial.values
-            size(explicit) == size(values) || throw(ArgumentError(
-                "ExplicitInitialHistory must have capacity by history-length shape"))
-            copyto!(values, explicit)
-            heads[slot] = UInt32(width)
-            fills[slot] = UInt32(width)
+    if history.initial isa ExplicitInitialHistory
+        explicit = history.initial.values
+        size(explicit) == size(values) || throw(ArgumentError(
+            "ExplicitInitialHistory must have capacity by history-length shape"))
+        copyto!(values, explicit)
+        fill!(heads, UInt32(width))
+        fill!(fills, UInt32(width))
+    else
+        for slot in 1:capacity
+            if history.initial isa RepeatInitialSample
+                fill!(@view(values[slot, :]), samples[slot])
+                heads[slot] = UInt32(width)
+                fills[slot] = UInt32(width)
+            else
+                fill!(@view(values[slot, :]), samples[slot])
+            end
         end
     end
     return CellHistoryState(history, values, heads, fills,
@@ -525,6 +683,22 @@ function maybe_history_value(state::CellHistoryState, cell::CellID,
     return HistoryValue(true, @inbounds(state.values[slot, column]))
 end
 
+@inline function maybe_history_value(
+        state::CellHistoryExecutionState{Name, Length}, cell::CellID,
+        generation::CellGeneration, lag::Lag) where {Name, Length}
+    slot = Int(value(cell))
+    if !(1 <= slot <= length(state.generations)) ||
+            @inbounds(state.generations[slot]) != generation
+        return HistoryValue(false, zero(eltype(state.values)))
+    end
+    fill = @inbounds state.fills[slot]
+    lag.value < fill ||
+        return HistoryValue(false, @inbounds(state.values[slot, 1]))
+    head = Int(@inbounds state.heads[slot])
+    column = mod(head - Int(lag.value) - 1, Length) + 1
+    return HistoryValue(true, @inbounds(state.values[slot, column]))
+end
+
 function history_value(state::CellHistoryState, cell::CellID,
         generation::CellGeneration, lag::Lag)
     result = maybe_history_value(state, cell, generation, lag)
@@ -540,23 +714,26 @@ function sample_history!(state::CellHistoryState, samples::AbstractVector,
     length(samples) == capacity && length(active) == capacity &&
         length(generations) == capacity || throw(ArgumentError(
         "history sampling inputs must match history capacity"))
-    candidate_values = copy(state.values)
-    candidate_heads = copy(state.heads)
-    candidate_fills = copy(state.fills)
+    0 <= target_mcs <= typemax(UInt64) || throw(ArgumentError(
+        "history sample MCS must be non-negative and fit UInt64"))
+    # Validate the complete synchronous input before publishing any sample. This preserves
+    # transaction atomicity without allocating full candidate copies on every MCS.
     for slot in 1:capacity
         active[slot] || continue
         state.generations[slot] == generations[slot] || throw(ArgumentError(
             "history sampling uses a stale cell generation"))
-        head = mod(Int(candidate_heads[slot]), Int(state.declaration.length)) + 1
-        @inbounds candidate_values[slot, head] = convert(
-            eltype(candidate_values), samples[slot])
-        candidate_heads[slot] = UInt32(head)
-        candidate_fills[slot] = min(state.declaration.length,
-            candidate_fills[slot] + UInt32(1))
+        convert(eltype(state.values), samples[slot])
     end
-    copyto!(state.values, candidate_values)
-    copyto!(state.heads, candidate_heads)
-    copyto!(state.fills, candidate_fills)
+    width = Int(state.declaration.length)
+    for slot in 1:capacity
+        active[slot] || continue
+        head = mod(Int(@inbounds(state.heads[slot])), width) + 1
+        @inbounds state.values[slot, head] =
+            convert(eltype(state.values), samples[slot])
+        @inbounds state.heads[slot] = UInt32(head)
+        @inbounds state.fills[slot] = min(state.declaration.length,
+            state.fills[slot] + UInt32(1))
+    end
     state.latest_sample_mcs = UInt64(target_mcs)
     return state
 end
@@ -621,12 +798,219 @@ struct RelationshipEdge{T}
     payload::T
 end
 
-mutable struct RelationshipState{D <: RelationshipSet, T}
-    declaration::D
-    edges::Vector{RelationshipEdge{T}}
+"""Generic elastic-link payload stored as three relationship-owned SoA columns."""
+struct ElasticLinkParameters{T <: AbstractFloat}
+    strength::T
+    target_length::T
+    maximum_length::T
+    ElasticLinkParameters{T}(
+        strength::T, target_length::T, maximum_length::T) where {T} =
+        new{T}(strength, target_length, maximum_length)
+    function ElasticLinkParameters(
+            strength::T, target_length::T, maximum_length::T) where {
+            T <: AbstractFloat}
+        isfinite(strength) && strength >= zero(T) || throw(ArgumentError(
+            "elastic-link strength must be finite and non-negative"))
+        isfinite(target_length) && target_length >= zero(T) ||
+            throw(ArgumentError(
+                "elastic-link target length must be finite and non-negative"))
+        isfinite(maximum_length) && maximum_length >= target_length ||
+            throw(ArgumentError(
+                "elastic-link maximum length must be finite and at least the target length"))
+        return new{T}(strength, target_length, maximum_length)
+    end
 end
-RelationshipState(set::RelationshipSet{T}) where {T} =
-    RelationshipState(set, RelationshipEdge{T}[])
+Base.zero(::Type{ElasticLinkParameters{T}}) where {T} =
+    ElasticLinkParameters(zero(T), zero(T), zero(T))
+
+struct ElasticLinkColumns{T <: AbstractFloat,
+        A <: AbstractVector{T}} <: AbstractVector{ElasticLinkParameters{T}}
+    strength::A
+    target_length::A
+    maximum_length::A
+end
+Base.IndexStyle(::Type{<:ElasticLinkColumns}) = IndexLinear()
+Base.size(columns::ElasticLinkColumns) = size(columns.strength)
+Base.length(columns::ElasticLinkColumns) = length(columns.strength)
+@inline function Base.getindex(columns::ElasticLinkColumns, index::Int)
+    @boundscheck checkbounds(columns.strength, index)
+    @inbounds return ElasticLinkParameters{eltype(columns.strength)}(
+        columns.strength[index],
+        columns.target_length[index],
+        columns.maximum_length[index])
+end
+@inline function Base.setindex!(
+        columns::ElasticLinkColumns{T}, value::ElasticLinkParameters{T},
+        index::Int) where {T}
+    @boundscheck checkbounds(columns.strength, index)
+    @inbounds begin
+        columns.strength[index] = value.strength
+        columns.target_length[index] = value.target_length
+        columns.maximum_length[index] = value.maximum_length
+    end
+    return value
+end
+function Base.similar(columns::ElasticLinkColumns{T}) where {T}
+    return ElasticLinkColumns(
+        similar(columns.strength),
+        similar(columns.target_length),
+        similar(columns.maximum_length))
+end
+function Base.similar(columns::ElasticLinkColumns{T},
+        ::Type{ElasticLinkParameters{T}}, dims::Dims) where {T}
+    return ElasticLinkColumns(
+        similar(columns.strength, T, dims),
+        similar(columns.target_length, T, dims),
+        similar(columns.maximum_length, T, dims))
+end
+Base.similar(columns::ElasticLinkColumns{T},
+    ::Type{ElasticLinkParameters{T}}, length::Int) where {T} =
+    similar(columns, ElasticLinkParameters{T}, (length,))
+function Adapt.adapt_structure(to, columns::ElasticLinkColumns)
+    return ElasticLinkColumns(
+        Adapt.adapt(to, columns.strength),
+        Adapt.adapt(to, columns.target_length),
+        Adapt.adapt(to, columns.maximum_length))
+end
+KernelAbstractions.get_backend(columns::ElasticLinkColumns) =
+    KernelAbstractions.get_backend(columns.strength)
+
+_relationship_payload_storage(::Type{T}, capacity::Int) where {T} =
+    Vector{T}(undef, capacity)
+function _relationship_payload_storage(
+        ::Type{ElasticLinkParameters{T}}, capacity::Int) where {T}
+    return ElasticLinkColumns(
+        zeros(T, capacity), zeros(T, capacity), zeros(T, capacity))
+end
+
+mutable struct RelationshipState{D <: RelationshipSet, T,
+        E <: AbstractVector{UInt32}, G <: AbstractVector{UInt64},
+        P <: AbstractVector{T}, A <: AbstractVector{UInt8},
+        C <: AbstractVector{UInt32}, U <: AbstractVector{UInt64}}
+    declaration::D
+    endpoint_a::E
+    generation_a::G
+    endpoint_b::E
+    generation_b::G
+    payload::P
+    active::A
+    count::C
+    publication_epoch::U
+end
+function RelationshipState(set::RelationshipSet{T}) where {T}
+    capacity = Int(set.capacity.value)
+    endpoint_a = zeros(UInt32, capacity)
+    generation_a = zeros(UInt64, capacity)
+    endpoint_b = zeros(UInt32, capacity)
+    generation_b = zeros(UInt64, capacity)
+    payload = _relationship_payload_storage(T, capacity)
+    zero_payload = hasmethod(zero, Tuple{Type{T}}) ?
+        zero(T) : reinterpret(T, zeros(UInt8, sizeof(T)))[1]
+    fill!(payload, zero_payload)
+    active = zeros(UInt8, capacity)
+    return RelationshipState(
+        set, endpoint_a, generation_a, endpoint_b, generation_b,
+        payload, active, zeros(UInt32, 1), zeros(UInt64, 1))
+end
+
+function Adapt.adapt_structure(to, state::RelationshipState)
+    return RelationshipState(
+        state.declaration,
+        Adapt.adapt(to, state.endpoint_a),
+        Adapt.adapt(to, state.generation_a),
+        Adapt.adapt(to, state.endpoint_b),
+        Adapt.adapt(to, state.generation_b),
+        Adapt.adapt(to, state.payload),
+        Adapt.adapt(to, state.active),
+        Adapt.adapt(to, state.count),
+        Adapt.adapt(to, state.publication_epoch))
+end
+
+"""
+Descriptor-free fixed-capacity relationship view admitted to portable kernels.
+
+The relationship identity, directionality, and maximum degree are encoded in the type. All
+runtime storage is a backend-adaptable isbits array.
+"""
+struct RelationshipExecutionState{Name, Directed, MaximumDegree,
+        E, G, P, A, C, U}
+    endpoint_a::E
+    generation_a::G
+    endpoint_b::E
+    generation_b::G
+    payload::P
+    active::A
+    count::C
+    publication_epoch::U
+end
+
+RelationshipExecutionState(state::RelationshipState) =
+    RelationshipExecutionState{
+        state.declaration.name, state.declaration.directed,
+        Int(state.declaration.maximum_degree),
+        typeof(state.endpoint_a), typeof(state.generation_a),
+        typeof(state.payload), typeof(state.active),
+        typeof(state.count), typeof(state.publication_epoch)}(
+        state.endpoint_a, state.generation_a,
+        state.endpoint_b, state.generation_b,
+        state.payload, state.active, state.count,
+        state.publication_epoch)
+
+function Adapt.adapt_structure(to,
+        state::RelationshipExecutionState{Name, Directed, MaximumDegree}) where {
+        Name, Directed, MaximumDegree}
+    endpoint_a = Adapt.adapt(to, state.endpoint_a)
+    generation_a = Adapt.adapt(to, state.generation_a)
+    endpoint_b = Adapt.adapt(to, state.endpoint_b)
+    generation_b = Adapt.adapt(to, state.generation_b)
+    payload = Adapt.adapt(to, state.payload)
+    active = Adapt.adapt(to, state.active)
+    count = Adapt.adapt(to, state.count)
+    publication_epoch = Adapt.adapt(to, state.publication_epoch)
+    return RelationshipExecutionState{Name, Directed, MaximumDegree,
+        typeof(endpoint_a), typeof(generation_a), typeof(payload),
+        typeof(active), typeof(count), typeof(publication_epoch)}(
+        endpoint_a, generation_a, endpoint_b, generation_b,
+        payload, active, count, publication_epoch)
+end
+
+@inline _relationship_count(state::RelationshipState) =
+    Int(@inbounds state.count[1])
+
+@inline function _relationship_edge(state::RelationshipState, index::Int)
+    @boundscheck 1 <= index <= _relationship_count(state) ||
+        throw(BoundsError(state, index))
+    @inbounds return RelationshipEdge(
+        CellEndpoint(
+            CellID(state.endpoint_a[index]),
+            CellGeneration(state.generation_a[index])),
+        CellEndpoint(
+            CellID(state.endpoint_b[index]),
+            CellGeneration(state.generation_b[index])),
+        state.payload[index])
+end
+
+function _relationship_edges(state::RelationshipState)
+    return [_relationship_edge(state, index)
+        for index in 1:_relationship_count(state)]
+end
+
+# Compatibility inspection for the registry-v1 provisional surface. Mutations use the bounded
+# state operations below; the returned vector is deliberately not authoritative storage.
+function Base.getproperty(state::RelationshipState, name::Symbol)
+    name === :edges && return _relationship_edges(state)
+    return getfield(state, name)
+end
+
+function clear_relationships!(state::RelationshipState)
+    fill!(state.endpoint_a, UInt32(0))
+    fill!(state.generation_a, UInt64(0))
+    fill!(state.endpoint_b, UInt32(0))
+    fill!(state.generation_b, UInt64(0))
+    fill!(state.active, UInt8(0))
+    fill!(state.count, UInt32(0))
+    return state
+end
 
 struct RelationshipCapacityError <: Exception
     relationship::Symbol
@@ -646,11 +1030,65 @@ end
 function _edge_index(state::RelationshipState,
         left::CellEndpoint, right::CellEndpoint)
     canonical = _canonical_endpoints(state.declaration, left, right)
-    return findfirst(edge -> (edge.left, edge.right) == canonical, state.edges)
+    left_value = value(canonical[1].cell)
+    left_generation = value(canonical[1].generation)
+    right_value = value(canonical[2].cell)
+    right_generation = value(canonical[2].generation)
+    for index in 1:_relationship_count(state)
+        @inbounds if state.active[index] != UInt8(0) &&
+                state.endpoint_a[index] == left_value &&
+                state.generation_a[index] == left_generation &&
+                state.endpoint_b[index] == right_value &&
+                state.generation_b[index] == right_generation
+            return index
+        end
+    end
+    return nothing
 end
 
-function _relationship_degree(edges, endpoint)
-    return count(edge -> edge.left == endpoint || edge.right == endpoint, edges)
+function _relationship_degree(state::RelationshipState, endpoint)
+    endpoint_value = value(endpoint.cell)
+    endpoint_generation = value(endpoint.generation)
+    degree = 0
+    for index in 1:_relationship_count(state)
+        @inbounds state.active[index] == UInt8(0) && continue
+        @inbounds degree += (
+            (state.endpoint_a[index] == endpoint_value &&
+             state.generation_a[index] == endpoint_generation) ||
+            (state.endpoint_b[index] == endpoint_value &&
+             state.generation_b[index] == endpoint_generation))
+    end
+    return degree
+end
+
+@inline function _relationship_key(
+        left::CellEndpoint, right::CellEndpoint)
+    return (
+        value(left.cell), value(left.generation),
+        value(right.cell), value(right.generation))
+end
+
+function _relationship_insert_index(
+        state::RelationshipState, left::CellEndpoint, right::CellEndpoint)
+    key = _relationship_key(left, right)
+    for index in 1:_relationship_count(state)
+        edge = _relationship_edge(state, index)
+        key < _relationship_key(edge.left, edge.right) && return index
+    end
+    return _relationship_count(state) + 1
+end
+
+@inline function _copy_relationship_slot!(
+        state::RelationshipState, destination::Int, source::Int)
+    @inbounds begin
+        state.endpoint_a[destination] = state.endpoint_a[source]
+        state.generation_a[destination] = state.generation_a[source]
+        state.endpoint_b[destination] = state.endpoint_b[source]
+        state.generation_b[destination] = state.generation_b[source]
+        state.payload[destination] = state.payload[source]
+        state.active[destination] = state.active[source]
+    end
+    return state
 end
 
 function create_relationship!(state::RelationshipState{D, T},
@@ -658,18 +1096,28 @@ function create_relationship!(state::RelationshipState{D, T},
     canonical = _canonical_endpoints(state.declaration, left, right)
     _edge_index(state, canonical...) === nothing || throw(ArgumentError(
         "duplicate relationship edge"))
-    length(state.edges) < Int(state.declaration.capacity.value) || throw(
+    count = _relationship_count(state)
+    count < Int(state.declaration.capacity.value) || throw(
         RelationshipCapacityError(state.declaration.name,
-            length(state.edges) + 1, state.declaration.capacity.value))
+            count + 1, state.declaration.capacity.value))
     for endpoint in canonical
-        _relationship_degree(state.edges, endpoint) <
+        _relationship_degree(state, endpoint) <
             Int(state.declaration.maximum_degree) || throw(ArgumentError(
                 "relationship maximum degree exceeded"))
     end
-    push!(state.edges, RelationshipEdge(canonical..., payload))
-    sort!(state.edges; by = edge -> (
-        value(edge.left.cell), value(edge.left.generation),
-        value(edge.right.cell), value(edge.right.generation)))
+    insertion = _relationship_insert_index(state, canonical...)
+    for index in (count + 1):-1:(insertion + 1)
+        _copy_relationship_slot!(state, index, index - 1)
+    end
+    @inbounds begin
+        state.endpoint_a[insertion] = value(canonical[1].cell)
+        state.generation_a[insertion] = value(canonical[1].generation)
+        state.endpoint_b[insertion] = value(canonical[2].cell)
+        state.generation_b[insertion] = value(canonical[2].generation)
+        state.payload[insertion] = payload
+        state.active[insertion] = UInt8(1)
+        state.count[1] = UInt32(count + 1)
+    end
     return state
 end
 
@@ -677,7 +1125,18 @@ function remove_relationship!(state::RelationshipState,
         left::CellEndpoint, right::CellEndpoint)
     index = _edge_index(state, left, right)
     index === nothing && return false
-    deleteat!(state.edges, index)
+    count = _relationship_count(state)
+    for source in (index + 1):count
+        _copy_relationship_slot!(state, source - 1, source)
+    end
+    @inbounds begin
+        state.endpoint_a[count] = UInt32(0)
+        state.generation_a[count] = UInt64(0)
+        state.endpoint_b[count] = UInt32(0)
+        state.generation_b[count] = UInt64(0)
+        state.active[count] = UInt8(0)
+        state.count[1] = UInt32(count - 1)
+    end
     return true
 end
 
@@ -685,30 +1144,42 @@ function retune_relationship!(state::RelationshipState{D, T},
         left::CellEndpoint, right::CellEndpoint, payload::T) where {D, T}
     index = _edge_index(state, left, right)
     index === nothing && throw(ArgumentError("cannot retune an absent relationship"))
-    edge = state.edges[index]
-    state.edges[index] = RelationshipEdge(edge.left, edge.right, payload)
+    @inbounds state.payload[index] = payload
     return state
 end
 
 function relationship_edges(state::RelationshipState, endpoint::CellEndpoint)
-    return Tuple(edge for edge in state.edges
-        if edge.left == endpoint || edge.right == endpoint)
+    result = RelationshipEdge{eltype(state.payload)}[]
+    for index in 1:_relationship_count(state)
+        edge = _relationship_edge(state, index)
+        (edge.left == endpoint || edge.right == endpoint) &&
+            push!(result, edge)
+    end
+    return Tuple(result)
 end
 
 function relationship_payload(state::RelationshipState,
         left::CellEndpoint, right::CellEndpoint)
     index = _edge_index(state, left, right)
     index === nothing && throw(ArgumentError("relationship edge is absent"))
-    return state.edges[index].payload
+    return @inbounds state.payload[index]
 end
 
 function retire_relationship_endpoint!(state::RelationshipState,
         endpoint::CellEndpoint)
-    incident = findall(edge -> edge.left == endpoint || edge.right == endpoint,
-        state.edges)
-    isempty(incident) && return state
-    state.declaration.endpoint_lifecycle isa RemoveIncidentEdges || throw(
-        ArgumentError("relationship endpoint retirement rejected by policy"))
-    deleteat!(state.edges, incident)
+    found = false
+    index = 1
+    while index <= _relationship_count(state)
+        edge = _relationship_edge(state, index)
+        if edge.left == endpoint || edge.right == endpoint
+            found = true
+            state.declaration.endpoint_lifecycle isa RemoveIncidentEdges || throw(
+                ArgumentError("relationship endpoint retirement rejected by policy"))
+            remove_relationship!(state, edge.left, edge.right)
+        else
+            index += 1
+        end
+    end
+    found || return state
     return state
 end

@@ -16,7 +16,8 @@ function RNGNamespaceIdentity(value::Integer)
     0 <= value <= typemax(UInt128) || throw(ArgumentError(
         "RNG namespace identity must fit UInt128"))
     bits = UInt128(value)
-    return RNGNamespaceIdentity(UInt64(bits >> 64), UInt64(bits))
+    return RNGNamespaceIdentity(
+        UInt64(bits >> 64), bits % UInt64)
 end
 
 Base.UInt128(identity::RNGNamespaceIdentity) =

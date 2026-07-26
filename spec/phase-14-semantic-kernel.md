@@ -5,24 +5,39 @@ Version: `0.2-provisional`
 Status: Accepted architecture; individual Phase 14.1 contracts remain Provisional until their
 registered vertical-slice gates pass
 
-Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24. Its
-real-hardware Metal/ROCm closure is the next permitted vertical slice; Wang remains gated. This
-proves only the CPU Wortel-scoped subset and does not promote the seven contracts beyond their
-registered Provisional status.
+Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24 and its
+real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang G3-B sequential CPU closure is
+attested complete at implementation commit `a82b0c4`; its
+[closure ledger](../design/audits/phase-14-g3b-closure-ledger-v1.toml) records
+`overall_status = "passed"`. The exact
+[source/runtime order](../design/audits/phase-14-wang-order-audit.md) and revision-7
+[G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) govern that evidence.
+This proves the bounded Wortel slice and Wang sequential CPU model. Decision 0035 retires the
+assembled Wang Metal/ROCm promotion because the paper-faithful sequential algorithm is not an
+appropriate GPU target; G4 is current. Contracts outside the proven slices remain Provisional.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
-[Decision 0032](decisions/0032-phase-14-gpu-native-promotion.md)
+[Decision 0032](decisions/0032-phase-14-gpu-native-promotion.md), plus the generic authoring
+boundary in
+[Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md)
+and the Wang algorithm-suitability boundary in
+[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md)
 
 Registry:
 [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
 
 ## Authority
 
-This document is the sole normative architecture for new Phase 14 coupled-model semantics. The
-earlier Phase 14 domain specifications are retained as source and prototype evidence, but they do
-not define independent runtimes or contracts. When an earlier document conflicts with this one,
-this document and Decision 0031 control.
+This document is the sole normative architecture for the existing Potts-owned Phase 14
+coupled-model path. The earlier Phase 14 domain specifications are retained as source and prototype
+evidence, but they do not define independent Potts runtimes or contracts. When an earlier Phase 14
+document conflicts with this one, this document and Decision 0031 control.
+
+Decision 0034 separately establishes the domain-neutral `ProcessBigraphs.jl` runtime. During the
+strangler migration, this kernel remains authoritative for unmigrated Potts models; migrated slices
+lower through the runtime and must pass old/new serial differential evidence. The migration MUST
+end dual execution authority for each cut-over slice rather than leave two Potts schedulers.
 
 The specification defines observable semantics, not concrete Julia storage layouts. Candidate type
 names illustrate the intended API and remain Provisional until the corresponding vertical slice is
@@ -38,6 +53,8 @@ The kernel must:
 - preserve exact update order, transaction atomicity, lifecycle safety, continuation, and
   qualification boundaries;
 - provide natural biological authoring façades;
+- support generic hierarchical composition whose root complexity follows meaningful subsystems
+  rather than private declaration leaves;
 - have one canonical model representation before execution; and
 - leave every Phase 13 meaning unchanged for models that do not opt into Phase 14 declarations.
 
@@ -73,6 +90,11 @@ record.
 An authoring façade MUST either lower completely or reject with an actionable diagnostic. Runtime
 lexical lookup, untyped symbol dictionaries, hidden closures with unregistered semantics, and
 partially lowered adapter objects are prohibited.
+
+Authoring hierarchy is not canonical runtime hierarchy. `ModelFragment` composition, lexical
+namespaces, named requirements, and named exports are resolved before execution. The canonical
+model retains qualified identities and authoring provenance but has no fragment-local clock,
+scheduler, persistence store, backend state, or runtime dispatch boundary.
 
 ## Contract 1: State
 
@@ -214,6 +236,16 @@ inlined into a law's canonical representation.
 Field evolution and exchange are process laws over field and cell/site state. Geometry, boundary
 conditions, diffusion/reaction law, source/sink reduction order, units, split order, and failure
 behavior MUST be explicit.
+
+Internal field substeps may feed later internal substeps but remain staging operations. They do not
+create process commits, plan entries, semantic clocks, or checkpoint positions. If preserving the
+pre-process authoritative field through all internal steps requires additional staging storage,
+that storage is a declared preallocated workspace rather than hidden allocation.
+
+An exchange that mutates field state and produces cell/global outputs owns one typed cross-domain
+write set. Every candidate output and status validates before one logical publication epoch. A
+process-specific execution view may address only those declared targets; it is not an unrestricted
+integrator callback.
 
 Phase-local forcing that has no future relevance MUST disappear at its declared commit boundary.
 Any accumulator that affects future execution is state and therefore must be declared and
@@ -450,6 +482,61 @@ events, and paper observations.
 Every façade MUST expose its lowered canonical representation through inspection. It MAY add
 defaults only when those defaults are stable, documented, fingerprinted, and source-appropriate.
 
+### Generic hierarchical composition
+
+Flat `PottsModel(declarations...)` remains the concise spelling for small models and all frozen
+Phase 13 use. Complex coupled models compose through the existing `ModelFragment` concept. No
+separate `CoupledModel`, `Subsystem`, field runtime, relationship runtime, or paper-specific core
+model type is introduced.
+
+A fragment provides:
+
+- one stable identity, version, and lexical namespace;
+- named typed requirements;
+- private declarations and nested fragments;
+- named typed exports;
+- compatibility, provenance, and backend requirements; and
+- no independent clock, scheduler, persistence format, or runtime state.
+
+A named requirement describes the semantic category and all compatibility information necessary
+to validate a binding, including owner, schema, units, lifecycle obligations, capabilities, and
+backend requirements where applicable. A named export refers to one admitted state, process
+operation, observation, relation, parameter, or other registered semantic value. Neither boundary
+uses untyped runtime name lookup.
+
+The exact requirement/export constructor names remain Provisional. The stable semantic rule is
+that fragments connect through named typed ports and lower those references to canonical qualified
+identities before fingerprinting or execution.
+
+Plans reference exported process operations:
+
+```julia
+Phase(:field, Advance(secretome.advance))
+Phase(:uptake, Exchange(secretome.uptake))
+Phase(:signaling, Advance(signaling.advance))
+```
+
+The property-like spelling denotes an immutable exported semantic reference, never mutable
+fragment storage. Private declarations cannot be referenced outside the fragment.
+
+There is still exactly one normalized root plan. Fragments may export operations, and a documented
+convenience façade may contribute fully inspectable plan entries, but no fragment owns a hidden
+local scheduler. Convenience entries are expanded and conflict-checked in the root plan.
+Dependencies validate explicit order and never topologically choose scientific order.
+
+Equivalent explicit leaves and fragment-packaged declarations normalize to the same scientific
+fingerprint. Fragment paths remain in composition reports and diagnostics. A different binding,
+namespace, law, schedule, or exported declaration changes canonical identity normally.
+
+Paper-specific builders may be supplied in tutorial or paper-example modules only after the same
+model is expressed through this generic API. Selected paper or author names MUST NOT enter the
+stable CorePotts or PottsToolkit export surface merely to hide authoring complexity.
+
+Backend requirements are derived transitively after complete fragment lowering. A fragment cannot
+hide host fallback, synchronization, transfer, allocation, unsupported storage, or an unqualified
+law. Decision 0032 applies unchanged to every stable execution capability reached through a
+fragment.
+
 ### Illustrative direct-kernel spelling
 
 The exact Julia constructors are Provisional, but the semantic shape is:
@@ -626,15 +713,54 @@ to exact by successful execution.
 
 ### Wang 2025 collective tumor migration
 
-- state: cell ODE state, five-MCS centroid history, field state, and focal relationships;
+- state: cell ODE state, bounded centroid history with registered source/paper offset variants,
+  field state, and focal relationships;
 - process: fixed-step ODE/rules, uptake, focal creation/retuning, polarity alignment, and
   protrusion-drive mapping;
-- plan: relaxation/switch stages, five/ten-MCS cadences, source plugin order, and observations at
-  MCS 90 and 270;
+- plan: relaxation/switch stages, per-MCS history and ten-MCS focal cadence, source plugin order,
+  and observations at source MCS 90 and 270 / normalized target MCS 91 and 271;
 - lifecycle: generation-safe state and relationship cleanup;
 - observation: geometric features, migration modes, and parameter-map primitives;
 - spatial: distinct proposal/contact/focal/field/query relations;
 - algorithm: source-attempt identity.
+
+The generic authoring fixture groups Wang's leaves into reusable field-coupling, intracellular
+signaling, focal-relationship, motility/history, observation, and protocol fragments. These are
+ordinary `ModelFragment` values with named typed requirements and exports; none has a Wang-specific
+CorePotts or PottsToolkit type. One root plan references their exported operations and makes the
+complete source order visible.
+
+The Wang lowering MUST encode the accepted order as Potts and accepted-copy focal-topology commit;
+scaled secretome field solve with diffusion followed by constant-medium concentration in each
+substep; centroid sampling; self-polarity derivation; secretome uptake/calibration; same-MCS ODE
+advance; ten-MCS focal retuning; synchronous neighbor-polarity alignment; protrusion-force
+publication; lifecycle; and observations.
+
+CompuCell3D's source label MCS `k` maps to normalized Potts.jl target MCS `k+1`: Potts.jl MCS 0 is
+the finalized initial condition, whereas CompuCell3D executes a real Potts/field/Python iteration
+labelled MCS 0. Source labels are exactly derived observation/provenance metadata, not a second
+clock. No source `step()` work may be hidden in initialization. Consequently, source MCS 120, 210,
+and 211 correspond to normalized target MCS 121, 211, and 212 and are direct read/write visibility
+fixtures.
+
+The five Wang field substeps are one numerical process. They read one immutable post-Potts
+ownership/type snapshot, stage through two scratch grids, and publish only once after all five
+substeps validate. A Medium constant-concentration operation is an exact post-substep reservoir
+constraint, not additive forcing. Internal substeps and post-field/post-exchange phases are not
+stable checkpoints.
+
+Wang exchange mode is resolved by the root plan: inactive, reset-only, calibrate, or publish. The
+exchange law may not branch on an undeclared process-local MCS scheduler. Calibrate and publish
+atomically couple a staged field mutation, per-cell uptake reduction, cell-signal output, and one
+global multiplier/status. A deterministic reduction profile and zero/nonfinite calibration
+failure policy are mandatory.
+
+Wang is one indivisible paper-faithful sequential CPU reference slice. Its secretome field,
+histories, relationships, intracellular dynamics, and exact accepted-copy order are part of that
+reference and cannot be substituted by a checkerboard algorithm while retaining the paper claim.
+Decision 0035 deliberately makes the assembled Wang backend profile unsupported. Reusable state
+and law families introduced by the slice remain subject to focused CPU/Metal/ROCm promotion when
+they stabilize, beginning with the algorithm-suitable G4 field-model gate.
 
 Each sketch MUST become an executable lowering fixture before its vertical slice is considered
 complete.
@@ -643,6 +769,11 @@ complete.
 
 Morpheus parity is construct-level semantic compatibility, not identical XML, GUI, plotting, or job
 workflow.
+
+Generic authoring parity additionally requires that nested Morpheus-style systems map to the same
+`ModelFragment` requirement/export boundary used by hand-authored Wang and CNV models. An adapter
+may construct fragments and bindings but cannot introduce adapter-only hierarchy, symbol lookup,
+or scheduling semantics.
 
 The stable initial kernel targets:
 
@@ -672,6 +803,11 @@ Before runtime implementation resumes broadly:
 - Every old contract has a recorded v2 disposition.
 - Every capability and Morpheus row maps to the kernel or derived adapter boundary.
 - The six lowering sketches above remain complete and unambiguous.
+- No selected-model or author name is a stable CorePotts or PottsToolkit export.
+- Complex Wang, CNV, and Morpheus fixtures use the same nested-fragment, named-requirement,
+  named-export, and one-root-plan semantics.
+- Fragment packaging versus equivalent explicit declarations has canonical fingerprint identity.
+- Private access, incompatible bindings, and hidden plan authorities reject before execution.
 - The candidate kernel API has canonicalization and conflict-validation tests.
 - Registry v1 prototype exports are removed, internalized, or deliberately retained only as
   registry v2 façades; they are not added to the frozen Phase 13 surface.
@@ -690,8 +826,8 @@ The first vertical slice MUST prove:
 - restart matches uninterrupted execution; and
 - unsupported backends reject before mutation.
 
-The CPU-reference evidence closes only the first half of this gate. Wortel opens Wang only after
-real-hardware Metal and ROCm evidence also proves:
+The CPU-reference evidence closed the first half of this gate. Real-hardware Metal and ROCm
+evidence closed the second half on 2026-07-25 by proving:
 
 - backend-resident activity state, accepted-copy updates, per-MCS decay, and neighborhood
   reductions without scalar host loops or hidden fallback;
@@ -704,10 +840,12 @@ real-hardware Metal and ROCm evidence also proves:
 
 ### Expansion gates
 
-Only after Wortel passes both its CPU reference and Metal/ROCm closure may Wang open the
-history/ODE/relationship/multirate breadth. Only after Wang passes the same CPU-plus-device gate may
-the first field model open broad field solver and exchange work. Every later stable execution
-capability follows the same reference-then-device promotion rule.
+Wortel has passed both its CPU reference and Metal/ROCm closure, and Wang G3-B has passed its
+sequential CPU gate. Decision 0035 retires G3-C assembled-model GPU qualification and opens G4 as
+the current gate for broader boundary, solver, and exchange work on CPU, Metal, and ROCm. Every
+later stable execution capability follows the same reference-then-device promotion rule, using an
+algorithm-suitable fixture rather than requiring every paper reference assembly to be a GPU
+workload.
 
 ## Phase 13 Freeze Impact
 

@@ -367,46 +367,201 @@ _property_write_target(component) = nothing
 _property_write_target(rule::PropertyUpdate) = (rule.source, rule.role)
 _property_write_target(rule::ShrinkDeath) = (rule.source, :target)
 
-function _fragment_diagnostics(fragment::ModelFragment, declared::Tuple)
-    diagnostics = ()
-    direct_identities = Tuple(semantic_identity(value) for value in fragment.declarations)
+function _fragment_exportable_identities(fragment::ModelFragment)
+    direct = Tuple(semantic_identity(value) for value in fragment.declarations
+        if !(value isa ModelFragment))
+    nested = Tuple(identity for value in fragment.declarations
+        if value isa ModelFragment for identity in
+            Tuple(semantic_identity(exported) for exported in value.exports))
+    return (direct..., nested...)
+end
+
+function _fragment_provider(declarations::Tuple, identity::SemanticName)
+    index = findfirst(value -> semantic_identity(value) == identity, declarations)
+    return index === nothing ? nothing : declarations[index]
+end
+
+function _fragment_export_contracts!(contracts::Dict{SemanticName, FragmentPortContract},
+        fragment::ModelFragment)
+    for declaration in _scoped_fragment_declarations(fragment)
+        declaration isa ModelFragment || continue
+        _fragment_export_contracts!(contracts, declaration)
+    end
     for exported in fragment.exports
-        exported in direct_identities || (diagnostics = (diagnostics..., Diagnostic(
+        contracts[semantic_identity(exported)] = exported.contract
+    end
+    return contracts
+end
+
+_fragment_export_contracts!(contracts, ::Any) = contracts
+
+function _fragment_diagnostics(fragment::ModelFragment, declared::Tuple,
+        declarations::Tuple,
+        export_contracts::Dict{SemanticName, FragmentPortContract})
+    diagnostics = ()
+    exportable = _fragment_exportable_identities(fragment)
+    for exported in fragment.exports
+        identity = semantic_identity(exported)
+        identity in exportable || (diagnostics = (diagnostics..., Diagnostic(
             :error, :unknown_fragment_export,
-            "fragment exports must name one of its direct declarations";
-            identity = fragment.name, related = (exported,), fragment = fragment.name,
-            correction = "remove the export or add a declaration with that identity"),))
+            "fragment exports must name a direct declaration or a nested-fragment export";
+            identity = fragment.name, related = (exported.name, identity),
+            fragment = fragment.name,
+            correction = "remove the export or export the declaration from the nested fragment"),))
     end
     for requirement in fragment.requirements
-        if requirement isa AbstractFragmentRole
+        reference = requirement.reference
+        identity = semantic_identity(requirement)
+        if !requirement.satisfied || reference isa AbstractFragmentRole ||
+                reference === nothing
             diagnostics = (diagnostics..., Diagnostic(
                 :error, :unresolved_fragment_role,
                 "fragment has an unbound typed requirement";
-                identity = fragment.name, related = (requirement,), fragment = fragment.name,
+                identity = fragment.name,
+                related = (requirement.name, requirement.contract),
+                fragment = fragment.name,
                 correction = "bind the role explicitly before constructing a problem"))
-        elseif requirement ∉ declared
+        elseif identity ∉ declared
             diagnostics = (diagnostics..., Diagnostic(
                 :error, :unsatisfied_fragment_requirement,
                 "fragment requirement is not provided by the composed model";
-                identity = fragment.name, related = (requirement,), fragment = fragment.name,
+                identity = fragment.name, related = (requirement.name, identity),
+                fragment = fragment.name,
                 correction = "compose a provider for the required identity"))
+        else
+            provider = _fragment_provider(declarations, identity)
+            provider_contract = get(export_contracts, identity,
+                provider === nothing ? requirement.contract :
+                fragment_port_contract(provider))
+            provider === nothing || _port_contract_accepts(requirement.contract,
+                provider_contract) ||
+                (diagnostics = (diagnostics..., Diagnostic(
+                    :error, :fragment_requirement_contract_mismatch,
+                    "fragment requirement provider does not satisfy its typed port contract";
+                    identity = fragment.name,
+                    related = (requirement.name, requirement.contract,
+                        provider_contract),
+                    fragment = fragment.name,
+                    correction = "bind a provider with matching category, owner, schema, units, lifecycle, capabilities, and backends"),))
         end
     end
+    any(value -> value isa CorePotts.MCSPlan, fragment.declarations) &&
+        (diagnostics = (diagnostics..., Diagnostic(
+            :error, :fragment_local_execution_plan,
+            "fragments may export operations but cannot own an execution plan";
+            identity = fragment.name, fragment = fragment.name,
+            correction = "move the plan to the root model and reference fragment exports"),))
     for declaration in _scoped_fragment_declarations(fragment)
         declaration isa ModelFragment || continue
-        diagnostics = (diagnostics..., _fragment_diagnostics(declaration, declared)...)
+        diagnostics = (diagnostics...,
+            _fragment_diagnostics(declaration, declared, declarations,
+                export_contracts)...)
     end
     return diagnostics
 end
 
-_fragment_diagnostics(declaration, declared::Tuple) = ()
+_fragment_diagnostics(declaration, declared::Tuple, declarations::Tuple,
+    export_contracts::Dict{SemanticName, FragmentPortContract}) = ()
+
+function _fragment_public_private_identities(fragment::ModelFragment)
+    exported = Set(semantic_identity(value) for value in fragment.exports)
+    private = Set{SemanticName}()
+    for declaration in fragment.declarations
+        if declaration isa ModelFragment
+            child_public, child_private =
+                _fragment_public_private_identities(declaration)
+            union!(private, child_private)
+            for identity in child_public
+                identity in exported || push!(private, identity)
+            end
+        else
+            identity = semantic_identity(declaration)
+            identity in exported || push!(private, identity)
+        end
+    end
+    return exported, private
+end
+
+_fragment_public_private_identities(::Any) =
+    (Set{SemanticName}(), Set{SemanticName}())
+
+_authoring_scheduled_process(entry::CorePotts.ScheduledSystem) = entry.process
+_authoring_scheduled_process(entry::CorePotts.ScheduledEvent) = entry.event
+_authoring_scheduled_process(entry::CorePotts.ScheduledProcess) = entry.process
+_authoring_scheduled_process(entry) = nothing
+
+function _plan_reference_identities(plan::CorePotts.MCSPlan)
+    references = SemanticName[]
+    if plan.timeline === nothing
+        for entry in plan.entries
+            if entry isa CorePotts.PottsAttempts
+                append!(references,
+                    (semantic_identity(effect) for effect in entry.on_accept))
+            elseif entry isa CorePotts.CoupledPhase
+                append!(references, (semantic_identity(
+                    CorePotts.invocation_process(invocation))
+                    for invocation in entry.invocations))
+            end
+        end
+    else
+        for entry in plan.timeline.entries
+            process = _authoring_scheduled_process(entry)
+            process === nothing || push!(references, semantic_identity(process))
+        end
+    end
+    return Tuple(references)
+end
+
+function _root_plan_diagnostics(model::PottsModel, declarations::Tuple,
+        components::Tuple)
+    plans = Tuple(value for value in components if value isa CorePotts.MCSPlan)
+    diagnostics = ()
+    length(plans) <= 1 || (diagnostics = (diagnostics..., Diagnostic(
+        :error, :multiple_root_execution_plans,
+        "a composed model may contain at most one root MCSPlan";
+        related = (length(plans),),
+        correction = "merge all explicit stages into one globally ordered root plan"),))
+    isempty(plans) && return diagnostics
+    length(plans) == 1 || return diagnostics
+
+    public = Set{SemanticName}()
+    private = Set{SemanticName}()
+    for declaration in model.declarations
+        visible, hidden = _fragment_public_private_identities(declaration)
+        union!(public, visible)
+        union!(private, hidden)
+    end
+    declared = Set(semantic_identity(value) for value in declarations)
+    for reference in _plan_reference_identities(only(plans))
+        if reference in private && !(reference in public)
+            diagnostics = (diagnostics..., Diagnostic(
+                :error, :private_fragment_reference,
+                "the root plan references a fragment-private operation";
+                identity = reference,
+                correction = "name and export the operation from its fragment before scheduling it"))
+        elseif !(reference in declared)
+            diagnostics = (diagnostics..., Diagnostic(
+                :error, :unresolved_plan_reference,
+                "the root plan references an operation absent from the canonical model";
+                identity = reference,
+                correction = "compose the provider fragment and reference one of its named exports"))
+        end
+    end
+    return diagnostics
+end
 
 function _composition_diagnostics(model::PottsModel, declarations::Tuple,
         components::Tuple)
     diagnostics = ()
     declared = Tuple(semantic_identity(value) for value in declarations)
+    export_contracts = Dict{SemanticName, FragmentPortContract}()
     for declaration in model.declarations
-        diagnostics = (diagnostics..., _fragment_diagnostics(declaration, declared)...)
+        _fragment_export_contracts!(export_contracts, declaration)
+    end
+    for declaration in model.declarations
+        diagnostics = (diagnostics...,
+            _fragment_diagnostics(declaration, declared, declarations,
+                export_contracts)...)
     end
     targets = Tuple(filter(value -> !isnothing(value),
         map(_property_write_target, components)))
@@ -419,6 +574,8 @@ function _composition_diagnostics(model::PottsModel, declarations::Tuple,
             identity = first(writers), related = (target, writers...),
             correction = "retain one writer or place an explicit combination law between them"),))
     end
+    diagnostics = (diagnostics...,
+        _root_plan_diagnostics(model, declarations, components)...)
     return diagnostics
 end
 
@@ -794,6 +951,56 @@ _canonical_write(io::IO, value::CellProperty) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::ClosedPropertyInterval) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::CorePotts.FixedMechanicalNoise) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::CorePotts.AxisFieldBoundary) = _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ElasticLinkParameters) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.AnyFiniteCellPair) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.RNGNamespaceIdentity) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ReactionDiffusion) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.FixedStep) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ExplicitEuler) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ConstantConcentration) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.Uptake) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ByCellVolume) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.OneMCS) =
+    _canonical_fields(io, value)
+function _canonical_write(
+        io::IO, value::CorePotts.StaticCartesianRelation)
+    version = CorePotts.canonicalization_version(
+        value)
+    data = (
+        role = Symbol(nameof(typeof(value.role))),
+        offsets = Tuple(Tuple(offset)
+            for offset in value.offsets),
+        weights = Tuple(value.weights),
+        opposite = Tuple(value.opposite),
+        symmetric = value.symmetric,
+        version = (
+            version.major,
+            version.minor,
+            version.patch),
+    )
+    _canonical_open(io, value)
+    _canonical_write(io, data)
+    return _canonical_close(io)
+end
 
 function _canonical_write(io::IO, value::CorePotts.NumericalPolicy)
     _canonical_open(io, value)

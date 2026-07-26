@@ -1,0 +1,179 @@
+schema_version = "1.1.0"
+gate = "G3-B"
+model_id = "wang-2025-collective-tumor-migration"
+contract = "phase-14-g3b-entry-contract-v1.toml"
+contract_revision = 7
+overall_status = "passed"
+updated_at = "2026-07-25"
+manifest = "design/evidence/phase-14/g3b-closure/manifest-v1.toml"
+completion_rule = "overall_status may become passed in the clean tested implementation commit only when every requirement and process-evidence row is passed; the later evidence-only attestation adds the hash-complete manifest proving every registered command/source-study/proof, and scripts/check_phase14_g3b_closure.jl then passes from a clean checkout"
+
+[[requirement]]
+id = "source-provenance-lock"
+status = "passed"
+evidence = ["phase-14-model-source-records-v1.toml", "phase-14-source-closure-v1.toml", "phase-14-g3b-potts-fpp-source-study.md", "phase-14-g3b-roadrunner-source-study.md", "phase-14-g3b-field-source-study.md"]
+proof_ids = ["requirement:source-provenance-lock"]
+remaining = []
+
+[[requirement]]
+id = "canonical-wang-assembly"
+status = "passed"
+evidence = ["phase-14-g3a-generic-authoring-evidence.md", "phase-14-g3b-generality-implementation-audit.md", "phase-14-g3b-entry-packet.md"]
+proof_ids = ["requirement:canonical-wang-assembly"]
+remaining = []
+
+[[requirement]]
+id = "generic-api-and-composability"
+status = "passed"
+evidence = ["phase-14-g3a-generic-authoring-evidence.md", "phase-14-generic-authoring-simplification-audit.md", "phase-14-g3b-generality-implementation-audit.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:generic-api-and-composability"]
+remaining = []
+
+[[requirement]]
+id = "sequential-cpu-conformance"
+status = "passed"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:sequential-cpu-conformance"]
+remaining = []
+
+[[requirement]]
+id = "order-and-boundaries"
+status = "passed"
+evidence = ["phase-14-wang-order-audit.md", "phase-14-wang-order-oracle-v1.toml", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-potts-fpp-source-study.md", "phase-14-g3b-field-source-study.md"]
+proof_ids = ["requirement:order-and-boundaries"]
+remaining = []
+
+[[requirement]]
+id = "transaction-and-failure-atomicity"
+status = "passed"
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md", "phase-14-g3b-generality-implementation-audit.md"]
+proof_ids = ["requirement:transaction-and-failure-atomicity"]
+remaining = []
+
+[[requirement]]
+id = "completed-mcs-restart"
+status = "passed"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:completed-mcs-restart"]
+remaining = []
+
+[[requirement]]
+id = "steady-state-resource-contract"
+status = "passed"
+evidence = ["phase-14-g3b-history-evidence.md", "phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:steady-state-resource-contract"]
+remaining = []
+
+[[requirement]]
+id = "portable-abi-readiness"
+status = "passed"
+evidence = ["phase-14-g3b-field-evidence.md", "phase-14-g3b-exchange-evidence.md", "phase-14-g3b-intracellular-evidence.md", "phase-14-g3b-relationship-evidence.md", "phase-14-g3b-polarity-force-evidence.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:portable-abi-readiness"]
+remaining = []
+
+[[requirement]]
+id = "source-semantic-study"
+status = "passed"
+evidence = ["phase-14-g3b-entry-contract-v1.toml", "phase-14-wang-order-audit.md", "phase-14-g3b-potts-fpp-source-study.md", "phase-14-g3b-roadrunner-source-study.md", "phase-14-g3b-field-source-study.md", "phase-14-g3b-focal-topology-source-audit.md", "phase-14-g3b-polarity-force-source-audit.md", "phase-14-g3b-observation-source-audit.md"]
+proof_ids = ["requirement:source-semantic-study"]
+remaining = []
+
+[[requirement]]
+id = "observation-schema"
+status = "passed"
+evidence = ["phase-14-g3b-entry-contract-v1.toml", "phase-14-g3b-observation-source-audit.md", "phase-14-g3b-observation-evidence.md"]
+proof_ids = ["requirement:observation-schema"]
+remaining = []
+
+[[requirement]]
+id = "regression-and-api-freeze"
+status = "passed"
+evidence = ["phase-14-g3a-generic-authoring-evidence.md", "phase-13-api-inventory.toml", "phase-14-g3b-generality-implementation-audit.md"]
+proof_ids = ["requirement:regression-and-api-freeze"]
+remaining = []
+
+[[requirement]]
+id = "evidence-reproducibility"
+status = "passed"
+evidence = ["phase-14-g3b-closure-spec-audit.md", "phase-14-g3b-closure-ledger-v1.toml"]
+proof_ids = ["requirement:evidence-reproducibility"]
+remaining = []
+
+[process_matrix]
+required_facets = [
+    "generic-declaration",
+    "source-traceability",
+    "isolated-sequential-cpu",
+    "assembled-sequential-cpu",
+    "portable-execution-view",
+    "failure-and-overflow",
+    "persistence-and-restart",
+    "steady-state-allocation",
+    "order-and-boundary-visibility",
+]
+
+[[process_evidence]]
+id = "potts_metropolis"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "secretome_field_advance"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "centroid_sample"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "self_polarity_from_history"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "secretome_signal_exchange"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "intracellular_advance"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "focal_parameter_retune"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "neighbor_polarity_alignment"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "protrusion_force_update"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "relationship_lifecycle_cleanup"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []
+
+[[process_evidence]]
+id = "wang_observations"
+status = "passed"
+passed_facets = ["generic-declaration", "source-traceability", "isolated-sequential-cpu", "assembled-sequential-cpu", "portable-execution-view", "failure-and-overflow", "persistence-and-restart", "steady-state-allocation", "order-and-boundary-visibility"]
+remaining_facets = []

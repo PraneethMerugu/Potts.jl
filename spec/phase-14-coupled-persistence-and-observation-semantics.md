@@ -151,7 +151,11 @@ scientific bounds, realized capacity, and graph schema. Derived adjacency indexe
 rebuilt.
 
 `evolving-field` stores logical field values in canonical axis order, field descriptor identity,
-semantic time, precision, and any authoritative accumulated forcing.
+semantic time, precision, and any authoritative accumulated forcing. Physical ping-pong/staging
+buffers, active-buffer indices whose normalization cannot change future arithmetic, internal
+substep counters, per-site exchange contributions, and reduction scratch are workspace and are
+omitted. Wang has no authoritative accumulated forcing: its Medium reservoir is a post-substep
+constraint and its uptake is an immediate atomic field mutation.
 
 `cell-dynamics` and `field-dynamics` store process clocks and only the numerical stepping state
 required by the claimed continuation profile. The stable fixed-step profile has no hidden solver

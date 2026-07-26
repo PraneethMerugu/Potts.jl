@@ -30,12 +30,12 @@ For one experienced contributor, the expected implementation effort is approxima
 | --- | ---: | --- |
 | Common device state/workspace substrate | 1–2 weeks | type-stable adaptation across every state family |
 | Wortel Act Metal/ROCm closure | 1–2 weeks | atomic accepted-copy coupling and Metal numerical profile |
-| Wang history/ODE/relationship/multirate slice | 2–3 weeks | bounded dynamic graph and deterministic transactions |
-| First field model | 2–3 weeks | stencils, reductions, splitting, and mass balance |
+| Wang history/ODE/relationship/multirate/secretome slice | 3–5 weeks | bounded dynamic graph, field kernels, and deterministic transactions |
+| First additional field model | 1–2 weeks | broadening Wang's field substrate to new boundaries, splitting, and mass balance |
 | Remaining lifecycle/event/mapping breadth | 2–4 weeks | bounded queues, conflicts, and deterministic reductions |
 | Hardware qualification and performance closure | 1–2 weeks, overlapping | real-hardware availability and backend compiler defects |
 
-The realistic total is **8–12 engineer-weeks**, or roughly **6–9 calendar weeks** with parallel
+The realistic total is **9–13 engineer-weeks**, or roughly **7–10 calendar weeks** with parallel
 Metal/ROCm qualification and prompt hardware access. The Act slice alone is moderate: about
 one week for a first correct device path and another several days for qualification and evidence.
 Dynamic relationships and event/lifecycle queues dominate uncertainty.
@@ -86,6 +86,8 @@ trajectories use preregistered local, invariant, and statistical comparisons.
 Deliver:
 
 - `GPUQualified`/`GPURequiredForPromotion` backend dispositions derived from `SemanticModel`;
+- transitive backend requirements derived after generic `ModelFragment` requirement/export
+  resolution, with no fragment-local override or fallback;
 - capability reports at state/law/storage/backend granularity;
 - residency, allocation, synchronization, and transfer instrumentation;
 - reusable CPU/Metal/ROCm test matrix and artifact schema;
@@ -95,6 +97,8 @@ Deliver:
 Gate:
 
 - a deliberately unsupported law fails before mutation;
+- equivalent explicit-leaf and fragment-packaged models produce identical backend preflight and
+  qualification requirements;
 - an advertised law cannot pass without both hardware evidence records; and
 - an uncoupled Phase 13 model remains byte- and result-identical.
 
@@ -140,35 +144,95 @@ Gate:
 
 Only after G2 passes may Wang implementation begin.
 
-### G3 — Wang GPU closure
+### G3 — Wang sequential CPU reference closure
+
+G3 includes every execution capability required by the paper-faithful Wang sequential CPU
+reference. Wang's secretome field is part of that reference. Reusable laws remain designed for
+device adaptation, but Decision 0035 retires promotion of the unchanged sequential assembly as a
+Metal/ROCm workload.
+
+G3 is executed through three non-substitutable gates:
+
+- **G3-A — generic authoring and lowering: complete.** Implement Decision 0033 named typed
+  fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
+  backend requirements, and the generic Wang lowering/order fixture. Evidence:
+  [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
+- **G3-B — Wang sequential CPU reference: complete.** The
+  [G3-B entry packet](phase-14-g3b-entry-packet.md) and
+  [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the
+  source-backed state/process inventory, device-ready storage ABI, numerical profiles, conformance
+  matrix, three source-semantic studies, and thirteen-row fail-closed
+  [closure ledger](phase-14-g3b-closure-ledger-v1.toml). Every requirement and process-evidence
+  row is passed, the assembled 11-process model closes exact/invariant/restart conformance, and the
+  evidence attestation binds the clean implementation commit `a82b0c4`. This does not qualify a
+  GPU backend.
+- **G3-C — assembled Wang Metal/ROCm qualification: retired.** Decision 0035 records that the
+  paper-faithful ordered attempt stream is an unsuitable GPU release gate. Its harness, device-code
+  capture, CI jobs, ledger, and closure claim are removed. This is an owner disposition, not a
+  pass or failure.
 
 Deliver:
 
 - device cell state and bounded ring histories;
 - fixed-step Euler/Heun/RK4 kernels for the admitted per-cell systems;
 - synchronous rule and mapping kernels;
+- ordinary CPU and backend-resident Metal/ROCm evolving-field state and preallocated solver
+  workspaces for the Wang two-dimensional periodic secretome profile;
+- one authoritative logical 256×256 field plus two same-shape staging grids so all five internal
+  substeps preserve process failure atomicity;
+- the source-compatible scaled field step: diffusion followed by medium constant-concentration
+  enforcement in every substep;
+- a root-plan-resolved inactive/reset/calibrate/publish exchange mode table, typed cross-domain
+  field/cell/global writes, and deterministic secretome uptake/calibration reductions that publish
+  before the same-source-MCS ODE;
 - bounded relationship graph in canonical structure-of-arrays form;
-- deterministic request generation, conflict resolution, and commit;
+- deterministic focal-topology request generation plus accepted-copy conflict resolution and
+  commit with Potts ownership;
+- ten-MCS relationship retuning distinct from accepted-copy topology mutation;
 - device-safe endpoint retirement and lifecycle cleanup;
-- exact multirate launch schedule with device-resident process state; and
+- exact Potts/field/history/uptake/ODE/focal/alignment/force launch schedule with device-resident
+  process state; and
 - bounded observation reducers.
 
 Gate:
 
-- analytic ODE/history fixtures on all backends;
-- relationship create/remove/retune and capacity truth tables;
-- lifecycle generation/reuse rejection;
-- same-time schedule ordering;
-- restart from every declared stable boundary;
-- no unobserved transfers; and
-- Wang bounded model smoke and performance profiles on Metal and ROCm.
+- analytic ODE/history fixtures on sequential CPU, Metal, and ROCm;
+- periodic diffusion, per-substep constant concentration, uptake, calibration, and field-balance
+  fixtures on sequential CPU, Metal, and ROCm;
+- relationship create/remove/retune, accepted-copy visibility, and capacity truth tables on all
+  three backends;
+- lifecycle generation/reuse rejection on all three backends;
+- exact source-order, source-MCS-to-target-MCS `k -> k+1` mapping, and source 120/210/211
+  (target 121/211/212) visibility fixtures on all three backends;
+- restart from completed-MCS stable boundaries and rejection of internal-substep/mid-phase capture
+  on all three backends;
+- no unobserved transfer, scalar host loop, host callback, or host fallback on either GPU;
+- device-code, allocation, synchronization, transfer, and memory evidence on real Metal and ROCm;
+  and
+- Wang bounded-model correctness and performance profiles on sequential CPU.
 
-### G4 — Field-model GPU closure
+G3-B may be called complete only when `scripts/check_phase14_g3b_closure.jl` passes on the exact
+clean commit recorded by the evidence packet. The checker requires every registered closure row,
+including the complete 11-process assembly, all-process failure/allocation matrices, assembled
+  restart/order traces, bounded observation schema, three pinned source-semantic studies, and frozen
+regression/API evidence. KernelAbstractions CPU execution proves portable shape only; it does not
+create an assembled Wang GPU claim.
+
+G4 opens after the passed G3-B reference and Decision 0035 disposition. The generic primitives do
+not inherit a GPU claim from CPU correctness; each stable G4 law/storage pair still requires real
+Metal and ROCm evidence without host fallback.
+
+### G4 — General field-model CPU/Metal/ROCm closure
+
+G4 reuses the field state, periodic stencil, constant-concentration, uptake, and split-order
+substrate exercised by the Wang CPU reference. It qualifies and broadens those reusable semantics
+for an algorithm-suitable field model on CPU, Metal, and ROCm; it does not retroactively create an
+assembled Wang GPU claim.
 
 Deliver:
 
-- device-resident evolving fields and solver workspaces;
-- boundary-aware diffusion/reaction stencils;
+- reusable backend-resident evolving fields and solver workspaces beyond the Wang profile;
+- additional boundary-aware diffusion/reaction stencils;
 - deterministic or explicitly qualified secretion/uptake reductions;
 - cell/field exchange kernels;
 - exact split-order execution;
@@ -177,12 +241,13 @@ Deliver:
 
 Gate:
 
-- manufactured solutions and analytic decay/diffusion;
-- mass/source/sink balance;
-- periodic, no-flux, and admitted fixed boundary fixtures;
-- split-order, overlap, and empty-domain truth tables;
-- checkpoint/restart; and
-- bounded selected-field-model smoke and performance profiles on both GPUs.
+- manufactured solutions and analytic decay/diffusion on sequential CPU, Metal, and ROCm;
+- mass/source/sink balance on all three backends;
+- periodic, no-flux, and admitted fixed boundary fixtures on all three backends;
+- split-order, overlap, and empty-domain truth tables on all three backends;
+- checkpoint/restart on all three backends; and
+- bounded selected-field-model correctness and performance profiles on sequential CPU, Metal, and
+  ROCm.
 
 ### G5 — Remaining selected-model capabilities
 
@@ -200,7 +265,7 @@ Experimental unless separately promoted through the same CPU/Metal/ROCm process.
 
 Gate:
 
-- source-backed truth tables and Morpheus/foreign-runtime microfixtures;
+- source-backed truth tables and Morpheus/source-semantic microfixtures;
 - bounded-capacity overflow diagnostics before corruption;
 - deterministic conflict ordering;
 - lifecycle and queue continuation; and

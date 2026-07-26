@@ -1,0 +1,793 @@
+schema_version = "1.6.0"
+status = "accepted-implementation-entry"
+accepted_at = "2026-07-25"
+revised_at = "2026-07-25"
+revision = 7
+model_id = "wang-2025-collective-tumor-migration"
+gate = "G3-B"
+scope = "source-backed sequential CPU reference through backend-adaptable canonical state, processes, workspaces, and one root plan"
+semantic_authority = "../../spec/phase-14-semantic-kernel.md"
+gpu_authority = "../../spec/decisions/0032-phase-14-gpu-native-promotion.md"
+authoring_authority = "../../spec/decisions/0033-phase-14-generic-hierarchical-authoring.md"
+source_record = "phase-14-model-source-records-v1.toml"
+order_authority = "phase-14-wang-order-oracle-v1.toml"
+source_revision = "60ebcf013aafefdff39ebe566114ee79f2a6e54d"
+source_runtime = "CompuCell3D 4.2.5"
+paper_doi = "10.1016/j.bpj.2025.04.010"
+implementation_rule = "No Wang-specific runtime hierarchy or public paper-specific API. Generic state and process declarations lower to one canonical model; physical storage is backend-adapted before execution."
+
+[entry_decision]
+architecture_interview_required = false
+implementation_may_start = true
+open_source_semantic_studies_block_generic_primitives = false
+open_source_semantic_studies_block_complete_wang_claim = true
+cpu_oracle_is_architectural_authority = false
+cpu_oracle_purpose = "deterministic semantic and numerical reference for the identical canonical model later qualified on Metal and ROCm"
+internal_substeps_are_stable_boundaries = false
+only_completed_mcs_is_checkpointable = true
+exchange_mode_must_be_plan_resolved = true
+cross_domain_writes_must_publish_as_one_logical_transaction = true
+
+[source_time_mapping]
+rule = "CompuCell3D source MCS k maps to normalized target MCS k+1."
+reason = "Potts.jl MCS 0 is the finalized initial condition, while CompuCell3D 4.2.5 executes a real Potts/field/Python iteration labelled MCS 0."
+source_first = 0
+source_last = 499
+target_first = 1
+target_last = 500
+source_label_is_clock = false
+source_label_derivation = "source_mcs = completed_target_mcs - 1"
+initialization_rule = "Only the registered source start() hooks, including the one RoadRunner advance, occur before finalized Potts.jl MCS 0. No source step() Potts attempt, field substep, history sample, exchange, retune, or observation is hidden in initialization."
+fingerprint_rule = "Schedules fingerprint normalized target MCS ranges; paper observations may additionally publish the exactly derived source_mcs label."
+
+[profiles.source_faithful_cpu]
+floating_precision = "mixed source-compatible: Float32 field and source-runtime-equivalent Float64 cell algebra/ODE oracle"
+purpose = "source-semantic fidelity and exact/invariant/restart conformance without requiring new external CC3D execution"
+backend = "sequential CPU"
+field_arithmetic = "Float32 evaluation derived from the pinned Wang XML/Python and CC3D 4.2.5 DiffusionSolverFE source study, checked by controlled exact/invariant fixtures under the registered source-local tolerance"
+
+[profiles.portable]
+floating_precision = "Float32"
+backends = ["CPU", "Metal", "ROCm"]
+purpose = "one portable numerical profile used for cross-backend conformance and G3-C qualification"
+field_arithmetic = "for each canonical (x,y): pair_x=left+right; pair_y=down+up; lap=(pair_x+pair_y)-4.0f0*center; diffused=muladd(0.2f0,lap,center); output=is_medium ? 1.0f0 : diffused. Every operation is Float32; fast-math reassociation and alternative contraction are forbidden."
+same_backend_replay = "bitwise for schedule, ownership, reset values, reduction topology, and status; floating results follow the registered deterministic reduction tree"
+cross_backend_comparison = "preregistered tolerance and invariant comparison, not unconditional bitwise equality"
+
+[numerical_tolerances]
+field_local_atol = 9.5367431640625e-7
+field_local_rtol = 9.5367431640625e-7
+uptake_local_atol = 3.814697265625e-6
+uptake_local_rtol = 3.814697265625e-6
+balance_rule = "absolute error <= 64*eps(Float32)*max(1, reference mass)"
+exact_quantities = ["integer schedules", "periodic index mapping", "Medium overwrite value 1.0f0", "uptake cap 1.0f0 for exact branch fixtures", "cell slot/generation identity", "status and commit epoch"]
+registration_rule = "Every comparison declares the reference runtime, arithmetic profile, observable, absolute/relative rule, and aggregation rule before the first paper-scale run. A changed tolerance creates a new evidence revision and invalidates no earlier raw artifact."
+study_rule = "Controlled source-derived microfixtures are generated from non-paper-scale inputs. Potts.jl does not choose tolerances by inspecting Wang paper-scale outputs, and no new external CC3D execution is required."
+
+[capacities]
+cell_capacity = "construction-time parameter, fixed before execution"
+history_capacity = 5
+relationship_maximum_degree = 4
+relationship_capacity = "derived and preallocated from cell_capacity * maximum_degree / 2 plus explicit slack policy"
+relationship_degree_rule = "The Wang assembly admits one finite endpoint type, so its source per-type-pair maximum four is exactly a total external-relationship degree cap of four. A future multi-type CC3D-parity claim requires an explicit typed per-pair degree policy and is not implied by this G3-B component."
+observation_capacity = "A bounded cell-table workspace is indexed by persistent one-based cell slot and therefore has an explicit cell_capacity, not an active-row count. Coordinate columns are derived from the compiled moment dimension. Geometry snapshot capacities separately bound lattice sites and cell slots."
+contact_adjacency_capacity = "exactly cell_capacity * cld(cell_capacity, 32) UInt32 words; one bit per possible finite-cell pair in an ephemeral process workspace"
+packed_failure_capacity = "cell_capacity must not exceed 2^28-2; four low UInt32 bits encode the failure class and the remaining high bits encode the canonical one-based cell identity"
+overflow_rule = "deterministic failure status; never allocate, drop, or reorder silently"
+
+[genericity]
+public_api_rule = "No exported Wang-named runtime type, no public positional mega-constructor, and no paper-specific branch in a generic process. The published-model assembly is a declarative docs/example artifact lowered through generic state, process, relation, trigger, coupling, observation, and plan protocols."
+lowered_api_rule = "Canonical lowered tuples, execution views, workspaces, and transaction objects are expert compiler/runtime surfaces and are never required positional arguments of the user-facing model constructor."
+reuse_rule = "Every new G3-B runtime primitive must pass one non-Wang microassembly proving that its configuration, state ownership, scheduling, and coupling semantics are independently reusable."
+coupling_rule = "Intracellular, field, relationship, and observation couplings use typed named bindings and declared read/write sets. They may not capture a host closure, foreign solver object, process-local scheduler, or runtime symbol lookup."
+api_freeze_rule = "G3-B may add only generic names justified by the Phase 14 public-API registry. The final API diff must contain no Wang identifier and no constructor whose required positional arity increased because of the paper assembly."
+
+[accepted_copy_transaction]
+binding_rule = "Construction preflight requires exactly one transaction effect for every stateful proposal component identity, forbids duplicate effect identities, rejects orphan required effects, proves the effect carries identical scientific configuration to the component, and proves its execution arrays alias the authoritative coupled state before any kernel launch."
+proposal_rule = "Focal topology selection and elastic delta-H read only the pre-attempt scientific snapshot and bounded attempt workspace. Proposal evaluation may write only attempt-local candidate/status fields."
+rejection_rule = "Rejected, non-actionable, and no-op proposals publish no relationship mutation and no relationship publication epoch."
+preflight_rule = "Before the first authoritative write on an accepted proposal, validate endpoint activity/generation, duplicate and degree rules, relationship capacity, requested removals, and every Potts/geometry/tracker invariant that can fail."
+commit_rule = "After successful preflight, the accepted-copy commit is infallible: ownership, geometry trackers, accepted-copy site effects, relationship creation/removal, and their logical publication identity become visible together. No observer, checkpoint, or later process can see a mixed Potts/relationship state."
+failure_rule = "A preflight or backend-status failure leaves ownership, geometry, trackers, site state, relationships, semantic MCS, and publication epochs byte-identical to the pre-attempt snapshot. Ordinary Metropolis rejection is not a transaction failure."
+attempt_identity = "Every staged topology decision is tagged by normalized target MCS and zero-based attempt ordinal; stale attempt-local candidates are ignored deterministically."
+
+[contact_neighbor_normalization]
+authority = "immutable post-Potts ownership snapshot plus the alignment process's declared StaticCartesianRelation"
+state_rule = "Contact adjacency is ephemeral derived process workspace, not authoritative model state, an accepted-copy tracker, or checkpoint payload. No process consumes contact adjacency between Potts completion and alignment, so deriving it at alignment entry is exactly equivalent to incrementally maintaining a graph."
+membership_rule = "Two distinct active finite cells are adjacent iff at least one mutable neighbor pair under the declared relation crosses their ownership boundary. Medium/self pairs are excluded, common contact measure is ignored, duplicate faces collapse, and the derived relation is symmetric."
+storage_rule = "Bit-packed UInt32 words are laid out as cld(cell_capacity,32) words for each cell. Idempotent integer atomic OR materializes adjacency; no floating atomic, variable-length collection, hidden host graph, or capacity-dependent allocation is permitted."
+reduction_rule = "Each cell scans words and set bits in ascending neighbor identity, accumulating every finite neighbor exactly once from one immutable polarity snapshot. All neighbor means complete before any aligned polarity is published."
+persistence_rule = "The adjacency workspace is cleared and rebuilt for every due alignment phase, adapts with the compiled process, is excluded from semantic checkpoints and fingerprints, and is never observable as scientific state."
+
+[randomness.portable_focal_topology]
+contract = "Philox4x32x10V1"
+namespace = "wang/focal-topology/neighbor-permutation"
+distribution = "small_permutation! Fisher-Yates over the exact live-oracle NeighborOrder-3 direction table"
+address = "AuxiliaryEvolutionStream; normalized target MCS; subround 0; collision-checked namespace operation; GlobalEntity; entity=zero-based Potts attempt ordinal; generation 0; invocation 0; draw 0"
+draw_rule = "The addressed permutation is evaluated only after the finite gaining endpoint passes registered-type and total-degree prechecks. Because the RNG is addressed, skipped scans do not shift any other proposal, acceptance, initialization, or topology result."
+replay_rule = "Same seed, canonical plan, normalized MCS, and attempt ordinal reproduce the same permutation independently of observation, launch geometry, backend scheduling, rejection, or earlier capacity outcomes."
+source_comparison_rule = "Portable execution must match the eligible set, first-eligible rule, degree/capacity behavior, and preregistered selection-distribution tests. It does not claim bitwise replay of CC3D 4.2.5 std::random_shuffle."
+
+[portable_abi]
+single_tree_rule = "The same canonical model, state identities, logical layouts, process order, trigger modes, transactions, and observation schemas are used by sequential CPU and portable profiles; backend adaptation changes physical storage/execution views only."
+storage_rule = "Every state, workspace, status buffer, transaction buffer, process view, relation descriptor, RNG namespace, and observation reducer adapts as one tree to CPU, Metal, and ROCm storage without host-owned array aliases."
+dispatch_rule = "Portable process execution is extended by typed method dispatch over generic process declarations and execution views. The central executor contains no selected-paper process list; unsupported law, boundary, arithmetic, or backend combinations fail capability preflight before execution."
+kernel_rule = "Portable process execution uses descriptor-free KernelAbstractions kernels or the already qualified ordered Potts kernel. Device code contains no Julia heap allocation, exception path, dynamic dispatch, host closure, foreign solver, dictionary, variable-length collection, scalar host loop, or runtime symbol lookup."
+launch_rule = "After construction, launch cardinality is a plan constant determined by process/substep/reduction topology, never by active cell, site, edge, or observation row count. No per-cell, per-edge, or per-attempt host launch loop is admissible."
+transfer_rule = "Unobserved target-MCS execution transfers no scientific field, cell, relationship, or observation payload to the host. Bounded failure/status scalars may synchronize at their declared boundary; status, requested observation publication, checkpoint serialization, and evidence instrumentation transfers are separately counted and may not conceal scientific payload movement."
+status_rule = "Cell-parallel process validation packs failure class and one-based cell identity into one UInt32 key and atomically selects the smallest key ordered first by ascending cell then class. Host synchronization decodes one internally consistent pair and cannot expose partially published state."
+promotion_lock = "G3-C must execute and qualify this exact ABI on real Metal and ROCm. A G3-C backend failure may repair backend plumbing but may not alter G3-B scientific semantics, logical storage, plan order, RNG addressing, launch topology, or publication boundaries without reopening G3-B."
+
+[observations]
+ordering = "Rows are ordered by ascending persistent cell identity, then slot generation; inactive slots are absent. Geometric ownership snapshots use canonical linear site order."
+envelope = "Every publication records normalized target MCS, exactly derived source_mcs, model fingerprint, profile identity, semantic seed, active row count, capacity, schema fingerprint, and publication epoch."
+generic_primitive_boundary = "The reusable bounded cell-table primitive accepts arbitrary typed named per-cell property bindings and a coordinate-name tuple whose arity exactly matches the compiled moment dimension. The reusable lossless ownership primitive preserves the full N-dimensional lattice shape and boundary metadata. Neither primitive contains a paper identity, source column list, source MCS trigger, or fixed 2D branch."
+capacity_semantics = "Cell-table capacity is the maximum representable persistent one-based cell slot, including inactive holes; active_row_count is a separate publication field. It is never described as a compact row-count bound. Snapshot site and cell capacities are independent declared bounds."
+paper_profile_boundary = "The exact two-dimensional x/y schema, fourteen source labels, and targets 91/271 are Wang declaration-layer configuration over the generic primitives, not generic runtime defaults."
+overflow = "Insufficient cell-slot or snapshot capacity is a deterministic pre-publication failure. No partial row set, truncated snapshot, allocation, or silent drop is permitted."
+restart = "Observation scheduling and publication epochs are checkpointed only at completed-MCS stable boundaries. A restarted run neither duplicates nor skips a declared publication."
+host_boundary = "Device reduction/packing remains backend-resident; only the explicitly requested bounded publication payload transfers to host at the declared observation boundary."
+
+[observations.per_cell_record]
+trigger = "normalized target MCS 122:500, carrying source labels 121:499"
+source_columns = ["cell_id", "x", "y", "x_self_polarity", "y_self_polarity", "a", "s", "rac", "f", "f_x", "f_y", "fpp", "f_coef", "p_frac"]
+derived_columns = ["target_mcs", "source_mcs", "cell_generation"]
+column_rule = "The fourteen source columns retain their exact spelling, meaning, and sign. Derived target/source time and generation are typed metadata and may not replace or rename a source column."
+
+[observations.geometry_snapshot]
+target_mcs = [91, 271]
+source_mcs = [90, 270]
+payload = "lossless canonical ownership/type lattice plus active persistent cell identity, slot, generation, type, and lattice metadata sufficient for later Phase 14.3 geometric feature extraction"
+deferred = "Geometric feature extraction, saved scaler/k-means/UMAP execution, classification, ensemble aggregation, and paper-figure comparison remain Phase 14.3."
+
+[[state]]
+id = "secretome"
+owner = "field"
+schema = "scalar concentration on a logical 256x256 square lattice; source provenance retains the singleton CC3D z extent 256x256x1"
+logical_type = "Float32"
+storage = "current"
+physical_layout = "one authoritative contiguous backend-resident Matrix{Float32}; two same-shape staging grids are workspace, not state"
+initialization = "zero at finalized Potts.jl MCS 0; target MCS 1/source MCS 0 performs the first five diffusion/reset substeps"
+lifecycle = "lattice lifetime; no division or death policy"
+persistence = ["authoritative field values", "semantic field time at completed MCS"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "fpp_polarity_force.xml DiffusionSolverFE/secretome"
+
+[[state]]
+id = "centroid_history"
+owner = "cell"
+schema = "two-component centroid sample"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "bounded-history"
+physical_layout = "bounded capacity-by-history-length matrix of fixed-size isbits vector samples, plus head[cell], count[cell], and generation[cell]; the sample dimension is generic and fixed by its element type"
+initialization = "sample post-Potts centroid once per MCS; no read before more than five real samples exist"
+lifecycle = "initialize active slot; reset on retirement or generation change; source target has no division"
+persistence = ["samples", "head", "count", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict x_list/y_list"
+
+[[state]]
+id = "self_polarity"
+owner = "cell"
+schema = "normalized two-component displacement and pre-normalization magnitude"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays x[cell], y[cell], magnitude[cell]"
+initialization = "zero"
+lifecycle = "zero on create; reset on retirement"
+persistence = ["x", "y", "magnitude", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "x_self_polarity, y_self_polarity, self_polarity"
+
+[[state]]
+id = "signal"
+owner = "cell"
+schema = "nonnegative scalar secretome input s"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays s[cell]"
+initialization = "zero"
+lifecycle = "zero on create and retirement"
+persistence = ["s", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['s'] and RR['s']"
+
+[[state]]
+id = "uptake_multiplier"
+owner = "global"
+schema = "one positive scalar calibration multiplier shared by every eligible cell"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "backend-resident one-element value plus initialized status"
+initialization = "unset status plus zero value"
+lifecycle = "model lifetime; no cell lifecycle policy"
+persistence = ["multiplier", "initialized status"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['multiply']; source writes the identical global value into every cell, so normalized state stores it once"
+
+[[state]]
+id = "intracellular_state"
+owner = "cell"
+schema = "rac dynamic species, constant a, mapped input s, and semantic ODE time"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays rac[cell], a[cell], time[cell]"
+initialization = "rac sampled uniformly on [0,30), a=1, s=0, followed by one source-equivalent 2880-time-unit advance before MCS 0"
+lifecycle = "initialize with semantic RNG namespace on create; reset on retirement"
+persistence = ["rac", "a", "time", "cell generation", "numerical method identity"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "Antimony RR model and OdeSteppable"
+
+[[state]]
+id = "focal_strength"
+owner = "cell"
+schema = "scalar focal-point spring strength"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays strength[cell]"
+initialization = "zero at finalized Potts.jl MCS 0; the first retune is target MCS 1/source MCS 0 after that target's Potts and ODE positions"
+lifecycle = "zero on create and retirement"
+persistence = ["strength", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "cell.dict['fpp']"
+
+[[state]]
+id = "focal_relationships"
+owner = "relationship"
+schema = "undirected generation-aware cell pair with strength, target length, and maximum length"
+logical_type = "integer endpoints/generations plus profile floating type payload"
+storage = "registered-specialized"
+physical_layout = "bounded canonical SoA: endpoint_a, generation_a, endpoint_b, generation_b, strength, target_length, maximum_length, active"
+initialization = "empty; accepted-copy topology follows the registered FocalPointPlasticity profile. A newly accepted link starts with strength 0, target length 0, and maximum length 100000 before the later source-mcs%10 retune."
+lifecycle = "remove stale endpoint generation before slot reuse"
+persistence = ["active edges", "canonical order", "payload", "endpoint generations", "capacity"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "FocalPointPlasticity Local plugin"
+
+[[state]]
+id = "motility_force"
+owner = "cell"
+schema = "two-component external-potential coefficient plus derived magnitude/coefficient/alignment fraction"
+logical_type = "Float64 source profile; Float32 portable profile"
+storage = "current"
+physical_layout = "structure-of-arrays x[cell], y[cell], magnitude[cell], hill_coefficient[cell], alignment_fraction[cell]"
+initialization = "zero"
+lifecycle = "zero on create and retirement"
+persistence = ["x", "y", "magnitude", "hill_coefficient", "alignment_fraction", "cell generation"]
+adaptation = ["CPU", "Metal", "ROCm"]
+source = "lambdaVecX/Y and output attributes"
+potts_consumer = "generic per-cell vector boundary-potential Hamiltonian matching the pinned CC3D 4.2.5 ExternalPotential BYCELLID pixel-based new-minus-old law; this is not normalized to a donor-recipient displacement bias"
+
+[[workspace]]
+id = "field_staging"
+layout = "two same-shape Float32 grids: field substep ping-pong; exchange candidate field and per-site removal contributions"
+capacity = "two times the exact 256x256 logical lattice dimensions"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "cell_reduction"
+layout = "per-cell uptake totals, active/generation validation, and fixed-tree global maximum scratch"
+capacity = "cell_capacity plus a construction-time fixed reduction tree; reduction width is the power-of-two ExecutionPlan block size and the Wang portable assembly pins 256"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "phase_status"
+layout = "backend-resident validation status, failure code, failing index, and one logical publication epoch"
+capacity = "constant per coupled integrator"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "polarity_snapshot"
+layout = "SoA snapshot x[cell], y[cell], neighbor sum/count, candidate x/y/fraction, and a symmetric bit-packed finite-contact adjacency execution view"
+capacity = "linear cell columns plus exactly cell_capacity * cld(cell_capacity,32) UInt32 adjacency words and one packed UInt32 failure key"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "relationship_transactions"
+layout = "bounded create/remove/retune request arrays, conflict keys, status buffer"
+capacity = "derived from relationship_capacity and accepted-copy attempt policy"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[workspace]]
+id = "observation_reducers"
+layout = "persistent-slot-indexed identity/generation/type columns, a dimension-generic tuple of centroid coordinate columns, arbitrary typed named property columns, bounded status/count scalars, and shape-preserving ownership publication buffers"
+capacity = "declared cell_capacity plus the compiled moment dimension and output schema; geometry snapshot capacity separately bounds lattice sites and cell slots"
+steady_state_allocation = false
+adaptation = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "potts_metropolis"
+phase = 1
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
+reads = ["ownership", "cell geometry", "motility_force", "focal_relationships"]
+writes = ["ownership", "cell geometry", "focal_relationships"]
+snapshot = "accepted-copy transaction snapshot for topology; preceding completed-MCS snapshot for force and relationship energy"
+commit = "ordered sequential Potts commit with accepted-copy relationship transaction"
+topology_policy = "For an actionable proposal with a finite gaining cell, inspect NeighborOrder-3 sites around the recipient in the topology RNG permutation. The first finite distinct eligible cell with no existing link and degree below the type-pair maximum four becomes the proposed neighbor. A candidate contributes activation energy -50 and short-circuits ordinary focal spring evaluation for that proposal. Only acceptance creates the canonical generation-aware link. After an accepted copy, endpoint extinction removes all incident links; otherwise each affected endpoint removes at most the first canonical link whose centroid distance exceeds its stored maximum length."
+energy_policy = "If no new junction candidate short-circuits evaluation, each external link incident to the losing or gaining cell contributes exactly once. A surviving endpoint contributes strength*((post-copy distance-target_length)^2-(pre-copy distance-target_length)^2); extinction of the losing cell contributes -strength*(pre-copy distance-target_length)^2. A link directly joining losing and gaining endpoints is not double counted. Source-profile centroid/distance arithmetic is pinned by the accepted Wang/CC3D source study and controlled fixtures; the portable profile uses the registered floating profile and exact canonical link order."
+boundary_policy = "Potts proposal/contact/surface boundaries and NeighborOrder tables are independent from the periodic secretome field boundary. The pinned CC3D 4.2.5 source study must record the default Potts boundary and exact ordered NeighborOrder-2/3/4 offset tables; no field-periodicity assumption may leak into Potts or focal topology."
+rng_namespace = "wang/focal-topology/neighbor-permutation"
+source_rng_policy = "CompuCell3D 4.2.5 uses std::random_shuffle over NeighborOrder-3 directions in ordinary runs and unshuffled direction order in test/generate mode. The source-faithful CPU oracle records both modes and the pinned runtime seed behavior. The portable profile uses the registered semantic Philox namespace and compares eligible-set/distribution behavior rather than claiming bitwise std::rand replay."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "secretome_field_advance"
+phase = 2
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
+reads = ["secretome", "post-Potts ownership/type field"]
+writes = ["secretome"]
+snapshot = "one process-entry post-Potts ownership/type snapshot remains immutable across all five internal substeps; substep n reads the staged result of substep n-1"
+commit = "one atomic synchronous process commit after all five internal substeps and validation; no internal substep is externally visible or checkpointable"
+numerical_policy = "five Float32 four-neighbor x/y-periodic forward-Euler substeps on a logical 256x256 Matrix; coefficient 0.2f0 per substep; each substep computes diffusion from its input snapshot and then exactly overwrites every Medium output site with 1.0f0 before that output feeds the next substep"
+failure_policy = "nonfinite input/output, shape/ownership mismatch, invalid coefficient/profile, or workspace/backend mismatch writes a deterministic status and canonical first failing index. The authoritative field is unchanged until all five staged substeps pass validation; failure advances no publication epoch."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "centroid_sample"
+phase = 3
+trigger = "normalized target MCS 1:500, corresponding to source MCS 0:499"
+reads = ["post-Potts cell centroid"]
+writes = ["centroid_history"]
+snapshot = "completed-Potts snapshot"
+commit = "atomic synchronous commit"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "self_polarity_from_history"
+phase = 4
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
+reads = ["centroid_history including current sample"]
+writes = ["self_polarity"]
+snapshot = "completed centroid_sample snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "normalize current centroid minus ring sample four MCS intervals earlier; zero displacement maps to zero vector"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "secretome_signal_exchange"
+phase = 5
+trigger = "plan-resolved mode: inactive on target 1:121/source 0:120; reset on target 122:210/source 121:209; calibrate on target 211/source 210; publish on target 212:500/source 211:499"
+reads = ["secretome", "ownership", "cell volume", "uptake_multiplier"]
+writes = ["secretome", "signal", "uptake_multiplier"]
+snapshot = "completed field snapshot plus one post-Potts ownership, generation, and volume snapshot; the plan supplies an immutable exchange mode"
+commit = "one cross-domain logical transaction publishes the candidate field, per-cell signal writes, global multiplier/status, and publication epoch only after every reduction and invariant passes"
+numerical_policy = "reset mode writes s=0 without field mutation. Calibrate and publish modes remove min(1,0.0025*C) from every eligible cell-owned site in a staged candidate field; raw uptake is removed_total/post-Potts cell volume. Calibrate mode sets one global multiplier 4/max(raw uptake) without writing s. Publish mode requires initialized multiplier and writes s=raw uptake*multiplier. A zero/nonfinite calibration maximum is a structured domain failure and commits nothing."
+reduction_policy = "source-faithful CPU accumulates Float32 removals into Float64 in ascending canonical linear-site order for each ascending active cell slot. Portable profile accumulates Float32 and launches one fixed-width-256 reduction group per active cell; lane l visits matching canonical sites l,l+256,... in ascending order and a fixed pairwise tree combines lanes. Global maximum uses a fixed pairwise tree. Floating atomics and scheduler-dependent sums are forbidden."
+failure_policy = "stale generation, nonpositive active-cell volume, nonfinite concentration/removal/total, zero or nonfinite calibration maximum, uninitialized multiplier in publish mode, capacity mismatch, or backend status failure commits nothing and reports the deterministic failure class plus canonical first failing site/cell when applicable."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "intracellular_advance"
+phase = 6
+trigger = "one registered source start() advance before finalized Potts.jl MCS 0; then normalized target MCS 122:500, corresponding to source MCS > 120"
+reads = ["signal", "intracellular_state"]
+writes = ["intracellular_state"]
+snapshot = "completed secretome_signal_exchange snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "drac/dt = a+s-0.1*rac over 2880 time units with a and s constant; source CPU oracle is RoadRunner/CVODE-equivalent and portable execution is tolerance-qualified against the closed-form affine solution"
+rng_namespace = "wang/intracellular/rac-initialization"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "focal_parameter_retune"
+phase = 7
+trigger = "PeriodicMCS(1,10; stop=491), corresponding exactly to source MCS % 10 == 0 over source 0:499"
+reads = ["MCS", "focal_relationships"]
+writes = ["focal_strength", "focal_relationships payload only"]
+snapshot = "completed intracellular_advance snapshot"
+commit = "atomic synchronous relationship retune distinct from accepted-copy topology"
+numerical_policy = "using derived source_mcs=target_mcs-1: strength=0 for source_mcs<120, 20 for 120<=source_mcs<210, scanned strength for source_mcs>=210; target length=8, maximum length=12"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "neighbor_polarity_alignment"
+phase = 8
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
+reads = ["post-Potts ownership through the declared contact relation", "self_polarity snapshot", "focal_strength"]
+writes = ["self_polarity", "motility_force.alignment_fraction"]
+snapshot = "bit-packed symmetric adjacency and all neighbor means are derived from one immutable post-Potts ownership/polarity snapshot before any aligned polarity is published"
+commit = "atomic synchronous commit"
+numerical_policy = "p=min(focal_strength/1000,1)*0.4; normalize p*mean(neighbor self polarity)+(1-p)*self polarity; empty neighbor set contributes zero"
+failure_policy = "nonfinite polarity/strength, negative strength, or nonfinite output selects one packed canonical first-cell/class key; every authoritative x/y/fraction column remains unchanged on any failure"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "protrusion_force_update"
+phase = 9
+trigger = "normalized target MCS 122:500, corresponding to source MCS > 120"
+reads = ["self_polarity", "intracellular_state.rac", "scanned protrusion-force maximum"]
+writes = ["motility_force"]
+snapshot = "completed neighbor_polarity_alignment snapshot"
+commit = "atomic synchronous commit"
+numerical_policy = "h=rac^4/(40^4+rac^4); lambdaVec=-force_max*h*polarity; reported magnitude=force_max*h"
+failure_policy = "nonfinite polarity/signal, negative signal, or nonfinite output selects one packed canonical first-cell/class key; every authoritative force/magnitude/coefficient column remains unchanged on any failure"
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "relationship_lifecycle_cleanup"
+phase = 10
+trigger = "every completed MCS and every endpoint retirement"
+reads = ["focal_relationships", "cell slot generations"]
+writes = ["focal_relationships"]
+snapshot = "completed process snapshot before observation"
+commit = "deterministic canonical compaction"
+numerical_policy = "Remove only stale endpoint generations and compact inactive slots in canonical relationship order. Overlength and endpoint-extinction removals belong to the accepted-copy Potts transaction and may not be repeated or broadened here."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[[process]]
+id = "wang_observations"
+phase = 11
+trigger = "per-cell source record on normalized target MCS 122:500/source MCS >120; geometric observation primitives at target 91/source 90 and target 271/source 270; final classifier/UMAP execution remains Phase 14.3"
+reads = ["cell identity/generation/type", "ownership lattice", "centroid", "self_polarity", "intracellular_state", "signal", "motility_force", "focal_strength"]
+writes = []
+snapshot = "completed lifecycle snapshot"
+commit = "read-only device reduction; host publication only at declared observation boundary"
+schema_policy = "Publish the exact fourteen-column per-cell source record plus typed time/generation envelope, and lossless geometry snapshots at target 91/source 90 and target 271/source 270. Phase 14.3 owns derived geometric features and classifier/UMAP execution."
+backend_requirements = ["CPU", "Metal", "ROCm"]
+
+[plan]
+single_root = true
+ordered_processes = [
+    "potts_metropolis",
+    "secretome_field_advance",
+    "centroid_sample",
+    "self_polarity_from_history",
+    "secretome_signal_exchange",
+    "intracellular_advance",
+    "focal_parameter_retune",
+    "neighbor_polarity_alignment",
+    "protrusion_force_update",
+    "relationship_lifecycle_cleanup",
+    "wang_observations",
+]
+forbid_fragment_local_schedulers = true
+forbid_hidden_callbacks = true
+forbid_runtime_symbol_lookup = true
+forbid_process_local_mcs_branching = true
+source_mcs_is_derived_metadata = true
+
+[plan.exchange_modes]
+target_1_121 = "inactive"
+target_122_210 = "reset"
+target_211 = "calibrate"
+target_212_500 = "publish"
+
+[plan.stable_boundary]
+kind = "completed MCS after required observation"
+internal_field_substeps = false
+post_field_phase = false
+post_exchange_phase = false
+partial_mcs_restart = false
+
+[process_proof]
+required_facets = [
+    "generic-declaration",
+    "source-traceability",
+    "isolated-sequential-cpu",
+    "assembled-sequential-cpu",
+    "portable-execution-view",
+    "failure-and-overflow",
+    "persistence-and-restart",
+    "steady-state-allocation",
+    "order-and-boundary-visibility",
+]
+status_rule = "The live ledger lists every canonical process exactly once. passed_facets and remaining_facets are disjoint and partition required_facets; row status is pending for zero passed facets, partial for a strict subset, and passed only for the complete set."
+closure_rule = "Every process row and every facet must be passed and backed by a matching manifest process proof. Evidence for one process or isolated primitive cannot substitute for another process or for assembled visibility."
+
+[closure_protocol]
+status = "passed"
+ledger = "phase-14-g3b-closure-ledger-v1.toml"
+claim_checker = "../../scripts/check_phase14_g3b_closure.jl"
+completion_claim = "G3-B complete"
+completion_rule = "The completion claim is permitted only when every closure_requirement has status passed in the closure ledger, every referenced evidence artifact exists, every registered command exits successfully, and every registered source-semantic study is accepted with immutable source, analysis, uncertainty, and controlled-fixture artifacts."
+primitive_rule = "Passing a reusable primitive or a KernelAbstractions CPU oracle may close only that named increment. It cannot close the canonical Wang assembly, a source-semantic study, G3-B, or any real GPU backend."
+profile_boundary = "G3-B requires the source-faithful sequential CPU model and portable structural/device-readiness evidence over the identical canonical plan. Real Metal and ROCm numerical execution, residency, device code, transfer, memory, and performance qualification are exclusively G3-C and may not redesign G3-B semantics."
+stable_boundary_rule = "Only a completed target MCS after required observations is restartable. A closure fixture must reject capture after every earlier process phase and every internal field substep."
+failure_rule = "Every mutating process proves candidate-only failure behavior, deterministic failure class and canonical first failing identity where applicable, unchanged authoritative state and semantic time, and unchanged publication epoch."
+allocation_rule = "After construction and warm-up, every scientific process proves zero dynamic scientific-storage allocation in its isolated sequential CPU fixture. The complete portable KernelAbstractions CPU target-MCS transition must preserve all tracked host/device scientific allocation counters, allocate at most 65536 Julia heap bytes of fixed launch/orchestration overhead, and prove that overhead does not grow with lattice, cell, edge, field, or observation-row capacity. Caller-owned observation serialization and checkpoint output buffers are measured separately and may not hide scientific-storage allocation."
+evidence_rule = "Each closure artifact records the exact clean tested commit, git tree, Julia and package/runtime versions, platform, exact command, input hashes, raw-output hash, assertion totals, and claim boundary. Contract and ledger are already passed in the tested commit; the later attestation may add only the hashed closure-evidence root."
+
+[closure_attestation]
+schema_version = "1.0.0"
+manifest = "design/evidence/phase-14/g3b-closure/manifest-v1.toml"
+evidence_root = "design/evidence/phase-14/g3b-closure"
+hash_algorithm = "sha256"
+tested_commit_rule = "All registered commands execute from one clean implementation commit containing revision 7 of this contract and the closure checker. The manifest records that commit and its git tree."
+attestation_commit_rule = "The manifest and hashed artifacts are committed afterward as an attestation. From tested_commit to the checker HEAD, changed paths are restricted to design/evidence/phase-14/g3b-closure/**. Contract and ledger must already be passed at tested_commit and cannot be edited by the attestation."
+artifact_rule = "Every command stdout/stderr capture, source-study input, source excerpt/index, analysis, uncertainty record, controlled-fixture output, comparison report, environment manifest, matrix, and fingerprint referenced by a proof is a regular file beneath evidence_root with recorded byte length and matching SHA-256."
+proof_rule = "The manifest contains one passed requirement proof for every closure requirement and one passed process proof for every canonical process. Each process proof lists the complete required-facet set plus its supporting command and artifact IDs; missing facets and dangling or duplicate IDs fail closure."
+study_rule = "Each registered source-semantic study has one accepted manifest row naming the pinned Wang/CC3D/RoadRunner source identities, immutable source and analysis artifacts, an explicit uncertainty record, controlled conformance fixtures, and the tested commit. New external CC3D execution is not required."
+command_rule = "Every closure_command has exactly one passed result at tested_commit with exact command text, exit code zero, positive assertion count or an explicit non-test validation count, and hashed stdout/stderr."
+claim_rule = "The manifest claim is exactly 'G3-B complete'; it explicitly denies real Metal/ROCm qualification, performance qualification, Phase 14.3 classifier/paper reproduction, and bitwise CC3D std::rand replay."
+
+[[closure_command]]
+id = "g3b-entry-contract"
+command = "julia --project=. --startup-file=no scripts/check_phase14_g3b_entry.jl"
+claim = "revision-7 contract, derived-contact normalization, dimension-generic bounded observations, registries, ledger shape, and fail-closed entry rules"
+
+[[closure_command]]
+id = "wang-order-oracle"
+command = "julia --project=. --startup-file=no scripts/validate_wang_order_oracle.jl design/evidence/phase-14/wang-order/cc3d-4.2.5-trace.csv"
+claim = "accepted source/target time and scheduler trace"
+
+[[closure_command]]
+id = "g3a-generic-authoring"
+command = "julia --project=. --startup-file=no scripts/check_phase14_g3a.jl"
+claim = "generic fragments, direct/fragment identity, and authoring fingerprints"
+
+[[closure_command]]
+id = "g3b-assembled-conformance"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite assembled"
+claim = "canonical 11-process Wang assembly and source-faithful sequential CPU conformance"
+
+[[closure_command]]
+id = "g3b-portable-abi"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite portable-abi"
+claim = "complete-plan descriptor-free KernelAbstractions CPU execution and device-readiness ABI"
+
+[[closure_command]]
+id = "g3b-failure-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite failure"
+claim = "all-process and cross-domain failure atomicity"
+
+[[closure_command]]
+id = "g3b-restart-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite restart"
+claim = "completed-MCS restart and exhaustive unstable-boundary rejection"
+
+[[closure_command]]
+id = "g3b-resource-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite resources"
+claim = "per-process and whole-transition allocation, capacity, and overflow contract"
+
+[[closure_command]]
+id = "g3b-observation-matrix"
+command = "julia --project=. --startup-file=no scripts/run_phase14_g3b_conformance.jl --suite observations"
+claim = "bounded observation schema, order, labels, publication, and restart continuity"
+
+[[closure_command]]
+id = "corepotts-full"
+command = "julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test()'"
+claim = "full CorePotts regression suite"
+
+[[closure_command]]
+id = "pottstoolkit-full"
+command = "julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'"
+claim = "full PottsToolkit regression suite"
+
+[[closure_command]]
+id = "phase13-api-inventory"
+command = "julia --project=. --startup-file=no scripts/check_phase13_api_inventory.jl"
+claim = "Phase 13 public API freeze"
+
+[[closure_command]]
+id = "repository-structure"
+command = "julia --project=. --startup-file=no scripts/check_structure.jl"
+claim = "repository structure and package-boundary freeze"
+
+[[closure_command]]
+id = "legacy-containment"
+command = "julia --project=. --startup-file=no scripts/check_legacy_containment.jl"
+claim = "legacy quarantine remains intact"
+
+[[closure_requirement]]
+id = "source-provenance-lock"
+scope = "Pinned Wang source revision, XML/Python/SBML inputs, paper identity, runtime/container identities, and cryptographic hashes."
+required_evidence = ["source archive manifest", "license/provenance record", "runtime version manifest"]
+
+[[closure_requirement]]
+id = "canonical-wang-assembly"
+scope = "One generic declaration lowers to one canonical 11-process root plan with all nine registered state families and no Wang-specific public runtime API."
+required_evidence = ["canonical inspection artifact", "lowering fingerprint", "direct-versus-fragment identity", "bounded target-MCS 0:500 smoke"]
+
+[[closure_requirement]]
+id = "generic-api-and-composability"
+scope = "Every new runtime primitive is exposed only through generic named/declarative authoring, passes a non-Wang microassembly, and adds no Wang export, positional mega-constructor, host callback, hidden scheduler, or paper branch."
+required_evidence = ["public API diff", "constructor-arity audit", "non-Wang reuse matrix", "coupling and lowering inspection"]
+
+[[closure_requirement]]
+id = "sequential-cpu-conformance"
+scope = "Every source_faithful_cpu conformance row passes against the assembled model, not merely isolated primitives."
+required_evidence = ["per-row assertion ledger", "assembled bounded-model trace", "analytic and invariant fixtures"]
+
+[[closure_requirement]]
+id = "order-and-boundaries"
+scope = "Exact source k to target k+1 mapping, process order, attempt budget, and source 120/210/211 visibility are observed in the assembled trace."
+required_evidence = ["ordinary-MCS trace", "target 121/122 trace", "target 211/212 trace", "attempt accounting trace"]
+
+[[closure_requirement]]
+id = "transaction-and-failure-atomicity"
+scope = "Every mutating process and the Potts/relationship and field/cell/global cross-domain transactions satisfy the closure failure rule."
+required_evidence = ["failure matrix", "publication-epoch trace", "authoritative-state before/after hashes"]
+
+[[closure_requirement]]
+id = "completed-mcs-restart"
+scope = "Uninterrupted and restarted runs agree at declared target boundaries 0, 120, 121, 210, 211, 212, and 500; every partial-MCS capture point rejects."
+required_evidence = ["checkpoint schema fingerprint", "restart comparison matrix", "partial-boundary rejection matrix"]
+
+[[closure_requirement]]
+id = "steady-state-resource-contract"
+scope = "The complete sequential CPU transition and each process meet the allocation rule with preallocated bounded workspaces and deterministic overflow."
+required_evidence = ["per-process allocation table", "whole-transition allocation result", "capacity and overflow truth table"]
+
+[[closure_requirement]]
+id = "portable-abi-readiness"
+scope = "All canonical state, workspaces, process views, status, and transactions adapt together and execute through descriptor-free KernelAbstractions CPU oracles without host callbacks, scalar loops, hidden transfers, or runtime symbol lookup."
+required_evidence = ["Adapt tree inventory", "device-storage validation", "launch/transfer trace", "conditional-publication fixtures"]
+
+[[closure_requirement]]
+id = "source-semantic-study"
+scope = "The Wang XML/Python/SBML and the relevant CC3D 4.2.5 Potts, FocalPointPlasticity, ExternalPotential, scheduler, and DiffusionSolverFE semantics are studied deeply enough to distinguish proven behavior, implementation choices, and remaining uncertainty. Controlled source-derived fixtures replace any requirement for new external CC3D execution."
+required_evidence = ["three accepted source-semantic study records", "pinned source identities and hashes", "line/symbol-level analysis", "explicit uncertainty register", "controlled conformance fixtures"]
+
+[[closure_requirement]]
+id = "observation-schema"
+scope = "All G3-B observations have typed bounded schemas, exact source labels, deterministic ordering/reduction, restart continuity, and declared host-publication boundaries."
+required_evidence = ["schema fingerprint", "record-order fixture", "target 91/271 fixtures", "restart continuity fixture"]
+
+[[closure_requirement]]
+id = "regression-and-api-freeze"
+scope = "G3-A identity/lowering, Phase 13 API inventory and fingerprints, prior checkpoints, full CorePotts behavior, and repository structure remain accepted."
+required_evidence = ["full test reports", "API diff report", "fingerprint checks", "structure checks"]
+
+[[closure_requirement]]
+id = "evidence-reproducibility"
+scope = "The closure packet is commit-addressed, hash-complete, independently rerunnable, and contains no unsupported GPU or paper-reproduction claim."
+required_evidence = ["closure ledger", "exact command manifest", "artifact hashes", "claim-boundary audit"]
+
+[boundary_expectations.source_mcs_120]
+target_mcs = 121
+potts_focal_strength = 0.0
+self_polarity_runs = false
+intracellular_advance_runs = false
+retune_strength = 20.0
+first_source_potts_using_retune = 121
+first_target_potts_using_retune = 122
+
+[boundary_expectations.source_mcs_210]
+target_mcs = 211
+potts_focal_strength = 20.0
+field_runs_before_exchange = true
+exchange_removes_field_mass = true
+exchange_writes_multiplier = true
+exchange_writes_signal = false
+ode_signal = 0.0
+retune_writes_scanned_strength = true
+force_reads_scanned_strength = true
+first_source_potts_using_scanned_strength = 211
+first_target_potts_using_scanned_strength = 212
+
+[boundary_expectations.source_mcs_211]
+target_mcs = 212
+exchange_writes_signal = true
+ode_reads_same_mcs_signal = true
+potts_uses_force_from_source_mcs = 210
+potts_uses_force_from_target_mcs = 211
+
+[[conformance]]
+id = "history-ring"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["ring wrap", "source t-minus-4", "named paper t-minus-5 sensitivity", "zero displacement", "restart with each head position"]
+
+[[conformance]]
+id = "intracellular-affine-ode"
+kind = "analytic-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["s=0", "constant nonzero s", "startup advance", "source MCS 210/target 211 zero signal", "source MCS 211/target 212 same-MCS signal", "completed-MCS restart"]
+
+[[conformance]]
+id = "periodic-field"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["constant field invariant", "single-site impulse one substep", "five-substep manufactured solution", "periodic edge wrap", "singleton source-z collapse", "medium reset after every substep", "reset-every-substep differs from final-only reset", "mass balance without reset", "reservoir overwrite balance", "five-substep failure leaves authoritative field unchanged", "completed-MCS restart"]
+
+[[conformance]]
+id = "uptake-calibration"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["inactive mode", "reset mode without field mutation", "per-site cap", "relative uptake branch", "per-cell volume normalization", "fixed reduction order", "deterministic maximum and ties", "zero/nonfinite calibration failure atomicity", "source MCS 210/target 211 no signal write", "source MCS 211/target 212 same-MCS signal write", "field mass balance", "cross-domain failure atomicity", "completed-MCS restart"]
+
+[[conformance]]
+id = "relationship-graph"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["create", "duplicate rejection", "degree capacity", "remove", "retune without topology change", "accepted/rejected/no-op proposal", "NeighborOrder-3 eligible-neighbor truth table", "activation-energy short circuit", "existing-link new-minus-old spring energy", "losing-volume-one old-energy subtraction", "shared losing/gaining link counted once", "accepted-copy initial payload 0/0/100000", "preflight failure leaves Potts and relationship state unchanged", "one logical accepted-copy publication", "one overlength removal per affected endpoint", "endpoint extinction removes every incident link", "stale endpoint generation", "canonical order", "restart"]
+
+[[conformance]]
+id = "polarity-and-force"
+kind = "exact-and-tolerance"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["empty neighbor set", "synchronous neighbor snapshot", "Medium/self exclusion", "duplicate contact-face collapse", "symmetric bit-packed adjacency", "cross-word neighbor identity", "ascending-neighbor reduction", "alignment clamp", "zero vector normalization", "Hill limits", "force sign", "heterogeneous simultaneous failure selects one canonical cell/class pair", "failure leaves every output column unchanged", "restart"]
+
+[[conformance]]
+id = "bounded-observations"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["generic arbitrary named property binding", "dimension-matched coordinate schema", "shape-preserving 2D and 3D ownership publication", "cell-slot capacity with inactive holes", "exact fourteen Wang source columns", "typed target/source/generation envelope", "ascending persistent-cell order", "inactive-slot exclusion", "target 91/source 90 lossless geometry snapshot", "target 271/source 270 lossless geometry snapshot", "schema fingerprint", "capacity failure atomicity", "declared host publication only", "restart without duplicate or skipped record"]
+
+[[conformance]]
+id = "wang-plan-boundaries"
+kind = "exact"
+profiles = ["source_faithful_cpu", "portable"]
+cases = ["source-to-target MCS mapping 0->1 and 499->500", "ordinary order", "source observation labels 90/270 map to target 91/271", "source MCS 120/target 121", "source MCS 210/target 211", "source MCS 211/target 212", "restart at completed MCS 0, 120, 121, 210, 211, 212, and 500", "mid-phase and internal-substep checkpoint rejection"]
+
+[[conformance]]
+id = "device-readiness"
+kind = "structural"
+profiles = ["portable"]
+cases = ["complete-plan Adapt round trip", "descriptor-free execution views", "device-storage validation", "authoritative field plus two staging grids", "bit-packed derived contact adjacency", "single packed process-failure key", "all capacities preallocated", "typed cross-domain write set", "backend status propagation", "no scalar host loop contract", "no hidden callback or process-local MCS branch", "plan-constant launch cardinality", "no per-cell/per-edge/per-attempt launch loop", "zero unobserved scientific-payload transfer", "zero dynamic scientific-storage allocation", "size-independent KernelAbstractions CPU orchestration allocation within 65536 bytes"]
+
+[[semantic_studies]]
+id = "wang-cc3d-potts-fpp-source-study"
+status = "required-before-g3b-closure"
+blocks = ["source-faithful Potts attempt semantics", "source-faithful FocalPointPlasticity topology semantics", "source-faithful ExternalPotential force consumption", "G3-B completion claim"]
+does_not_block = ["state substrate", "history", "field", "exchange", "ODE", "relationship storage", "observation reducers"]
+external_execution_required = false
+question = "Trace Wang's XML/Python against CC3D 4.2.5 source for default Potts boundaries, attempted-copy accounting, NeighborOrder-2/3/4 tables, FocalPointPlasticity proposal/acceptance/removal behavior, and the ExternalPotential algorithm selected by Wang's empty plugin declaration. Record what is exact, what is source-profile dependent, and what Potts.jl intentionally normalizes."
+source_identity_required = ["Wang XML/Python commit and hashes", "CC3D 4.2.5 source tag/commit and relevant file hashes", "relevant class/function symbols and line ranges", "accepted scheduler-order trace identity"]
+evidence_target = "line/symbol-level source map plus controlled fixtures for boundary truth tables, attempt totals/ordinals, eligible-neighbor order, activation-energy short circuit, 0/0/100000 initial payload, degree-four rejection, accepted/rejected/no-op visibility, existing-link/extinction energy, overlength removal order, endpoint extinction, ExternalPotential BYCELLID/pixel dispatch, losing/gaining boundary contributions, sign, periodic displacement correction, and next-MCS force visibility"
+conformance_rule = "Exact source-derived integer/order behavior is asserted exactly. Floating focal and vector-boundary energies use preregistered controlled-fixture tolerances. Any behavior not decidable from pinned source is entered in the uncertainty register and cannot be claimed as bitwise CC3D parity."
+
+[[semantic_studies]]
+id = "wang-roadrunner-coupling-study"
+status = "required-before-g3b-closure"
+blocks = ["source-faithful intracellular coupling interpretation", "G3-B completion claim"]
+does_not_block = ["generic fixed-step/closed-form cell state substrate", "portable affine-law implementation"]
+external_execution_required = false
+question = "Trace the pinned Antimony law, RoadRunner creation/start/step calls, time advancement, inputs, and state publication in Wang's Python. Compare the accepted affine implementation against the closed-form solution and document numerical-profile uncertainty without requiring a live foreign solver."
+source_identity_required = ["Wang Python and Antimony hashes", "RoadRunner API/version documentation or pinned source identity used to interpret calls", "relevant symbols/line ranges"]
+evidence_target = "source map for startup and repeated 2880-unit invocations plus closed-form fixtures over preregistered rac0 and signal values, semantic start/end times, and publication boundaries"
+conformance_rule = "The affine mathematical law, timing, and publication order are exact. Portable and source-faithful CPU fixtures are checked against the closed-form solution. Solver-specific trajectories are not claimed bitwise equivalent without separately supplied runtime evidence."
+
+[[semantic_studies]]
+id = "wang-cc3d-field-source-study"
+status = "required-before-g3b-closure"
+blocks = ["source-faithful field splitting and numerical-profile interpretation", "G3-B completion claim"]
+does_not_block = ["generic periodic Float32 stencil", "portable five-substep field implementation", "exchange transaction substrate"]
+external_execution_required = false
+question = "Trace Wang's DiffusionSolverFE XML and Python exchange against CC3D 4.2.5 source for stability scaling, substep count, stencil/boundary order, constant-concentration timing, lattice layout, and field publication."
+source_identity_required = ["Wang XML/Python commit and hashes", "CC3D 4.2.5 DiffusionSolverFE source tag/commit and relevant file hashes", "relevant symbols and line ranges"]
+evidence_target = "line/symbol-level source map plus constant, impulse, periodic-edge, singleton-z, and reset-every-substep distinguishing fixtures with Medium masks, per-substep arrays, canonical checksums, and mass-balance results"
+conformance_rule = "Masks, periodic indices, overwrite values, substep count, shape/order, and splitting are exact where proven from source. Float32 concentrations use preregistered field-local and mass-balance rules. Undecidable compiler/runtime details remain explicit uncertainty rather than a fabricated external-oracle claim."
+
+[deferred]
+items = [
+    "recovery of original NumPy and CompuCell3D seed identities",
+    "portable execution of archived pickle/UMAP/classifier artifacts",
+    "Phase 14.3 ensemble sizes, classifier thresholds, and final paper-figure tolerance",
+    "performance tuning that does not alter frozen logical storage or process contracts",
+    "CUDA qualification",
+    "Mermaid.jl integration",
+]
+
+[acceptance]
+g3b_requires = [
+    "every closure_requirement row is passed in the machine-readable closure ledger",
+    "every canonical process has every required proof facet passed and linked to hashed command/artifact evidence",
+    "every state and process above is implemented through generic canonical declarations and exercised in one assembled target-MCS 0:500 model",
+    "every new runtime primitive passes a non-Wang reuse microassembly and no Wang export or positional mega-constructor is introduced",
+    "all source_faithful_cpu conformance rows pass in isolation and through the assembled model",
+    "portable device-readiness structural conformance passes over the identical canonical state/plan before G3-C begins",
+    "all three required source-semantic studies are accepted from pinned source, explicit uncertainty records, and controlled fixtures without requiring new external CC3D execution",
+    "source MCS labels map exactly to normalized target MCS without a hidden source step in initialization",
+    "restart passes at every declared completed-MCS stable boundary and every partial-MCS capture point rejects",
+    "every isolated sequential CPU process allocates zero dynamic scientific storage, while the complete portable KernelAbstractions CPU transition preserves scientific allocation counters and keeps size-independent launch/orchestration allocation within 65536 bytes after warm-up",
+    "every mutating process proves failure atomicity; Potts/relationship and field/cell/global writes prove one logical publication",
+    "all G3-B numerical tolerances and deterministic reduction identities are registered before paper-scale result inspection",
+    "G3-A identity, lowering, API inventory, Phase 13 behavior, prior checkpoints, and repository structure remain unchanged",
+    "all registered commands pass on one exact clean tested commit and every artifact hash verifies",
+    "the attestation-only diff from tested commit to checker HEAD contains only the closure evidence root",
+    "the claim checker passes from a clean attestation checkout",
+]
+g3c_inherits = [
+    "identical canonical model and logical storage",
+    "identical process order, RNG addressing, transactions, launch topology, and observation publication boundaries",
+    "portable conformance rows on real Metal and ROCm",
+    "residency, device-code, replay, restart, transfer, allocation, memory, and performance evidence",
+]

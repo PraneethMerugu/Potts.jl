@@ -1,0 +1,1 @@
+Phase 13 API inventory is unchanged; additive exports exactly match the reviewed Phase 14 v2 allowlist

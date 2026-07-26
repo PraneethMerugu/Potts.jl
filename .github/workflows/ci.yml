@@ -36,6 +36,12 @@ jobs:
         run: julia --startup-file=no scripts/check_legacy_containment.jl
       - name: Enforce Phase 14 corpus and simplified architecture closure
         run: julia --project=. --startup-file=no scripts/check_phase14_0.jl
+      - name: Enforce ProcessBigraphs platform specification
+        run: julia --startup-file=no scripts/check_process_bigraph_platform.jl
+      - name: Enforce ProcessBigraphs PB0 bounded foundation
+        run: julia --startup-file=no scripts/process-bigraph-pb0-check.jl
+      - name: Enforce Phase 14 Wang sequential CPU disposition
+        run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
       - name: Resolve the package workspace without mutation
         run: |
           julia --project=. --startup-file=no -e '
@@ -48,10 +54,16 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Closure archives preserve exact, content-addressed command and
+          # hardware output bytes. Their hashes are checked independently;
+          # whitespace normalization would invalidate admitted evidence.
+          EVIDENCE_EXCLUSIONS=(
+            ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
+          )
           if [ -n "$BASE_SHA" ]; then
-            git diff --check "$BASE_SHA"...HEAD
+            git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
           else
-            git diff --check HEAD^ HEAD
+            git diff --check HEAD^ HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
           fi
 
   packages:
@@ -64,6 +76,8 @@ jobs:
             project: .
           - package: CorePotts
             project: lib/CorePotts
+          - package: ProcessBigraphs
+            project: lib/ProcessBigraphs
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -87,6 +101,14 @@ jobs:
                 profile = CorePotts.algorithm_guarantees(CorePotts.SequentialCPM())
                 profile.proposal_process.recipient === :uniform_with_replacement ||
                     error("CorePotts public exercise failed")
+            elseif ENV["PACKAGE"] == "ProcessBigraphs"
+                @eval using ProcessBigraphs
+                state_path = ProcessBigraphs.path(:cell, :mass)
+                sprint(show, state_path) == "/cell/mass" ||
+                    error("ProcessBigraphs path exercise failed")
+                scale = ProcessBigraphs.TimeScale(1, 4)
+                ProcessBigraphs.physical_value(ProcessBigraphs.LogicalTime(2, scale)) == 1 // 2 ||
+                    error("ProcessBigraphs exact-time exercise failed")
             else
                 @eval using PottsToolkit
                 algorithm = PottsToolkit.CheckerboardSweepCPM()
@@ -153,10 +175,11 @@ jobs:
           force-arch: true
       - name: Verify ARM64 runtime
         run: julia --startup-file=no -e 'Sys.ARCH == :aarch64 || error("expected ARM64 Julia; found $(Sys.ARCH)")'
-      - name: Test CorePotts and PottsToolkit independently
+      - name: Test CorePotts, PottsToolkit, and ProcessBigraphs independently
         run: |
           julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test("CorePotts"; julia_args=["--startup-file=no"])'
           julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("PottsToolkit"; julia_args=["--startup-file=no"])'
+          julia --project=lib/ProcessBigraphs --startup-file=no -e 'using Pkg; Pkg.test("ProcessBigraphs"; julia_args=["--startup-file=no"])'
       - name: Run complete cross-package integration suite
         run: |
           julia --project=integration --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true, allow_autoprecomp=false)'
@@ -184,10 +207,11 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
       - name: Verify x86_64 runtime
         run: julia --startup-file=no -e 'Sys.ARCH == :x86_64 || error("expected x86_64 Julia; found $(Sys.ARCH)")'
-      - name: Test CorePotts and PottsToolkit independently
+      - name: Test CorePotts, PottsToolkit, and ProcessBigraphs independently
         run: |
           julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test("CorePotts"; julia_args=["--startup-file=no"])'
           julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("PottsToolkit"; julia_args=["--startup-file=no"])'
+          julia --project=lib/ProcessBigraphs --startup-file=no -e 'using Pkg; Pkg.test("ProcessBigraphs"; julia_args=["--startup-file=no"])'
       - name: Run complete cross-package integration suite
         run: |
           julia --project=integration --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true, allow_autoprecomp=false)'

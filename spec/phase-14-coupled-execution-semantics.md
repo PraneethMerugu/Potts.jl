@@ -145,6 +145,24 @@ An uncoupled model does not need an `MCSPlan`. It retains the Phase 13 path and 
 The implementation MUST NOT normalize an omitted plan into new semantic data that changes an
 uncoupled model fingerprint.
 
+### Generic fragment references
+
+Under Decision 0033, a complex model plan SHOULD reference named typed operations exported by
+generic `ModelFragment` values rather than fragment-private leaf declarations:
+
+```julia
+Phase(:field, Advance(field_coupling.advance))
+Phase(:uptake, Exchange(field_coupling.uptake))
+Phase(:cell_dynamics, Advance(signaling.advance))
+```
+
+Lowering resolves each export to one canonical process identity before plan validation. Missing,
+private, category-incompatible, or multiply resolved exports fail before execution.
+
+Fragment hierarchy does not weaken the one-plan rule. A fragment cannot carry a hidden local
+schedule. Convenience plan entries, when admitted, expand into this root plan before ordering,
+conflict, fingerprint, continuation, and backend checks.
+
 ## Positional One-MCS State Machine
 
 For current MCS `m`, `step!(integrator, 1)` executes:
@@ -373,8 +391,9 @@ A `StagedProtocol` contains named `ProtocolStage` values over explicit target-MC
 ```julia
 protocol = StagedProtocol(
     ProtocolStage(:relax; mcs = MCSRange(1, 120)),
-    ProtocolStage(:pre_signal; mcs = MCSRange(121, 210)),
-    ProtocolStage(:stimulated; mcs = MCSRange(211, 500)),
+    ProtocolStage(:initial_adhesion; mcs = MCSRange(121, 210)),
+    ProtocolStage(:switch_calibration; mcs = MCSRange(211, 211)),
+    ProtocolStage(:stimulated; mcs = MCSRange(212, 500)),
 )
 ```
 
@@ -405,8 +424,9 @@ stage-local clock are available to qualified scheduled laws.
 focal_strength = ScheduledParameter(
     :focal_strength,
     protocol;
-    relax = 20.0f0,
-    pre_signal = 20.0f0,
+    relax = 0.0f0,
+    initial_adhesion = 20.0f0,
+    switch_calibration = scanned_strength,
     stimulated = scanned_strength,
 )
 ```
@@ -416,6 +436,13 @@ meaning. Every covered stage has exactly one compatible value.
 
 Components and processes read the value selected for the target MCS. A value change is visible from
 the first phase of the new stage unless the source requires a separately named in-MCS update phase.
+Wang uses the latter rule: the scheduled value is an input to its ten-MCS focal-retuning phase,
+while Potts reads the previously published per-relationship payload.
+
+CompuCell3D source MCS `k` maps to normalized target MCS `k+1`; the source label is exactly derived
+metadata, not a second clock. Thus source MCS 120 / target 121 Potts reads 0, source MCS 210 /
+target 211 Potts reads 20, and source MCS 211 / target 212 is the first Potts step to read the
+scanned payload. Source `step()` work, including source MCS 0, cannot be hidden in initialization.
 
 ### Process activation
 
@@ -424,6 +451,13 @@ RNG draws, solver advances, or diagnostics other than bounded inactive accountin
 
 Activation is determined from the selected protocol stage, not from runtime declaration order or an
 arbitrary predicate. State-dependent conditions belong to triggers or process eligibility laws.
+
+A process whose scientific operation changes across exact MCS ranges MAY receive a typed
+plan-resolved mode table. The complete nonoverlapping ranges and mode identities are plan data and
+fingerprint inputs. The process law receives the already resolved immutable mode; it MUST NOT
+implement an undeclared `target_mcs` branch or maintain its own cadence counter. Wang exchange uses
+this rule for inactive, reset, calibrate, and publish modes because its mode boundaries do not
+coincide exactly with every focal-parameter stage boundary.
 
 ## Continuous Clocks
 
@@ -575,7 +609,9 @@ Before acceptance, the contract requires:
 9. terminal failure tests for every phase category;
 10. completed-MCS checkpoint/restart tests at every protocol boundary;
 11. an external downstream process fixture using only public protocols;
-12. CPU reference execution through one complete Wortel or Wang vertical slice; and
+12. sequential CPU reference plus backend-resident Metal and ROCm execution through every complete
+    release vertical slice, including all Wang field, ODE, history, relationship, plan,
+    observation, and persistence capabilities; and
 13. backend preflight tests that reject every unqualified process/backend combination before
     execution.
 
@@ -587,13 +623,17 @@ Before acceptance, the contract requires:
   distinct semantic identity derived from process identity, phase identity, and explicit invocation
   label. Continuous intervals for the same process cannot overlap, and its completed clock must
   equal the plan-implied endpoint.
-- The first stable `AcceptedCopyUpdate` writer targets one or more declared `SiteProperty` instances
-  at transaction-local gained or lost sites. Arbitrary cell, field, relationship, lifecycle, solver,
-  and observation mutation is outside that hook. A later state family requires an additive contract.
+- `AcceptedCopyUpdate` targets one or more declared `SiteProperty` instances at transaction-local
+  gained or lost sites. Wang additionally requires a distinct typed accepted-copy relationship
+  effect that emits bounded focal-topology requests and commits them atomically with ownership.
+  This does not authorize arbitrary cell, field, lifecycle, solver, or observation mutation inside
+  Potts evaluation; each admitted state family has its own read/write, capacity, conflict, and
+  backend contract.
 - Only `BestEffortTelemetry` may use nonfatal observation failure, under the restrictions above.
 
-The remaining open items are source transcriptions rather than architectural choices:
+The remaining open items are implementation or source-transcription closures rather than
+architectural choices:
 
-- exact Wortel activity eligibility and update order;
-- exact Wang CompuCell3D steppable ordering; and
+- executable CPU/Metal/ROCm lowering of the accepted Wang CompuCell3D order and boundary fixtures;
+- CompuCell3D attempt-budget accounting for the Wang source profile; and
 - whether Graner--Glazier observation annealing mutates the continuing source trajectory.

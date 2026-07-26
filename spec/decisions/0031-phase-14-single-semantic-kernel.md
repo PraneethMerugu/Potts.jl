@@ -152,6 +152,12 @@ CPU-reference requirement, honest backend reporting, and Mermaid.jl exclusion.
 [Decision 0029](0029-phase-14-model-driven-capability-and-documentation-policy.md) continues to
 govern the selected-model portfolio, fidelity policy, and documentation program.
 
+Decision 0034 later establishes an independent domain-neutral `ProcessBigraphs.jl` package. That
+does not reinstate the rejected collection of cell, field, event, relationship, and continuous
+Potts runtimes. This decision remains authoritative for unmigrated Phase 14 Potts slices; each
+accepted strangler cutover must prove old/new serial equivalence and retire the prior execution
+authority for that slice.
+
 ## Consequences
 
 - The semantic center contains seven contract areas rather than 24 independently versioned

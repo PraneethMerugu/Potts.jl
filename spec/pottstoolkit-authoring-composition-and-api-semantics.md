@@ -2,6 +2,10 @@
 
 Status: Accepted Level 1 and Level 2 authoring, composition, and API contract; implementation evidence pending
 
+Phase 14 extension: generic hierarchical composition for complex coupled models is governed by
+[Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md). The Phase 13 flat-model
+contract remains unchanged.
+
 ## Purpose
 
 This document defines the durable public-language architecture of PottsToolkit. It governs how users
@@ -328,6 +332,16 @@ model = PottsModel(
 
 It does not require category buckets such as `cell_types`, `penalties`, or `events`. Declaration
 types and public protocols provide their categories, and declaration order is not semantic.
+
+This flat spelling is intentionally retained for small models. It is not the sole recommended
+authoring form for complex coupled models. When a model contains multiple interacting fields,
+continuous systems, histories, relationship graphs, observations, and scheduled processes, it
+SHOULD compose generic `ModelFragment` values and one explicit root plan. Root-model complexity
+then follows meaningful subsystems rather than every fragment-private declaration.
+
+Phase 14 does not replace flattening with category keywords. Keywords such as `states=`,
+`processes=`, and `fields=` would rearrange the same leaf list without providing hierarchy,
+namespace isolation, binding, reuse, or substitution.
 
 ### Cell types and media
 
@@ -704,11 +718,11 @@ or scientific meaning depend on arbitrary AST execution.
 
 ## Reusable Model Fragments
 
-A model fragment is a first-class immutable declaration bundle. It declares:
+A model fragment is the one first-class immutable hierarchical declaration bundle. It declares:
 
-- Required inputs and semantic capabilities
-- Exported names
-- Private names
+- Named typed requirements and semantic capabilities
+- Named typed exports
+- Private names and nested fragments
 - Properties, parameters, fields, and relations it provides
 - Components and rules it contributes
 - Effects and phase requirements
@@ -718,17 +732,31 @@ A model fragment is a first-class immutable declaration bundle. It declares:
 Applying a fragment returns a new model and produces an inspectable composition result.
 
 The primary Level 1 representation is an ordinary `ModelFragment`, not a required macro. Ordinary
-Julia functions may construct or generate fragments. Fragment requirements are typed roles such as
-`CellRole` and `FieldRole`; a symbol or dictionary key is not a substitute for a role value.
+Julia functions may construct or generate fragments. Fragment requirements are typed semantic
+roles; a symbol or dictionary key is not a substitute for a role value.
+
+Phase 13 supplies `CellRole` and `FieldRole`. Phase 14 generalizes the same requirement protocol to
+state, process operation, observation, relation, parameter, and other registered semantic
+categories. One generic requirement/export protocol is used; PottsToolkit does not create separate
+field-module, ODE-module, relationship-module, or paper-module composition runtimes.
 
 ```julia
 migrating_cells = CellRole(:migrating_cells)
 signal_field = FieldRole(:signal_field)
 
 migration = ModelFragment(
-    :migration;
-    requires = (migrating_cells, signal_field),
-    declarations = (polarity, persistence, chemotaxis),
+    :migration,
+    polarity,
+    persistence,
+    chemotaxis;
+    requires = (
+        cells = migrating_cells,
+        signal = signal_field,
+    ),
+    exports = (
+        polarity = polarity,
+        drive = chemotaxis,
+    ),
 )
 
 bound_migration = bind(
@@ -740,6 +768,46 @@ bound_migration = bind(
 
 `bind` returns an immutable bound-fragment declaration that may be passed directly to
 `PottsModel`. Missing, duplicate, or category-incompatible bindings are validation errors.
+The named-tuple requirement/export spelling is the Phase 14 target; exact constructor and access
+names remain Provisional until the generic Wang and Morpheus fixtures pass.
+
+### Named typed ports
+
+A requirement records enough semantic information to validate a binding before canonical
+lowering. Depending on category, this includes owner domain, schema, units, lifecycle obligations,
+operation/read-write kind, capabilities, and backend requirements.
+
+An export maps one stable local name to an admitted declaration or process operation:
+
+```julia
+exports = (
+    advance = field_dynamics,
+    uptake = uptake_process,
+    signal = sensed_signal,
+)
+```
+
+Another fragment or the root plan may refer to `field_coupling.advance`,
+`field_coupling.uptake`, or `field_coupling.signal`. This property-like spelling is an immutable
+semantic reference. It is resolved to a qualified identity before fingerprinting and does not
+expose mutable runtime storage.
+
+Private declarations cannot be referenced outside the fragment. Missing exports, category
+mismatches, incompatible schemas or units, and unqualified backend requirements are structured
+composition failures.
+
+### Root execution plan
+
+Fragments export operations; one root plan owns global order, cadence, stages, snapshots,
+lifecycle commit, observations, and stable boundaries. A fragment cannot own an independent clock
+or hidden scheduler.
+
+A convenience façade may contribute fully inspectable plan entries when its placement is a named,
+documented semantic preset. Normalization expands those entries into the same root plan and rejects
+conflicts. Dependency analysis validates declared order but never chooses scientific order.
+
+Equivalent explicit-leaf and fragment-packaged models normalize to the same scientific
+fingerprint. Fragment paths remain visible in composition reports and provenance.
 
 ### Namespaces and binding
 
@@ -796,6 +864,12 @@ tests relevant to capabilities the component claims.
 Third-party fragments may package properties, rules, components, fields, and lifecycle behavior
 behind typed biological roles. Fragment-private declarations remain collision-free, while every
 expanded declaration, capability limitation, and replacement remains visible through inspection.
+
+Selected-paper convenience builders may be distributed in tutorial or paper-example modules, but
+they use this same fragment and plan API. Paper and author names are not admitted as stable
+CorePotts or PottsToolkit constructors merely to shorten examples. A paper builder is documented
+only after the equivalent generic construction and does not count as generic API conformance
+evidence.
 
 ## Defaults, Presets, and Convenience
 

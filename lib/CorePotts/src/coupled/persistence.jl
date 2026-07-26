@@ -106,10 +106,10 @@ function _state_block(state::CellHistoryState)
         history_length = size(state.values, 2),
         value_type = string(eltype(state.values)))
     payload = (
-        values = copy(state.values),
-        heads = copy(state.heads),
-        fills = copy(state.fills),
-        generations = copy(state.generations),
+        values = copy(Adapt.adapt(Array, state.values)),
+        heads = copy(Adapt.adapt(Array, state.heads)),
+        fills = copy(Adapt.adapt(Array, state.fills)),
+        generations = copy(Adapt.adapt(Array, state.generations)),
         latest_sample_mcs = state.latest_sample_mcs)
     return _checkpoint_block(:cell_history, declaration.name,
         :cell_history, metadata, payload)
@@ -118,8 +118,24 @@ end
 function _state_block(state::RelationshipState)
     declaration = state.declaration
     metadata = (declaration = _declaration_record(declaration),
-        realized_capacity = declaration.capacity.value)
-    payload = (edges = Tuple(state.edges),)
+        realized_capacity = declaration.capacity.value,
+        storage = :canonical_soa)
+    host_count = Adapt.adapt(Array, state.count)
+    count = Int(@inbounds host_count[1])
+    endpoint_a = Adapt.adapt(Array, state.endpoint_a)
+    generation_a = Adapt.adapt(Array, state.generation_a)
+    endpoint_b = Adapt.adapt(Array, state.endpoint_b)
+    generation_b = Adapt.adapt(Array, state.generation_b)
+    edge_payload = Adapt.adapt(Array, state.payload)
+    payload = (
+        endpoint_a = copy(@view(endpoint_a[1:count])),
+        generation_a = copy(@view(generation_a[1:count])),
+        endpoint_b = copy(@view(endpoint_b[1:count])),
+        generation_b = copy(@view(generation_b[1:count])),
+        edge_payload = copy(@view(edge_payload[1:count])),
+        count = UInt32(count),
+        publication_epoch = copy(
+            Adapt.adapt(Array, state.publication_epoch)))
     return _checkpoint_block(:relationship_set, declaration.name,
         :relationship_set, metadata, payload)
 end
@@ -134,7 +150,8 @@ function _state_block(state::EvolvingFieldState)
         values = copy(Adapt.adapt(Array, state.values)),
         forcing = copy(Adapt.adapt(Array, state.forcing)),
         time = state.time,
-        diagnostics = state.diagnostics)
+        diagnostics = state.diagnostics,
+        publication_epoch = copy(Adapt.adapt(Array, state.publication_epoch)))
     return _checkpoint_block(:evolving_field, state.name,
         :evolving_field, metadata, payload)
 end
@@ -156,6 +173,32 @@ function _state_block(state::GlobalPropertyState)
         value = state.value, semantic_time = state.semantic_time)
     return _checkpoint_block(:global_property, declaration.name,
         :global_property, metadata, payload)
+end
+
+function _state_block(state::FieldExchangeState)
+    metadata = (
+        value_type = string(eltype(state.value)),
+        accumulator_type = string(eltype(state.workspace.raw_totals)),
+        capacity = length(state.workspace.raw_totals))
+    payload = (
+        value = copy(Adapt.adapt(Array, state.value)),
+        initialized = copy(Adapt.adapt(Array, state.initialized)),
+        publication_epoch = copy(Adapt.adapt(Array, state.publication_epoch)))
+    return _checkpoint_block(:field_exchange_state, state.name,
+        :field_exchange_state, metadata, payload)
+end
+
+function _state_block(state::AffineCellRuntime)
+    payload = (
+        publication_epoch = copy(Adapt.adapt(
+            Array, state.workspace.publication_epoch)),)
+    metadata = (
+        capacity = length(state.workspace.candidate_state),
+        state_type = string(eltype(state.workspace.candidate_state)),
+        time_type = string(eltype(state.workspace.candidate_time)))
+    return _checkpoint_block(
+        :affine_cell_runtime, state.name,
+        :affine_cell_runtime, metadata, payload)
 end
 
 function _state_block(state::MembranePropertyState)
@@ -218,9 +261,14 @@ _checkpoint_arrays(state::SitePropertyState) = (state.values,)
 _checkpoint_arrays(state::CellHistoryState) = (
     state.values, state.heads, state.fills, state.generations)
 _checkpoint_arrays(::RelationshipState) = ()
-_checkpoint_arrays(state::EvolvingFieldState) = (state.values, state.forcing)
+_checkpoint_arrays(state::EvolvingFieldState) = (
+    state.values, state.forcing, state.publication_epoch)
 _checkpoint_arrays(::ContinuousSystemState) = ()
 _checkpoint_arrays(::GlobalPropertyState) = ()
+_checkpoint_arrays(state::FieldExchangeState) = (
+    state.value, state.initialized, state.publication_epoch)
+_checkpoint_arrays(state::AffineCellRuntime) =
+    (state.workspace.publication_epoch,)
 _checkpoint_arrays(state::MembranePropertyState) = (
     state.values, state.generations, state.active)
 _checkpoint_arrays(::DelayStateStorage) = ()
@@ -273,6 +321,9 @@ function _observation_schedule(integrator::CoupledIntegrator)
         completed_mcs = integrator.observations.completed_mcs,
         last_published = Tuple(sort!(collect(
             integrator.observations.last_published);
+            by = pair -> String(first(pair)))),
+        publication_epochs = Tuple(sort!(collect(
+            integrator.observations.publication_epochs);
             by = pair -> String(first(pair)))))
 end
 
@@ -299,6 +350,8 @@ end
 
 function capture_checkpoint(integrator::CoupledIntegrator;
         ancestry::Union{Nothing, CoupledCheckpoint} = nothing)
+    integrator.checkpoint_stable || throw(ArgumentError(
+        "a partial target MCS is not a stable coupled checkpoint boundary"))
     integrator.terminal_error === nothing || throw(ArgumentError(
         "a failed target MCS is not a stable coupled checkpoint boundary"))
     integrator.potts.mcs == integrator.mcs || throw(ArgumentError(
@@ -390,7 +443,9 @@ function _find_state(state::CoupledState, block::CoupledCheckpointBlock)
         family === :cell_history ? state.histories :
         family === :relationship_set ? state.relationships :
         family === :evolving_field ? state.fields :
-        family in (:continuous_system, :global_property) ? state.globals :
+        family in (:continuous_system, :global_property,
+            :field_exchange_state, :affine_cell_runtime) ?
+            state.globals :
         family === :membrane_property ? state.membranes :
         family in (:delay_state, :continuous_event) ? state.delays :
         throw(CheckpointCompatibilityError(:block_family,
@@ -416,8 +471,21 @@ function _restore_block!(state::CellHistoryState, block)
     state.latest_sample_mcs = block.payload.latest_sample_mcs
 end
 function _restore_block!(state::RelationshipState, block)
-    empty!(state.edges)
-    append!(state.edges, block.payload.edges)
+    count = Int(block.payload.count)
+    count <= length(state.endpoint_a) || throw(
+        CheckpointCompatibilityError(:relationship_capacity,
+            string(length(state.endpoint_a)), string(count)))
+    clear_relationships!(state)
+    count > 0 && begin
+        copyto!(@view(state.endpoint_a[1:count]), block.payload.endpoint_a)
+        copyto!(@view(state.generation_a[1:count]), block.payload.generation_a)
+        copyto!(@view(state.endpoint_b[1:count]), block.payload.endpoint_b)
+        copyto!(@view(state.generation_b[1:count]), block.payload.generation_b)
+        copyto!(@view(state.payload[1:count]), block.payload.edge_payload)
+        fill!(@view(state.active[1:count]), UInt8(1))
+    end
+    fill!(state.count, UInt32(count))
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::EvolvingFieldState, block)
     size(state.values) == size(block.payload.values) || throw(
@@ -427,6 +495,7 @@ function _restore_block!(state::EvolvingFieldState, block)
     copyto!(state.forcing, block.payload.forcing)
     state.time = block.payload.time
     state.diagnostics = block.payload.diagnostics
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
 end
 function _restore_block!(state::ContinuousSystemState, block)
     propertynames(state.values) == propertynames(block.payload.values) || throw(
@@ -441,6 +510,23 @@ function _restore_block!(state::GlobalPropertyState, block)
     set_global_property!(
         state, block.payload.value;
         semantic_time = block.payload.semantic_time)
+end
+function _restore_block!(state::FieldExchangeState, block)
+    length(state.workspace.raw_totals) == block.metadata.capacity || throw(
+        CheckpointCompatibilityError(:field_exchange_capacity,
+            string(length(state.workspace.raw_totals)),
+            string(block.metadata.capacity)))
+    copyto!(state.value, block.payload.value)
+    copyto!(state.initialized, block.payload.initialized)
+    copyto!(state.publication_epoch, block.payload.publication_epoch)
+end
+function _restore_block!(state::AffineCellRuntime, block)
+    length(state.workspace.candidate_state) == block.metadata.capacity || throw(
+        CheckpointCompatibilityError(:affine_cell_capacity,
+            string(length(state.workspace.candidate_state)),
+            string(block.metadata.capacity)))
+    copyto!(state.workspace.publication_epoch,
+        block.payload.publication_epoch)
 end
 function _restore_block!(state::MembranePropertyState, block)
     size(state.values) == size(block.payload.values) || throw(
@@ -499,8 +585,12 @@ function restore_checkpoint(checkpoint::CoupledCheckpoint,
         _restore_block!(_find_state(candidate_state, block), block)
     end
     effects = _accepted_copy_effects(prototype.plan)
-    workspace = isempty(effects) ? NoAlgorithmWorkspace() :
-        CoupledAttemptWorkspace(candidate_state.site_states, effects)
+    transaction_effects = rebuild_accepted_copy_effects(
+        prototype.potts.algorithm_workspace, candidate_state)
+    workspace = isempty(effects) && isempty(transaction_effects) ?
+        NoAlgorithmWorkspace() :
+        CoupledAttemptWorkspace(
+            candidate_state.site_states, effects, transaction_effects)
     restored_potts = _restore_checkpoint(
         checkpoint.base, prototype.potts, adaptor;
         exact = true, algorithm_workspace = workspace)
@@ -513,13 +603,15 @@ function restore_checkpoint(checkpoint::CoupledCheckpoint,
     observation_position = checkpoint.extension.observation_schedule
     observation = CoupledObservationState(
         checkpoint.mcs, Any[], Dict{Symbol, UInt64}(
-            observation_position.last_published))
+            observation_position.last_published),
+        Dict{Symbol, UInt64}(
+            observation_position.publication_epochs))
     restored = CoupledIntegrator(
         restored_potts, prototype.plan, candidate_state,
         prototype.lifecycle, observation, prototype.protocol,
-        prototype.semantic_model,
+        prototype.semantic_model, prototype.execution_mode,
         checkpoint.mcs, position.stage, position.stage_local_mcs,
-        nothing, checkpoint.initial_state_fingerprint)
+        nothing, true, checkpoint.initial_state_fingerprint)
     _protocol_position(restored) == position || throw(
         CheckpointCompatibilityError(:protocol_position,
             string(position), string(_protocol_position(restored))))

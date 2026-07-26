@@ -5,8 +5,9 @@ Status: Accepted engineering standard
 ## Purpose
 
 This document defines the target repository, package, source, test, benchmark, documentation, and
-reproducibility structure for the paper-release refactor. Repository structure MUST reinforce the
-accepted scientific and API boundaries rather than preserve the current layout.
+reproducibility structure for the paper-release refactor and the concurrent incubation of
+`ProcessBigraphs.jl`. Repository structure MUST reinforce the accepted scientific and API
+boundaries rather than preserve the current layout.
 
 The structural migration is a clean break. Historical package locations, the `Potts` umbrella
 package, generated documentation, and duplicated development environments do not constrain the
@@ -18,6 +19,8 @@ The project remains a monorepo through the paper release. Its package family is:
 
 - `PottsToolkit`: the primary user-facing package and conventional repository-root package
 - `CorePotts`: the hardware-agnostic scientific execution engine
+- `ProcessBigraphs`: an independent, domain-neutral multirate process-bigraph runtime incubated
+  under `lib/`
 - `MakiePotts`: an optional visualization satellite
 - `NeuralPotts`: an experimental satellite
 
@@ -32,32 +35,65 @@ The packages remain independently valid Julia packages with their own identity, 
 compatibility bounds, and package-local tests. Repository co-location MUST NOT permit undeclared
 cross-package dependencies.
 
-During the Phase 13 freeze, only PottsToolkit and CorePotts are paper-core workspace packages.
-MakiePotts source is intentionally outside that workspace until the Phase 14.4 migration. The
-pre-freeze NeuralPotts implementation is absent; the experimental package identity may be restored
-only by the Phase 14.4-or-later redesign required by the accepted scope map.
+`ProcessBigraphs` has an independent package UUID and internal package identity from its first
+implementation slice. Internal alpha and beta labels are development gates, not public releases.
+The package MUST remain unpublished until it has passed complete feature and observable-behavior
+parity against the pinned Process-Bigraph 2.0 authority and a whole-cell-style composite acceptance
+workload. A repository split MAY be considered only after that first complete-parity release; it is
+not an incubation requirement.
+
+During the Phase 13 freeze, PottsToolkit and CorePotts were the only paper-core workspace packages.
+Phase 14.PB0 adds the independent `ProcessBigraphs` incubation package to the workspace without
+making it part of the Potts paper-core dependency graph. MakiePotts source is intentionally outside
+that workspace until the Phase 14.4 migration. The pre-freeze NeuralPotts implementation is absent;
+the experimental package identity may be restored only by the Phase 14.4-or-later redesign
+required by the accepted scope map.
 
 ## Dependency Direction
 
-The dependency direction is:
+The target dependency direction is:
 
 ```text
-CorePotts
-    ^
-PottsToolkit
-    ^
-MakiePotts
+ProcessBigraphs
+      ^
+  CorePotts
+      ^
+ PottsToolkit
+      ^
+  MakiePotts
 
 CorePotts <- NeuralPotts
 ```
 
 More specifically:
 
-- `CorePotts` MUST NOT depend on `PottsToolkit`, `MakiePotts`, or `NeuralPotts`.
-- `PottsToolkit` depends on `CorePotts` and MUST NOT depend on either satellite.
+- `ProcessBigraphs` MUST NOT depend on `CorePotts`, `PottsToolkit`, `MakiePotts`, or `NeuralPotts`.
+- In Phase 15, `ProcessBigraphs` directly depends on `ACSets.jl` and `Catlab.jl`. Phase 16 adds
+  `AlgebraicRewriting.jl`; Phase 17 admits `AlgebraicDynamics.jl` only through a weak-dependency
+  extension. These packages supply structural mathematics and authoring, not runtime scheduling,
+  numerical-state, transaction, or persistence authority.
+- `CorePotts` depends on `ProcessBigraphs` after the corresponding strangler-migration slice and
+  MUST NOT depend on `PottsToolkit`, `MakiePotts`, or `NeuralPotts`.
+- `PottsToolkit` depends on `CorePotts` and MAY depend directly on `ProcessBigraphs` when its
+  composition compiler uses runtime contracts. It MUST NOT depend on either satellite.
 - `MakiePotts` MAY depend on `PottsToolkit` and `CorePotts`.
 - `NeuralPotts` MUST depend on the smallest stable layer it requires.
 - A satellite MUST NOT be required to load, test, document, or benchmark the primary interface.
+
+The dependency arrow is introduced one accepted migration slice at a time. During parallel
+incubation, G4 and other Potts work MAY continue against the locked CorePotts ABI while
+`ProcessBigraphs` develops in isolated paths. Temporary absence of the target dependency is allowed;
+a reverse dependency, shared ownership of generic runtime contracts, or undeclared source inclusion
+is not.
+
+`ProcessBigraphs` owns generic paths, ports, state schemas, processes, steps, deltas, clocks,
+composites, scheduling, reconciliation, commits, checkpoints, and replay. One custom ProcessBigraph
+ACSet is its canonical authoring structure; structured cospans define open composition and directed
+wiring diagrams are derived views. The ACSet remains host-side topology/metadata and compiles to
+immutable indexed execution tables, so ordinary numerical hot paths do not traverse it. CorePotts
+owns Potts laws, spatial storage, workspaces, kernels, lifecycle operations, and algorithms.
+PottsToolkit owns biological authoring façades and lowering. CorePotts is the flagship
+spatial-process adapter, not the semantic owner of the general runtime.
 
 KernelAbstractions, AcceleratedKernels, Atomix, KernelIntrinsics, Adapt, and physical device-storage
 machinery belong primarily to `CorePotts`. `PottsToolkit` MAY depend directly on a low-level
@@ -79,6 +115,7 @@ Potts.jl/
   test/
 
   lib/
+    ProcessBigraphs/
     CorePotts/
     MakiePotts/
     NeuralPotts/
@@ -101,6 +138,11 @@ explicitly changes package identity.
 `spec/` owns observable scientific and API contracts. `design/` owns implementation and engineering
 standards. These directories remain at the repository root because their authority spans the
 package family.
+
+`lib/ProcessBigraphs/` owns its package-local source, tests, internal documentation, and development
+project. A package-local parity registry pins the normative Process-Bigraph 2.0 authority and binds
+each claimed feature to executable evidence. Potts-specific models and adapters MUST NOT be used as
+the runtime's only conformance evidence.
 
 ## CorePotts Source Organization
 
@@ -232,6 +274,7 @@ Tests are separated by responsibility:
 
 ```text
 test/                         # PottsToolkit package tests
+lib/ProcessBigraphs/test/     # ProcessBigraphs package and serial-oracle tests
 lib/CorePotts/test/           # CorePotts package tests
 lib/MakiePotts/test/          # MakiePotts package tests
 lib/NeuralPotts/test/         # NeuralPotts package tests
@@ -248,6 +291,15 @@ integration/
 Package-local tests verify that package independently. `integration/` verifies cross-package
 semantics, DSL-to-engine equivalence, SciML behavior, reference models, statistical correctness,
 and backend conformance.
+
+`ProcessBigraphs` CI owns its package-local unit, property, metamorphic, AlgebraicJulia-structure,
+scheduler, persistence, and source-derived parity-conformance lanes. Its checked Julia
+specification oracle remains structurally independent from production execution. CI, tests,
+examples, attestations, and release tooling MUST NOT install or execute Vivarium,
+Process-Bigraph Python, or Bigraph-Schema Python. Cross-package CI owns CorePotts adapter
+equivalence, PottsToolkit lowering, and whole-cell-style composite acceptance. A Potts CI lane MUST
+NOT be treated as evidence that the domain-neutral runtime passes independently, and runtime CI
+MUST NOT silently alter the accepted Phase 13 or Potts backend gates.
 
 Backend launchers SHOULD use separate processes or CI jobs while invoking the same shared
 conformance definitions. Scientific fixtures and canonical workload builders MUST NOT be copied
@@ -357,6 +409,12 @@ docs/
 `docs/build/` is generated and MUST be ignored. Small intentional documentation assets MAY remain in
 `docs/src/assets/`. Generated videos, Zarr stores, HDF5 stores, and other large tutorial products
 belong in artifacts or release assets.
+
+During incubation, `ProcessBigraphs` maintains package-local internal documentation for its public
+contracts, parity decisions, executor semantics, and extension examples. The root documentation MAY
+surface runtime-backed Potts workflows, but it MUST NOT imply a public runtime release or complete
+parity before the release gates pass. Every runtime implementation phase updates its owned
+documentation and CI evidence in the same phase.
 
 The Documenter navigation is Learn, Examples, Published Models, Concepts and Guarantees, and API.
 Learn progresses through Beginner, Model Builder, Research Workflows, and Advanced Extensions.

@@ -108,13 +108,15 @@ end
 Advance(process; interval, active = nothing, label::Symbol = :advance) =
     Advance(process, interval, active, label)
 
-struct Exchange{P, A} <: AbstractProcessInvocation
+struct Exchange{P, A, M} <: AbstractProcessInvocation
     process::P
     active::A
+    mode::M
     label::Symbol
 end
-Exchange(process; active = nothing, label::Symbol = :exchange) =
-    Exchange(process, active, label)
+Exchange(process; active = nothing, mode = nothing,
+        label::Symbol = :exchange) =
+    Exchange(process, active, mode, label)
 
 struct Sample{P, A} <: AbstractProcessInvocation
     process::P
@@ -126,13 +128,15 @@ Sample(process; active = nothing, label::Symbol = :sample) =
 Sample(history::HistorySample; kwargs...) = Sample{typeof(history), Nothing}(
     history, nothing, get(kwargs, :label, :sample))
 
-struct Update{P, A} <: AbstractProcessInvocation
+struct Update{P, A, V} <: AbstractProcessInvocation
     process::P
     active::A
+    value::V
     label::Symbol
 end
-Update(process; active = nothing, label::Symbol = :update) =
-    Update(process, active, label)
+Update(process; active = nothing, value = nothing,
+        label::Symbol = :update) =
+    Update(process, active, value, label)
 
 invocation_process(invocation::AbstractProcessInvocation) = invocation.process
 invocation_reads(invocation::AbstractProcessInvocation) =
@@ -151,6 +155,10 @@ process_writes(sample::HistorySample) = ((:history, sample.history),)
 function _validate_plan_write_conflicts(entries)
     for phase in entries
         phase isa CoupledPhase || continue
+        all(invocation -> invocation.active === nothing ||
+                invocation.active isa Union{During, AbstractMCSSchedule},
+            phase.invocations) || throw(ArgumentError(
+            "process activation must be During(...), an MCS schedule, or nothing"))
         writes = Tuple(target for invocation in phase.invocations
             for target in invocation_writes(invocation))
         length(unique(writes)) == length(writes) || throw(ArgumentError(
@@ -334,8 +342,17 @@ function _publish_state!(destination::CellHistoryState,
 end
 function _publish_state!(destination::RelationshipState,
         source::RelationshipState)
-    empty!(destination.edges)
-    append!(destination.edges, source.edges)
+    length(destination.endpoint_a) == length(source.endpoint_a) ||
+        throw(DimensionMismatch(
+            "relationship state capacities differ during publication"))
+    copyto!(destination.endpoint_a, source.endpoint_a)
+    copyto!(destination.generation_a, source.generation_a)
+    copyto!(destination.endpoint_b, source.endpoint_b)
+    copyto!(destination.generation_b, source.generation_b)
+    copyto!(destination.payload, source.payload)
+    copyto!(destination.active, source.active)
+    copyto!(destination.count, source.count)
+    copyto!(destination.publication_epoch, source.publication_epoch)
     return destination
 end
 _publish_state!(destination, source) = copyto!(destination, source)
@@ -373,12 +390,15 @@ mutable struct CoupledObservationState
     completed_mcs::UInt64
     records::Vector{Any}
     last_published::Dict{Symbol, UInt64}
+    publication_epochs::Dict{Symbol, UInt64}
 end
 CoupledObservationState() = CoupledObservationState(
-    UInt64(0), Any[], Dict{Symbol, UInt64}())
+    UInt64(0), Any[], Dict{Symbol, UInt64}(),
+    Dict{Symbol, UInt64}())
 CoupledObservationState(completed_mcs::UInt64, records::Vector{Any}) =
     CoupledObservationState(
-        completed_mcs, records, Dict{Symbol, UInt64}())
+        completed_mcs, records, Dict{Symbol, UInt64}(),
+        Dict{Symbol, UInt64}())
 
 struct CoupledPhaseFailure <: Exception
     target_mcs::UInt64
@@ -524,7 +544,15 @@ function _validate_semantic_realization(model::SemanticModel,
     return model
 end
 
-mutable struct CoupledIntegrator{P, S, L, O, R, M}
+abstract type AbstractCoupledExecutionMode end
+
+"""Sequential host-reference execution for coupled process phases."""
+struct HostCoupledExecution <: AbstractCoupledExecutionMode end
+
+"""KernelAbstractions execution for coupled process phases on any qualified backend."""
+struct PortableCoupledExecution <: AbstractCoupledExecutionMode end
+
+mutable struct CoupledIntegrator{P, S, L, O, R, M, E}
     potts::P
     plan::MCSPlan
     state::S
@@ -532,19 +560,125 @@ mutable struct CoupledIntegrator{P, S, L, O, R, M}
     observations::O
     protocol::R
     semantic_model::M
+    execution_mode::E
     mcs::UInt64
     stage::Union{Nothing, Symbol}
     stage_local_mcs::UInt64
     terminal_error::Union{Nothing, CoupledPhaseFailure}
+    checkpoint_stable::Bool
     initial_state_fingerprint::NTuple{32, UInt8}
+end
+
+_bounded_observation_workspace_bytes(::Any) = 0
+
+"""
+    realize_coupled_process(process, state, scientific)
+
+Realize backend-sized execution storage for an immutable coupled-process
+declaration. Processes that own no execution storage pass through unchanged.
+"""
+realize_coupled_process(
+    process, state::CoupledState,
+    scientific::CompiledScientificState) = process
+
+function _realize_invocation(
+        invocation::Advance,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    return Advance(
+        realize_coupled_process(
+            invocation.process, state, scientific);
+        interval = invocation.interval,
+        active = invocation.active,
+        label = invocation.label)
+end
+
+function _realize_invocation(
+        invocation::Exchange,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    return Exchange(
+        realize_coupled_process(
+            invocation.process, state, scientific);
+        active = invocation.active,
+        mode = invocation.mode,
+        label = invocation.label)
+end
+
+function _realize_invocation(
+        invocation::Sample,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    process =
+        realize_coupled_process(
+            invocation.process, state, scientific)
+    return Sample(
+        process, invocation.active,
+        invocation.label)
+end
+
+function _realize_invocation(
+        invocation::Update,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    return Update(
+        realize_coupled_process(
+            invocation.process, state, scientific);
+        active = invocation.active,
+        value = invocation.value,
+        label = invocation.label)
+end
+
+function _realize_plan_entry(
+        entry::CoupledPhase,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    invocations = map(
+        invocation -> _realize_invocation(
+            invocation, state, scientific),
+        entry.invocations)
+    return CoupledPhase(
+        entry.name, invocations;
+        version = entry.version)
+end
+_realize_plan_entry(
+    entry::AbstractMCSPlanEntry,
+    state::CoupledState,
+    scientific::CompiledScientificState) = entry
+
+"""
+    realize_coupled_plan(plan, state, scientific)
+
+Bind a backend-independent ordinary MCS plan to authoritative coupled and
+scientific state. The returned plan preserves declaration semantics while its
+workspace-owning processes are executable on the state backend.
+"""
+function realize_coupled_plan(
+        plan::MCSPlan,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    plan.timeline === nothing || return plan
+    entries = map(
+        entry -> _realize_plan_entry(
+            entry, state, scientific),
+        plan.entries)
+    return MCSPlan(
+        entries;
+        version = plan.version)
 end
 
 function init_coupled(potts::ScientificPottsIntegrator, plan::MCSPlan,
         state::CoupledState; lifecycle = NoCompiledLifecycle(),
         observations = CoupledObservationState(),
-        protocol = NoStagedProtocol(), semantic_model = nothing)
+        protocol = NoStagedProtocol(), semantic_model = nothing,
+        execution_mode::AbstractCoupledExecutionMode =
+            potts.plan.backend isa KernelAbstractions.CPU ?
+                HostCoupledExecution() :
+                PortableCoupledExecution())
     potts.mcs == 0 || throw(ArgumentError(
         "coupled initialization requires an unstepped scientific integrator"))
+    plan = realize_coupled_plan(
+        plan, state, potts.state)
     potts_entry = if plan.timeline === nothing
         only(entry for entry in plan.entries if entry isa PottsAttempts)
     else
@@ -556,23 +690,39 @@ function init_coupled(potts::ScientificPottsIntegrator, plan::MCSPlan,
         potts.algorithm_workspace.effects : ()
     _accepted_copy_effects_match(declared_effects, workspace_effects) ||
         throw(ArgumentError(
-        "PottsAttempts accepted-copy effects must match the scientific algorithm workspace"))
+            "PottsAttempts accepted-copy effects must match the scientific algorithm workspace"))
+    accepted_copy_workspace_state_valid(
+        potts.algorithm_workspace, state) || throw(ArgumentError(
+        "accepted-copy transaction state must alias the authoritative coupled state"))
     semantic_model === nothing ||
         semantic_model isa SemanticModel || throw(ArgumentError(
             "semantic_model must be the canonical SemanticModel"))
     semantic_model === nothing ||
         _validate_semantic_realization(semantic_model, potts, plan, state)
-    preflight_coupled(plan, state, potts.plan.capabilities)
+    execution_mode isa HostCoupledExecution &&
+        !(potts.plan.backend isa KernelAbstractions.CPU) &&
+        throw(ArgumentError(
+            "host coupled execution requires a CPU backend"))
+    preflight_coupled(
+        plan, state, potts.plan.capabilities; potts)
     observation_entry = only(
         entry for entry in plan.entries if entry isa ObservationPhase)
     domain = potts.plan.backend isa KernelAbstractions.CPU ? :host : :device
     for observation in observation_entry.observations
         observable = observation.observable
-        observable isa ActivitySummary || continue
-        record_allocation!(
-            potts.plan, domain, _array_bytes(observable.active_count))
-        record_allocation!(
-            potts.plan, domain, _array_bytes(observable.total))
+        if observable isa ActivitySummary
+            record_allocation!(
+                potts.plan, domain,
+                _array_bytes(observable.active_count))
+            record_allocation!(
+                potts.plan, domain,
+                _array_bytes(observable.total))
+        else
+            bytes = _bounded_observation_workspace_bytes(
+                observable)
+            iszero(bytes) ||
+                record_allocation!(potts.plan, domain, bytes)
+        end
     end
     if !(potts.plan.backend isa KernelAbstractions.CPU)
         synchronize_observation!(potts.plan)
@@ -582,16 +732,18 @@ function init_coupled(potts::ScientificPottsIntegrator, plan::MCSPlan,
     end
     initial_fingerprint = _coupled_initial_state_fingerprint(state)
     return CoupledIntegrator(potts, plan, state, lifecycle, observations,
-        protocol, semantic_model, UInt64(0), nothing, UInt64(0), nothing,
+        protocol, semantic_model, execution_mode,
+        UInt64(0), nothing, UInt64(0), nothing, true,
         initial_fingerprint)
 end
 
-function _invocation_active(invocation, stage)
+function _invocation_active(invocation, stage, target_mcs)
     invocation.active === nothing && return true
+    invocation.active isa AbstractMCSSchedule &&
+        return is_due(invocation.active, target_mcs)
     invocation.active isa During || throw(ArgumentError(
-        "process activation must be During(...) or nothing"))
-    stage === nothing && return false
-    return stage.name in invocation.active.stages
+        "process activation must be During(...), an MCS schedule, or nothing"))
+    return stage !== nothing && stage.name in invocation.active.stages
 end
 
 function execute_process!(candidate::CoupledState, snapshot::CoupledState,
@@ -635,20 +787,71 @@ function execute_process!(candidate::CoupledState, snapshot::CoupledState,
 end
 
 _invocation_interval(invocation::Advance) = invocation.interval
+_invocation_interval(invocation::Exchange) = invocation.mode
+_invocation_interval(invocation::Update) = invocation.value
 _invocation_interval(invocation::AbstractProcessInvocation) = nothing
+
+function _resolve_invocation_interval(
+        value::ScheduledParameter,
+        stage, target_mcs)
+    stage === nothing && throw(ArgumentError(
+        "a scheduled process value requires an active staged protocol"))
+    parameter_stage = stage_for(
+        value.protocol, target_mcs)
+    parameter_stage.name === stage.name || throw(ArgumentError(
+        "scheduled process value protocol does not match the root plan protocol"))
+    return scheduled_value(value, parameter_stage)
+end
+_resolve_invocation_interval(
+    value, stage, target_mcs) = value
+
+_resolved_invocation_interval(
+        invocation::AbstractProcessInvocation,
+        stage, target_mcs) =
+    _resolve_invocation_interval(
+        _invocation_interval(invocation),
+        stage, target_mcs)
+
+function _execute_host_process!(
+        candidate::CoupledState, snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        process, target_mcs, stage, interval)
+    execute_process!(
+        candidate, snapshot, potts_snapshot, process,
+        target_mcs, stage, interval)
+    return ()
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator, process,
+        target_mcs, stage, interval)
+    throw(UnsupportedBackendCapability(
+        integrator.potts.plan.capabilities.family,
+        component_identity(process).key))
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator, process::SiteDynamics,
+        target_mcs, stage, interval)
+    target = _state_by_name(
+        integrator.state.site_states, process.property)
+    apply_site_dynamics!(
+        integrator.potts.plan, target, process, target_mcs)
+    return ()
+end
 
 function _execute_phase!(integrator::CoupledIntegrator,
         phase::CoupledPhase, target_mcs::UInt64, stage)
-    if !(integrator.potts.plan.backend isa KernelAbstractions.CPU)
+    if integrator.execution_mode isa PortableCoupledExecution
         for invocation in phase.invocations
-            _invocation_active(invocation, stage) || continue
+            _invocation_active(invocation, stage, target_mcs) || continue
             process = invocation_process(invocation)
-            process isa SiteDynamics || throw(ArgumentError(
-                "the GPU-native coupled phase currently admits only qualified site dynamics"))
-            target = _state_by_name(
-                integrator.state.site_states, process.property)
-            apply_site_dynamics!(
-                integrator.potts.plan, target, process, target_mcs)
+            _execute_portable_process!(
+                integrator, process, target_mcs, stage,
+                _resolved_invocation_interval(
+                    invocation, stage, target_mcs))
         end
         return integrator
     end
@@ -658,18 +861,14 @@ function _execute_phase!(integrator::CoupledIntegrator,
     potts_candidate = deepcopy(potts_snapshot)
     written_cell_properties = Symbol[]
     for invocation in phase.invocations
-        _invocation_active(invocation, stage) || continue
+        _invocation_active(invocation, stage, target_mcs) || continue
         process = invocation_process(invocation)
-        if process isa CellDynamics
-            execute_cell_dynamics!(
-                potts_candidate, potts_snapshot, process,
-                target_mcs, _invocation_interval(invocation))
-            append!(written_cell_properties,
-                (variable.property for variable in process.system.state))
-        else
-            execute_process!(candidate, snapshot, potts_snapshot, process,
-                target_mcs, stage, _invocation_interval(invocation))
-        end
+        append!(written_cell_properties, _execute_host_process!(
+            candidate, snapshot, potts_candidate, potts_snapshot,
+            integrator.potts.state,
+            process, target_mcs, stage,
+            _resolved_invocation_interval(
+                invocation, stage, target_mcs)))
     end
     publish_coupled_state!(integrator.state, candidate)
     _publish_cell_properties!(
@@ -703,7 +902,8 @@ end
 @inline function _any_potts_observation_due(observations::Tuple, state, target_mcs)
     observation = first(observations)
     _observation_due_now(state, observation, target_mcs) &&
-        !(observation.observable isa ActivitySummary) && return true
+        _observation_requires_logical_snapshot(
+            observation.observable) && return true
     return _any_potts_observation_due(
         Base.tail(observations), state, target_mcs)
 end
@@ -723,6 +923,10 @@ function _execute_observations!(integrator::CoupledIntegrator,
             execute_activity_observation!(
                 integrator.observations, observation,
                 integrator.state, integrator.potts.plan, target_mcs)
+        elseif _is_bounded_native_observation(
+                observation.observable)
+            execute_bounded_observation!(
+                integrator, observation, target_mcs)
         else
             execute_observation!(
                 integrator.observations, observation,
@@ -738,6 +942,7 @@ function SciMLBase.step!(integrator::CoupledIntegrator)
         Int(integrator.mcs), SciMLBase.ReturnCode.Terminated))
     integrator.plan.timeline === nothing ||
         return _step_multirate!(integrator)
+    integrator.checkpoint_stable = false
     target = integrator.mcs + UInt64(1)
     stage = integrator.protocol isa NoStagedProtocol ?
         nothing : stage_for(integrator.protocol, target)
@@ -772,6 +977,7 @@ function SciMLBase.step!(integrator::CoupledIntegrator)
         integrator.stage = stage === nothing ? nothing : stage.name
         integrator.stage_local_mcs =
             stage === nothing ? UInt64(0) : stage_local_mcs(stage, target)
+        integrator.checkpoint_stable = true
         return integrator
     catch cause
         failure = CoupledPhaseFailure(target,

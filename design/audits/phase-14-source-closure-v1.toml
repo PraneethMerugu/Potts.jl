@@ -162,7 +162,7 @@ failure_rule = "The simulation-ID-902 microfixture and the ten-run aggregate are
 id = "wang-2025-collective-tumor-migration"
 source_closure = "pinned-source-transcribed-with-foreign-runtime"
 validation_target_id = "wang2025-figure3-migration-map-v1"
-validation_target = "Figure 3 migration-mode map at MCS 270 over 21 focal-strength values from 0 to 1000 and 11 protrusion-force values from 0 to 300, with 50 repeats per combination; the displayed 0-to-500 focal subset remains a presentation choice."
+validation_target = "Figure 3 migration-mode map at source MCS 270 / normalized target MCS 271 over 21 focal-strength values from 0 to 1000 and 11 protrusion-force values from 0 to 300, with 50 repeats per combination; the displayed 0-to-500 focal subset remains a presentation choice."
 baseline_policy = "Retain the archived scaler, two k-means models, and UMAP model as the paper-exact classifier baseline while also preregistering transparent geometric cross-checks; neither may silently replace the other."
 claim_boundary = "Phase 14.0 closes the pinned source and analysis identity. Quantitative Reproduction still requires seed registration, a compatible CompuCell3D 4.2.5 baseline, and exact-versus-transparent classifier reporting."
 authority_order = ["paper and supplement", "Zenodo paper-v0 / Git 60ebcf013aafefdff39ebe566114ee79f2a6e54d", "CompuCell3D 4.2.5", "Yi Jiang clarification"]
@@ -173,10 +173,11 @@ transcribed_execution = [
     "contact NeighborOrder 4, focal-point activation NeighborOrder 1 and plugin NeighborOrder 3",
     "periodic x/y secretome field with constant medium concentration, diffusion coefficient 1, and zero decay",
     "231 scan combinations: focal strength 0:50:1000 and protrusion force 0:30:300",
-    "50 repeats per scan combination; geometric features at MCS 90 and 270",
+    "50 repeats per scan combination; geometric features at source MCS 90 and 270 / normalized targets 91 and 271",
     "relax_step=120 and switch_step=210",
-    "registered order: migration/secretome/history every MCS, ODE every MCS, focal parameters every 10 MCS, polarity/force/output every MCS",
-    "five-MCS displacement polarity, Antimony step size 2880, Hill threshold 40 with exponent 4, neighbor-polarity scale 0.4",
+    "exact order: Potts, DiffusionSolverFE, BlobInitializer, migration/secretome/history, ODE, focal parameters when mcs%10==0, polarity/force/output, housekeeping",
+    "source displacement is x(t)-x(t-4) after append while paper Equation 11 states x(t)-x(t-5); both are registered as source baseline and paper-intent sensitivity variant",
+    "Antimony step size 2880, Hill threshold 40 with exponent 4, neighbor-polarity scale 0.4",
 ]
 source_file_sha256 = [
     "ParameterScanSpecs.json=258d44a0e68d9187476f68bf1059af67e15a8393b5e32b5b3523147acad98918",
@@ -188,7 +189,7 @@ source_file_sha256 = [
 ]
 sensitivity_axes = [
     "missing CompuCell3D and NumPy seeds replaced by a preregistered paired semantic-seed ensemble",
-    "foreign steppable/Potts/field order checked by source-runtime microfixtures",
+    "source x(t)-x(t-4) displacement compared with the paper-intent x(t)-x(t-5) variant",
     "archived binary classifier outputs compared with a transparent registered geometric-observable table rather than silently re-trained",
 ]
 failure_rule = "Paper-exact classifier agreement and transparent mechanistic observables are reported independently; a match in one does not erase disagreement in the other."

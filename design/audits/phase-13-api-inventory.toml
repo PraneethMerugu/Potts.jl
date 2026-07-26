@@ -6,14 +6,14 @@ schema_version = "1.0.0"
 status = "frozen-owner-approved"
 
 [modules.CorePotts]
-export_count = 727
-export_set_sha256 = "4bb6f3e9f04e685cf8128f9646d0038d2b2f0e2a6f2f952678a1250fa98443d7"
+export_count = 728
+export_set_sha256 = "4648f381b0a39c1be512b4547802863bb59e1ad19f6db39d1bafa5a61be37af9"
 undocumented_stable = []
 unpromoted_candidates = []
 
     [modules.CorePotts.counts]
     experimental = 10
-    internal = 488
+    internal = 489
     limited = 1
     stable = 228
 
@@ -592,6 +592,11 @@ unpromoted_candidates = []
     documented = true
     kind = "type"
     name = "CellTypeIn"
+    [[modules.CorePotts.exports]]
+    classification = "internal"
+    documented = true
+    kind = "type"
+    name = "CellVectorBoundaryPotentialHamiltonian"
     [[modules.CorePotts.exports]]
     classification = "internal"
     documented = false

@@ -1,0 +1,83 @@
+schema_version = "1.0.0"
+status = "pass"
+recorded_at = "2026-07-25"
+model_id = "wang-2025-collective-tumor-migration"
+purpose = "foreign-runtime proof of CompuCell3D 4.2.5 pre-MCS, XML field, normal-Python registration, and frequency placement"
+
+[paper]
+doi = "10.1016/j.bpj.2025.04.010"
+local_reference_sha256 = "69fad81266dd41e1ba1e69fba3a7bed88efbac9dec2818e055cb4fd15beaa600"
+local_reference_bytes = 7684284
+repository_disposition = "not-vendored"
+
+[wang_source]
+git_commit = "60ebcf013aafefdff39ebe566114ee79f2a6e54d"
+zenodo_doi = "10.5281/zenodo.14928214"
+zenodo_sha256 = "1aa5c426a24075091761c2fc80873b1d7582b32bc038d761e71630c867c3e984"
+zenodo_md5 = "12f8f5759b335c36ce988851e46c3f68"
+git_zenodo_tree_comparison = "byte-identical-excluding-git-metadata"
+
+[compucell3d]
+version = "4.2.5"
+revision = "20210612"
+runtime_commit_label = "4.2.5-1-ge45c73e"
+source_tag_commit = "4ca1f2919a5da53111d2027d2e00b626aba1cd28"
+runtime_artifact = "cc3d_4.2.5_OSX_10.14+.dmg"
+runtime_artifact_bytes = 284664579
+runtime_artifact_sha256 = "a9a9d09653625663bfb5d2bff1a16e1e02bb8b193f028587136d4eab396fd076"
+host = "macOS arm64 using Rosetta x86_64 translation"
+exit_code = 0
+
+[oracle]
+trace = "cc3d-4.2.5-trace.csv"
+trace_sha256 = "f304a82a5dca8c81b64cbdb2b444502d140f877954902e4bfff2f3fb191beabe"
+rows = 11
+python_frequency_1_code = 123
+python_frequency_10_code = 1234
+pre_mcs_field_write = 3.0
+normal_python_field_observation = 7.0
+result = "pass"
+
+[[wang_source.files]]
+path = "s1_model/12222021_force_fpp_scan/Simulation/ParameterScanSpecs.json"
+sha256 = "258d44a0e68d9187476f68bf1059af67e15a8393b5e32b5b3523147acad98918"
+
+[[wang_source.files]]
+path = "s1_model/12222021_force_fpp_scan/Simulation/fpp_polarity_force.xml"
+sha256 = "f90cce0a696c674649617f606d3ad0055de3787f80ce92fa2e4fee7e2c013b09"
+
+[[wang_source.files]]
+path = "s1_model/12222021_force_fpp_scan/Simulation/fpp_polarity_force.py"
+sha256 = "fea06064140cbc372740ee1008f5a4af77a92454648e1f0473cbdc3a431a327f"
+
+[[wang_source.files]]
+path = "s1_model/12222021_force_fpp_scan/Simulation/fpp_polarity_force_Steppables.py"
+sha256 = "c045bc7fc46652db9ec340076d733d89cb75a002a045343b103af77c21b9f04e"
+
+[[wang_source.files]]
+path = "s2_model_simulation/cc3d_simulation_scan_array.ipynb"
+sha256 = "2d7adbcb6fe572ebdfc673e5c9644dd71a33ed93dabf6035ca287ce623dbbfbb"
+
+[[wang_source.files]]
+path = "src/feature_calc_6_simple_corr_edit.py"
+sha256 = "e8ad45197eea6e4bae24516ffd2fa5ecc1d7da0cb1e4333a9a49e4d2f6db676d"
+
+[[fixture_files]]
+path = "integration/external/wang_order/wang_order_oracle.cc3d"
+sha256 = "bab524cbd91a906712967dbbf1f1d6860aff557b7b668e169265f0b5feaf4962"
+
+[[fixture_files]]
+path = "integration/external/wang_order/Simulation/wang_order_oracle.xml"
+sha256 = "29e058af70c90e8e56a47e35c6e87007d25f5a330691d932a8718222af696594"
+
+[[fixture_files]]
+path = "integration/external/wang_order/Simulation/wang_order_oracle.py"
+sha256 = "7cc0056390b80131f82f4127f5b6f78c2da412bc14f263035d50c3077a771763"
+
+[[fixture_files]]
+path = "integration/external/wang_order/Simulation/wang_order_oracle_Steppables.py"
+sha256 = "d8f4c3ee34d1e5e60f5cbe362d67fe00bb85196c013583b142306b86c32e6be3"
+
+[[fixture_files]]
+path = "integration/external/wang_order/run_cc3d_isolated.py"
+sha256 = "df39278f606d195e72d468dfbce6951efe3c4743c5eceb5a779492148e064aad"

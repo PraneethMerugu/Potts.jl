@@ -1,10 +1,11 @@
-schema_version = "2.0.0"
+schema_version = "2.1.0"
 registry_version = "phase14-contract-registry-v2"
-status = "phase14.1-owner-approved-simplified-gpu-native-contract-set; Wortel CPU-reference slice passed; Wortel Metal/ROCm closure required; individual contracts provisional"
-registered_at = "2026-07-24"
+status = "phase14.1-owner-approved-simplified generic-hierarchical GPU-native contract set; Wortel CPU/Metal/ROCm and Wang G3-B sequential CPU passed; Wang assembled GPU qualification retired; G4 is current; individual contracts provisional outside proven slices"
+registered_at = "2026-07-25"
 supersedes = "phase-14-contract-registry-v1.toml"
 architecture_decision = "decisions/0031-phase-14-single-semantic-kernel.md"
 gpu_promotion_decision = "decisions/0032-phase-14-gpu-native-promotion.md"
+generic_authoring_decision = "decisions/0033-phase-14-generic-hierarchical-authoring.md"
 gpu_implementation_plan = "../design/audits/phase-14-gpu-native-implementation-plan.md"
 kernel_specification = "phase-14-semantic-kernel.md"
 source_records = "../design/audits/phase-14-model-source-records-v1.toml"
@@ -68,6 +69,18 @@ candidate_values = [
     "DelayState",
     "PhaseObservation",
 ]
+
+[authoring_composition]
+root_model = "PottsModel retains flat order-independent declarations for small models and Phase 13 compatibility."
+hierarchy = "ModelFragment is the sole generic hierarchical authoring unit for the existing Potts Phase 14 path; no CoupledModel, paper-specific core model, or independent Potts domain runtime is admitted. Decision 0034 separately governs the future domain-neutral ProcessBigraphs runtime and its strangler migration."
+requirements = "Fragment requirements are named and typed by semantic category, owner, schema, units, lifecycle obligations, capabilities, and backend needs as applicable."
+exports = "Fragment exports are named immutable references to admitted declarations or operations; private fragment declarations are inaccessible externally."
+plan = "Exactly one normalized root plan references exported operations and owns all order, cadence, stages, snapshots, lifecycle commit, observations, and stable boundaries."
+lowering = "Bindings, nested fragments, export paths, and convenience entries resolve completely to the canonical seven-area model before execution."
+identity = "Equivalent explicit-leaf and fragment-packaged models have the same scientific fingerprint; composition paths remain diagnostic provenance."
+paper_boundary = "Selected paper or author names are forbidden as stable CorePotts/PottsToolkit exports; example-layer builders use only the generic API and do not count as generic conformance evidence."
+backend_boundary = "Backend requirements propagate transitively from the lowered fragment graph; no fragment may hide fallback, transfer, synchronization, allocation, or unsupported laws."
+acceptance_fixtures = ["nested binding and privacy", "named requirement/export mismatch truth tables", "direct-versus-fragment fingerprint identity", "fragment substitution", "one-root-plan expansion", "Wang", "CNV", "Morpheus", "CPU/Metal/ROCm preflight and qualification"]
 
 [adapter_boundary]
 stable_core_dependency = "none"
@@ -148,6 +161,7 @@ acceptance_requires = [
     "unsupported experimental-family rejection",
     "device kernels with no scalar host loop or fallback",
     "real-hardware Metal and ROCm process evidence",
+    "Wang secretome field, uptake, and exact split order qualified inside the Wang slice rather than deferred to the later field-model slice",
     "Wortel, Wang, and field-model CPU-plus-device vertical slices",
 ]
 
@@ -176,6 +190,7 @@ acceptance_requires = [
     "exact order and same-time conflict fixtures",
     "stage-boundary and gap fixtures",
     "multirate conversion fixtures",
+    "Wang exact source-MCS-to-target-MCS k->k+1 mapping and Potts/field/history/uptake/ODE/focal/alignment/force order, including source 120/210/211 and target 121/211/212 visibility on the sequential CPU reference",
     "restart from every completed-MCS boundary",
     "no hidden synchronization or per-entry host transfer on Metal and ROCm",
     "real-hardware same-time and multirate schedule fixtures",

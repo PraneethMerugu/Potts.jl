@@ -1,0 +1,3 @@
+Test Summary:                | Pass  Total     Time
+Phase 14 G3-B restart matrix |   48     48  1m09.6s
+Phase 14 G3-B conformance suite 'restart': PASS

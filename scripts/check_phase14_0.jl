@@ -37,8 +37,13 @@ closures = load_toml("design/audits/phase-14-source-closure-v1.toml")
 matrix = load_toml("design/audits/phase-14-model-capability-matrix-v1.toml")
 work = load_toml("design/audits/phase-14-d9-work-items-v1.toml")
 morpheus = load_toml("design/audits/phase-14-morpheus-continuous-semantics-v1.toml")
+wang_order = load_toml("design/audits/phase-14-wang-order-oracle-v1.toml")
+g3b_entry = load_toml("design/audits/phase-14-g3b-entry-contract-v1.toml")
+g3b_ledger = load_toml("design/audits/phase-14-g3b-closure-ledger-v1.toml")
+wang_order_evidence = load_toml("design/evidence/phase-14/wang-order/index.toml")
 old_registry = load_toml("spec/phase-14-contract-registry-v1.toml")
 registry = load_toml("spec/phase-14-contract-registry-v2.toml")
+phase14_public_api = load_toml("design/audits/phase-14-public-api-v2.toml")
 wortel_evidence_path = joinpath(
     REPO, "design", "audits", "phase-14-wortel-vertical-slice-evidence.md")
 check(isfile(wortel_evidence_path),
@@ -49,6 +54,21 @@ check(isfile(gpu_plan_path), "missing Phase 14 GPU-native implementation plan")
 gpu_decision_path = joinpath(
     REPO, "spec", "decisions", "0032-phase-14-gpu-native-promotion.md")
 check(isfile(gpu_decision_path), "missing Phase 14 GPU-native promotion decision")
+generic_authoring_decision_path = joinpath(
+    REPO, "spec", "decisions", "0033-phase-14-generic-hierarchical-authoring.md")
+check(isfile(generic_authoring_decision_path),
+    "missing Phase 14 generic hierarchical authoring decision")
+generic_authoring_audit_path = joinpath(
+    REPO, "design", "audits", "phase-14-generic-authoring-simplification-audit.md")
+check(isfile(generic_authoring_audit_path),
+    "missing Phase 14 generic authoring simplification audit")
+wang_order_audit_path = joinpath(
+    REPO, "design", "audits", "phase-14-wang-order-audit.md")
+check(isfile(wang_order_audit_path), "missing Wang execution-order audit")
+g3b_closure_audit_path = joinpath(
+    REPO, "design", "audits", "phase-14-g3b-closure-spec-audit.md")
+check(isfile(g3b_closure_audit_path),
+    "missing G3-B closure specification audit")
 
 source_rows = sources["models"]
 closure_rows = closures["models"]
@@ -88,7 +108,30 @@ check(closure_ids == expected_models, "source-closure rows differ from the froze
 check(matrix["status"] == "accepted-requirements-baseline", "capability matrix is not an accepted requirements baseline")
 check(work["status"] == "accepted-phase14.1-simplified-gpu-native-planning", "D9 work-item registry is not accepted for the simplified GPU-native Phase 14.1 architecture")
 check(morpheus["status"] == "accepted-requirements-baseline", "Morpheus matrix is not an accepted requirements baseline")
+check(wang_order["status"] == "accepted-source-and-runtime-order",
+    "Wang execution-order authority is not accepted")
+check(wang_order_evidence["status"] == "pass",
+    "Wang CompuCell3D 4.2.5 runtime oracle did not pass")
+check(wang_order["history_discrepancy"]["classification"] ==
+      "paper-t-minus-5_source-t-minus-4",
+    "Wang paper/source history discrepancy is not registered")
+check(g3b_entry["schema_version"] == "1.6.0" &&
+      g3b_entry["revision"] == 7,
+    "G3-B entry contract is not the revision-7 fail-closed closure contract")
+check(g3b_ledger["overall_status"] == "passed",
+    "G3-B closure ledger is not passed")
+check(g3b_ledger["contract_revision"] == g3b_entry["revision"],
+    "G3-B closure ledger targets a stale contract revision")
+check(g3b_entry["source_time_mapping"]["source_first"] == 0 &&
+      g3b_entry["source_time_mapping"]["target_first"] == 1 &&
+      g3b_entry["source_time_mapping"]["source_last"] == 499 &&
+      g3b_entry["source_time_mapping"]["target_last"] == 500,
+    "G3-B source MCS mapping is not 0:499 -> target 1:500")
 check(occursin("phase14.1-owner-approved-simplified", registry["status"]), "contract registry is not the owner-approved simplified Phase 14.1 set")
+check(occursin("Wang G3-B sequential CPU passed", registry["status"]) &&
+      occursin("Wang assembled GPU qualification retired", registry["status"]) &&
+      occursin("G4 is current", registry["status"]),
+    "contract registry does not record G3-B passed, Wang GPU retired, and G4 current")
 expected_contracts = Set([
     "state",
     "process",
@@ -254,6 +297,38 @@ check(isempty(setdiff(capability_ids, union(covered_capabilities, coverage_exclu
     "one or more capability rows lack a contract or explicit existing/paper-specific classification")
 check(isempty(setdiff(covered_capabilities, capability_ids)), "contract registry contains unknown capability ids")
 
+authoring = registry["authoring_composition"]
+require_fields(authoring, [
+    "root_model", "hierarchy", "requirements", "exports", "plan", "lowering",
+    "identity", "paper_boundary", "backend_boundary", "acceptance_fixtures",
+], "generic authoring composition policy")
+check(occursin("ModelFragment", authoring["hierarchy"]),
+    "generic authoring policy does not use ModelFragment as the sole hierarchy")
+check(occursin("one normalized root plan", lowercase(authoring["plan"])),
+    "generic authoring policy does not preserve one root plan")
+check(occursin("named", lowercase(authoring["requirements"])) &&
+      occursin("typed", lowercase(authoring["requirements"])) &&
+      occursin("named", lowercase(authoring["exports"])),
+    "generic authoring policy lacks named typed requirements/exports")
+check(occursin("transitively", lowercase(authoring["backend_boundary"])),
+    "generic authoring policy does not derive backend requirements transitively")
+
+paper_export_tokens = (
+    "wang", "wortel", "merks", "mombach", "shirinifard", "graner", "glazier", "cnv",
+)
+phase14_exports = String[]
+for module_exports in Base.values(phase14_public_api["modules"])
+    append!(phase14_exports, module_exports)
+end
+for row in contract_rows
+    append!(phase14_exports, row["public_values"])
+end
+for exported in phase14_exports
+    lowered = lowercase(exported)
+    check(!any(token -> occursin(token, lowered), paper_export_tokens),
+        "paper-specific public API value '$exported' is forbidden by Decision 0033")
+end
+
 work_contracts = Set{String}()
 work_capabilities = Set{String}()
 work_required = [
@@ -304,8 +379,11 @@ check(!isempty(morpheus_contracts), "Morpheus matrix does not trace to Phase 14 
 freeze_decision = read(joinpath(REPO, "spec/decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"), String)
 architecture_decision = read(joinpath(REPO, "spec/decisions/0031-phase-14-single-semantic-kernel.md"), String)
 gpu_decision = read(gpu_decision_path, String)
+generic_authoring_decision = read(generic_authoring_decision_path, String)
+generic_authoring_audit = read(generic_authoring_audit_path, String)
 gpu_plan = read(gpu_plan_path, String)
 kernel = read(joinpath(REPO, "spec/phase-14-semantic-kernel.md"), String)
+coupled_api = read(joinpath(REPO, "spec/phase-14-coupled-dynamics-api.md"), String)
 interview = read(joinpath(REPO, "design/audits/phase-14-semantics-focused-interview.md"), String)
 audit = read(joinpath(REPO, "design/audits/phase-14-0-corpus-and-requirements-audit.md"), String)
 roadmap = read(joinpath(REPO, "design/refactor-roadmap.md"), String)
@@ -316,10 +394,49 @@ check(occursin("seven stable contract areas", architecture_decision), "Decision 
 check(occursin("Status: Accepted", gpu_decision), "Decision 0032 is not accepted")
 check(occursin("Metal", gpu_decision) && occursin("ROCm", gpu_decision),
     "Decision 0032 does not require Metal and ROCm")
+check(occursin("Status: Accepted policy", generic_authoring_decision),
+    "Decision 0033 is not accepted")
+check(occursin("ModelFragment", generic_authoring_decision) &&
+      occursin("named typed requirements", generic_authoring_decision) &&
+      occursin("exports", generic_authoring_decision),
+    "Decision 0033 does not freeze generic hierarchical fragment composition")
+check(occursin("Status: Complete", generic_authoring_audit),
+    "generic authoring simplification audit is not complete")
 check(occursin("Wortel GPU closure", gpu_plan),
     "GPU-native implementation plan does not make Wortel closure explicit")
 check(occursin("Status: Complete; all 15 owner decisions accepted", interview), "focused simplification interview is not complete")
 check(occursin("sole normative architecture", kernel), "kernel specification is not the sole normative Phase 14 architecture")
+check(occursin("Generic hierarchical composition", kernel) &&
+      occursin("named typed requirements", kernel) &&
+      occursin("named typed exports", kernel),
+    "kernel specification lacks the generic hierarchical authoring boundary")
+wang_heading = findfirst("### Wang collective migration", coupled_api)
+cnv_heading = findfirst("### CNV", coupled_api)
+merks_heading = findfirst("### Merks vasculogenesis", coupled_api)
+if wang_heading === nothing || cnv_heading === nothing
+    check(false, "coupled API is missing Wang or CNV representative headings")
+else
+    wang_section = coupled_api[first(wang_heading):prevind(coupled_api, first(cnv_heading))]
+    check(occursin("model = compose(", wang_section),
+        "Wang authoring sketch is not composed from generic fragments")
+    check(occursin("ModelFragment(", wang_section) &&
+          occursin("exports = (", wang_section),
+        "Wang authoring sketch lacks named generic fragment exports")
+    check(!occursin("model = PottsModel(\n    Tumor", wang_section),
+        "Wang authoring sketch regressed to a flattened PottsModel declaration list")
+    cnv_section = coupled_api[first(cnv_heading):end]
+    check(occursin("model = compose(", cnv_section),
+        "CNV authoring sketch is not composed from generic fragments")
+end
+if merks_heading === nothing || wang_heading === nothing
+    check(false, "coupled API is missing Merks or Wang representative headings")
+else
+    merks_section = coupled_api[first(merks_heading):prevind(
+        coupled_api, first(wang_heading))]
+    check(occursin("ModelFragment(", merks_section) &&
+          occursin("model = compose(", merks_section),
+        "Merks authoring sketch is not composed from generic fragments")
+end
 for contract in expected_contracts
     heading = contract == "potts-algorithm-identities" ? "Contract 7: Potts Algorithm Identities" :
         contract == "spatial-roles" ? "Contract 6: Spatial Roles" :
@@ -342,7 +459,10 @@ phase14_markdown = [
     joinpath(REPO, "spec/decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"),
     joinpath(REPO, "spec/decisions/0031-phase-14-single-semantic-kernel.md"),
     gpu_decision_path,
+    generic_authoring_decision_path,
+    generic_authoring_audit_path,
     gpu_plan_path,
+    wang_order_audit_path,
     joinpath(REPO, "design/audits/phase-14-semantics-simplification-audit.md"),
     joinpath(REPO, "design/audits/phase-14-semantics-focused-interview.md"),
 ]
@@ -379,6 +499,24 @@ for phrase in stale_phrases
     check(!occursin(phrase, closure_text), "stale Phase 14.0 status remains: '$phrase'")
 end
 
+current_status_paths = [
+    joinpath(REPO, "design/refactor-roadmap.md"),
+    joinpath(REPO, "spec/README.md"),
+    joinpath(REPO, "spec/phase-14-semantic-kernel.md"),
+    joinpath(REPO, "design/audits/phase-14-gpu-native-implementation-plan.md"),
+]
+current_status_text = join(read(path, String) for path in current_status_paths)
+for phrase in ["Wang is open", "G3-B current", "pending G3-B"]
+    check(!occursin(phrase, current_status_text),
+        "stale G3-B status remains in a current-status document: '$phrase'")
+end
+check(occursin("G3-B", current_status_text) &&
+      occursin("complete", current_status_text) &&
+      occursin("G4", current_status_text) &&
+      occursin("current", current_status_text) &&
+      occursin("retired", lowercase(current_status_text)),
+    "current-status documents do not record G3-B complete, Wang GPU retired, and G4 current")
+
 if isempty(failures)
     println("Phase 14 corpus and simplified architecture closure passes:")
     println("  6 frozen source records and 6 source-closure records")
@@ -386,7 +524,11 @@ if isempty(failures)
     println("  all $(length(old_contract_ids)) registry v1 contracts dispositioned into $(length(contract_ids)) registry v2 semantic areas")
     println("  $(length(contract_ids)) provisional kernel contracts covered by $(length(work_ids)) vertical work items")
     println("  $(length(morpheus_feature_ids)) Morpheus semantic requirements traced to registered contracts")
-    println("  Decisions 0031/0032 and all 15 owner choices accepted; Wortel CPU-reference passed and Metal/ROCm closure is current")
+    println("  Decisions 0031–0033 and all 15 owner choices accepted; generic hierarchical authoring enforced")
+    println("  no selected-paper names exported; Wang sketch uses generic fragments and one root plan")
+    println("  Wortel CPU/Metal/ROCm G2 passed")
+    println("  Wang G3-B sequential CPU closure passed; assembled GPU qualification retired; G4 is current")
+    println("  Wang source/runtime order and source 0:499 -> target 1:500 mapping accepted, including the explicit paper t-5 versus source t-4 history variant")
     println("  D10 additive classification preserved; Mermaid.jl remains out of scope")
 else
     println(stderr, "Phase 14 architecture closure failed with $(length(failures)) issue(s):")

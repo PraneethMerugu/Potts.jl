@@ -45,6 +45,8 @@ function _capability_for_state(state)
     state isa EvolvingFieldState && return :evolving_field
     state isa ContinuousSystemState && return :continuous_system
     state isa GlobalPropertyState && return :global_property
+    state isa FieldExchangeState && return :field_exchange_state
+    state isa AffineCellRuntime && return :affine_cell_runtime
     state isa MembranePropertyState && return :membrane_property
     state isa DelayStateStorage && return :delay_state
     state isa EventRuntimeState && return :continuous_event
@@ -54,6 +56,26 @@ end
 function _capability_for_process(process)
     process isa SiteDynamics && return :site_dynamics
     process isa HistorySample && return :cell_history
+    process isa Union{
+        CentroidHistorySample,
+        CentroidHistorySampleExecution} &&
+        return :centroid_history_sample
+    process isa Union{
+        HistoryDisplacementDirection,
+        HistoryDisplacementDirectionExecution} &&
+        return :history_displacement_direction
+    process isa Union{
+        NeighborPolarityAlignment,
+        NeighborPolarityAlignmentExecution} &&
+        return :neighbor_polarity_alignment
+    process isa Union{
+        HillVectorForce,
+        HillVectorForceExecution} &&
+        return :hill_vector_force
+    process isa ElasticLinkRetuneExecution &&
+        return :relationship_retune
+    process isa RelationshipCleanupExecution &&
+        return :relationship_cleanup
     process isa RelationshipDynamics && return :relationship_dynamics
     process isa FieldDynamics && return :field_dynamics
     process isa FieldExchange && return :field_exchange
@@ -148,7 +170,7 @@ function _gpu_activity_qualified(plan::MCSPlan, state::CoupledState,
 end
 
 function coupled_backend_report(plan::MCSPlan, state::CoupledState,
-        backend::BackendCapabilities)
+        backend::BackendCapabilities; potts = nothing)
     capabilities = _coupled_capability_set(plan, state)
     cpu = backend.family === CPUFamily
     activity_gpu = _gpu_activity_qualified(plan, state, backend)
@@ -171,8 +193,9 @@ function coupled_backend_report(plan::MCSPlan, state::CoupledState,
 end
 
 function preflight_coupled(plan::MCSPlan, state::CoupledState,
-        backend::BackendCapabilities)
-    report = coupled_backend_report(plan, state, backend)
+        backend::BackendCapabilities; potts = nothing)
+    report = coupled_backend_report(
+        plan, state, backend; potts)
     unsupported = Tuple(row for row in report.rows
         if row.status === :unsupported)
     isempty(unsupported) ||
@@ -254,6 +277,9 @@ function inspect_coupled(integrator::CoupledIntegrator)
         completed_mcs = integrator.observations.completed_mcs,
         last_published = Tuple(sort!(collect(
             integrator.observations.last_published);
+            by = pair -> String(first(pair)))),
+        publication_epochs = Tuple(sort!(collect(
+            integrator.observations.publication_epochs);
             by = pair -> String(first(pair)))))
     return CoupledInspectionReport(
         integrator.mcs, global_time(integrator),

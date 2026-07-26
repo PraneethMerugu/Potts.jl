@@ -16,6 +16,8 @@ include("reference_models.jl")
 
 using .Authoring: Namespace, SemanticName, AbstractBiologicalType, CellType, Medium,
                   AbstractFragmentRole, CellRole, FieldRole,
+                  FragmentPortContract, FragmentRequirement, FragmentExport,
+                  fragment_port_contract, required_backends,
                   Binding, BindingTable, PairIdentity, PairwiseLaw,
                   AbstractPropertyInvariant, UnboundedProperty, ClosedPropertyInterval,
                   PropertyVisibility, PublicProperty, PrivateProperty,
@@ -144,6 +146,8 @@ export ScientificContractVersions, scientific_contract_versions,
        PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
 export Namespace, SemanticName, AbstractBiologicalType, CellType, Medium
 export AbstractFragmentRole, CellRole, FieldRole
+export FragmentPortContract, FragmentRequirement, FragmentExport
+export fragment_port_contract, required_backends
 export Binding, BindingTable, PairIdentity, PairwiseLaw
 export AbstractPropertyInvariant, UnboundedProperty, ClosedPropertyInterval
 export PropertyVisibility, PublicProperty, PrivateProperty

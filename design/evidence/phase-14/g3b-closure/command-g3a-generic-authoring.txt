@@ -1,0 +1,7 @@
+Test Summary:                                | Pass  Total   Time
+Phase 14 generic hierarchical fragment ports |   25     25  10.3s
+Test Summary:                                     | Pass  Total  Time
+Phase 14 process cadence belongs to the root plan |    5      5  0.4s
+Test Summary:                                    | Pass  Total   Time
+Phase 14 Wang generic fragment authoring fixture |   10     10  20.6s
+Phase 14.1 G3-A generic authoring gate: PASS
