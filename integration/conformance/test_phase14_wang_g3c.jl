@@ -1,6 +1,34 @@
+using SHA
+using TOML
+
 include("phase14_wang_fixture.jl")
 
 @testset "Phase 14 Wang G3-C fail-closed backend contract" begin
+    # Raw closure captures are immutable binary evidence, not prose to
+    # normalize. Check the exact files that contain terminal-preserved
+    # whitespace before CI exempts the content-addressed archive directory
+    # from its source-text whitespace policy.
+    repository = normpath(joinpath(@__DIR__, "..", ".."))
+    g3b_manifest = TOML.parsefile(joinpath(
+        repository, "design", "evidence", "phase-14",
+        "g3b-closure", "manifest-v1.toml"))
+    raw_capture_ids = Set([
+        "command-corepotts-full",
+        "command-pottstoolkit-full",
+        "environment",
+    ])
+    checked_capture_ids = Set{String}()
+    for artifact in g3b_manifest["artifact"]
+        artifact["id"] in raw_capture_ids || continue
+        artifact_path = joinpath(repository, artifact["path"])
+        @test isfile(artifact_path)
+        @test filesize(artifact_path) == artifact["bytes"]
+        @test bytes2hex(SHA.sha256(read(artifact_path))) ==
+              artifact["sha256"]
+        push!(checked_capture_ids, artifact["id"])
+    end
+    @test checked_capture_ids == raw_capture_ids
+
     fixture = _wang_runtime_fixture(32)
     coupled = fixture.coupled
     @test CorePotts._wang_g3c_state_matches(

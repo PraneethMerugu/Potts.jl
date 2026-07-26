@@ -54,10 +54,17 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Closure archives preserve exact, content-addressed command and
+          # hardware output bytes. Their hashes are checked independently;
+          # whitespace normalization would invalidate admitted evidence.
+          EVIDENCE_EXCLUSIONS=(
+            ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
+            ':(exclude,glob)design/evidence/phase-14/g3c-closure/**'
+          )
           if [ -n "$BASE_SHA" ]; then
-            git diff --check "$BASE_SHA"...HEAD
+            git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
           else
-            git diff --check HEAD^ HEAD
+            git diff --check HEAD^ HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
           fi
 
   packages:
