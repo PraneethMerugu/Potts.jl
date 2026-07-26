@@ -51,6 +51,8 @@ include("coupled/activity.jl")
 include("coupled/execution.jl")
 include("coupled/continuous.jl")
 include("coupled/relationships.jl")
+include("coupled/polarity.jl")
+include("coupled/history.jl")
 include("coupled/events.jl")
 include("coupled/multirate.jl")
 include("coupled/observations.jl")
@@ -232,6 +234,7 @@ export AbstractEnergy, AbstractDrive, AbstractHardConstraint, AbstractKineticMod
        test_energy_component, test_tracker, test_event, test_algorithm, test_topology
 export CellPropertyRef, property_key, MediumTypeTable, owner_type,
        QuadraticVolumeHamiltonian, UnorderedContactHamiltonian,
+       CellVectorBoundaryPotentialHamiltonian,
        AbstractBoundaryMetric, BoundaryEdgeCount, WeightedBoundaryCount,
        MagnoAxisCalibrationV1, NormalizedKernelMeasure,
        boundary_measure, boundary_measure_change, QuadraticBoundaryHamiltonian,

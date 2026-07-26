@@ -1496,14 +1496,18 @@ function execute_process!(candidate::CoupledState, snapshot::CoupledState,
     source = _state_by_name(snapshot.fields, dynamics.field)
     target = _state_by_name(candidate.fields, dynamics.field)
     _publish_state!(target, source)
-    amount = dynamics.clock isa ContinuousClock ?
+    amount = _field_interval_amount(dynamics, interval)
+    advance_field!(target, dynamics, amount, potts_snapshot)
+    return nothing
+end
+
+function _field_interval_amount(dynamics::FieldDynamics, interval)
+    return dynamics.clock isa ContinuousClock ?
         interval_value(dynamics.clock, interval) :
         interval isa OneMCS ? dynamics.clock.scale :
         interval isa HalfMCS ? dynamics.clock.scale / 2 :
         interval isa ContinuousInterval ? interval.value :
         dynamics.clock.scale * interval
-    advance_field!(target, dynamics, amount, potts_snapshot)
-    return nothing
 end
 
 struct ByCellVolume end
@@ -1940,7 +1944,12 @@ function execute_field_exchange!(candidate::CoupledState,
     return sink.output
 end
 
-const WANG_PORTABLE_REDUCTION_WIDTH = 256
+function _portable_reduction_width(plan::ExecutionPlan)
+    width = plan.block_size
+    ispow2(width) && 2 <= width <= 256 || throw(ArgumentError(
+        "portable fixed-tree reduction requires a power-of-two block size in 2:256"))
+    return width
+end
 
 @inline function _record_exchange_device_failure!(
         status, failing_index, code::FieldExchangeFailureCode, index)
@@ -1987,10 +1996,11 @@ end
 @kernel function _exchange_device_reduce_cells!(
         candidate_field, removals, raw_totals,
         field, owner_tags, owner_ids, active, cell_types, volumes,
-        scope_type, maximum, relative_rate, status, failing_index)
+        scope_type, maximum, relative_rate, status, failing_index,
+        ::Val{Width}) where {Width}
     cell = @index(Group, Linear)
     lane = @index(Local, Linear)
-    scratch = @localmem eltype(raw_totals) (WANG_PORTABLE_REDUCTION_WIDTH,)
+    scratch = @localmem eltype(raw_totals) (Width,)
     total = zero(eltype(raw_totals))
     eligible = cell <= length(active) &&
         @inbounds(active[cell] != UInt8(0)) &&
@@ -2023,25 +2033,39 @@ end
                     end
                 end
             end
-            site += WANG_PORTABLE_REDUCTION_WIDTH
+            site += Width
         end
     end
     @inbounds scratch[lane] = total
     @synchronize
-    lane <= 128 && (@inbounds scratch[lane] += scratch[lane + 128])
-    @synchronize
-    lane <= 64 && (@inbounds scratch[lane] += scratch[lane + 64])
-    @synchronize
-    lane <= 32 && (@inbounds scratch[lane] += scratch[lane + 32])
-    @synchronize
-    lane <= 16 && (@inbounds scratch[lane] += scratch[lane + 16])
-    @synchronize
-    lane <= 8 && (@inbounds scratch[lane] += scratch[lane + 8])
-    @synchronize
-    lane <= 4 && (@inbounds scratch[lane] += scratch[lane + 4])
-    @synchronize
-    lane <= 2 && (@inbounds scratch[lane] += scratch[lane + 2])
-    @synchronize
+    if Width >= 256
+        lane <= 128 && (@inbounds scratch[lane] += scratch[lane + 128])
+        @synchronize
+    end
+    if Width >= 128
+        lane <= 64 && (@inbounds scratch[lane] += scratch[lane + 64])
+        @synchronize
+    end
+    if Width >= 64
+        lane <= 32 && (@inbounds scratch[lane] += scratch[lane + 32])
+        @synchronize
+    end
+    if Width >= 32
+        lane <= 16 && (@inbounds scratch[lane] += scratch[lane + 16])
+        @synchronize
+    end
+    if Width >= 16
+        lane <= 8 && (@inbounds scratch[lane] += scratch[lane + 8])
+        @synchronize
+    end
+    if Width >= 8
+        lane <= 4 && (@inbounds scratch[lane] += scratch[lane + 4])
+        @synchronize
+    end
+    if Width >= 4
+        lane <= 2 && (@inbounds scratch[lane] += scratch[lane + 2])
+        @synchronize
+    end
     lane <= 1 && (@inbounds scratch[lane] += scratch[lane + 1])
     @synchronize
     if lane == 1
@@ -2070,9 +2094,10 @@ end
 
 @kernel function _exchange_device_calibrate_maximum!(
         value, initialized, raw_totals, active, cell_types,
-        scope_type, numerator, status, failing_index)
+        scope_type, numerator, status, failing_index,
+        ::Val{Width}) where {Width}
     lane = @index(Local, Linear)
-    scratch = @localmem eltype(raw_totals) (WANG_PORTABLE_REDUCTION_WIDTH,)
+    scratch = @localmem eltype(raw_totals) (Width,)
     local_maximum = zero(eltype(raw_totals))
     cell = lane
     while cell <= length(raw_totals)
@@ -2082,31 +2107,45 @@ end
         eligible &&
             (local_maximum = max(
                 local_maximum, @inbounds(raw_totals[cell])))
-        cell += WANG_PORTABLE_REDUCTION_WIDTH
+        cell += Width
     end
     @inbounds scratch[lane] = local_maximum
     @synchronize
-    lane <= 128 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 128]))
-    @synchronize
-    lane <= 64 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 64]))
-    @synchronize
-    lane <= 32 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 32]))
-    @synchronize
-    lane <= 16 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 16]))
-    @synchronize
-    lane <= 8 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 8]))
-    @synchronize
-    lane <= 4 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 4]))
-    @synchronize
-    lane <= 2 && (@inbounds scratch[lane] =
-        max(scratch[lane], scratch[lane + 2]))
-    @synchronize
+    if Width >= 256
+        lane <= 128 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 128]))
+        @synchronize
+    end
+    if Width >= 128
+        lane <= 64 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 64]))
+        @synchronize
+    end
+    if Width >= 64
+        lane <= 32 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 32]))
+        @synchronize
+    end
+    if Width >= 32
+        lane <= 16 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 16]))
+        @synchronize
+    end
+    if Width >= 16
+        lane <= 8 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 8]))
+        @synchronize
+    end
+    if Width >= 8
+        lane <= 4 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 4]))
+        @synchronize
+    end
+    if Width >= 4
+        lane <= 2 && (@inbounds scratch[lane] =
+            max(scratch[lane], scratch[lane + 2]))
+        @synchronize
+    end
     lane <= 1 && (@inbounds scratch[lane] =
         max(scratch[lane], scratch[lane + 1]))
     @synchronize
@@ -2224,10 +2263,11 @@ function apply_field_exchange!(plan::ExecutionPlan,
         "portable exchange requires ByCellVolume normalization"))
     exchange.calibration isa MaximumCalibration || throw(ArgumentError(
         "portable exchange requires MaximumCalibration"))
-    eltype(field.values) === Float32 &&
-        eltype(runtime.workspace.raw_totals) === Float32 ||
+    T = eltype(field.values)
+    T <: AbstractFloat &&
+        eltype(runtime.workspace.raw_totals) === T ||
         throw(ArgumentError(
-            "portable Wang exchange requires Float32 field and reductions"))
+            "portable exchange requires matching floating field and reduction storage"))
     execution = scientific_execution(scientific)
     signal = getproperty(execution.core.properties, sink.output)
     _portable_exchange_arrays_match(
@@ -2282,6 +2322,8 @@ function apply_field_exchange!(plan::ExecutionPlan,
     launch!(plan, init_sites,
         field.workspace.first, field.workspace.second, field.values;
         ndrange = site_count)
+    reduction_width = _portable_reduction_width(plan)
+    reduction_width_value = Val(reduction_width)
     reduce_cells = _fixed_execution_kernel(
         plan, _exchange_device_reduce_cells!)
     launch!(plan, reduce_cells,
@@ -2290,10 +2332,11 @@ function apply_field_exchange!(plan::ExecutionPlan,
         field.values, execution.core.ownership.tags,
         execution.core.ownership.ids, execution.core.active,
         execution.core.cell_types, execution.trackers.finite_volumes,
-        scope_type, Float32(sink.maximum), Float32(sink.relative_rate),
-        runtime.workspace.status, runtime.workspace.failing_index;
-        ndrange = cell_count * WANG_PORTABLE_REDUCTION_WIDTH,
-        workgroupsize = WANG_PORTABLE_REDUCTION_WIDTH)
+        scope_type, T(sink.maximum), T(sink.relative_rate),
+        runtime.workspace.status, runtime.workspace.failing_index,
+        reduction_width_value;
+        ndrange = cell_count * reduction_width,
+        workgroupsize = reduction_width)
     if mode === CalibrateExchange
         calibrate = _fixed_execution_kernel(
             plan, _exchange_device_calibrate_maximum!)
@@ -2301,10 +2344,11 @@ function apply_field_exchange!(plan::ExecutionPlan,
             runtime.value, runtime.initialized,
             runtime.workspace.raw_totals, execution.core.active,
             execution.core.cell_types, scope_type,
-            Float32(exchange.calibration.numerator),
-            runtime.workspace.status, runtime.workspace.failing_index;
-            ndrange = WANG_PORTABLE_REDUCTION_WIDTH,
-            workgroupsize = WANG_PORTABLE_REDUCTION_WIDTH)
+            T(exchange.calibration.numerator),
+            runtime.workspace.status, runtime.workspace.failing_index,
+            reduction_width_value;
+            ndrange = reduction_width,
+            workgroupsize = reduction_width)
     else
         publish = _execution_kernel(
             plan, _exchange_device_publish_signal!, cell_count)
@@ -2444,12 +2488,10 @@ function advance_field!(plan::ExecutionPlan,
     law isa ReactionDiffusion && law.reaction === nothing ||
         throw(ArgumentError(
             "portable field advance requires reaction-free ReactionDiffusion"))
-    eltype(state.values) === Float32 || throw(ArgumentError(
-        "portable Wang field advance requires Float32"))
+    eltype(state.values) <: AbstractFloat || throw(ArgumentError(
+        "portable field advance requires floating field storage"))
     count, dt = _materialize_substeps(dynamics.method, interval)
     _validate_transient_field_profile(state, law, count, dt)
-    count == 5 || throw(ArgumentError(
-        "portable Wang field profile requires exactly five substeps"))
     size(state.values) == size(ownership.tags) ||
         throw(ArgumentError(
             "portable field and ownership shapes differ"))
@@ -2548,6 +2590,98 @@ function execute_process!(candidate::CoupledState, snapshot::CoupledState,
     _publish_state!(target, source)
     apply_field_exchange!(target, exchange, potts_snapshot)
     return nothing
+end
+
+function _execute_host_process!(
+        candidate::CoupledState, snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        process::FieldExchange, target_mcs, stage,
+        schedule::PlanModeSchedule)
+    output = execute_field_exchange!(
+        candidate, snapshot, potts_candidate, potts_snapshot,
+        process, schedule, target_mcs)
+    return (output,)
+end
+
+function _execute_host_process!(
+        candidate::CoupledState, snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        process::AffineCellAdvance, target_mcs, stage, interval)
+    return execute_affine_cell_process!(
+        candidate, snapshot, potts_candidate, process)
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator,
+        process::FieldDynamics,
+        target_mcs, stage, interval)
+    field = _state_by_name(
+        integrator.state.fields, process.field)
+    amount = _field_interval_amount(process, interval)
+    ownership = scientific_execution(
+        integrator.potts.state).core.ownership
+    advance_field!(
+        integrator.potts.plan, field, process,
+        amount, ownership)
+    synchronize_field_advance_status!(
+        integrator.potts.plan, field, process, amount)
+    return ()
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator,
+        process::FieldExchange,
+        target_mcs, stage,
+        schedule::PlanModeSchedule)
+    process.calibration isa MaximumCalibration ||
+        throw(ArgumentError(
+            "portable scheduled exchange requires MaximumCalibration"))
+    field = _state_by_name(
+        integrator.state.fields, process.field)
+    runtime = _state_by_name(
+        integrator.state.globals,
+        process.calibration.state)
+    runtime isa FieldExchangeState || throw(ArgumentError(
+        "portable scheduled exchange runtime is not realized"))
+    apply_field_exchange!(
+        integrator.potts.plan, field, process,
+        integrator.potts.state, runtime,
+        mode_at(schedule, target_mcs), target_mcs)
+    synchronize_field_exchange_status!(
+        integrator.potts.plan, runtime)
+    return ()
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator,
+        process::AffineCellAdvance,
+        target_mcs, stage, interval)
+    runtime = _state_by_name(
+        integrator.state.globals, process.name)
+    runtime isa AffineCellRuntime || throw(ArgumentError(
+        "portable affine-cell runtime is not realized"))
+    apply_affine_cell_advance!(
+        integrator.potts.plan, integrator.potts.state,
+        process, runtime.workspace)
+    synchronize_affine_cell_status!(
+        integrator.potts.plan, runtime.workspace)
+    return ()
+end
+
+function _execute_host_process!(
+        candidate::CoupledState, snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        process::CellDynamics, target_mcs, stage, interval)
+    execute_cell_dynamics!(
+        potts_candidate, potts_snapshot, process,
+        target_mcs, interval)
+    return Tuple(variable.property for variable in process.system.state)
 end
 
 struct SteadyStateAdvance{M, T, R}

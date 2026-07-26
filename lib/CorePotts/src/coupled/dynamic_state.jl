@@ -226,13 +226,19 @@ AcceptedCopyExecutionEffect(effect::AcceptedCopyUpdate) =
 @inline _effect_property(
     ::AcceptedCopyExecutionEffect{Name, Property}) where {Name, Property} = Property
 
-struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple}
+struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple, X <: Tuple}
     site_states::S
     effects::E
-    CoupledAttemptWorkspace(site_states::S, effects::E, ::Val{:compiled}) where {
-        S <: Tuple, E <: Tuple} = new{S, E}(site_states, effects)
+    transaction_effects::X
+    CoupledAttemptWorkspace(
+        site_states::S, effects::E, transaction_effects::X,
+        ::Val{:compiled}) where {
+        S <: Tuple, E <: Tuple, X <: Tuple} =
+        new{S, E, X}(site_states, effects, transaction_effects)
 
-    function CoupledAttemptWorkspace(site_states::Tuple, effects::Tuple)
+    function CoupledAttemptWorkspace(
+            site_states::Tuple, effects::Tuple,
+            transaction_effects::Tuple = ())
         names = Tuple(state.declaration.name for state in site_states)
         length(unique(names)) == length(names) || throw(ArgumentError(
             "coupled attempt workspace site-property identities must be unique"))
@@ -258,14 +264,18 @@ struct CoupledAttemptWorkspace{S <: Tuple, E <: Tuple}
         end
         execution_states = map(SitePropertyExecutionState, site_states)
         execution_effects = map(AcceptedCopyExecutionEffect, effects)
-        return new{typeof(execution_states), typeof(execution_effects)}(
-            execution_states, execution_effects)
+        return new{typeof(execution_states), typeof(execution_effects),
+            typeof(transaction_effects)}(
+            execution_states, execution_effects, transaction_effects)
     end
 end
 
 function Adapt.adapt_structure(to, workspace::CoupledAttemptWorkspace)
     return CoupledAttemptWorkspace(
-        Adapt.adapt(to, workspace.site_states), workspace.effects, Val(:compiled))
+        Adapt.adapt(to, workspace.site_states),
+        workspace.effects,
+        Adapt.adapt(to, workspace.transaction_effects),
+        Val(:compiled))
 end
 
 @inline _site_state_name(state::SitePropertyState) = state.declaration.name
@@ -283,8 +293,68 @@ end
 @inline _assignment_value(::PreserveSiteValue, old) = old
 @inline _assignment_value(assignment::SetTo, old) = assignment.value
 
-@inline commit_accepted_copy_updates!(workspace,
-    proposal, transaction, scientific_state) = nothing
+"""
+Internal staged transaction protocol for accepted-copy extensions.
+
+An extension may mutate only its bounded attempt-local workspace during `prepare`. `preflight`
+returns `false` only after recording a backend-resident failure status. Once every extension has
+passed preflight, `commit` must be infallible and may publish its authoritative state. The default
+methods make ordinary Potts execution and existing accepted-copy site updates exact no-ops.
+"""
+@inline begin_accepted_copy_mcs!(effect, scientific_state, mcs) = nothing
+@inline prepare_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state,
+    rng, seed, mcs, attempt_id) = nothing
+@inline preflight_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state) = true
+@inline commit_accepted_copy_effect!(
+    effect, proposal, transaction, scientific_state) = nothing
+
+# Optional host-only binding metadata. Stateful proposal components use this to prove at
+# construction that the matching compiled effect exists and carries identical scientific
+# configuration; stateless accepted-copy effects and probes keep the no-binding default.
+accepted_copy_effect_requirement(component) = nothing
+accepted_copy_effect_binding(effect) = nothing
+accepted_copy_effect_state_valid(effect, coupled_state) = true
+
+@inline begin_accepted_copy_transaction!(
+    workspace, scientific_state, mcs) = nothing
+@inline prepare_accepted_copy_transaction!(
+    workspace, proposal, transaction, scientific_state,
+    rng, seed, mcs, attempt_id) = nothing
+@inline preflight_accepted_copy_transaction!(
+    workspace, proposal, transaction, scientific_state) = true
+@inline commit_accepted_copy_updates!(
+    workspace, proposal, transaction, scientific_state) = nothing
+
+function begin_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, scientific_state, mcs)
+    for effect in workspace.transaction_effects
+        begin_accepted_copy_mcs!(effect, scientific_state, mcs)
+    end
+    return nothing
+end
+
+function prepare_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, proposal, transaction,
+        scientific_state, rng, seed, mcs, attempt_id)
+    for effect in workspace.transaction_effects
+        prepare_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state,
+            rng, seed, mcs, attempt_id)
+    end
+    return nothing
+end
+
+function preflight_accepted_copy_transaction!(
+        workspace::CoupledAttemptWorkspace, proposal, transaction,
+        scientific_state)
+    for effect in workspace.transaction_effects
+        preflight_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state) || return false
+    end
+    return true
+end
 
 function commit_accepted_copy_updates!(workspace::CoupledAttemptWorkspace,
         proposal, transaction, scientific_state)
@@ -306,8 +376,50 @@ function commit_accepted_copy_updates!(workspace::CoupledAttemptWorkspace,
         # host and device; dynamic invariant predicates remain a host-reference responsibility.
         @inbounds state.values[site] = convert(eltype(state.values), value)
     end
+    for effect in workspace.transaction_effects
+        commit_accepted_copy_effect!(
+            effect, proposal, transaction, scientific_state)
+    end
     return nothing
 end
+
+accepted_copy_effect_backend_valid(effect, scientific_state, plan) = true
+accepted_copy_effect_allocation_bytes(effect) = 0
+synchronize_accepted_copy_effect_status!(plan, effect) = nothing
+rebuild_accepted_copy_effect(effect, coupled_state) = effect
+
+function accepted_copy_workspace_backend_valid(
+        workspace::CoupledAttemptWorkspace, scientific_state, plan)
+    return all(effect -> accepted_copy_effect_backend_valid(
+            effect, scientific_state, plan), workspace.transaction_effects)
+end
+
+function accepted_copy_workspace_state_valid(
+        workspace::CoupledAttemptWorkspace, coupled_state)
+    return all(effect -> accepted_copy_effect_state_valid(
+            effect, coupled_state), workspace.transaction_effects)
+end
+accepted_copy_workspace_state_valid(workspace, coupled_state) = true
+
+accepted_copy_workspace_allocation_bytes(workspace::CoupledAttemptWorkspace) =
+    sum(accepted_copy_effect_allocation_bytes, workspace.transaction_effects;
+        init = 0)
+
+function synchronize_accepted_copy_transaction_status!(
+        plan, workspace::CoupledAttemptWorkspace)
+    for effect in workspace.transaction_effects
+        synchronize_accepted_copy_effect_status!(plan, effect)
+    end
+    return workspace
+end
+synchronize_accepted_copy_transaction_status!(plan, workspace) = workspace
+
+function rebuild_accepted_copy_effects(
+        workspace::CoupledAttemptWorkspace, coupled_state)
+    return map(effect -> rebuild_accepted_copy_effect(effect, coupled_state),
+        workspace.transaction_effects)
+end
+rebuild_accepted_copy_effects(workspace, coupled_state) = ()
 
 abstract type AbstractSiteUpdateLaw end
 struct SaturatingSubtract{T} <: AbstractSiteUpdateLaw

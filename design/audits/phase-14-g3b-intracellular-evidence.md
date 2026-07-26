@@ -1,7 +1,7 @@
 # Phase 14.1 G3-B Intracellular Evidence
 
-Status: generic sequential CPU and portable KernelAbstractions CPU increment accepted; RoadRunner
-oracle, assembled Wang closure, and real GPU qualification remain open
+Status: pinned Wang/CC3D RoadRunner coupling semantics plus generic sequential CPU and portable
+KernelAbstractions CPU increment accepted; real GPU qualification remains G3-C
 
 Date: 2026-07-25
 
@@ -56,15 +56,7 @@ entry, G3-A, Phase 14.0, Phase 13 API-inventory, and repository-structure gates 
 a working-tree implementation baseline; the final closure packet still requires the exact clean
 commit and artifact hashes registered by the current closure contract.
 
-## Explicitly open
-
-G3-B still requires:
-
-1. the pinned libRoadRunner integrator/tolerance/raw-output oracle;
-2. comparison of controlled RoadRunner traces under a preregistered source-profile rule;
-3. the relationship, alignment/force, observation, and canonical Wang assembly rows;
-4. completed-MCS assembled restart at the registered boundaries; and
-5. a clean-commit full regression/evidence manifest.
-
-Real Metal and ROCm execution is G3-C. The KernelAbstractions CPU result proves the portable
-execution shape and conditional-publication ABI only.
+The coupling study is recorded in `phase-14-g3b-roadrunner-source-study.md`. It proves the affine
+law, 2880-unit advancement, startup call, target-122 activation, and same-MCS signal publication
+without claiming bitwise equivalence to an unpinned libRoadRunner binary. Real Metal and ROCm
+execution is G3-C.

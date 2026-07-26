@@ -318,6 +318,8 @@ function algorithm_component_compatibility(::SequentialEquilibrium,
 end
 
 _non_equilibrium_energy(::Any) = false
+_non_equilibrium_energy(
+    ::CellVectorBoundaryPotentialHamiltonian) = true
 
 @inline acceptance_law(::SequentialCPM) = ConventionalMetropolis()
 @inline acceptance_law(::BudgetedSequentialCPM) = ConventionalMetropolis()
@@ -485,10 +487,56 @@ function _validate_algorithm_workspace(workspace::CoupledAttemptWorkspace,
         isbitstype(typeof(device_workspace)) || throw(ArgumentError(
             "GPU coupled attempt workspace must lower to an isbits array tree"))
     end
+    accepted_copy_workspace_backend_valid(workspace, state, plan) ||
+        throw(ArgumentError(
+            "accepted-copy transaction workspace does not match the scientific execution backend"))
     return workspace
 end
 _validate_algorithm_workspace(
     workspace, state::CompiledScientificState, plan::ExecutionPlan) = workspace
+
+function _validate_accepted_copy_effect_bindings(
+        components::ScientificComponentSet,
+        workspace::CoupledAttemptWorkspace)
+    requirements = Tuple(requirement
+        for component in _all_scientific_components(components)
+        for requirement in (accepted_copy_effect_requirement(component),)
+        if requirement !== nothing)
+    bindings = Tuple(binding
+        for effect in workspace.transaction_effects
+        for binding in (accepted_copy_effect_binding(effect),)
+        if binding !== nothing)
+    requirement_ids = Tuple(item.identity for item in requirements)
+    binding_ids = Tuple(item.identity for item in bindings)
+    length(unique(requirement_ids)) == length(requirement_ids) ||
+        throw(ArgumentError(
+            "scientific components require duplicate accepted-copy transaction identities"))
+    length(unique(binding_ids)) == length(binding_ids) ||
+        throw(ArgumentError(
+            "accepted-copy transaction identities must be unique"))
+    for requirement in requirements
+        index = findfirst(==(requirement.identity), binding_ids)
+        index === nothing && throw(ArgumentError(
+            "scientific component requires missing accepted-copy transaction `$(requirement.identity)`"))
+        isequal(requirement.component, bindings[index].component) ||
+            throw(ArgumentError(
+                "accepted-copy transaction `$(requirement.identity)` does not match its scientific component"))
+    end
+    for binding in bindings
+        binding.required || continue
+        binding.identity in requirement_ids || throw(ArgumentError(
+            "accepted-copy transaction `$(binding.identity)` has no matching scientific component"))
+    end
+    return workspace
+end
+
+function _validate_accepted_copy_effect_bindings(
+        components::ScientificComponentSet, workspace)
+    any(component -> accepted_copy_effect_requirement(component) !== nothing,
+        _all_scientific_components(components)) && throw(ArgumentError(
+        "scientific components require a CoupledAttemptWorkspace"))
+    return workspace
+end
 
 _contains_float64_type(::Type{Float64}) = true
 function _contains_float64_type(type::Type)
@@ -565,6 +613,8 @@ function init_scientific(state::CompiledScientificState,
     _validate_scientific_initialization(
         state, proposal_relation, components, algorithm, seed, rng, plan)
     _validate_algorithm_workspace(algorithm_workspace, state, plan)
+    _validate_accepted_copy_effect_bindings(
+        components, algorithm_workspace)
     _validate_sequential_components(algorithm, components)
     _validate_zero_temperature(algorithm, components)
 
@@ -591,6 +641,10 @@ function init_scientific(state::CompiledScientificState,
             record_allocation!(
                 plan, domain, _array_bytes(site_state.values))
         end
+        transaction_bytes =
+            accepted_copy_workspace_allocation_bytes(algorithm_workspace)
+        iszero(transaction_bytes) ||
+            record_allocation!(plan, domain, transaction_bytes)
     end
     integrator = ScientificPottsIntegrator(state, components, proposal_relation, algorithm, rng,
         plan, workspace, moment_tracker, algorithm_workspace, lifecycle, report_storage,
@@ -659,10 +713,14 @@ end
         constraint_rejections = UInt64(0)
         acceptance_rejections = UInt64(0)
         accepted = UInt64(0)
+        processed = UInt64(0)
         proposal_process = proposal_law(algorithm)
         accepted_law = acceptance_law(algorithm)
+        begin_accepted_copy_transaction!(
+            algorithm_workspace, state, mcs)
         # init_scientific proves candidate_count fits UInt32; the loop proves each attempt ID.
         for raw_attempt in 1:attempt_total
+            processed += UInt64(1)
             attempt_id = Base.unsafe_trunc(UInt32, raw_attempt)
             recipient_address = _attempt_address(
                 ProposalRecipientStream, mcs, attempt_id, algorithm)
@@ -690,6 +748,9 @@ end
             proposal = actionable_proposal(attempt)
             transaction = _stage_copy_transaction_unchecked(
                 state, state.boundary_tracker, proposal; moment_tracker)
+            prepare_accepted_copy_transaction!(
+                algorithm_workspace, proposal, transaction,
+                state, rng, seed, mcs, attempt_id)
             context = ScientificProposalContext(
                 state, transaction, connectivity_workspace, attempt_id,
                 algorithm_workspace)
@@ -707,6 +768,9 @@ end
             draw = uniform_open01(
                 typeof(algorithm.temperature), rng, seed, acceptance_address)
             if draw < probability
+                preflight_accepted_copy_transaction!(
+                    algorithm_workspace, proposal, transaction, state) ||
+                    break
                 commit_accepted_copy_updates!(
                     algorithm_workspace, proposal, transaction, state)
                 _commit_staged!(state, transaction)
@@ -719,7 +783,7 @@ end
             report[1] = mcs
             report[2] = UInt64(1)
             report[3] = Base.unsafe_trunc(UInt64, attempt_total)
-            report[4] = Base.unsafe_trunc(UInt64, attempt_total)
+            report[4] = processed
             report[5] = realized
             report[6] = same_owner
             report[7] = boundary
@@ -755,6 +819,8 @@ function perform_scientific_mcs!(integrator::ScientificPottsIntegrator{S, C, R, 
         integrator.proposal_relation, integrator.algorithm, integrator.rng,
         integrator.seed, next_mcs, integrator.connectivity_workspace,
         integrator.moment_tracker, integrator.algorithm_workspace; ndrange = 1)
+    synchronize_accepted_copy_transaction_status!(
+        integrator.plan, integrator.algorithm_workspace)
     _advance_mechanics!(integrator, next_mcs, UInt8(0), UInt8(1), half_interval)
     run_compiled_lifecycle!(integrator, integrator.lifecycle, next_mcs)
     integrator.mcs = next_mcs

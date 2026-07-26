@@ -40,6 +40,55 @@ using CorePotts: AcceptedCopyManaged, AcceptedCopyUpdate, AdaptiveStep,
     retune_relationship!, sample_delay!, sample_history!, scheduled_value,
     set_global_property!, set_membrane_values!, stage_for, stage_local_mcs
 
+struct _AcceptedCopyTransactionProbe{A <: AbstractVector{UInt32}}
+    counters::A
+    fail_preflight::Bool
+end
+
+function CorePotts.begin_accepted_copy_mcs!(
+        probe::_AcceptedCopyTransactionProbe, scientific_state, mcs)
+    @inbounds begin
+        probe.counters[1] += UInt32(1)
+        probe.counters[5] = UInt32(0)
+    end
+    return nothing
+end
+
+function CorePotts.prepare_accepted_copy_effect!(
+        probe::_AcceptedCopyTransactionProbe, proposal, transaction,
+        scientific_state, rng, seed, mcs, attempt_id)
+    @inbounds probe.counters[2] += UInt32(1)
+    return nothing
+end
+
+function CorePotts.preflight_accepted_copy_effect!(
+        probe::_AcceptedCopyTransactionProbe, proposal, transaction,
+        scientific_state)
+    @inbounds probe.counters[3] += UInt32(1)
+    if probe.fail_preflight
+        @inbounds probe.counters[5] = UInt32(1)
+        return false
+    end
+    return true
+end
+
+function CorePotts.commit_accepted_copy_effect!(
+        probe::_AcceptedCopyTransactionProbe, proposal, transaction,
+        scientific_state)
+    @inbounds probe.counters[4] += UInt32(1)
+    return nothing
+end
+
+CorePotts.accepted_copy_effect_allocation_bytes(
+    probe::_AcceptedCopyTransactionProbe) = sizeof(probe.counters)
+
+function CorePotts.synchronize_accepted_copy_effect_status!(
+        plan, probe::_AcceptedCopyTransactionProbe)
+    @inbounds iszero(probe.counters[5]) || throw(
+        ArgumentError("injected accepted-copy preflight failure"))
+    return nothing
+end
+
 @testset "Phase 14 contract versions and source attempt budget" begin
     versions = phase14_contract_versions()
     @test versions.contract_set == v"2.0.0"
@@ -125,6 +174,51 @@ end
         update = SaturatingSubtract(0.25f0))
     @test apply_site_dynamics!(site_state, decay, 1)
     @test all(value -> 0.0f0 <= value <= 0.75f0, site_state.values)
+end
+
+@testset "Phase 14 staged accepted-copy extension transaction" begin
+    fixture = _scientific_fixture(Float32, (4, 4))
+    tracker = BoundaryMeasureTracker(
+        fixture.boundary.metric, fixture.boundary.relation)
+    components = ScientificComponentSet(
+        energies = (fixture.volume, fixture.contact, fixture.boundary,))
+
+    compiled = compile_scientific_state(
+        fixture.state, fixture.domain, tracker)
+    successful_probe =
+        _AcceptedCopyTransactionProbe(zeros(UInt32, 5), false)
+    successful_workspace =
+        CoupledAttemptWorkspace((), (), (successful_probe,))
+    successful = init_scientific(
+        compiled, fixture.proposal_relation, components,
+        SequentialCPM(temperature = 1000.0f0);
+        seed = 0x1412, algorithm_workspace = successful_workspace)
+    step!(successful)
+    successful_report = current_mcs_report(successful)
+    @test successful_probe.counters[1] == UInt32(1)
+    @test successful_probe.counters[2] ==
+        UInt32(successful_report.realized_proposals)
+    @test successful_probe.counters[3] ==
+        UInt32(successful_report.accepted_copies)
+    @test successful_probe.counters[4] ==
+        UInt32(successful_report.accepted_copies)
+    @test successful_probe.counters[5] == UInt32(0)
+
+    failing_compiled = compile_scientific_state(
+        fixture.state, fixture.domain, tracker)
+    initial_lattice = copy(lattice_storage(failing_compiled.potts))
+    failing_probe = _AcceptedCopyTransactionProbe(zeros(UInt32, 5), true)
+    failing_workspace = CoupledAttemptWorkspace((), (), (failing_probe,))
+    failing = init_scientific(
+        failing_compiled, fixture.proposal_relation, components,
+        SequentialCPM(temperature = 1000.0f0);
+        seed = 0x1413, algorithm_workspace = failing_workspace)
+    @test_throws ArgumentError step!(failing)
+    @test failing.mcs == UInt64(0)
+    @test lattice_storage(failing.state.potts) == initial_lattice
+    @test failing_probe.counters[3] == UInt32(1)
+    @test failing_probe.counters[4] == UInt32(0)
+    @test failing_probe.counters[5] == UInt32(1)
 end
 
 @testset "Phase 14 Wortel Act semantic-kernel vertical slice" begin
@@ -471,6 +565,19 @@ end
         cpu_logical, :volume_strength) == Float32[50, 50]
     @test cpu_elastic_state.payload.strength == Float32[50, 0]
     @test cpu_elastic_state.publication_epoch[1] == 2
+    scheduled_parameters =
+        CorePotts.ElasticLinkParameters(
+            75.0f0, 9.0f0, 13.0f0)
+    @test CorePotts.apply_elastic_link_retune!(
+        cpu_logical, cpu_elastic_state, retune,
+        scheduled_parameters,
+        cpu_retune_workspace) === cpu_elastic_state
+    @test property_values(
+        cpu_logical, :volume_strength) ==
+          Float32[75, 75]
+    @test relationship_payload(
+        cpu_elastic_state, first, second) ==
+          scheduled_parameters
 
     execution = CorePotts.scientific_execution(compiled)
     portable_retune_workspace =
@@ -492,6 +599,20 @@ end
     @test portable_retune_plan.metrics.launches == 3
     @test portable_retune_plan.metrics.host_to_device_transfers == 0
     @test portable_retune_plan.metrics.device_to_host_transfers == 0
+    @test CorePotts.apply_elastic_link_retune!(
+        portable_retune_plan, compiled,
+        elastic_state, retune,
+        scheduled_parameters,
+        portable_retune_workspace) === elastic_state
+    @test CorePotts.synchronize_elastic_retune_status!(
+        portable_retune_plan,
+        portable_retune_workspace) ===
+          portable_retune_workspace
+    @test execution.core.properties.volume_strength ==
+          Float32[75, 75]
+    @test relationship_payload(
+        elastic_state, first, second) ==
+          scheduled_parameters
 
     property_before_failure =
         copy(execution.core.properties.volume_strength)
@@ -523,6 +644,130 @@ end
     @test elastic_state.publication_epoch[1] ==
         epoch_before_failure + 1
     @test cleanup_plan.metrics.launches == 3
+end
+
+@testset "Phase 14 generic contact relationship accepted-copy transaction" begin
+    fixture = _focal_fixture(Float32, (5, 5))
+    relation = static_relation(
+        SpatialQueryRole(), CorePotts.offsets(CorePotts.MooreTopology{2}());
+        spacing = (1.0f0, 1.0f0))
+    declaration = RelationshipSet(
+        :contact_links;
+        edge = CorePotts.ElasticLinkParameters{Float32},
+        maximum_degree = 4,
+        capacity = RelationshipCapacity(8))
+    relationships = RelationshipState(declaration)
+    component = CorePotts.ContactRelationshipHamiltonian(
+        :contact_link_energy, :contact_links;
+        relation,
+        pair_filter = CorePotts.SameCellTypePair(CellTypeID(1)),
+        activation_energy = -50.0f0,
+        initial_payload = CorePotts.ElasticLinkParameters(
+            0.0f0, 0.0f0, 100_000.0f0),
+        namespace = CorePotts.RNGNamespaceIdentity(0x1414))
+    effect =
+        CorePotts.ContactRelationshipTransaction(component, relationships)
+    workspace = CoupledAttemptWorkspace((), (), (effect,))
+
+    @test component_identity(component).category == :energy
+    @test CorePotts.capabilities(component).portable
+    @test CorePotts.accepted_copy_workspace_backend_valid(
+        workspace, fixture.compiled,
+        ExecutionPlan(KernelAbstractions.CPU()))
+    @test CorePotts.Adapt.adapt(Array, effect) isa
+        CorePotts.ContactRelationshipTransaction
+
+    linear = LinearIndices((5, 5))
+    proposal = CopyProposal(
+        linear[2, 3], linear[2, 2],
+        MediumOwner(1), CellOwner(1))
+    staged = stage_copy_transaction(
+        fixture.compiled, fixture.boundary_tracker, proposal;
+        moment_tracker = fixture.moment_tracker)
+    scientific = scientific_execution(fixture.compiled)
+    CorePotts.begin_accepted_copy_mcs!(
+        effect, scientific, UInt64(1))
+    CorePotts.prepare_accepted_copy_effect!(
+        effect, proposal, staged, scientific,
+        Philox4x32x10V1(), UInt64(0x1414),
+        UInt64(1), UInt32(1))
+
+    @test only(effect.candidate_present) == UInt8(1)
+    @test only(effect.candidate_endpoint) == UInt32(2)
+    @test only(effect.mcs_id) == UInt64(1)
+    @test only(effect.attempt_id) == UInt32(0)
+    context = ScientificProposalContext(
+        scientific, staged;
+        algorithm_workspace = workspace)
+    @test proposal_energy_change(
+        component, proposal, context) == -50.0f0
+    @test isempty(relationships.edges)
+    @test only(relationships.publication_epoch) == UInt64(0)
+
+    @test CorePotts.preflight_accepted_copy_effect!(
+        effect, proposal, staged, scientific)
+    CorePotts.commit_accepted_copy_effect!(
+        effect, proposal, staged, scientific)
+    first = CellEndpoint(
+        CellID(1), generation(fixture.state, CellID(1)))
+    second = CellEndpoint(
+        CellID(2), generation(fixture.state, CellID(2)))
+    @test length(relationships.edges) == 1
+    @test only(relationships.edges).left == first
+    @test only(relationships.edges).right == second
+    @test relationship_payload(
+        relationships, first, second) ==
+        CorePotts.ElasticLinkParameters(
+            0.0f0, 0.0f0, 100_000.0f0)
+    @test only(relationships.publication_epoch) == UInt64(1)
+
+    components = ScientificComponentSet(energies = (component,))
+    proposal_relation = first_shell_relation(
+        ProposalRole(), Val(2);
+        spacing = (1.0f0, 1.0f0))
+    @test_throws ArgumentError init_scientific(
+        deepcopy(fixture.compiled), proposal_relation,
+        components, SequentialCPM(temperature = 20.0f0);
+        seed = 0x1414,
+        moment_tracker = fixture.moment_tracker)
+    mismatched = CorePotts.ContactRelationshipHamiltonian(
+        :contact_link_energy, :contact_links;
+        relation,
+        pair_filter = CorePotts.SameCellTypePair(CellTypeID(1)),
+        activation_energy = -49.0f0,
+        initial_payload = CorePotts.ElasticLinkParameters(
+            0.0f0, 0.0f0, 100_000.0f0),
+        namespace = CorePotts.RNGNamespaceIdentity(0x1414))
+    @test_throws ArgumentError init_scientific(
+        deepcopy(fixture.compiled), proposal_relation,
+        ScientificComponentSet(energies = (mismatched,)),
+        SequentialCPM(temperature = 20.0f0);
+        seed = 0x1414,
+        moment_tracker = fixture.moment_tracker,
+        algorithm_workspace = workspace)
+    @test_throws ArgumentError init_scientific(
+        deepcopy(fixture.compiled), proposal_relation,
+        ScientificComponentSet(),
+        SequentialCPM(temperature = 20.0f0);
+        seed = 0x1414,
+        moment_tracker = fixture.moment_tracker,
+        algorithm_workspace = workspace)
+    potts = init_scientific(
+        deepcopy(fixture.compiled), proposal_relation,
+        components, SequentialCPM(temperature = 20.0f0);
+        seed = 0x1414,
+        moment_tracker = fixture.moment_tracker,
+        algorithm_workspace = workspace)
+    @test potts isa CorePotts.ScientificPottsIntegrator
+    plan = MCSPlan(
+        PottsAttempts(), LifecyclePhase(), ObservationPhase())
+    @test_throws ArgumentError init_coupled(
+        potts, plan,
+        CoupledState(relationships = (deepcopy(relationships),)))
+    @test init_coupled(
+        potts, plan,
+        CoupledState(relationships = (relationships,))) isa
+        CorePotts.CoupledIntegrator
 end
 
 @testset "Phase 14 coupled checkpoint all authoritative state families" begin
@@ -617,6 +862,25 @@ end
     parameter = ScheduledParameter(:strength, protocol;
         relax = 1.0f0, active = 2.0f0)
     @test scheduled_value(parameter, stage_for(protocol, 2)) == 2.0f0
+    scheduled_update = Update(
+        SiteDynamics(
+            :scheduled_probe,
+            SiteProperty(
+                :scheduled_probe;
+                initial = 0.0f0,
+                ownership =
+                    AcceptedCopyManaged());
+            update =
+                SaturatingSubtract(0.0f0));
+        value = parameter)
+    @test CorePotts._resolved_invocation_interval(
+        scheduled_update,
+        stage_for(protocol, 1),
+        UInt64(1)) == 1.0f0
+    @test CorePotts._resolved_invocation_interval(
+        scheduled_update,
+        stage_for(protocol, 2),
+        UInt64(2)) == 2.0f0
     @test stage_local_mcs(stage_for(protocol, 3), 3) == 2
     @test_throws ArgumentError stage_for(protocol, 4)
 
@@ -1015,6 +1279,25 @@ end
     @test portable_plan.metrics.device_to_host_transfers == 0
     @test portable_plan.metrics.launches == 15
 
+    width64_field = EvolvingFieldState(
+        :transaction_field,
+        reshape(Float32[0.5, 1.0, 400.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+            3, 3))
+    width64_runtime = FieldExchangeState(
+        :uptake_multiplier, width64_field, portable_potts_snapshot;
+        accumulator_type = Float32)
+    width64_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 64)
+    apply_field_exchange!(
+        width64_plan, width64_field, transaction_exchange,
+        portable_scientific, width64_runtime, CalibrateExchange, 211)
+    CorePotts.synchronize_field_exchange_status!(
+        width64_plan, width64_runtime)
+    width64_expected = reshape(
+        Float32[0.49875, 0.9975, 399.0, 2, 2, 2, 2, 2, 2], 3, 3)
+    @test width64_field.values == width64_expected
+    @test width64_runtime.value[1] == 4.0f0
+
     portable_zero_field = EvolvingFieldState(
         :transaction_field, zeros(Float32, 3, 3))
     portable_zero_runtime = FieldExchangeState(
@@ -1066,6 +1349,38 @@ end
     @test portable_field_plan.metrics.launches == 8
     @test portable_field_plan.metrics.host_to_device_transfers == 0
     @test portable_field_plan.metrics.device_to_host_transfers == 0
+
+    generic_field_initial = Float64.(portable_field_initial)
+    generic_field_dynamics = FieldDynamics(
+        :generic_field_dynamics;
+        field = :generic_field,
+        law = ReactionDiffusion(
+            diffusion = 0.1, decay = 0.0),
+        method = FixedStep(ExplicitEuler(); substeps = 3),
+        clock = ContinuousClock(
+            :generic_field_clock; per_mcs = 1.0, unit = :second),
+        post_substep = (
+            ConstantConcentration(:medium, 1.0),))
+    generic_field_cpu = EvolvingFieldState(
+        :generic_field, generic_field_initial)
+    generic_field_kernel = EvolvingFieldState(
+        :generic_field, generic_field_initial)
+    advance_field!(
+        generic_field_cpu, generic_field_dynamics, 1.0,
+        portable_potts_snapshot)
+    generic_field_plan = ExecutionPlan(
+        KernelAbstractions.CPU(); block_size = 64)
+    CorePotts.advance_field!(
+        generic_field_plan, generic_field_kernel,
+        generic_field_dynamics, 1.0,
+        CorePotts.scientific_execution(
+            portable_scientific).core.ownership)
+    CorePotts.synchronize_field_advance_status!(
+        generic_field_plan, generic_field_kernel,
+        generic_field_dynamics, 1.0)
+    @test generic_field_kernel.values == generic_field_cpu.values
+    @test generic_field_kernel.time == 1.0
+    @test generic_field_plan.metrics.launches == 6
 
     overflowing_initial = zeros(Float32, 3, 3)
     overflowing_initial[1] = floatmax(Float32)

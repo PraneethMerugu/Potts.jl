@@ -114,9 +114,9 @@ check(wang_order_evidence["status"] == "pass",
 check(wang_order["history_discrepancy"]["classification"] ==
       "paper-t-minus-5_source-t-minus-4",
     "Wang paper/source history discrepancy is not registered")
-check(g3b_entry["schema_version"] == "1.3.0" &&
-      g3b_entry["revision"] == 4,
-    "G3-B entry contract is not the revision-4 fail-closed closure contract")
+check(g3b_entry["schema_version"] == "1.6.0" &&
+      g3b_entry["revision"] == 7,
+    "G3-B entry contract is not the revision-7 fail-closed closure contract")
 check(g3b_entry["source_time_mapping"]["source_first"] == 0 &&
       g3b_entry["source_time_mapping"]["target_first"] == 1 &&
       g3b_entry["source_time_mapping"]["source_last"] == 499 &&

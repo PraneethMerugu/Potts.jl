@@ -78,6 +78,7 @@ G3-B still requires:
 2. stale-generation and backend/capacity failure fixtures;
 3. source-runtime uptake/calibration fixtures;
 4. assembled completed-MCS restart at targets 210, 211, and 212; and
-5. the CC3D numerical field oracle needed to interpret exchange input equivalence.
+5. the CC3D numerical-field source study needed to interpret exchange input equivalence.
 
-No portable or foreign-runtime numerical claim may cite this sequential CPU record alone.
+No portable, source-semantic, or paper-reproduction claim may cite this sequential CPU record
+alone.

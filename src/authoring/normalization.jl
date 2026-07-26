@@ -951,6 +951,56 @@ _canonical_write(io::IO, value::CellProperty) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::ClosedPropertyInterval) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::CorePotts.FixedMechanicalNoise) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::CorePotts.AxisFieldBoundary) = _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ElasticLinkParameters) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.AnyFiniteCellPair) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.RNGNamespaceIdentity) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ReactionDiffusion) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.FixedStep) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ExplicitEuler) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ConstantConcentration) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.Uptake) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.ByCellVolume) =
+    _canonical_fields(io, value)
+_canonical_write(
+    io::IO, value::CorePotts.OneMCS) =
+    _canonical_fields(io, value)
+function _canonical_write(
+        io::IO, value::CorePotts.StaticCartesianRelation)
+    version = CorePotts.canonicalization_version(
+        value)
+    data = (
+        role = Symbol(nameof(typeof(value.role))),
+        offsets = Tuple(Tuple(offset)
+            for offset in value.offsets),
+        weights = Tuple(value.weights),
+        opposite = Tuple(value.opposite),
+        symmetric = value.symmetric,
+        version = (
+            version.major,
+            version.minor,
+            version.patch),
+    )
+    _canonical_open(io, value)
+    _canonical_write(io, data)
+    return _canonical_close(io)
+end
 
 function _canonical_write(io::IO, value::CorePotts.NumericalPolicy)
     _canonical_open(io, value)

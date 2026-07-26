@@ -231,6 +231,897 @@ end
     return left_gb < right_gb
 end
 
+"""Admit every pair of distinct active finite cells for contact-triggered relationship formation."""
+struct AnyFiniteCellPair end
+@inline (::AnyFiniteCellPair)(left_type::UInt32, right_type::UInt32) = true
+
+"""Admit a contact-triggered relationship only when both endpoints have one registered type."""
+struct SameCellTypePair
+    cell_type::UInt32
+end
+SameCellTypePair(cell_type::CellTypeID) =
+    SameCellTypePair(value(cell_type))
+@inline (pair::SameCellTypePair)(
+    left_type::UInt32, right_type::UInt32) =
+    left_type == pair.cell_type && right_type == pair.cell_type
+
+"""
+Generic contact-triggered dynamic elastic-relationship Hamiltonian.
+
+The component owns scientific meaning only. Its mutable, backend-adaptable attempt state is
+compiled separately as a `ContactRelationshipTransaction`, so the same declaration works for CPU,
+Metal, and ROCm execution.
+"""
+struct ContactRelationshipHamiltonian{
+        Relationships, R, F, T <: AbstractFloat,
+        P <: ElasticLinkParameters, N} <: AbstractEnergy
+    name::Symbol
+    relation::R
+    pair_filter::F
+    activation_energy::T
+    initial_payload::P
+    namespace::N
+    version::VersionNumber
+end
+
+function ContactRelationshipHamiltonian(
+        name::Symbol, relationships::Symbol;
+        relation::StaticCartesianRelation,
+        pair_filter = AnyFiniteCellPair(),
+        activation_energy::T,
+        initial_payload::ElasticLinkParameters,
+        namespace::RNGNamespaceIdentity,
+        version::VersionNumber = DYNAMIC_STATE_CONTRACT_VERSION) where {
+        T <: AbstractFloat}
+    isempty(String(name)) && throw(ArgumentError(
+        "contact-relationship Hamiltonian identity must not be empty"))
+    isfinite(activation_energy) || throw(ArgumentError(
+        "contact-relationship activation energy must be finite"))
+    direction_count(relation) <= Int(_RNG_MAX_DRAW) + 2 || throw(
+        ArgumentError(
+            "contact-relationship permutation exceeds the semantic RNG draw domain"))
+    return ContactRelationshipHamiltonian{
+        relationships, typeof(relation), typeof(pair_filter), T,
+        typeof(initial_payload), typeof(namespace)}(
+        name, relation, pair_filter, activation_energy,
+        initial_payload, namespace, version)
+end
+
+component_identity(component::ContactRelationshipHamiltonian) =
+    ComponentIdentity(component.name, component.version,
+        :energy)
+component_semantic_data(component::ContactRelationshipHamiltonian{
+        Relationships}) where {Relationships} = (
+    relationships = Relationships,
+    relation = component.relation,
+    pair_filter = component.pair_filter,
+    activation_energy = component.activation_energy,
+    initial_payload = component.initial_payload,
+    namespace = component.namespace)
+required_relations(component::ContactRelationshipHamiltonian) =
+    (component.relation, :center_unwrapping)
+component_rng_streams(::ContactRelationshipHamiltonian) =
+    (AuxiliaryEvolutionStream,)
+capabilities(::ContactRelationshipHamiltonian) =
+    ScientificCapabilities(dimensions = (2, 3), portable = true)
+component_supports_backend(
+        ::ContactRelationshipHamiltonian,
+        backend::BackendCapabilities) =
+    backend.family in (CPUFamily, MetalFamily, AMDGPUFamily) &&
+    supports(backend, QualifiedBackendCapability()) &&
+    supports(backend, FunctionalBackendCapability()) &&
+    supports(backend, OrderedLaunchCapability())
+scientific_access(component::ContactRelationshipHamiltonian) =
+    SnapshotScientificAccess(
+        (component.relation,); cell_wide = true,
+        private_workspace = true)
+tiled_scientific_access(::ContactRelationshipHamiltonian) =
+    UnsupportedTiledScientificAccess()
+_non_equilibrium_energy(::ContactRelationshipHamiltonian) = true
+accepted_copy_effect_requirement(
+        component::ContactRelationshipHamiltonian{
+            Relationships}) where {Relationships} = (
+    identity = Relationships,
+    component,
+)
+
+const CONTACT_RELATIONSHIP_SUCCEEDED = UInt32(0)
+const CONTACT_RELATIONSHIP_STALE_ENDPOINT = UInt32(1)
+const CONTACT_RELATIONSHIP_CAPACITY = UInt32(2)
+const CONTACT_RELATIONSHIP_DEGREE = UInt32(3)
+const CONTACT_RELATIONSHIP_DUPLICATE = UInt32(4)
+const CONTACT_RELATIONSHIP_REMOVAL_CAPACITY = UInt32(5)
+
+struct ContactRelationshipTransaction{
+        Name, H, R <: RelationshipExecutionState,
+        D <: AbstractVector{UInt16},
+        E <: AbstractVector{UInt32},
+        G <: AbstractVector{UInt64},
+        P <: AbstractVector{UInt8}}
+    component::H
+    relationships::R
+    permutation::D
+    candidate_endpoint::E
+    candidate_generation::G
+    candidate_present::P
+    removal_endpoint_a::E
+    removal_generation_a::G
+    removal_endpoint_b::E
+    removal_generation_b::G
+    removal_count::E
+    status::E
+    failing_attempt::E
+    attempt_id::E
+    mcs_id::G
+end
+
+function ContactRelationshipTransaction(
+        component::H, relationships::R, permutation::D,
+        candidate_endpoint::E, candidate_generation::G,
+        candidate_present::P, removal_endpoint_a::E,
+        removal_generation_a::G, removal_endpoint_b::E,
+        removal_generation_b::G, removal_count::E,
+        status::E, failing_attempt::E, attempt_id::E,
+        mcs_id::G) where {
+        Name, H <: ContactRelationshipHamiltonian{Name},
+        R <: RelationshipExecutionState,
+        D <: AbstractVector{UInt16},
+        E <: AbstractVector{UInt32},
+        G <: AbstractVector{UInt64},
+        P <: AbstractVector{UInt8}}
+    return ContactRelationshipTransaction{Name, H, R, D, E, G, P}(
+        component, relationships, permutation,
+        candidate_endpoint, candidate_generation, candidate_present,
+        removal_endpoint_a, removal_generation_a,
+        removal_endpoint_b, removal_generation_b,
+        removal_count, status, failing_attempt, attempt_id, mcs_id)
+end
+
+function ContactRelationshipTransaction(
+        component::ContactRelationshipHamiltonian{Name},
+        state::RelationshipState) where {Name}
+    state.declaration.name === Name || throw(ArgumentError(
+        "contact-relationship component and state identities differ"))
+    state.payload isa ElasticLinkColumns || throw(ArgumentError(
+        "contact-relationship Hamiltonian requires ElasticLinkParameters payload storage"))
+    directions = direction_count(component.relation)
+    removal_capacity = max(
+        2, Int(state.declaration.maximum_degree))
+    permutation = similar(state.endpoint_a, UInt16, directions)
+    candidate_endpoint = similar(state.endpoint_a, UInt32, 1)
+    candidate_generation = similar(state.generation_a, UInt64, 1)
+    candidate_present = similar(state.active, UInt8, 1)
+    removal_endpoint_a =
+        similar(state.endpoint_a, UInt32, removal_capacity)
+    removal_generation_a =
+        similar(state.generation_a, UInt64, removal_capacity)
+    removal_endpoint_b =
+        similar(state.endpoint_b, UInt32, removal_capacity)
+    removal_generation_b =
+        similar(state.generation_b, UInt64, removal_capacity)
+    removal_count = similar(state.count, UInt32, 1)
+    status = similar(state.count, UInt32, 1)
+    failing_attempt = similar(state.count, UInt32, 1)
+    attempt_id = similar(state.count, UInt32, 1)
+    mcs_id = similar(state.generation_a, UInt64, 1)
+    for array in (
+            permutation, candidate_endpoint, candidate_generation,
+            candidate_present, removal_endpoint_a, removal_generation_a,
+            removal_endpoint_b, removal_generation_b, removal_count,
+            status, failing_attempt, attempt_id, mcs_id)
+        fill!(array, zero(eltype(array)))
+    end
+    return ContactRelationshipTransaction(
+        component, RelationshipExecutionState(state),
+        permutation, candidate_endpoint, candidate_generation,
+        candidate_present, removal_endpoint_a, removal_generation_a,
+        removal_endpoint_b, removal_generation_b, removal_count,
+        status, failing_attempt, attempt_id, mcs_id)
+end
+
+function Adapt.adapt_structure(to,
+        transaction::ContactRelationshipTransaction{Name}) where {Name}
+    return ContactRelationshipTransaction(
+        Adapt.adapt(to, transaction.component),
+        Adapt.adapt(to, transaction.relationships),
+        Adapt.adapt(to, transaction.permutation),
+        Adapt.adapt(to, transaction.candidate_endpoint),
+        Adapt.adapt(to, transaction.candidate_generation),
+        Adapt.adapt(to, transaction.candidate_present),
+        Adapt.adapt(to, transaction.removal_endpoint_a),
+        Adapt.adapt(to, transaction.removal_generation_a),
+        Adapt.adapt(to, transaction.removal_endpoint_b),
+        Adapt.adapt(to, transaction.removal_generation_b),
+        Adapt.adapt(to, transaction.removal_count),
+        Adapt.adapt(to, transaction.status),
+        Adapt.adapt(to, transaction.failing_attempt),
+        Adapt.adapt(to, transaction.attempt_id),
+        Adapt.adapt(to, transaction.mcs_id))
+end
+
+accepted_copy_effect_binding(
+        transaction::ContactRelationshipTransaction{Name}) where {Name} = (
+    identity = Name,
+    component = transaction.component,
+    required = true,
+)
+
+function accepted_copy_effect_state_valid(
+        transaction::ContactRelationshipTransaction{Name},
+        coupled_state::CoupledState) where {Name}
+    state = try
+        _state_by_name(coupled_state.relationships, Name)
+    catch
+        return false
+    end
+    state.payload isa ElasticLinkColumns || return false
+    relationships = transaction.relationships
+    return relationships.endpoint_a === state.endpoint_a &&
+        relationships.generation_a === state.generation_a &&
+        relationships.endpoint_b === state.endpoint_b &&
+        relationships.generation_b === state.generation_b &&
+        relationships.payload.strength === state.payload.strength &&
+        relationships.payload.target_length === state.payload.target_length &&
+        relationships.payload.maximum_length === state.payload.maximum_length &&
+        relationships.active === state.active &&
+        relationships.count === state.count &&
+        relationships.publication_epoch === state.publication_epoch
+end
+
+@inline _relationship_directed(
+    ::RelationshipExecutionState{Name, Directed}) where {
+    Name, Directed} = Directed
+@inline _relationship_maximum_degree(
+    ::RelationshipExecutionState{Name, Directed, MaximumDegree}) where {
+    Name, Directed, MaximumDegree} = MaximumDegree
+
+@inline function _canonical_raw_relationship(
+        relationships::RelationshipExecutionState,
+        left::UInt32, left_generation::UInt64,
+        right::UInt32, right_generation::UInt64)
+    if !_relationship_directed(relationships) &&
+            _relationship_raw_less(
+                right, right_generation, left, left_generation,
+                left, left_generation, right, right_generation)
+        return right, right_generation, left, left_generation
+    end
+    return left, left_generation, right, right_generation
+end
+
+@inline function _find_contact_relationship_transaction(
+        effects::Tuple, ::Val{Name}) where {Name}
+    effect = first(effects)
+    effect isa ContactRelationshipTransaction{Name} && return effect
+    return _find_contact_relationship_transaction(
+        Base.tail(effects), Val(Name))
+end
+@noinline _find_contact_relationship_transaction(
+    ::Tuple{}, ::Val{Name}) where {Name} = throw(ArgumentError(
+    "contact-relationship Hamiltonian `$Name` has no compiled attempt transaction"))
+
+@inline function _contact_relationship_transaction(
+        workspace::CoupledAttemptWorkspace, ::Val{Name}) where {Name}
+    return _find_contact_relationship_transaction(
+        workspace.transaction_effects, Val(Name))
+end
+@inline _contact_relationship_identity(
+    ::ContactRelationshipHamiltonian{Name}) where {Name} = Val(Name)
+
+@inline function _contact_endpoint_current(
+        scientific, endpoint::UInt32, generation::UInt64)
+    core = scientific.core
+    return UInt32(1) <= endpoint <= UInt32(length(core.active)) &&
+        @inbounds(core.active[Int(endpoint)] != UInt8(0) &&
+            core.generations[Int(endpoint)] == generation)
+end
+
+@inline function _contact_relationship_failure!(
+        transaction::ContactRelationshipTransaction,
+        code::UInt32)
+    @inbounds begin
+        transaction.status[1] = code
+        transaction.failing_attempt[1] =
+            transaction.attempt_id[1]
+    end
+    return false
+end
+
+function begin_accepted_copy_mcs!(
+        transaction::ContactRelationshipTransaction,
+        scientific_state, mcs)
+    @inbounds begin
+        transaction.status[1] = CONTACT_RELATIONSHIP_SUCCEEDED
+        transaction.failing_attempt[1] = UInt32(0)
+        transaction.candidate_present[1] = UInt8(0)
+        transaction.removal_count[1] = UInt32(0)
+        transaction.mcs_id[1] = UInt64(mcs)
+    end
+    return nothing
+end
+
+@inline function _contact_permutation!(
+        destination, rng::Philox4x32x10V1, seed::UInt64,
+        namespace::RNGNamespaceIdentity, mcs::UInt64,
+        zero_based_attempt::UInt32)
+    for index in eachindex(destination)
+        @inbounds destination[index] =
+            Base.unsafe_trunc(UInt16, index)
+    end
+    address = _rng_address_unchecked(
+        AuxiliaryEvolutionStream, mcs, UInt8(0),
+        extension_rng_operation(namespace), GlobalEntity,
+        zero_based_attempt, UInt64(0), UInt8(0), UInt16(0))
+    length_value = length(destination)
+    for index in length_value:-1:2
+        draw = Base.unsafe_trunc(
+            UInt16, length_value - index)
+        selected = Int(bounded_uint(
+            rng, seed, _with_draw(address, draw),
+            Base.unsafe_trunc(UInt32, index))) + 1
+        @inbounds destination[index], destination[selected] =
+            destination[selected], destination[index]
+    end
+    return destination
+end
+
+function prepare_accepted_copy_effect!(
+        transaction::ContactRelationshipTransaction,
+        proposal, staged, scientific, rng, seed, mcs, attempt_id)
+    @inbounds begin
+        transaction.candidate_present[1] = UInt8(0)
+        transaction.removal_count[1] = UInt32(0)
+        transaction.attempt_id[1] = attempt_id - UInt32(1)
+    end
+    is_cell_owner(proposal.gaining) || return nothing
+    relationships = transaction.relationships
+    gaining = proposal.gaining.value
+    gaining_generation =
+        @inbounds scientific.core.generations[Int(gaining)]
+    gaining_degree = _relationship_raw_degree(
+        relationships.endpoint_a, relationships.generation_a,
+        relationships.endpoint_b, relationships.generation_b,
+        relationships.active, Int(@inbounds relationships.count[1]),
+        gaining, gaining_generation)
+    gaining_degree < _relationship_maximum_degree(relationships) ||
+        return nothing
+    component = transaction.component
+    _contact_permutation!(
+        transaction.permutation, rng, seed,
+        component.namespace, mcs,
+        @inbounds(transaction.attempt_id[1]))
+    gaining_type =
+        @inbounds scientific.core.cell_types[Int(gaining)]
+    count = Int(@inbounds relationships.count[1])
+    for permutation_index in eachindex(transaction.permutation)
+        direction = Int(@inbounds transaction.permutation[permutation_index])
+        neighbor = _realize_neighbor_unchecked(
+            scientific.domain, component.relation,
+            proposal.recipient, direction)
+        neighbor.kind === MutableNeighbor || continue
+        owner = _proposal_owner_at(scientific, neighbor.site)
+        is_cell_owner(owner) || continue
+        owner.value == gaining && continue
+        neighbor_type =
+            @inbounds scientific.core.cell_types[Int(owner.value)]
+        component.pair_filter(gaining_type, neighbor_type) || continue
+        neighbor_generation =
+            @inbounds scientific.core.generations[Int(owner.value)]
+        _relationship_raw_degree(
+            relationships.endpoint_a, relationships.generation_a,
+            relationships.endpoint_b, relationships.generation_b,
+            relationships.active, count,
+            owner.value, neighbor_generation) <
+            _relationship_maximum_degree(relationships) || continue
+        left, left_generation, right, right_generation =
+            _canonical_raw_relationship(
+                relationships, gaining, gaining_generation,
+                owner.value, neighbor_generation)
+        _relationship_raw_edge_index(
+            relationships.endpoint_a, relationships.generation_a,
+            relationships.endpoint_b, relationships.generation_b,
+            relationships.active, count,
+            left, left_generation, right, right_generation) == 0 ||
+            continue
+        @inbounds begin
+            transaction.candidate_endpoint[1] = owner.value
+            transaction.candidate_generation[1] =
+                neighbor_generation
+            transaction.candidate_present[1] = UInt8(1)
+        end
+        break
+    end
+    return nothing
+end
+
+@inline function _contact_postcopy_center(
+        scientific, proposal, moments, endpoint::UInt32)
+    owner = CellOwner(endpoint)
+    if owner == proposal.losing
+        volume =
+            @inbounds scientific.trackers.finite_volumes[Int(endpoint)]
+        volume == 1 && return nothing
+    end
+    return owner == proposal.losing || owner == proposal.gaining ?
+        _proposed_center(
+            scientific, owner, proposal, moments) :
+        unwrapped_center(scientific, owner)
+end
+
+@inline function _contact_link_energy(
+        scientific, left::UInt32, right::UInt32,
+        strength, target_length, left_center, right_center)
+    displacement = _minimum_image_displacement(
+        scientific, left, right, left_center, right_center)
+    distance = sqrt(sum(abs2, displacement))
+    return strength * (distance - target_length)^2
+end
+
+@inline function energy_change(
+        component::ContactRelationshipHamiltonian,
+        proposal::CopyProposal,
+        context::ScientificProposalContext)
+    transaction = _contact_relationship_transaction(
+        context.algorithm_workspace,
+        _contact_relationship_identity(component))
+    @inbounds transaction.status[1] ==
+        CONTACT_RELATIONSHIP_SUCCEEDED ||
+        return zero(component.activation_energy)
+    @inbounds transaction.candidate_present[1] != UInt8(0) &&
+        return component.activation_energy
+    relationships = transaction.relationships
+    payload = relationships.payload
+    moments = context.transaction.trackers.moments
+    if !(moments isa UnwrappedMomentDelta)
+        _contact_relationship_failure!(
+            transaction, CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+        return zero(component.activation_energy)
+    end
+    result = zero(component.activation_energy)
+    count = Int(@inbounds relationships.count[1])
+    for index in 1:count
+        @inbounds relationships.active[index] == UInt8(0) && continue
+        left = @inbounds relationships.endpoint_a[index]
+        left_generation =
+            @inbounds relationships.generation_a[index]
+        right = @inbounds relationships.endpoint_b[index]
+        right_generation =
+            @inbounds relationships.generation_b[index]
+        affected = left == proposal.losing.value ||
+            right == proposal.losing.value ||
+            left == proposal.gaining.value ||
+            right == proposal.gaining.value
+        affected || continue
+        if !_contact_endpoint_current(
+                context.state, left, left_generation) ||
+                !_contact_endpoint_current(
+                    context.state, right, right_generation)
+            _contact_relationship_failure!(
+                transaction, CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+            return zero(component.activation_energy)
+        end
+        old_left = unwrapped_center(
+            context.state, CellOwner(left))
+        old_right = unwrapped_center(
+            context.state, CellOwner(right))
+        strength = @inbounds payload.strength[index]
+        target_length =
+            @inbounds payload.target_length[index]
+        old_energy = _contact_link_energy(
+            context.state, left, right,
+            strength, target_length, old_left, old_right)
+        new_left = _contact_postcopy_center(
+            context.state, proposal, moments, left)
+        new_right = _contact_postcopy_center(
+            context.state, proposal, moments, right)
+        if new_left === nothing || new_right === nothing
+            result -= old_energy
+        else
+            result += _contact_link_energy(
+                context.state, left, right,
+                strength, target_length,
+                new_left, new_right) - old_energy
+        end
+    end
+    return result
+end
+
+@inline proposal_energy_change(
+    component::ContactRelationshipHamiltonian,
+    proposal::CopyProposal,
+    context::ScientificProposalContext) =
+    energy_change(component, proposal, context)
+
+@inline function _contact_removal_already_staged(
+        transaction, left, left_generation,
+        right, right_generation)
+    for index in 1:Int(@inbounds transaction.removal_count[1])
+        @inbounds if transaction.removal_endpoint_a[index] == left &&
+                transaction.removal_generation_a[index] ==
+                    left_generation &&
+                transaction.removal_endpoint_b[index] == right &&
+                transaction.removal_generation_b[index] ==
+                    right_generation
+            return true
+        end
+    end
+    return false
+end
+
+@inline function _stage_contact_removal!(
+        transaction, left, left_generation,
+        right, right_generation)
+    _contact_removal_already_staged(
+        transaction, left, left_generation,
+        right, right_generation) && return true
+    count = Int(@inbounds transaction.removal_count[1])
+    count < length(transaction.removal_endpoint_a) ||
+        return _contact_relationship_failure!(
+            transaction, CONTACT_RELATIONSHIP_REMOVAL_CAPACITY)
+    index = count + 1
+    @inbounds begin
+        transaction.removal_endpoint_a[index] = left
+        transaction.removal_generation_a[index] =
+            left_generation
+        transaction.removal_endpoint_b[index] = right
+        transaction.removal_generation_b[index] =
+            right_generation
+        transaction.removal_count[1] = UInt32(index)
+    end
+    return true
+end
+
+@inline function _contact_edge_overlength(
+        transaction, scientific, proposal, moments,
+        left, left_generation, right, right_generation,
+        maximum_length)
+    _contact_endpoint_current(
+        scientific, left, left_generation) &&
+        _contact_endpoint_current(
+            scientific, right, right_generation) || return false
+    left_center = _contact_postcopy_center(
+        scientific, proposal, moments, left)
+    right_center = _contact_postcopy_center(
+        scientific, proposal, moments, right)
+    (left_center === nothing || right_center === nothing) &&
+        return true
+    displacement = _minimum_image_displacement(
+        scientific, left, right, left_center, right_center)
+    return sqrt(sum(abs2, displacement)) > maximum_length
+end
+
+function _stage_first_overlength_for_endpoint!(
+        transaction, scientific, proposal, moments,
+        endpoint::UInt32)
+    relationships = transaction.relationships
+    payload = relationships.payload
+    found = false
+    best_left = UInt32(0)
+    best_left_generation = UInt64(0)
+    best_right = UInt32(0)
+    best_right_generation = UInt64(0)
+    count = Int(@inbounds relationships.count[1])
+    for index in 1:count
+        @inbounds relationships.active[index] == UInt8(0) && continue
+        left = @inbounds relationships.endpoint_a[index]
+        left_generation =
+            @inbounds relationships.generation_a[index]
+        right = @inbounds relationships.endpoint_b[index]
+        right_generation =
+            @inbounds relationships.generation_b[index]
+        left == endpoint || right == endpoint || continue
+        _contact_edge_overlength(
+            transaction, scientific, proposal, moments,
+            left, left_generation, right, right_generation,
+            @inbounds(payload.maximum_length[index])) || continue
+        if !found || _relationship_raw_less(
+                left, left_generation, right, right_generation,
+                best_left, best_left_generation,
+                best_right, best_right_generation)
+            found = true
+            best_left, best_left_generation =
+                left, left_generation
+            best_right, best_right_generation =
+                right, right_generation
+        end
+    end
+    if @inbounds transaction.candidate_present[1] != UInt8(0)
+        gaining = proposal.gaining.value
+        gaining_generation =
+            @inbounds scientific.core.generations[Int(gaining)]
+        neighbor = @inbounds transaction.candidate_endpoint[1]
+        neighbor_generation =
+            @inbounds transaction.candidate_generation[1]
+        left, left_generation, right, right_generation =
+            _canonical_raw_relationship(
+                relationships, gaining, gaining_generation,
+                neighbor, neighbor_generation)
+        if (left == endpoint || right == endpoint) &&
+                _contact_edge_overlength(
+                    transaction, scientific, proposal, moments,
+                    left, left_generation, right, right_generation,
+                    transaction.component.initial_payload.maximum_length) &&
+                (!found || _relationship_raw_less(
+                    left, left_generation, right, right_generation,
+                    best_left, best_left_generation,
+                    best_right, best_right_generation))
+            found = true
+            best_left, best_left_generation =
+                left, left_generation
+            best_right, best_right_generation =
+                right, right_generation
+        end
+    end
+    found || return true
+    return _stage_contact_removal!(
+        transaction, best_left, best_left_generation,
+        best_right, best_right_generation)
+end
+
+function preflight_accepted_copy_effect!(
+        transaction::ContactRelationshipTransaction,
+        proposal, staged, scientific)
+    @inbounds transaction.status[1] ==
+        CONTACT_RELATIONSHIP_SUCCEEDED || return false
+    relationships = transaction.relationships
+    count = Int(@inbounds relationships.count[1])
+    if @inbounds transaction.candidate_present[1] != UInt8(0)
+        gaining = proposal.gaining.value
+        gaining_generation =
+            @inbounds scientific.core.generations[Int(gaining)]
+        neighbor = @inbounds transaction.candidate_endpoint[1]
+        neighbor_generation =
+            @inbounds transaction.candidate_generation[1]
+        _contact_endpoint_current(
+            scientific, gaining, gaining_generation) &&
+            _contact_endpoint_current(
+                scientific, neighbor, neighbor_generation) ||
+            return _contact_relationship_failure!(
+                transaction, CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+        left, left_generation, right, right_generation =
+            _canonical_raw_relationship(
+                relationships, gaining, gaining_generation,
+                neighbor, neighbor_generation)
+        _relationship_raw_edge_index(
+            relationships.endpoint_a, relationships.generation_a,
+            relationships.endpoint_b, relationships.generation_b,
+            relationships.active, count,
+            left, left_generation, right, right_generation) == 0 ||
+            return _contact_relationship_failure!(
+                transaction, CONTACT_RELATIONSHIP_DUPLICATE)
+        count < length(relationships.active) ||
+            return _contact_relationship_failure!(
+                transaction, CONTACT_RELATIONSHIP_CAPACITY)
+        _relationship_raw_degree(
+            relationships.endpoint_a, relationships.generation_a,
+            relationships.endpoint_b, relationships.generation_b,
+            relationships.active, count,
+            left, left_generation) <
+            _relationship_maximum_degree(relationships) &&
+            _relationship_raw_degree(
+                relationships.endpoint_a, relationships.generation_a,
+                relationships.endpoint_b, relationships.generation_b,
+                relationships.active, count,
+                right, right_generation) <
+            _relationship_maximum_degree(relationships) ||
+            return _contact_relationship_failure!(
+                transaction, CONTACT_RELATIONSHIP_DEGREE)
+    end
+    moments = staged.trackers.moments
+    moments isa UnwrappedMomentDelta ||
+        return _contact_relationship_failure!(
+            transaction, CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+    @inbounds transaction.removal_count[1] = UInt32(0)
+    if is_cell_owner(proposal.losing) &&
+            @inbounds(scientific.trackers.finite_volumes[
+                Int(proposal.losing.value)]) == 1
+        losing = proposal.losing.value
+        for index in 1:count
+            @inbounds relationships.active[index] == UInt8(0) && continue
+            left = @inbounds relationships.endpoint_a[index]
+            right = @inbounds relationships.endpoint_b[index]
+            left == losing || right == losing || continue
+            _stage_contact_removal!(
+                transaction, left,
+                @inbounds(relationships.generation_a[index]),
+                right,
+                @inbounds(relationships.generation_b[index])) ||
+                return false
+        end
+        if @inbounds transaction.candidate_present[1] != UInt8(0) &&
+                transaction.candidate_endpoint[1] == losing
+            gaining = proposal.gaining.value
+            gaining_generation =
+                @inbounds scientific.core.generations[Int(gaining)]
+            left, left_generation, right, right_generation =
+                _canonical_raw_relationship(
+                    relationships, gaining, gaining_generation,
+                    losing,
+                    @inbounds(transaction.candidate_generation[1]))
+            _stage_contact_removal!(
+                transaction, left, left_generation,
+                right, right_generation) || return false
+        end
+    else
+        is_cell_owner(proposal.gaining) &&
+            !_stage_first_overlength_for_endpoint!(
+                transaction, scientific, proposal, moments,
+                proposal.gaining.value) && return false
+        is_cell_owner(proposal.losing) &&
+            !_stage_first_overlength_for_endpoint!(
+                transaction, scientific, proposal, moments,
+                proposal.losing.value) && return false
+    end
+    return true
+end
+
+@inline function _insert_contact_relationship!(
+        relationships, left, left_generation,
+        right, right_generation, payload)
+    count = Int(@inbounds relationships.count[1])
+    insertion = count + 1
+    for index in 1:count
+        @inbounds if _relationship_raw_less(
+                left, left_generation, right, right_generation,
+                relationships.endpoint_a[index],
+                relationships.generation_a[index],
+                relationships.endpoint_b[index],
+                relationships.generation_b[index])
+            insertion = index
+            break
+        end
+    end
+    for destination in (count + 1):-1:(insertion + 1)
+        _relationship_raw_copy!(
+            relationships.endpoint_a,
+            relationships.generation_a,
+            relationships.endpoint_b,
+            relationships.generation_b,
+            relationships.payload, relationships.active,
+            destination, destination - 1)
+    end
+    @inbounds begin
+        relationships.endpoint_a[insertion] = left
+        relationships.generation_a[insertion] =
+            left_generation
+        relationships.endpoint_b[insertion] = right
+        relationships.generation_b[insertion] =
+            right_generation
+        relationships.payload[insertion] = payload
+        relationships.active[insertion] = UInt8(1)
+        relationships.count[1] = UInt32(count + 1)
+    end
+    return nothing
+end
+
+@inline function _remove_contact_relationship!(
+        relationships, left, left_generation,
+        right, right_generation)
+    count = Int(@inbounds relationships.count[1])
+    index = _relationship_raw_edge_index(
+        relationships.endpoint_a, relationships.generation_a,
+        relationships.endpoint_b, relationships.generation_b,
+        relationships.active, count,
+        left, left_generation, right, right_generation)
+    index == 0 && return false
+    for source in (index + 1):count
+        _relationship_raw_copy!(
+            relationships.endpoint_a,
+            relationships.generation_a,
+            relationships.endpoint_b,
+            relationships.generation_b,
+            relationships.payload, relationships.active,
+            source - 1, source)
+    end
+    @inbounds begin
+        relationships.active[count] = UInt8(0)
+        relationships.count[1] = UInt32(count - 1)
+    end
+    return true
+end
+
+function commit_accepted_copy_effect!(
+        transaction::ContactRelationshipTransaction,
+        proposal, staged, scientific)
+    relationships = transaction.relationships
+    changed = false
+    if @inbounds transaction.candidate_present[1] != UInt8(0)
+        gaining = proposal.gaining.value
+        gaining_generation =
+            @inbounds scientific.core.generations[Int(gaining)]
+        neighbor = @inbounds transaction.candidate_endpoint[1]
+        neighbor_generation =
+            @inbounds transaction.candidate_generation[1]
+        left, left_generation, right, right_generation =
+            _canonical_raw_relationship(
+                relationships, gaining, gaining_generation,
+                neighbor, neighbor_generation)
+        _insert_contact_relationship!(
+            relationships, left, left_generation,
+            right, right_generation,
+            transaction.component.initial_payload)
+        changed = true
+    end
+    for index in 1:Int(@inbounds transaction.removal_count[1])
+        changed |= _remove_contact_relationship!(
+            relationships,
+            @inbounds(transaction.removal_endpoint_a[index]),
+            @inbounds(transaction.removal_generation_a[index]),
+            @inbounds(transaction.removal_endpoint_b[index]),
+            @inbounds(transaction.removal_generation_b[index]))
+    end
+    changed &&
+        (@inbounds relationships.publication_epoch[1] += UInt64(1))
+    return nothing
+end
+
+function accepted_copy_effect_backend_valid(
+        transaction::ContactRelationshipTransaction,
+        scientific, plan)
+    relationships = transaction.relationships
+    arrays = (
+        relationships.endpoint_a, relationships.generation_a,
+        relationships.endpoint_b, relationships.generation_b,
+        relationships.payload.strength,
+        relationships.payload.target_length,
+        relationships.payload.maximum_length,
+        relationships.active, relationships.count,
+        relationships.publication_epoch,
+        transaction.permutation,
+        transaction.candidate_endpoint,
+        transaction.candidate_generation,
+        transaction.candidate_present,
+        transaction.removal_endpoint_a,
+        transaction.removal_generation_a,
+        transaction.removal_endpoint_b,
+        transaction.removal_generation_b,
+        transaction.removal_count, transaction.status,
+        transaction.failing_attempt, transaction.attempt_id,
+        transaction.mcs_id)
+    return all(array -> isbitstype(eltype(array)) &&
+        isequal(KernelAbstractions.get_backend(array), plan.backend),
+        arrays)
+end
+
+accepted_copy_effect_allocation_bytes(
+    transaction::ContactRelationshipTransaction) = sum(
+    _array_bytes, (
+        transaction.permutation,
+        transaction.candidate_endpoint,
+        transaction.candidate_generation,
+        transaction.candidate_present,
+        transaction.removal_endpoint_a,
+        transaction.removal_generation_a,
+        transaction.removal_endpoint_b,
+        transaction.removal_generation_b,
+        transaction.removal_count, transaction.status,
+        transaction.failing_attempt, transaction.attempt_id,
+        transaction.mcs_id);
+    init = 0)
+
+function synchronize_accepted_copy_effect_status!(
+        plan, transaction::ContactRelationshipTransaction)
+    synchronize_observation!(plan)
+    if !(plan.backend isa KernelAbstractions.CPU)
+        record_transfer!(plan, :device_to_host)
+        record_transfer!(plan, :device_to_host)
+    end
+    status = only(Adapt.adapt(Array, transaction.status))
+    iszero(status) && return transaction
+    attempt = only(Adapt.adapt(
+        Array, transaction.failing_attempt))
+    throw(ArgumentError(
+        "contact-relationship transaction failed with status $status at zero-based attempt $attempt"))
+end
+
+function rebuild_accepted_copy_effect(
+        transaction::ContactRelationshipTransaction{Name},
+        coupled_state::CoupledState) where {Name}
+    state = _state_by_name(
+        coupled_state.relationships, Name)
+    return ContactRelationshipTransaction(
+        transaction.component, state)
+end
+
 @kernel function _relationship_initialize_transaction!(
         candidate_endpoint_a, candidate_generation_a,
         candidate_endpoint_b, candidate_generation_b,
@@ -602,11 +1493,82 @@ function Adapt.adapt_structure(to,
         Adapt.adapt(to, workspace.failing_edge))
 end
 
+"""
+Compiled execution view for an immutable `ElasticLinkRetune` declaration.
+
+The wrapper owns only bounded scratch storage. Relationship payload and cell properties remain
+authoritative in `CoupledState` and `CompiledScientificState`, respectively.
+"""
+struct ElasticLinkRetuneExecution{
+        P <: ElasticLinkRetune,
+        W <: ElasticLinkRetuneWorkspace}
+    process::P
+    workspace::W
+end
+
+function ElasticLinkRetuneExecution(
+        process::ElasticLinkRetune,
+        relationships::RelationshipState,
+        state::Union{
+            LogicalPottsState,
+            CompiledScientificState})
+    property = _coupled_property_column(
+        state, process.property)
+    workspace = ElasticLinkRetuneWorkspace(
+        relationships, property)
+    return ElasticLinkRetuneExecution(
+        process, workspace)
+end
+
+function realize_coupled_process(
+        process::ElasticLinkRetune,
+        state::CoupledState,
+        scientific::CompiledScientificState)
+    relationships = _state_by_name(
+        state.relationships,
+        process.relationships)
+    return ElasticLinkRetuneExecution(
+        process, relationships, scientific)
+end
+
+function Adapt.adapt_structure(
+        to, execution::ElasticLinkRetuneExecution)
+    return ElasticLinkRetuneExecution(
+        Adapt.adapt(to, execution.process),
+        Adapt.adapt(to, execution.workspace))
+end
+
+component_identity(
+    execution::ElasticLinkRetuneExecution) =
+    component_identity(execution.process)
+component_semantic_data(
+    execution::ElasticLinkRetuneExecution) =
+    component_semantic_data(execution.process)
+process_reads(execution::ElasticLinkRetuneExecution) =
+    process_reads(execution.process)
+process_writes(execution::ElasticLinkRetuneExecution) =
+    process_writes(execution.process)
+canonical_process_law(
+    execution::ElasticLinkRetuneExecution) =
+    execution.process
+
 function apply_elastic_link_retune!(
         logical::LogicalPottsState,
         state::RelationshipState{
             D, ElasticLinkParameters{T}},
         process::ElasticLinkRetune,
+        workspace::ElasticLinkRetuneWorkspace) where {D, T}
+    return apply_elastic_link_retune!(
+        logical, state, process,
+        process.parameters, workspace)
+end
+
+function apply_elastic_link_retune!(
+        logical::LogicalPottsState,
+        state::RelationshipState{
+            D, ElasticLinkParameters{T}},
+        process::ElasticLinkRetune,
+        parameters::ElasticLinkParameters{T},
         workspace::ElasticLinkRetuneWorkspace) where {D, T}
     process.relationships === state.declaration.name ||
         throw(ArgumentError(
@@ -640,11 +1602,11 @@ function apply_elastic_link_retune!(
         end
         @inbounds begin
             workspace.candidate_strength[index] =
-                process.parameters.strength
+                parameters.strength
             workspace.candidate_target_length[index] =
-                process.parameters.target_length
+                parameters.target_length
             workspace.candidate_maximum_length[index] =
-                process.parameters.maximum_length
+                parameters.maximum_length
         end
     end
     for slot in eachindex(property)
@@ -653,7 +1615,7 @@ function apply_elastic_link_retune!(
         _cell_scope_matches_exchange(
             process.scope, logical, cell) || continue
         @inbounds workspace.candidate_property[slot] =
-            process.parameters.strength
+            parameters.strength
     end
     copyto!(property, workspace.candidate_property)
     copyto!(payload.strength, workspace.candidate_strength)
@@ -768,6 +1730,19 @@ function apply_elastic_link_retune!(
             D, ElasticLinkParameters{T}},
         process::ElasticLinkRetune,
         workspace::ElasticLinkRetuneWorkspace) where {D, T}
+    return apply_elastic_link_retune!(
+        plan, scientific, state, process,
+        process.parameters, workspace)
+end
+
+function apply_elastic_link_retune!(
+        plan::ExecutionPlan,
+        scientific::CompiledScientificState,
+        state::RelationshipState{
+            D, ElasticLinkParameters{T}},
+        process::ElasticLinkRetune,
+        parameters::ElasticLinkParameters{T},
+        workspace::ElasticLinkRetuneWorkspace) where {D, T}
     process.relationships === state.declaration.name ||
         throw(ArgumentError(
             "elastic retune targets a different relationship set"))
@@ -827,9 +1802,9 @@ function apply_elastic_link_retune!(
         state.endpoint_b, state.generation_b,
         state.active, state.count,
         core.active, core.generations, core.cell_types,
-        scope_type, process.parameters.strength,
-        process.parameters.target_length,
-        process.parameters.maximum_length,
+        scope_type, parameters.strength,
+        parameters.target_length,
+        parameters.maximum_length,
         workspace.status, workspace.failing_edge;
         ndrange)
     commit = _execution_kernel(
@@ -860,6 +1835,253 @@ function synchronize_elastic_retune_status!(
     failing == typemax(UInt32) && (failing = UInt32(0))
     throw(ArgumentError(
         "elastic relationship retune failed with status $status at edge $failing"))
+end
+
+function _execute_host_process!(
+        candidate::CoupledState,
+        snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        execution::ElasticLinkRetuneExecution,
+        target_mcs, stage, interval)
+    process = execution.process
+    parameters = _elastic_retune_parameters(
+        process, interval)
+    source = _state_by_name(
+        snapshot.relationships,
+        process.relationships)
+    target = _state_by_name(
+        candidate.relationships,
+        process.relationships)
+    _publish_state!(target, source)
+    apply_elastic_link_retune!(
+        potts_candidate, target, process, parameters,
+        execution.workspace)
+    return (process.property,)
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator,
+        execution::ElasticLinkRetuneExecution,
+        target_mcs, stage, interval)
+    process = execution.process
+    parameters = _elastic_retune_parameters(
+        process, interval)
+    relationships = _state_by_name(
+        integrator.state.relationships,
+        process.relationships)
+    apply_elastic_link_retune!(
+        integrator.potts.plan,
+        integrator.potts.state,
+        relationships, process, parameters,
+        execution.workspace)
+    synchronize_elastic_retune_status!(
+        integrator.potts.plan,
+        execution.workspace)
+    return ()
+end
+
+function _elastic_retune_parameters(
+        process::ElasticLinkRetune,
+        interval)
+    interval === nothing &&
+        return process.parameters
+    interval isa typeof(process.parameters) ||
+        throw(ArgumentError(
+            "elastic retune scheduled value must match the declaration parameter type"))
+    return interval
+end
+
+"""
+Immutable declaration for canonical stale-endpoint relationship compaction.
+
+The declaration carries only identity and the targeted relationship set. Bounded candidate
+storage belongs to `RelationshipCleanupExecution`.
+"""
+struct RelationshipCleanup{Relationships}
+    name::Symbol
+    version::VersionNumber
+end
+
+function RelationshipCleanup(
+        name::Symbol,
+        relationships::Union{
+            Symbol, RelationshipSet};
+        version::VersionNumber =
+            DYNAMIC_STATE_CONTRACT_VERSION)
+    isempty(String(name)) && throw(ArgumentError(
+        "relationship-cleanup identity must not be empty"))
+    target = relationships isa Symbol ?
+        relationships : relationships.name
+    return RelationshipCleanup{target}(
+        name, version)
+end
+
+component_identity(process::RelationshipCleanup) =
+    ComponentIdentity(
+        process.name, process.version,
+        :relationship_cleanup)
+component_semantic_data(
+        ::RelationshipCleanup{Relationships}) where {
+        Relationships} = (
+    relationships = Relationships,
+    policy = :remove_stale_endpoint_generation,
+    order = :canonical_compaction,
+)
+process_reads(
+        ::RelationshipCleanup{
+            Relationships}) where {
+        Relationships} = (
+    (:relationships, Relationships),
+    (:ownership, :cells),
+)
+process_writes(
+        ::RelationshipCleanup{
+            Relationships}) where {
+        Relationships} = (
+    (:relationships, Relationships),)
+
+struct RelationshipCleanupExecution{
+        P <: RelationshipCleanup,
+        W <: RelationshipTransactionWorkspace}
+    process::P
+    workspace::W
+end
+
+function RelationshipCleanupExecution(
+        process::RelationshipCleanup{
+            Relationships},
+        state::RelationshipState) where {
+        Relationships}
+    state.declaration.name === Relationships ||
+        throw(ArgumentError(
+            "relationship-cleanup declaration and state identities differ"))
+    return RelationshipCleanupExecution(
+        process,
+        RelationshipTransactionWorkspace(
+            state; request_capacity = 1))
+end
+
+function realize_coupled_process(
+        process::RelationshipCleanup{
+            Relationships},
+        state::CoupledState,
+        scientific::CompiledScientificState) where {
+            Relationships}
+    relationships = _state_by_name(
+        state.relationships, Relationships)
+    return RelationshipCleanupExecution(
+        process, relationships)
+end
+
+function Adapt.adapt_structure(
+        to,
+        execution::RelationshipCleanupExecution)
+    return RelationshipCleanupExecution(
+        Adapt.adapt(to, execution.process),
+        Adapt.adapt(to, execution.workspace))
+end
+
+component_identity(
+    execution::RelationshipCleanupExecution) =
+    component_identity(execution.process)
+component_semantic_data(
+    execution::RelationshipCleanupExecution) =
+    component_semantic_data(execution.process)
+process_reads(
+    execution::RelationshipCleanupExecution) =
+    process_reads(execution.process)
+process_writes(
+    execution::RelationshipCleanupExecution) =
+    process_writes(execution.process)
+canonical_process_law(
+    execution::RelationshipCleanupExecution) =
+    execution.process
+
+function cleanup_relationships!(
+        state::RelationshipState,
+        logical::LogicalPottsState)
+    state.declaration.endpoint_lifecycle isa
+        RemoveIncidentEdges ||
+        throw(ArgumentError(
+            "relationship cleanup requires RemoveIncidentEdges"))
+    count = _relationship_count(state)
+    index = 1
+    while index <= count
+        left = @inbounds state.endpoint_a[index]
+        left_generation =
+            @inbounds state.generation_a[index]
+        right = @inbounds state.endpoint_b[index]
+        right_generation =
+            @inbounds state.generation_b[index]
+        current =
+            is_active(logical, CellID(left)) &&
+            generation(logical, CellID(left)) ==
+                CellGeneration(left_generation) &&
+            is_active(logical, CellID(right)) &&
+            generation(logical, CellID(right)) ==
+                CellGeneration(right_generation)
+        if current
+            index += 1
+            continue
+        end
+        for source in (index + 1):count
+            _relationship_raw_copy!(
+                state.endpoint_a,
+                state.generation_a,
+                state.endpoint_b,
+                state.generation_b,
+                state.payload, state.active,
+                source - 1, source)
+        end
+        @inbounds state.active[count] = UInt8(0)
+        count -= 1
+    end
+    state.count[1] = UInt32(count)
+    state.publication_epoch[1] += UInt64(1)
+    return state
+end
+
+function _execute_host_process!(
+        candidate::CoupledState,
+        snapshot::CoupledState,
+        potts_candidate::LogicalPottsState,
+        potts_snapshot::LogicalPottsState,
+        scientific::CompiledScientificState,
+        execution::RelationshipCleanupExecution,
+        target_mcs, stage, interval)
+    process = execution.process
+    relationships =
+        component_semantic_data(process).relationships
+    source = _state_by_name(
+        snapshot.relationships, relationships)
+    target = _state_by_name(
+        candidate.relationships, relationships)
+    _publish_state!(target, source)
+    cleanup_relationships!(
+        target, potts_snapshot)
+    return ()
+end
+
+function _execute_portable_process!(
+        integrator::CoupledIntegrator,
+        execution::RelationshipCleanupExecution,
+        target_mcs, stage, interval)
+    process = execution.process
+    relationships =
+        component_semantic_data(process).relationships
+    state = _state_by_name(
+        integrator.state.relationships,
+        relationships)
+    cleanup_relationships!(
+        integrator.potts.plan,
+        integrator.potts.state, state,
+        execution.workspace)
+    synchronize_relationship_status!(
+        integrator.potts.plan,
+        execution.workspace)
+    return ()
 end
 
 @kernel function _relationship_cleanup_transaction!(

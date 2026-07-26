@@ -1,6 +1,7 @@
 # Phase 14.1 G3-B Atomic Field Evidence
 
-Status: sequential CPU and portable KernelAbstractions reference accepted; Metal/ROCm execution remains open
+Status: pinned CC3D field semantics plus sequential CPU and portable KernelAbstractions reference
+accepted; Metal/ROCm execution remains G3-C
 
 Date: 2026-07-25
 
@@ -63,13 +64,6 @@ values and epoch.
 The Phase 14 G3-B, G3-A, Phase 14.0, Phase 13 API-inventory, and repository-structure checkers also
 pass after this slice.
 
-## Explicitly open
-
-G3-B still requires:
-
-1. Metal/ROCm adaptation and device-tree compilation evidence for the complete execution view;
-2. the registered CC3D 4.2.5 field microtrace oracle;
-3. tolerance-based impulse, periodic-edge, and reset-order comparisons against that oracle; and
-4. completed-MCS restart evidence in the assembled Wang plan.
-
-No backend numerical claim may cite this CPU record as a substitute.
+The source-derived splitting, five-substep scale, periodic field/no-flux Potts distinction, and
+reset-after-every-substep timing are frozen in `phase-14-g3b-field-source-study.md`. Real Metal and
+ROCm execution remains G3-C; no backend numerical claim may cite this CPU record as a substitute.

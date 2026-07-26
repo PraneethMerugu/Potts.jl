@@ -1,6 +1,7 @@
 # Phase 14.1 G3-B Wang Entry Packet
 
-Status: accepted implementation entry, revision 4; fail-closed G3-B exit protocol registered
+Status: accepted implementation entry, revision 7; derived-contact, packed-status, and
+dimension-generic observation normalization accepted
 
 Date: 2026-07-25
 
@@ -19,7 +20,7 @@ left structural:
 - numerical profiles and source-runtime authority;
 - exact read, write, snapshot, commit, and MCS-boundary behavior;
 - conformance fixtures that must precede claims; and
-- the three remaining foreign-runtime questions.
+- the three remaining Wang/CC3D/RoadRunner source-semantic studies.
 
 The CPU reference is an oracle for the same canonical model that will run on Metal and ROCm. It is
 not permission to build CPU-owned arrays, host callbacks, a second runtime, or paper-specific
@@ -32,11 +33,38 @@ the shared uptake multiplier to global state, and freezes deterministic reductio
 cross-domain-publication requirements.
 
 Revision 3 leaves those semantics unchanged and strengthens only the exit proof. It registers a
-[machine-readable closure ledger](phase-14-g3b-closure-ledger-v1.toml), twelve non-substitutable
+[machine-readable closure ledger](phase-14-g3b-closure-ledger-v1.toml), thirteen non-substitutable
 closure requirements, assembled-model evidence, all-process failure/allocation matrices,
-hash-addressed foreign-runtime artifacts, exact restart rejection points, and a fail-closed claim
+hash-addressed source-study artifacts, exact restart rejection points, and a fail-closed claim
 checker. Primitive results and KernelAbstractions CPU results remain useful increments but cannot
-be promoted into a Wang, foreign-runtime, GPU, or paper-reproduction claim.
+be promoted into a complete Wang, GPU, or paper-reproduction claim.
+
+Revision 4 froze the accepted-copy FocalPointPlasticity law. Revision 5 closes the remaining
+specification loopholes: it makes the Potts/relationship commit one preflighted transaction,
+freezes portable topology RNG addressing, records the exact fourteen-column source observation
+schema and lossless geometry snapshots, prohibits Wang exports and positional mega-constructors,
+requires a non-Wang reuse proof for every new primitive, and adds a process-by-process proof
+matrix. Final closure is now an attestation over one clean tested implementation commit: command
+outputs, source inputs, analyses, uncertainty records, controlled fixtures, and matrices are SHA-256
+addressed. Contract and ledger must already say `passed` in that tested commit; the later
+attestation commit may add only the closure evidence root.
+
+Revision 6 reconciles the implemented contact-neighbor execution view with the scientific state
+contract. Contact adjacency is derived transiently from the immutable post-Potts ownership
+snapshot, not transactionally maintained or checkpointed as a second authoritative graph. It is
+stored as one symmetric bit-packed relation, built with idempotent integer atomic OR and reduced
+in ascending neighbor identity. Revision 6 also replaces independently selected device status and
+failing-cell scalars with one packed atomic key, so simultaneous different failures cannot report
+a class from one cell and an identity from another. These corrections preserve the revision-5
+closure proof and reduce adjacency storage by approximately 32 times.
+
+Revision 7 closes the observation generality defects found before canonical assembly. The bounded
+cell table now derives a dimension-generic coordinate tuple from compiled moments and binds
+arbitrary typed named property columns. Its capacity is explicitly persistent cell-slot capacity,
+not an ambiguous compact row count. Lossless ownership publication preserves the full
+N-dimensional lattice shape. The exact two-dimensional Wang labels and schedules remain
+declaration-layer configuration. Focused 2D/3D, failure, publication, and restart evidence passes;
+assembled Wang observation order and real GPU qualification remain open.
 
 ## Source time mapping
 
@@ -60,7 +88,7 @@ The implementation has nine future-relevant state families:
 | State | Owner | Backend-ready physical form |
 | --- | --- | --- |
 | secretome | field | one authoritative 256×256 matrix; two same-shape staging grids are workspace |
-| centroid history | cell | SoA `x`/`y` bounded ring with per-slot head and count |
+| centroid history | cell | bounded capacity-by-history matrix of fixed-size vector samples with per-slot head, count, and generation |
 | self polarity | cell | SoA vector components and magnitude |
 | signal | cell | SoA scalar column |
 | uptake multiplier | global | one backend-resident scalar plus initialized status |
@@ -68,11 +96,11 @@ The implementation has nine future-relevant state families:
 | focal strength | cell | SoA scalar column |
 | focal relationships | relationship | bounded canonical endpoint/generation/payload SoA |
 | motility force | cell | SoA vector and derived scalar columns |
-| Potts ownership/geometry/neighbors | existing CorePotts state | existing qualified storage |
+| Potts ownership/geometry | existing CorePotts state | existing qualified storage |
 
 Scratch is declared and preallocated at construction: two field staging grids, per-cell uptake and
-fixed-tree global reduction scratch, polarity snapshots and neighbor reductions, relationship
-transaction buffers, status/publication buffers, and observation reducers. The authoritative
+fixed-tree global reduction scratch, polarity snapshots, bit-packed derived contact adjacency and
+neighbor reductions, relationship transaction buffers, status/publication buffers, and observation reducers. The authoritative
 field is not overwritten during its five internal substeps. No state is represented as a
 dictionary, per-cell heap object, vector of variable-length vectors, live foreign solver, or
 host-only closure.
@@ -111,6 +139,14 @@ The exact source-label boundary consequences remain, with normalized targets mad
   sees it.
 - At source MCS 211 / target 212, uptake publishes `s` before the ODE, and Potts uses the force
   written at source MCS 210 / target 211.
+
+The source-shaped per-cell publication is now exact rather than “an observation.” At targets
+122–500 it contains, in order, `cell_id,x,y,x_self_polarity,y_self_polarity,a,s,rac,f,f_x,f_y,`
+`fpp,f_coef,p_frac`; target/source MCS and slot generation are typed envelope metadata. Rows use
+ascending persistent cell identity. Targets 91 and 271 publish lossless canonical ownership/type
+snapshots labelled source 90 and 270 so Phase 14.3 can derive geometric features without rerunning
+or reverse-engineering G3-B. Classifier, scaler, k-means, UMAP, and paper-figure claims remain
+deferred.
 
 ## Numerical freeze
 
@@ -164,12 +200,13 @@ drac/dt = a + s - 0.1rac
 a = 1
 ```
 
-with `s` constant over one 2880-time-unit invocation. The source uses libRoadRunner/CVODE. The CPU
-source profile will be checked against an exact runtime trace; the portable implementation is
-checked against the affine closed form rather than inheriting a host foreign solver. The generic
+with `s` constant over one 2880-time-unit invocation. The source uses libRoadRunner/CVODE. Wang's
+construction, startup, time, input, and publication calls must be traced from pinned source; the
+CPU and portable implementations are checked against the affine closed form rather than inheriting
+a host foreign solver. The generic
 Euler, Heun, and RK4 capability remains part of G3, but the Wang production law may use a
-registered source-equivalent affine advance if that is the only stable and efficient way to meet
-the runtime oracle.
+registered source-equivalent affine advance when it preserves the studied mathematical law,
+timing, and publication boundary.
 
 The force law remains:
 
@@ -194,18 +231,21 @@ Each primitive starts with its smallest oracle:
 | exchange | inactive/reset/calibrate/publish modes, cap/relative branches, volume normalization, fixed reduction, zero-maximum failure, cross-domain atomicity |
 | relationships | create/remove/retune, capacity, proposal truth table, stale generation |
 | alignment/force | empty neighbors, synchronous snapshot, clamp, zero vector, Hill limits |
+| observations | arbitrary named bindings, dimension-matched coordinates, 2D/3D shape preservation, exact Wang schema, capacity/failure atomicity, restart |
 | plan | source-to-target mapping and direct source 120/210/211 → target 121/211/212 visibility |
-| storage | Adapt round trip, descriptor-free device-valid tree, authoritative field plus two staging grids, typed cross-domain write set, fixed capacities, zero warm allocation contract |
+| storage | Adapt round trip, descriptor-free device-valid tree, authoritative field plus two staging grids, typed cross-domain write set, fixed capacities, zero dynamic scientific-storage allocation, bounded size-independent CPU launch overhead |
 
 G3-B closes the source-faithful rows on sequential CPU and the portable structural/device-readiness
-rows. Warm field and exchange execution on CPU must allocate zero bytes after construction.
+rows. Warm isolated field and exchange execution on CPU must allocate zero bytes after construction.
 G3-C then executes the identical canonical model on Metal and ROCm without redesign.
 
-Revision 3 strengthens the allocation gate: the final closure packet must report every process and
-the complete non-observing sequential CPU MCS transition at zero bytes after construction and
-warm-up. Field and exchange already meet that rule; their local results do not waive the remaining
-rows. Caller-owned observation serialization and checkpoint output buffers are measured
-separately.
+The final closure packet reports zero dynamic scientific-storage allocation for every isolated
+process. For the complete portable KernelAbstractions CPU MCS transition it separately requires
+unchanged tracked scientific allocation counters and no more than 65,536 Julia heap bytes of
+size-independent launch/orchestration overhead after warm-up. The 48² and 64² fixtures must report
+the same measured overhead, so a fixed runtime cost cannot conceal lattice-, cell-, edge-, field-,
+or row-sized allocation. Caller-owned observation serialization and checkpoint output buffers are
+measured separately.
 
 The field and exchange conformance profile preregisters local Float32 tolerances in the
 machine-readable contract. Integer schedules, periodic index mapping, exact Medium overwrite,
@@ -213,18 +253,22 @@ identity/generation state, status, and publication epochs remain exact. Balance 
 mass-scaled bound; tolerances cannot be widened after paper-scale results are inspected without a
 new evidence revision.
 
-## Remaining foreign-runtime work
+## Remaining source-semantic study
 
-Three narrow runtime oracles remain. None blocks starting the reusable state, field, history,
-exchange, intracellular, relationship, or observation substrate, but all block a completed G3-B
-claim:
+Three narrow studies remain. They do not require new external CC3D execution. None blocks starting
+the reusable state, field, history, exchange, intracellular, relationship, or observation
+substrate, but all block a completed G3-B claim:
 
-1. Confirm default CC3D 4.2.5 Potts lattice boundary behavior and exact attempted-copy accounting
-   for the Wang XML, including source MCS 0 / target MCS 1.
-2. Record the pinned libRoadRunner integrator identity, tolerances, and `rac` outputs for controlled
-   initial values and signals.
-3. Record a CC3D 4.2.5 numerical field microtrace for impulse, periodic-edge, and a pattern that
-   distinguishes Medium reset after every scaled substep from final-only reset.
+1. Trace default CC3D 4.2.5 Potts boundaries, attempt accounting, NeighborOrder tables,
+   FocalPointPlasticity behavior, and the per-cell pixel-based ExternalPotential law selected by
+   Wang's empty plugin declaration from pinned source against the Wang XML/Python, recording every
+   uncertainty and controlled distinguishing fixture.
+2. Trace Wang's RoadRunner construction, startup, time advancement, input, and publication calls
+   against the pinned Antimony law, and qualify the implementation against its closed-form affine
+   solution.
+3. Trace CC3D 4.2.5 DiffusionSolverFE stability scaling, substeps, stencil/boundary order,
+   constant-concentration timing, and field publication from source, then exercise impulse,
+   periodic-edge, singleton-z, and reset-every-substep fixtures.
 
 Original source seed identities, archived pickle/UMAP execution, and final paper-classification
 tolerances belong to Phase 14.3 rather than this implementation gate.
@@ -238,9 +282,15 @@ The accepted exit is deliberately narrower than “the pieces exist.” Before t
 2. isolated and assembled source-faithful CPU conformance must both pass;
 3. the portable state/plan tree must pass the structural KernelAbstractions CPU gate;
 4. all-process transaction, failure, allocation, observation, and restart matrices must pass;
-5. all three foreign-runtime oracles must be closed from pinned raw artifacts;
+5. all three source-semantic studies must be accepted from pinned source, explicit uncertainty
+   records, and controlled fixtures;
 6. regression/API/fingerprint gates must pass on the exact clean commit; and
-7. `scripts/check_phase14_g3b_closure.jl` must print `PASS`.
+7. every process proof records the complete required-facet set, and every command output, runtime
+   environment, raw artifact, comparison, and matrix must resolve through the SHA-256 closure
+   manifest;
+8. the diff after the clean tested implementation commit must be restricted to the closure
+   evidence root; contract and ledger cannot be promoted after testing; and
+9. `scripts/check_phase14_g3b_closure.jl` must print `PASS` from a clean attestation checkout.
 
 The live ledger may use only `pending`, `partial`, or `passed`. A `partial` row is never treated as
 credit toward the final claim. G3-C still owns real Metal and ROCm numerical/runtime
@@ -271,7 +321,7 @@ The
 [atomic field evidence](phase-14-g3b-field-evidence.md) records the next sequential CPU increment:
 one authoritative field, two preallocated staging grids, five internal substeps, exact
 post-substep Medium reset, preflight stability rejection, failure atomicity, and zero-byte warm
-execution. Backend-native execution, backend status publication, the CC3D microtrace, and
+execution. Backend-native execution, backend status publication, the CC3D field source study, and
 exchange/calibration remain open; this evidence is not a GPU qualification claim.
 
 The
@@ -280,7 +330,7 @@ root-plan-mode and immediate field/cell/global transaction: inactive/reset/calib
 boundaries, maximum calibration, source-faithful CPU reductions, checkpoint state, failure
 atomicity, and zero-byte warm publication now pass. Portable fixed-tree kernels, device
 conditional publication, and their KernelAbstractions CPU oracle now pass; Metal/ROCm execution
-and foreign-runtime comparison remain open.
+and the CC3D source-semantic field study remain open.
 
 The same field/exchange state ABI now executes a portable KernelAbstractions reference: five
 ordered field substeps, width-256 per-cell uptake trees, a fixed global maximum, backend status,
@@ -294,7 +344,23 @@ advancement, semantic-RNG initialization, CPU/portable agreement, conditional pu
 zero-byte warm execution, exact target-122 start, and checkpoint epoch restore. The pinned
 RoadRunner trace and assembled Wang visibility remain open.
 
-All remaining implementation proceeds only against revision 4 of the machine-readable contract.
+The
+[polarity and force evidence](phase-14-g3b-polarity-force-evidence.md) records source-backed
+synchronous neighbor alignment and Hill-scaled vector force through generic named property
+bindings. The revision-6 bit-packed adjacency, canonical heterogeneous-failure key, host/portable
+agreement, fixed launch counts, zero-byte warm host path, and coupled restart pass 67 focused
+assertions. Assembled Wang order and real Metal/ROCm qualification remain open.
+
+The
+[bounded observation evidence](phase-14-g3b-observation-evidence.md) records arbitrary typed named
+property bindings, dimension-generic coordinate columns, shape-preserving ownership snapshots,
+the exact configured fourteen-column Wang record, capacity/nonfinite failure atomicity, and
+completed-MCS restart continuity across 107 focused assertions. The
+[source audit](phase-14-g3b-observation-source-audit.md) pins the exact header and source
+`mcs > 120` trigger. Assembled target 91/122/271/500 visibility, whole-plan allocation, and real
+Metal/ROCm qualification remain open.
+
+All remaining implementation proceeds only against revision 7 of the machine-readable contract.
 The old three-argument forcing-array exchange overload remains compatibility-only historical
 prototype behavior. The mode-bound immediate transaction is the Wang execution target and owns
 the frozen cross-domain write ABI.

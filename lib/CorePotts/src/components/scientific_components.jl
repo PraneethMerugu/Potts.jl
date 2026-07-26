@@ -127,6 +127,159 @@ function energy_change(component::QuadraticVolumeHamiltonian, proposal::CopyProp
     return delta
 end
 
+"""
+    CellVectorBoundaryPotentialHamiltonian(relation; coefficients, number_type, division)
+
+Per-cell vector boundary potential evaluated at the recipient of an ownership-copy proposal.
+For each realized relation direction, the component accumulates the gaining-cell coefficient when
+the neighboring owner differs from the gaining owner and subtracts the corresponding losing-cell
+coefficient when the neighboring owner differs from the losing owner. Coefficients are dotted
+with the relation's lattice-coordinate offset and scaled by its declared weight.
+
+The operation is intentionally local and non-equilibrium: it reproduces the pixel-based,
+per-cell-vector law used by CC3D's `ExternalPotential` component without claiming a conservative
+global Hamiltonian.
+"""
+struct CellVectorBoundaryPotentialHamiltonian{
+        N, T <: AbstractFloat, P <: Tuple,
+        R <: StaticCartesianRelation{<:SurfaceRole},
+        D <: AbstractDivisionPolicy} <: AbstractEnergy
+    coefficients::P
+    relation::R
+    division::D
+end
+
+function CellVectorBoundaryPotentialHamiltonian(
+        relation::R;
+        coefficients::NTuple{N, Symbol},
+        number_type::Type{T} = Float64,
+        division::D = ResetBothOnDivision()) where {
+        N, T <: AbstractFloat,
+        R <: StaticCartesianRelation{<:SurfaceRole},
+        D <: AbstractDivisionPolicy}
+    N in (2, 3) || throw(ArgumentError(
+        "a cell-vector boundary potential requires two or three coefficients"))
+    length(first(relation.offsets)) == N || throw(DimensionMismatch(
+        "cell-vector coefficients and relation dimensions differ"))
+    length(unique(coefficients)) == N || throw(ArgumentError(
+        "cell-vector coefficient property keys must be distinct"))
+    references = map(CellPropertyRef, coefficients)
+    return CellVectorBoundaryPotentialHamiltonian{
+        N, T, typeof(references), R, D}(
+        references, relation, division)
+end
+
+component_identity(::CellVectorBoundaryPotentialHamiltonian) =
+    ComponentIdentity(
+        :cell_vector_boundary_potential, v"1.0.0", :energy)
+
+function required_properties(
+        component::CellVectorBoundaryPotentialHamiltonian{
+            N, T}) where {N, T}
+    requester = component_identity(component)
+    descriptors = map(component.coefficients) do reference
+        PropertyDescriptor(
+            property_key(reference), T,
+            ConstantInitializer(zero(T));
+            requester,
+            mutability = MutableProperty,
+            division = component.division,
+            transition = PreserveOnTransition(),
+            kind = AuxiliaryProperty)
+    end
+    return PropertySchema(descriptors)
+end
+
+component_semantic_data(
+        component::CellVectorBoundaryPotentialHamiltonian{
+            N, T}) where {N, T} = (
+    coefficient_properties =
+        map(property_key, component.coefficients),
+    number_type = nameof(T),
+    displacement = :lattice_relation_offset,
+    relation = relation_semantics_report(component.relation),
+    division = component.division,
+    equilibrium = false,
+)
+
+required_relations(
+    component::CellVectorBoundaryPotentialHamiltonian) =
+    (component.relation,)
+
+capabilities(
+    ::CellVectorBoundaryPotentialHamiltonian{N}) where {N} =
+    ScientificCapabilities(
+        dimensions = (N,), portable = true)
+
+@inline _cell_vector_number_type(
+    ::CellVectorBoundaryPotentialHamiltonian{
+        N, T}) where {N, T} = T
+
+@inline function _cell_vector_coefficient_dot(
+        ::Tuple{}, state, slot, offset,
+        ::Type{T}, ::Val{D}) where {T, D}
+    return zero(T)
+end
+
+@inline function _cell_vector_coefficient_dot(
+        coefficients::Tuple, state, slot, offset,
+        ::Type{T}, ::Val{D}) where {T, D}
+    column = _property_column(state, first(coefficients))
+    value = @inbounds column[slot]
+    return T(value) * T(offset[D]) +
+           _cell_vector_coefficient_dot(
+        Base.tail(coefficients), state, slot,
+        offset, T, Val(D + 1))
+end
+
+@inline function _cell_vector_owner_dot(
+        component::CellVectorBoundaryPotentialHamiltonian{
+            N, T}, state, owner::OwnerRef,
+        offset) where {N, T}
+    is_cell_owner(owner) || return zero(T)
+    return _cell_vector_coefficient_dot(
+        component.coefficients, state,
+        Int(owner.value), offset, T, Val(1))
+end
+
+@inline function energy_change(
+        component::CellVectorBoundaryPotentialHamiltonian,
+        proposal::CopyProposal, state,
+        domain::Union{
+            CartesianDomain,
+            CompiledCartesianDomain})
+    T = _cell_vector_number_type(component)
+    delta = zero(T)
+    for direction in
+        1:direction_count(component.relation)
+        neighbor = realize_neighbor(
+            domain, component.relation,
+            proposal.recipient, direction)
+        neighbor.kind in (
+            AbsentNeighbor, InvalidNeighbor) && continue
+        neighbor_owner = _realized_owner(state, neighbor)
+        offset = relation_offset(
+            component.relation, direction)
+        weight = T(relation_weight(
+            component.relation, direction))
+        if is_cell_owner(proposal.losing) &&
+           proposal.losing != neighbor_owner
+            delta -= weight *
+                     _cell_vector_owner_dot(
+                component, state,
+                proposal.losing, offset)
+        end
+        if is_cell_owner(proposal.gaining) &&
+           proposal.gaining != neighbor_owner
+            delta += weight *
+                     _cell_vector_owner_dot(
+                component, state,
+                proposal.gaining, offset)
+        end
+    end
+    return delta
+end
+
 @enum MechanicalInitialization::UInt8 begin
     ConstitutiveMeanInitialization = 1
     StationaryMechanicalInitialization = 2

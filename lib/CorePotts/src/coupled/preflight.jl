@@ -56,6 +56,26 @@ end
 function _capability_for_process(process)
     process isa SiteDynamics && return :site_dynamics
     process isa HistorySample && return :cell_history
+    process isa Union{
+        CentroidHistorySample,
+        CentroidHistorySampleExecution} &&
+        return :centroid_history_sample
+    process isa Union{
+        HistoryDisplacementDirection,
+        HistoryDisplacementDirectionExecution} &&
+        return :history_displacement_direction
+    process isa Union{
+        NeighborPolarityAlignment,
+        NeighborPolarityAlignmentExecution} &&
+        return :neighbor_polarity_alignment
+    process isa Union{
+        HillVectorForce,
+        HillVectorForceExecution} &&
+        return :hill_vector_force
+    process isa ElasticLinkRetuneExecution &&
+        return :relationship_retune
+    process isa RelationshipCleanupExecution &&
+        return :relationship_cleanup
     process isa RelationshipDynamics && return :relationship_dynamics
     process isa FieldDynamics && return :field_dynamics
     process isa FieldExchange && return :field_exchange
@@ -256,6 +276,9 @@ function inspect_coupled(integrator::CoupledIntegrator)
         completed_mcs = integrator.observations.completed_mcs,
         last_published = Tuple(sort!(collect(
             integrator.observations.last_published);
+            by = pair -> String(first(pair)))),
+        publication_epochs = Tuple(sort!(collect(
+            integrator.observations.publication_epochs);
             by = pair -> String(first(pair)))))
     return CoupledInspectionReport(
         integrator.mcs, global_time(integrator),

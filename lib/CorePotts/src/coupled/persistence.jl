@@ -315,6 +315,9 @@ function _observation_schedule(integrator::CoupledIntegrator)
         completed_mcs = integrator.observations.completed_mcs,
         last_published = Tuple(sort!(collect(
             integrator.observations.last_published);
+            by = pair -> String(first(pair)))),
+        publication_epochs = Tuple(sort!(collect(
+            integrator.observations.publication_epochs);
             by = pair -> String(first(pair)))))
 end
 
@@ -341,6 +344,8 @@ end
 
 function capture_checkpoint(integrator::CoupledIntegrator;
         ancestry::Union{Nothing, CoupledCheckpoint} = nothing)
+    integrator.checkpoint_stable || throw(ArgumentError(
+        "a partial target MCS is not a stable coupled checkpoint boundary"))
     integrator.terminal_error === nothing || throw(ArgumentError(
         "a failed target MCS is not a stable coupled checkpoint boundary"))
     integrator.potts.mcs == integrator.mcs || throw(ArgumentError(
@@ -574,8 +579,12 @@ function restore_checkpoint(checkpoint::CoupledCheckpoint,
         _restore_block!(_find_state(candidate_state, block), block)
     end
     effects = _accepted_copy_effects(prototype.plan)
-    workspace = isempty(effects) ? NoAlgorithmWorkspace() :
-        CoupledAttemptWorkspace(candidate_state.site_states, effects)
+    transaction_effects = rebuild_accepted_copy_effects(
+        prototype.potts.algorithm_workspace, candidate_state)
+    workspace = isempty(effects) && isempty(transaction_effects) ?
+        NoAlgorithmWorkspace() :
+        CoupledAttemptWorkspace(
+            candidate_state.site_states, effects, transaction_effects)
     restored_potts = _restore_checkpoint(
         checkpoint.base, prototype.potts, adaptor;
         exact = true, algorithm_workspace = workspace)
@@ -588,13 +597,15 @@ function restore_checkpoint(checkpoint::CoupledCheckpoint,
     observation_position = checkpoint.extension.observation_schedule
     observation = CoupledObservationState(
         checkpoint.mcs, Any[], Dict{Symbol, UInt64}(
-            observation_position.last_published))
+            observation_position.last_published),
+        Dict{Symbol, UInt64}(
+            observation_position.publication_epochs))
     restored = CoupledIntegrator(
         restored_potts, prototype.plan, candidate_state,
         prototype.lifecycle, observation, prototype.protocol,
-        prototype.semantic_model,
+        prototype.semantic_model, prototype.execution_mode,
         checkpoint.mcs, position.stage, position.stage_local_mcs,
-        nothing, checkpoint.initial_state_fingerprint)
+        nothing, true, checkpoint.initial_state_fingerprint)
     _protocol_position(restored) == position || throw(
         CheckpointCompatibilityError(:protocol_position,
             string(position), string(_protocol_position(restored))))

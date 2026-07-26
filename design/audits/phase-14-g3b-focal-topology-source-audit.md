@@ -1,6 +1,7 @@
 # Phase 14.1 G3-B Focal-Topology Source Audit
 
-Status: primary-source semantics frozen; implementation and live-runtime oracle in progress
+Status: pinned CC3D 4.2.5 source study and controlled Potts.jl fixtures accepted; no external CC3D
+execution required
 
 Date: 2026-07-25
 
@@ -70,9 +71,13 @@ backend contract. Revision 4 separates two claims:
 Portable results must match the exact eligible set, degree/capacity rules, acceptance visibility,
 and selection distribution. They do not claim bitwise replay of `std::rand`.
 
-## Remaining oracle
+## Completed source study
 
-Static source inspection is sufficient to freeze implementation semantics but not to close the
-runtime row. The G3-B Potts/FPP oracle must still emit controlled traces for selection order,
-activation energy, accepted/rejected/no-op proposals, initial payload, degree rejection,
-overlength removal order, and endpoint extinction.
+The pinned archive, line-and-symbol analysis, uncertainty register, exact NeighborOrder sets,
+implicit no-flux Potts boundary, attempt accounting, and distinguishing fixtures are recorded in
+`phase-14-g3b-potts-fpp-source-study.md`. The controlled tests cover activation, accepted-copy
+visibility, initial payload, degree/capacity rejection, spring/extinction energy, overlength
+removal, endpoint extinction, stale generations, and vector-boundary consumption.
+
+The previously accepted CC3D 4.2.5 scheduling trace remains useful historical evidence for
+steppable ordering. It is not generalized into an external runtime oracle for Potts/FPP behavior.
