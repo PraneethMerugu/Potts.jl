@@ -40,8 +40,8 @@ jobs:
         run: julia --startup-file=no scripts/check_process_bigraph_platform.jl
       - name: Enforce ProcessBigraphs PB0 bounded foundation
         run: julia --startup-file=no scripts/process-bigraph-pb0-check.jl
-      - name: Enforce Phase 14 Wang G3-C entry and fail-closed evidence
-        run: julia --project=. --startup-file=no scripts/check_phase14_g3c_entry.jl
+      - name: Enforce Phase 14 Wang sequential CPU disposition
+        run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
       - name: Resolve the package workspace without mutation
         run: |
           julia --project=. --startup-file=no -e '
@@ -59,7 +59,6 @@ jobs:
           # whitespace normalization would invalidate admitted evidence.
           EVIDENCE_EXCLUSIONS=(
             ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
-            ':(exclude,glob)design/evidence/phase-14/g3c-closure/**'
           )
           if [ -n "$BASE_SHA" ]; then
             git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"

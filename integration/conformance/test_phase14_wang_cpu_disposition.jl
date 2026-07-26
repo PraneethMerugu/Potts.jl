@@ -3,7 +3,7 @@ using TOML
 
 include("phase14_wang_fixture.jl")
 
-@testset "Phase 14 Wang G3-C fail-closed backend contract" begin
+@testset "Phase 14 Wang sequential CPU disposition" begin
     # Raw closure captures are immutable binary evidence, not prose to
     # normalize. Check the exact files that contain terminal-preserved
     # whitespace before CI exempts the content-addressed archive directory
@@ -31,14 +31,6 @@ include("phase14_wang_fixture.jl")
 
     fixture = _wang_runtime_fixture(32)
     coupled = fixture.coupled
-    @test CorePotts._wang_g3c_state_matches(
-        coupled.state)
-    @test CorePotts._wang_g3c_plan_matches(
-        coupled.plan)
-    @test CorePotts._coupled_tree_backend_valid(
-        coupled.plan, coupled.state,
-        coupled.potts.plan.capabilities)
-
     cpu_report = CorePotts.coupled_backend_report(
         coupled.plan, coupled.state,
         coupled.potts.plan.capabilities;
@@ -49,8 +41,9 @@ include("phase14_wang_fixture.jl")
         cpu_report.rows)
 
     # A family label cannot qualify CPU storage as a GPU runtime. This
-    # proves the Wang recognizer fails closed before any mutation even when
-    # every advertised capability bit is otherwise present.
+    # proves the paper-faithful sequential CPU model has no assembled GPU
+    # promotion even when every advertised capability bit is otherwise
+    # present.
     alleged_metal = CorePotts.BackendCapabilities(
         CorePotts.MetalFamily,
         CorePotts.QualifiedBackend,

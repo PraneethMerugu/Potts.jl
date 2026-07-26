@@ -144,12 +144,12 @@ Gate:
 
 Only after G2 passes may Wang implementation begin.
 
-### G3 — Wang CPU/Metal/ROCm closure
+### G3 — Wang sequential CPU reference closure
 
-G3 includes every execution capability required by Wang. In particular, Wang's secretome field is
-not deferred to G4. Each reusable law is implemented and proven first through the ordinary
-sequential CPU reference, then through backend-resident Metal and ROCm production paths over the
-same canonical plan.
+G3 includes every execution capability required by the paper-faithful Wang sequential CPU
+reference. Wang's secretome field is part of that reference. Reusable laws remain designed for
+device adaptation, but Decision 0035 retires promotion of the unchanged sequential assembly as a
+Metal/ROCm workload.
 
 G3 is executed through three non-substitutable gates:
 
@@ -166,9 +166,10 @@ G3 is executed through three non-substitutable gates:
   row is passed, the assembled 11-process model closes exact/invariant/restart conformance, and the
   evidence attestation binds the clean implementation commit `a82b0c4`. This does not qualify a
   GPU backend.
-- **G3-C — Wang Metal/ROCm qualification: current.** Close the identical canonical model on
-  real Metal and ROCm with residency, device-code, replay, restart, transfer, allocation, memory,
-  and performance evidence.
+- **G3-C — assembled Wang Metal/ROCm qualification: retired.** Decision 0035 records that the
+  paper-faithful ordered attempt stream is an unsuitable GPU release gate. Its harness, device-code
+  capture, CI jobs, ledger, and closure claim are removed. This is an owner disposition, not a
+  pass or failure.
 
 Deliver:
 
@@ -208,25 +209,25 @@ Gate:
 - no unobserved transfer, scalar host loop, host callback, or host fallback on either GPU;
 - device-code, allocation, synchronization, transfer, and memory evidence on real Metal and ROCm;
   and
-- Wang bounded-model correctness and performance profiles on sequential CPU, Metal, and ROCm.
+- Wang bounded-model correctness and performance profiles on sequential CPU.
 
 G3-B may be called complete only when `scripts/check_phase14_g3b_closure.jl` passes on the exact
 clean commit recorded by the evidence packet. The checker requires every registered closure row,
 including the complete 11-process assembly, all-process failure/allocation matrices, assembled
   restart/order traces, bounded observation schema, three pinned source-semantic studies, and frozen
-regression/API evidence. KernelAbstractions CPU execution proves portable shape only; real
-Metal/ROCm qualification remains G3-C.
+regression/API evidence. KernelAbstractions CPU execution proves portable shape only; it does not
+create an assembled Wang GPU claim.
 
-Failure of any required backend leaves Wang Provisional and prevents G4 from opening. CPU
-correctness cannot compensate for a missing or host-assisted GPU path, and GPU agreement cannot
-compensate for a missing CPU reference.
+G4 opens after the passed G3-B reference and Decision 0035 disposition. The generic primitives do
+not inherit a GPU claim from CPU correctness; each stable G4 law/storage pair still requires real
+Metal and ROCm evidence without host fallback.
 
 ### G4 — General field-model CPU/Metal/ROCm closure
 
 G4 reuses the field state, periodic stencil, constant-concentration, uptake, and split-order
-substrate already qualified by Wang. It broadens field semantics for the next selected field model;
-it is not the first implementation of fields and cannot retroactively supply a missing Wang
-capability.
+substrate exercised by the Wang CPU reference. It qualifies and broadens those reusable semantics
+for an algorithm-suitable field model on CPU, Metal, and ROCm; it does not retroactively create an
+assembled Wang GPU claim.
 
 Deliver:
 

@@ -12,14 +12,17 @@ attested complete at implementation commit `a82b0c4`; its
 `overall_status = "passed"`. The exact
 [source/runtime order](../design/audits/phase-14-wang-order-audit.md) and revision-7
 [G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) govern that evidence.
-This proves the bounded Wortel slice and Wang sequential CPU model, not Wang Metal/ROCm
-qualification or contracts outside the proven slices.
+This proves the bounded Wortel slice and Wang sequential CPU model. Decision 0035 retires the
+assembled Wang Metal/ROCm promotion because the paper-faithful sequential algorithm is not an
+appropriate GPU target; G4 is current. Contracts outside the proven slices remain Provisional.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
 [Decision 0032](decisions/0032-phase-14-gpu-native-promotion.md), plus the generic authoring
 boundary in
 [Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md)
+and the Wang algorithm-suitability boundary in
+[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md)
 
 Registry:
 [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
@@ -752,12 +755,12 @@ atomically couple a staged field mutation, per-cell uptake reduction, cell-signa
 global multiplier/status. A deterministic reduction profile and zero/nonfinite calibration
 failure policy are mandatory.
 
-Wang is one indivisible CPU/Metal/ROCm vertical slice. Its secretome field is part of Wang and
-cannot be deferred to the later general field-model slice. Every Wang state family, process law,
-accepted-copy effect, scheduler entry, observation reducer, checkpoint block, and Potts coupling
-MUST have an ordinary sequential CPU reference plus backend-resident production execution on Metal
-and ROCm before the slice passes. A host field or ODE solve, host-managed relationship graph,
-per-MCS transfer, scalar host loop, or silent fallback makes the Wang backend profile unsupported.
+Wang is one indivisible paper-faithful sequential CPU reference slice. Its secretome field,
+histories, relationships, intracellular dynamics, and exact accepted-copy order are part of that
+reference and cannot be substituted by a checkerboard algorithm while retaining the paper claim.
+Decision 0035 deliberately makes the assembled Wang backend profile unsupported. Reusable state
+and law families introduced by the slice remain subject to focused CPU/Metal/ROCm promotion when
+they stabilize, beginning with the algorithm-suitable G4 field-model gate.
 
 Each sketch MUST become an executable lowering fixture before its vertical slice is considered
 complete.
@@ -838,10 +841,11 @@ evidence closed the second half on 2026-07-25 by proving:
 ### Expansion gates
 
 Wortel has passed both its CPU reference and Metal/ROCm closure, and Wang G3-B has passed its
-sequential CPU gate. Wang G3-C real-hardware Metal/ROCm qualification is therefore current. Only
-after that complete Wang CPU/Metal/ROCm slice passes may the first additional field model open
-broader boundary, solver, and exchange work. Every later stable execution capability follows the
-same reference-then-device promotion rule.
+sequential CPU gate. Decision 0035 retires G3-C assembled-model GPU qualification and opens G4 as
+the current gate for broader boundary, solver, and exchange work on CPU, Metal, and ROCm. Every
+later stable execution capability follows the same reference-then-device promotion rule, using an
+algorithm-suitable fixture rather than requiring every paper reference assembly to be a GPU
+workload.
 
 ## Phase 13 Freeze Impact
 

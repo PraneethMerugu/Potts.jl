@@ -77,7 +77,7 @@ More specifically:
 - A satellite MUST NOT be required to load, test, document, or benchmark the primary interface.
 
 The dependency arrow is introduced one accepted migration slice at a time. During parallel
-incubation, G3-C and other Potts work MAY continue against the locked CorePotts ABI while
+incubation, G4 and other Potts work MAY continue against the locked CorePotts ABI while
 `ProcessBigraphs` develops in isolated paths. Temporary absence of the target dependency is allowed;
 a reverse dependency, shared ownership of generic runtime contracts, or undeclared source inclusion
 is not.

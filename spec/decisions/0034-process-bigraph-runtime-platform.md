@@ -166,8 +166,9 @@ time, same-time visibility, merge order, conflict meaning, structural order, or 
 
 ### Parallel development, migration, release, and presentation (decisions 43--48)
 
-43. Potts G3-C continues on the locked G3-B ABI while runtime specifications, the serial engine,
-    and non-Potts fixtures begin in isolated package paths.
+43. Potts G4 continues without changing the locked G3-B ABI while runtime specifications, the
+    serial engine, and non-Potts fixtures begin in isolated package paths. Decision 0035 retires
+    assembled Wang GPU qualification.
 44. The first Potts field-model slice may finish on the existing executor. Its generic runtime
     adapter is co-designed but is not frozen before the field evidence closes.
 45. Migration uses a strangler strategy: old/new serial differential execution, one vertical slice
@@ -230,7 +231,7 @@ During migration:
 
 - frozen Phase 13 behavior and artifacts remain unchanged;
 - the attested G3-B result remains unchanged;
-- G3-C may repair backend plumbing without changing the locked G3-B semantic ABI;
+- G4 may repair backend plumbing without changing the locked G3-B semantic ABI;
 - current checkpoint readers remain supported for attested formats;
 - CorePotts and runtime paths are compared through serial golden fixtures;
 - Wortel, Wang, and field-model state/order equivalence is required before their cutover; and
@@ -239,7 +240,7 @@ During migration:
 ## Consequences
 
 - PottsToolkit and the general runtime can progress concurrently without freezing an unproven field
-  abstraction or blocking G3-C.
+  abstraction or blocking G4.
 - The serial executor becomes the durable semantic oracle; Dagger is replaceable infrastructure.
 - GPU-native means explicit residency and qualified device processes, not a false requirement that
   every whole-cell method execute on every GPU family.

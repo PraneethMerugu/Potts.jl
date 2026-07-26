@@ -931,7 +931,7 @@ first_public_release_gate = "julia_biochemical_fba_composite"
 long_term_goal = "whole-cell development platform"
 
 [parallel_migration]
-potts_workstream = "Continue G3-C on locked G3-B ABI, then the field-model CPU/Metal/ROCm slice and published-model evidence."
+potts_workstream = "Preserve locked G3-B sequential CPU evidence, continue G4 field-model CPU/Metal/ROCm qualification, then published-model evidence; assembled Wang GPU qualification is retired by Decision 0035."
 runtime_workstream = "Build domain-neutral paths, schemas, ports, deltas, exact time, serial execution, steps, persistence, failure, and structural transactions."
 bridge_workstream = "Adapt CorePotts slice-by-slice and compare old/new serial paths before cutover."
 field_freeze_rule = "The generic field adapter is co-designed but cannot freeze before the field-model evidence closes."

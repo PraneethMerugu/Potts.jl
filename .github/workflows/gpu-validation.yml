@@ -25,7 +25,7 @@ jobs:
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
     runs-on: [self-hosted, metal]
-    timeout-minutes: 120
+    timeout-minutes: 45
     env:
       BACKEND_GROUP: Metal
       JULIA_LOAD_PATH: "benchmark/backends/metal:benchmark:@stdlib"
@@ -55,10 +55,6 @@ jobs:
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=metal --profile=paper
       - name: Capture Phase 14 Wortel Metal device code
         run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_phase14_wortel_metal.jl
-      - name: Qualify Phase 14 Wang G3-C on Metal
-        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/phase14_wang_g3c_qualification.jl --backend=metal --profile=paper
-      - name: Capture Phase 14 Wang G3-C Metal device code
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_phase14_wang_g3c_metal.jl
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-metal-${{ github.sha }}
@@ -72,7 +68,7 @@ jobs:
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
     runs-on: [self-hosted, rocm]
-    timeout-minutes: 120
+    timeout-minutes: 45
     env:
       BACKEND_GROUP: AMDGPU
       JULIA_LOAD_PATH: "benchmark/backends/amdgpu:benchmark:@stdlib"
@@ -100,10 +96,6 @@ jobs:
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=amdgpu --profile=paper
       - name: Capture Phase 14 Wortel ROCm device code
         run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_phase14_wortel_amdgpu.jl
-      - name: Qualify Phase 14 Wang G3-C on ROCm
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/phase14_wang_g3c_qualification.jl --backend=amdgpu --profile=paper
-      - name: Capture Phase 14 Wang G3-C ROCm device code
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_phase14_wang_g3c_amdgpu.jl
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-rocm-${{ github.sha }}

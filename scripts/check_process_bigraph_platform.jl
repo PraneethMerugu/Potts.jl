@@ -273,8 +273,9 @@ end
 for phrase in ["Potts workstream", "Runtime workstream", "Adapter", "Evidence"]
     check(occursin(phrase, roadmap), "roadmap omits the '$phrase' workstream")
 end
-check(occursin("G3-B", roadmap) && occursin("G3-C", roadmap),
-    "roadmap omits the G3-B-to-G3-C boundary")
+check(occursin("G3-B", roadmap) && occursin("G4", roadmap) &&
+      occursin("retired", lowercase(roadmap)),
+    "roadmap omits the Wang GPU disposition and G3-B-to-G4 boundary")
 check(occursin("0034-process-bigraph-runtime-platform.md", indices),
     "Decision 0034 is absent from specification indexes")
 check(occursin("process-bigraph-runtime-semantics.md", indices),

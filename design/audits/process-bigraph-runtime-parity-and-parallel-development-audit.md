@@ -4,6 +4,11 @@ Status: Pre-interview research complete; no roadmap or contract decision is chan
 
 Date: 2026-07-26
 
+Post-audit disposition: [Decision 0035](../../spec/decisions/0035-wang-sequential-gpu-disposition.md)
+retired assembled Wang GPU qualification and opened G4. References below to concurrent or pending
+G3-C work preserve the factual planning context at the time of this research; they are not current
+gates.
+
 ## Purpose
 
 This audit evaluates a new project goal:

@@ -39,6 +39,7 @@ corresponding specification document.
 - [0032: Phase 14 GPU-native promotion](0032-phase-14-gpu-native-promotion.md)
 - [0033: Phase 14 generic hierarchical authoring](0033-phase-14-generic-hierarchical-authoring.md)
 - [0034: ProcessBigraphs.jl as the domain-neutral runtime platform](0034-process-bigraph-runtime-platform.md)
+- [0035: Wang sequential reference and GPU suitability disposition](0035-wang-sequential-gpu-disposition.md)
 
 ## Record Template
 

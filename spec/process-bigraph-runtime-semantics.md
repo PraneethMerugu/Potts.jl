@@ -636,9 +636,9 @@ Specific policies are:
 - device adaptation and residency through declared capabilities; and
 - existing checkpoints through versioned readers and a bounded conversion.
 
-G3-C continues against the locked G3-B ABI while runtime work begins. The field-model slice may
-close on the existing executor; its generic field adapter remains provisional until the CPU and GPU
-evidence pressure-tests it.
+G4 continues without changing the locked G3-B ABI while runtime work begins. Decision 0035 retires
+assembled Wang GPU qualification. The field-model slice may close on the existing executor; its
+generic field adapter remains provisional until CPU and GPU evidence pressure-tests it.
 
 Migration is slice-by-slice:
 

@@ -177,7 +177,9 @@ work but cannot redefine time, visibility, reconciliation, or commit order. Phas
 as a bounded foundation: the independent package and 11 direct registry rows are implemented and
 locally tested. Pinned Python oracles, the Phase 15 internal alpha, GPU execution, parallel
 executors, structural transactions, the Potts adapter, and public release remain explicitly open.
-G3-C remains the next Potts gate.
+Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
+algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
+CPU/Metal/ROCm qualification for the reusable field substrate.
 
 ## Conformance Principle
 

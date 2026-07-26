@@ -129,8 +129,9 @@ check(g3b_entry["source_time_mapping"]["source_first"] == 0 &&
     "G3-B source MCS mapping is not 0:499 -> target 1:500")
 check(occursin("phase14.1-owner-approved-simplified", registry["status"]), "contract registry is not the owner-approved simplified Phase 14.1 set")
 check(occursin("Wang G3-B sequential CPU passed", registry["status"]) &&
-      occursin("Wang G3-C is current", registry["status"]),
-    "contract registry does not record G3-B passed and G3-C current")
+      occursin("Wang assembled GPU qualification retired", registry["status"]) &&
+      occursin("G4 is current", registry["status"]),
+    "contract registry does not record G3-B passed, Wang GPU retired, and G4 current")
 expected_contracts = Set([
     "state",
     "process",
@@ -511,9 +512,10 @@ for phrase in ["Wang is open", "G3-B current", "pending G3-B"]
 end
 check(occursin("G3-B", current_status_text) &&
       occursin("complete", current_status_text) &&
-      occursin("G3-C", current_status_text) &&
-      occursin("current", current_status_text),
-    "current-status documents do not record G3-B complete and G3-C current")
+      occursin("G4", current_status_text) &&
+      occursin("current", current_status_text) &&
+      occursin("retired", lowercase(current_status_text)),
+    "current-status documents do not record G3-B complete, Wang GPU retired, and G4 current")
 
 if isempty(failures)
     println("Phase 14 corpus and simplified architecture closure passes:")
@@ -525,7 +527,7 @@ if isempty(failures)
     println("  Decisions 0031–0033 and all 15 owner choices accepted; generic hierarchical authoring enforced")
     println("  no selected-paper names exported; Wang sketch uses generic fragments and one root plan")
     println("  Wortel CPU/Metal/ROCm G2 passed")
-    println("  Wang G3-B sequential CPU closure passed; G3-C Metal/ROCm qualification is current")
+    println("  Wang G3-B sequential CPU closure passed; assembled GPU qualification retired; G4 is current")
     println("  Wang source/runtime order and source 0:499 -> target 1:500 mapping accepted, including the explicit paper t-5 versus source t-4 history variant")
     println("  D10 additive classification preserved; Mermaid.jl remains out of scope")
 else

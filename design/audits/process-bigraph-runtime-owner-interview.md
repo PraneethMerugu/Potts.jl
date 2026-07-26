@@ -4,6 +4,10 @@ Status: Complete; all 48 owner decisions resolved
 
 Date: 2026-07-26
 
+Post-interview disposition: [Decision 0035](../../spec/decisions/0035-wang-sequential-gpu-disposition.md)
+later retired assembled Wang GPU qualification and opened G4. The G3-C answer text below is retained
+as the historical owner record and no longer defines the current Potts gate.
+
 This interview follows the
 [Process-Bigraph runtime parity and parallel-development audit](process-bigraph-runtime-parity-and-parallel-development-audit.md).
 It determines the product, semantic, migration, and roadmap choices required before changing the
