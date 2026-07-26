@@ -21,7 +21,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested G3-B complete; Wang G3-C Metal/ROCm qualification is the current Potts gate; ProcessBigraphs foundation work may proceed in parallel | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [completed owner interview](audits/process-bigraph-runtime-owner-interview.md), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
+| Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested G3-B complete; Wang G3-C Metal/ROCm qualification is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Potts Paper/Release Qualification and ProcessBigraphs Internal Alpha | Not started; runtime foundations may enter before Potts Phase 14 closes where the join rules permit | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes serial static composites without a public release |
 | Phase 16: Dynamic Hierarchy and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts needed by the first adapter slice stabilize |
 | Phase 17: Scientific Process Ecosystem and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
@@ -1009,6 +1009,11 @@ This workstream begins after attested G3-B and proceeds concurrently with G3-C, 
 Phase 14 documentation/model work. It does not replace the Potts Phase 14.1 kernel and does not
 require a CorePotts dependency cutover.
 
+**Status:** Passed as a bounded foundation on 2026-07-26. The independent package, direct
+microfixtures, implementation audit, and machine-readable evidence pass. This does not claim the
+Phase 15 internal alpha, pinned Python-oracle parity, GPU or parallel executors, dynamic structure,
+the Potts adapter, or a public release.
+
 #### Deliverables
 
 - Freeze the initial Process-Bigraph and Bigraph-Schema commits and create a machine-readable parity
@@ -1453,14 +1458,15 @@ critical path.
 
 ## Current Fork/Join Critical Path
 
-Phases 0--13, Phase 14.0, Wortel G2, Wang G3-A, and attested Wang G3-B are complete. Work now forks:
+Phases 0--13, Phase 14.0, Wortel G2, Wang G3-A, attested Wang G3-B, and the bounded
+ProcessBigraphs PB0 foundation are complete. The remaining work proceeds on independent gates:
 
 ```text
-Potts scientific path                         ProcessBigraphs foundation path
-----------------------                        -------------------------------
-G3-C Metal/ROCm qualification                 pinned parity registry and specifications
-        |                                     package scaffold and serial primitives
-G4 field CPU/Metal/ROCm                       non-Potts microfixtures and internal docs/CI
+Potts scientific path                         ProcessBigraphs runtime path
+----------------------                        ----------------------------
+G3-C Metal/ROCm qualification                 PB0 bounded foundation [passed]
+        |                                                   |
+G4 field CPU/Metal/ROCm                       Phase 15 serial internal alpha
         |                                                   |
 bounded portfolio smokes                                    |
         |                                                   |
@@ -1492,10 +1498,10 @@ The executable sequence and join rules are:
 2. **Current Potts gate:** qualify the identical Wang model on real Metal and ROCm as G3-C. Backend
    plumbing may change; G3-B semantics, RNG, ordering, storage ABI, launch topology, publication,
    continuation, and evidence identity may not.
-3. **Current parallel runtime gate:** freeze the ProcessBigraphs authority and parity registry,
-   specify the serial semantics, scaffold the independent package, and prove domain-neutral
-   primitives and non-Potts fixtures. Do not introduce a CorePotts dependency or public runtime
-   release.
+3. **Complete parallel runtime gate:** the ProcessBigraphs authority and parity registry are frozen,
+   and the independent package plus bounded domain-neutral primitives and non-Potts fixtures pass
+   PB0. No CorePotts dependency or public runtime release was introduced; Phase 15 internal alpha
+   remains a separate gate.
 4. **Potts join:** only after G3-C passes, open G4 and broaden the field substrate through sequential
    CPU, real Metal, and real ROCm. Only after G4 passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then

@@ -35,10 +35,12 @@ include(joinpath(@__DIR__, "..", "..", "scripts", "validate_wang_order_oracle.jl
         "python_polarity_force_and_output",
         "restart_snapshot_screenshot_and_steering",
     ]
-    @test audit["canonical_mcs_order"] == expected_order
-    @test isempty(audit["wang_run_before_mcs_steppables"])
-    @test audit["xml_steppable_order"] == ["DiffusionSolverFE", "BlobInitializer"]
-    @test audit["normal_python_registration_order"] == [
+    normalized_time_mapping = audit["normalized_time_mapping"]
+    @test normalized_time_mapping["canonical_mcs_order"] == expected_order
+    @test isempty(normalized_time_mapping["wang_run_before_mcs_steppables"])
+    @test normalized_time_mapping["xml_steppable_order"] ==
+          ["DiffusionSolverFE", "BlobInitializer"]
+    @test normalized_time_mapping["normal_python_registration_order"] == [
         "migration_racdir_fppSteppable",
         "OdeSteppable",
         "FocalPointPlasticityParams",

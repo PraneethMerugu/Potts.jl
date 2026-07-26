@@ -126,7 +126,7 @@ function BoundedCellTableWorkspace(
             coordinates..., columns..., row_count)
         fill!(array, zero(eltype(array)))
     end
-    failure_key[1] = _COUPLED_PROCESS_FAILURE_SENTINEL
+    fill!(failure_key, _COUPLED_PROCESS_FAILURE_SENTINEL)
     return BoundedCellTableWorkspace(
         cell_id, generation, cell_type, present,
         coordinates, columns,

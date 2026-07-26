@@ -3619,5 +3619,6 @@ function provenance(backend::String, device::String)
 end
 
 include("Phase14WortelQualification.jl")
+include("Phase14WangG3CQualification.jl")
 
 end

@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 registry_id = "process-bigraph-parity-v1"
-registry_status = "accepted-scope-specified-implementation-open"
+registry_status = "accepted-scope-pb0-implemented-qualification-open"
 registered_at = "2026-07-26"
 decision = "decisions/0034-process-bigraph-runtime-platform.md"
 specification = "process-bigraph-runtime-semantics.md"
@@ -13,6 +13,28 @@ legacy_scope = "Vivarium 1.x compatibility is excluded"
 interchange_scope = "Exact Python API and declaration interchange are optional ecosystem work, not parity authorities"
 external_authority = "Development and qualification are independent; Eran Agmon and upstream maintainers are not design or release authorities"
 public_release_rule = "No independent public release before every pinned-parity feature is qualified and the required whole-cell-style composite passes"
+
+[pb0_implementation]
+status = "passed_bounded_foundation"
+package = "../lib/ProcessBigraphs"
+local_registry = "../lib/ProcessBigraphs/parity-registry.toml"
+audit = "../design/audits/process-bigraph-pb0-implementation-audit.md"
+evidence = "../design/evidence/process-bigraph-pb0-evidence-v1.toml"
+checker = "../scripts/process-bigraph-pb0-check.jl"
+implemented_direct_rows = [
+    "stable-typed-paths",
+    "typed-hierarchical-store",
+    "structural-schema-realization",
+    "typed-input-output-ports",
+    "workflow-cycle-rejection",
+    "exact-integer-logical-time",
+    "actual-elapsed-partial-interval",
+    "same-time-common-snapshot",
+    "typed-process-deltas",
+    "deterministic-conflict-reconciliation",
+    "atomic-event-commit",
+]
+remaining_claim = "No row is oracle_passing or qualified; pinned Python oracles and Phase 15 internal alpha remain open."
 
 [status_vocabulary]
 allowed = [
@@ -227,8 +249,8 @@ parity_authority = false
 [[features]]
 id = "typed-hierarchical-store"
 classification = "normative_parity"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Hierarchical state and schemas", "Store"]
@@ -237,8 +259,8 @@ oracle_ids = ["oracle-nested-composite"]
 [[features]]
 id = "stable-typed-paths"
 classification = "normative_parity"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Hierarchical state and schemas", "Store"]
@@ -247,8 +269,8 @@ oracle_ids = ["oracle-nested-composite"]
 [[features]]
 id = "structural-schema-realization"
 classification = "normative_parity"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Structural schemas"]
@@ -277,8 +299,8 @@ oracle_ids = ["oracle-checkpoint-replay"]
 [[features]]
 id = "typed-input-output-ports"
 classification = "normative_parity"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Ports and wiring"]
@@ -327,8 +349,8 @@ oracle_ids = ["oracle-step-workflow"]
 [[features]]
 id = "workflow-cycle-rejection"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Step"]
@@ -347,8 +369,8 @@ oracle_ids = ["oracle-step-workflow", "oracle-whole-cell-composite"]
 [[features]]
 id = "exact-integer-logical-time"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Exact logical time"]
@@ -377,8 +399,8 @@ oracle_ids = ["oracle-multirate-shared-state"]
 [[features]]
 id = "actual-elapsed-partial-interval"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Horizon and partial intervals"]
@@ -387,8 +409,8 @@ oracle_ids = ["oracle-partial-interval"]
 [[features]]
 id = "same-time-common-snapshot"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Same-time process batch"]
@@ -407,8 +429,8 @@ oracle_ids = ["oracle-multirate-shared-state"]
 [[features]]
 id = "typed-process-deltas"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Typed deltas and update algebra"]
@@ -427,8 +449,8 @@ oracle_ids = ["oracle-update-algebra"]
 [[features]]
 id = "deterministic-conflict-reconciliation"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Reconciliation"]
@@ -437,8 +459,8 @@ oracle_ids = ["oracle-update-algebra", "oracle-failure-atomicity"]
 [[features]]
 id = "atomic-event-commit"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_pb0"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Imminent-event scheduler", "Failure and retry"]

@@ -28,7 +28,7 @@ function CentroidHistorySampleWorkspace(
     fill!(samples, zero(eltype(samples)))
     fill!(active, false)
     copyto!(generations, state.generations)
-    failure_key[1] = _COUPLED_PROCESS_FAILURE_SENTINEL
+    fill!(failure_key, _COUPLED_PROCESS_FAILURE_SENTINEL)
     return CentroidHistorySampleWorkspace(
         samples, active, generations, failure_key)
 end
@@ -441,7 +441,7 @@ function HistoryDisplacementWorkspace(
     for array in (candidates..., candidate_magnitude)
         fill!(array, zero(eltype(array)))
     end
-    failure_key[1] = _COUPLED_PROCESS_FAILURE_SENTINEL
+    fill!(failure_key, _COUPLED_PROCESS_FAILURE_SENTINEL)
     return HistoryDisplacementWorkspace(
         candidates, candidate_magnitude, failure_key)
 end

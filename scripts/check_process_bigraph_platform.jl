@@ -50,6 +50,14 @@ roadmap_path = require_file("design/refactor-roadmap.md")
 decision_index_path = require_file("spec/decisions/README.md")
 spec_index_path = require_file("spec/README.md")
 evidence_index_path = require_file("spec/conformance-evidence.md")
+package_project_path = require_file("lib/ProcessBigraphs/Project.toml")
+package_registry_path = require_file("lib/ProcessBigraphs/parity-registry.toml")
+package_runner_path = require_file("lib/ProcessBigraphs/test/runtests.jl")
+pb0_audit_path = require_file(
+    "design/audits/process-bigraph-pb0-implementation-audit.md")
+pb0_evidence_path = require_file(
+    "design/evidence/process-bigraph-pb0-evidence-v1.toml")
+pb0_checker_path = require_file("scripts/process-bigraph-pb0-check.jl")
 
 registry = TOML.parsefile(registry_path)
 sources = registry["sources"]
@@ -60,7 +68,7 @@ feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
 check(registry["schema_version"] == "1.0.0", "unexpected parity-registry schema")
-check(registry["registry_status"] == "accepted-scope-specified-implementation-open",
+check(registry["registry_status"] == "accepted-scope-pb0-implemented-qualification-open",
     "parity registry overclaims implementation maturity")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
@@ -146,8 +154,57 @@ for oracle in oracles
         "oracle '$id' references an unknown source")
 end
 
-check(all(feature -> feature["status"] in ("not_started", "specified", "excluded"), features),
-    "spec-only revision must not claim implemented, oracle-passing, or qualified runtime features")
+expected_pb0_implemented = Set([
+    "stable-typed-paths",
+    "typed-hierarchical-store",
+    "structural-schema-realization",
+    "typed-input-output-ports",
+    "workflow-cycle-rejection",
+    "exact-integer-logical-time",
+    "actual-elapsed-partial-interval",
+    "same-time-common-snapshot",
+    "typed-process-deltas",
+    "deterministic-conflict-reconciliation",
+    "atomic-event-commit",
+])
+implemented_features = Set(feature["id"] for feature in features
+    if feature["status"] == "implemented")
+check(implemented_features == expected_pb0_implemented,
+    "root registry implemented rows must exactly match bounded PB0 direct evidence")
+check(all(feature -> feature["status"] ∉ ("oracle_passing", "qualified"), features),
+    "PB0 must not claim oracle-passing or qualified runtime features")
+check(all(oracle -> oracle["status"] ∉ ("oracle_passing", "qualified"), oracles),
+    "PB0 must not claim oracle-passing or qualified registered oracles")
+check(all(feature["evidence_status"] == "direct_passing_pb0" for feature in features
+    if feature["id"] in expected_pb0_implemented),
+    "every PB0 implemented row must cite direct_passing_pb0 evidence")
+
+pb0 = registry["pb0_implementation"]
+check(pb0["status"] == "passed_bounded_foundation",
+    "PB0 implementation status is not the bounded foundation claim")
+check(Set(pb0["implemented_direct_rows"]) == expected_pb0_implemented,
+    "PB0 registry summary does not match implemented feature rows")
+
+package_project = TOML.parsefile(package_project_path)
+check(package_project["name"] == "ProcessBigraphs",
+    "PB0 package name changed")
+check(package_project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
+    "PB0 package UUID changed")
+check(get(package_project["compat"], "julia", "") == "1.12.6",
+    "PB0 package must target Julia 1.12.6 exactly")
+check(Set(keys(get(package_project, "deps", Dict{String,Any}()))) == Set(["SHA"]),
+    "PB0 package must have only SHA as a runtime dependency")
+
+pb0_evidence = TOML.parsefile(pb0_evidence_path)
+check(pb0_evidence["status"] == "passed_bounded_foundation",
+    "PB0 evidence does not record its bounded pass")
+check(Set(pb0_evidence["qualification"]["implemented_direct_rows"]) ==
+      expected_pb0_implemented,
+    "PB0 evidence implemented rows disagree with the root registry")
+check(pb0_evidence["pinned_python_oracles"] == "not_run" &&
+      pb0_evidence["gpu_evidence"] == "not_run" &&
+      pb0_evidence["threads_or_dagger_evidence"] == "not_run",
+    "PB0 evidence must leave Python, GPU, and parallel qualification open")
 check(!all(feature["status"] == "qualified" for feature in features
           if feature["required_for_first_public_release"]),
     "registry incorrectly declares the first public release ready")
@@ -228,7 +285,7 @@ check(occursin("process-bigraph-parity-registry-v1.toml", indices),
 for path in [
     decision_path, semantics_path, audit_path, interview_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
-    evidence_index_path,
+    evidence_index_path, pb0_audit_path,
 ]
     check_local_links(path)
 end
@@ -239,8 +296,9 @@ if isempty(failures)
     println("  $(length(features)) classified features")
     println("  $(length(oracles)) registered conformance oracles")
     println("  all 48 owner decisions recorded")
+    println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
     println("  exact-time serial authority, Dagger boundary, GPU transfer policy, and whole-cell ladder frozen")
-    println("  first public release remains fail-closed")
+    println("  pinned-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs platform specification failed with $(length(failures)) issue(s):")

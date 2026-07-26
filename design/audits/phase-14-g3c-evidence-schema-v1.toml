@@ -1,0 +1,50 @@
+schema_version = "1.0.0"
+suite = "phase14-wang-g3c-gpu-native-qualification-v1"
+artifact_kind = "real-hardware-backend-qualification"
+required_profiles = ["paper"]
+required_backends = ["metal", "amdgpu"]
+required_julia = "1.12.6"
+
+[qualification]
+required_side = 256
+required_target_mcs = 500
+required_number_type = "Float32"
+required_algorithm = "SequentialCPM"
+required_rng = "Philox4x32x10V1"
+required_g3b_contract_revision = 7
+required_preflight = "qualified_gpu_native"
+
+[unobserved]
+target_mcs = 2
+status_scalar_transfers = 9
+status_boundaries = 5
+scientific_payload_transfers = 0
+host_to_device_transfers = 0
+device_allocations = 0
+
+[continuation]
+same_backend_replay = true
+completed_mcs_restart = true
+capture_mcs = 3
+continued_mcs = 6
+mid_phase_capture_admitted = false
+
+[numerics]
+cpu_oracle = "sequential-cpu-float32-identical-canonical-plan"
+field_relative_tolerance = 0.0005
+rac_relative_tolerance = 0.0005
+integer_schedule_exact = true
+
+[device_code]
+metal_kind = "Metal AIR"
+amdgpu_kind = "AMDGPU device-code directory"
+minimum_bytes = 1
+capture_target_mcs = 211
+
+[provenance]
+git_dirty = false
+harness_git_dirty = false
+require_identical_implementation_commit = true
+require_identical_source_tree_sha256 = true
+require_device_identity = true
+require_hardware_id = true

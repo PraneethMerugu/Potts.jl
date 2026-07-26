@@ -264,6 +264,24 @@ struct ContactRelationshipHamiltonian{
     version::VersionNumber
 end
 
+"""
+Descriptor-free device view of a contact-relationship Hamiltonian.
+
+The public declaration retains its `VersionNumber` for fingerprints and
+checkpoints. Kernel argument conversion removes that host descriptor while
+preserving every scientific value and the relationship identity as a type
+parameter.
+"""
+struct ContactRelationshipHamiltonianExecution{
+        Relationships, R, F, T <: AbstractFloat,
+        P <: ElasticLinkParameters, N} <: AbstractEnergy
+    relation::R
+    pair_filter::F
+    activation_energy::T
+    initial_payload::P
+    namespace::N
+end
+
 function ContactRelationshipHamiltonian(
         name::Symbol, relationships::Symbol;
         relation::StaticCartesianRelation,
@@ -285,6 +303,33 @@ function ContactRelationshipHamiltonian(
         typeof(initial_payload), typeof(namespace)}(
         name, relation, pair_filter, activation_energy,
         initial_payload, namespace, version)
+end
+
+function Adapt.adapt_structure(
+        to,
+        component::ContactRelationshipHamiltonian{
+            Relationships}) where {Relationships}
+    relation = Adapt.adapt(to, component.relation)
+    pair_filter = Adapt.adapt(to, component.pair_filter)
+    payload = Adapt.adapt(to, component.initial_payload)
+    namespace = Adapt.adapt(to, component.namespace)
+    if to isa Union{Type, UnionAll}
+        return ContactRelationshipHamiltonian{
+            Relationships, typeof(relation),
+            typeof(pair_filter),
+            typeof(component.activation_energy),
+            typeof(payload), typeof(namespace)}(
+            component.name, relation, pair_filter,
+            component.activation_energy, payload,
+            namespace, component.version)
+    end
+    return ContactRelationshipHamiltonianExecution{
+        Relationships, typeof(relation),
+        typeof(pair_filter),
+        typeof(component.activation_energy),
+        typeof(payload), typeof(namespace)}(
+        relation, pair_filter,
+        component.activation_energy, payload, namespace)
 end
 
 component_identity(component::ContactRelationshipHamiltonian) =
@@ -421,22 +466,44 @@ end
 
 function Adapt.adapt_structure(to,
         transaction::ContactRelationshipTransaction{Name}) where {Name}
-    return ContactRelationshipTransaction(
-        Adapt.adapt(to, transaction.component),
-        Adapt.adapt(to, transaction.relationships),
-        Adapt.adapt(to, transaction.permutation),
-        Adapt.adapt(to, transaction.candidate_endpoint),
-        Adapt.adapt(to, transaction.candidate_generation),
-        Adapt.adapt(to, transaction.candidate_present),
-        Adapt.adapt(to, transaction.removal_endpoint_a),
-        Adapt.adapt(to, transaction.removal_generation_a),
-        Adapt.adapt(to, transaction.removal_endpoint_b),
-        Adapt.adapt(to, transaction.removal_generation_b),
-        Adapt.adapt(to, transaction.removal_count),
-        Adapt.adapt(to, transaction.status),
-        Adapt.adapt(to, transaction.failing_attempt),
-        Adapt.adapt(to, transaction.attempt_id),
-        Adapt.adapt(to, transaction.mcs_id))
+    component = Adapt.adapt(to, transaction.component)
+    relationships = Adapt.adapt(
+        to, transaction.relationships)
+    permutation = Adapt.adapt(
+        to, transaction.permutation)
+    candidate_endpoint = Adapt.adapt(
+        to, transaction.candidate_endpoint)
+    candidate_generation = Adapt.adapt(
+        to, transaction.candidate_generation)
+    candidate_present = Adapt.adapt(
+        to, transaction.candidate_present)
+    removal_endpoint_a = Adapt.adapt(
+        to, transaction.removal_endpoint_a)
+    removal_generation_a = Adapt.adapt(
+        to, transaction.removal_generation_a)
+    removal_endpoint_b = Adapt.adapt(
+        to, transaction.removal_endpoint_b)
+    removal_generation_b = Adapt.adapt(
+        to, transaction.removal_generation_b)
+    removal_count = Adapt.adapt(
+        to, transaction.removal_count)
+    status = Adapt.adapt(to, transaction.status)
+    failing_attempt = Adapt.adapt(
+        to, transaction.failing_attempt)
+    attempt_id = Adapt.adapt(
+        to, transaction.attempt_id)
+    mcs_id = Adapt.adapt(to, transaction.mcs_id)
+    return ContactRelationshipTransaction{
+        Name, typeof(component), typeof(relationships),
+        typeof(permutation), typeof(candidate_endpoint),
+        typeof(candidate_generation),
+        typeof(candidate_present)}(
+        component, relationships, permutation,
+        candidate_endpoint, candidate_generation,
+        candidate_present, removal_endpoint_a,
+        removal_generation_a, removal_endpoint_b,
+        removal_generation_b, removal_count, status,
+        failing_attempt, attempt_id, mcs_id)
 end
 
 accepted_copy_effect_binding(
@@ -506,6 +573,9 @@ end
 end
 @inline _contact_relationship_identity(
     ::ContactRelationshipHamiltonian{Name}) where {Name} = Val(Name)
+@inline _contact_relationship_identity(
+    ::ContactRelationshipHamiltonianExecution{Name}) where {Name} =
+    Val(Name)
 
 @inline function _contact_endpoint_current(
         scientific, endpoint::UInt32, generation::UInt64)
@@ -725,8 +795,86 @@ end
     return result
 end
 
+@inline function energy_change(
+        component::ContactRelationshipHamiltonianExecution,
+        proposal::CopyProposal,
+        context::ScientificProposalContext)
+    transaction = _contact_relationship_transaction(
+        context.algorithm_workspace,
+        _contact_relationship_identity(component))
+    @inbounds transaction.status[1] ==
+        CONTACT_RELATIONSHIP_SUCCEEDED ||
+        return zero(component.activation_energy)
+    @inbounds transaction.candidate_present[1] != UInt8(0) &&
+        return component.activation_energy
+    relationships = transaction.relationships
+    payload = relationships.payload
+    moments = context.transaction.trackers.moments
+    if !(moments isa UnwrappedMomentDelta)
+        _contact_relationship_failure!(
+            transaction, CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+        return zero(component.activation_energy)
+    end
+    result = zero(component.activation_energy)
+    count = Int(@inbounds relationships.count[1])
+    for index in 1:count
+        @inbounds relationships.active[index] == UInt8(0) &&
+            continue
+        left = @inbounds relationships.endpoint_a[index]
+        left_generation =
+            @inbounds relationships.generation_a[index]
+        right = @inbounds relationships.endpoint_b[index]
+        right_generation =
+            @inbounds relationships.generation_b[index]
+        affected = left == proposal.losing.value ||
+            right == proposal.losing.value ||
+            left == proposal.gaining.value ||
+            right == proposal.gaining.value
+        affected || continue
+        if !_contact_endpoint_current(
+                context.state, left, left_generation) ||
+                !_contact_endpoint_current(
+                    context.state, right, right_generation)
+            _contact_relationship_failure!(
+                transaction,
+                CONTACT_RELATIONSHIP_STALE_ENDPOINT)
+            return zero(component.activation_energy)
+        end
+        old_left = unwrapped_center(
+            context.state, CellOwner(left))
+        old_right = unwrapped_center(
+            context.state, CellOwner(right))
+        strength = @inbounds payload.strength[index]
+        target_length =
+            @inbounds payload.target_length[index]
+        old_energy = _contact_link_energy(
+            context.state, left, right,
+            strength, target_length,
+            old_left, old_right)
+        new_left = _contact_postcopy_center(
+            context.state, proposal, moments, left)
+        new_right = _contact_postcopy_center(
+            context.state, proposal, moments, right)
+        if new_left === nothing ||
+                new_right === nothing
+            result -= old_energy
+        else
+            result += _contact_link_energy(
+                context.state, left, right,
+                strength, target_length,
+                new_left, new_right) - old_energy
+        end
+    end
+    return result
+end
+
 @inline proposal_energy_change(
     component::ContactRelationshipHamiltonian,
+    proposal::CopyProposal,
+    context::ScientificProposalContext) =
+    energy_change(component, proposal, context)
+@inline proposal_energy_change(
+    component::ContactRelationshipHamiltonianExecution,
     proposal::CopyProposal,
     context::ScientificProposalContext) =
     energy_change(component, proposal, context)

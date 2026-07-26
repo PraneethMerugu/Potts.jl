@@ -703,7 +703,8 @@ function init_coupled(potts::ScientificPottsIntegrator, plan::MCSPlan,
         !(potts.plan.backend isa KernelAbstractions.CPU) &&
         throw(ArgumentError(
             "host coupled execution requires a CPU backend"))
-    preflight_coupled(plan, state, potts.plan.capabilities)
+    preflight_coupled(
+        plan, state, potts.plan.capabilities; potts)
     observation_entry = only(
         entry for entry in plan.entries if entry isa ObservationPhase)
     domain = potts.plan.backend isa KernelAbstractions.CPU ? :host : :device

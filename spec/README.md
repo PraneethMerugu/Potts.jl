@@ -140,6 +140,8 @@ Refactor execution evidence:
 - [Phase 14 GPU-Native Implementation and Qualification Plan](../design/audits/phase-14-gpu-native-implementation-plan.md)
 - [Process-Bigraph Runtime Parity and Parallel-Development Audit](../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md)
 - [Process-Bigraph Runtime Owner Interview](../design/audits/process-bigraph-runtime-owner-interview.md)
+- [ProcessBigraphs PB0 Implementation Audit](../design/audits/process-bigraph-pb0-implementation-audit.md)
+- [ProcessBigraphs PB0 Evidence](../design/evidence/process-bigraph-pb0-evidence-v1.toml)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
 - [JuliaGPU and Open-Protocol Community Validation](../design/audits/juliagpu-open-protocol-research.md)
@@ -171,9 +173,11 @@ prototypes and are not compatibility commitments.
 Decision 0034 establishes `ProcessBigraphs.jl` as an independent package under `lib/`, with
 feature and observable-behavior parity against exact pinned Process-Bigraph 2.0 sources. Its
 deterministic serial executor is the semantic oracle; Dagger and device executors may run selected
-work but cannot redefine time, visibility, reconciliation, or commit order. G3-C remains the next
-Potts gate while runtime specification and isolated non-Potts implementation may proceed in
-parallel.
+work but cannot redefine time, visibility, reconciliation, or commit order. Phase 14.PB0 now passes
+as a bounded foundation: the independent package and 11 direct registry rows are implemented and
+locally tested. Pinned Python oracles, the Phase 15 internal alpha, GPU execution, parallel
+executors, structural transactions, the Potts adapter, and public release remain explicitly open.
+G3-C remains the next Potts gate.
 
 ## Conformance Principle
 

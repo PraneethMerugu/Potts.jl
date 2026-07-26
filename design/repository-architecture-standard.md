@@ -42,10 +42,12 @@ parity against the pinned Process-Bigraph 2.0 authority and a whole-cell-style c
 workload. A repository split MAY be considered only after that first complete-parity release; it is
 not an incubation requirement.
 
-During the Phase 13 freeze, only PottsToolkit and CorePotts are paper-core workspace packages.
-MakiePotts source is intentionally outside that workspace until the Phase 14.4 migration. The
-pre-freeze NeuralPotts implementation is absent; the experimental package identity may be restored
-only by the Phase 14.4-or-later redesign required by the accepted scope map.
+During the Phase 13 freeze, PottsToolkit and CorePotts were the only paper-core workspace packages.
+Phase 14.PB0 adds the independent `ProcessBigraphs` incubation package to the workspace without
+making it part of the Potts paper-core dependency graph. MakiePotts source is intentionally outside
+that workspace until the Phase 14.4 migration. The pre-freeze NeuralPotts implementation is absent;
+the experimental package identity may be restored only by the Phase 14.4-or-later redesign
+required by the accepted scope map.
 
 ## Dependency Direction
 

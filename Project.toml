@@ -43,4 +43,4 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 test = ["Aqua", "KernelAbstractions", "Test", "TOML", "Unitful"]
 
 [workspace]
-projects = ["integration", "lib/CorePotts"]
+projects = ["integration", "lib/CorePotts", "lib/ProcessBigraphs"]

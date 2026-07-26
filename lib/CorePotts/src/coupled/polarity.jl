@@ -76,7 +76,7 @@ function NeighborPolarityWorkspace(values::AbstractVector{T}) where {
             failure_key)
         fill!(array, zero(eltype(array)))
     end
-    failure_key[1] = _COUPLED_PROCESS_FAILURE_SENTINEL
+    fill!(failure_key, _COUPLED_PROCESS_FAILURE_SENTINEL)
     return NeighborPolarityWorkspace(
         arrays[1], arrays[2], arrays[3], arrays[4],
         neighbor_count, arrays[5], arrays[6], arrays[7],
@@ -764,7 +764,7 @@ function HillVectorForceWorkspace(values::AbstractVector{T}) where {
     for array in (arrays..., failure_key)
         fill!(array, zero(eltype(array)))
     end
-    failure_key[1] = _COUPLED_PROCESS_FAILURE_SENTINEL
+    fill!(failure_key, _COUPLED_PROCESS_FAILURE_SENTINEL)
     return HillVectorForceWorkspace(
         arrays..., failure_key)
 end

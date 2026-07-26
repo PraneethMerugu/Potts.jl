@@ -120,13 +120,19 @@ function _state_block(state::RelationshipState)
     metadata = (declaration = _declaration_record(declaration),
         realized_capacity = declaration.capacity.value,
         storage = :canonical_soa)
-    count = _relationship_count(state)
+    host_count = Adapt.adapt(Array, state.count)
+    count = Int(@inbounds host_count[1])
+    endpoint_a = Adapt.adapt(Array, state.endpoint_a)
+    generation_a = Adapt.adapt(Array, state.generation_a)
+    endpoint_b = Adapt.adapt(Array, state.endpoint_b)
+    generation_b = Adapt.adapt(Array, state.generation_b)
+    edge_payload = Adapt.adapt(Array, state.payload)
     payload = (
-        endpoint_a = copy(Adapt.adapt(Array, @view(state.endpoint_a[1:count]))),
-        generation_a = copy(Adapt.adapt(Array, @view(state.generation_a[1:count]))),
-        endpoint_b = copy(Adapt.adapt(Array, @view(state.endpoint_b[1:count]))),
-        generation_b = copy(Adapt.adapt(Array, @view(state.generation_b[1:count]))),
-        edge_payload = copy(Adapt.adapt(Array, @view(state.payload[1:count]))),
+        endpoint_a = copy(@view(endpoint_a[1:count])),
+        generation_a = copy(@view(generation_a[1:count])),
+        endpoint_b = copy(@view(endpoint_b[1:count])),
+        generation_b = copy(@view(generation_b[1:count])),
+        edge_payload = copy(@view(edge_payload[1:count])),
         count = UInt32(count),
         publication_epoch = copy(
             Adapt.adapt(Array, state.publication_epoch)))
