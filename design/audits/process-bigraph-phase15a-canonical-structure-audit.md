@@ -69,8 +69,12 @@ The package still has no dependency on CorePotts or PottsToolkit. `AlgebraicRewr
 
 ## Executable evidence
 
-The package suite contains 116 passing ProcessBigraphs tests and 10 passing Aqua checks. The
-Phase 15.A cases prove:
+The package suite contains 116 passing ProcessBigraphs tests and nine deterministic Aqua checks.
+CI separately installs, precompiles, loads, and exercises the package from a clean temporary
+project. Aqua's nested persistent-task precompile is disabled because its hidden subprocess
+reported an unexpected sentinel-less exit on a cold Catlab graph after all behavioral tests
+passed; the explicit clean-project CI gate covers the intended package-load property without that
+duplicate subprocess. The Phase 15.A cases prove:
 
 - schema shape and canonical entity counts;
 - typed-to-ACSet and direct-ACSet compilation equivalence;

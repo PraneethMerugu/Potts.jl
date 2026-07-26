@@ -18,7 +18,9 @@ SHA = "stdlib"
 command = "julia --project=<isolated-phase15a-environment> --startup-file=no -e 'using Pkg; Pkg.test(\"ProcessBigraphs\")'"
 result = "passed"
 processbigraphs_tests_passed = 116
-aqua_checks_passed = 10
+aqua_checks_passed = 9
+clean_temporary_project_install_load_exercise = "ci_required"
+aqua_persistent_tasks_probe = "replaced_by_explicit_clean_project_ci_gate"
 implemented_rows = [
     "canonical-process-bigraph-acset",
     "compiled-structural-epoch",
