@@ -36,6 +36,8 @@ jobs:
         run: julia --startup-file=no scripts/check_legacy_containment.jl
       - name: Enforce Phase 14 corpus and simplified architecture closure
         run: julia --project=. --startup-file=no scripts/check_phase14_0.jl
+      - name: Enforce ProcessBigraphs platform specification
+        run: julia --startup-file=no scripts/check_process_bigraph_platform.jl
       - name: Resolve the package workspace without mutation
         run: |
           julia --project=. --startup-file=no -e '

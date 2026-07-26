@@ -1,15 +1,15 @@
-# Potts.jl Semantics Specification
+# Potts.jl and ProcessBigraphs.jl Semantics Specification
 
-Version: `0.4-draft`
+Version: `0.5-draft`
 
 Status: Draft
 
 ## Authority
 
-This specification defines the observable scientific behavior of Potts.jl. A conforming
-implementation may change storage layouts, kernel organization, parallel scheduling, backend
-libraries, and other internal mechanisms, but it MUST preserve the applicable normative behavior
-defined here.
+This specification defines the observable scientific behavior of Potts.jl and the domain-neutral
+runtime contracts of the internally incubated `ProcessBigraphs.jl`. A conforming implementation
+may change storage layouts, kernel organization, parallel scheduling, backend libraries, and other
+internal mechanisms, but it MUST preserve the applicable normative behavior defined here.
 
 The specification is authoritative over implementation comments, tutorials, examples, and
 historical behavior. Until a section is marked `Accepted`, existing code MUST NOT be assumed to
@@ -49,6 +49,8 @@ implementation maturity separately.
 
 This specification covers:
 
+- The independent ProcessBigraphs runtime boundary and pinned parity contract
+- Hierarchical runtime state, ports, processes, steps, deltas, clocks, commits, and executors
 - The lattice, cells, cell types, media, and per-cell state
 - Monte Carlo time and copy-attempt semantics
 - Energy, proposal, acceptance, and tracker contracts
@@ -87,6 +89,8 @@ behavior.
 - [Published-Model Reproduction Semantics](published-model-reproduction-semantics.md)
 - [Phase 14 Single Semantic Kernel](phase-14-semantic-kernel.md)
 - [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
+- [Process-Bigraph Runtime Semantics](process-bigraph-runtime-semantics.md)
+- [Process-Bigraph Parity Registry v1](process-bigraph-parity-registry-v1.toml)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
@@ -134,6 +138,8 @@ Refactor execution evidence:
 - [Phase 14 Focused Semantic-Architecture Interview](../design/audits/phase-14-semantics-focused-interview.md)
 - [Phase 14 Generic Authoring Simplification Audit](../design/audits/phase-14-generic-authoring-simplification-audit.md)
 - [Phase 14 GPU-Native Implementation and Qualification Plan](../design/audits/phase-14-gpu-native-implementation-plan.md)
+- [Process-Bigraph Runtime Parity and Parallel-Development Audit](../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md)
+- [Process-Bigraph Runtime Owner Interview](../design/audits/process-bigraph-runtime-owner-interview.md)
 - [Phase 8 Minimality Pass](../design/audits/phase-8-minimality-pass.md)
 - [Phase 8 Mechanical Lifecycle Research](../design/audits/phase-8-mechanical-lifecycle-research.md)
 - [JuliaGPU and Open-Protocol Community Validation](../design/audits/juliagpu-open-protocol-research.md)
@@ -151,15 +157,23 @@ real-hardware Metal and ROCm qualification. Decision 0033 requires complex model
 generic hierarchical `ModelFragment` composition, named typed requirements/exports, and one
 explicit root plan; paper-specific builders cannot substitute for that API evidence. The
 [Wortel Act-CPM vertical slice](../design/audits/phase-14-wortel-vertical-slice-evidence.md)
-now passes on CPU, Metal, and ROCm. Wang is open, and its exact
-[source/runtime execution order](../design/audits/phase-14-wang-order-audit.md) is accepted before
-implementation. The revision-2
+passes on CPU, Metal, and ROCm. Wang G3-A and its sequential CPU G3-B gate are complete; the
+authoritative [G3-B closure ledger](../design/audits/phase-14-g3b-closure-ledger-v1.toml) records
+`overall_status = "passed"`. Its exact
+[source/runtime execution order](../design/audits/phase-14-wang-order-audit.md), revision-7
 [G3-B entry packet](../design/audits/phase-14-g3b-entry-packet.md) and
 [closure specification audit](../design/audits/phase-14-g3b-closure-spec-audit.md) additionally
 freeze source MCS `0:499` to normalized target MCS `1:500`, atomic field/exchange publication,
 completed-MCS-only restart, and deterministic reduction/device-readiness gates. The seven contracts
 remain Provisional outside proven scope. Registry v1 spellings remain internal historical
 prototypes and are not compatibility commitments.
+
+Decision 0034 establishes `ProcessBigraphs.jl` as an independent package under `lib/`, with
+feature and observable-behavior parity against exact pinned Process-Bigraph 2.0 sources. Its
+deterministic serial executor is the semantic oracle; Dagger and device executors may run selected
+work but cannot redefine time, visibility, reconciliation, or commit order. G3-C remains the next
+Potts gate while runtime specification and isolated non-Potts implementation may proceed in
+parallel.
 
 ## Conformance Principle
 

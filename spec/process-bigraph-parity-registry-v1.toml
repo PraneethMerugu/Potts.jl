@@ -1,0 +1,923 @@
+schema_version = "1.0.0"
+registry_id = "process-bigraph-parity-v1"
+registry_status = "accepted-scope-specified-implementation-open"
+registered_at = "2026-07-26"
+decision = "decisions/0034-process-bigraph-runtime-platform.md"
+specification = "process-bigraph-runtime-semantics.md"
+audit = "../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md"
+owner_interview = "../design/audits/process-bigraph-runtime-owner-interview.md"
+package_name = "ProcessBigraphs.jl"
+incubation_path = "lib/ProcessBigraphs"
+parity_target = "Pinned Process-Bigraph 2.0 feature and observable behavioral parity through idiomatic Julia APIs"
+legacy_scope = "Vivarium 1.x compatibility is excluded"
+interchange_scope = "Exact Python API and declaration interchange are optional ecosystem work, not parity authorities"
+external_authority = "Development and qualification are independent; Eran Agmon and upstream maintainers are not design or release authorities"
+public_release_rule = "No independent public release before every pinned-parity feature is qualified and the required whole-cell-style composite passes"
+
+[status_vocabulary]
+allowed = [
+    "not_started",
+    "specified",
+    "implemented",
+    "oracle_passing",
+    "qualified",
+    "blocked",
+    "excluded",
+    "not_applicable",
+]
+not_started = "No accepted design or qualifying implementation evidence."
+specified = "Normative behavior and evidence obligations are accepted; implementation evidence is incomplete."
+implemented = "An implementation exists, but its required pinned oracles and production evidence are incomplete."
+oracle_passing = "Required direct and pinned-oracle fixtures pass; remaining production qualification is incomplete."
+qualified = "Specification, implementation, oracle, failure, persistence, documentation, and applicable backend evidence all pass."
+blocked = "A recorded external or architectural blocker prevents qualification."
+excluded = "Explicitly outside this registry's scope."
+not_applicable = "The evidence dimension does not apply and the reason is recorded."
+
+[classification_vocabulary]
+allowed = [
+    "normative_parity",
+    "normative_julia",
+    "compatibility_mode",
+    "application_required",
+    "optional_ecosystem",
+    "excluded_legacy",
+    "deferred_rewrite",
+]
+normative_parity = "Required feature and observable behavior of the pinned Process-Bigraph 2.0 baseline."
+normative_julia = "Versioned Julia behavior selected independently where upstream sources disagree or leave behavior unsafe or ambiguous."
+compatibility_mode = "Explicit non-normative mode reproducing a materially useful pinned upstream behavior."
+application_required = "Required by the accepted whole-cell or Potts platform program but not necessarily by pinned runtime parity."
+optional_ecosystem = "Useful integration that cannot block core semantic parity."
+excluded_legacy = "Vivarium 1.x-only behavior outside scope."
+deferred_rewrite = "Structural behavior not promoted until dedicated semantics and fixtures pass."
+
+[evidence_vocabulary]
+replay_classes = ["exact", "numerical", "statistical", "unsupported"]
+oracle_kinds = ["direct", "pinned_python", "differential_local", "application", "hardware", "fuzz", "failure_injection"]
+backend_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
+behavior_classifications = ["documented", "tested", "incidental", "upstream_discrepancy", "intentional_julia_improvement"]
+
+[qualification]
+required_dimensions = [
+    "normative specification",
+    "implementation",
+    "direct semantic tests",
+    "registered pinned oracle when applicable",
+    "failure atomicity disposition",
+    "persistence and continuation disposition",
+    "RNG and replay disposition",
+    "CPU reference evidence",
+    "applicable process-family backend matrix",
+    "documentation",
+    "provenance record",
+]
+required_evidence_metadata = [
+    "runtime_commit",
+    "source_pins",
+    "model_fingerprint",
+    "compatibility_mode",
+    "executor",
+    "backend",
+    "hardware",
+    "replay_class",
+    "artifact",
+]
+default_cpu_status = "not_started"
+default_gpu_status = "not_applicable until the feature or process family declares a named device capability"
+default_replay_status = "unsupported until explicitly qualified"
+
+[checker]
+minimum_source_count = 6
+minimum_feature_count = 40
+minimum_oracle_count = 12
+unique_keys = ["sources.id", "features.id", "oracles.id"]
+required_feature_fields = [
+    "id",
+    "classification",
+    "status",
+    "evidence_status",
+    "required_for_pinned_parity",
+    "required_for_first_public_release",
+    "spec_sections",
+    "oracle_ids",
+]
+required_oracle_fields = ["id", "kind", "status", "required", "feature_ids", "acceptance"]
+allowed_status_source = "status_vocabulary.allowed"
+allowed_classification_source = "classification_vocabulary.allowed"
+release_required_status = "qualified"
+pin_format = "Full lowercase 40-character git commit for git sources; immutable arXiv identifier for the paper"
+invariants = [
+    "Every feature id and oracle id is unique.",
+    "Every feature classification and status belongs to its declared vocabulary.",
+    "Every referenced oracle id and source id exists.",
+    "Every normative_parity or normative_julia feature has at least one oracle.",
+    "Every required_for_pinned_parity feature is also required_for_first_public_release.",
+    "No excluded_legacy, optional_ecosystem, compatibility_mode, or deferred_rewrite feature is required_for_pinned_parity.",
+    "A feature cannot be qualified while a required referenced oracle is below qualified.",
+    "A feature cannot be qualified without documentation, persistence, failure, and backend dispositions.",
+    "The registry cannot be release-ready while any required_for_first_public_release feature is below qualified.",
+    "Advancing a parity source pin requires a registry version change and refreshed affected oracles.",
+    "Vivarium Core cannot be cited as a parity authority.",
+    "Executor completion order, worker count, and device lane cannot be semantic ordering or RNG identities.",
+]
+
+[release_gates]
+internal_alpha = [
+    "serial static composite",
+    "typed paths and hierarchical schemas",
+    "ports and topology validation",
+    "exact time and imminent-event batches",
+    "typed deltas and atomic commit",
+    "settled-boundary checkpoint",
+]
+internal_beta = [
+    "dynamic add/remove/divide/move/rewire",
+    "Potts adapter differential qualification",
+    "dynamic hierarchy failure and replay evidence",
+    "applicable alternate-executor equivalence",
+]
+first_public_release = [
+    "all required_for_pinned_parity features qualified",
+    "all required_for_first_public_release features qualified",
+    "Julia biochemical/FBA whole-cell-style composite qualified",
+    "complete user, adapter-author, executor-author, and conformance documentation",
+    "no Vivarium 1.x, exact Python interchange, or upstream endorsement claim",
+]
+
+[scheduler_policy]
+normative_mode = "imminent_event"
+compatibility_modes = ["pinned_deferred_sample_hold"]
+time_representation = "normalized integer ticks with declared rational scale"
+same_time_visibility = "one common immutable pre-commit snapshot"
+partial_interval = "actual elapsed duration or declared rejection before mutation"
+process_step_boundary = "Process is positive-time deadline work; Step is zero-time ordered/reactive DAG work"
+cycle_policy = "reject undeclared cycles; iteration requires an explicit versioned iterative construct"
+
+[executor_policy]
+semantic_oracle = "SerialExecutor"
+allowed_qualified_executors = ["SerialExecutor", "ThreadsExecutor", "DaggerExecutor"]
+dagger_boundary = "Receives already selected coarse runnable batches and returns typed effects; never owns time, reconciliation, commit, topology, or observation."
+coarse_units = ["process_tick", "solver_call", "field_advance", "partition_batch"]
+distributed_failure = "deterministic fail-stop plus settled-checkpoint recovery; retry only declared pure idempotent work"
+
+[gpu_policy]
+runtime = "GPU-native, residency-aware, and capability-declared"
+universal_gpu_requirement = false
+hidden_transfer = "fail_preflight"
+transfer_requirements = ["declared", "bounded", "measured", "visible", "fingerprinted"]
+core_qualification = "CPU plus applicable named-device microfixtures"
+process_family_rule = "Every process family publishes its own backend and replay matrix"
+potts_non_regression = "Existing CPU/Metal/ROCm Potts requirements remain until separately revised"
+
+[[sources]]
+id = "process-bigraph"
+kind = "git"
+repository = "https://github.com/vivarium-collective/process-bigraph"
+revision = "305ea826191e9f897f0c6e207bc303bbc44a9eef"
+package_version = "1.5.0"
+authority = "pinned_executable_runtime"
+parity_authority = true
+
+[[sources]]
+id = "bigraph-schema"
+kind = "git"
+repository = "https://github.com/vivarium-collective/bigraph-schema"
+revision = "4b208e13620e09e877af52ea07273bc9429a3a17"
+package_version = "1.4.3"
+authority = "pinned_schema_state_apply_divide_serialization"
+parity_authority = true
+
+[[sources]]
+id = "process-bigraph-paper"
+kind = "arxiv"
+repository = "https://arxiv.org/abs/2512.23754"
+revision = "2512.23754"
+package_version = "not_applicable"
+authority = "architectural_intent_and_discrepancy_research"
+parity_authority = true
+
+[[sources]]
+id = "vivarium-core-context"
+kind = "git"
+repository = "https://github.com/vivarium-collective/vivarium-core"
+revision = "60b1570ed20bddd1229e621e670621566c0dafd3"
+package_version = "1.6.5"
+authority = "legacy_research_context_only"
+parity_authority = false
+
+[[sources]]
+id = "spatio-flux-reference"
+kind = "git"
+repository = "https://github.com/vivarium-collective/spatio-flux"
+revision = "6fece7bb9af8e3b374affe02f30b6b022de1d134"
+package_version = "1.4.0"
+authority = "multiscale_application_reference"
+parity_authority = false
+
+[[sources]]
+id = "vecoli-reference"
+kind = "git"
+repository = "https://github.com/vivarium-collective/vEcoli"
+revision = "0c4bc21731b07d0d395b5e5b1d8f5afe11466626"
+package_version = "0.1.0"
+authority = "whole_cell_acceptance_reference"
+parity_authority = false
+
+[[features]]
+id = "typed-hierarchical-store"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Hierarchical state and schemas", "Store"]
+oracle_ids = ["oracle-nested-composite"]
+
+[[features]]
+id = "stable-typed-paths"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Hierarchical state and schemas", "Store"]
+oracle_ids = ["oracle-nested-composite"]
+
+[[features]]
+id = "structural-schema-realization"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural schemas"]
+oracle_ids = ["oracle-update-algebra", "oracle-division-lineage"]
+
+[[features]]
+id = "schema-metadata-units-ontology"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Structural schemas", "Scientific adapter contract"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "canonical-state-serialization"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural schemas", "Checkpoint contents"]
+oracle_ids = ["oracle-checkpoint-replay"]
+
+[[features]]
+id = "typed-input-output-ports"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Ports and wiring"]
+oracle_ids = ["oracle-nested-composite"]
+
+[[features]]
+id = "place-and-link-topology"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Place and link topology"]
+oracle_ids = ["oracle-dynamic-topology", "oracle-nested-composite"]
+
+[[features]]
+id = "nested-composites-and-bridges"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Ports, topology, and composites"]
+oracle_ids = ["oracle-nested-composite"]
+
+[[features]]
+id = "temporal-process-protocol"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Process"]
+oracle_ids = ["oracle-multirate-shared-state"]
+
+[[features]]
+id = "ordered-reactive-step-protocol"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Step"]
+oracle_ids = ["oracle-step-workflow"]
+
+[[features]]
+id = "workflow-cycle-rejection"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Step"]
+oracle_ids = ["oracle-step-workflow"]
+
+[[features]]
+id = "explicit-iterative-constructs"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Step"]
+oracle_ids = ["oracle-step-workflow", "oracle-whole-cell-composite"]
+
+[[features]]
+id = "exact-integer-logical-time"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Exact logical time"]
+oracle_ids = ["oracle-multirate-shared-state", "oracle-partial-interval"]
+
+[[features]]
+id = "imminent-event-scheduler"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Imminent-event scheduler"]
+oracle_ids = ["oracle-multirate-shared-state"]
+
+[[features]]
+id = "deferred-sample-hold-compatibility"
+classification = "compatibility_mode"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Imminent-event scheduler"]
+oracle_ids = ["oracle-multirate-shared-state"]
+
+[[features]]
+id = "actual-elapsed-partial-interval"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Horizon and partial intervals"]
+oracle_ids = ["oracle-partial-interval"]
+
+[[features]]
+id = "same-time-common-snapshot"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Same-time process batch"]
+oracle_ids = ["oracle-multirate-shared-state", "oracle-update-algebra"]
+
+[[features]]
+id = "adaptive-deadlines"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Process timing contract"]
+oracle_ids = ["oracle-multirate-shared-state"]
+
+[[features]]
+id = "typed-process-deltas"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Typed deltas and update algebra"]
+oracle_ids = ["oracle-update-algebra"]
+
+[[features]]
+id = "versioned-update-algebra"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Update-law declarations"]
+oracle_ids = ["oracle-update-algebra"]
+
+[[features]]
+id = "deterministic-conflict-reconciliation"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Reconciliation"]
+oracle_ids = ["oracle-update-algebra", "oracle-failure-atomicity"]
+
+[[features]]
+id = "atomic-event-commit"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Imminent-event scheduler", "Failure and retry"]
+oracle_ids = ["oracle-failure-atomicity"]
+
+[[features]]
+id = "structural-add-remove"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-dynamic-topology"]
+
+[[features]]
+id = "structural-divide"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-dynamic-topology", "oracle-division-lineage"]
+
+[[features]]
+id = "structural-move-rewire"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-dynamic-topology"]
+
+[[features]]
+id = "process-reconfiguration-retirement"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-dynamic-topology"]
+
+[[features]]
+id = "merge-engulf-burst-general-rewrite"
+classification = "deferred_rewrite"
+status = "not_started"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Structural transactions"]
+oracle_ids = ["oracle-dynamic-topology"]
+
+[[features]]
+id = "settled-boundary-checkpoint"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Continuation, checkpoint, and replay"]
+oracle_ids = ["oracle-checkpoint-replay"]
+
+[[features]]
+id = "versioned-process-continuation"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Checkpoint contents"]
+oracle_ids = ["oracle-checkpoint-replay"]
+
+[[features]]
+id = "mid-event-restart"
+classification = "optional_ecosystem"
+status = "not_started"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Checkpoint contents"]
+oracle_ids = ["oracle-checkpoint-replay"]
+
+[[features]]
+id = "semantic-lineage-rng"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Semantic randomness"]
+oracle_ids = ["oracle-division-lineage", "oracle-executor-equivalence"]
+
+[[features]]
+id = "transactional-failure"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Failure and retry"]
+oracle_ids = ["oracle-failure-atomicity"]
+
+[[features]]
+id = "readonly-observer-protocol"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Observation and emission"]
+oracle_ids = ["oracle-checkpoint-replay", "oracle-failure-atomicity"]
+
+[[features]]
+id = "extension-emitters"
+classification = "optional_ecosystem"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Observation and emission"]
+oracle_ids = ["oracle-checkpoint-replay"]
+
+[[features]]
+id = "capability-placement-residency"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Capability, residency, and placement"]
+oracle_ids = ["oracle-residency-hardware"]
+
+[[features]]
+id = "declared-measured-transfers"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Transfer policy"]
+oracle_ids = ["oracle-residency-hardware"]
+
+[[features]]
+id = "serial-semantic-executor"
+classification = "normative_julia"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Executor protocol and Dagger boundary"]
+oracle_ids = ["oracle-executor-equivalence"]
+
+[[features]]
+id = "threads-executor"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Executor protocol and Dagger boundary"]
+oracle_ids = ["oracle-executor-equivalence"]
+
+[[features]]
+id = "dagger-coarse-executor"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Executor protocol and Dagger boundary"]
+oracle_ids = ["oracle-executor-equivalence", "oracle-residency-hardware"]
+
+[[features]]
+id = "multirate-input-semantics"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "sciml-ode-adapter"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "modelingtoolkit-frontend"
+classification = "optional_ecosystem"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "catalyst-jumpprocesses-adapter"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "cobrexa-jump-fba-adapter"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-fba-failures", "oracle-whole-cell-composite"]
+
+[[features]]
+id = "sbml-supported-feature-matrix"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Scientific adapter contract"]
+oracle_ids = ["oracle-sbml-conformance"]
+
+[[features]]
+id = "requester-allocator-evolver-workflow"
+classification = "normative_parity"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = true
+required_for_first_public_release = true
+spec_sections = ["Process and Step", "Whole-cell acceptance ladder"]
+oracle_ids = ["oracle-requester-allocator-evolver"]
+
+[[features]]
+id = "potts-spatial-process-adapter"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Potts adapter and parallel migration"]
+oracle_ids = ["oracle-potts-differential"]
+
+[[features]]
+id = "whole-cell-style-composite"
+classification = "application_required"
+status = "specified"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = true
+spec_sections = ["Whole-cell acceptance ladder"]
+oracle_ids = ["oracle-whole-cell-composite"]
+
+[[features]]
+id = "python-declaration-interchange"
+classification = "optional_ecosystem"
+status = "not_started"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Explicit non-goals for the first parity release"]
+oracle_ids = []
+
+[[features]]
+id = "vivarium1-api-compatibility"
+classification = "excluded_legacy"
+status = "excluded"
+evidence_status = "not_applicable"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Scope and authority", "Explicit non-goals for the first parity release"]
+oracle_ids = []
+
+[[features]]
+id = "ray-rest-ec2-nextflow-backends"
+classification = "optional_ecosystem"
+status = "not_started"
+evidence_status = "not_started"
+required_for_pinned_parity = false
+required_for_first_public_release = false
+spec_sections = ["Explicit non-goals for the first parity release"]
+oracle_ids = []
+
+[[oracles]]
+id = "oracle-multirate-shared-state"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["temporal-process-protocol", "exact-integer-logical-time", "imminent-event-scheduler", "deferred-sample-hold-compatibility", "same-time-common-snapshot", "adaptive-deadlines"]
+sources = ["process-bigraph", "process-bigraph-paper"]
+acceptance = "Interval-one and interval-two processes share state; normative imminent-event and explicit pinned deferred modes produce their separately specified traces."
+
+[[oracles]]
+id = "oracle-partial-interval"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["exact-integer-logical-time", "actual-elapsed-partial-interval"]
+sources = ["process-bigraph", "process-bigraph-paper"]
+acceptance = "A forced final partial interval passes actual elapsed time in normative mode; unsupported partial advancement rejects before mutation."
+
+[[oracles]]
+id = "oracle-update-algebra"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["structural-schema-realization", "same-time-common-snapshot", "typed-process-deltas", "versioned-update-algebra", "deterministic-conflict-reconciliation"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Numeric, overwrite, map, array, set, add/remove, and division conflicts run under reversed executor order with registered parity or intentional-Julia classifications."
+
+[[oracles]]
+id = "oracle-step-workflow"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["ordered-reactive-step-protocol", "workflow-cycle-rejection", "explicit-iterative-constructs"]
+sources = ["process-bigraph", "process-bigraph-paper"]
+acceptance = "Fork/join, silent inputs, wildcard inputs, same-layer writes, and cycle discrepancy fixtures pass their versioned normative and compatibility dispositions."
+
+[[oracles]]
+id = "oracle-dynamic-topology"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["place-and-link-topology", "structural-add-remove", "structural-divide", "structural-move-rewire", "process-reconfiguration-retirement", "merge-engulf-burst-general-rewrite"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Add, execute, move, rewire, divide, daughter reconstruction, and remove are atomic; deferred rewrite families are classified without false parity claims."
+
+[[oracles]]
+id = "oracle-nested-composite"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["typed-hierarchical-store", "stable-typed-paths", "typed-input-output-ports", "place-and-link-topology", "nested-composites-and-bridges"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Nested composites, bridges, private paths, typed port bindings, and canonical lowering pass direct and differential fixtures."
+
+[[oracles]]
+id = "oracle-division-lineage"
+kind = "pinned_python"
+status = "not_started"
+required = true
+feature_ids = ["structural-schema-realization", "structural-divide", "semantic-lineage-rng"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Typed daughter partitioning, continuation reconstruction, identity allocation, and lineage RNG remain deterministic under reversed task order."
+
+[[oracles]]
+id = "oracle-checkpoint-replay"
+kind = "direct"
+status = "not_started"
+required = true
+feature_ids = ["canonical-state-serialization", "settled-boundary-checkpoint", "versioned-process-continuation", "mid-event-restart", "readonly-observer-protocol", "extension-emitters"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Every supported settled boundary restarts exactly; observer position does not duplicate or omit required records; mid-event behavior is honestly unsupported unless fully encoded."
+
+[[oracles]]
+id = "oracle-failure-atomicity"
+kind = "failure_injection"
+status = "not_started"
+required = true
+feature_ids = ["deterministic-conflict-reconciliation", "atomic-event-commit", "transactional-failure", "readonly-observer-protocol"]
+sources = ["process-bigraph", "bigraph-schema"]
+acceptance = "Injected failure during invoke, reconcile, apply, structural commit, required emission, and checkpoint exposes no partial boundary and names the last stable checkpoint."
+
+[[oracles]]
+id = "oracle-requester-allocator-evolver"
+kind = "application"
+status = "not_started"
+required = true
+feature_ids = ["requester-allocator-evolver-workflow"]
+sources = ["vecoli-reference"]
+acceptance = "A requester to allocator to evolver ordered workflow preserves declared same-instance, dependency, update, checkpoint, and restart behavior."
+
+[[oracles]]
+id = "oracle-vecoli-slice"
+kind = "application"
+status = "not_started"
+required = true
+feature_ids = ["temporal-process-protocol", "ordered-reactive-step-protocol", "settled-boundary-checkpoint", "semantic-lineage-rng"]
+sources = ["vecoli-reference"]
+acceptance = "Selected seeded vEcoli slices produce registered differential traces, event order, and continuation behavior."
+
+[[oracles]]
+id = "oracle-spatio-flux"
+kind = "application"
+status = "not_started"
+required = true
+feature_ids = ["nested-composites-and-bridges", "multirate-input-semantics", "declared-measured-transfers"]
+sources = ["spatio-flux-reference"]
+acceptance = "A pinned Spatio-Flux-style coupled fixture passes registered multiscale state, scheduling, transfer, and restart evidence."
+
+[[oracles]]
+id = "oracle-executor-equivalence"
+kind = "differential_local"
+status = "not_started"
+required = true
+feature_ids = ["semantic-lineage-rng", "serial-semantic-executor", "threads-executor", "dagger-coarse-executor"]
+sources = []
+acceptance = "Claimed Threads and Dagger executions match SerialExecutor under the registered exact, numerical, or statistical class across task order and worker counts."
+
+[[oracles]]
+id = "oracle-residency-hardware"
+kind = "hardware"
+status = "not_started"
+required = true
+feature_ids = ["capability-placement-residency", "declared-measured-transfers", "dagger-coarse-executor"]
+sources = []
+acceptance = "Named CPU/GPU process families pass backend matrices; every transfer is declared and measured; hidden fallback, scalar indexing, and undeclared movement fail preflight."
+
+[[oracles]]
+id = "oracle-fba-failures"
+kind = "failure_injection"
+status = "not_started"
+required = true
+feature_ids = ["cobrexa-jump-fba-adapter"]
+sources = []
+acceptance = "Pinned optimizer settings and deterministic solution selection cover nonunique, infeasible, unbounded, timeout, warm-start, and solver-failure cases."
+
+[[oracles]]
+id = "oracle-sbml-conformance"
+kind = "application"
+status = "not_started"
+required = false
+feature_ids = ["sbml-supported-feature-matrix"]
+sources = []
+acceptance = "Every claimed SBML feature has a conformance case; unsupported constructs reject or report an explicit approximation."
+
+[[oracles]]
+id = "oracle-potts-differential"
+kind = "differential_local"
+status = "not_started"
+required = false
+feature_ids = ["potts-spatial-process-adapter"]
+sources = []
+acceptance = "Old and new serial paths preserve frozen Phase 13 and attested G3-B artifacts and pass Wortel, Wang, and field-model state/order/RNG/checkpoint comparisons before cutover."
+
+[[oracles]]
+id = "oracle-whole-cell-composite"
+kind = "application"
+status = "not_started"
+required = true
+feature_ids = ["schema-metadata-units-ontology", "explicit-iterative-constructs", "multirate-input-semantics", "sciml-ode-adapter", "modelingtoolkit-frontend", "catalyst-jumpprocesses-adapter", "cobrexa-jump-fba-adapter", "whole-cell-style-composite"]
+sources = []
+acceptance = "A Julia gene-expression jump, ODE regulation, and deterministic E. coli core FBA composite passes trajectory, balance, event-order, failure, and settled-restart gates."
+
+[whole_cell_ladder]
+ordered_gates = [
+    "runtime_microfixtures",
+    "julia_biochemical_fba_composite",
+    "selected_vecoli_slices",
+    "well_stirred_syn3a",
+    "full_vecoli_generation",
+    "potts_population_environment_composition",
+]
+first_public_release_gate = "julia_biochemical_fba_composite"
+long_term_goal = "whole-cell development platform"
+
+[parallel_migration]
+potts_workstream = "Continue G3-C on locked G3-B ABI, then the field-model CPU/Metal/ROCm slice and published-model evidence."
+runtime_workstream = "Build domain-neutral paths, schemas, ports, deltas, exact time, serial execution, steps, persistence, failure, and structural transactions."
+bridge_workstream = "Adapt CorePotts slice-by-slice and compare old/new serial paths before cutover."
+field_freeze_rule = "The generic field adapter is co-designed but cannot freeze before the field-model evidence closes."
+non_regression = ["frozen Phase 13 artifacts", "attested G3-B behavior", "existing checkpoint readers"]
+single_authority = "No model may have simultaneous old and new state, scheduler, lifecycle, or persistence authorities."
+
+[presentation_policy]
+development = "independent"
+eran_timing = "near_release"
+eran_role = "presentation audience and optional feedback source, not semantic or release authority"
+repository_split = "consider only after first complete parity release"

@@ -39,6 +39,7 @@ work = load_toml("design/audits/phase-14-d9-work-items-v1.toml")
 morpheus = load_toml("design/audits/phase-14-morpheus-continuous-semantics-v1.toml")
 wang_order = load_toml("design/audits/phase-14-wang-order-oracle-v1.toml")
 g3b_entry = load_toml("design/audits/phase-14-g3b-entry-contract-v1.toml")
+g3b_ledger = load_toml("design/audits/phase-14-g3b-closure-ledger-v1.toml")
 wang_order_evidence = load_toml("design/evidence/phase-14/wang-order/index.toml")
 old_registry = load_toml("spec/phase-14-contract-registry-v1.toml")
 registry = load_toml("spec/phase-14-contract-registry-v2.toml")
@@ -117,12 +118,19 @@ check(wang_order["history_discrepancy"]["classification"] ==
 check(g3b_entry["schema_version"] == "1.6.0" &&
       g3b_entry["revision"] == 7,
     "G3-B entry contract is not the revision-7 fail-closed closure contract")
+check(g3b_ledger["overall_status"] == "passed",
+    "G3-B closure ledger is not passed")
+check(g3b_ledger["contract_revision"] == g3b_entry["revision"],
+    "G3-B closure ledger targets a stale contract revision")
 check(g3b_entry["source_time_mapping"]["source_first"] == 0 &&
       g3b_entry["source_time_mapping"]["target_first"] == 1 &&
       g3b_entry["source_time_mapping"]["source_last"] == 499 &&
       g3b_entry["source_time_mapping"]["target_last"] == 500,
     "G3-B source MCS mapping is not 0:499 -> target 1:500")
 check(occursin("phase14.1-owner-approved-simplified", registry["status"]), "contract registry is not the owner-approved simplified Phase 14.1 set")
+check(occursin("Wang G3-B sequential CPU passed", registry["status"]) &&
+      occursin("Wang G3-C is current", registry["status"]),
+    "contract registry does not record G3-B passed and G3-C current")
 expected_contracts = Set([
     "state",
     "process",
@@ -490,6 +498,23 @@ for phrase in stale_phrases
     check(!occursin(phrase, closure_text), "stale Phase 14.0 status remains: '$phrase'")
 end
 
+current_status_paths = [
+    joinpath(REPO, "design/refactor-roadmap.md"),
+    joinpath(REPO, "spec/README.md"),
+    joinpath(REPO, "spec/phase-14-semantic-kernel.md"),
+    joinpath(REPO, "design/audits/phase-14-gpu-native-implementation-plan.md"),
+]
+current_status_text = join(read(path, String) for path in current_status_paths)
+for phrase in ["Wang is open", "G3-B current", "pending G3-B"]
+    check(!occursin(phrase, current_status_text),
+        "stale G3-B status remains in a current-status document: '$phrase'")
+end
+check(occursin("G3-B", current_status_text) &&
+      occursin("complete", current_status_text) &&
+      occursin("G3-C", current_status_text) &&
+      occursin("current", current_status_text),
+    "current-status documents do not record G3-B complete and G3-C current")
+
 if isempty(failures)
     println("Phase 14 corpus and simplified architecture closure passes:")
     println("  6 frozen source records and 6 source-closure records")
@@ -500,6 +525,7 @@ if isempty(failures)
     println("  Decisions 0031–0033 and all 15 owner choices accepted; generic hierarchical authoring enforced")
     println("  no selected-paper names exported; Wang sketch uses generic fragments and one root plan")
     println("  Wortel CPU/Metal/ROCm G2 passed")
+    println("  Wang G3-B sequential CPU closure passed; G3-C Metal/ROCm qualification is current")
     println("  Wang source/runtime order and source 0:499 -> target 1:500 mapping accepted, including the explicit paper t-5 versus source t-4 history variant")
     println("  D10 additive classification preserved; Mermaid.jl remains out of scope")
 else

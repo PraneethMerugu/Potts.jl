@@ -86,6 +86,11 @@ transfer, synchronization, or allocation.
 Every stable or release fragment capability remains subject to Decision 0032: sequential CPU
 reference plus backend-resident Metal and ROCm implementation and qualification.
 
+Decision 0034 later introduces `ProcessBigraphs.jl` as the domain-neutral runtime beneath migrated
+models. `ModelFragment` remains PottsToolkit's generic biological authoring and composition
+surface; it may lower to runtime composites without becoming a second runtime IR. The runtime does
+not authorize paper-specific builders, hidden schedules, or dual Potts execution authority.
+
 ## Consequences
 
 - Root-model complexity scales with meaningful subsystems rather than private leaf declarations.

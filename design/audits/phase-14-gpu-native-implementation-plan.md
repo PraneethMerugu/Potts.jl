@@ -157,20 +157,16 @@ G3 is executed through three non-substitutable gates:
   fragment ports, nested privacy, one root plan, direct-versus-fragment identity, transitive
   backend requirements, and the generic Wang lowering/order fixture. Evidence:
   [G3-A generic authoring evidence](phase-14-g3a-generic-authoring-evidence.md).
-- **G3-B — Wang sequential CPU reference: current; revision-7 implementation and closure
-  protocol frozen.** The
+- **G3-B — Wang sequential CPU reference: complete.** The
   [G3-B entry packet](phase-14-g3b-entry-packet.md) and
   [machine-readable implementation contract](phase-14-g3b-entry-contract-v1.toml) freeze the
   source-backed state/process inventory, device-ready storage ABI, numerical profiles, conformance
-  matrix, three remaining source-semantic studies, and thirteen-row fail-closed
-  [closure ledger](phase-14-g3b-closure-ledger-v1.toml). Replace every structural fixture law with
-  the registered Wang state, field, ODE, relationship, observation, and lifecycle implementation
-  in one assembled model and close exact/invariant/restart conformance. Isolated primitive
-  evidence cannot substitute for the assembled-model, source-study, or clean-commit claim
-  gates. The first implementation increment, the
-  backend-adaptable bounded [cell-history substrate](phase-14-g3b-history-evidence.md), passes its
-  sequential CPU gate; this does not close G3-B or qualify a GPU backend.
-- **G3-C — Wang Metal/ROCm qualification: pending G3-B.** Close the identical canonical model on
+  matrix, three source-semantic studies, and thirteen-row fail-closed
+  [closure ledger](phase-14-g3b-closure-ledger-v1.toml). Every requirement and process-evidence
+  row is passed, the assembled 11-process model closes exact/invariant/restart conformance, and the
+  evidence attestation binds the clean implementation commit `a82b0c4`. This does not qualify a
+  GPU backend.
+- **G3-C — Wang Metal/ROCm qualification: current.** Close the identical canonical model on
   real Metal and ROCm with residency, device-code, replay, restart, transfer, allocation, memory,
   and performance evidence.
 

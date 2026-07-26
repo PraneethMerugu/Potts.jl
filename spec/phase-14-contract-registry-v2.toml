@@ -1,6 +1,6 @@
 schema_version = "2.1.0"
 registry_version = "phase14-contract-registry-v2"
-status = "phase14.1-owner-approved-simplified generic-hierarchical GPU-native contract set; Wortel CPU/Metal/ROCm passed; Wang order accepted and implementation current; individual contracts provisional"
+status = "phase14.1-owner-approved-simplified generic-hierarchical GPU-native contract set; Wortel CPU/Metal/ROCm and Wang G3-B sequential CPU passed; Wang G3-C is current; individual contracts provisional outside proven slices"
 registered_at = "2026-07-25"
 supersedes = "phase-14-contract-registry-v1.toml"
 architecture_decision = "decisions/0031-phase-14-single-semantic-kernel.md"
@@ -72,7 +72,7 @@ candidate_values = [
 
 [authoring_composition]
 root_model = "PottsModel retains flat order-independent declarations for small models and Phase 13 compatibility."
-hierarchy = "ModelFragment is the sole generic hierarchical composition unit; no CoupledModel, paper-specific core model, or independent domain runtime is admitted."
+hierarchy = "ModelFragment is the sole generic hierarchical authoring unit for the existing Potts Phase 14 path; no CoupledModel, paper-specific core model, or independent Potts domain runtime is admitted. Decision 0034 separately governs the future domain-neutral ProcessBigraphs runtime and its strangler migration."
 requirements = "Fragment requirements are named and typed by semantic category, owner, schema, units, lifecycle obligations, capabilities, and backend needs as applicable."
 exports = "Fragment exports are named immutable references to admitted declarations or operations; private fragment declarations are inaccessible externally."
 plan = "Exactly one normalized root plan references exported operations and owns all order, cadence, stages, snapshots, lifecycle commit, observations, and stable boundaries."

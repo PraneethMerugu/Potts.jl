@@ -6,11 +6,14 @@ Status: Accepted architecture; individual Phase 14.1 contracts remain Provisiona
 registered vertical-slice gates pass
 
 Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24 and its
-real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang is open; its exact
-[source/runtime order](../design/audits/phase-14-wang-order-audit.md) and revision-2
-[G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) are accepted. This proves
-only the bounded Wortel subset and Wang implementation-entry authority and does not promote the
-seven contracts beyond their registered Provisional status.
+real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang G3-B sequential CPU closure is
+attested complete at implementation commit `a82b0c4`; its
+[closure ledger](../design/audits/phase-14-g3b-closure-ledger-v1.toml) records
+`overall_status = "passed"`. The exact
+[source/runtime order](../design/audits/phase-14-wang-order-audit.md) and revision-7
+[G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) govern that evidence.
+This proves the bounded Wortel slice and Wang sequential CPU model, not Wang Metal/ROCm
+qualification or contracts outside the proven slices.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
@@ -23,10 +26,15 @@ Registry:
 
 ## Authority
 
-This document is the sole normative architecture for new Phase 14 coupled-model semantics. The
-earlier Phase 14 domain specifications are retained as source and prototype evidence, but they do
-not define independent runtimes or contracts. When an earlier document conflicts with this one,
-this document and Decision 0031 control.
+This document is the sole normative architecture for the existing Potts-owned Phase 14
+coupled-model path. The earlier Phase 14 domain specifications are retained as source and prototype
+evidence, but they do not define independent Potts runtimes or contracts. When an earlier Phase 14
+document conflicts with this one, this document and Decision 0031 control.
+
+Decision 0034 separately establishes the domain-neutral `ProcessBigraphs.jl` runtime. During the
+strangler migration, this kernel remains authoritative for unmigrated Potts models; migrated slices
+lower through the runtime and must pass old/new serial differential evidence. The migration MUST
+end dual execution authority for each cut-over slice rather than leave two Potts schedulers.
 
 The specification defines observable semantics, not concrete Julia storage layouts. Candidate type
 names illustrate the intended API and remain Provisional until the corresponding vertical slice is
@@ -829,11 +837,11 @@ evidence closed the second half on 2026-07-25 by proving:
 
 ### Expansion gates
 
-Wortel has passed both its CPU reference and Metal/ROCm closure, so Wang is open for the
-history/ODE/relationship/multirate breadth and its required periodic secretome field. Only after
-that complete Wang CPU/Metal/ROCm slice passes may the first additional field model open broader
-boundary, solver, and exchange work. Every later stable execution capability follows the same
-reference-then-device promotion rule.
+Wortel has passed both its CPU reference and Metal/ROCm closure, and Wang G3-B has passed its
+sequential CPU gate. Wang G3-C real-hardware Metal/ROCm qualification is therefore current. Only
+after that complete Wang CPU/Metal/ROCm slice passes may the first additional field model open
+broader boundary, solver, and exchange work. Every later stable execution capability follows the
+same reference-then-device promotion rule.
 
 ## Phase 13 Freeze Impact
 
