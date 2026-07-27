@@ -22,8 +22,8 @@ Decision 0038 and the completed 64-choice owner interview define the Phase 15.C 
 features, seven supporting oracle-requalification features, four retained direct structural
 features, and the explicit later-work exclusions. The
 [C0--C7 plan](../../../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md) is strictly
-ordered and requires a separately implemented, test-only Julia specification oracle. C1--C6 pass,
-and C7 records implementation PR #24, its successful Required CI run, the candidate artifact
+ordered and requires a separately implemented, test-only Julia specification oracle. C0--C7 pass;
+C7 records implementation PR #24, its successful Required CI run, the candidate artifact
 digests, and the identical qualified and squash-merge trees. Package version is `0.4.0` with
 `internal_alpha = true` and `public_release = false`. The complete closure provenance is in the
 [evidence manifest](../../../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).

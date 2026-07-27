@@ -245,7 +245,7 @@ roadmap = read(roadmap_path, String)
 check(occursin("Implemented and directly passing", decision),
     "Decision 0037 implementation disposition is stale")
 check(occursin(
-        "PB0, Phase 15.A, and Phase 15.B passed; Decision 0038 freezes Phase 15.C entry while runtime implementation remains open",
+        "PB0 and Phase 15.A--15.C passed; ProcessBigraphs 0.4.0 is a qualified serial internal alpha",
         platform_decision),
     "Decision 0034 implementation disposition is stale")
 check(occursin("Status: Implemented and directly passing", plan),
@@ -258,7 +258,7 @@ for phrase in [
     PHASE15B_QUALIFIED_HEAD,
     PHASE15B_MERGE_COMMIT,
     PHASE15B_QUALIFIED_TREE,
-    "Remaining Phase 15 work",
+    "Subsequent Phase 15.C disposition",
 ]
     check(occursin(phrase, audit), "Phase 15.B audit is missing '$phrase'")
 end

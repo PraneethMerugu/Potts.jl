@@ -154,6 +154,7 @@ Refactor execution evidence:
 - [ProcessBigraphs Phase 15.C Qualification Ledger](process-bigraph-phase15c-qualification-v1.toml)
 - [ProcessBigraphs Phase 15.C Entry Audit](../design/audits/process-bigraph-phase15c-entry-audit.md)
 - [ProcessBigraphs Phase 15.C Closure Audit](../design/audits/process-bigraph-phase15c-closure-audit.md)
+- [ProcessBigraphs Phase 15.C Documentation Consistency Audit](../design/audits/process-bigraph-phase15c-documentation-consistency-audit.md)
 - [ProcessBigraphs Phase 15.C Evidence](../design/evidence/process-bigraph-phase15c-evidence-v1.toml)
 - [ProcessBigraphs PB0 Implementation Audit](../design/audits/process-bigraph-pb0-implementation-audit.md)
 - [ProcessBigraphs PB0 Evidence](../design/evidence/process-bigraph-pb0-evidence-v1.toml)
@@ -204,7 +205,7 @@ Decision 0038 and the completed 64-choice owner interview freeze Phase 15.C as a
 immutable-topology serial internal-alpha gate. Its exact 15 target rows, seven supporting
 oracle-requalification rows, four retained structural rows, exclusions, fixtures, strict C0--C7
 order, independent-oracle boundary, and two-stage attested closure are machine-readable in the
-Phase 15.C entry contract. C1--C7 now pass: implementation PR #24 passed Required CI, the
+Phase 15.C entry contract. C0--C7 now pass: implementation PR #24 passed Required CI, the
 independent stdlib-only oracle and complete qualification matrix passed, and its squash-merge tree
 exactly matches the qualified tree. The metadata-only attestation promotes ProcessBigraphs to
 `0.4.0` with `internal_alpha = true` and `public_release = false`. GPU execution, parallel

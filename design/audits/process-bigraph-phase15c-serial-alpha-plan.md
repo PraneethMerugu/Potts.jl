@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 15.C Serial Internal-Alpha Plan
 
-Status: Accepted pre-implementation plan; runtime implementation not started
+Status: Complete; C0--C7 implemented, independently qualified, and attested
 
 Date: 2026-07-26
 
@@ -20,9 +20,10 @@ executor, exact multirate semantics, semantic RNG, read-only observation, typed 
 canonical settled checkpoints, deterministic fail-stop behavior, and a structurally independent
 checked Julia oracle.
 
-This plan is an implementation contract, not implementation evidence. The package remains version
-`0.3.0`, `internal_alpha = false`, and publicly unreleased until the two-stage Phase 15.C closure
-passes.
+This plan is the historical implementation contract, not the evidence record. Under its two-stage
+rule the implementation candidate remained version `0.3.0`, `internal_alpha = false`, and publicly
+unreleased until closure. The attestation subsequently advanced the unchanged qualified runtime to
+`0.4.0`, `internal_alpha = true`, with `public_release = false`.
 
 ## Non-goals
 
@@ -518,3 +519,7 @@ No Phase 15.C runtime source, oracle, fixture, registry promotion, or closure ev
 implemented on the authority of an unmerged draft of this packet. Implementation begins at 15.C1
 only after the complete 15.C0 packet is merged to `main` and the entry checker passes from that
 merged tree.
+
+Disposition: the 15.C0 entry packet merged as PR #23, implementation PR #24 passed C1--C6 and
+Required CI, and closure-attestation PR #25 completed C7. The rule is retained to document the
+provenance discipline used by the completed phase.

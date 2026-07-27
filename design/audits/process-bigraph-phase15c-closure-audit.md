@@ -40,6 +40,9 @@ the guardrail report SHA-256 is
 `e9eefabd1a705019e7acae3fe23af626dc2cd00d2226c482d62d19e6e3e8ce87`.
 The complete machine-readable record is the
 [Phase 15.C evidence manifest](../evidence/process-bigraph-phase15c-evidence-v1.toml).
+The post-merge
+[documentation consistency audit](process-bigraph-phase15c-documentation-consistency-audit.md)
+records the repository-wide status-language reconciliation without altering this evidence.
 
 ## Qualification balance
 

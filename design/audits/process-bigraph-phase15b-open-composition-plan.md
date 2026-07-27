@@ -158,3 +158,7 @@ Phase 15.B is structurally complete when its two registry rows have direct passi
 15.C remains responsible for the independent checked Julia specification oracle, semantic RNG,
 read-only observer completion, continuation/invalidation, remaining multirate and update-law
 truth tables, failure injection, settled restart, and the final serial internal-alpha gate.
+
+Post-closure disposition: Phase 15.B passed this boundary, and Phase 15.C subsequently completed
+all listed serial-alpha obligations. This plan remains the historical Phase 15.B execution
+contract rather than a current-work list.

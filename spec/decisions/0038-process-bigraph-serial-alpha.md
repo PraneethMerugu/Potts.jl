@@ -1,8 +1,15 @@
 # Decision 0038: ProcessBigraphs Phase 15.C Serial Internal Alpha
 
-Status: Accepted pre-implementation architecture; Phase 15.C runtime implementation not started
+Status: Implemented, independently qualified, and attested as ProcessBigraphs 0.4.0 serial internal alpha
 
 Date: 2026-07-26
+
+Implementation disposition: C0--C7 passed. Implementation PR #24 qualified and merged the
+immutable-topology serial runtime; closure-attestation PR #25 promoted the unchanged qualified
+implementation to `0.4.0` with `internal_alpha = true` and `public_release = false`. The exact
+evidence and limitations are recorded in the
+[closure audit](../../design/audits/process-bigraph-phase15c-closure-audit.md) and
+[evidence manifest](../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
 
 ## Context
 
@@ -12,16 +19,16 @@ execution plan. Phase 15.B added arbitrary-depth immutable open composition, rea
 cospans, and a lossless annotated wiring view. Those slices pass direct evidence, but they do not
 establish the complete serial runtime or its independent conformance oracle.
 
-The remaining Phase 15 work is semantically coupled. Scheduler publication determines RNG event
-identity, observer boundaries, continuation advancement, failure rollback, and checkpoint
-contents. Implementing these concerns independently without one closure contract could create
-multiple authorities or circular conformance evidence.
+At entry freeze, the remaining Phase 15 work was semantically coupled. Scheduler publication
+determines RNG event identity, observer boundaries, continuation advancement, failure rollback,
+and checkpoint contents. Implementing these concerns independently without one closure contract
+could create multiple authorities or circular conformance evidence.
 
 The project owner resolved all 64 questions in the
 [Phase 15.C owner interview](../../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md)
-by accepting the recommended option. This record converts those answers into one normative
-pre-implementation decision. The exact allowlist, exclusions, fixtures, ordering, and evidence
-shape are machine-readable in
+by accepting the recommended option. At entry freeze, this record converted those answers into one
+normative pre-implementation decision. The exact allowlist, exclusions, fixtures, ordering, and
+evidence shape are machine-readable in
 [`process-bigraph-phase15c-entry-v1.toml`](../process-bigraph-phase15c-entry-v1.toml).
 
 ## Decision
@@ -219,7 +226,7 @@ identity from `0.3.x` to `0.4.0`. It does not publish the package.
 - Expanding Phase 15.C into dynamic structure, adapters, Dagger, GPU, or public release.
 - Recording only a pre-merge commit as final runtime provenance.
 
-## Required conformance evidence
+## Historical entry and closure gates
 
 Before Phase 15.C implementation may begin, the owner interview, this decision, the implementation
 plan, entry contract, entry audit, roadmap references, and entry checker must agree and pass.
@@ -227,3 +234,6 @@ plan, entry contract, entry audit, roadmap references, and entry checker must ag
 Before internal alpha may close, every requirement in the entry contract and implementation plan
 must have exact production and independent evidence as applicable, both closure PRs must pass all
 required CI, and the final registry and documentation must retain every later-phase exclusion.
+
+Both gates passed. This section remains as the historical rule that governed the attested
+two-stage closure; it is not an indication that Phase 15.C remains open.

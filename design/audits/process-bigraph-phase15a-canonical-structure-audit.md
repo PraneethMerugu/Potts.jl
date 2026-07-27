@@ -4,7 +4,8 @@ Status: Phase 15.A passed
 
 Date: 2026-07-26
 
-Scope: bounded canonical-structure migration only; complete Phase 15 internal alpha remains open
+Scope: bounded canonical-structure migration only; Phase 15.C subsequently qualified the complete
+immutable-topology serial internal alpha
 
 ## Result
 
@@ -109,15 +110,15 @@ and no-upstream-Python policies.
 | Independent Julia specification oracle | Not in Phase 15.A |
 | Complete internal-alpha fixture matrix | Not in Phase 15.A |
 
-## Remaining Phase 15 work
+## Subsequent Phase 15 disposition
 
-The complete Phase 15 internal-alpha gate still requires structured-cospan open composition,
-derived directed wiring diagrams, nested/open composite fixtures and parenthesization invariance,
-the independent checked Julia specification oracle, semantic RNG and observer contracts, and the
-remaining multirate biochemical, update-law, failure-injection, and checkpoint/replay evidence.
-Those capabilities must extend the canonical structure and compiled-plan boundary established here;
-they must not restore a parallel structural model or make runtime semantics depend on ACSet storage
-order.
+At Phase 15.A closure, the complete internal-alpha gate still required structured-cospan open
+composition, derived directed wiring diagrams, nested/open composite fixtures and
+parenthesization invariance, the independent checked Julia specification oracle, semantic RNG and
+observer contracts, and the remaining multirate, update-law, failure-injection, and
+checkpoint/replay evidence. Phase 15.B and Phase 15.C subsequently completed those obligations
+without restoring a parallel structural model or making runtime semantics depend on ACSet storage
+order. This audit's two-row direct-evidence claim remains unchanged.
 
 Phase 16 remains responsible for AlgebraicRewriting-backed dynamic topology and the first Potts
 adapter cutover. Phase 17 remains responsible for AlgebraicDynamics/scientific adapters. Later

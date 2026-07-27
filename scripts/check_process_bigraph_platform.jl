@@ -555,12 +555,15 @@ if isempty(failures)
     println("  all 48 owner decisions recorded")
     println("  all 34 AlgebraicJulia and independent-conformance decisions recorded")
     println("  all 22 Phase 15.B open-composition decisions recorded")
+    println("  all 64 Phase 15.C serial-alpha decisions recorded")
     println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
     println("  $(length(expected_phase15a_implemented)) Phase 15.A canonical-structure rows implemented and locally tested")
     println("  $(length(expected_phase15b_implemented)) Phase 15.B open-composition rows implemented and locally tested")
     println("  canonical ACSet, open-composition semantics, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
-    println("  independent-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
+    println(registry["registry_status"] == "phase15c-qualified-serial-internal-alpha" ?
+        "  independent oracle and serial internal alpha qualified; GPU, parallel-executor, and public-release claims remain fail-closed" :
+        "  independent-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs platform specification failed with $(length(failures)) issue(s):")

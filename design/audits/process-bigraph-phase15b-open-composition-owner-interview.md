@@ -11,6 +11,10 @@ choices accepted by Decisions 0034 and 0036.
 The accepted normative result is
 [Decision 0037](../../spec/decisions/0037-process-bigraph-open-composition.md).
 
+Implementation outcome: Phase 15.B subsequently passed, and Phase 15.C independently requalified
+the admitted immutable-topology runtime use of its structure. The interview answers remain the
+historical design authority.
+
 ## Round 1: Boundary semantics
 
 1. **A.** An open boundary is a constrained ProcessBigraph ACSet fragment with
@@ -91,4 +95,5 @@ The accepted normative result is
 
 No Phase 15.B architecture question remains open. The interview authorizes specification and
 implementation work; it does not claim that structured-cospan composition, nested lowering,
-directed wiring views, or their evidence have been implemented.
+directed wiring views, or their evidence had been implemented at interview time. Those Phase 15.B
+obligations and the later Phase 15.C serial-alpha qualification have since passed.
