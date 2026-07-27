@@ -122,6 +122,9 @@ function CartesianDomain(dims::NTuple{N, <:Integer};
 end
 
 mutable_site_count(domain::CartesianDomain) = count(domain.mutable_mask)
+domain_dimensions(domain::CartesianDomain) = domain.dims
+domain_spacing(domain::CartesianDomain) = Tuple(domain.spacing)
+domain_boundaries(domain::CartesianDomain) = domain.boundaries
 
 function immutable_owner(domain::CartesianDomain, site)
     index = _obstacle_index(site, domain.dims)

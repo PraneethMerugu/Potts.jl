@@ -1,11 +1,12 @@
 using Documenter
 using CorePotts
+using MakiePotts
 using PottsToolkit
 
 makedocs(
     sitename = "Potts.jl",
     authors = "Praneeth Merugu",
-    modules = [CorePotts, PottsToolkit],
+    modules = [CorePotts, PottsToolkit, MakiePotts],
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true",
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
@@ -29,6 +30,7 @@ makedocs(
         "Scientific Contracts" => "corepotts/contracts.md",
         "CorePotts API" => "corepotts/api.md",
         "PottsToolkit API" => "pottstoolkit/api.md",
+        "MakiePotts" => "makiepotts.md",
     ],
 )
 

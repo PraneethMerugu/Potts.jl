@@ -401,6 +401,8 @@ end
 Base.getindex(prob::PottsProblem, ::PottsParameterHandle{Name}) where {Name} =
     getproperty(prob.p, Name)
 
+problem_geometry(prob::PottsProblem) = prob.geometry
+
 _parameter_symbols(parameters) = fieldnames(typeof(parameters))
 _SII.is_parameter(prob::PottsProblem, symbol::Symbol) =
     symbol in _parameter_symbols(prob.p)
@@ -460,6 +462,28 @@ struct SavedPottsState{S}
     t::Int
     state::S
     residency::Symbol
+end
+
+"""Return the exact completed-MCS coordinate carried by a saved solution entry."""
+snapshot_mcs(saved::SavedPottsState) = saved.t
+
+"""Return the declared storage residency of a saved solution entry."""
+snapshot_residency(saved::SavedPottsState) = saved.residency
+
+"""
+    snapshot_state(saved::SavedPottsState)
+
+Return the complete logical host state retained by `HostSnapshotPolicy`.
+
+This accessor never transfers, synchronizes, or reconstructs data. Device, backend-native, and
+observable-only entries fail with an actionable error.
+"""
+function snapshot_state(saved::SavedPottsState)
+    saved.residency === :host && saved.state isa LogicalPottsState ||
+        throw(ArgumentError(
+            "saved entry at MCS $(saved.t) does not contain a complete logical host state; " *
+            "solve with snapshot_policy=HostSnapshotPolicy() or request explicit observables"))
+    return saved.state
 end
 
 function Base.getindex(saved::SavedPottsState,
@@ -566,6 +590,7 @@ Base.length(sol::PottsSolution) = length(sol.t)
 Base.firstindex(sol::PottsSolution) = firstindex(sol.t)
 Base.lastindex(sol::PottsSolution) = lastindex(sol.t)
 Base.getindex(sol::PottsSolution, index::Int) = sol.u[index]
+solution_problem(sol::PottsSolution) = sol.prob
 function Base.getindex(sol::PottsSolution, handle::PottsObservableHandle)
     name = observable_name(handle)
     _SII.is_observed(sol.prob, name) || throw(UnsavedObservableError(name, nothing))

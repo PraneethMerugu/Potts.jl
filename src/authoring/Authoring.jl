@@ -147,9 +147,13 @@ export CompletedMCS, NamedPhaseSnapshot, RequiredObservation,
        BestEffortTelemetry, RecordSchema, PhaseObservation,
        ObservationTransform
 =#
-export AbstractScientificObservable, CellVolume, CellTypeObservable
+export AbstractScientificObservable, CellVolume, CellTypeObservable, LatticeOwnership
 export CellBoundaryMeasure, CellPropertyValues, ObservationSet
 export CellValue, CellValues, CellFrame, CellSeries
+export ObservedCell, OwnershipValues, SpatialFrame, SpatialSeries
+export observed_cell_id, observed_cell_generation, observed_cell_type
+export ownership_size, ownership_owner_at, ownership_cells
+export spatial_mcs, spatial_values
 export observe, observation_policy, observation_table
 export PhysicalScale, UnitfulSolutionView, with_units, mcs
 

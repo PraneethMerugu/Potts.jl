@@ -228,9 +228,10 @@ end
     cell_types = PottsToolkit.CellTypeObservable()
     boundaries = PottsToolkit.CellBoundaryMeasure()
     ages = PottsToolkit.CellPropertyValues(age; name = :age)
-    set = PottsToolkit.ObservationSet(volumes, cell_types, boundaries, ages)
+    ownership = PottsToolkit.LatticeOwnership()
+    set = PottsToolkit.ObservationSet(volumes, cell_types, boundaries, ages, ownership)
     model = PottsToolkit.PottsModel(medium, cell, age, volume_component,
-        volumes, cell_types, boundaries, ages)
+        volumes, cell_types, boundaries, ages, ownership)
 
     mask = falses(3, 3)
     mask[2, 2] = true
@@ -239,7 +240,7 @@ end
         PottsToolkit.Layout(PottsToolkit.Place(cell, mask; identity = 1));
         capacity = 2, tspan = (0, 1), seed = 3)
     @test Set(CorePotts.observable_symbols(problem.model)) ==
-          Set((:volume, :cell_type, :boundary_measure, :age))
+          Set((:volume, :cell_type, :boundary_measure, :age, :ownership))
     solution = CorePotts.solve(problem,
         CorePotts.SequentialCPM(temperature = 0.0f0);
         snapshot_policy = PottsToolkit.observation_policy(set))
@@ -248,6 +249,20 @@ end
     @test only(volume_series.frames[1].values).value == 1
     @test length(solution[CorePotts.PottsObservableHandle(:age)]) ==
           length(solution.t)
+    ownership_series = PottsToolkit.observe(solution, ownership)
+    @test length(ownership_series) == length(solution.t)
+    first_spatial = first(ownership_series)
+    @test PottsToolkit.spatial_mcs(first_spatial) ==
+          CorePotts.snapshot_mcs(solution[firstindex(solution)])
+    ownership_values = PottsToolkit.spatial_values(first_spatial)
+    observed_cell = only(PottsToolkit.ownership_cells(ownership_values))
+    @test PottsToolkit.observed_cell_id(observed_cell) == CorePotts.CellID(1)
+    @test PottsToolkit.observed_cell_generation(observed_cell) ==
+          CorePotts.CellGeneration(0)
+    @test PottsToolkit.observed_cell_type(observed_cell) == CorePotts.CellTypeID(1)
+    @test PottsToolkit.ownership_size(ownership_values) == (3, 3)
+    @test PottsToolkit.ownership_owner_at(
+        ownership_values, CartesianIndex(2, 2)) == CorePotts.CellOwner(1)
     table = PottsToolkit.observation_table(solution, volumes, ages)
     @test !isempty(table)
     @test all(row -> hasproperty(row, :mcs) && hasproperty(row, :generation) &&
@@ -258,6 +273,10 @@ end
         snapshot_policy = CorePotts.HostSnapshotPolicy())
     @test length(PottsToolkit.observe(host_solution, boundaries)) ==
           length(host_solution.t)
+    @test length(PottsToolkit.observe(host_solution, ownership)) ==
+          length(host_solution.t)
+    @test_throws ArgumentError PottsToolkit.observation_table(
+        host_solution, ownership)
 
     model_fingerprint = PottsToolkit.semantic_fingerprint(model)
     scale = PottsToolkit.PhysicalScale(
