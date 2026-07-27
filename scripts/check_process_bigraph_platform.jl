@@ -75,8 +75,17 @@ phase15a_evidence_path = require_file(
 phase15a_checker_path = require_file("scripts/process-bigraph-phase15a-check.jl")
 phase15a_test_path = require_file(
     "lib/ProcessBigraphs/test/test_phase15a_algebraic_structure.jl")
+phase15b_audit_path = require_file(
+    "design/audits/process-bigraph-phase15b-open-composition-audit.md")
+phase15b_evidence_path = require_file(
+    "design/evidence/process-bigraph-phase15b-evidence-v1.toml")
+phase15b_checker_path = require_file("scripts/process-bigraph-phase15b-check.jl")
+phase15b_test_path = require_file(
+    "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl")
 algebraic_source_path = require_file(
     "lib/ProcessBigraphs/src/algebraic_structure.jl")
+composition_source_path = require_file(
+    "lib/ProcessBigraphs/src/composition.jl")
 lowering_source_path = require_file("lib/ProcessBigraphs/src/lowering.jl")
 runtime_source_path = require_file("lib/ProcessBigraphs/src/runtime.jl")
 
@@ -88,10 +97,10 @@ source_ids = unique_ids(sources, "source registry")
 feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
-check(registry["schema_version"] == "1.2.0", "unexpected parity-registry schema")
+check(registry["schema_version"] == "1.3.0", "unexpected parity-registry schema")
 check(registry["registry_status"] ==
-      "phase15b-open-composition-specified-implementation-open",
-    "parity registry does not record Phase 15.A evidence and accepted Phase 15.B design")
+      "phase15b-open-composition-direct-passing",
+    "parity registry does not record passed Phase 15.B open composition")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
@@ -253,9 +262,14 @@ expected_phase15a_implemented = Set([
     "canonical-process-bigraph-acset",
     "compiled-structural-epoch",
 ])
+expected_phase15b_implemented = Set([
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+])
 check(implemented_features ==
-      union(expected_pb0_implemented, expected_phase15a_implemented),
-    "root registry implemented rows must exactly match PB0 and Phase 15.A evidence")
+      union(expected_pb0_implemented, expected_phase15a_implemented,
+        expected_phase15b_implemented),
+    "root registry implemented rows must exactly match PB0, Phase 15.A, and Phase 15.B evidence")
 check(all(feature -> feature["status"] ∉ ("oracle_passing", "qualified"), features),
     "PB0 must not claim oracle-passing or qualified runtime features")
 check(all(oracle -> oracle["status"] ∉ ("oracle_passing", "qualified"), oracles),
@@ -266,6 +280,9 @@ check(all(feature["evidence_status"] == "direct_passing_pb0" for feature in feat
 check(all(feature["evidence_status"] == "direct_passing_phase15a"
           for feature in features if feature["id"] in expected_phase15a_implemented),
     "every Phase 15.A row must cite direct_passing_phase15a evidence")
+check(all(feature["evidence_status"] == "direct_passing_phase15b"
+          for feature in features if feature["id"] in expected_phase15b_implemented),
+    "every Phase 15.B row must cite direct_passing_phase15b evidence")
 
 pb0 = registry["pb0_implementation"]
 check(pb0["status"] == "passed_bounded_foundation",
@@ -288,18 +305,18 @@ check(get(package_project["compat"], "ACSets", "") == "0.2.29" &&
     "Phase 15.A AlgebraicJulia compatibility bounds changed")
 
 package_registry = TOML.parsefile(package_registry_path)
-check(package_registry["schema_version"] == "1.2.0",
-    "package-local parity registry has not adopted Decision 0037")
+check(package_registry["schema_version"] == "1.3.0",
+    "package-local parity registry has not closed Decision 0037")
 check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
     "package-local parity registry permits upstream runtime execution")
-check(package_registry["maturity"] == "phase_15a_canonical_structure",
-    "package-local registry does not record Phase 15.A maturity")
+check(package_registry["maturity"] == "phase_15b_open_composition",
+    "package-local registry does not record Phase 15.B maturity")
 check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
       "passed_canonical_structure",
     "package-local registry does not close the bounded Phase 15.A slice")
 check(package_registry["accepted_next_architecture"]["phase15b_status"] ==
-      "specified_implementation_not_started",
-    "package-local registry does not record the accepted Phase 15.B design boundary")
+      "passed_open_composition",
+    "package-local registry does not close Phase 15.B")
 check(package_registry["accepted_next_architecture"]["phase16_status"] == "not_started",
     "package-local registry overclaims dynamic AlgebraicRewriting")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
@@ -311,21 +328,27 @@ check(phase15a["status"] == "passed_canonical_structure",
     "root registry does not close the bounded Phase 15.A slice")
 check(Set(phase15a["implemented_rows"]) == expected_phase15a_implemented,
     "Phase 15.A summary does not match implemented registry rows")
-phase15b = registry["phase15b_design"]
+phase15b = registry["phase15b_implementation"]
 expected_phase15b_targets = Set([
     "structured-cospan-open-composition",
     "derived-directed-wiring-view",
 ])
-check(phase15b["status"] == "accepted_implementation_ready",
-    "root registry does not record accepted Phase 15.B design")
+check(phase15b["status"] == "passed_open_composition",
+    "root registry does not close Phase 15.B")
 check(Set(phase15b["target_rows"]) == expected_phase15b_targets &&
-      isempty(phase15b["implemented_rows"]),
-    "Phase 15.B registry summary overclaims or omits its target rows")
+      Set(phase15b["implemented_rows"]) == expected_phase15b_targets,
+    "Phase 15.B registry summary omits or misstates its target rows")
 feature_by_id = Dict(feature["id"] => feature for feature in features)
-check(all(feature_by_id[id]["status"] == "specified" &&
-          feature_by_id[id]["evidence_status"] == "not_started"
+check(all(feature_by_id[id]["status"] == "implemented" &&
+          feature_by_id[id]["evidence_status"] == "direct_passing_phase15b"
           for id in expected_phase15b_targets),
-    "Phase 15.B target rows do not preserve specified/unimplemented status")
+    "Phase 15.B target rows do not preserve direct implementation evidence")
+phase15b_evidence = TOML.parsefile(phase15b_evidence_path)
+check(phase15b_evidence["status"] == "passed_open_composition",
+    "Phase 15.B evidence does not record its bounded pass")
+check(Set(phase15b_evidence["qualification"]["implemented_rows"]) ==
+      expected_phase15b_targets,
+    "Phase 15.B evidence rows disagree with the root registry")
 phase15a_evidence = TOML.parsefile(phase15a_evidence_path)
 check(phase15a_evidence["status"] == "passed_canonical_structure",
     "Phase 15.A evidence does not record its bounded pass")
@@ -453,7 +476,7 @@ for path in [
     audit_path, interview_path, algebraic_interview_path, composition_interview_path,
     composition_plan_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
-    evidence_index_path, pb0_audit_path, phase15a_audit_path,
+    evidence_index_path, pb0_audit_path, phase15a_audit_path, phase15b_audit_path,
 ]
     check_local_links(path)
 end
@@ -465,6 +488,7 @@ check(!occursin("ACSets", runtime_source) &&
     "runtime hot path traverses an authoring representation")
 algebraic_source = read(algebraic_source_path, String)
 lowering_source = read(lowering_source_path, String)
+composition_source = read(composition_source_path, String)
 check(occursin("@acset_type ProcessBigraphACSet", algebraic_source) &&
       occursin("StructuralEpoch", algebraic_source) &&
       occursin("ExecutionPlan", algebraic_source),
@@ -472,6 +496,10 @@ check(occursin("@acset_type ProcessBigraphACSet", algebraic_source) &&
 check(occursin("compile_composite(model::CanonicalModel)", lowering_source) &&
       occursin("reverse_insertion", lowering_source),
     "typed lowering or row-order invariance hook is missing")
+check(occursin("ProcessBigraphStructuredMulticospan", composition_source) &&
+      occursin("function compose_open", composition_source) &&
+      occursin("struct AnnotatedWiringDiagram", composition_source),
+    "Phase 15.B composition or annotated wiring implementation is missing")
 
 for relative_root in [".github", "scripts", "test", "lib/ProcessBigraphs/test"]
     root = joinpath(ROOT, relative_root)
@@ -507,9 +535,10 @@ if isempty(failures)
     println("  all 22 Phase 15.B open-composition decisions recorded")
     println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
     println("  $(length(expected_phase15a_implemented)) Phase 15.A canonical-structure rows implemented and locally tested")
+    println("  $(length(expected_phase15b_implemented)) Phase 15.B open-composition rows implemented and locally tested")
     println("  canonical ACSet, open-composition semantics, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
-    println("  oracle-passing, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
+    println("  independent-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs platform specification failed with $(length(failures)) issue(s):")

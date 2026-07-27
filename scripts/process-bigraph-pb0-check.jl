@@ -27,8 +27,8 @@ project = TOML.parsefile(project_path)
 check(project["name"] == "ProcessBigraphs", "package name changed")
 check(project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
     "package UUID changed")
-check(project["version"] == "0.2.0",
-    "Phase 15.A package must use its accepted internal 0.2.0 identity")
+check(project["version"] == "0.3.0",
+    "Phase 15.B package must preserve PB0 under its internal 0.3.0 identity")
 check(project["compat"]["julia"] == "1.12.6",
     "PB0 must target exact active Julia 1.12.6")
 check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),
@@ -70,8 +70,8 @@ for forbidden in ("using CorePotts", "import CorePotts", "using PottsToolkit",
 end
 
 registry = TOML.parsefile(registry_path)
-check(registry["maturity"] == "phase_15a_canonical_structure",
-    "package registry must preserve PB0 evidence within Phase 15.A maturity")
+check(registry["maturity"] == "phase_15b_open_composition",
+    "package registry must preserve PB0 evidence within Phase 15.B maturity")
 check(registry["public_release"] == false, "package registry claims a public release")
 check(registry["internal_alpha"] == false, "PB0 registry claims internal alpha")
 check(registry["pins"]["process_bigraph"] ==
