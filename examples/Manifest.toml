@@ -38,18 +38,6 @@ git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
 uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 version = "0.4.5"
 
-[[deps.AcceleratedKernels]]
-deps = ["ArgCheck", "GPUArraysCore", "KernelAbstractions", "Markdown", "UnsafeAtomics"]
-git-tree-sha1 = "0de01460ed11e90b42ce666c8ed0265bad59aa6a"
-uuid = "6a4ca0a5-0e36-4168-a932-d9be78d558f1"
-version = "0.4.3"
-
-    [deps.AcceleratedKernels.extensions]
-    AcceleratedKernelsoneAPIExt = "oneAPI"
-
-    [deps.AcceleratedKernels.weakdeps]
-    oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
-
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
 git-tree-sha1 = "7063ad1083578215c7c4bf410368150abe8d5524"
@@ -101,11 +89,6 @@ deps = ["Colors"]
 git-tree-sha1 = "e092fa223bf66a3c41f9c022bd074d916dc303e7"
 uuid = "27a7e980-b3e6-11e9-2bcd-0b925532e340"
 version = "0.4.2"
-
-[[deps.ArgCheck]]
-git-tree-sha1 = "f9e9a66c9b7be1ad7372bbd9b062d9230c30c5ce"
-uuid = "dce04be8-c92d-5529-be00-80e4d2c0e197"
-version = "2.5.0"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -361,7 +344,7 @@ uuid = "a38c48d9-6df1-5ac9-9223-b6ada3b5572b"
 version = "0.1.0+0"
 
 [[deps.CorePotts]]
-deps = ["AcceleratedKernels", "Adapt", "ArgCheck", "Atomix", "ChainRulesCore", "ConstructionBase", "Functors", "KernelAbstractions", "KernelIntrinsics", "LinearAlgebra", "Random", "SHA", "SciMLBase", "Serialization", "StaticArrays", "Statistics", "StructArrays"]
+deps = ["Adapt", "Atomix", "ConstructionBase", "KernelAbstractions", "LinearAlgebra", "Random", "SHA", "SciMLBase", "Serialization", "StaticArrays", "Statistics"]
 path = "../lib/CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.1.0"
@@ -370,16 +353,13 @@ version = "0.1.0"
     CorePottsAMDGPUExt = "AMDGPU"
     CorePottsCUDAExt = "CUDA"
     CorePottsHDF5Ext = "HDF5"
-    CorePottsMermaidExt = ["Mermaid", "CommonSolve"]
     CorePottsMetalExt = "Metal"
     CorePottsZarrExt = "Zarr"
 
     [deps.CorePotts.weakdeps]
     AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
     HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
-    Mermaid = "922b6a97-db6b-4881-a67b-b45fb8a31c4c"
     Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
     Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
 
@@ -619,12 +599,6 @@ version = "1.10.0"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
     EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
     Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
-
-[[deps.Functors]]
-deps = ["Compat", "ConstructionBase", "LinearAlgebra", "Random"]
-git-tree-sha1 = "60a0339f28a233601cb74468032b5c302d5067de"
-uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
-version = "0.5.2"
 
 [[deps.GLFW]]
 deps = ["GLFW_jll"]
@@ -944,24 +918,6 @@ git-tree-sha1 = "9eda8292dd3268b3b7ec9df21bbfac24e177ec52"
 uuid = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 version = "0.6.12"
 
-[[deps.KernelIntrinsics]]
-deps = ["KernelAbstractions", "LLVM", "SIMD"]
-git-tree-sha1 = "d2ab6f9353bb91b8b9b5a51717cfcf01b26fdfde"
-repo-rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"
-repo-url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git"
-uuid = "f9588fbb-d238-4998-b15a-468e8766d49a"
-version = "0.1.8"
-
-    [deps.KernelIntrinsics.extensions]
-    KernelIntrinsicsAMDGPUExt = "AMDGPU"
-    KernelIntrinsicsCUDAExt = "CUDA"
-    KernelIntrinsicsMetalExt = "Metal"
-
-    [deps.KernelIntrinsics.weakdeps]
-    AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
-    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
-
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "059aabebaa7c82ccb853dd4a0ee9d17796f7e1bc"
@@ -1137,10 +1093,10 @@ version = "0.24.13"
     DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 
 [[deps.MakiePotts]]
-deps = ["CommonSolve", "CorePotts", "Makie", "Random", "SciMLBase"]
+deps = ["CorePotts", "Makie", "PottsToolkit", "PrecompileTools"]
 path = "../lib/MakiePotts"
 uuid = "95794c00-c762-4965-bf31-de18bcca2bc9"
-version = "0.1.0"
+version = "0.2.0"
 
 [[deps.MappedArrays]]
 git-tree-sha1 = "0ee4497a4e80dbd29c058fcee6493f5219556f40"

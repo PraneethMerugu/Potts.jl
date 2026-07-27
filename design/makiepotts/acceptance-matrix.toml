@@ -1,0 +1,95 @@
+schema_version = "1.0.0"
+status = "owner-approved"
+package_version_target = "0.2.0"
+makie_compatibility_line = "0.24"
+julia_primary = "1.12.6"
+
+[contracts]
+render_frame = "stable"
+render_request = "stable"
+channels = "stable"
+encodings = "stable"
+potts_plot = "stable"
+boundaries = "stable"
+inspection = "stable"
+recording = "limited"
+potts_volume = "experimental"
+explorer = "experimental"
+rerun_controller = "experimental"
+
+[makie]
+recipe = true
+convert_arguments = true
+plottype = true
+used_attributes = true
+theme_inheritance = true
+observables = true
+atomic_children = true
+preferred_axis = true
+data_limits = true
+boundingbox = true
+legend = true
+colorbar = true
+data_inspector = true
+transformations = true
+save = true
+record = true
+spec_composition = true
+
+[backends]
+cairo = "required-complete"
+gl = "required-smoke-and-interaction"
+wgl = "required-render-and-basic-interaction"
+metal_observation_audit = "required-when-applicable"
+rocm_observation_audit = "required-when-applicable"
+
+[correctness]
+no_internal_state_fields = true
+no_hidden_observation = true
+no_hidden_synchronization = true
+no_hidden_transfer = true
+generation_aware_identity = true
+validated_atomic_frames = true
+no_silent_palette_cycle = true
+no_partial_reactive_update = true
+
+[quality]
+semantic_unit_tests = true
+randomized_frame_tests = true
+headless_recipe_tests = true
+manual_reference_images = true
+automated_visual_regression = true
+interactive_lifecycle_tests = true
+recording_tests = true
+performance_tests = true
+clean_install = true
+aqua = true
+ambiguity_check = true
+doctests = true
+precompile_workload = true
+workspace_check = true
+
+visual_audit_a = "accepted"
+visual_audit_b = "accepted"
+visual_audit_c = "not-run-outside-bounded-scope"
+
+[hardening]
+contract_sentinel = "passed"
+downstream_protocol_fixture = "passed"
+adversarial_suite = "passed"
+recurring_backend_ci = "implemented"
+visual_audit_a = "accepted"
+visual_audit_a_sha256 = "87dd9fc74a0c82031f5b607ce785680859fb0a18846c6eb8150da30b7e9cf407"
+visual_audit_b = "accepted"
+visual_audit_b_sha256 = "77afeca1d3ead38aefbca0f1109ae36580ddce6af3ee71e17fcdba89d593e67c"
+visual_audit_b_dimensions = [3200, 1880]
+visual_reference_sha256 = "4c33bb9b296b211b021bd4edc5c5146e483e0c3db1744d0d7851ea3a95293afb"
+visual_reference_dimensions = [920, 380]
+visual_changed_pixel_limit = 0.035
+visual_mean_channel_error_limit = 0.006
+lifecycle_cleanup = "passed"
+atomic_recording = "passed"
+allocation_regression_ceilings = "passed"
+machine_readable_benchmark = "passed"
+clean_install_to_png = "passed"
+release_hygiene = "passed"

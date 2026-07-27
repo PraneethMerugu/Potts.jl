@@ -1,0 +1,119 @@
+schema_version = "1.0.0"
+package_version = "0.2.0"
+
+stable_exports = [
+    "AbstractPottsRenderFrame",
+    "PottsRenderFrame",
+    "RenderOwner",
+    "RenderOwnerKind",
+    "CellSite",
+    "MediumSite",
+    "ObstacleSite",
+    "CellIdentity",
+    "RenderCellMetadata",
+    "RenderGeometry",
+    "RenderProvenance",
+    "frame_mcs",
+    "frame_size",
+    "frame_geometry",
+    "owner_at",
+    "cell_metadata",
+    "available_channels",
+    "channel",
+    "frame_provenance",
+    "RenderFrameConformance",
+    "render_frame_conformance",
+    "assert_render_frame_conformance",
+    "AbstractRenderExtent",
+    "FullDomain",
+    "OrthogonalSlice",
+    "AbstractRenderChannelScope",
+    "SiteChannelScope",
+    "CellChannelScope",
+    "MediumChannelScope",
+    "RenderChannelKey",
+    "RenderChannel",
+    "SiteChannelKey",
+    "CellChannelKey",
+    "MediumChannelKey",
+    "AbstractChannelRequest",
+    "CellPropertyRequest",
+    "RenderRequest",
+    "renderframe",
+    "renderframes",
+    "materialize_channel",
+    "AbstractPottsEncoding",
+    "CellTypeEncoding",
+    "CellIdentityEncoding",
+    "ChannelEncoding",
+    "EncodingKind",
+    "CategoricalEncoding",
+    "ContinuousEncoding",
+    "encoding_kind",
+    "required_channels",
+    "encoding_label",
+    "encode",
+    "EncodedPottsFrame",
+    "LegendEntry",
+    "legend_entries",
+    "PottsPlot",
+    "pottsplot",
+    "pottsplot!",
+    "PottsBoundaries",
+    "pottsboundaries",
+    "pottsboundaries!",
+    "potts_theme",
+    "potts_legend",
+    "inspection_label",
+]
+
+limited_exports = ["record_potts"]
+
+experimental_exports = [
+    "PottsVolume",
+    "pottsvolume",
+    "pottsvolume!",
+    "PottsExplorer",
+    "explore_potts",
+    "RerunController",
+    "rerun!",
+    "rerun_status",
+    "rerun_result",
+    "rerun_error",
+]
+
+[frame_protocol]
+required = [
+    "frame_mcs(frame)",
+    "frame_size(frame)",
+    "frame_geometry(frame)",
+    "owner_at(frame, site)",
+    "cell_metadata(frame, identity)",
+    "cell_metadata(frame, owner)",
+    "available_channels(frame)",
+    "channel(frame, key)",
+    "frame_provenance(frame)",
+]
+
+[extension_protocols]
+channel_request = ["materialize_channel(source, cells, request)"]
+encoding = [
+    "encoding_kind(encoding)",
+    "required_channels(encoding)",
+    "encoding_label(encoding)",
+    "encode(frame, encoding)",
+]
+
+[architecture]
+forbidden_source_fragments = [
+    "solution.u",
+    "solution.prob",
+    "problem.geometry",
+    "saved.state",
+    "saved.mcs",
+    "saved.residency",
+    "frame.values",
+    "series.frames",
+    "values.owners",
+    "values.cells",
+]

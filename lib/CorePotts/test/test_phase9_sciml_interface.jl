@@ -103,6 +103,7 @@ CorePotts.backend_capabilities(::Phase9CapabilityBackend) = BackendCapabilities(
 @testset "Phase 9 problem ownership, remake, and cache" begin
     fixture = phase9_fixture()
     problem = fixture.problem
+    @test problem_geometry(problem) === fixture.domain
     @test problem.seed == 17
     @test problem.tspan == (0, 3)
     @test nslots(problem.capacity) == 3
@@ -311,6 +312,7 @@ end
     solution = solve(fixture.problem, algorithm; save_start = false,
         snapshot_policy = ObservableSnapshotPolicy(integrator ->
             (cell_count = n_cells(logical_state(integrator)),)))
+    @test solution_problem(solution) === fixture.problem
     @test solution.retcode == ReturnCode.Success
     @test proposal_law(algorithm) isa Phase9ExtensionProposal
     @test acceptance_law(algorithm) isa ConventionalMetropolis
@@ -318,6 +320,14 @@ end
     @test SciMLBase.is_observed(fixture.problem, :cell_count)
     @test solution[handle] == [1]
     @test_throws UnsavedObservableError solve(fixture.problem, algorithm)[handle]
+    @test snapshot_mcs(only(solution.u)) == only(solution.t)
+    @test snapshot_residency(only(solution.u)) === :observable
+    @test_throws ArgumentError snapshot_state(only(solution.u))
+
+    host_solution = solve(fixture.problem, algorithm; save_start = false,
+        snapshot_policy = HostSnapshotPolicy())
+    @test snapshot_residency(only(host_solution.u)) === :host
+    @test snapshot_state(only(host_solution.u)) isa LogicalPottsState
 
     report = compatibility_report(fixture.problem, algorithm)
     @test report.qualified

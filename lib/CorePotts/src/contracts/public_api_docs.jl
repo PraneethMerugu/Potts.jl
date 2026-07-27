@@ -37,6 +37,11 @@
 @doc "Stable symbolic handle for a requested scientific observable." PottsObservableHandle
 @doc "Host-owned snapshot policy that materializes complete logical states." HostSnapshotPolicy
 @doc "Snapshot policy that materializes only a declared set of scientific observables." ObservableSnapshotPolicy
+@doc "Return the exact completed-MCS coordinate carried by a saved solution entry." snapshot_mcs
+@doc "Return the declared storage residency of a saved solution entry." snapshot_residency
+@doc "Return a complete logical host state retained explicitly by `HostSnapshotPolicy`." snapshot_state
+@doc "Return the public spatial geometry carried by a Potts problem." problem_geometry
+@doc "Return the problem that produced a Potts solution." solution_problem
 @doc "Conventional Metropolis acceptance law." ConventionalMetropolis
 @doc "Metropolis–Hastings acceptance law with explicit forward/reverse proposal probabilities." MetropolisHastings
 @doc "Exact-continuation compatibility profile for checkpoint restoration." ExactContinuationProfile
@@ -52,6 +57,9 @@
 @doc "Return the compilation report for a compiled problem or integrator." compilation_report
 @doc "Return the stable identity and semantic version of a scientific component." component_identity
 @doc "Return the semantic RNG streams owned by a scientific component." component_rng_streams
+@doc "Return the logical Cartesian domain boundaries in axis order." domain_boundaries
+@doc "Return the logical Cartesian domain dimensions in axis order." domain_dimensions
+@doc "Return the logical Cartesian lattice spacing in axis order." domain_spacing
 @doc "Return the finite volume of an active cell from authoritative logical state." finite_volume
 @doc "Return the current generation of a cell slot." generation
 @doc "Import a compatible checkpoint as a new run under the declared import profile." import_checkpoint

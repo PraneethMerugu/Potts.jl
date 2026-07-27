@@ -46,6 +46,7 @@ Construct one typed lifecycle trigger rule using the closed Level 1 trigger gram
 
 @doc "Typed scientific observable requesting per-cell finite volume." CellVolume
 @doc "Typed scientific observable requesting per-cell biological type." CellTypeObservable
+@doc "Typed scientific observable requesting host logical ownership and generation-aware metadata." LatticeOwnership
 @doc "Typed scientific observable requesting per-cell boundary measure." CellBoundaryMeasure
 @doc "Typed scientific observable requesting values of one declared cell property." CellPropertyValues
 @doc "A deduplicated set of scientific observables used to construct a snapshot policy." ObservationSet
@@ -53,9 +54,21 @@ Construct one typed lifecycle trigger rule using the closed Level 1 trigger gram
 @doc "The cell-value collection stored for one observable and MCS." CellValues
 @doc "One MCS-indexed frame of generation-aware cell values." CellFrame
 @doc "A time-ordered series of frames for one scientific observable." CellSeries
+@doc "Generation-aware finite-cell metadata accompanying an ownership observation." ObservedCell
+@doc "Host logical ownership plus finite-cell and medium metadata." OwnershipValues
+@doc "One MCS-indexed spatial observation frame." SpatialFrame
+@doc "A time-ordered series of spatial observation frames." SpatialSeries
 @doc "Read one requested observable from a saved solution without accessing engine storage fields." observe
 @doc "Construct the CorePotts snapshot policy required by an `ObservationSet`." observation_policy
 @doc "Join saved scientific observables into generation-aware tabular rows." observation_table
+@doc "Return the finite-cell ID of one observed ownership cell." observed_cell_id
+@doc "Return the generation of one observed ownership cell." observed_cell_generation
+@doc "Return the biological type of one observed ownership cell." observed_cell_type
+@doc "Return the spatial dimensions of retained ownership values." ownership_size
+@doc "Return the semantic CorePotts owner at one retained ownership site." ownership_owner_at
+@doc "Return an immutable tuple of generation-aware retained cells." ownership_cells
+@doc "Return the completed MCS associated with a spatial observation frame." spatial_mcs
+@doc "Return the visualization-neutral values carried by a spatial observation frame." spatial_values
 @doc "Attach an explicit spatial and temporal calibration to a dimensionless solution view." with_units
 @doc "Return normalized Monte Carlo step coordinates from a solution or calibrated solution view." mcs
 
