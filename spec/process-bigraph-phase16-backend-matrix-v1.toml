@@ -1,0 +1,66 @@
+schema_version = "1.0.0"
+matrix_id = "process-bigraphs-phase16-backend-matrix-v1"
+phase = "16"
+status = "specified"
+allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
+
+[[envelopes]]
+id = "native-cartesian-field"
+adapter = "CorePottsNativeFieldEngine"
+problem = "Cartesian 2D/3D cell-centered field evolution and exchange"
+precision = ["Float32", "Float64"]
+CPU = "specified"
+Metal = "specified"
+ROCm = "specified"
+CUDA = "not_applicable"
+replay = ["exact for declared integer schedule and RNG", "numerical for declared floating profile"]
+residency = "engine-owned co-resident buffers; explicit observation/checkpoint payload"
+
+[[envelopes]]
+id = "sciml-cartesian-field"
+adapter = "SciMLFieldAdapter"
+problem = "bounded CPU Cartesian field advance and boundary solve"
+precision = ["Float64", "declared Float32"]
+CPU = "specified"
+Metal = "unsupported"
+ROCm = "unsupported"
+CUDA = "not_applicable"
+replay = ["exact only for fully canonical continuation", "otherwise numerical or statistical"]
+residency = "CPU"
+
+[[envelopes]]
+id = "independent-custom-field"
+adapter = "IndependentCustomFieldAdapter"
+problem = "minimal bounded CPU field advance proving open protocol"
+precision = ["Float64"]
+CPU = "specified"
+Metal = "unsupported"
+ROCm = "unsupported"
+CUDA = "not_applicable"
+replay = ["exact for declared fixture"]
+residency = "CPU"
+
+[[envelopes]]
+id = "merks-source-faithful-assembly"
+adapter = "ProcessBigraphsCorePotts"
+problem = "Merks 2006 bounded runnable assembly"
+precision = ["Float64"]
+CPU = "specified"
+Metal = "unsupported"
+ROCm = "unsupported"
+CUDA = "not_applicable"
+replay = ["exact scheduling and identity", "numerical field trajectory"]
+residency = "CPU"
+
+[[envelopes]]
+id = "cnv-source-faithful-assembly"
+adapter = "ProcessBigraphsCorePotts"
+problem = "CNV scenario 38 bounded runnable assembly"
+precision = ["Float64"]
+CPU = "specified"
+Metal = "unsupported"
+ROCm = "unsupported"
+CUDA = "not_applicable"
+replay = ["exact scheduling, lifecycle identity, and seed coordinates", "numerical field trajectory"]
+residency = "CPU"
+

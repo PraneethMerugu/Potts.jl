@@ -43,6 +43,7 @@ corresponding specification document.
 - [0036: AlgebraicJulia as the ProcessBigraphs structural foundation](0036-algebraicjulia-process-bigraph-foundation.md)
 - [0037: ProcessBigraphs open-composition semantics](0037-process-bigraph-open-composition.md)
 - [0038: ProcessBigraphs Phase 15.C serial internal alpha](0038-process-bigraph-serial-alpha.md)
+- [0039: Phase 16 compute ownership, field coupling, and internal-beta scope](0039-phase-16-compute-ownership-and-scope.md)
 
 ## Record Template
 

@@ -24,6 +24,10 @@ end
     include("phase15c/test_restart_matrix.jl")
 end
 
+@testset "ProcessBigraphs Phase 16" begin
+    include("phase16/test_phase16a_entry.jl")
+end
+
 @testset "Aqua" begin
     using Aqua
     # CI already installs, precompiles, loads, and exercises ProcessBigraphs from a clean

@@ -61,8 +61,9 @@ family_deps = Dict(
         Set(keys(get(TOML.parsefile(INDEPENDENT_PROJECTS[4]), "deps", Dict()))),
     "PottsToolkit" => Set(keys(get(root_project, "deps", Dict()))),
 )
-require(family_deps["ProcessBigraphs"] == Set(["ACSets", "Catlab", "SHA"]),
-    "ProcessBigraphs Phase 15.A must depend directly on ACSets, Catlab, and SHA")
+require(family_deps["ProcessBigraphs"] ==
+        Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
+    "ProcessBigraphs Phase 16 must depend directly on ACSets, AlgebraicRewriting, Catlab, and SHA")
 require(isempty(intersect(family_deps["CorePotts"], Set(["PottsToolkit", "MakiePotts", "NeuralPotts"]))),
     "CorePotts depends on an upward layer")
 require(isempty(intersect(family_deps["ProcessBigraphs"],

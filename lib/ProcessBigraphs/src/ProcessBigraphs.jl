@@ -1,6 +1,7 @@
 module ProcessBigraphs
 
 import ACSets
+import AlgebraicRewriting
 import Catlab
 using SHA
 using ACSets: BasicSchema, @acset_type

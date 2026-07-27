@@ -50,6 +50,10 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase15b-check.jl
       - name: Enforce ProcessBigraphs Phase 15.C implementation and closure
         run: julia --startup-file=no scripts/process-bigraph-phase15c-entry-check.jl
+      - name: Enforce ProcessBigraphs Phase 16 specification entry
+        run: julia --startup-file=no scripts/process-bigraph-phase16-entry-check.jl
+      - name: Verify ProcessBigraphs Phase 16 closure remains honestly open
+        run: julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
       - name: Enforce Phase 14 Wang sequential CPU disposition
         run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
       - name: Resolve the package workspace without mutation

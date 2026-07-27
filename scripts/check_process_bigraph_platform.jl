@@ -122,12 +122,14 @@ check(registry["decisions"] == [
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "decisions/0037-process-bigraph-open-composition.md",
     "decisions/0038-process-bigraph-serial-alpha.md",
+    "decisions/0039-phase-16-compute-ownership-and-scope.md",
 ], "parity registry decision authorities changed")
 check(registry["owner_interviews"] == [
     "../design/audits/process-bigraph-runtime-owner-interview.md",
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
     "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
     "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md",
+    "../design/audits/process-bigraph-phase16-owner-interview.md",
 ], "parity registry owner-interview authorities changed")
 
 minimums = registry["checker"]
@@ -308,11 +310,12 @@ check(package_project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
 check(get(package_project["compat"], "julia", "") == "1.12.6",
     "PB0 package must target Julia 1.12.6 exactly")
 check(Set(keys(get(package_project, "deps", Dict{String,Any}()))) ==
-      Set(["ACSets", "Catlab", "SHA"]),
-    "Phase 15.A package dependencies must be ACSets, Catlab, and SHA")
+      Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
+    "Phase 16 package dependencies must include bounded AlgebraicRewriting")
 check(get(package_project["compat"], "ACSets", "") == "0.2.29" &&
-      get(package_project["compat"], "Catlab", "") == "0.17.6",
-    "Phase 15.A AlgebraicJulia compatibility bounds changed")
+      get(package_project["compat"], "Catlab", "") == "0.17.6" &&
+      get(package_project["compat"], "AlgebraicRewriting", "") == "0.5",
+    "Phase 16 AlgebraicJulia compatibility bounds changed")
 
 package_registry = TOML.parsefile(package_registry_path)
 check(package_registry["schema_version"] == "1.3.0",
@@ -331,8 +334,11 @@ check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
 check(package_registry["accepted_next_architecture"]["phase15b_status"] ==
       "passed_open_composition",
     "package-local registry does not close Phase 15.B")
-check(package_registry["accepted_next_architecture"]["phase16_status"] == "not_started",
-    "package-local registry overclaims dynamic AlgebraicRewriting")
+check(package_registry["accepted_next_architecture"]["phase16_status"] ==
+      "specified_ready_to_start" &&
+      package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
+      package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
+    "package-local registry must record specified Phase 16 entry without implementation or beta")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
       ["ACSets.jl", "Catlab.jl"],
     "package-local Phase 15 dependency decision changed")

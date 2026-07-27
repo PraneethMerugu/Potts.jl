@@ -2,17 +2,18 @@
 
 Status: Normative design; implementation and parity status are tracked separately
 
-Version: 1.3.0
+Version: 1.4.0
 
-Date: 2026-07-26
+Date: 2026-07-27
 
 Implementation disposition: Phase 15.C C0--C7 passed. ProcessBigraphs 0.4.0 is a qualified
 immutable-topology serial internal alpha with `internal_alpha = true` and
-`public_release = false`. Dynamic structure and every broader gate below remain unqualified.
+`public_release = false`. Phase 16 is specified and ready to start, but dynamic structure and
+every Phase 16 implementation or broader gate below remain unqualified.
 
-Authority: Decisions 0034, 0036, 0037, and 0038,
+Authority: Decisions 0034, 0036, 0037, 0038, and 0039,
 `process-bigraph-parity-registry-v1.toml`, and
-`process-bigraph-phase15c-entry-v1.toml`
+the Phase 15.C and Phase 16 entry contracts
 
 ## Purpose
 
@@ -218,6 +219,13 @@ convergence-checked iterative regions over fixed structure. Undeclared cycles re
 Runtime add, remove, divide, move, and rewire operations are Phase 16 structural transactions that
 publish a new structural epoch. They may not redefine exact time, same-time visibility, iteration,
 reconciliation, or commit semantics established by the serial runtime.
+
+Phase 16 distinguishes canonical orchestration topology from optimized domain topology. The
+ProcessBigraph ACSet remains canonical for composites, stores, processes, ports, schedules, and
+orchestration relationships. A CorePotts adapter MAY keep cells, lattice sites, domain
+relationships, and materials in optimized leaf storage; one ACSet row per cell or voxel is not
+required. ProcessBigraphs still owns authorization and atomic publication of changes to either
+layer.
 
 ## Core semantic values
 
@@ -803,6 +811,23 @@ qualification waits for stable:
 Adapters lower external scientific systems into ordinary processes and steps. External libraries
 do not become runtime semantic authorities.
 
+Decision 0039 introduces a solver-neutral Phase 16 engine protocol. ProcessBigraphs owns when and
+why an operation occurs: logical time, reason, immutable inputs, identity, validation,
+authorization, publication, failure, checkpoint, and replay. The adapter owns how the heavy
+operation occurs: algorithms, internal steps and callbacks, arrays, workspaces, caches, device
+buffers, streams, kernels, and raw diagnostics.
+
+The core does not hard-depend on SciML. An immutable adapter declaration and a lineage-local opaque
+engine instance implement interval advance, boundary solve, discrete batch, or a typed extension.
+The engine returns a completion handle and staged opaque candidate, typed early return, typed
+global-impact request, or structured failure. Publication performs no allocation, transfer,
+synchronization, or numerical work.
+
+Phase 16 qualifies the native CorePotts field engine, one bounded CPU SciML field adapter, and one
+minimal independent CPU custom field adapter. This proves that arbitrary solvers may join through
+open Julia dispatch and per-envelope qualification; it does not claim universal solver/backend
+support. Phase 17 generalizes the proven boundary to broad ODE/DAE and scientific ecosystems.
+
 Every solver-backed adapter declares:
 
 - state mapping and canonical units;
@@ -841,16 +866,17 @@ Specific policies are:
 - device adaptation and residency through declared capabilities; and
 - existing checkpoints through versioned readers and a bounded conversion.
 
-G4 continues without changing the locked G3-B ABI while runtime work begins. Decision 0035 retires
-assembled Wang GPU qualification. The field-model slice may close on the existing executor; its
-generic field adapter remains provisional until CPU and GPU evidence pressure-tests it.
+Decision 0039 absorbs G4 as mandatory Phase 16.C without changing the locked G3-B ABI. Decision
+0035 still retires assembled Wang GPU qualification. Phase 16.B freezes the generic engine/field
+protocol; Phase 16.C then pressure-tests the native field engine on sequential CPU, real Metal,
+and real ROCm. Neither SciML nor assembled-model evidence substitutes for that hardware gate.
 
 Migration is slice-by-slice:
 
 1. preserve frozen Phase 13 and attested G3-B artifacts;
 2. implement the generic serial path without changing the old path;
 3. compare old and new serial state, order, RNG, lifecycle, checkpoint, and diagnostics;
-4. qualify Wortel, Wang, and field-model equivalence;
+4. qualify the registered field and lifecycle slice equivalence;
 5. cut over only the passing slice; and
 6. retain readers for attested checkpoint formats.
 
@@ -878,8 +904,9 @@ Maturity gates are:
 
 - **internal alpha** — the exact immutable-topology serial allowlist, supporting-oracle rows,
   fixtures, exclusions, and two-stage closure in `process-bigraph-phase15c-entry-v1.toml`;
-- **internal beta** — dynamic hierarchy, stable structural set, Potts adapter, and applicable
-  executor equivalence; and
+- **internal beta** — the exact Phase 16 entry/ledger scope: solver-neutral field engines, absorbed
+  G4 native CPU/Metal/ROCm qualification, dynamic hierarchy, a CorePotts cutover, CPU
+  SciML/custom adapters, and runnable source-bounded Merks/CNV models; and
 - **first public release** — every required pinned-parity registry item qualified plus a passing
   whole-cell-style composite.
 

@@ -21,10 +21,10 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12: Performance Recovery and Backend Qualification | Complete | Core recovery [completion audit](audits/phase-12-completion-audit.md), [CPU completion audit](audits/phase-12-cpu-completion-audit.md), and [external comparison crosswalk](audits/phase-12-external-comparison-crosswalk.md) |
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
-| Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; G4 is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
+| Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; former G4 work is reassigned intact to Phase 16.C by Decision 0039; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [Decision 0039](../spec/decisions/0039-phase-16-compute-ownership-and-scope.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.C serial internal alpha is qualified and attested, while the independent Potts paper gate remains open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs 0.4.0 remains an internal alpha without a public release |
-| Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts and canonical structural epoch needed by the first adapter slice stabilize |
-| Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
+| Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, CorePotts Adapter, and Runnable Merks/CNV Internal Beta | Ready to start 16.A; implementation and closure open | Decision 0039, the accepted 481-choice interview, normative specification, entry contract, qualification/backend/migration/model registries, plan, audit, and checker agree |
+| Phase 17: Algebraic Dynamics, Broad Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta; bounded CPU field-level SciML proof moved to Phase 16, while broad ODE/DAE/biochemical/FBA/SBML work remains here |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
 | Phase 19: Pinned Parity Closure and First Public ProcessBigraphs Release | Not started | Public release is forbidden until complete pinned parity and the whole-cell-style acceptance composite pass |
 | Phase 20: Whole-Cell Development Program | Not started | Scientific program beyond runtime parity: full-generation and population/environment compositions |
@@ -61,9 +61,11 @@ consumers are prohibited.
 9. Scientific invariants and taxonomies may be closed, but scientific families and execution
    mechanisms remain open Julia protocols under the
    [Open Protocol and Extensibility Standard](open-protocol-and-extensibility-standard.md).
-10. `ProcessBigraphs.jl` owns domain-neutral paths, ports, schemas, stores, processes, steps, deltas,
-    clocks, composites, scheduling, reconciliation, and commits. CorePotts owns Potts laws,
-    spatial storage, workspaces, kernels, lifecycle specializations, and algorithms.
+10. `ProcessBigraphs.jl` owns when and why computation occurs: paths, ports, schemas, logical
+    state, clocks, invocation reasons, scheduling, reconciliation, structural authorization,
+    publication, failure, observation, checkpoint, and replay. CorePotts and solver adapters own
+    how authorized heavy computation occurs: Potts laws, spatial storage, arrays, workspaces,
+    caches, kernels, streams, internal solver steps, lifecycle trigger kernels, and algorithms.
 11. The deterministic serial runtime defines scientific execution. Dagger and other executors may
     place and compute already selected batches but do not define logical time, same-time visibility,
     conflict meaning, merge order, structural order, or commit boundaries.
@@ -864,8 +866,9 @@ impact review, conformance, persistence, inspection, and the claimed backend evi
 
 Phase 14 has four parallel workstreams:
 
-- **Potts scientific closure:** preserve the locked G3-B sequential CPU reference, close G4 on
-  CPU/Metal/ROCm, then close the remaining portfolio-owned capability rows.
+- **Potts scientific closure:** preserve the locked G3-B sequential CPU reference and the former
+  G4 CPU/Metal/ROCm obligation, now scheduled as Phase 16.C, then close remaining
+  portfolio-owned capability rows.
 - **Runtime foundation:** specify and begin the independent domain-neutral package without moving
   the Potts-owned coupled executor wholesale.
 - **Adapter and join design:** record differential fixtures and ownership boundaries without
@@ -950,8 +953,9 @@ sequential CPU reference passed; the authoritative
 the [attested manifest](evidence/phase-14/g3b-closure/manifest-v1.toml) records the exact tested
 commit and evidence tree. [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md)
 retires assembled Wang Metal/ROCm qualification because the unchanged paper-faithful sequential
-algorithm is not a suitable GPU release gate. G4 is current and qualifies the reusable field
-substrate on CPU, Metal, and ROCm without creating an assembled Wang GPU claim.
+algorithm is not a suitable GPU release gate. Decision 0039 reassigns G4 to Phase 16.C, where it
+still qualifies the reusable field substrate on CPU, Metal, and ROCm without creating an assembled
+Wang GPU claim.
 The [generic authoring simplification audit](audits/phase-14-generic-authoring-simplification-audit.md)
 and [Decision 0033](../spec/decisions/0033-phase-14-generic-hierarchical-authoring.md) additionally
 require complex models to compose through generic nested `ModelFragment` values with named typed
@@ -1021,9 +1025,10 @@ this generic fixture.
 
 ### Phase 14.PB0: Parallel ProcessBigraphs Foundation
 
-This workstream begins after attested G3-B and proceeds concurrently with G4 and the existing
-Phase 14 documentation/model work. It does not replace the Potts Phase 14.1 kernel and does not
-require a CorePotts dependency cutover.
+This workstream began after attested G3-B and originally proceeded concurrently with G4 and the
+existing Phase 14 documentation/model work. Decision 0039 later moved the unfinished G4 work to
+Phase 16.C. PB0 does not replace the Potts Phase 14.1 kernel and does not require a CorePotts
+dependency cutover.
 
 **Status:** Passed as a bounded foundation on 2026-07-26. The independent package, direct
 microfixtures, implementation audit, and machine-readable evidence pass. This does not claim the
@@ -1051,12 +1056,14 @@ parallel executors, dynamic structure, the Potts adapter, or a public release.
 
 #### Join and non-freeze gate
 
-- G4 may repair backend plumbing but MUST NOT change G3-B storage semantics, ordering, RNG
-  addressing, publication boundaries, or attested checkpoint behavior.
-- Final portable-executor ownership and device graph/state adaptation use focused G4 evidence; no
-  Wang-through-runtime GPU claim is planned.
-- Generic field/PDE adapter contracts, stencil/boundary taxonomies, field continuation codecs, and
-  convergence/splitting semantics remain unfrozen until G4 closes.
+- Phase 16.C implementation of the former G4 obligation may repair backend plumbing but MUST NOT
+  change G3-B storage semantics, ordering, RNG addressing, publication boundaries, or attested
+  checkpoint behavior.
+- Final device graph/state adaptation uses focused Phase 16.C evidence; no Wang-through-runtime
+  GPU claim is planned.
+- Decision 0039 now freezes generic field/PDE adapter, boundary, continuation, and split semantics
+  before the Phase 16.C hardware gate; their implementation evidence remains open until the
+  corresponding subgates close.
 - Lifecycle queues, sampled events/delays, relationship/degradation dynamics, and hierarchical
   structural rewrites are co-designed once, not independently stabilized in two runtimes.
 - The foundation gate passes when the pinned registry and runtime specifications are internally
@@ -1299,8 +1306,8 @@ state while retaining historical evidence boundaries.
   PottsToolkit fragments to runtime contracts without moving the existing coupled tree wholesale.
 - Prepare old/new serial differential fixtures and checkpoint compatibility readers. No Potts model
   cuts over until its Phase 16 slice gate passes.
-- Use G4 evidence to settle GPU ownership and field-adapter questions left deliberately unfrozen in
-  Phase 14.PB0.
+- Use Phase 16.B semantics and Phase 16.C evidence to settle the GPU ownership and field-adapter
+  questions deliberately left unfrozen in Phase 14.PB0.
 
 ### Evidence and documentation workstream
 
@@ -1326,61 +1333,101 @@ state while retaining historical evidence boundaries.
 - The parity registry labels only proven alpha rows accordingly; complete parity and public release
   remain explicitly unclaimed.
 
-## Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta
+## Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, and Spatial Internal Beta
 
-### Potts workstream
+Decision 0039 and the
+[normative Phase 16 specification](../spec/phase-16-engine-field-structural-and-adapter-semantics.md)
+govern this phase. ProcessBigraphs owns when and why work occurs. Optimized field solvers and CPM
+kernels own how the heavy operation occurs. The
+[entry contract](../spec/process-bigraph-phase16-entry-v1.toml) and
+[qualification ledger](../spec/process-bigraph-phase16-qualification-v1.toml) are the
+machine-readable scope and closure authorities.
 
-- Preserve every frozen Phase 13, G3-B, G4, published-model, backend, and paper-release claim
-  while adapter work proceeds.
-- Continue Potts-owned performance, documentation, published-model maintenance, and scientific
-  capability work through the stable Potts interfaces.
+### 16.A — entry, dependencies, and API
 
-### Runtime workstream
+- Keep the accepted interview, Decision 0039, specification, entry audit, implementation plan,
+  backend matrix, migration registry, model-scope registry, and entry checker consistent.
+- Add `AlgebraicRewriting.jl` as a direct bounded dependency. Keep SciML behind a bounded extension
+  or adapter so the ProcessBigraphs core remains solver-neutral.
+- Freeze the smallest internal-beta API allowlist and generate capability/limitation documentation.
 
-- Add `AlgebraicRewriting.jl` as a direct dependency with an explicit compatibility bound. Lower
-  typed add, remove, divide, move, and rewire operations to checked rewrite rules; raw unrestricted
-  rewriting is not the stable public runtime API.
-- Permit AlgebraicRewriting to discover candidates while ProcessBigraphs assigns semantic match
-  identities, validates preconditions, orders conflicts, chooses the committed match set, and owns
-  the settled structural barrier.
-- Carry Phase 15's arbitrary-depth immutable composites and fixed-structure iterative semantics
-  across structural epochs while adding place/link topology mutations, ordered structural
-  barriers, and structural add, remove, divide, move, and rewire. Phase 16 may admit structural
-  transactions within or between existing iterative regions but does not redefine iteration,
-  exact time, same-time visibility, reconciliation, or commit.
-- Add versioned structural transactions, daughter reconstruction, lineage RNG, dynamic process
-  creation/retirement, continuation invalidation, and exact settled-boundary structural restart.
-- Fuzz update algebra and dynamic topology, inject failure during invoke/reconcile/apply/structural
-  commit/emission, and prove that failed events publish no partial state.
+### 16.B — solver-neutral engine and field protocol
 
-### Adapter and join workstream
+- Implement immutable adapter declarations, lineage-local opaque instances, typed operations,
+  asynchronous completion handles, staged candidates, normalized outcomes, and typed
+  continuation/replay contracts.
+- Add Cartesian 2D/3D field descriptors, units, geometry, per-face boundaries, independent grid
+  sampling/deposition, exchange/uptake/accounting, exact field clocks, and named splitting.
+- Prove one complete CPU transaction through publication, required observation, checkpoint,
+  restore, and injected failure. Undeclared loops, transfer, interpolation, clipping, fallback,
+  precision conversion, or publication-time numerical work fail.
 
-- Make CorePotts the flagship spatial-process adapter and lower PottsToolkit generic composition
-  into ProcessBigraphs without adding a second model, scheduler, lifecycle, or persistence authority.
-- Cut over one vertical slice at a time through old/new serial differential execution. At minimum,
-  preserve Phase 13, Wortel, Wang, and the first field-model state, order, observation, RNG,
-  continuation, and failure behavior before retiring each corresponding old path.
-- Retain readers for every already-attested checkpoint format and version every new continuation
-  envelope. A migrated model may never use both authorities simultaneously.
+### 16.C — absorbed G4 native field qualification
 
-### Evidence and documentation workstream
+- Qualify the reusable native CorePotts field engine on sequential CPU, real Metal, and real ROCm.
+  This is the former G4 obligation, preserved intact but no longer external to Phase 16.
+- Require analytic/manufactured solutions, refinement, boundaries, conservation, split/restart,
+  deterministic schedules, device residency, explicit transfers, zero steady native allocation,
+  and frozen performance guardrails.
+- CPU, SciML, custom-adapter, or assembled-model evidence cannot substitute for either real device.
 
-- Document hierarchy, ports, structural requests, lifecycle, adapter authoring, cutover status,
-  checkpoint compatibility, failure behavior, and per-process backend capabilities.
-- Add package-local dynamic fixtures and cross-package adapter conformance lanes. Potts regression
-  evidence and runtime conformance remain separately attributable.
+### 16.D — dynamic hierarchy
 
-### Internal-beta gate
+- Lower typed add, remove, binary divide, move, and rewire to bounded
+  `AlgebraicRewriting.jl` rules. DPO-safe behavior is the default; raw rewrites and implicit SPO
+  cascade are not stable APIs.
+- Keep the ProcessBigraph ACSet as orchestration topology and CorePotts cells/sites/relationships
+  in optimized leaf topology.
+- Qualify typed structural requests, identities, lineage, conflicts, capacity, continuation,
+  atomic numeric/structural publication, independent rewrite oracle, compiled-rule differential,
+  candidate-order invariance, fuzz, failure, and exact settled restart.
 
-- Dynamic hierarchy and all first-stable structural transactions pass serial conformance,
-  deterministic replay, continuation, failure injection, candidate-order invariance, rewrite
-  naturality, and topology fuzzing.
-- At least one CorePotts vertical slice and its PottsToolkit façade pass old/new differential
-  execution and use only the runtime authority after cutover.
-- Phase 13 and attested G3-B artifacts remain unchanged, and no reverse Potts dependency enters the
-  runtime.
+After 16.B, 16.C and 16.D may proceed concurrently with separately attributable evidence.
 
-## Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite
+### 16.E — CorePotts adapter, checkpoint, and first cutover
+
+- Make CorePotts the flagship spatial engine without adding a second scheduler, lifecycle,
+  publication, failure, or persistence authority.
+- Add the Phase 16 logical checkpoint and pure non-destructive readers/converters for attested
+  legacy formats.
+- Cut over one vertical slice through old/new differential execution. After cutover, retain frozen
+  fixtures and readers but no production fallback or dual authority.
+
+### 16.F — CPU SciML, independent custom adapter, and cross-adapter proof
+
+- Qualify one bounded CPU SciML field adapter and one deliberately independent CPU custom adapter.
+- Compare native, SciML, and custom adapters on the same analytic/manufactured, boundary,
+  continuation, restart, failure, and negative-capability fixtures.
+- Do not claim universal third-party-solver or GPU support.
+
+### 16.G — runnable Merks 2006
+
+- Implement the 2006 elongation/autocrine vasculogenesis model through the generic path, including
+  source-stated 2D geometry, eight-neighbor CPM, local connectivity, inertia length, secretion,
+  ECM-only decay, diffusion, chemotaxis, and the 15-by-2-second field schedule per MCS.
+- Pass source traceability, mechanism microfixtures, canonical startup, bounded trajectory,
+  native/SciML field execution, invariants, checkpoint/restart, observation, and rollback.
+- Claim only a runnable source-bounded reimplementation; full Figure 5 analysis is later.
+
+### 16.H — runnable CNV scenario 38
+
+- Implement the 40 by 40 by 35 scenario-38/simulation-902 configuration with four fields, exact
+  declared field schedule, tip/stalk lifecycle, hypoxia timers, growth/division/death, plastic
+  relationships, and bounded Bruch's membrane degradation.
+- Use generated reduced fixtures in ordinary CI and a separate checksum-verified Text S6 source
+  lane. Pass full-domain startup and bounded execution, not the full-year ensemble or classifier.
+
+### 16.I — internal-beta reconciliation and attestation
+
+- Qualify every ledger row and reconcile docs, capability/backend matrices, compatibility,
+  failure, persistence, performance, and package-independent tests.
+- Require real Metal/ROCm evidence, content-addressed exact-head candidate artifacts, a clean tree,
+  merged-tree verification, and a metadata-only attestation.
+- Promote provisionally to unpublished ProcessBigraphs `0.5.0` internal beta. Public release,
+  complete parity, Dagger, full model analysis, universal solver GPU support, and whole-cell
+  qualification remain open.
+
+## Phase 17: Algebraic Dynamics, Broad Scientific Process Ecosystem, and Whole-Cell-Style Composite
 
 ### Potts workstream
 
@@ -1394,8 +1441,9 @@ state while retaining historical evidence boundaries.
 - Add an `AlgebraicDynamics.jl` weak-dependency extension that lowers admitted machines and resource
   sharers into ordinary ProcessBigraphs processes and ports. It owns no scheduler, state,
   transaction, or checkpoint semantics.
-- Add SciML ODE/DAE integration with explicit frozen, interpolated, event-updated, or continuously
-  callable interval inputs and versioned solver continuation/invalidation.
+- Generalize the Phase 16 bounded field-level SciML proof to broad ODE/DAE families with explicit
+  frozen, interpolated, event-updated, or continuously callable interval inputs and
+  problem-specific solver continuation/invalidation.
 - Use ModelingToolkit only as optional authoring/compilation lowering to ordinary SciML processes.
 - Adapt Catalyst and JumpProcesses with propensity-cache invalidation, discontinuity, rescheduling,
   RNG, and restart contracts.
@@ -1584,7 +1632,7 @@ The remaining work proceeds on independent gates:
 ```text
 Potts scientific path                         ProcessBigraphs runtime path
 ----------------------                        ----------------------------
-G4 field CPU/Metal/ROCm                       PB0 bounded foundation [passed]
+Phase 14 frozen evidence                      PB0 bounded foundation [passed]
         |                                                   |
 bounded portfolio smokes                      Phase 15.A canonical structure [passed]
         |                                                   |
@@ -1596,7 +1644,9 @@ bounded portfolio smokes                      Phase 15.A canonical structure [pa
         |                                                   |
 Potts paper/release gate                      canonical static-composite alpha
                                                             |
-                                           Phase 16 algebraic rewriting + Potts adapter
+                                           Phase 16 engine/field + absorbed G4
+                                           + dynamic hierarchy + Potts adapter
+                                           + runnable Merks/CNV
                                                             |
                                            Phase 17 algebraic/scientific adapters + whole-cell style
                                                             |
@@ -1613,9 +1663,9 @@ The executable sequence and join rules are:
    as frozen evidence. The G3-B
    [closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml) and
    [manifest](evidence/phase-14/g3b-closure/manifest-v1.toml) are the factual CPU baseline.
-2. **Current Potts gate:** close G4 by qualifying the reusable field substrate on sequential CPU,
-   real Metal, and real ROCm. G3-B semantics, RNG, ordering, storage ABI, publication,
-   continuation, and evidence identity may not change.
+2. **Reassigned Potts gate:** Decision 0039 absorbs G4 into Phase 16.C. Qualify the reusable field
+   substrate on sequential CPU, real Metal, and real ROCm without changing frozen G3-B semantics,
+   RNG, ordering, storage ABI, publication, continuation, or evidence identity.
 3. **Complete parallel runtime foundations:** the ProcessBigraphs authority and parity registry are
    frozen, and the independent package plus bounded domain-neutral primitives and non-Potts
    fixtures pass PB0. Phase 15.A now implements Decision 0036's canonical ACSet, typed/direct
@@ -1625,8 +1675,8 @@ The executable sequence and join rules are:
    release was introduced. Phase 15.C now qualifies and attests the complete immutable-topology
    serial runtime, independent oracle, and qualification ledger as ProcessBigraphs 0.4.0 internal
    alpha.
-4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
-   passes may the generic field adapter freeze.
+4. **Phase 16 entry:** the generic engine/field contract freezes in 16.B before the absorbed G4
+   hardware qualification in 16.C. G4 is mandatory for closure, not a prerequisite for starting.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
    complete Learn/Examples, preregistered published-model studies, the full manual, and satellites.
 6. **Phase 15 independent gates:** qualify the Potts paper release from frozen Phase 14 evidence
@@ -1635,11 +1685,12 @@ The executable sequence and join rules are:
    candidate artifact, and bounded internal-alpha promotion are recorded by the metadata-only
    closure attestation.
    Failure of one product gate does not rewrite or weaken the other.
-7. **Phase 16 adapter join:** after serial runtime contracts and the relevant Potts evidence are
-   stable, cut over one CorePotts slice at a time through old/new differential execution. No model
-   may have two runtime authorities.
-8. **Phases 17--18:** add the AlgebraicDynamics extension, scientific adapters, and the
-   whole-cell-style composite before qualifying Dagger. Dagger placement experiments may occur
+7. **Phase 16 adapter join:** implement the solver-neutral protocol, absorbed G4, dynamic
+   hierarchy, CPU SciML/custom field adapters, and bounded runnable Merks/CNV. Cut over one
+   CorePotts slice at a time through old/new differential execution. No model may have two runtime
+   authorities.
+8. **Phases 17--18:** broaden scientific adapters, add the AlgebraicDynamics extension and the
+   whole-cell-style composite, then qualify Dagger. Dagger placement experiments may occur
    earlier, but qualification waits for stable serial batches, reconciliation, commits, and
    structural barriers.
 9. **Phase 19 release join:** publish ProcessBigraphs only when every mandatory pinned-parity row,

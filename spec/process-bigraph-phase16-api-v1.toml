@@ -1,0 +1,96 @@
+schema_version = "1.0.0"
+api_id = "process-bigraphs-phase16-api-v1"
+phase = "16"
+status = "frozen_preimplementation"
+current_package_version = "0.4.0"
+target_package_version = "0.5.0"
+public_release = false
+
+current_new_exports = []
+
+planned_internal_beta_exports = [
+    "AbstractEngineAdapter",
+    "AbstractEngineInstance",
+    "EngineDeclaration",
+    "EngineCapabilities",
+    "AbstractEngineOperation",
+    "IntervalAdvance",
+    "BoundarySolve",
+    "DiscreteBatch",
+    "EngineInvocation",
+    "AbstractCompletionHandle",
+    "EngineCandidate",
+    "EngineEarlyReturn",
+    "EngineEventRequest",
+    "EngineFailure",
+    "prepare_engine",
+    "stage_operation!",
+    "complete_operation!",
+    "validate_candidate",
+    "publish_candidate!",
+    "discard_candidate!",
+    "FieldDescriptor",
+    "FieldGeometry",
+    "FieldBoundary",
+    "FieldState",
+    "FieldSampler",
+    "FieldDeposition",
+    "FieldExchange",
+    "StructuralRequest",
+    "StructuralResult",
+]
+
+internal_only = [
+    "engine-owned arrays, buffers, workspaces, caches, streams, and tasks",
+    "AlgebraicRewriting matches and raw rule application",
+    "SciML integrator objects and cache layouts",
+    "CorePotts domain-topology representations",
+    "candidate publication internals",
+]
+
+excluded_api_claims = [
+    "universal solver compatibility",
+    "universal solver GPU support",
+    "raw unrestricted rewrite API",
+    "per-cell or per-voxel orchestration ACSet",
+    "Dagger or distributed executor",
+    "public stable 1.x API",
+]
+
+[policy]
+core_is_solver_neutral = true
+sciml_via_extension = true
+qualified_exports_only = true
+constructor_spelling_stable_at_internal_beta = false
+semantic_identity_stable_at_internal_beta = true
+unqualified_names_may_not_be_exported = true
+
+[[families]]
+id = "engine"
+subgate = "16.B"
+status = "specified"
+export_rule = "Export only after native and independent custom adapters pass the common CPU protocol."
+
+[[families]]
+id = "field"
+subgate = "16.B"
+status = "specified"
+export_rule = "Export only the logical descriptor and operation contracts; realizations remain opaque."
+
+[[families]]
+id = "structure"
+subgate = "16.D"
+status = "specified"
+export_rule = "Export typed structural requests/results only; raw AlgebraicRewriting rules remain internal."
+
+[[families]]
+id = "sciml"
+subgate = "16.F"
+status = "specified"
+export_rule = "Expose adapter construction through the SciML extension after CPU qualification."
+
+[[families]]
+id = "corepotts"
+subgate = "16.E"
+status = "specified"
+export_rule = "CorePotts owns adapter-facing methods; ProcessBigraphs must not import CorePotts."

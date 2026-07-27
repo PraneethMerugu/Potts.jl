@@ -1,0 +1,228 @@
+schema_version = "1.0.0"
+qualification_id = "process-bigraphs-phase16-qualification-v1"
+phase = "16"
+status = "open"
+required_row_count = 31
+allowed_statuses = ["not_started", "specified", "implemented", "oracle_passing", "qualified", "blocked", "excluded"]
+closure_status = "open"
+
+[dimensions]
+required = ["semantics", "dependencies", "implementation", "oracle", "tests", "failure", "persistence", "backend", "documentation", "evidence"]
+qualification_rule = "Every applicable dimension and the aggregate row must be qualified."
+
+[[requirements]]
+id = "P16-A01"
+subgate = "16.A"
+title = "Accepted authority and scope packet"
+status = "specified"
+evidence = ["Decision 0039", "owner interview", "normative specification", "entry checker"]
+
+[[requirements]]
+id = "P16-A02"
+subgate = "16.A"
+title = "Bounded dependency and extension direction"
+status = "specified"
+evidence = ["AlgebraicRewriting direct bound", "SciML extension boundary", "no reverse runtime dependency"]
+
+[[requirements]]
+id = "P16-A03"
+subgate = "16.A"
+title = "Honest public API and maturity claim"
+status = "specified"
+evidence = ["internal beta target", "public release false", "generated limitation matrix"]
+
+[[requirements]]
+id = "P16-B01"
+subgate = "16.B"
+title = "Solver-neutral declaration and instance protocol"
+status = "specified"
+evidence = ["production tests", "independent custom adapter"]
+
+[[requirements]]
+id = "P16-B02"
+subgate = "16.B"
+title = "Transactional staged engine invocation"
+status = "specified"
+evidence = ["failure injection", "publication allocation guard"]
+
+[[requirements]]
+id = "P16-B03"
+subgate = "16.B"
+title = "Field descriptor, geometry, units, and boundaries"
+status = "specified"
+evidence = ["analytic/manufactured solutions", "boundary fixtures", "refinement"]
+
+[[requirements]]
+id = "P16-B04"
+subgate = "16.B"
+title = "Sampling, deposition, exchange, and conservation"
+status = "specified"
+evidence = ["conservation oracle", "insufficiency and positivity truth tables"]
+
+[[requirements]]
+id = "P16-B05"
+subgate = "16.B"
+title = "Exact field clocks, input modes, and named splitting"
+status = "specified"
+evidence = ["split oracle", "restart every settled cut", "algebraic-loop rejection"]
+
+[[requirements]]
+id = "P16-B06"
+subgate = "16.B"
+title = "Typed engine continuation and replay classification"
+status = "specified"
+evidence = ["codec tests", "invalidation matrix", "failure tests"]
+
+[[requirements]]
+id = "P16-C01"
+subgate = "16.C"
+title = "Native field sequential CPU qualification"
+status = "specified"
+evidence = ["real CPU evidence", "analytic/manufactured field oracle"]
+
+[[requirements]]
+id = "P16-C02"
+subgate = "16.C"
+title = "Native field real Metal qualification"
+status = "specified"
+evidence = ["trusted self-hosted real Metal artifact", "residency and transfer trace"]
+
+[[requirements]]
+id = "P16-C03"
+subgate = "16.C"
+title = "Native field real ROCm qualification"
+status = "specified"
+evidence = ["trusted self-hosted real ROCm artifact", "residency and transfer trace"]
+
+[[requirements]]
+id = "P16-C04"
+subgate = "16.C"
+title = "Native field performance and hidden-transfer guardrails"
+status = "specified"
+evidence = ["cold/warm metrics", "zero steady allocation", "no host fallback"]
+
+[[requirements]]
+id = "P16-D01"
+subgate = "16.D"
+title = "AlgebraicRewriting-backed stable structural operations"
+status = "specified"
+evidence = ["add/remove/divide/move/rewire fixtures"]
+
+[[requirements]]
+id = "P16-D02"
+subgate = "16.D"
+title = "Independent Julia structural oracle"
+status = "specified"
+evidence = ["exhaustive bounded rules", "compiled/reference differential"]
+
+[[requirements]]
+id = "P16-D03"
+subgate = "16.D"
+title = "Structural conflict, identity, lineage, and capacity semantics"
+status = "specified"
+evidence = ["truth tables", "candidate-order invariance", "capacity failure"]
+
+[[requirements]]
+id = "P16-D04"
+subgate = "16.D"
+title = "Atomic numeric and structural failure/restart"
+status = "specified"
+evidence = ["failure all stages", "every settled-boundary restart", "fuzz and shrink"]
+
+[[requirements]]
+id = "P16-E01"
+subgate = "16.E"
+title = "CorePotts adapter without second authority"
+status = "specified"
+evidence = ["dependency guard", "authority tests", "typed structural requests"]
+
+[[requirements]]
+id = "P16-E02"
+subgate = "16.E"
+title = "Phase 16 checkpoint and legacy conversion"
+status = "specified"
+evidence = ["all attested readers", "non-destructive conversion", "corruption tests"]
+
+[[requirements]]
+id = "P16-E03"
+subgate = "16.E"
+title = "First CorePotts strangler cutover"
+status = "specified"
+evidence = ["old/new differential", "one production authority", "no silent fallback"]
+
+[[requirements]]
+id = "P16-F01"
+subgate = "16.F"
+title = "CPU SciML field adapter"
+status = "specified"
+evidence = ["declared problem envelope", "continuation/replay matrix", "failure/restart"]
+
+[[requirements]]
+id = "P16-F02"
+subgate = "16.F"
+title = "Independent CPU custom field adapter"
+status = "specified"
+evidence = ["no SciML dependency", "open-protocol conformance"]
+
+[[requirements]]
+id = "P16-F03"
+subgate = "16.F"
+title = "Native, SciML, and custom cross-adapter evidence"
+status = "specified"
+evidence = ["analytic/manufactured comparisons", "declared tolerances", "negative capabilities"]
+
+[[requirements]]
+id = "P16-G01"
+subgate = "16.G"
+title = "Merks 2006 machine-readable source and mechanism trace"
+status = "specified"
+evidence = ["primary paper", "corrected source record", "ambiguity profiles"]
+
+[[requirements]]
+id = "P16-G02"
+subgate = "16.G"
+title = "Merks runnable bounded assembly"
+status = "specified"
+evidence = ["canonical startup", "bounded scheduled trajectory", "native/SciML", "restart/rollback"]
+
+[[requirements]]
+id = "P16-H01"
+subgate = "16.H"
+title = "CNV scenario 38/simulation 902 source and mechanism trace"
+status = "specified"
+evidence = ["paper/Text S3/Text S6", "checksummed source lane", "generated CI fixture"]
+
+[[requirements]]
+id = "P16-H02"
+subgate = "16.H"
+title = "CNV reduced lifecycle and relationship fixtures"
+status = "specified"
+evidence = ["MCS 400 transition", "division/death", "plastic links", "BrM degradation"]
+
+[[requirements]]
+id = "P16-H03"
+subgate = "16.H"
+title = "CNV full-domain startup and bounded runnable assembly"
+status = "specified"
+evidence = ["40x40x35 startup", "four-field schedule", "bounded advance", "restart/rollback"]
+
+[[requirements]]
+id = "P16-I01"
+subgate = "16.I"
+title = "Complete documentation, matrices, and limitations"
+status = "specified"
+evidence = ["user/adapter/solver/persistence/failure docs", "generated capability pages"]
+
+[[requirements]]
+id = "P16-I02"
+subgate = "16.I"
+title = "Clean independent packages, compatibility, and performance"
+status = "specified"
+evidence = ["clean temp installs", "exact dependency resolution", "frozen regression budgets"]
+
+[[requirements]]
+id = "P16-I03"
+subgate = "16.I"
+title = "Exact-head internal-beta closure"
+status = "specified"
+evidence = ["all rows qualified", "content-addressed artifacts", "merged-tree verification", "metadata-only attestation"]
