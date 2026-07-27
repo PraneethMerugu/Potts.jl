@@ -28,6 +28,7 @@ end
     include("phase16/test_phase16a_entry.jl")
     include("phase16/test_phase16b_engine_field.jl")
     include("phase16/test_phase16d_structural_transactions.jl")
+    include("phase16/test_phase16e_checkpoint.jl")
 end
 
 @testset "Aqua" begin

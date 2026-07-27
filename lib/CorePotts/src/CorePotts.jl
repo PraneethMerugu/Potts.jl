@@ -10,6 +10,7 @@ using SciMLBase
 using LinearAlgebra: issymmetric, eigen, Symmetric
 using SHA
 import Atomix
+import ProcessBigraphs
 import SciMLBase: solve, savevalues!
 
 export solve, savevalues!
@@ -51,6 +52,7 @@ include("coupled/activity.jl")
 include("coupled/execution.jl")
 include("coupled/continuous.jl")
 include("coupled/native_fields.jl")
+include("coupled/process_bigraph_adapter.jl")
 include("coupled/relationships.jl")
 include("coupled/polarity.jl")
 include("coupled/history.jl")
@@ -59,6 +61,7 @@ include("coupled/multirate.jl")
 include("coupled/observations.jl")
 include("persistence/scientific.jl")
 include("coupled/persistence.jl")
+include("persistence/process_bigraph_conversion.jl")
 include("coupled/preflight.jl")
 include("reference/engine.jl")
 
