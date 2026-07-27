@@ -133,22 +133,22 @@ evidence = ["failure all stages", "every settled-boundary restart", "fuzz and sh
 id = "P16-E01"
 subgate = "16.E"
 title = "CorePotts adapter without second authority"
-status = "specified"
-evidence = ["dependency guard", "authority tests", "typed structural requests"]
+status = "qualified"
+evidence = ["dependency guard", "authority tests", "typed structural requests", "design/evidence/process-bigraph-phase16e-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-E02"
 subgate = "16.E"
 title = "Phase 16 checkpoint and legacy conversion"
-status = "specified"
-evidence = ["all attested readers", "non-destructive conversion", "corruption tests"]
+status = "qualified"
+evidence = ["all attested readers", "non-destructive conversion", "corruption tests", "design/evidence/process-bigraph-phase16e-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-E03"
 subgate = "16.E"
 title = "First CorePotts strangler cutover"
-status = "specified"
-evidence = ["old/new differential", "one production authority", "no silent fallback"]
+status = "qualified"
+evidence = ["old/new differential", "one production authority", "no silent fallback", "design/evidence/process-bigraph-phase16e-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-F01"

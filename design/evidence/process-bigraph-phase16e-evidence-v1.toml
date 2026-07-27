@@ -1,0 +1,107 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16e-corepotts-cutover-2026-07-27"
+phase = "16.E"
+status = "qualified"
+implementation_commit = "9157aa4f9659a67f09a1b0641c8805791ca08ec1"
+implementation_tree = "9c034e71a41905cbb49b7cb0f0628880b328b41d"
+branch = "codex/phase-16"
+internal_beta = false
+public_release = false
+qualified_rows = ["P16-E01", "P16-E02", "P16-E03"]
+
+[dependencies]
+corepotts_depends_on_process_bigraphs = true
+process_bigraphs_depends_on_corepotts = false
+process_bigraphs_solver_neutral = true
+corepotts_process_bigraphs_compat = "0.4"
+
+[artifacts]
+managed_engine = "lib/ProcessBigraphs/src/managed_engine.jl"
+managed_engine_sha256 = "4da1f0254ee1ac975cffb5e98030595b1155c54b1b6ff64f135d349033220611"
+checkpoint_v3 = "lib/ProcessBigraphs/src/checkpoint_v3.jl"
+checkpoint_v3_sha256 = "08959b9706d746510e941299e0727525187ea1144bad0ceb558c08f0d332e955"
+logical_codec = "lib/ProcessBigraphs/src/logical_codec.jl"
+logical_codec_sha256 = "51864eef2e6aec8b2ccc26d2f69f6a3f9d52f51498e9e516ffa7c91bdaee0bfa"
+corepotts_adapter = "lib/CorePotts/src/coupled/process_bigraph_adapter.jl"
+corepotts_adapter_sha256 = "efbb50de9cbc3998346a684aa682fbf12cfe8fb288627c83676d6c7370bc27b2"
+legacy_conversion = "lib/CorePotts/src/persistence/process_bigraph_conversion.jl"
+legacy_conversion_sha256 = "ff5ba7ec2e5207d0537f654eba33bcfd6a7d03241eb9a359d7e209493feb9fe4"
+process_bigraphs_tests = "lib/ProcessBigraphs/test/phase16/test_phase16e_checkpoint.jl"
+process_bigraphs_tests_sha256 = "d42473441ec57f42702d7c18989565fa7680656ec4cbec4ee6a180317858902d"
+corepotts_tests = "lib/CorePotts/test/test_phase16_process_bigraph_adapter.jl"
+corepotts_tests_sha256 = "890e8d3e241bf3163d1ba998b592387dcb260c56de4b3d6414c1e4cfe56ce5e6"
+audit = "design/audits/process-bigraph-phase16e-corepotts-cutover-audit.md"
+checker = "scripts/process-bigraph-phase16e-check.jl"
+
+[authority]
+runtime_owns_logical_time = true
+runtime_owns_invocation_reason_and_identity = true
+runtime_owns_resource_authorization = true
+runtime_owns_candidate_validation = true
+runtime_owns_publication_boundary = true
+runtime_owns_checkpoint_authorization = true
+native_engine_owns_arrays_and_kernels = true
+opaque_candidate = true
+one_production_authority = true
+silent_fallback = false
+
+[structural_requests]
+solver_neutral_typed_envelope = true
+stable_operations = ["add", "remove", "divide", "move", "rewire"]
+stable_domain_identity_and_generation = true
+source_epoch = true
+dependencies = true
+stable_priority = true
+candidate_order_invariant = true
+bounded_selection = true
+process_bigraphs_conflict_authority = true
+per_cell_acset_rows = false
+
+[checkpoint]
+schema = "process-bigraph-logical-checkpoint-v3"
+settled_only = true
+orchestration_topology = true
+structural_epoch = true
+identities_generations_lineage = true
+engine_declarations_and_state = true
+registered_identity_maps = true
+aggregate_replay_weakest = true
+prototype_free_structural_restore = true
+corruption_fail_closed = true
+failed_load_non_mutating = true
+canonical_legacy_conversion = true
+coupled_legacy_conversion = true
+conversion_pure_non_destructive = true
+existing_readers_retained = true
+
+[differential]
+slice = "field-substrate"
+old_path = "CorePotts direct native-field test oracle"
+new_path = "ProcessBigraphs managed runtime with CorePotts native adapter"
+scheduled_ticks = 4
+restart_cuts = [0, 1, 2, 3]
+state = "exact"
+logical_time = "exact"
+publication_epoch = "exact"
+failure_rollback = "exact"
+remaining_trajectory = "exact"
+authorization_rejection = "source unchanged"
+
+[tests]
+process_bigraphs_phase16e_assertions = 42
+corepotts_phase16e_assertions = 45
+process_bigraphs_full_assertions = 1061
+corepotts_full_assertions = 3772
+process_bigraphs_full_package_suite = "passed"
+corepotts_full_package_suite = "passed"
+structure_guard = "passed"
+prior_phase16_checkers = "passed"
+julia = "1.12.6"
+
+[open]
+phase16c_trusted_metal = true
+phase16c_trusted_rocm = true
+phase16f_solver_plurality = true
+merks_runnable_assembly = true
+cnv_runnable_assembly = true
+phase16_internal_beta = true

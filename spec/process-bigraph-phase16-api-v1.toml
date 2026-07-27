@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16d_qualified_c_hardware_open"
+status = "phase16e_qualified_c_hardware_open"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false
@@ -92,5 +92,5 @@ export_rule = "Expose adapter construction through the SciML extension after CPU
 [[families]]
 id = "corepotts"
 subgate = "16.E"
-status = "specified"
+status = "qualified"
 export_rule = "CorePotts owns adapter-facing methods; ProcessBigraphs must not import CorePotts."

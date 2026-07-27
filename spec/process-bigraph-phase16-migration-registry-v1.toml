@@ -1,11 +1,12 @@
 schema_version = "1.0.0"
 registry_id = "process-bigraphs-phase16-migration-v1"
 phase = "16"
-status = "specified"
+status = "phase16e_qualified"
 one_production_authority_per_slice = true
 silent_fallback = false
 
 [checkpoint]
+status = "qualified"
 new_writer = "ProcessBigraphs Phase 16 logical checkpoint"
 existing_attested_readers_retained = true
 legacy_conversion = "pure versioned checksummed transactional non-destructive"
@@ -14,7 +15,7 @@ aggregate_replay = "weakest component replay class"
 
 [[slices]]
 id = "field-substrate"
-status = "specified"
+status = "qualified"
 old_authority = "CorePotts existing field path"
 target_authority = "ProcessBigraphs schedule/publication with CorePotts native engine"
 differential_dimensions = ["state", "time", "operation order", "RNG", "observation", "failure", "checkpoint", "remaining trajectory"]
@@ -43,4 +44,3 @@ old_authority = "source-traced clean-room fixtures only"
 target_authority = "ProcessBigraphs model with CorePotts and field adapters"
 differential_dimensions = ["mechanism microfixtures", "schedule", "lifecycle", "relationships", "degradation", "checkpoint"]
 cutover_required = false
-

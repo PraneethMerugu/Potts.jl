@@ -33,8 +33,9 @@ evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16d-evidence-v1.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 
-check(entry["implementation_status"] ==
+check(entry["implementation_status"] in (
       "phase16d_qualified_c_hardware_open",
+      "phase16e_qualified_c_hardware_open"),
     "Phase 16.D checker requires qualified-D/C-hardware-open state")
 for id in ["P16-D01", "P16-D02", "P16-D03", "P16-D04"]
     check(requirements[id]["status"] == "qualified",

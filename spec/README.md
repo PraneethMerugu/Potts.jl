@@ -231,9 +231,12 @@ CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choic
 interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
 strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
 ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
-heavy computation occurs. Phase 16.A and 16.B are qualified, including the internal engine/field
-boundary; the 22 requirements in 16.C through 16.I remain fail-closed. Public engine exports remain
-gated on Phase 16.F cross-adapter qualification.
+heavy computation occurs. Phase 16.A, 16.B, 16.D, and 16.E are qualified: the internal
+engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
+domain requests, V3 logical checkpoint, and non-destructive legacy conversions are passing. Phase
+16.C remains open only for trusted exact-head Metal/ROCm evidence, and 14 requirements remain open
+across 16.C and 16.F–16.I. Public engine exports remain gated on Phase 16.F cross-adapter
+qualification.
 
 ## Conformance Principle
 

@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: Accepted plan; implementation not started
+Status: In progress; Phase 16.A/B/D/E qualified, C hardware and F–I open
 
 Date: 2026-07-27
 
@@ -100,4 +100,3 @@ qualification availability.
 Begin with 16.A dependency bounds and the bounded protocol/API skeleton. Do not begin with a model
 loop. The first executable proof should be the 16.B CPU field microfixture completing the entire
 transaction and restart path.
-

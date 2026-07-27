@@ -34,9 +34,11 @@ requirements = Dict(row["id"] => row for row in ledger["requirements"])
 candidate = entry["implementation_status"] == "phase16b_candidate"
 qualified = entry["implementation_status"] in (
     "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
-    "phase16d_qualified_c_hardware_open")
-d_qualified =
-    entry["implementation_status"] == "phase16d_qualified_c_hardware_open"
+    "phase16d_qualified_c_hardware_open",
+    "phase16e_qualified_c_hardware_open")
+d_qualified = entry["implementation_status"] in (
+    "phase16d_qualified_c_hardware_open",
+    "phase16e_qualified_c_hardware_open")
 check(candidate || qualified,
     "Phase 16.B checker requires candidate or qualified state")
 expected = candidate ? "implemented" : "qualified"

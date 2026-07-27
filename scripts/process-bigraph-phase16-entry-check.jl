@@ -61,12 +61,17 @@ phase_state = entry["implementation_status"]
 phase16b_candidate = phase_state == "phase16b_candidate"
 phase16b_qualified = phase_state in (
     "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
-    "phase16d_qualified_c_hardware_open")
+    "phase16d_qualified_c_hardware_open",
+    "phase16e_qualified_c_hardware_open")
 phase16c_candidate = phase_state in (
-    "phase16c_candidate", "phase16d_qualified_c_hardware_open")
+    "phase16c_candidate", "phase16d_qualified_c_hardware_open",
+    "phase16e_qualified_c_hardware_open")
 phase16c_qualified = phase_state == "phase16c_qualified"
-phase16d_qualified =
-    phase_state == "phase16d_qualified_c_hardware_open"
+phase16d_qualified = phase_state in (
+    "phase16d_qualified_c_hardware_open",
+    "phase16e_qualified_c_hardware_open")
+phase16e_qualified =
+    phase_state == "phase16e_qualified_c_hardware_open"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
@@ -75,7 +80,7 @@ check(entry["schema_version"] == "1.0.0" &&
 check(entry["status"] == "in_progress" &&
       (phase16b_candidate || phase16b_qualified ||
        phase16c_candidate || phase16c_qualified ||
-       phase16d_qualified) &&
+       phase16d_qualified || phase16e_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
     "entry must claim an admitted Phase 16 state without beta or release")
@@ -195,6 +200,8 @@ for row in requirements
     elseif row["subgate"] == "16.C" && phase16c_qualified
         "qualified"
     elseif row["subgate"] == "16.D" && phase16d_qualified
+        "qualified"
+    elseif row["subgate"] == "16.E" && phase16e_qualified
         "qualified"
     else
         "specified"
