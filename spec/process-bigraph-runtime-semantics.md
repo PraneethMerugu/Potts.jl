@@ -2,11 +2,13 @@
 
 Status: Normative design; implementation and parity status are tracked separately
 
-Version: 1.2.0
+Version: 1.3.0
 
 Date: 2026-07-26
 
-Authority: Decisions 0034, 0036, and 0037, and `process-bigraph-parity-registry-v1.toml`
+Authority: Decisions 0034, 0036, 0037, and 0038,
+`process-bigraph-parity-registry-v1.toml`, and
+`process-bigraph-phase15c-entry-v1.toml`
 
 ## Purpose
 
@@ -306,25 +308,30 @@ reference executor follows:
 while t < T:
     t_event = minimum eligible process deadline, constrained by the horizon policy
     due = all process instances with deadline == t_event
-    order due by stable semantic process identity
+    event_identity = derive without advancing committed event position
 
-    snapshot = immutable committed-state projection at t_event
-    invocations = validate and bind every due process against snapshot
-    effects = executor.compute(invocations)
+    common = immutable committed-state projection carried to t_event
+    invocations = validate and bind every due process against common
+    process_results = executor.compute(invocations)
 
-    reconcile all state deltas deterministically
-    validate all proposed deadlines and continuations
-    atomically commit reconciled state and process timing/continuation
+    candidate = reconcile all temporal deltas deterministically
+    validate all proposed deadlines and process continuations into candidate
+    execute changed-input Step layers and admitted iterative regions within candidate
+    validate required observations and checkpoint eligibility within candidate
+    atomically publish candidate state, clocks, continuations, event position, and records
 
-    execute the triggered Step DAG in dependency layers at t_event
-    validate and atomically commit the structural transaction
-    run settled-boundary observers and eligible checkpoint hooks
-
-    t = t_event
+    t = committed t_event
 ```
 
 State has no implicit evolution between events. “Snapshot at `t_event`” means the state resulting
 from every committed event strictly before `t_event`, carried to that logical time.
+
+No intermediate temporal result, Step layer, iteration, required observation, or checkpoint hook is
+a settled commit. They form one unpublished candidate. Internal candidate snapshots may feed later
+Step layers, but a failure anywhere before final publication leaves the previously settled runtime
+unchanged. An exact horizon with no
+process event MAY publish an unchanged settled snapshot at that time; it does not create a process
+event or consume semantic RNG identity.
 
 The pinned upstream deferred sample-and-hold behavior is not normative. If implemented, it MUST be
 selected by a fingerprinted compatibility mode and MUST NOT share normative conformance results.
@@ -333,7 +340,7 @@ selected by a fingerprinted compatibility mode and MUST NOT share normative conf
 
 Every process due at one event time:
 
-- reads one common immutable pre-process snapshot;
+- reads one common immutable pre-commit snapshot;
 - receives only its declared input projection;
 - cannot observe another same-time process's delta;
 - returns effects without publishing them;
@@ -374,18 +381,21 @@ by an explicit dependency DAG rather than a temporal deadline.
 Step dependencies are compiled from declared data dependencies and explicit workflow edges. At
 runtime:
 
-1. all ready steps in one DAG layer read one common layer snapshot;
-2. the executor may compute the layer concurrently;
-3. the runtime reconciles and atomically commits the layer;
-4. the next dependency layer reads the new committed state; and
-5. the workflow reaches quiescence before structural publication or the next temporal event.
+1. steps whose declared inputs changed become eligible;
+2. all ready eligible steps in one DAG layer read one common candidate-layer snapshot;
+3. the executor may compute the layer concurrently;
+4. the runtime reconciles the layer into the unpublished event candidate;
+5. downstream steps become eligible only through declared changed inputs;
+6. the workflow reaches quiescence before event publication; and
+7. a fingerprinted activation bound fails the event if quiescence is not reached.
 
 Silent inputs may establish dependencies without appearing in an adapter's user payload, but they
 remain visible in inspection and fingerprinting.
 
-Undeclared cycles fail compilation. Iteration requires an explicit construct that declares initial
-state, body graph, convergence predicate, maximum iterations, norm/tolerance when applicable, and
-nonconvergence policy. Executor priority is not a cycle-breaking semantic.
+Undeclared cycles fail compilation. Iteration requires a named, fingerprinted construct that
+declares initial state, body graph, deterministic order, maximum iterations, convergence predicate,
+norm/tolerance when applicable, and nonconvergence policy. Bounded-only iteration omits the
+predicate but not the hard bound. Executor priority is not a cycle-breaking semantic.
 
 ## Hierarchical state and schemas
 
@@ -599,24 +609,34 @@ A canonical checkpoint includes:
 - upstream parity pins and runtime version;
 - canonical model, topology, and capability fingerprints;
 - exact logical time and time scale;
+- canonical event ordinal and event position;
 - committed hierarchical state;
 - place and link topology;
 - every process and step deadline, timing state, and versioned continuation;
-- semantic RNG namespace and solver-owned RNG continuation where declared;
+- observer identities, schedules, positions, and typed continuations needed to avoid duplication or
+  omission;
+- semantic RNG algorithm, address-schema and root-seed identities, plus solver-owned RNG
+  continuation where declared;
 - lineage and stable identity allocators;
-- observer/emitter continuation needed to avoid duplication or omission;
 - placement-independent residency requirements;
 - compatibility mode and quantization policies; and
-- integrity hashes.
+- structural epoch, compiled-plan, runtime/observation, continuation, and integrity fingerprints.
 
 The checkpoint is a ProcessBigraphs-owned, versioned envelope. Raw ACSet, structured-cospan, or
 wiring-diagram serialization MAY be offered for structural interchange and inspection, but is not
 a runtime checkpoint, scheduler continuation, or replay contract. A checkpoint may occur before or
 after a complete structural transaction, never during matching or partial rewrite application.
 
-Every stateful process declares a continuation schema and invalidation rules. Serialization of an
-arbitrary Julia closure, task, pointer, solver object, or device allocation is not a portable
-continuation contract.
+The canonical logical envelope has deterministic encode and decode and is independent from Julia
+object serialization and any storage extension. Every already attested reader remains supported;
+new authoritative fields require a distinct format version. Phase 15.C qualifies exact compatible
+serial restore only.
+
+Every stateful process, step, and observer declares a typed continuation schema, semantic owner
+version, canonical codec, validation and fingerprint rules, restore compatibility, and invalidation
+rules. Migration requires an explicit registered migration. Serialization of an arbitrary Julia
+closure, task, pointer, solver object, device allocation, or untracked `Any` is not an
+alpha-qualified continuation contract.
 
 Mid-event checkpoint/restart is not claimed unless every runnable work item, partial result,
 transaction buffer, external solver state, and retry disposition has a registered canonical codec.
@@ -638,12 +658,19 @@ the process and update laws. Cross-backend bitwise identity is not generally req
 Runtime-addressed randomness derives draws from:
 
 ```text
-(model identity, process identity, logical time, event identity,
- invocation identity, entity/lineage identity, draw identity, RNG law version)
+(model fingerprint, normalized root seed, process identity, logical time,
+ event identity, entity/lineage identity, stable draw site,
+ explicit draw index, RNG algorithm and address-schema versions)
 ```
 
 Thread, worker, task, device lane, declaration storage order, and completion order are not semantic
 RNG coordinates.
+
+The core RNG is counter-based. Source line, call order, and an implicit mutable draw counter are not
+coordinates. Core bit, integer, and uniform draws are exact under their pinned algorithm.
+Transformed distributions declare exact, numerical, or statistical replay. A failed unpublished
+event consumes no RNG identity, and retry from the unchanged settled boundary reproduces the same
+draws. Observer analysis uses a separate namespace and cannot consume or perturb model RNG.
 
 A process may retain solver-owned RNG state only when the external algorithm requires sequential
 continuation. It MUST:
@@ -656,9 +683,11 @@ continuation. It MUST:
 
 ## Failure and retry
 
-Execution is transactional. Failure during invocation, reconciliation, apply, step execution,
-structural validation, required observation, or checkpoint formation MUST NOT expose partial
-committed state for that boundary.
+Execution is transactional. Failure during invocation, invocation-result validation,
+reconciliation, apply, step execution, continuation validation, structural validation, required
+observation, checkpoint formation, or required-record publication MUST NOT expose partial committed
+state, clocks, continuation, RNG/event position, observer position, or required records for that
+boundary.
 
 A structured failure includes:
 
@@ -670,23 +699,29 @@ A structured failure includes:
 - invalidated continuations; and
 - deterministic diagnostic payload.
 
-The first distributed policy is fail-stop and recovery from the last settled checkpoint. Automatic
-retry is permitted only for work declared pure and idempotent and only when retry preserves
-semantic RNG and output identity. Universal rollback of files, databases, services, or arbitrary
-foreign code is not promised.
+The Phase 15.C serial policy is deterministic fail-stop and performs no implicit retry. Explicit
+retry may begin from the unchanged settled boundary. A later physical executor may automate retry
+only for work declared pure and idempotent and only when retry preserves semantic RNG and output
+identity. Universal rollback of files, databases, services, or arbitrary foreign code is not
+promised.
 
 ## Observation and emission
 
-Core provides a read-only observer protocol over declared settled snapshots. An observer:
+Core provides a declarative read-only observer protocol. Before execution, an observation plan
+assigns every observer a stable identity, exact schedule, declared projection, output schema,
+typed continuation, and required or optional policy. An observer:
 
-- declares its projection and cadence;
+- sees only its declared immutable candidate-snapshot projection at an eligible settled boundary;
 - cannot mutate state, topology, scheduler, RNG, or process continuation;
 - has versioned output identity and continuation;
 - declares whether failure is fatal, retryable, or noncritical; and
 - cannot make task completion order scientifically observable.
 
-Memory, SQLite, Parquet, dashboard, network, and visualization emitters are extensions. Output
-volume, backpressure, duplication avoidance, and restart position are qualified per emitter.
+Required in-memory records are validated and published atomically with the event. Observation does
+not change the scientific model fingerprint; a separate runtime/observation fingerprint records the
+plan. Memory sinks beyond the required core record, SQLite, Parquet, dashboards, networks, and
+visualization emitters are non-atomic extensions with explicit idempotency and retry behavior.
+Output volume, backpressure, duplication avoidance, and restart position are qualified per emitter.
 
 ## Capability, residency, and placement
 
@@ -729,8 +764,9 @@ is explicit with measured boundaries.
 
 ## Executor protocol and Dagger boundary
 
-The serial executor is the equivalence reference for alternate physical executors. It is not the
-independent specification oracle. An executor receives a fully selected runnable batch:
+`SerialExecutor` is the Phase 15.C execution policy over `SerialRuntime` state and is the
+equivalence reference for alternate physical executors. It is not the independent specification
+oracle. An executor receives a fully selected runnable batch:
 
 - exact event and interval identities;
 - immutable typed input projections;
@@ -836,14 +872,19 @@ feature; an example run alone cannot qualify a semantic family.
 
 Maturity gates are:
 
-- **internal alpha** — serial static composites and their core schema/port/delta/time/checkpoint
-  fixtures;
+- **internal alpha** — the exact immutable-topology serial allowlist, supporting-oracle rows,
+  fixtures, exclusions, and two-stage closure in `process-bigraph-phase15c-entry-v1.toml`;
 - **internal beta** — dynamic hierarchy, stable structural set, Potts adapter, and applicable
   executor equivalence; and
 - **first public release** — every required pinned-parity registry item qualified plus a passing
   whole-cell-style composite.
 
 There is no public partial-parity release.
+
+Passing the Phase 15.C independent specification oracle does not pass later dynamic-lineage,
+executor-equivalence, hardware, application, adapter, or whole-cell oracles attached to the same
+feature. Registry evidence must retain that scope rather than collapsing an internal-alpha result
+into full pinned parity.
 
 ## Whole-cell acceptance ladder
 
@@ -862,11 +903,18 @@ not replace the accepted ladder.
 
 ## Minimum conformance suite
 
-The checked Julia specification oracle MUST be small, auditable, and structurally independent from
-the production executor. Expected results MUST be traced to exact pinned-source locations,
-hand-checkable derivations, or explicit mathematical definitions, including uncertainty records
-where sources disagree. It MUST NOT import or invoke the production scheduler to manufacture its
-expected results.
+The checked Julia specification oracle MUST be a test-only, small, auditable module structurally
+independent from the production executor. Expected results MUST be traced to exact pinned-source
+locations, hand-checkable derivations, or explicit mathematical definitions, including uncertainty
+records where sources disagree. It MUST NOT import ProcessBigraphs or invoke production scheduling,
+reconciliation, update, RNG, continuation, observation, checkpoint, fingerprint, or runtime
+implementations. Production and oracle may share only neutral machine-readable fixture inputs and
+result schemas.
+
+Phase 15.C additionally requires static dependency enforcement and mutation-sensitivity fixtures
+that perturb scheduler, update, RNG, failure, and checkpoint behavior. Bounded generated cases
+record seeds and retained minimal counterexamples. Every reachable settled boundary in each
+bounded Phase 15.C fixture is a required restart cut.
 
 Before public release, evidence MUST cover:
 

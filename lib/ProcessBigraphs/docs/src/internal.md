@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 15.B immutable open composition passed; complete internal alpha and public parity remain open
+Status: Phase 15.B passed; Phase 15.C entry frozen, runtime implementation not started
 
 ## Authority and maturity
 
@@ -16,6 +16,16 @@ boundary. Phase 15.B proves immutable open composition and derived wiring views.
 not claim dynamic structural transactions, bridges that execute transfers, persisted checkpoint
 files, a general observer protocol, semantic RNG, Threads/Dagger equivalence, device kernels,
 scientific adapters, or independent source-derived Julia oracle qualification.
+
+Decision 0038 and the completed 64-choice owner interview freeze the Phase 15.C
+pre-implementation boundary. The
+[entry contract](../../../../spec/process-bigraph-phase15c-entry-v1.toml) names exactly 15 target
+features, seven supporting oracle-requalification features, four retained direct structural
+features, and the explicit later-work exclusions. The
+[C0--C7 plan](../../../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md) is strictly
+ordered and requires a separately implemented, test-only Julia specification oracle. This freeze
+does not claim implementation: package version is `0.3.0`, `internal_alpha = false`, and Phase
+15.C runtime and oracle evidence remain absent.
 
 Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
 model. Phase 15.A directly depends on `ACSets.jl` 0.2.29 and `Catlab.jl` 0.17.6.

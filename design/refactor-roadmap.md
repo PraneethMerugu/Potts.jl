@@ -22,7 +22,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; G4 is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
-| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.A canonical structure and Phase 15.B immutable open composition passed, while the Phase 15.C independent oracle, complete runtime alpha, and Potts paper gate remain open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes the remaining serial-alpha semantics without a public release |
+| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.A and Phase 15.B passed, and the 64-choice Phase 15.C entry packet is frozen while its runtime implementation, evidence, and Potts paper gate remain open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes the remaining serial-alpha semantics without a public release |
 | Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts and canonical structural epoch needed by the first adapter slice stabilize |
 | Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
@@ -1207,6 +1207,24 @@ fail-closed corruption tests pass. See the
 [evidence record](evidence/process-bigraph-phase15b-evidence-v1.toml). The independent checked
 Julia specification oracle and complete serial internal-alpha qualification remain Phase 15.C.
 
+### ProcessBigraphs Phase 15.C entry status
+
+The pre-implementation architecture is frozen by [Decision 0038](../spec/decisions/0038-process-bigraph-serial-alpha.md),
+the completed [64-choice owner interview](audits/process-bigraph-phase15c-serial-alpha-owner-interview.md),
+the [C0--C7 implementation plan](audits/process-bigraph-phase15c-serial-alpha-plan.md), and the
+[machine-readable entry contract](../spec/process-bigraph-phase15c-entry-v1.toml). The bounded claim
+is an immutable-topology serial internal alpha: 15 target features and seven supporting
+oracle-requalification features, while four already-passed structural features retain their direct
+evidence. Dynamic structure, alternate executors, GPU execution, scientific adapters, Potts
+cutover, whole-cell qualification, interchange, and public release are explicitly later work.
+
+This entry freeze is not implementation or qualification. Package version remains `0.3.0`,
+`internal_alpha = false`, and the independent specification oracle and Phase 15.C evidence do not
+yet exist. The [entry audit](audits/process-bigraph-phase15c-entry-audit.md) and required entry
+checker must merge and pass on `main` before 15.C1 may add production scheduler code. Implementation
+then follows strict C1--C6 order, followed by the two-PR attested C7 closure; only the attestation
+may advance the internal package identity to `0.4.0` and set `internal_alpha = true`.
+
 ### Potts workstream deliverables
 
 - Freeze the paper Project and Manifest, experiment configurations, semantic seeds, model
@@ -1597,7 +1615,8 @@ The executable sequence and join rules are:
    authoring convergence, frozen structural epoch, indexed execution plan, and provenance boundary.
    Decision 0037 and the accepted Phase 15.B plan freeze immutable open-composition semantics;
    their implementation and direct evidence now pass. No CorePotts dependency or public runtime
-   release was introduced; the complete Phase 15.C serial internal alpha remains a separate gate.
+   release was introduced; the Phase 15.C entry contract is frozen, while its complete serial
+   internal-alpha implementation and evidence remain a separate gate.
 4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
    passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
@@ -1606,7 +1625,8 @@ The executable sequence and join rules are:
    while completing the remaining ProcessBigraphs serial internal-alpha and independent Julia
    specification-oracle work after the passed Phase 15.A canonical-structure slice. ProcessBigraphs
    first executes the accepted Phase 15.B boundary/composition/hierarchy/wiring plan, then closes
-   the Phase 15.C oracle, RNG, observer, continuation, multirate, failure, and restart matrix.
+   the frozen Phase 15.C plan next implements its oracle, RNG, observer, continuation, multirate,
+   failure, and restart matrix in strict C1--C7 order.
    Failure of one product gate does not rewrite or weaken the other.
 7. **Phase 16 adapter join:** after serial runtime contracts and the relevant Potts evidence are
    stable, cut over one CorePotts slice at a time through old/new differential execution. No model

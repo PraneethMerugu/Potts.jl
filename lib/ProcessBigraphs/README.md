@@ -44,9 +44,13 @@ persistence, residency, and endpoint transfer contracts must match exactly; no s
 conversion is inferred. Runtime and checkpoint paths still consume only the frozen epoch and
 indexed plan.
 
-Phase 15.B is not the complete Phase 15 internal alpha. The independent Julia specification
-oracle, semantic RNG, observer and continuation completion, and the broader multirate/failure
-fixture matrix remain Phase 15.C work.
+Phase 15.B is not the complete Phase 15 internal alpha. Decision 0038 and the completed 64-choice
+owner interview now freeze Phase 15.C as an immutable-topology serial-alpha gate. Its exact
+allowlist, exclusions, C0--C7 order, independent-oracle boundary, and two-PR closure are recorded
+in the repository [entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
+[implementation plan](../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md).
+This is a pre-implementation freeze: package version remains `0.3.0`, `internal_alpha = false`,
+and no Phase 15.C runtime or oracle qualification is claimed.
 
 Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
@@ -63,7 +67,9 @@ The current maturity, limitations, and exact parity pins are recorded in
 authoring, and the advanced AlgebraicJulia path are documented in
 [`docs/src/internal.md`](docs/src/internal.md). The bounded Phase 15.B closure is recorded by the
 repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
-[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml).
+[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). Phase 15.C
+entry readiness is recorded separately by its
+[entry audit](../../design/audits/process-bigraph-phase15c-entry-audit.md).
 
 Run the package suite with Julia 1.12.6:
 

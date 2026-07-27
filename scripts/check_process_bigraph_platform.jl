@@ -43,6 +43,8 @@ algebraic_decision_path =
     require_file("spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md")
 composition_decision_path =
     require_file("spec/decisions/0037-process-bigraph-open-composition.md")
+serial_alpha_decision_path =
+    require_file("spec/decisions/0038-process-bigraph-serial-alpha.md")
 semantics_path = require_file("spec/process-bigraph-runtime-semantics.md")
 audit_path = require_file(
     "design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md")
@@ -54,6 +56,13 @@ composition_interview_path = require_file(
     "design/audits/process-bigraph-phase15b-open-composition-owner-interview.md")
 composition_plan_path = require_file(
     "design/audits/process-bigraph-phase15b-open-composition-plan.md")
+serial_alpha_interview_path = require_file(
+    "design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md")
+serial_alpha_plan_path = require_file(
+    "design/audits/process-bigraph-phase15c-serial-alpha-plan.md")
+serial_alpha_entry_path = require_file("spec/process-bigraph-phase15c-entry-v1.toml")
+serial_alpha_entry_audit_path = require_file(
+    "design/audits/process-bigraph-phase15c-entry-audit.md")
 charter_path = require_file("spec/project-charter.md")
 architecture_path = require_file("design/repository-architecture-standard.md")
 roadmap_path = require_file("design/refactor-roadmap.md")
@@ -99,8 +108,8 @@ oracle_ids = unique_ids(oracles, "oracle registry")
 
 check(registry["schema_version"] == "1.3.0", "unexpected parity-registry schema")
 check(registry["registry_status"] ==
-      "phase15b-open-composition-direct-passing",
-    "parity registry does not record passed Phase 15.B open composition")
+      "phase15c-entry-frozen-runtime-not-started",
+    "parity registry does not record frozen Phase 15.C entry")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
@@ -109,11 +118,13 @@ check(registry["decisions"] == [
     "decisions/0034-process-bigraph-runtime-platform.md",
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "decisions/0037-process-bigraph-open-composition.md",
+    "decisions/0038-process-bigraph-serial-alpha.md",
 ], "parity registry decision authorities changed")
 check(registry["owner_interviews"] == [
     "../design/audits/process-bigraph-runtime-owner-interview.md",
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
     "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
+    "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md",
 ], "parity registry owner-interview authorities changed")
 
 minimums = registry["checker"]
@@ -397,10 +408,14 @@ check(occursin("Status: Complete; all 34 owner decisions resolved", algebraic_in
 composition_interview = read(composition_interview_path, String)
 check(occursin("Status: Complete; all 22 owner decisions resolved", composition_interview),
     "Phase 15.B owner interview is not complete")
+serial_alpha_interview = read(serial_alpha_interview_path, String)
+check(occursin("Status: Complete; all 64 owner decisions resolved", serial_alpha_interview),
+    "Phase 15.C owner interview is not complete")
 
 decision = read(decision_path, String)
 algebraic_decision = read(algebraic_decision_path, String)
 composition_decision = read(composition_decision_path, String)
+serial_alpha_decision = read(serial_alpha_decision_path, String)
 semantics = read(semantics_path, String)
 charter = read(charter_path, String)
 architecture = read(architecture_path, String)
@@ -466,15 +481,19 @@ check(occursin("0036-algebraicjulia-process-bigraph-foundation.md", indices),
     "Decision 0036 is absent from specification indexes")
 check(occursin("0037-process-bigraph-open-composition.md", indices),
     "Decision 0037 is absent from specification indexes")
+check(occursin("0038-process-bigraph-serial-alpha.md", indices),
+    "Decision 0038 is absent from specification indexes")
 check(occursin("process-bigraph-runtime-semantics.md", indices),
     "runtime semantics are absent from specification indexes")
 check(occursin("process-bigraph-parity-registry-v1.toml", indices),
     "parity registry is absent from specification indexes")
 
 for path in [
-    decision_path, algebraic_decision_path, composition_decision_path, semantics_path,
+    decision_path, algebraic_decision_path, composition_decision_path,
+    serial_alpha_decision_path, semantics_path,
     audit_path, interview_path, algebraic_interview_path, composition_interview_path,
-    composition_plan_path, charter_path,
+    composition_plan_path, serial_alpha_interview_path, serial_alpha_plan_path,
+    serial_alpha_entry_path, serial_alpha_entry_audit_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
     evidence_index_path, pb0_audit_path, phase15a_audit_path, phase15b_audit_path,
 ]
