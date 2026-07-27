@@ -230,6 +230,54 @@ function _encode_logical(io::IO, value::Duration)
     _encode_logical(io, value.scale)
 end
 
+function _encode_logical(io::IO, schema::LeafSchema{T}) where {T}
+    write(io, UInt8(0x1a))
+    _write_text(io, string(T))
+    _encode_logical(io, tuple((
+        dimension isa DynamicDimension ? nothing : dimension
+        for dimension in schema.shape
+    )...))
+    _encode_logical(io, !(schema.default isa NoDefault))
+    schema.default isa NoDefault ||
+        _encode_logical(io, schema.default)
+    _encode_logical(io, schema.required)
+    _encode_logical(io, schema.nominal_id)
+    _encode_logical(io, schema.units)
+    _encode_logical(io, schema.ontology)
+    _encode_logical(io, schema.owner)
+    _encode_logical(io, schema.conservation)
+    _encode_logical(io, schema.update_law)
+    _encode_logical(io, schema.division_law)
+    _encode_logical(io, schema.persistence)
+    _encode_logical(io, schema.continuation)
+    _encode_logical(io, schema.residency)
+    _encode_logical(io, schema.codec)
+end
+
+function _encode_logical(io::IO, schema::BranchSchema)
+    write(io, UInt8(0x1b))
+    _encode_logical(io, schema.children)
+end
+
+function _encode_logical(io::IO, capability::CapabilitySet)
+    write(io, UInt8(0x1c))
+    _encode_logical(io, capability.domains)
+    _encode_logical(io, capability.purity)
+    _encode_logical(io, capability.idempotent)
+    _encode_logical(io, capability.continuation_codec)
+    _encode_logical(io, capability.replay_class)
+end
+
+function _encode_logical(io::IO, transfer::TransferDeclaration)
+    write(io, UInt8(0x1d))
+    _encode_logical(io, transfer.source)
+    _encode_logical(io, transfer.destination)
+    _encode_logical(io, transfer.max_bytes)
+    _encode_logical(io, transfer.cadence)
+    _encode_logical(io, transfer.precision)
+    _encode_logical(io, transfer.synchronization)
+end
+
 function _encode_logical(io::IO, value)
     _fail(:unsupported_logical_value,
         "value has no registered logical checkpoint codec";
@@ -334,6 +382,50 @@ function _decode_logical(reader::_LogicalReader)
         return LogicalTime(_decode_logical(reader), _decode_logical(reader))
     elseif tag == 0x19
         return Duration(_decode_logical(reader), _decode_logical(reader))
+    elseif tag == 0x1a
+        type = _logical_type(_read_text(reader))
+        encoded_shape = _decode_logical(reader)
+        shape = tuple((isnothing(dimension) ?
+            _DYNAMIC_DIMENSION : dimension
+            for dimension in encoded_shape)...)
+        has_default = _decode_logical(reader)
+        default = has_default ? _decode_logical(reader) : _NO_DEFAULT
+        return LeafSchema(
+            type;
+            shape,
+            default,
+            required=_decode_logical(reader),
+            nominal_id=_decode_logical(reader),
+            units=_decode_logical(reader),
+            ontology=_decode_logical(reader),
+            owner=_decode_logical(reader),
+            conservation=_decode_logical(reader),
+            update_law=_decode_logical(reader),
+            division_law=_decode_logical(reader),
+            persistence=_decode_logical(reader),
+            continuation=_decode_logical(reader),
+            residency=_decode_logical(reader),
+            codec=_decode_logical(reader),
+        )
+    elseif tag == 0x1b
+        return BranchSchema(_decode_logical(reader))
+    elseif tag == 0x1c
+        return CapabilitySet(
+            _decode_logical(reader);
+            purity=_decode_logical(reader),
+            idempotent=_decode_logical(reader),
+            continuation_codec=_decode_logical(reader),
+            replay_class=_decode_logical(reader),
+        )
+    elseif tag == 0x1d
+        return TransferDeclaration(
+            _decode_logical(reader),
+            _decode_logical(reader);
+            max_bytes=_decode_logical(reader),
+            cadence=_decode_logical(reader),
+            precision=_decode_logical(reader),
+            synchronization=_decode_logical(reader),
+        )
     end
     _fail(:logical_codec_tag, "unknown logical value tag"; tag)
 end
