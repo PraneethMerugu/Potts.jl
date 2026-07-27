@@ -1,6 +1,6 @@
 # Decision 0034: ProcessBigraphs.jl as the Domain-Neutral Runtime Platform
 
-Status: Accepted architecture and roadmap policy; bounded PB0 foundation passed; Phase 15 not implemented
+Status: Accepted architecture and roadmap policy; PB0, Phase 15.A, and Phase 15.B passed; Phase 15.C remains open
 
 Date: 2026-07-26
 

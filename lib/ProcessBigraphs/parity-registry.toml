@@ -42,7 +42,7 @@ id = "canonical-process-bigraph-acset"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
 test = "test/test_phase15a_algebraic_structure.jl"
-limitation = "Static single-root composite scope; Decision 0037 specifies structured cospans and annotated wiring views, but Phase 15.B implementation remains open."
+limitation = "Canonical authority covers arbitrary-depth immutable open composites after Phase 15.B; independent-oracle qualification remains Phase 15.C and dynamic structural epochs remain Phase 16."
 
 [[features]]
 id = "compiled-structural-epoch"

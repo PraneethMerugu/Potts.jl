@@ -4,6 +4,15 @@ using TOML
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const failures = String[]
+const PHASE15B_IMPLEMENTATION_SLICE =
+    "5caff0ce5e87b001a7abe3a77d1be422daf56d76"
+const PHASE15B_QUALIFIED_HEAD =
+    "fc3ff11373b979b4d443f0d192d7bf6b8c444a47"
+const PHASE15B_MERGE_COMMIT =
+    "5643a1e8ca8c3dfc2d1cb124274823beae206dd3"
+const PHASE15B_QUALIFIED_TREE =
+    "a32f86db29dc82276df8fe6e81a6a64bf837e916"
+const PHASE15B_CI_RUN = 30230566611
 
 fail(message) = push!(failures, message)
 check(condition, message) = condition || fail(message)
@@ -30,12 +39,15 @@ local_registry_path = require_file("lib/ProcessBigraphs/parity-registry.toml")
 root_registry_path = require_file("spec/process-bigraph-parity-registry-v1.toml")
 decision_path = require_file(
     "spec/decisions/0037-process-bigraph-open-composition.md")
+platform_decision_path = require_file(
+    "spec/decisions/0034-process-bigraph-runtime-platform.md")
 plan_path = require_file(
     "design/audits/process-bigraph-phase15b-open-composition-plan.md")
 evidence_path = require_file(
     "design/evidence/process-bigraph-phase15b-evidence-v1.toml")
 audit_path = require_file(
     "design/audits/process-bigraph-phase15b-open-composition-audit.md")
+roadmap_path = require_file("design/refactor-roadmap.md")
 ci_path = require_file(".github/workflows/ci.yml")
 
 project = TOML.parsefile(project_path)
@@ -181,8 +193,25 @@ evidence = TOML.parsefile(evidence_path)
 check(evidence["status"] == "passed_open_composition" &&
       evidence["runtime_version"] == "0.3.0",
     "Phase 15.B evidence status or runtime version is wrong")
-check(occursin(r"^[0-9a-f]{40}$", evidence["runtime_commit"]),
-    "Phase 15.B evidence lacks an exact implementation commit")
+check(evidence["runtime_commit"] == PHASE15B_MERGE_COMMIT,
+    "Phase 15.B evidence does not name the merged runtime commit")
+provenance = evidence["provenance"]
+check(provenance["implementation_slice_commit"] ==
+        PHASE15B_IMPLEMENTATION_SLICE &&
+      provenance["qualified_head_commit"] == PHASE15B_QUALIFIED_HEAD &&
+      provenance["merge_commit"] == PHASE15B_MERGE_COMMIT,
+    "Phase 15.B implementation, qualification, or merge provenance is stale")
+check(provenance["qualified_head_tree"] == PHASE15B_QUALIFIED_TREE &&
+      provenance["merge_tree"] == PHASE15B_QUALIFIED_TREE,
+    "Phase 15.B qualified and merged trees are not recorded as identical")
+check(provenance["pull_request"] == 21 &&
+      provenance["pull_request_url"] ==
+        "https://github.com/PraneethMerugu/Potts.jl/pull/21" &&
+      provenance["ci_run"] == PHASE15B_CI_RUN &&
+      provenance["ci_run_url"] ==
+        "https://github.com/PraneethMerugu/Potts.jl/actions/runs/30230566611" &&
+      provenance["merge_method"] == "squash",
+    "Phase 15.B PR, CI, or merge-method provenance is stale")
 check(evidence["qualification"]["result"] == "passed" &&
       evidence["qualification"]["processbigraphs_tests_passed"] == 309 &&
       evidence["qualification"]["phase15b_open_composition_assertions"] == 193 &&
@@ -203,19 +232,46 @@ check(evidence["policy"]["upstream_python_runtime_executed"] == false,
     "Phase 15.B evidence permits upstream Python execution")
 
 decision = read(decision_path, String)
+platform_decision = read(platform_decision_path, String)
 plan = read(plan_path, String)
 audit = read(audit_path, String)
+roadmap = read(roadmap_path, String)
 check(occursin("Implemented and directly passing", decision),
     "Decision 0037 implementation disposition is stale")
+check(occursin(
+        "PB0, Phase 15.A, and Phase 15.B passed; Phase 15.C remains open",
+        platform_decision),
+    "Decision 0034 implementation disposition is stale")
 check(occursin("Status: Implemented and directly passing", plan),
     "Phase 15.B plan status is stale")
 for phrase in [
     "Status: Phase 15.B passed",
     "Requirement audit",
     "Architectural findings",
+    "Post-merge provenance and maintenance disposition",
+    PHASE15B_QUALIFIED_HEAD,
+    PHASE15B_MERGE_COMMIT,
+    PHASE15B_QUALIFIED_TREE,
     "Remaining Phase 15 work",
 ]
     check(occursin(phrase, audit), "Phase 15.B audit is missing '$phrase'")
+end
+status_sources = join([
+    platform_decision,
+    local_features["canonical-process-bigraph-acset"]["limitation"],
+    root_registry["pb0_implementation"]["remaining_claim"],
+    root_registry["phase15a_implementation"]["remaining_claim"],
+    roadmap,
+], "\n")
+for stale in [
+    "Phase 15 not implemented",
+    "Phase 15.B implementation remains open",
+    "their implementation and evidence remain open",
+    "while structured composition, the independent Julia specification oracle",
+    "Structured-cospan composition, directed wiring views, the independent specification oracle",
+]
+    check(!occursin(stale, status_sources),
+        "stale Phase 15.B status remains: '$stale'")
 end
 
 if isempty(failures)

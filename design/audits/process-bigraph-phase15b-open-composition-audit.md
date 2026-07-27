@@ -4,7 +4,11 @@ Status: Phase 15.B passed
 
 Date: 2026-07-26
 
-Implementation commit: `5caff0ce5e87b001a7abe3a77d1be422daf56d76`
+Implementation slice commit: `5caff0ce5e87b001a7abe3a77d1be422daf56d76`
+
+Qualified PR head: `fc3ff11373b979b4d443f0d192d7bf6b8c444a47`
+
+Merged runtime commit: `5643a1e8ca8c3dfc2d1cb124274823beae206dd3`
 
 Authority:
 
@@ -66,6 +70,24 @@ converts scientific values nor inserts implicit device bridges.
 - Existing PB0 and Phase 15.A tests pass unchanged except that the Phase 15.A epoch-version
   assertion now follows the exported schema-version constant.
 - No Vivarium, Process-Bigraph Python, or Bigraph-Schema Python runtime was installed or executed.
+
+## Post-merge provenance and maintenance disposition
+
+Pull request [#21](https://github.com/PraneethMerugu/Potts.jl/pull/21) qualified the exact head
+`fc3ff11373b979b4d443f0d192d7bf6b8c444a47` in CI run
+[`30230566611`](https://github.com/PraneethMerugu/Potts.jl/actions/runs/30230566611). The required
+aggregate job and the dedicated `Enforce ProcessBigraphs Phase 15.B open composition` step passed.
+GitHub squash-merged that head as `5643a1e8ca8c3dfc2d1cb124274823beae206dd3`. The qualified head
+and merge commit have the identical Git tree
+`a32f86db29dc82276df8fe6e81a6a64bf837e916`; the merge changed history shape, not the qualified
+Phase 15.B contents.
+
+The host-side authoring implementation remains intentionally outside runtime hot paths, but its
+internal organization carries maintenance debt: `composition.jl` and the central `compose_open`
+lowering are large. A later behavior-preserving cleanup should separate validation, mounting,
+initializer resolution, ACSet assembly, and provenance construction behind the existing public
+API. That cleanup is not required to establish Phase 15.B semantics and must preserve the complete
+invariance and failure matrix.
 
 ## Remaining Phase 15 work
 

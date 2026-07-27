@@ -1178,11 +1178,12 @@ and compilation produces a frozen structural epoch, indexed execution plan, and 
 map. Runtime and checkpoint paths consume the plan without traversing the ACSet or retaining the
 PB0 authoring declaration. Exact PB0 fingerprints and traces are preserved.
 
-This closure implements only the `canonical-process-bigraph-acset` and
-`compiled-structural-epoch` registry rows. It does not close the Phase 15 internal-alpha gate.
-Structured cospans, derived directed wiring diagrams, nested open composition, independent Julia
-oracle qualification, semantic RNG/observer work, and the complete multirate/failure/restart
-matrix remain unimplemented. See the
+This closure implemented only the `canonical-process-bigraph-acset` and
+`compiled-structural-epoch` registry rows and did not close the Phase 15 internal-alpha gate.
+At Phase 15.A closure, structured cospans, derived directed wiring diagrams, and nested open
+composition remained unimplemented; Phase 15.B has since closed those bounded structural rows.
+Independent Julia oracle qualification, semantic RNG/observer work, and the complete
+multirate/failure/restart matrix remain Phase 15.C work. See the
 [Phase 15.A audit](audits/process-bigraph-phase15a-canonical-structure-audit.md) and
 [evidence record](evidence/process-bigraph-phase15a-evidence-v1.toml).
 
@@ -1594,9 +1595,9 @@ The executable sequence and join rules are:
    frozen, and the independent package plus bounded domain-neutral primitives and non-Potts
    fixtures pass PB0. Phase 15.A now implements Decision 0036's canonical ACSet, typed/direct
    authoring convergence, frozen structural epoch, indexed execution plan, and provenance boundary.
-   Decision 0037 and the accepted Phase 15.B plan now freeze immutable open-composition semantics,
-   but their implementation and evidence remain open. No CorePotts dependency or public runtime
-   release was introduced; the complete Phase 15 internal alpha remains a separate gate.
+   Decision 0037 and the accepted Phase 15.B plan freeze immutable open-composition semantics;
+   their implementation and direct evidence now pass. No CorePotts dependency or public runtime
+   release was introduced; the complete Phase 15.C serial internal alpha remains a separate gate.
 4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
    passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
