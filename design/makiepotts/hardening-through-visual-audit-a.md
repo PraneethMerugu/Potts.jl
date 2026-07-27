@@ -92,7 +92,7 @@ Gate:
 - valid edge cases preserve exact geometry and semantics;
 - invalid cases fail before partial publication or output.
 
-## H4 — Recurring backend qualification
+## H4 — Explicit backend qualification
 
 Backend smoke programs live below `lib/MakiePotts/test/backends` and operate on
 the same public recipe:
@@ -102,8 +102,11 @@ the same public recipe:
   Xvfb; and
 - WGLMakie: render, update, HTML serialization, and nonempty payload.
 
-CI installs the declared backend qualification environment and runs all three.
-The normal MakiePotts package job remains the complete Cairo suite.
+The normal MakiePotts package CI job is the complete Cairo suite, including
+framebuffer rendering, reactive updates, PNG saving, and GIF recording. The
+three standalone programs remain explicit pre-release qualification for backend
+compatibility without adding roughly 25 minutes of duplicate compilation and
+rendering to every pull request.
 
 Gate:
 
