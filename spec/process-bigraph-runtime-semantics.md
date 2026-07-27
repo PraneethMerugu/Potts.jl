@@ -8,8 +8,10 @@ Date: 2026-07-27
 
 Implementation disposition: Phase 15.C C0--C7 passed. ProcessBigraphs 0.4.0 is a qualified
 immutable-topology serial internal alpha with `internal_alpha = true` and
-`public_release = false`. Phase 16 is specified and ready to start, but dynamic structure and
-every Phase 16 implementation or broader gate below remain unqualified.
+`public_release = false`. Phase 16.A, 16.B, 16.D, and 16.E are qualified on the working branch:
+the solver-neutral protocol, dynamic orchestration transactions, first CorePotts field cutover,
+typed domain requests, V3 logical checkpoint, and legacy conversions pass. Phase 16.C remains
+open for trusted exact-head Metal/ROCm evidence, and Phase 16.F–16.I remain unqualified.
 
 Authority: Decisions 0034, 0036, 0037, 0038, and 0039,
 `process-bigraph-parity-registry-v1.toml`, and

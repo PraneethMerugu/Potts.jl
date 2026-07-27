@@ -337,7 +337,8 @@ check(package_registry["accepted_next_architecture"]["phase15b_status"] ==
 check(package_registry["accepted_next_architecture"]["phase16_status"] in
       ("phase16b_candidate", "phase16b_qualified",
        "phase16c_candidate", "phase16c_qualified",
-       "phase16d_qualified_c_hardware_open") &&
+       "phase16d_qualified_c_hardware_open",
+       "phase16e_qualified_c_hardware_open") &&
       package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry must record the current Phase 16.B state without beta")
