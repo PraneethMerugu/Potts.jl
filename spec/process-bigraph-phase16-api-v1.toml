@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16c_candidate"
+status = "phase16d_qualified_c_hardware_open"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false
@@ -80,7 +80,7 @@ export_rule = "Export only the logical descriptor and operation contracts; reali
 [[families]]
 id = "structure"
 subgate = "16.D"
-status = "specified"
+status = "qualified"
 export_rule = "Export typed structural requests/results only; raw AlgebraicRewriting rules remain internal."
 
 [[families]]
