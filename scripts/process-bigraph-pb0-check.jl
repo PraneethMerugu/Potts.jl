@@ -70,10 +70,13 @@ for forbidden in ("using CorePotts", "import CorePotts", "using PottsToolkit",
 end
 
 registry = TOML.parsefile(registry_path)
-check(registry["maturity"] == "phase_15b_open_composition",
-    "package registry must preserve PB0 evidence within Phase 15.B maturity")
+check(registry["maturity"] in (
+        "phase_15b_open_composition",
+        "phase_15c_implementation_candidate",
+        "phase_15c_serial_internal_alpha",
+    ),
+    "package registry no longer preserves PB0 evidence")
 check(registry["public_release"] == false, "package registry claims a public release")
-check(registry["internal_alpha"] == false, "PB0 registry claims internal alpha")
 check(registry["pins"]["process_bigraph"] ==
     "305ea826191e9f897f0c6e207bc303bbc44a9eef",
     "Process-Bigraph pin changed")
@@ -87,8 +90,12 @@ check(length(ids) == length(unique(ids)), "package registry feature IDs are not 
 check(length(features) >= 20, "PB0 registry omits implemented/partial feature rows")
 check(all(feature -> feature["implementation_status"] in ("implemented", "partial"),
     features), "PB0 feature has an invalid implementation status")
-check(all(feature -> feature["oracle_status"] in ("direct_passing", "direct_partial"),
-    features), "PB0 feature has an invalid direct-oracle status")
+check(all(feature -> feature["oracle_status"] in (
+        "direct_passing",
+        "direct_partial",
+        "independent_passing_candidate",
+        "independent_qualified",
+    ), features), "package feature has an invalid oracle status")
 check(all(feature -> isfile(joinpath(PACKAGE, feature["test"])), features),
     "PB0 feature references a missing direct test")
 

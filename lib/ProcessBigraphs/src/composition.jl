@@ -167,6 +167,10 @@ _mounted_endpoint_identity(composite::AbstractString, name::Symbol) =
 _mounted_junction_identity(composite::AbstractString, source::AbstractString) =
     string("junction:",
         canonical_fingerprint((:mounted_junction_v1, String(composite), String(source))))
+_mounted_iteration_identity(composite::AbstractString, source::AbstractString) =
+    string("iteration:",
+        canonical_fingerprint((:mounted_iteration_v1,
+            String(composite), String(source))))
 _mounted_origin_identity(composite::AbstractString, source::AbstractString) =
     string("origin:",
         canonical_fingerprint((:mounted_origin_v1, String(composite), String(source))))
@@ -237,6 +241,7 @@ function canonical_model(
     initial_values,
     laws,
     continuations=(),
+    iterations=(),
 )
     structure = Catlab.apex(cospan)
     structure isa ConcreteProcessBigraphACSet ||
@@ -248,6 +253,7 @@ function canonical_model(
         initial_values,
         laws,
         continuations,
+        iterations,
     )
     endpoints = _open_root_endpoints(model.structure)
     expected_imports = Set(record.endpoint_id for record in values(endpoints)
@@ -534,6 +540,7 @@ function compose_open(spec::CompositionSpec)
     processes = ProcessDeclaration[]
     steps = StepDeclaration[]
     bindings = PortBinding[]
+    iteration_regions = IterationRegion[]
     actor_composite = Dict{String,String}()
     actor_local = Dict{String,String}()
     source_path_maps = Dict{Symbol,Dict{Path,Path}}()
@@ -606,6 +613,17 @@ function compose_open(spec::CompositionSpec)
                 path_map[binding.target];
                 transfer=binding.transfer))
         end
+        source_root_id = data.composite_ids[data.source_root]
+        for region in flat.iteration_regions
+            push!(iteration_regions, IterationRegion(
+                _mounted_iteration_identity(source_root_id, region.id),
+                tuple((actor_ids[id] for id in region.steps)...);
+                mode=region.mode,
+                max_iterations=region.max_iterations,
+                watch_paths=tuple((path_map[target]
+                    for target in region.watch_paths)...),
+            ))
+        end
     end
 
     junction_contracts = Dict{String,Any}()
@@ -664,7 +682,8 @@ function compose_open(spec::CompositionSpec)
         scale;
         processes=tuple(processes...),
         steps=tuple(steps...),
-        bindings=tuple(bindings...))
+        bindings=tuple(bindings...),
+        iteration_regions=tuple(iteration_regions...))
     structure = _lower_static_to_structure(aggregate)
     root = _root_composite(structure)
     ACSets.set_subpart!(structure, root, :composite_id, spec.root_id)
@@ -836,7 +855,8 @@ function compose_open(spec::CompositionSpec)
         aggregate.initial_values,
         (declaration.id => declaration.law for declaration in owners);
         continuations=(declaration.id => declaration.continuation
-            for declaration in owners))
+            for declaration in owners),
+        iterations=aggregate.iteration_regions)
     _open_from_model(CanonicalModel(structure, payloads))
 end
 

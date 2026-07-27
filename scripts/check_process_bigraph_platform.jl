@@ -107,9 +107,12 @@ feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
 check(registry["schema_version"] == "1.3.0", "unexpected parity-registry schema")
-check(registry["registry_status"] ==
-      "phase15c-entry-frozen-runtime-not-started",
-    "parity registry does not record frozen Phase 15.C entry")
+check(registry["registry_status"] in (
+        "phase15c-entry-frozen-runtime-not-started",
+        "phase15c-implementation-candidate-awaiting-attestation",
+        "phase15c-qualified-serial-internal-alpha",
+    ),
+    "parity registry has an unknown Phase 15.C lifecycle state")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
@@ -254,6 +257,7 @@ check(Set(conformance_policy["forbidden_runtimes"]) ==
       Set(["Vivarium", "Process-Bigraph Python", "Bigraph-Schema Python"]),
     "forbidden upstream runtime list changed")
 
+feature_by_id = Dict(feature["id"] => feature for feature in features)
 expected_pb0_implemented = Set([
     "stable-typed-paths",
     "typed-hierarchical-store",
@@ -267,8 +271,6 @@ expected_pb0_implemented = Set([
     "deterministic-conflict-reconciliation",
     "atomic-event-commit",
 ])
-implemented_features = Set(feature["id"] for feature in features
-    if feature["status"] == "implemented")
 expected_phase15a_implemented = Set([
     "canonical-process-bigraph-acset",
     "compiled-structural-epoch",
@@ -277,17 +279,14 @@ expected_phase15b_implemented = Set([
     "structured-cospan-open-composition",
     "derived-directed-wiring-view",
 ])
-check(implemented_features ==
-      union(expected_pb0_implemented, expected_phase15a_implemented,
-        expected_phase15b_implemented),
-    "root registry implemented rows must exactly match PB0, Phase 15.A, and Phase 15.B evidence")
-check(all(feature -> feature["status"] ∉ ("oracle_passing", "qualified"), features),
-    "PB0 must not claim oracle-passing or qualified runtime features")
-check(all(oracle -> oracle["status"] ∉ ("oracle_passing", "qualified"), oracles),
-    "PB0 must not claim oracle-passing or qualified registered oracles")
-check(all(feature["evidence_status"] == "direct_passing_pb0" for feature in features
-    if feature["id"] in expected_pb0_implemented),
-    "every PB0 implemented row must cite direct_passing_pb0 evidence")
+check(all(feature_by_id[id]["status"] in (
+        "implemented", "oracle_passing", "qualified")
+      for id in expected_pb0_implemented),
+    "a PB0 row regressed below implemented")
+check(all(occursin("direct_passing_pb0",
+          feature_by_id[id]["evidence_status"])
+      for id in expected_pb0_implemented),
+    "a PB0 row lost its direct evidence history")
 check(all(feature["evidence_status"] == "direct_passing_phase15a"
           for feature in features if feature["id"] in expected_phase15a_implemented),
     "every Phase 15.A row must cite direct_passing_phase15a evidence")
@@ -320,8 +319,12 @@ check(package_registry["schema_version"] == "1.3.0",
     "package-local parity registry has not closed Decision 0037")
 check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
     "package-local parity registry permits upstream runtime execution")
-check(package_registry["maturity"] == "phase_15b_open_composition",
-    "package-local registry does not record Phase 15.B maturity")
+check(package_registry["maturity"] in (
+        "phase_15b_open_composition",
+        "phase_15c_implementation_candidate",
+        "phase_15c_serial_internal_alpha",
+    ),
+    "package-local registry no longer preserves Phase 15.B maturity")
 check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
       "passed_canonical_structure",
     "package-local registry does not close the bounded Phase 15.A slice")

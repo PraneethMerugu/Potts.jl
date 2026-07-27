@@ -165,7 +165,8 @@ struct ModelPayloads
     initial_values::Any
     laws::Tuple
     continuations::Tuple
-    function ModelPayloads(initial_values, laws, continuations)
+    iterations::Tuple{Vararg{IterationRegion}}
+    function ModelPayloads(initial_values, laws, continuations, iterations)
         normalized_laws = tuple(sort!(
             Pair{String,Any}[String(first(pair)) => last(pair) for pair in laws];
             by=first)...)
@@ -173,13 +174,20 @@ struct ModelPayloads
             Pair{String,Any}[String(first(pair)) => deepcopy(last(pair))
                 for pair in continuations];
             by=first)...)
-        new(deepcopy(initial_values), normalized_laws, normalized_continuations)
+        normalized_iterations = tuple(sort!(
+            IterationRegion[deepcopy(region) for region in iterations];
+            by=region -> region.id)...)
+        new(deepcopy(initial_values), normalized_laws, normalized_continuations,
+            normalized_iterations)
     end
 end
 
-function ModelPayloads(initial_values, laws; continuations=())
-    ModelPayloads(initial_values, laws, continuations)
+function ModelPayloads(initial_values, laws; continuations=(), iterations=())
+    ModelPayloads(initial_values, laws, continuations, iterations)
 end
+
+ModelPayloads(initial_values, laws, continuations) =
+    ModelPayloads(initial_values, laws, continuations, ())
 
 struct CanonicalModel
     structure::ConcreteProcessBigraphACSet
@@ -224,7 +232,9 @@ struct ExecutionPlan
     processes::Tuple
     steps::Tuple
     layers::Tuple
+    iterations::Tuple{Vararg{IterationRegion}}
     provenance::StructuralProvenance
+    fingerprint::String
 end
 
 function _canonical(io::IO, provenance::StructuralProvenance)

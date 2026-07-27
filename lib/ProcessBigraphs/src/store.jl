@@ -93,7 +93,7 @@ function snapshot_fingerprint(snapshot::CommittedSnapshot)
     ))
 end
 
-function project(snapshot::CommittedSnapshot, requested::Path...)
+function _project_exact(snapshot::CommittedSnapshot, requested)
     selected = if isempty(requested)
         snapshot.entries
     else
@@ -107,8 +107,15 @@ function project(snapshot::CommittedSnapshot, requested::Path...)
     Projection(snapshot.version, snapshot_fingerprint(snapshot), selected)
 end
 
-function project(snapshot::CommittedSnapshot, prefix::Path; recursive::Bool)
-    recursive || return project(snapshot, prefix)
+project(snapshot::CommittedSnapshot, requested::Path...) =
+    _project_exact(snapshot, requested)
+
+function project(
+    snapshot::CommittedSnapshot,
+    prefix::Path;
+    recursive::Bool=false,
+)
+    recursive || return _project_exact(snapshot, (prefix,))
     selected = tuple((target => deepcopy(value) for (target, value) in snapshot.entries
         if isprefixpath(prefix, target))...)
     isempty(selected) &&

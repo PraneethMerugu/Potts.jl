@@ -67,7 +67,7 @@ function invoke(law::Union{AbstractProcess,AbstractStep}, inputs, context)
         law=string(typeof(law)))
 end
 
-struct FixedSchedule
+struct FixedSchedule <: AbstractSchedule
     cadence::Duration
     first_due::Duration
     supports_partial::Bool
@@ -86,10 +86,18 @@ struct FixedSchedule
     end
 end
 
-struct ProcessDeclaration{P<:AbstractProcess,C}
+function _canonical(io::IO, schedule::FixedSchedule)
+    write(io, "FS")
+    _canonical(io, "1.0.0")
+    _canonical(io, schedule.cadence)
+    _canonical(io, schedule.first_due)
+    _canonical(io, schedule.supports_partial)
+end
+
+struct ProcessDeclaration{P<:AbstractProcess,S<:AbstractSchedule,C}
     id::String
     law::P
-    schedule::FixedSchedule
+    schedule::S
     domain::Symbol
     continuation::C
     continuation_version::String
@@ -98,7 +106,7 @@ end
 function ProcessDeclaration(
     id::AbstractString,
     law::P,
-    schedule::FixedSchedule;
+    schedule::AbstractSchedule;
     domain::Symbol=:cpu,
     continuation=nothing,
     continuation_version::AbstractString="1",
@@ -107,7 +115,7 @@ function ProcessDeclaration(
     domain in capabilities(law).domains ||
         _fail(:unsupported_execution_domain, "process does not support selected domain";
             id, domain, supported=capabilities(law).domains)
-    ProcessDeclaration{P,typeof(continuation)}(
+    ProcessDeclaration{P,typeof(schedule),typeof(continuation)}(
         String(id), law, schedule, domain, deepcopy(continuation),
         String(continuation_version))
 end
@@ -146,16 +154,29 @@ struct InvocationContext
     elapsed::Duration
     continuation::Any
     outputs::Tuple
+    rng::ModelRNGContext
 end
 
 struct InvocationResult
     deltas::Tuple{Vararg{Delta}}
     continuation::Any
+    next_deadline::Union{Nothing,LogicalTime}
     diagnostics::NamedTuple
 end
 
-InvocationResult(deltas=(); continuation=nothing, diagnostics=NamedTuple()) =
-    InvocationResult(tuple(deltas...), continuation, diagnostics)
+InvocationResult(
+    deltas=();
+    continuation=nothing,
+    next_deadline=nothing,
+    diagnostics=NamedTuple(),
+) = InvocationResult(tuple(deltas...), continuation, next_deadline, diagnostics)
+
+semantic_bits(context::InvocationContext, site, index; lineage="root") =
+    semantic_bits(context.rng, site, index; lineage)
+semantic_integer(context::InvocationContext, site, index, range; lineage="root") =
+    semantic_integer(context.rng, site, index, range; lineage)
+semantic_uniform(context::InvocationContext, site, index; lineage="root") =
+    semantic_uniform(context.rng, site, index; lineage)
 
 function emit(context::InvocationContext, port::Symbol, law::AbstractUpdateLaw, payload)
     position = findfirst(pair -> first(pair) == port, context.outputs)
@@ -171,7 +192,14 @@ struct PortView
     snapshot_version::UInt64
     snapshot_fingerprint::String
     values::Tuple{Vararg{Pair{Symbol,Any}}}
+    intervals::Tuple{Vararg{Pair{Symbol,AbstractIntervalInput}}}
 end
+
+PortView(
+    snapshot_version::UInt64,
+    snapshot_fingerprint::String,
+    values::Tuple,
+) = PortView(snapshot_version, snapshot_fingerprint, values, ())
 
 function Base.getindex(view::PortView, name::Symbol)
     position = findfirst(pair -> first(pair) == name, view.values)
@@ -181,6 +209,14 @@ end
 
 Base.haskey(view::PortView, name::Symbol) =
     any(pair -> first(pair) == name, view.values)
+
+function interval_input(view::PortView, name::Symbol)
+    position = findfirst(pair -> first(pair) == name, view.intervals)
+    isnothing(position) &&
+        _fail(:missing_interval_input,
+            "port has no compiled interval-input view"; name)
+    deepcopy(last(view.intervals[position]))
+end
 
 function _canonical(io::IO, port::PortSpec{T}) where {T}
     write(io, "PO")
