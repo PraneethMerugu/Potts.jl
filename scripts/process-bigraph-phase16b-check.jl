@@ -33,7 +33,10 @@ requirements = Dict(row["id"] => row for row in ledger["requirements"])
 
 candidate = entry["implementation_status"] == "phase16b_candidate"
 qualified = entry["implementation_status"] in (
-    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified")
+    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
+    "phase16d_qualified_c_hardware_open")
+d_qualified =
+    entry["implementation_status"] == "phase16d_qualified_c_hardware_open"
 check(candidate || qualified,
     "Phase 16.B checker requires candidate or qualified state")
 expected = candidate ? "implemented" : "qualified"
@@ -55,7 +58,8 @@ check(api["current_new_exports"] == [] &&
 families = Dict(row["id"] => row for row in api["families"])
 check(families["engine"]["status"] == expected &&
       families["field"]["status"] == expected &&
-      families["structure"]["status"] == "specified" &&
+      families["structure"]["status"] ==
+          (d_qualified ? "qualified" : "specified") &&
       families["sciml"]["status"] == "specified",
     "Phase 16.B API family states are inconsistent")
 

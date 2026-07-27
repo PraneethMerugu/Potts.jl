@@ -19,7 +19,9 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16-entry-audit.md",
     "design/audits/process-bigraph-phase16b-engine-field-audit.md",
     "design/audits/process-bigraph-phase16c-native-field-audit.md",
+    "design/audits/process-bigraph-phase16d-structural-transaction-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
+    "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
     "spec/process-bigraph-phase16-entry-v1.toml",
@@ -34,6 +36,7 @@ const REQUIRED = [
     "lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl",
     "scripts/process-bigraph-phase16b-check.jl",
     "scripts/process-bigraph-phase16c-check.jl",
+    "scripts/process-bigraph-phase16d-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -57,9 +60,13 @@ phase16a_evidence = TOML.parsefile(
 phase_state = entry["implementation_status"]
 phase16b_candidate = phase_state == "phase16b_candidate"
 phase16b_qualified = phase_state in (
-    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified")
-phase16c_candidate = phase_state == "phase16c_candidate"
+    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
+    "phase16d_qualified_c_hardware_open")
+phase16c_candidate = phase_state in (
+    "phase16c_candidate", "phase16d_qualified_c_hardware_open")
 phase16c_qualified = phase_state == "phase16c_qualified"
+phase16d_qualified =
+    phase_state == "phase16d_qualified_c_hardware_open"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
@@ -67,10 +74,11 @@ check(entry["schema_version"] == "1.0.0" &&
     "Phase 16 entry identity changed")
 check(entry["status"] == "in_progress" &&
       (phase16b_candidate || phase16b_qualified ||
-       phase16c_candidate || phase16c_qualified) &&
+       phase16c_candidate || phase16c_qualified ||
+       phase16d_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
-    "entry must claim the current Phase 16.B state without beta or release")
+    "entry must claim an admitted Phase 16 state without beta or release")
 check(entry["current_package_version"] == "0.4.0" &&
       entry["target_package_version"] == "0.5.0",
     "Phase 16 maturity versions changed")
@@ -185,6 +193,8 @@ for row in requirements
             "P16-C04" => "oracle_passing",
         )[row["id"]]
     elseif row["subgate"] == "16.C" && phase16c_qualified
+        "qualified"
+    elseif row["subgate"] == "16.D" && phase16d_qualified
         "qualified"
     else
         "specified"

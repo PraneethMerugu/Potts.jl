@@ -97,7 +97,7 @@ remaining_claim = "The immutable-topology serial runtime is qualified as Process
 
 [phase16_entry]
 status = "in_progress"
-implementation_status = "phase16c_candidate"
+implementation_status = "phase16d_qualified_c_hardware_open"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
 specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
@@ -117,10 +117,13 @@ phase16b_evidence = "../design/evidence/process-bigraph-phase16b-evidence-v1.tom
 phase16c_audit = "../design/audits/process-bigraph-phase16c-native-field-audit.md"
 phase16c_checker = "../scripts/process-bigraph-phase16c-check.jl"
 phase16c_candidate_evidence = "../design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"
+phase16d_audit = "../design/audits/process-bigraph-phase16d-structural-transaction-audit.md"
+phase16d_checker = "../scripts/process-bigraph-phase16d-check.jl"
+phase16d_evidence = "../design/evidence/process-bigraph-phase16d-evidence-v1.toml"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
-remaining_claim = "Phase 16.A and 16.B are qualified; Phase 16.C has a CPU/Metal oracle-passing implementation candidate but remains open for exact-head trusted Metal/ROCm evidence. Dynamic structure, adapters, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
+remaining_claim = "Phase 16.A, 16.B, and 16.D are qualified. Phase 16.C has qualified CPU and local real-Metal evidence but remains open for exact-head trusted Metal/ROCm artifacts. CorePotts cutover, adapters, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [

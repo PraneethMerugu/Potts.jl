@@ -105,29 +105,29 @@ evidence = ["cold/warm metrics", "zero steady allocation", "no host fallback"]
 id = "P16-D01"
 subgate = "16.D"
 title = "AlgebraicRewriting-backed stable structural operations"
-status = "specified"
-evidence = ["add/remove/divide/move/rewire fixtures"]
+status = "qualified"
+evidence = ["add/remove/divide/move/rewire fixtures", "design/evidence/process-bigraph-phase16d-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-D02"
 subgate = "16.D"
 title = "Independent Julia structural oracle"
-status = "specified"
-evidence = ["exhaustive bounded rules", "compiled/reference differential"]
+status = "qualified"
+evidence = ["exhaustive bounded rules", "compiled/reference differential", "design/evidence/process-bigraph-phase16d-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-D03"
 subgate = "16.D"
 title = "Structural conflict, identity, lineage, and capacity semantics"
-status = "specified"
-evidence = ["truth tables", "candidate-order invariance", "capacity failure"]
+status = "qualified"
+evidence = ["truth tables", "candidate-order invariance", "capacity failure", "design/evidence/process-bigraph-phase16d-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-D04"
 subgate = "16.D"
 title = "Atomic numeric and structural failure/restart"
-status = "specified"
-evidence = ["failure all stages", "every settled-boundary restart", "fuzz and shrink"]
+status = "qualified"
+evidence = ["failure all stages", "every settled-boundary restart", "fuzz and shrink", "design/evidence/process-bigraph-phase16d-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-E01"
