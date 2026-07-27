@@ -97,7 +97,7 @@ remaining_claim = "The immutable-topology serial runtime is qualified as Process
 
 [phase16_entry]
 status = "in_progress"
-implementation_status = "phase16b_candidate"
+implementation_status = "phase16b_qualified"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
 specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
@@ -113,10 +113,11 @@ checker = "../scripts/process-bigraph-phase16-entry-check.jl"
 phase16a_evidence = "../design/evidence/process-bigraph-phase16a-evidence-v1.toml"
 phase16b_audit = "../design/audits/process-bigraph-phase16b-engine-field-audit.md"
 phase16b_checker = "../scripts/process-bigraph-phase16b-check.jl"
+phase16b_evidence = "../design/evidence/process-bigraph-phase16b-evidence-v1.toml"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
-remaining_claim = "Phase 16.A is qualified and Phase 16.B is an implementation candidate; 28 rows remain unqualified. Absorbed G4, dynamic structure, adapters, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
+remaining_claim = "Phase 16.A and 16.B are qualified; 22 required rows remain open. Absorbed G4, dynamic structure, adapters, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [

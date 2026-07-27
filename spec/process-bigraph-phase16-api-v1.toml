@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16b_candidate"
+status = "phase16b_qualified"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false
@@ -68,13 +68,13 @@ unqualified_names_may_not_be_exported = true
 [[families]]
 id = "engine"
 subgate = "16.B"
-status = "implemented"
+status = "qualified"
 export_rule = "Export only after native and independent custom adapters pass the common CPU protocol."
 
 [[families]]
 id = "field"
 subgate = "16.B"
-status = "implemented"
+status = "qualified"
 export_rule = "Export only the logical descriptor and operation contracts; realizations remain opaque."
 
 [[families]]
