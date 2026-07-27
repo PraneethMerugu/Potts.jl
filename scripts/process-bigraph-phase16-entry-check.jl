@@ -179,7 +179,7 @@ for row in requirements
         phase16b_candidate ? "implemented" : "qualified"
     elseif row["subgate"] == "16.C" && phase16c_candidate
         Dict(
-            "P16-C01" => "oracle_passing",
+            "P16-C01" => "qualified",
             "P16-C02" => "oracle_passing",
             "P16-C03" => "implemented",
             "P16-C04" => "oracle_passing",
@@ -206,10 +206,14 @@ check(Set(keys(envelopes)) == Set([
     ]),
     "backend matrix envelope set changed")
 native = envelopes["native-cartesian-field"]
-native_status = phase16c_qualified ? "qualified" :
+native_cpu_status = (phase16c_candidate || phase16c_qualified) ?
+    "qualified" : "specified"
+native_device_status = phase16c_qualified ? "qualified" :
     phase16c_candidate ? "implemented" : "specified"
-check(native["CPU"] == native_status && native["Metal"] == native_status &&
-      native["ROCm"] == native_status && native["CUDA"] == "not_applicable",
+check(native["CPU"] == native_cpu_status &&
+      native["Metal"] == native_device_status &&
+      native["ROCm"] == native_device_status &&
+      native["CUDA"] == "not_applicable",
     "native field matrix must require CPU/Metal/ROCm and defer CUDA")
 for id in ["sciml-cartesian-field", "independent-custom-field",
            "merks-source-faithful-assembly", "cnv-source-faithful-assembly"]

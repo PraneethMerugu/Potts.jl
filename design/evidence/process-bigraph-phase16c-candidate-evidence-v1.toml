@@ -1,0 +1,51 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16c-native-field-candidate-2026-07-27"
+phase = "16.C"
+status = "candidate_hardware_open"
+runtime_package = "CorePotts"
+runtime_version = "0.1.0"
+julia = "1.12.6"
+internal_beta = false
+public_release = false
+
+[provenance]
+implementation_commit = "0a0dfc88141e601546e4211c5c09f0184dc42b6f"
+implementation_tree = "7ac6a23c4e7e2d6918ecaf78ef18e9d2acab8db2"
+native_field_source_sha256 = "bea14e8047e8d5f23aba71dcb51063d2550faafa665209980722518b13c66491"
+branch = "codex/phase-16"
+
+[cpu]
+status = "qualified"
+artifact = "phase-16/native-field/cpu-exact-head.toml"
+artifact_sha256 = "c6526ad59d01f58e73ad1bcfe98839511372653015716f85da0e940cf41ed8de"
+phase16c_assertions = 51
+corepotts_total_assertions = 3727
+full_package_suite = "passed"
+zero_warm_stage_allocation = true
+zero_publication_allocation = true
+manufactured_refinement = true
+mass_conservation = true
+restart_cuts = 5
+
+[metal]
+status = "oracle_passing_local_real_hardware"
+artifact = "phase-16/native-field/metal-local-exact-head.toml"
+artifact_sha256 = "2f024e68638efd697ba0dd439aafca5f9241e020f29cb3b9120a43d26c1ada73"
+real_hardware = true
+trusted_self_hosted_artifact = false
+exact_implementation_commit = true
+case_count = 2
+maximum_absolute_error = 0.0
+zero_staging_transfer = true
+zero_warm_device_allocation = true
+zero_publication_allocation = true
+
+[rocm]
+status = "implemented_awaiting_trusted_hardware"
+trusted_self_hosted_workflow = ".github/workflows/gpu-validation.yml"
+exact_head_artifact = false
+
+[closure]
+phase16c_qualified = false
+open_rows = ["P16-C02", "P16-C03", "P16-C04"]
+reason = "Exact-head trusted self-hosted Metal and ROCm artifacts remain required."

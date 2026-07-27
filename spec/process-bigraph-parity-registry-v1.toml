@@ -116,6 +116,7 @@ phase16b_checker = "../scripts/process-bigraph-phase16b-check.jl"
 phase16b_evidence = "../design/evidence/process-bigraph-phase16b-evidence-v1.toml"
 phase16c_audit = "../design/audits/process-bigraph-phase16c-native-field-audit.md"
 phase16c_checker = "../scripts/process-bigraph-phase16c-check.jl"
+phase16c_candidate_evidence = "../design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
