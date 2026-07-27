@@ -50,6 +50,7 @@ include("algorithms/lottery.jl")
 include("coupled/activity.jl")
 include("coupled/execution.jl")
 include("coupled/continuous.jl")
+include("coupled/native_fields.jl")
 include("coupled/relationships.jl")
 include("coupled/polarity.jl")
 include("coupled/history.jl")
@@ -256,7 +257,8 @@ export OwnershipVolumeTracker, BoundaryMeasureTracker, NoMomentStorage, NoMoment
        stage_copy_transaction, commit_staged!, launch_staged_commit!,
        tracker_conformance_errors
 export AbstractFieldBoundary, PeriodicFieldBoundary, ZeroNeumannFieldBoundary,
-       DirichletFieldBoundary, AxisFieldBoundary, AbstractFieldInterpolation,
+       DirichletFieldBoundary, MixedFieldBoundary, AxisFieldBoundary,
+       AbstractFieldInterpolation,
        NearestFieldInterpolation, MultilinearFieldInterpolation, CellCenteredField,
        sample_field,
        AbstractFieldResponse, LinearResponse, MichaelisMentenResponse,

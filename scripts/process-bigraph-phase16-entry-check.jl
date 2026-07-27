@@ -18,6 +18,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16-implementation-plan.md",
     "design/audits/process-bigraph-phase16-entry-audit.md",
     "design/audits/process-bigraph-phase16b-engine-field-audit.md",
+    "design/audits/process-bigraph-phase16c-native-field-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
@@ -32,6 +33,7 @@ const REQUIRED = [
     "lib/ProcessBigraphs/Project.toml",
     "lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl",
     "scripts/process-bigraph-phase16b-check.jl",
+    "scripts/process-bigraph-phase16c-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -52,15 +54,20 @@ local_parity = TOML.parsefile(paths["lib/ProcessBigraphs/parity-registry.toml"])
 project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 phase16a_evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16a-evidence-v1.toml"])
-phase16b_candidate = entry["implementation_status"] == "phase16b_candidate"
-phase16b_qualified = entry["implementation_status"] == "phase16b_qualified"
+phase_state = entry["implementation_status"]
+phase16b_candidate = phase_state == "phase16b_candidate"
+phase16b_qualified = phase_state in (
+    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified")
+phase16c_candidate = phase_state == "phase16c_candidate"
+phase16c_qualified = phase_state == "phase16c_qualified"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
       entry["phase"] == "16",
     "Phase 16 entry identity changed")
 check(entry["status"] == "in_progress" &&
-      (phase16b_candidate || phase16b_qualified) &&
+      (phase16b_candidate || phase16b_qualified ||
+       phase16c_candidate || phase16c_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
     "entry must claim the current Phase 16.B state without beta or release")
@@ -170,6 +177,15 @@ for row in requirements
         "qualified"
     elseif row["subgate"] == "16.B"
         phase16b_candidate ? "implemented" : "qualified"
+    elseif row["subgate"] == "16.C" && phase16c_candidate
+        Dict(
+            "P16-C01" => "oracle_passing",
+            "P16-C02" => "oracle_passing",
+            "P16-C03" => "implemented",
+            "P16-C04" => "oracle_passing",
+        )[row["id"]]
+    elseif row["subgate"] == "16.C" && phase16c_qualified
+        "qualified"
     else
         "specified"
     end
@@ -190,8 +206,10 @@ check(Set(keys(envelopes)) == Set([
     ]),
     "backend matrix envelope set changed")
 native = envelopes["native-cartesian-field"]
-check(native["CPU"] == "specified" && native["Metal"] == "specified" &&
-      native["ROCm"] == "specified" && native["CUDA"] == "not_applicable",
+native_status = phase16c_qualified ? "qualified" :
+    phase16c_candidate ? "implemented" : "specified"
+check(native["CPU"] == native_status && native["Metal"] == native_status &&
+      native["ROCm"] == native_status && native["CUDA"] == "not_applicable",
     "native field matrix must require CPU/Metal/ROCm and defer CUDA")
 for id in ["sciml-cartesian-field", "independent-custom-field",
            "merks-source-faithful-assembly", "cnv-source-faithful-assembly"]
@@ -227,7 +245,7 @@ check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
     "CNV scenario/source/domain changed")
 
 check(api["status"] ==
-      (phase16b_candidate ? "phase16b_candidate" : "phase16b_qualified") &&
+      phase_state &&
       api["current_new_exports"] == [] &&
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
@@ -242,13 +260,13 @@ check(length(planned_exports) == length(unique(planned_exports)) &&
 
 check(parity["phase16_entry"]["status"] == "in_progress" &&
       parity["phase16_entry"]["implementation_status"] ==
-      entry["implementation_status"] &&
+      phase_state &&
       parity["phase16_entry"]["g4_disposition"] == "mandatory Phase 16.C" &&
       parity["phase16_entry"]["internal_beta"] == false &&
       parity["phase16_entry"]["public_release"] == false,
     "root parity registry misstates Phase 16 entry or maturity")
 check(local_parity["accepted_next_architecture"]["phase16_status"] ==
-      entry["implementation_status"] &&
+      phase_state &&
       local_parity["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       local_parity["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry misstates Phase 16 entry or maturity")

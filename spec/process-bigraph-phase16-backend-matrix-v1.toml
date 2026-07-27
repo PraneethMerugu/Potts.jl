@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 matrix_id = "process-bigraphs-phase16-backend-matrix-v1"
 phase = "16"
-status = "specified"
+status = "phase16c_candidate"
 allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 
 [[envelopes]]
@@ -9,9 +9,9 @@ id = "native-cartesian-field"
 adapter = "CorePottsNativeFieldEngine"
 problem = "Cartesian 2D/3D cell-centered field evolution and exchange"
 precision = ["Float32", "Float64"]
-CPU = "specified"
-Metal = "specified"
-ROCm = "specified"
+CPU = "implemented"
+Metal = "implemented"
+ROCm = "implemented"
 CUDA = "not_applicable"
 replay = ["exact for declared integer schedule and RNG", "numerical for declared floating profile"]
 residency = "engine-owned co-resident buffers; explicit observation/checkpoint payload"
@@ -63,4 +63,3 @@ ROCm = "unsupported"
 CUDA = "not_applicable"
 replay = ["exact scheduling, lifecycle identity, and seed coordinates", "numerical field trajectory"]
 residency = "CPU"
-

@@ -55,6 +55,14 @@ jobs:
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=metal --profile=paper
       - name: Capture Phase 14 Wortel Metal device code
         run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_phase14_wortel_metal.jl
+      - name: Qualify Phase 16 native field on real Metal hardware
+        env:
+          POTTS_BENCHMARK_HARDWARE_ID: metal-runner-gpu-v1
+        run: >-
+          julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes
+          benchmark/phase16_native_field_qualification.jl
+          --backend=metal
+          --output=benchmark/results/phase16-native-field-metal.toml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-metal-${{ github.sha }}
@@ -96,6 +104,14 @@ jobs:
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=amdgpu --profile=paper
       - name: Capture Phase 14 Wortel ROCm device code
         run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_phase14_wortel_amdgpu.jl
+      - name: Qualify Phase 16 native field on real ROCm hardware
+        env:
+          POTTS_BENCHMARK_HARDWARE_ID: rocm-runner-gpu-v1
+        run: >-
+          julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes
+          benchmark/phase16_native_field_qualification.jl
+          --backend=amdgpu
+          --output=benchmark/results/phase16-native-field-rocm.toml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-rocm-${{ github.sha }}
