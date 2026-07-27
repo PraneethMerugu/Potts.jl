@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: In progress; Phase 16.A/B/D/E qualified, C hardware and F–I open
+Status: In progress; Phase 16.A/B/D/E qualified, C hardware open, 16.F consolidation next
 
 Date: 2026-07-27
 
@@ -52,9 +52,27 @@ device qualification and dynamic hierarchy; Merks and CNV then exercise the comm
 
 ### 16.F — solver plurality
 
-- Implement and qualify the CPU SciML field adapter.
-- Implement a deliberately independent custom CPU adapter.
-- Compare all three adapters on the same analytic/manufactured problems and failure/restart cases.
+Complete a mandatory 16.F0 repair before qualification:
+
+- remove the prototype `P16FixedEuler`, custom SciML solution, and
+  `solve(::SciMLBase.ODEProblem, ...)` implementation;
+- make the declaration accept an explicit real solver algorithm and bounded canonical options;
+- construct/remake a real SciML problem from published state, advance with the solver's
+  exact-target interface, and use standard return/error handling;
+- default to reconstructing solver state on every invocation with numerical replay;
+- move the independent custom adapter into an external-style conformance fixture with no SciML
+  dependency or shared numerical helper;
+- restore the admitted API boundary and keep concrete instances/candidates internal; and
+- preserve all qualified A–E tests and evidence.
+
+Then:
+
+- qualify the CPU SciML field adapter using a concrete solver package in the test environment;
+- qualify the deliberately independent custom CPU adapter;
+- compare native, SciML, and custom paths against analytic/manufactured solutions, refinement and
+  convergence expectations, declared tolerances, negative capabilities, failure, and restart;
+- record algorithm, options, package resolution, continuation, replay, and split accuracy in
+  fingerprints and evidence.
 
 ### 16.G — Merks
 
@@ -81,8 +99,9 @@ device qualification and dynamic hierarchy; Merks and CNV then exercise the comm
 ## Parallelism and joins
 
 16.B is the first code join. After it passes, 16.C and 16.D may run independently. 16.E joins both
-where a dynamic field slice needs them. 16.F requires 16.B but may overlap late 16.C/16.D work.
-16.G requires B, C CPU/native correctness, E's adapter path, and F. 16.H additionally requires D.
+where a dynamic field slice needs them. 16.F requires 16.B but may overlap unresolved 16.C
+hardware work. 16.G requires B, C CPU/native correctness, E's adapter path, and qualified F.
+16.H additionally requires D and qualified F.
 16.I joins everything.
 
 No branch's evidence can compensate for another branch. Hardware unavailability leaves only the
@@ -95,8 +114,8 @@ calendar weeks with disciplined overlap and dependable Metal/ROCm access. The la
 combined 3D fields, lifecycle, relationships, degradation, and persistence; the next is hardware
 qualification availability.
 
-## First implementation task
+## Current implementation task
 
-Begin with 16.A dependency bounds and the bounded protocol/API skeleton. Do not begin with a model
-loop. The first executable proof should be the 16.B CPU field microfixture completing the entire
-transaction and restart path.
+Treat commit `7217f9b67db3bc0e798bab192e81ad3a8923b912` as an unqualified 16.F prototype. Perform the
+16.F0 repair above, run all A–E regression gates unchanged, and only then attempt P16-F01 through
+P16-F03 qualification. Do not begin Merks or CNV assembly while 16.F remains open.

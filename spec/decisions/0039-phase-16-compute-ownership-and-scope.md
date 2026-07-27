@@ -1,6 +1,7 @@
 # Decision 0039: Phase 16 Compute Ownership, Field Coupling, and Internal-Beta Scope
 
-Status: Accepted architecture; Phase 16.A/B/D/E qualified, C hardware and F–I open
+Status: Accepted architecture with 16.F consolidation; Phase 16.A/B/D/E qualified, C hardware and
+F–I open
 
 Date: 2026-07-27
 
@@ -52,6 +53,20 @@ Phase 16 proves the abstraction with:
 Broader ODE/DAE, ModelingToolkit, Catalyst/JumpProcesses, COBREXA/JuMP, FBA, and SBML ecosystem
 work remains Phase 17. “Arbitrary solver” means an open protocol and independently qualified
 adapters, not a claim that every solver works on every device.
+
+The CPU SciML proof MUST inject a real solver algorithm and bounded canonical options. The adapter
+MUST hand a real SciML problem to methods owned by the selected solver ecosystem; ProcessBigraphs
+MUST NOT define a numerical `solve(::SciMLBase.ODEProblem, ...)` implementation. ProcessBigraphs
+owns exact target authorization and transactional publication, while the selected algorithm owns
+internal numerical steps, adaptivity, convergence, and caches. The initial generic continuation
+policy reconstructs from published canonical state and claims numerical replay. Retained
+integrators require a separately qualified codec/clone and invalidation contract.
+
+The independent custom adapter is an external-style conformance fixture, not a second numerical
+implementation shipped in ProcessBigraphs core. Cross-adapter proof uses analytic/manufactured and
+convergence evidence rather than agreement between duplicated stepping loops. These refinements
+are recorded in
+[`process-bigraph-phase16f-solver-integration-consolidation-research.md`](../../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md).
 
 ### Fields and splitting
 

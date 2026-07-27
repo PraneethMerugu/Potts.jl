@@ -20,6 +20,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16b-engine-field-audit.md",
     "design/audits/process-bigraph-phase16c-native-field-audit.md",
     "design/audits/process-bigraph-phase16d-structural-transaction-audit.md",
+    "design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
@@ -37,6 +38,7 @@ const REQUIRED = [
     "scripts/process-bigraph-phase16b-check.jl",
     "scripts/process-bigraph-phase16c-check.jl",
     "scripts/process-bigraph-phase16d-check.jl",
+    "scripts/process-bigraph-phase16f-consolidation-spec-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -113,7 +115,10 @@ const SUBGATES = [
 check(entry["ordering"]["subgates"] == SUBGATES &&
       entry["ordering"]["parallel_after"] == "16.B" &&
       Set(entry["ordering"]["parallel_branches"]) == Set(["16.C", "16.D"]) &&
-      entry["ordering"]["compensation_allowed"] == false,
+      entry["ordering"]["compensation_allowed"] == false &&
+      entry["ordering"]["phase16f_internal_order"] ==
+      ["16.F0-consolidation-repair", "P16-F01", "P16-F02", "P16-F03"] &&
+      entry["ordering"]["models_wait_for_qualified_phase16f"] == true,
     "Phase 16 subgate ordering changed")
 
 required_scope = Set(entry["scope"]["required"])
@@ -146,6 +151,16 @@ check(entry["dependency_policy"]["core_hard_sciml_dependency"] == false &&
       entry["dependency_policy"]["corepotts_depends_on_process_bigraphs"] == true &&
       entry["dependency_policy"]["upstream_python_runtime_execution"] == "forbidden",
     "dependency direction or no-Python rule changed")
+check(entry["solver_integration"]["phase16f_prototype_status"] ==
+      "unqualified_repair_required" &&
+      entry["solver_integration"]["process_bigraph_owned_sciml_solve"] ==
+      "forbidden" &&
+      entry["solver_integration"]["qualified_algorithm_selection"] ==
+      "explicit_real_algorithm_object" &&
+      entry["solver_integration"]["generic_continuation"] ==
+      "reconstruct_each_invocation_from_published_canonical_state" &&
+      entry["solver_integration"]["generic_replay"] == "numerical",
+    "Phase 16.F real-solver consolidation contract changed")
 check(Set(keys(project["deps"])) ==
       Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]) &&
       project["deps"]["AlgebraicRewriting"] ==
@@ -271,7 +286,10 @@ check(api["status"] ==
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
       api["policy"]["sciml_via_extension"] == true &&
-      api["policy"]["qualified_exports_only"] == true,
+      api["policy"]["qualified_exports_only"] == true &&
+      api["policy"]["process_bigraph_owned_sciml_solve"] == false &&
+      api["policy"]["explicit_real_sciml_algorithm"] == true &&
+      api["policy"]["prototype_exports_are_admitted"] == false,
     "Phase 16 API contract widens the current unqualified surface")
 planned_exports = String.(api["planned_internal_beta_exports"])
 check(length(planned_exports) == length(unique(planned_exports)) &&
@@ -311,14 +329,18 @@ for (path, phrases) in [
         ["when and why", "how", "Phase 16.C", "runnable source-bounded"]),
     ("spec/phase-16-engine-field-structural-and-adapter-semantics.md",
         ["ProcessBigraphs MUST be the only authority", "An engine MUST retain control",
-         "Merks 2006", "CNV scenario 38"]),
+         "Real-solver handoff", "Merks 2006", "CNV scenario 38"]),
+    ("design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md",
+        ["Mermaid-sized real-solver integration", "qualification evidence. It currently"]),
     ("design/refactor-roadmap.md",
         ["absorbed G4", "Phase 16.C", "CPU SciML"]),
     ("spec/process-bigraph-runtime-semantics.md",
         ["Decision 0039", "solver-neutral"]),
     ("spec/README.md", ["Phase 16", "Decision 0039"]),
     ("spec/conformance-evidence.md", ["Phase 16", "specified"]),
-    (".github/workflows/ci.yml", ["process-bigraph-phase16-entry-check.jl"]),
+    (".github/workflows/ci.yml",
+        ["process-bigraph-phase16-entry-check.jl",
+         "process-bigraph-phase16f-consolidation-spec-check.jl"]),
 ]
     text = read(paths[path], String)
     for phrase in phrases

@@ -153,23 +153,42 @@ evidence = ["old/new differential", "one production authority", "no silent fallb
 [[requirements]]
 id = "P16-F01"
 subgate = "16.F"
-title = "CPU SciML field adapter"
+title = "CPU real-SciML field adapter"
 status = "specified"
-evidence = ["declared problem envelope", "continuation/replay matrix", "failure/restart"]
+evidence = [
+    "explicit real solver algorithm and canonical options",
+    "no ProcessBigraph-owned SciML solve or solution implementation",
+    "solver-supported exact-target advance and standard success/error handling",
+    "algorithm/options/package-resolution declaration fingerprint",
+    "reconstruct-each-invocation numerical replay",
+    "transaction isolation, failure, and settled restart",
+]
 
 [[requirements]]
 id = "P16-F02"
 subgate = "16.F"
 title = "Independent CPU custom field adapter"
 status = "specified"
-evidence = ["no SciML dependency", "open-protocol conformance"]
+evidence = [
+    "external-style conformance fixture outside ProcessBigraphs core",
+    "no SciML dependency",
+    "no shared numerical stepping helper with SciML realization",
+    "open-protocol transaction/failure/restart conformance",
+]
 
 [[requirements]]
 id = "P16-F03"
 subgate = "16.F"
 title = "Native, SciML, and custom cross-adapter evidence"
 status = "specified"
-evidence = ["analytic/manufactured comparisons", "declared tolerances", "negative capabilities"]
+evidence = [
+    "analytic/manufactured solutions",
+    "refinement and method-appropriate convergence",
+    "declared tolerances and split-accuracy limitations",
+    "boundary, conservation, failure, and restart comparisons",
+    "negative capabilities",
+    "duplicated Euler-loop equality is not an independent oracle",
+]
 
 [[requirements]]
 id = "P16-G01"

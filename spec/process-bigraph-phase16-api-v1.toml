@@ -64,12 +64,31 @@ qualified_exports_only = true
 constructor_spelling_stable_at_internal_beta = false
 semantic_identity_stable_at_internal_beta = true
 unqualified_names_may_not_be_exported = true
+process_bigraph_owned_sciml_solve = false
+explicit_real_sciml_algorithm = true
+automatic_algorithm_selection_qualified = false
+concrete_solver_is_core_dependency = false
+concrete_instances_candidates_and_caches_are_internal = true
+custom_conformance_adapter_is_core_api = false
+prototype_exports_are_admitted = false
+
+[phase16f_consolidation]
+status = "repair_required"
+prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
+restore_current_new_exports_to = []
+minimal_admission_rule = "Only the smallest declaration-authoring surface may be admitted after P16-F01 through P16-F03 qualify."
+forbidden_public_details = [
+    "home-grown SciML algorithm or solution wrappers",
+    "solver integrators and caches",
+    "adapter instances, completion handles, and candidates",
+    "independent custom conformance fixture internals",
+]
 
 [[families]]
 id = "engine"
 subgate = "16.B"
 status = "qualified"
-export_rule = "Export only after native and independent custom adapters pass the common CPU protocol."
+export_rule = "Admit the smallest declaration-authoring surface only after Phase 16.F cross-adapter qualification; concrete runtime machinery remains internal."
 
 [[families]]
 id = "field"
@@ -87,7 +106,7 @@ export_rule = "Export typed structural requests/results only; raw AlgebraicRewri
 id = "sciml"
 subgate = "16.F"
 status = "specified"
-export_rule = "Expose adapter construction through the SciML extension after CPU qualification."
+export_rule = "Expose only qualified declaration construction with an explicit real algorithm and canonical options through the SciML extension."
 
 [[families]]
 id = "corepotts"

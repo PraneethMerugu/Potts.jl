@@ -35,6 +35,8 @@ phase16d_evidence = "../design/evidence/process-bigraph-phase16d-evidence-v1.tom
 phase16e_audit = "../design/audits/process-bigraph-phase16e-corepotts-cutover-audit.md"
 phase16e_checker = "../scripts/process-bigraph-phase16e-check.jl"
 phase16e_evidence = "../design/evidence/process-bigraph-phase16e-evidence-v1.toml"
+phase16f_consolidation_research = "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
+phase16f_consolidation_checker = "../scripts/process-bigraph-phase16f-consolidation-spec-check.jl"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]
@@ -115,6 +117,8 @@ subgates = [
 parallel_after = "16.B"
 parallel_branches = ["16.C", "16.D"]
 compensation_allowed = false
+phase16f_internal_order = ["16.F0-consolidation-repair", "P16-F01", "P16-F02", "P16-F03"]
+models_wait_for_qualified_phase16f = true
 
 [engine_protocol]
 operation_families = ["interval_advance", "boundary_solve", "discrete_batch", "typed_extension"]
@@ -124,6 +128,25 @@ candidate = "opaque staged leaf candidate plus typed small effects"
 completion = "asynchronous handle allowed"
 engine_owns = ["algorithm", "internal steps", "workspace", "cache", "arrays", "layout", "device buffers", "kernels", "streams", "preconditioners"]
 runtime_owns = ["logical time", "invocation reason", "identity", "schema", "version", "visibility", "RNG coordinates", "validation", "authorization", "publication", "failure", "checkpoint", "replay"]
+
+[solver_integration]
+phase16f_prototype_status = "unqualified_repair_required"
+prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
+process_bigraph_owned_sciml_solve = "forbidden"
+qualified_algorithm_selection = "explicit_real_algorithm_object"
+automatic_algorithm_selection = "experimental"
+solver_options = "bounded typed or canonical and fingerprinted"
+exact_target = "solver-supported exact-target operation plus reached-time verification"
+success = "standard SciML return-code and integrator-error interfaces"
+generic_continuation = "reconstruct_each_invocation_from_published_canonical_state"
+generic_replay = "numerical"
+retained_integrator = "separately qualified codec/clone and invalidation envelope only"
+published_state_mutation_during_solve = "forbidden"
+custom_adapter_location = "external-style conformance fixture outside ProcessBigraphs core"
+custom_adapter_independence = "no SciML dependency and no shared numerical stepping helper"
+cross_adapter_oracle = "analytic/manufactured plus refinement/convergence and declared tolerances"
+mermaid_role = "research reference only; not dependency, scheduler, authority, or oracle"
+admitted_exports = "smallest qualified declaration-authoring surface"
 
 [fields]
 dimensions = [2, 3]

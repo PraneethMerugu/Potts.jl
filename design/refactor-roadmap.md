@@ -1395,9 +1395,17 @@ After 16.B, 16.C and 16.D may proceed concurrently with separately attributable 
 
 ### 16.F — CPU SciML, independent custom adapter, and cross-adapter proof
 
-- Qualify one bounded CPU SciML field adapter and one deliberately independent CPU custom adapter.
-- Compare native, SciML, and custom adapters on the same analytic/manufactured, boundary,
-  continuation, restart, failure, and negative-capability fixtures.
+- First complete the mandatory 16.F0 consolidation recorded in the
+  [solver-integration research audit](audits/process-bigraph-phase16f-solver-integration-consolidation-research.md):
+  remove ProcessBigraph-owned SciML solver/solution implementations, inject a real algorithm and
+  canonical options, use the solver's exact-target and standard success interfaces, default to
+  reconstruct-each-invocation numerical replay, move the independent custom adapter outside core,
+  and restore the admitted export boundary.
+- Qualify one bounded CPU real-SciML field adapter and one deliberately independent external-style
+  CPU custom conformance adapter.
+- Compare native, SciML, and custom adapters against analytic/manufactured solutions, refinement
+  and convergence expectations, declared tolerances, boundary, continuation, restart, failure,
+  and negative-capability fixtures.
 - Do not claim universal third-party-solver or GPU support.
 
 ### 16.G — runnable Merks 2006

@@ -60,6 +60,8 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16d-check.jl
       - name: Enforce ProcessBigraphs Phase 16.E CorePotts cutover
         run: julia --startup-file=no scripts/process-bigraph-phase16e-check.jl
+      - name: Enforce ProcessBigraphs Phase 16.F solver-integration consolidation specification
+        run: julia --startup-file=no scripts/process-bigraph-phase16f-consolidation-spec-check.jl
       - name: Verify ProcessBigraphs Phase 16 closure remains honestly open
         run: julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
       - name: Enforce Phase 14 Wang sequential CPU disposition

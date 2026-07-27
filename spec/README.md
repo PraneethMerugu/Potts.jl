@@ -235,8 +235,12 @@ heavy computation occurs. Phase 16.A, 16.B, 16.D, and 16.E are qualified: the in
 engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
 domain requests, V3 logical checkpoint, and non-destructive legacy conversions are passing. Phase
 16.C remains open only for trusted exact-head Metal/ROCm evidence, and 14 requirements remain open
-across 16.C and 16.F–16.I. Public engine exports remain gated on Phase 16.F cross-adapter
-qualification.
+across 16.C and 16.F–16.I. The
+[16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
+classifies commit `7217f9b` as an unqualified prototype and requires a real injected SciML
+algorithm, standard solver interfaces, an external-style independent custom fixture, numerical
+replay by default, and restored API containment before qualification. Merks/CNV assembly waits
+for qualified 16.F; public engine exports remain gated.
 
 ## Conformance Principle
 
