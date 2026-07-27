@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Entry Audit
 
-Status: Ready to start Phase 16.A; implementation closure open
+Status: Historical entry passed; Phase 16.A/B/D/E qualified, C hardware and F–I open
 
 Date: 2026-07-27
 
@@ -36,6 +36,16 @@ Phase 16.A must add actual compatible dependency bounds and freeze the bounded A
 16.B runtime implementation. The entry checker passing authorizes this work; it does not authorize
 marking any implementation row qualified.
 
+## Current amendment
+
+Phase 16.A/B/D/E have since qualified. Phase 16.C remains independently open for trusted
+exact-head Metal/ROCm artifacts. The first 16.F implementation at commit `7217f9b` is retained as
+an unqualified prototype, not admitted evidence. The
+[16.F solver-integration consolidation](process-bigraph-phase16f-solver-integration-consolidation-research.md)
+requires a real injected SciML algorithm, standard solver interfaces, numerical replay by default,
+an external-style independent custom fixture, and restored API containment before F01–F03 can
+qualify. Phase 16.G/H must wait for that qualification.
+
 ## Risks already controlled
 
 - one scheduler/lifecycle/publication authority is explicit;
@@ -47,4 +57,3 @@ marking any implementation row qualified.
 - G4 cannot be skipped;
 - full model analyses and universal GPU claims are excluded; and
 - final closure requires real Metal/ROCm and exact-tree evidence.
-

@@ -123,10 +123,13 @@ phase16d_evidence = "../design/evidence/process-bigraph-phase16d-evidence-v1.tom
 phase16e_audit = "../design/audits/process-bigraph-phase16e-corepotts-cutover-audit.md"
 phase16e_checker = "../scripts/process-bigraph-phase16e-check.jl"
 phase16e_evidence = "../design/evidence/process-bigraph-phase16e-evidence-v1.toml"
+phase16f_consolidation_research = "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
+phase16f_consolidation_checker = "../scripts/process-bigraph-phase16f-consolidation-spec-check.jl"
+phase16f_prototype_status = "unqualified_repair_required"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
-remaining_claim = "Phase 16.A, 16.B, 16.D, and 16.E are qualified. Phase 16.C has qualified CPU and local real-Metal evidence but remains open for exact-head trusted Metal/ROCm artifacts. SciML/custom plurality, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
+remaining_claim = "Phase 16.A, 16.B, 16.D, and 16.E are qualified. Phase 16.C has qualified CPU and local real-Metal evidence but remains open for exact-head trusted Metal/ROCm artifacts. Commit 7217f9b is an unqualified 16.F prototype that must pass the real-solver/API/custom-fixture consolidation repair before SciML/custom plurality can qualify. Runnable Merks/CNV, internal beta, complete parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [

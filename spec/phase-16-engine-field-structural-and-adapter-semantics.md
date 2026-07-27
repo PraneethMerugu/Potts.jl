@@ -1,13 +1,14 @@
 # Phase 16 Engine, Field, Structural, and Adapter Semantics
 
-Status: Normative pre-implementation specification
+Status: Normative specification; Phase 16.F consolidation amended
 
 Version: 1.0.0
 
 Date: 2026-07-27
 
-Authority: Decision 0039, the Phase 16 owner interview, entry contract, qualification ledger,
-backend matrix, and migration registry
+Authority: Decision 0039, the Phase 16 owner interview, the Phase 16.F solver-integration
+consolidation research, entry contract, qualification ledger, backend matrix, and migration
+registry
 
 ## 1. Purpose and claim boundary
 
@@ -63,7 +64,29 @@ Adapter construction and problem lowering occur outside the numerical hot path. 
 MUST be type-stable for the qualified path. Extension adapters use ordinary Julia dispatch and MAY
 use Julia package extensions; ProcessBigraphs core MUST NOT hard-depend on SciML.
 
-### 3.2 Operation contract
+### 3.2 Real-solver handoff
+
+For the qualified SciML envelope, the immutable adapter declaration MUST contain an explicit real
+solver algorithm plus bounded typed or canonical solver options. Automatic algorithm selection is
+experimental. Algorithm identity, option values, package resolution, exact-target policy,
+continuation policy, and replay class contribute to declaration fingerprints and provenance.
+
+ProcessBigraphs MUST NOT implement a numerical `solve` method for a SciML problem type. The
+extension constructs or remakes a real SciML problem from the published canonical state and calls
+the selected solver package through its supported CommonSolve/SciML interface. The solver owns
+internal step sizes, adaptivity, convergence, callbacks, caches, and numerical diagnostics.
+
+An interval adapter MUST use a solver-supported exact-target mechanism, such as an integrator
+operation that forces the requested stop, and MUST verify the reached time. It MUST interpret
+completion with the standard SciML return-code/error interface and normalize failure without
+publishing candidate state. Interpolating an overshot solution back to the target is not
+publication-equivalent evidence.
+
+SciMLBase and CommonSolve MAY remain weak extension triggers. A concrete solver package belongs in
+the test or application environment for the qualified envelope; it MUST NOT become a
+ProcessBigraphs core dependency.
+
+### 3.3 Operation contract
 
 Stable operation families are:
 
@@ -95,7 +118,7 @@ Publication MUST be allocation-free, transfer-free, synchronization-free, and fr
 work. A candidate may not be externally visible before authorization. Failure discards numeric,
 field, structural, continuation, RNG, clock, observation, and required-record candidates together.
 
-### 3.3 Solver control and early returns
+### 3.4 Solver control and early returns
 
 An engine controls internal steps and iterations. An internal callback may alter only engine-local
 candidate state. A callback that changes global scheduling or structure MUST surface a typed event
@@ -105,7 +128,7 @@ An interval operation MUST reach the exact target or return a typed early result
 overshoot, undershoot, extrapolation, or target rounding is forbidden. ProcessBigraphs determines
 what the early result means for scheduling.
 
-### 3.4 Capabilities and unsupported combinations
+### 3.5 Capabilities and unsupported combinations
 
 Preflight MUST reject unsupported combinations before mutation. Capability declarations are
 specific to adapter, semantic version, problem envelope, backend, precision, continuation/replay
@@ -134,6 +157,16 @@ change is forbidden.
 
 Replay classes are `exact`, `numerical`, `statistical`, and `unsupported`. Aggregate replay takes
 the weakest component class.
+
+The initial generic SciML continuation policy in Phase 16 is `reconstruct_each_invocation`.
+The adapter reconstructs a problem and solver-owned integrator from the last published canonical
+state and therefore claims numerical replay by default. Retaining or checkpointing a live
+integrator requires a separately declared and qualified clone/codec, compatibility and
+invalidation matrix, failure isolation, restart proof, and replay class. Generic `deepcopy` or
+Julia serialization of an integrator is not a continuation contract.
+
+Every solve is staged against isolated candidate state. Neither a solver nor an adapter may mutate
+published arrays or a published integrator before ProcessBigraphs authorization.
 
 ## 5. Field contract
 
@@ -196,6 +229,11 @@ declared and supported.
 ProcessBigraphs owns the globally visible operation graph and split. Presets lower to canonical
 named operations. A solver owns internal numerical splitting that is invisible outside its
 invocation. Fusion is allowed only with evidence of boundary equivalence.
+
+The declared split MUST document its temporal accuracy and source/field visibility. Solver
+accuracy inside one interval does not remove operator-splitting error at CPM/field boundaries.
+Cross-adapter evidence distinguishes discretization error, solver tolerance, and visible-split
+error.
 
 An algebraic feedback loop must be represented as a named bounded iterative region or rejected.
 There is no universal default CPM/field split.
@@ -293,6 +331,11 @@ The minimum stable Phase 16 envelopes are:
 | CNV full source-faithful assembly | required | not claimed | not claimed |
 
 Reusable Merks/CNV mechanisms must separately qualify on every applicable native backend.
+
+The SciML realization uses a concrete CPU solver package only through the extension/test or
+application environment. The independent custom realization is an external-style conformance
+fixture outside ProcessBigraphs core, has no SciML dependency, and shares no numerical stepping
+helper with the SciML realization.
 
 ### 7.2 Residency and synchronization
 
@@ -455,7 +498,7 @@ Every requirement has a stable ledger identity and statuses `not_started`, `spec
 Required methods include:
 
 - analytic and manufactured field solutions, refinement, boundary, conservation, and split tests;
-- native/SciML/custom cross-adapter comparisons;
+- native/SciML/custom cross-adapter comparisons with declared tolerances and convergence evidence;
 - independent Julia structural oracle and exhaustive bounded rule cases;
 - property, metamorphic, fuzz with recorded seed and shrink, and targeted mutation tests;
 - failure injection at every stage;
@@ -487,13 +530,19 @@ validity.
 - **16.D** exits with the stable structural set, independent rewrite oracle, fuzz, failure, and
   exact restart.
 - **16.E** exits with the first CorePotts cutover and legacy checkpoint conversion.
-- **16.F** exits with CPU SciML, independent custom adapter, and cross-adapter evidence.
+- **16.F** first requires a consolidation repair that removes any ProcessBigraph-owned SciML
+  solver/solution implementation, injects a real algorithm and canonical options, uses standard
+  success handling, moves the custom conformance adapter out of core, and restores the admitted
+  API boundary. It exits only with CPU SciML, independent custom-adapter, and analytic,
+  manufactured, convergence, failure, and restart evidence.
 - **16.G** exits with the bounded runnable Merks contract.
 - **16.H** exits with the bounded runnable CNV contract.
 - **16.I** exits with full ledger reconciliation, documentation, performance evidence, clean
   dependency resolution, exact-tree candidate, and internal-beta attestation.
 
 After 16.B, 16.C and 16.D may overlap. No subgate substitutes for another.
+16.G and 16.H MUST NOT start until 16.F is qualified. Mermaid.jl is a research reference, not a
+Phase 16 dependency, scheduler, runtime authority, or qualification oracle.
 
 ## 13. Explicit exclusions
 

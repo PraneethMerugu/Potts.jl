@@ -19,13 +19,17 @@ residency = "engine-owned co-resident buffers; explicit observation/checkpoint p
 [[envelopes]]
 id = "sciml-cartesian-field"
 adapter = "SciMLFieldAdapter"
-problem = "bounded CPU Cartesian field advance and boundary solve"
+problem = "bounded CPU Cartesian field advance lowered to a real SciML problem"
 precision = ["Float64", "declared Float32"]
 CPU = "specified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"
-replay = ["exact only for fully canonical continuation", "otherwise numerical or statistical"]
+algorithm = "explicit injected real solver algorithm; automatic selection experimental"
+options = "bounded canonical and fingerprinted"
+exact_target = "solver-supported exact-target operation with reached-time verification"
+continuation = "reconstruct each invocation from published canonical state"
+replay = ["numerical by default", "stronger class requires a separately qualified continuation envelope"]
 residency = "CPU"
 
 [[envelopes]]
@@ -37,7 +41,9 @@ CPU = "specified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"
-replay = ["exact for declared fixture"]
+location = "external-style conformance fixture outside ProcessBigraphs core"
+independence = "no SciML dependency or shared numerical stepping helper"
+replay = ["declared by fixture; floating trajectory is numerical unless exactness is separately proven"]
 residency = "CPU"
 
 [[envelopes]]
