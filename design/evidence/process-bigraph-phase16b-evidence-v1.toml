@@ -1,0 +1,88 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16b-engine-field-2026-07-27"
+phase = "16.B"
+status = "qualified"
+runtime_package = "ProcessBigraphs"
+runtime_version = "0.4.0"
+runtime_uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
+julia = "1.12.6"
+internal_beta = false
+public_release = false
+qualified_rows = [
+    "P16-B01",
+    "P16-B02",
+    "P16-B03",
+    "P16-B04",
+    "P16-B05",
+    "P16-B06",
+]
+
+[provenance]
+implementation_commit = "d423ce94aa3fa933ec87fad9598de001d6924b00"
+implementation_tree = "c1517f8e0325dfea2a472f0d44ed426687848bff"
+branch = "codex/phase-16"
+qualification_scope = "Phase 16.B only"
+exact_head_internal_beta_claim = false
+
+[artifact_hashes]
+engine_protocol_sha256 = "5c6f4b839b959a3bdca6fa4521d13ca77e6bb750cdaf3e346b7465d5e5ec1251"
+field_protocol_sha256 = "b9b55cd311518752a37149d81e82e9234dcb9689d767c22b115262d7108b7a66"
+test_sha256 = "a103a3e8fe93906b3374883d7c9b48426c1dc62464c0ad77e8a286d4eaded234"
+
+[dependencies]
+AlgebraicRewriting = "0.5.0"
+CommonSolve = "0.2.11"
+SciMLBase = "3.39.1"
+core_hard_sciml_dependency = false
+core_reverse_corepotts_dependency = false
+
+[protocol]
+operation_families = ["interval_advance", "boundary_solve", "discrete_batch"]
+transaction = "stage-complete-validate-authorize-publish-or-discard"
+exact_target_required = true
+typed_early_return = true
+typed_global_event_request = true
+typed_failure = true
+immutable_encoded_inputs = true
+zero_allocation_publication_fixture = true
+replay_classes = ["exact", "numerical", "statistical", "unsupported"]
+continuation_actions = ["preserve", "transform", "reinitialize", "reconstruct", "reject"]
+
+[field]
+ranks = [2, 3]
+geometry = "Cartesian cell-centered"
+boundaries = ["periodic", "Dirichlet", "Neumann", "mixed"]
+sampling = ["nearest", "linear"]
+functional_deposition = true
+conservative_exchange = true
+explicit_insufficiency = true
+named_splitting = true
+undeclared_algebraic_loop_rejected = true
+
+[totals]
+pb0_assertions = 309
+phase15c_assertions = 440
+phase16a_assertions = 7
+phase16b_assertions = 81
+phase16_assertions = 88
+aqua_assertions = 9
+total_assertions = 846
+failure_paths = 8
+restart_cuts = 4
+
+[qualification]
+processbigraphs_package_tests = "passed"
+phase16_entry_checker = "passed"
+phase16b_checker = "passed"
+phase16_closure_open_checker = "passed"
+platform_checker = "passed"
+structure_checker = "passed"
+phase15c_checker = "passed"
+
+[limitations]
+items = [
+    "The reusable protocol is qualified internally but remains unexported until Phase 16.F cross-adapter qualification.",
+    "Native numerical field kernels and real device evidence remain Phase 16.C.",
+    "Dynamic structural rewriting, CorePotts cutover, SciML/custom production adapters, and assembled models remain open.",
+    "No internal-beta, public-release, complete-parity, or fastest-runtime claim is made.",
+]
