@@ -36,6 +36,7 @@ evidence_path = require_file(
     "design/evidence/process-bigraph-phase15b-evidence-v1.toml")
 audit_path = require_file(
     "design/audits/process-bigraph-phase15b-open-composition-audit.md")
+ci_path = require_file(".github/workflows/ci.yml")
 
 project = TOML.parsefile(project_path)
 check(project["version"] == "0.3.0",
@@ -56,6 +57,7 @@ checkpoint_source = read(checkpoint_path, String)
 tests = read(test_path, String)
 runner = read(runner_path, String)
 docs = read(readme_path, String) * "\n" * read(docs_path, String)
+ci = read(ci_path, String)
 
 for phrase in [
     "include(\"composition.jl\")",
@@ -127,6 +129,8 @@ for phrase in [
 end
 check(occursin("test_phase15b_open_composition.jl", runner),
     "Phase 15.B tests are absent from the package runner")
+check(occursin("scripts/process-bigraph-phase15b-check.jl", ci),
+    "Phase 15.B checker is absent from the required CI workflow")
 for phrase in [
     "Immutable open composition",
     "Advanced AlgebraicJulia access",

@@ -20,6 +20,7 @@ result = "passed"
 processbigraphs_tests_passed = 309
 phase15b_open_composition_assertions = 193
 aqua_checks_passed = 9
+required_ci_gate = ".github/workflows/ci.yml"
 implemented_rows = [
     "structured-cospan-open-composition",
     "derived-directed-wiring-view",

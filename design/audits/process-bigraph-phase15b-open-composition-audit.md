@@ -40,7 +40,7 @@ Phase 15.C.
 | 15.B3 hierarchy compilation | Passed | Static containment is canonical at arbitrary finite depth. Compilation validates the hierarchy, flattens stores/routes/actors into the existing indexed plan, and retains composite, endpoint, boundary, junction, and junction-endpoint provenance. Runtime and checkpoint code do not traverse authoring structures. |
 | 15.B4 directed wiring profile | Passed | The versioned annotated ProcessBigraph profile derives a real Catlab directed wiring diagram and re-imports only with intact structure and annotation fingerprints. Generic or mutated diagrams fail closed. |
 | 15.B5 integration matrix | Passed | 193 Phase 15.B assertions cover flat typed, hierarchical typed, direct-ACSet, structured-cospan, left/right-grouped four-way, and annotated-wiring authoring; row renumbering; repeated mounts; five-level nesting; a four-way junction; namespace privacy and collision rejection; exact compatibility; root-resolved initialization; malformed maps; wiring corruption; checkpoints; traces; and failure atomicity. |
-| 15.B6 evidence and closure | Passed | Package docs contain ordinary and advanced authoring tracks; dependency bounds are recorded; this audit, the machine-readable evidence manifest, and the fail-closed checker exist; PB0 and Phase 15.A baselines remain exact. |
+| 15.B6 evidence and closure | Passed | Package docs contain ordinary and advanced authoring tracks; dependency bounds are recorded; this audit, the machine-readable evidence manifest, and the fail-closed checker exist; the checker is an explicit required CI step; PB0 and Phase 15.A baselines remain exact. |
 
 ## Architectural findings
 
