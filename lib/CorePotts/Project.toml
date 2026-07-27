@@ -39,6 +39,7 @@ Adapt = "4.7"
 AMDGPU = "2.7"
 Aqua = "0.8"
 Atomix = "1.1"
+CommonSolve = "0.2.11"
 ConstructionBase = "1.6.0"
 CUDA = "5.11"
 HDF5 = "0.17"
@@ -59,6 +60,7 @@ julia = "1.12.6"
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
@@ -66,4 +68,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
 
 [targets]
-test = ["Aqua", "Zarr", "HDF5", "Test"]
+test = ["Aqua", "CommonSolve", "Zarr", "HDF5", "Test"]
