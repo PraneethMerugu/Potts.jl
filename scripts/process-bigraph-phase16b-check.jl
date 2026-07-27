@@ -45,9 +45,9 @@ for id in ["P16-A01", "P16-A02", "P16-A03"]
     check(requirements[id]["status"] == "qualified",
         "$(id) lost Phase 16.A qualification")
 end
-check(count(row -> row["status"] == "qualified", values(requirements)) ==
-      (candidate ? 3 : 9),
-    "Phase 16.B ledger promotes rows outside the admitted subgates")
+qualified_count = count(row -> row["status"] == "qualified", values(requirements))
+check(candidate ? qualified_count == 3 : qualified_count >= 9,
+    "Phase 16.B ledger does not preserve the admitted Phase 16.A/B qualifications")
 
 check(api["current_new_exports"] == [] &&
       api["policy"]["unqualified_names_may_not_be_exported"] == true,

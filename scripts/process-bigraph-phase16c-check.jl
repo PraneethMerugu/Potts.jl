@@ -1,6 +1,7 @@
 #!/usr/bin/env julia
 
 using TOML
+using SHA
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 const failures = String[]
@@ -37,7 +38,7 @@ check(candidate || qualified,
 
 expected = qualified ? "qualified" : nothing
 if candidate
-    check(requirements["P16-C01"]["status"] == "oracle_passing" &&
+    check(requirements["P16-C01"]["status"] == "qualified" &&
           requirements["P16-C02"]["status"] == "oracle_passing" &&
           requirements["P16-C03"]["status"] == "implemented" &&
           requirements["P16-C04"]["status"] == "oracle_passing",
@@ -59,12 +60,13 @@ end
 
 envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 native = envelopes["native-cartesian-field"]
-expected_backend = qualified ? "qualified" : "implemented"
+expected_cpu = "qualified"
+expected_device = qualified ? "qualified" : "implemented"
 check(matrix["status"] ==
       (qualified ? "phase16c_qualified" : "phase16c_candidate") &&
-      native["CPU"] == expected_backend &&
-      native["Metal"] == expected_backend &&
-      native["ROCm"] == expected_backend &&
+      native["CPU"] == expected_cpu &&
+      native["Metal"] == expected_device &&
+      native["ROCm"] == expected_device &&
       native["CUDA"] == "not_applicable",
     "native backend matrix disagrees with Phase 16.C state")
 
@@ -116,6 +118,29 @@ if qualified
           evidence["hardware"]["metal_exact_head"] == true &&
           evidence["hardware"]["rocm_exact_head"] == true,
         "Phase 16.C final evidence lacks exact-head real hardware")
+else
+    evidence = TOML.parsefile(require_file(
+        "design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"))
+    cpu_path = require_file(
+        "design/evidence/phase-16/native-field/cpu-exact-head.toml")
+    metal_path = require_file(
+        "design/evidence/phase-16/native-field/metal-local-exact-head.toml")
+    cpu = TOML.parsefile(cpu_path)
+    metal = TOML.parsefile(metal_path)
+    check(evidence["status"] == "candidate_hardware_open" &&
+          evidence["cpu"]["status"] == "qualified" &&
+          evidence["metal"]["trusted_self_hosted_artifact"] == false &&
+          evidence["rocm"]["exact_head_artifact"] == false &&
+          cpu["github_sha"] == evidence["provenance"]["implementation_commit"] &&
+          metal["github_sha"] == evidence["provenance"]["implementation_commit"] &&
+          bytes2hex(SHA.sha256(read(cpu_path))) ==
+              evidence["cpu"]["artifact_sha256"] &&
+          bytes2hex(SHA.sha256(read(metal_path))) ==
+              evidence["metal"]["artifact_sha256"] &&
+          all(row -> row["publication_host_allocated_bytes"] == 0 &&
+                     row["staging_host_to_device_transfers"] == 0,
+              vcat(cpu["cases"], metal["cases"])),
+        "Phase 16.C candidate evidence overclaims hardware or guardrails")
 end
 
 if isempty(failures)

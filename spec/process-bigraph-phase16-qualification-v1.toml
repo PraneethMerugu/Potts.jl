@@ -77,8 +77,8 @@ evidence = ["codec tests", "invalidation matrix", "failure tests", "design/evide
 id = "P16-C01"
 subgate = "16.C"
 title = "Native field sequential CPU qualification"
-status = "oracle_passing"
-evidence = ["real CPU evidence", "analytic/manufactured field oracle"]
+status = "qualified"
+evidence = ["real CPU evidence", "analytic/manufactured field oracle", "design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-C02"
