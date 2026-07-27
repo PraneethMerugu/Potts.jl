@@ -32,7 +32,8 @@ project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 
 candidate = entry["implementation_status"] == "phase16b_candidate"
-qualified = entry["implementation_status"] == "phase16b_qualified"
+qualified = entry["implementation_status"] in (
+    "phase16b_qualified", "phase16c_candidate", "phase16c_qualified")
 check(candidate || qualified,
     "Phase 16.B checker requires candidate or qualified state")
 expected = candidate ? "implemented" : "qualified"

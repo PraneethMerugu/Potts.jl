@@ -77,28 +77,28 @@ evidence = ["codec tests", "invalidation matrix", "failure tests", "design/evide
 id = "P16-C01"
 subgate = "16.C"
 title = "Native field sequential CPU qualification"
-status = "specified"
+status = "oracle_passing"
 evidence = ["real CPU evidence", "analytic/manufactured field oracle"]
 
 [[requirements]]
 id = "P16-C02"
 subgate = "16.C"
 title = "Native field real Metal qualification"
-status = "specified"
+status = "oracle_passing"
 evidence = ["trusted self-hosted real Metal artifact", "residency and transfer trace"]
 
 [[requirements]]
 id = "P16-C03"
 subgate = "16.C"
 title = "Native field real ROCm qualification"
-status = "specified"
+status = "implemented"
 evidence = ["trusted self-hosted real ROCm artifact", "residency and transfer trace"]
 
 [[requirements]]
 id = "P16-C04"
 subgate = "16.C"
 title = "Native field performance and hidden-transfer guardrails"
-status = "specified"
+status = "oracle_passing"
 evidence = ["cold/warm metrics", "zero steady allocation", "no host fallback"]
 
 [[requirements]]

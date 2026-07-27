@@ -54,6 +54,8 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16-entry-check.jl
       - name: Enforce ProcessBigraphs Phase 16.B engine and field protocol
         run: julia --startup-file=no scripts/process-bigraph-phase16b-check.jl
+      - name: Enforce ProcessBigraphs Phase 16.C native field candidate
+        run: julia --startup-file=no scripts/process-bigraph-phase16c-check.jl
       - name: Verify ProcessBigraphs Phase 16 closure remains honestly open
         run: julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
       - name: Enforce Phase 14 Wang sequential CPU disposition
