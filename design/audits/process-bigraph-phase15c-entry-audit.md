@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 15.C Pre-Implementation Entry Audit
 
-Status: Passed pre-implementation design audit; runtime implementation not started
+Status: Passed entry audit; Phase 15.C subsequently implemented, qualified, and attested
 
 Date: 2026-07-26
 
@@ -11,10 +11,11 @@ passes on `main`. All 64 owner choices are resolved, the semantic boundary is in
 consistent, the feature and evidence scope is machine-readable, the implementation order is
 closed, and no owner or architectural question remains open.
 
-This verdict is deliberately narrower than an implementation or qualification verdict.
-`ProcessBigraphs.jl` remains version `0.3.0`; `internal_alpha = false`; no Phase 15.C production
-scheduler, semantic RNG, observer/continuation completion, independent oracle, qualification
-matrix, candidate artifact, or final attestation is claimed.
+This verdict was deliberately narrower than an implementation or qualification verdict. At entry
+freeze `ProcessBigraphs.jl` remained version `0.3.0` with `internal_alpha = false`; this audit did
+not itself claim a scheduler, semantic RNG, observer/continuation completion, independent oracle,
+qualification matrix, candidate artifact, or final attestation. Those obligations subsequently
+passed and are recorded by the Phase 15.C closure audit and evidence manifest.
 
 ## Authority and method
 
@@ -158,7 +159,7 @@ identity to `0.4.0`. It still may not publish the package.
 
 ## Readiness conclusion
 
-The design is ready, bounded, and testable. The remaining Phase 15.C work is implementation and
-qualification rather than unresolved architecture. The entry checker makes this conclusion
-fail-closed and prevents future prose drift, scope inflation, premature maturity claims, or
+The design was ready, bounded, and testable. Implementation and qualification subsequently passed
+without reopening the architecture. The entry checker and closure checker keep this historical
+conclusion fail-closed and prevent prose drift, scope inflation, premature maturity claims, or
 accidental conflation of the scoped serial-alpha oracle with later parity gates.

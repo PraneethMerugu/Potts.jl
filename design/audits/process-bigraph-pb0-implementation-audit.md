@@ -2,10 +2,10 @@
 
 > Post-PB0 architecture note: [Decision 0036](../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md)
 > preserves this bounded behavioral evidence but makes the PB0 structural structs provisional
-> façades. Phase 15 must lower them into one canonical ProcessBigraph ACSet and qualify an
-> independent source-derived Julia oracle; no upstream Python runtime will be executed.
+> façades. Phase 15 subsequently lowered them into one canonical ProcessBigraph ACSet and
+> qualified an independent source-derived Julia oracle; no upstream Python runtime was executed.
 
-Status: PB0 bounded foundation passed; Phase 15 internal alpha remains open
+Status: PB0 bounded foundation passed; Phase 15.C subsequently qualified the serial internal alpha
 
 Date: 2026-07-26
 
@@ -35,7 +35,7 @@ There is no CorePotts or PottsToolkit dependency.
 | Canonical encoding | `src/canonical.jl`, order/fingerprint tests | Passed as encoding foundation |
 | Capability/residency and hidden-transfer preflight | `src/capabilities.jl`, device-boundary declaration tests | Passed as declaration foundation |
 | Non-Potts serial microfixtures | `src/runtime.jl`, `test_serial_microfixtures.jl` | Passed in bounded PB0 scope |
-| Settled checkpoint/replay foundation | `src/checkpoint.jl`, replay test | Passed in-memory; persisted codec remains open |
+| Settled checkpoint/replay foundation | `src/checkpoint.jl`, replay test | Passed in-memory at PB0; Phase 15.C later supplied the canonical persisted codec |
 | Honest status and limitations | package registry and PB0 evidence | Passed |
 | No package-local manifest | `.gitignore`, PB0 checker | Passed |
 
@@ -54,8 +54,9 @@ The bounded serial runner demonstrates:
 - exact in-memory replay from a settled checkpoint in the same package/backend.
 
 The runner intentionally supports fixed schedules and static composition only.
-It exists so PB0 primitives are executable together; it is not evidence that
-the Phase 15 serial executor or internal-alpha gate has closed.
+It exists so PB0 primitives are executable together; at PB0 closure it was not
+evidence that the Phase 15 serial executor or internal-alpha gate had closed.
+Phase 15.C later supplied that separate evidence.
 
 ## Qualification result
 
@@ -109,4 +110,5 @@ ownership:
 
 Phase 14.PB0 passes its bounded foundation gate. The package is independently
 loadable and testable, its domain-neutral primitives execute together, and its
-claims do not exceed direct evidence. Phase 15 internal alpha remains open.
+claims do not exceed direct evidence. This audit does not retroactively broaden PB0 evidence;
+Phase 15.C independently qualified the later immutable-topology serial internal alpha.

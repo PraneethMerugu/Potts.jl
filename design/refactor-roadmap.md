@@ -1183,7 +1183,7 @@ This closure implemented only the `canonical-process-bigraph-acset` and
 At Phase 15.A closure, structured cospans, derived directed wiring diagrams, and nested open
 composition remained unimplemented; Phase 15.B has since closed those bounded structural rows.
 Independent Julia oracle qualification, semantic RNG/observer work, and the complete
-multirate/failure/restart matrix remain Phase 15.C work. See the
+multirate/failure/restart matrix were subsequently completed in Phase 15.C. See the
 [Phase 15.A audit](audits/process-bigraph-phase15a-canonical-structure-audit.md) and
 [evidence record](evidence/process-bigraph-phase15a-evidence-v1.toml).
 
@@ -1205,11 +1205,12 @@ role/privacy truth tables, exact compatibility, initialization, checkpoint, runt
 fail-closed corruption tests pass. See the
 [closure audit](audits/process-bigraph-phase15b-open-composition-audit.md) and
 [evidence record](evidence/process-bigraph-phase15b-evidence-v1.toml). The independent checked
-Julia specification oracle and complete serial internal-alpha qualification remain Phase 15.C.
+Julia specification oracle and complete serial internal-alpha qualification subsequently passed
+in Phase 15.C.
 
 ### ProcessBigraphs Phase 15.C qualified internal-alpha status
 
-The pre-implementation architecture is frozen by [Decision 0038](../spec/decisions/0038-process-bigraph-serial-alpha.md),
+The architecture was frozen before implementation by [Decision 0038](../spec/decisions/0038-process-bigraph-serial-alpha.md),
 the completed [64-choice owner interview](audits/process-bigraph-phase15c-serial-alpha-owner-interview.md),
 the [C0--C7 implementation plan](audits/process-bigraph-phase15c-serial-alpha-plan.md), and the
 [machine-readable entry contract](../spec/process-bigraph-phase15c-entry-v1.toml). The bounded claim
@@ -1218,7 +1219,7 @@ oracle-requalification features, while four already-passed structural features r
 evidence. Dynamic structure, alternate executors, GPU execution, scientific adapters, Potts
 cutover, whole-cell qualification, interchange, and public release are explicitly later work.
 
-C1--C7 pass: 440 Phase 15.C assertions, 309 retained historical
+C0--C7 pass: 440 Phase 15.C assertions, 309 retained historical
 assertions, nine Aqua checks, 22 exact independent-oracle rows, five killed mutation targets,
 eight failure stages, six authoring routes, eight fixtures, and 33 restart cuts. Four
 source-isolation/performance guardrails pass and their compile, throughput, and allocation
@@ -1226,6 +1227,10 @@ measurements are recorded without a fastest-runtime claim. Implementation PR #24
 CI and its squash-merge tree is identical to the qualified tree. The metadata-only closure
 attestation advances the internal package identity to `0.4.0` and sets
 `internal_alpha = true`; no public release is claimed.
+The post-merge
+[documentation consistency audit](audits/process-bigraph-phase15c-documentation-consistency-audit.md)
+confirms that current decisions, registries, audits, indexes, and package docs use this lifecycle
+state while retaining historical evidence boundaries.
 
 ### Potts workstream deliverables
 
@@ -1583,7 +1588,7 @@ G4 field CPU/Metal/ROCm                       PB0 bounded foundation [passed]
         |                                                   |
 bounded portfolio smokes                      Phase 15.A canonical structure [passed]
         |                                                   |
-14.2 Learn/Examples                         remaining Phase 15 serial alpha
+14.2 Learn/Examples                         Phase 15.C serial alpha [passed]
 14.3 Published Models                                       |
 14.4 Manual/Satellites                                      |
         |                                                   |
@@ -1626,7 +1631,7 @@ The executable sequence and join rules are:
    complete Learn/Examples, preregistered published-model studies, the full manual, and satellites.
 6. **Phase 15 independent gates:** qualify the Potts paper release from frozen Phase 14 evidence
    while retaining the attested ProcessBigraphs serial implementation and independent Julia
-   specification oracle. Phase 15.C C1--C7 pass; the implementation merge, exact qualified tree,
+   specification oracle. Phase 15.C C0--C7 pass; the implementation merge, exact qualified tree,
    candidate artifact, and bounded internal-alpha promotion are recorded by the metadata-only
    closure attestation.
    Failure of one product gate does not rewrite or weaken the other.

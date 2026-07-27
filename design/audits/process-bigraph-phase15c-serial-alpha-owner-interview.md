@@ -13,9 +13,10 @@ Authority:
 - [ProcessBigraphs parity registry](../../spec/process-bigraph-parity-registry-v1.toml)
 
 This interview freezes every owner choice required before Phase 15.C implementation. It does not
-claim that any Phase 15.C capability has been implemented or qualified. Option A was the
-recommendation for every question, and the owner selected A for all eight questions in all eight
-rounds.
+claim that any Phase 15.C capability had been implemented or qualified at interview time. Option A
+was the recommendation for every question, and the owner selected A for all eight questions in all
+eight rounds. C0--C7 subsequently passed through implementation PR #24 and closure-attestation
+PR #25.
 
 The accepted normative result is
 [Decision 0038](../../spec/decisions/0038-process-bigraph-serial-alpha.md). The executable boundary
@@ -216,4 +217,5 @@ All owner choices required to plan Phase 15.C are resolved. This interview autho
 specification, planning, entry-enforcement, and later gated implementation work. It does not
 authorize weakening the allowlist, substituting direct evidence for the independent oracle,
 executing an upstream Python runtime, or claiming that Phase 15.C has begun implementation before
-the entry packet passes.
+the entry packet passes. That entry packet and the complete implementation/attestation sequence
+have since passed; the interview remains the owner-choice authority rather than current status.

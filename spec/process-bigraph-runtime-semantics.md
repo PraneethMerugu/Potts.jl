@@ -6,6 +6,10 @@ Version: 1.3.0
 
 Date: 2026-07-26
 
+Implementation disposition: Phase 15.C C0--C7 passed. ProcessBigraphs 0.4.0 is a qualified
+immutable-topology serial internal alpha with `internal_alpha = true` and
+`public_release = false`. Dynamic structure and every broader gate below remain unqualified.
+
 Authority: Decisions 0034, 0036, 0037, and 0038,
 `process-bigraph-parity-registry-v1.toml`, and
 `process-bigraph-phase15c-entry-v1.toml`

@@ -158,7 +158,7 @@ for phrase in [
     "Status: Phase 15.A passed",
     "Canonical ProcessBigraph ACSet",
     "Compiled structural epoch",
-    "Remaining Phase 15 work",
+    "Subsequent Phase 15 disposition",
 ]
     check(occursin(phrase, audit), "Phase 15.A audit is missing '$phrase'")
 end

@@ -4,9 +4,10 @@ Status: Accepted
 
 Date: 2026-07-26
 
-Implementation disposition: Implemented and directly passing in ProcessBigraphs 0.3.0. The
-independent checked Julia specification oracle and complete internal-alpha qualification remain
-Phase 15.C work.
+Implementation disposition: Implemented and directly passing in ProcessBigraphs 0.3.0, then
+requalified through the independent Phase 15.C Julia specification oracle. ProcessBigraphs 0.4.0
+is now a qualified immutable-topology serial internal alpha. Dynamic structural rewriting remains
+Phase 16; complete parity and public release remain unclaimed.
 
 ## Context
 
@@ -107,8 +108,8 @@ hierarchy traversal in runtime hot paths. They were resolved through the accepte
     mount-order, isomorphism, and parenthesization invariance; boundary privacy and compatibility;
     failure atomicity; hierarchy-to-plan provenance; runtime-trace equivalence; preserved PB0 and
     Phase 15.A evidence; package documentation; registry updates; a machine-readable evidence
-    manifest; a checker; and a closure audit. Direct evidence may establish implementation, but the
-    independent-oracle status remains open until Phase 15.C.
+    manifest; a checker; and a closure audit. Direct evidence established the Phase 15.B
+    implementation; Phase 15.C subsequently supplied the independent-oracle qualification.
 
 ## Consequences
 
@@ -122,8 +123,8 @@ hierarchy traversal in runtime hot paths. They were resolved through the accepte
   of runtime routing.
 - Direct Catlab use remains available without forcing ordinary users to understand structured
   cospans.
-- Phase 15.B can close honestly before the independent Julia runtime oracle and remaining
-  serial-alpha qualification in Phase 15.C.
+- Phase 15.B closed honestly before the independent Julia runtime oracle; Phase 15.C subsequently
+  supplied the remaining serial-alpha qualification without redefining this composition contract.
 
 ## Rejected alternatives
 

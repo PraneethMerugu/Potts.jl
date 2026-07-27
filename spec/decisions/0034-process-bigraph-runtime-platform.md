@@ -1,6 +1,6 @@
 # Decision 0034: ProcessBigraphs.jl as the Domain-Neutral Runtime Platform
 
-Status: Accepted architecture and roadmap policy; PB0, Phase 15.A, and Phase 15.B passed; Decision 0038 freezes Phase 15.C entry while runtime implementation remains open
+Status: Accepted architecture and roadmap policy; PB0 and Phase 15.A--15.C passed; ProcessBigraphs 0.4.0 is a qualified serial internal alpha
 
 Date: 2026-07-26
 
@@ -14,7 +14,9 @@ Further refined by
 [Decision 0038](0038-process-bigraph-serial-alpha.md): Phase 15.C is an immutable-topology serial
 internal-alpha gate with an exact allowlist, independent Julia oracle, semantic RNG, observation,
 typed continuation, canonical checkpoint, deterministic fail-stop, and two-stage attested closure.
-The Phase 15.C runtime implementation has not started at entry freeze.
+That gate subsequently passed through implementation PR #24 and closure-attestation PR #25.
+ProcessBigraphs is now version `0.4.0` with `internal_alpha = true` and
+`public_release = false`; every later-phase exclusion in this decision remains in force.
 
 ## Context
 

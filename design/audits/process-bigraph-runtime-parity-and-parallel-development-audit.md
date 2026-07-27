@@ -13,7 +13,9 @@ Date: 2026-07-26
 Post-audit disposition: [Decision 0035](../../spec/decisions/0035-wang-sequential-gpu-disposition.md)
 retired assembled Wang GPU qualification and opened G4. References below to concurrent or pending
 G3-C work preserve the factual planning context at the time of this research; they are not current
-gates.
+gates. Decisions 0034 and 0036--0038 subsequently froze the runtime architecture, and
+ProcessBigraphs Phase 15.C has since qualified the immutable-topology serial internal alpha. The
+research recommendations below remain historical input rather than current implementation status.
 
 ## Purpose
 

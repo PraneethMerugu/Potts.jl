@@ -31,8 +31,9 @@ The two Phase 15.B registry rows are now `implemented` with
 - `structured-cospan-open-composition`; and
 - `derived-directed-wiring-view`.
 
-This is not the complete serial internal alpha. Independent source-derived oracle passage remains
-Phase 15.C.
+This Phase 15.B slice alone was not the complete serial internal alpha. Phase 15.C subsequently
+supplied independent source-derived oracle qualification without changing the Phase 15.B
+structural claim.
 
 ## Requirement audit
 
@@ -89,13 +90,14 @@ initializer resolution, ACSet assembly, and provenance construction behind the e
 API. That cleanup is not required to establish Phase 15.B semantics and must preserve the complete
 invariance and failure matrix.
 
-## Remaining Phase 15 work
+## Subsequent Phase 15.C disposition
 
-Phase 15.C must still build and pass the independent checked Julia specification oracle and close
-the remaining semantic RNG, observer, continuation/invalidation, update-law, multirate,
-failure-injection, and settled-restart matrices. Until that gate passes:
+Phase 15.C subsequently built and passed the independent checked Julia specification oracle and
+closed the semantic RNG, observer, continuation/invalidation, update-law, multirate,
+failure-injection, and settled-restart matrices. The closure attestation therefore:
 
-- `internal_alpha` remains false;
-- no feature is `oracle_passing` or `qualified`;
+- sets `internal_alpha = true` for ProcessBigraphs 0.4.0;
+- qualifies only the 15 target and seven supporting serial-runtime rows;
+- retains the four Phase 15.A/B structural rows as direct evidence;
 - no GPU, Threads, Dagger, adapter, whole-cell, parity, or public-release claim is made; and
 - dynamic add/remove/divide/move/rewire operations remain Phase 16 work.

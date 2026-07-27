@@ -8,8 +8,10 @@ Implementation disposition: Phase 15.A passed on 2026-07-26 for Decisions 1, 5, 
 static portion of Decision 23. This bounded slice adds ACSets/Catlab, one canonical ACSet,
 typed/direct-authoring convergence, row-order-invariant identity, and compiled structural
 epoch/plan provenance while preserving PB0 behavior. Phase 15.B subsequently implemented
-structured-cospan open composition and annotated wiring diagrams. The independent specification
-oracle and complete Phase 15 internal-alpha gate remain unimplemented.
+structured-cospan open composition and annotated wiring diagrams. Phase 15.C subsequently
+qualified the immutable-topology serial runtime and independent Julia specification oracle as
+ProcessBigraphs 0.4.0 internal alpha. AlgebraicRewriting-backed dynamic structure remains Phase 16;
+no complete-parity or public-release claim follows.
 
 Post-decision refinement: [Decision 0037](0037-process-bigraph-open-composition.md) fixes the
 same-schema store-endpoint boundary algebra, n-ary mount/junction/export composition, namespace and

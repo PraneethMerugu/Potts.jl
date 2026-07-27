@@ -50,7 +50,7 @@ id = "canonical-process-bigraph-acset"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
 test = "test/test_phase15a_algebraic_structure.jl"
-limitation = "Canonical authority covers arbitrary-depth immutable open composites after Phase 15.B; independent-oracle qualification remains Phase 15.C and dynamic structural epochs remain Phase 16."
+limitation = "Canonical authority covers arbitrary-depth immutable open composites and is retained as direct Phase 15.A/B evidence; Phase 15.C independently qualifies its admitted runtime use, while dynamic structural epochs remain Phase 16."
 
 [[features]]
 id = "compiled-structural-epoch"
@@ -64,7 +64,7 @@ id = "structured-cospan-open-composition"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
 test = "test/test_phase15b_open_composition.jl"
-limitation = "Immutable same-schema open composition only; dynamic structural rewriting remains Phase 16 and independent-oracle qualification remains Phase 15.C."
+limitation = "Immutable same-schema open composition only; Phase 15.C independently qualifies its admitted runtime use, while dynamic structural rewriting remains Phase 16."
 
 [[features]]
 id = "derived-directed-wiring-view"
