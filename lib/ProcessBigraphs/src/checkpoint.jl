@@ -71,12 +71,20 @@ function restore(composite::CompiledComposite, value::SettledCheckpoint)
     step_ids = Tuple(entry.declaration.id for entry in composite.plan.steps)
     Tuple(clock.id for clock in value.step_clocks) == step_ids ||
         _fail(:checkpoint_step_mismatch, "checkpoint step identities changed")
-    SerialRuntime(
-        composite,
-        deepcopy(value.snapshot),
-        deepcopy(value.process_clocks),
-        deepcopy(value.step_clocks),
-        value.event_count,
-        true,
-    )
+    runtime = initialize_runtime(composite)
+    runtime.snapshot = deepcopy(value.snapshot)
+    runtime.process_clocks = deepcopy(value.process_clocks)
+    runtime.step_clocks = deepcopy(value.step_clocks)
+    runtime.events = value.event_count
+    runtime.input_cursors = tuple((
+        ProcessInputCursor(
+            entry.declaration.id,
+            clock.last_committed,
+            _input_values(entry, value.snapshot),
+            (clock.last_committed => _input_values(entry, value.snapshot),),
+        )
+        for (entry, clock) in zip(
+            composite.plan.processes, value.process_clocks)
+    )...)
+    runtime
 end

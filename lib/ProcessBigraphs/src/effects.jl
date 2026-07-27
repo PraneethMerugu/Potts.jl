@@ -8,6 +8,13 @@ struct IndexedUpdate <: AbstractUpdateLaw end
 struct SetUpdate <: AbstractUpdateLaw end
 struct StableAppend <: AbstractUpdateLaw end
 
+struct UpdateLawContract
+    identity::Symbol
+    version::String
+    ordering::Symbol
+    conflict_policy::Symbol
+end
+
 law_identity(::AdditiveUpdate) = :add
 law_identity(::MultiplicativeUpdate) = :multiply
 law_identity(::ReplaceUpdate) = :replace
@@ -15,6 +22,17 @@ law_identity(::KeyedUpdate) = :keyed
 law_identity(::IndexedUpdate) = :indexed
 law_identity(::SetUpdate) = :set
 law_identity(::StableAppend) = :append_stable
+
+update_law_contract(law::AbstractUpdateLaw) =
+    UpdateLawContract(
+        law_identity(law),
+        "1.0.0",
+        :canonical_producer_event_payload,
+        law_identity(law) === :replace ? :single_writer :
+        law_identity(law) in (:keyed, :indexed) ? :disjoint_targets :
+        law_identity(law) === :set ? :disjoint_add_remove :
+        :deterministic_fold,
+    )
 
 struct SetPatch{A,R}
     additions::A
@@ -232,10 +250,39 @@ function reconcile(
     _committed_snapshot(snapshot, tuple(entries...), time)
 end
 
+"""
+Internal unpublished reconciliation used by the strict serial executor.
+It validates and applies the same update algebra as `reconcile` without
+manufacturing a committed version or parent link for an intermediate layer.
+"""
+function _reconcile_unpublished(
+    snapshot::CommittedSnapshot,
+    effects::AbstractVector{<:Delta},
+    time::LogicalTime,
+)
+    published = reconcile(snapshot, effects, time)
+    CommittedSnapshot(
+        snapshot.schema,
+        published.entries,
+        snapshot.version,
+        time,
+        snapshot.parent_fingerprint,
+        snapshot.topology_fingerprint,
+    )
+end
+
 function _canonical(io::IO, law::AbstractUpdateLaw)
     write(io, "UL")
     _canonical(io, law_identity(law))
     _canonical(io, 1)
+end
+
+function _canonical(io::IO, contract::UpdateLawContract)
+    write(io, "UC")
+    _canonical(io, contract.identity)
+    _canonical(io, contract.version)
+    _canonical(io, contract.ordering)
+    _canonical(io, contract.conflict_policy)
 end
 
 function _canonical(io::IO, patch::SetPatch)

@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 15.B passed; Phase 15.C entry frozen, runtime implementation not started
+Status: Phase 15.C implementation candidate passing; closure attestation pending
 
 ## Authority and maturity
 
@@ -10,31 +10,32 @@ baseline is Process-Bigraph commit
 `4b208e13620e09e877af52ea07273bc9429a3a17`. Those projects do not own or
 endorse this implementation.
 
-PB0 remains deliberately narrower than the Phase 15 internal alpha. It proves domain-neutral
-values and bounded serial microfixtures. Phase 15.A proves the canonical ACSet-to-compiled-plan
-boundary. Phase 15.B proves immutable open composition and derived wiring views. These slices do
-not claim dynamic structural transactions, bridges that execute transfers, persisted checkpoint
-files, a general observer protocol, semantic RNG, Threads/Dagger equivalence, device kernels,
-scientific adapters, or independent source-derived Julia oracle qualification.
+PB0 proves domain-neutral values and bounded serial microfixtures. Phase 15.A proves the canonical
+ACSet-to-compiled-plan boundary, and Phase 15.B proves immutable open composition and derived
+wiring views. Phase 15.C adds the complete immutable-topology serial executor, semantic RNG,
+typed observation and continuation, transactional failure, and portable logical checkpoints.
+Dynamic structural transactions, executable transfers, Threads/Dagger equivalence, device
+kernels, scientific adapters, and public release remain outside this candidate.
 
-Decision 0038 and the completed 64-choice owner interview freeze the Phase 15.C
-pre-implementation boundary. The
+Decision 0038 and the completed 64-choice owner interview define the Phase 15.C boundary. The
 [entry contract](../../../../spec/process-bigraph-phase15c-entry-v1.toml) names exactly 15 target
 features, seven supporting oracle-requalification features, four retained direct structural
 features, and the explicit later-work exclusions. The
 [C0--C7 plan](../../../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md) is strictly
-ordered and requires a separately implemented, test-only Julia specification oracle. This freeze
-does not claim implementation: package version is `0.3.0`, `internal_alpha = false`, and Phase
-15.C runtime and oracle evidence remain absent.
+ordered and requires a separately implemented, test-only Julia specification oracle. C1--C6 now
+pass as an implementation candidate. Package version remains `0.3.0` and `internal_alpha = false`
+until C7's separate attestation PR records the merged implementation commit, tree, CI run, and
+candidate artifact digest.
 
 Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
 model. Phase 15.A directly depends on `ACSets.jl` 0.2.29 and `Catlab.jl` 0.17.6.
 `AlgebraicRewriting.jl` follows in Phase 16 and `AlgebraicDynamics.jl` enters
 through a Phase 17 weak-dependency extension.
 
-The checked specification oracle will be independent from production
-execution. CI, tests, examples, attestations, and release tooling will not
-install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema Python.
+The checked specification oracle is independent from production execution. Production, oracle,
+and comparator run as separate Julia processes; the oracle uses only `Base`, `Core`, `Test`,
+`TOML`, and `SHA`. CI and release tooling do not install or execute Vivarium, Process-Bigraph
+Python, or Bigraph-Schema Python.
 
 ## Canonical structure and compilation
 
@@ -183,20 +184,27 @@ measure a device transfer, so `declared-measured-transfers` is not implemented.
 A missing transfer at a residency boundary fails preflight as
 `:hidden_transfer`.
 
-## Bounded serial microfixture runner
+## Immutable-topology serial executor
 
-`SerialRuntime` is the PB0 semantic microfixture runner, not a Phase 15
-executor qualification. It supports fixed-cadence static processes and an
-acyclic static Step DAG.
+`SerialExecutor()` is the fail-closed Phase 15.C policy and `SerialRuntime` owns its mutable
+execution state. The one-argument `initialize_runtime(compiled)` remains a legacy-compatibility
+facade solely to preserve PB0/15.A/15.B fingerprints; new qualified work constructs the executor
+explicitly.
 
 At each imminent event, all due processes read one common snapshot. Their
-deltas reconcile into a local candidate. Each Step layer then reads one common
-layer snapshot. Only after every process invocation, reconciliation, and Step
-layer succeeds does the runtime publish the candidate and timing continuation.
+deltas reconcile into one unpublished candidate. Changed-input Step layers run to quiescence,
+named iteration regions run to their convergence or hard bounds, and required observation records
+validate inside the same transaction. Only then does the runtime publish state, clocks,
+continuations, input cursors, observer positions, records, and one canonical event identity.
 
 `horizon_policy=:exact` supplies the actual final elapsed interval. A process
 that rejects partial intervals causes preflight failure before the call
 publishes any event. `:stop_prior` stops at the last ordinary due event.
+
+Semantic RNG uses immutable Philox4x32-10 addresses containing model, seed, owner, exact time,
+event, lineage, site, and explicit draw index. Observer draws use a disjoint namespace. The v2
+logical checkpoint codec captures every settled execution field without Julia object
+serialization and validates its integrity and compatibility before returning a live runtime.
 
 ## Minimal example
 

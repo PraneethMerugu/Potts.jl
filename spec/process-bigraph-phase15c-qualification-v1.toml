@@ -1,0 +1,195 @@
+schema_version = "1.0.0"
+qualification_id = "process-bigraphs-phase15c-qualification-v1"
+phase = "15.C"
+fixture_count = 8
+method_count = 8
+authoring_path_count = 6
+invariance_dimension_count = 8
+performance_guardrail_count = 4
+failure_stage_count = 8
+mutation_target_count = 5
+restart_cut_count = 33
+phase15c_assertion_count = 440
+historical_assertion_count = 309
+aqua_assertion_count = 9
+oracle_differential_row_count = 22
+oracle_unit_assertion_count = 6
+mutation_assertion_count = 10
+
+fixtures = [
+    "same-time-accumulator",
+    "multirate-producer-consumer",
+    "adaptive-pulse",
+    "reactive-dag",
+    "iterative-region",
+    "stochastic-branch",
+    "open-composite-fork-join",
+    "observation-failure-restart",
+]
+
+methods = [
+    "finite-truth-tables",
+    "focused-unit-tests",
+    "production-oracle-differential",
+    "property-tests",
+    "metamorphic-invariance",
+    "mutation-sensitivity",
+    "failure-injection",
+    "every-settled-boundary-restart",
+]
+
+authoring_paths = [
+    "ordinary-typed",
+    "direct-acset",
+    "n-ary-composition",
+    "pairwise-grouping",
+    "structured-cospan",
+    "annotated-wiring-profile",
+]
+
+invariance_dimensions = [
+    "declaration-and-acset-order",
+    "composition-grouping",
+    "process-invocation-order",
+    "dictionary-order",
+    "rng-request-order",
+    "restart-boundary",
+    "observer-selection",
+    "explicit-retry-attempt",
+]
+
+performance_guardrails = [
+    "no-runtime-acset-traversal",
+    "no-authoring-structure-in-execution-plan",
+    "no-hidden-transfer",
+    "bounded-event-loop-regression-tracking",
+]
+
+failure_stages = [
+    "process_invocation",
+    "invocation_result_validation",
+    "reconciliation",
+    "reactive_step_execution",
+    "continuation_validation",
+    "required_observation",
+    "checkpoint_capture",
+    "record_publication",
+]
+
+mutation_targets = [
+    "scheduler",
+    "update",
+    "rng",
+    "failure",
+    "checkpoint",
+]
+
+[[assertion_groups]]
+id = "strict-serial-scheduler"
+method = "focused-unit-tests"
+count = 14
+test = "lib/ProcessBigraphs/test/phase15c/test_serial_scheduler.jl"
+
+[[assertion_groups]]
+id = "adaptive-schedule-horizon"
+method = "finite-truth-tables"
+count = 9
+test = "lib/ProcessBigraphs/test/phase15c/test_serial_scheduler.jl"
+
+[[assertion_groups]]
+id = "multirate-interval-inputs"
+method = "finite-truth-tables"
+count = 8
+test = "lib/ProcessBigraphs/test/phase15c/test_serial_scheduler.jl"
+
+[[assertion_groups]]
+id = "reactive-and-iteration"
+method = "focused-unit-tests"
+count = 8
+test = "lib/ProcessBigraphs/test/phase15c/test_adaptive_and_iteration.jl"
+
+[[assertion_groups]]
+id = "semantic-rng"
+method = "focused-unit-tests"
+count = 22
+test = "lib/ProcessBigraphs/test/phase15c/test_semantic_rng.jl"
+
+[[assertion_groups]]
+id = "typed-observations"
+method = "focused-unit-tests"
+count = 18
+test = "lib/ProcessBigraphs/test/phase15c/test_observation.jl"
+
+[[assertion_groups]]
+id = "continuation-and-observer-state"
+method = "finite-truth-tables"
+count = 18
+test = "lib/ProcessBigraphs/test/phase15c/test_observation_continuation.jl"
+
+[[assertion_groups]]
+id = "logical-checkpoint-v2"
+method = "focused-unit-tests"
+count = 33
+test = "lib/ProcessBigraphs/test/phase15c/test_checkpoint_v2.jl"
+
+[[assertion_groups]]
+id = "transactional-failure-stages"
+method = "failure-injection"
+count = 75
+test = "lib/ProcessBigraphs/test/phase15c/test_failure_checkpoint.jl"
+
+[[assertion_groups]]
+id = "versioned-update-algebra"
+method = "finite-truth-tables"
+count = 19
+test = "lib/ProcessBigraphs/test/phase15c/test_properties_metamorphic.jl"
+
+[[assertion_groups]]
+id = "bounded-metamorphic-cases"
+method = "metamorphic-invariance"
+count = 32
+test = "lib/ProcessBigraphs/test/phase15c/test_properties_metamorphic.jl"
+
+[[assertion_groups]]
+id = "six-authoring-paths"
+method = "metamorphic-invariance"
+count = 50
+test = "lib/ProcessBigraphs/test/phase15c/test_authoring_equivalence.jl"
+
+[[assertion_groups]]
+id = "eight-fixture-restart"
+method = "every-settled-boundary-restart"
+count = 134
+test = "lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl"
+
+[[restart_fixtures]]
+id = "same-time-accumulator"
+cuts = [0, 1, 2, 3, 4]
+
+[[restart_fixtures]]
+id = "multirate-producer-consumer"
+cuts = [0, 1, 2, 3]
+
+[[restart_fixtures]]
+id = "adaptive-pulse"
+cuts = [0, 1, 3, 5]
+
+[[restart_fixtures]]
+id = "reactive-dag"
+cuts = [0, 1, 2, 3]
+
+[[restart_fixtures]]
+id = "iterative-region"
+cuts = [0, 1, 2, 3]
+
+[[restart_fixtures]]
+id = "stochastic-branch"
+cuts = [0, 1, 2, 3]
+
+[[restart_fixtures]]
+id = "open-composite-fork-join"
+cuts = [0, 1, 2, 3]
+
+[[restart_fixtures]]
+id = "observation-failure-restart"
+cuts = [0, 1, 2, 3]

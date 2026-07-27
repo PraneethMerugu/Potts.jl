@@ -2,8 +2,8 @@ schema_version = "1.0.0"
 contract_id = "process-bigraphs-phase15c-entry-v1"
 phase = "15.C"
 title = "ProcessBigraphs serial internal-alpha entry and closure contract"
-status = "ready_after_preimplementation_packet_merges"
-runtime_implementation_status = "not_started"
+status = "implementation_candidate"
+runtime_implementation_status = "implemented_awaiting_attestation"
 internal_alpha = false
 public_release = false
 current_package_version = "0.3.0"
@@ -364,7 +364,7 @@ required = [
 
 [entry_ci]
 workflow = ".github/workflows/ci.yml"
-step = "Enforce ProcessBigraphs Phase 15.C pre-implementation entry"
-phase15c_runtime_tests_present = false
-phase15c_oracle_lane_present = false
-explanation = "The entry checker is required now. Runtime and oracle lanes are added by the implementation PR and may not be claimed by the pre-implementation packet."
+step = "Enforce ProcessBigraphs Phase 15.C implementation and closure"
+phase15c_runtime_tests_present = true
+phase15c_oracle_lane_present = true
+explanation = "The implementation PR keeps version 0.3.0 and internal_alpha=false while the complete runtime, independent oracle, qualification ledger, and candidate-artifact lane pass. Final promotion remains exclusive to the attestation PR."

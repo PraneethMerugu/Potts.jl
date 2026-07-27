@@ -1,0 +1,31 @@
+schema_version = "1.0.0"
+fixture_id = "phase15c-neutral-oracle-v1"
+horizon = 4
+root_seed = 2026
+
+[[processes]]
+id = "fast"
+amount = 1
+cadence = 1
+
+[[processes]]
+id = "slow"
+amount = 10
+cadence = 2
+
+[adaptive]
+first_due = 1
+offset = 2
+horizon = 5
+
+[multirate]
+producer_cadence = 1
+consumer_cadence = 3
+horizon = 3
+
+[iteration]
+convergence_target = 2
+bounded_iterations = 3
+
+[observation]
+times = [1, 2, 3]

@@ -1,7 +1,7 @@
 schema_version = "1.3.0"
 registry_id = "process-bigraphs-pb0-local-v1"
 package_version = "0.3.0"
-maturity = "phase_15b_open_composition"
+maturity = "phase_15c_implementation_candidate"
 public_release = false
 internal_alpha = false
 evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
@@ -23,7 +23,7 @@ bigraph_schema_version = "1.4.3"
 implementation_status = ["implemented", "partial"]
 oracle_status = ["direct_passing", "direct_partial"]
 qualification_status = "not_qualified"
-independent_julia_specification_oracle = "not_started"
+independent_julia_specification_oracle = "oracle_passing_candidate"
 upstream_runtime_execution = "forbidden"
 device_evidence = "not_started"
 
@@ -36,7 +36,7 @@ phase15a_status = "passed_canonical_structure"
 phase15b_status = "passed_open_composition"
 phase15b_decision = "../../spec/decisions/0037-process-bigraph-open-composition.md"
 phase15b_plan = "../../design/audits/process-bigraph-phase15b-open-composition-plan.md"
-phase15c_status = "entry_frozen_runtime_not_started"
+phase15c_status = "implementation_candidate_awaiting_attestation"
 phase15c_decision = "../../spec/decisions/0038-process-bigraph-serial-alpha.md"
 phase15c_plan = "../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md"
 phase15c_entry_contract = "../../spec/process-bigraph-phase15c-entry-v1.toml"
@@ -96,10 +96,10 @@ limitation = "No schema migration or dynamic structural rewrite."
 
 [[features]]
 id = "canonical-state-serialization"
-implementation_status = "partial"
-oracle_status = "direct_partial"
-test = "test/test_paths_time_canonical.jl"
-limitation = "Deterministic canonical encoding/fingerprints exist; canonical decode and persisted file codec do not."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_checkpoint_v2.jl"
+limitation = "Canonical logical codec and v2 checkpoint envelope cover the admitted value set; filesystem storage remains an extension concern."
 
 [[features]]
 id = "typed-input-output-ports"
@@ -110,94 +110,94 @@ limitation = "Static one-path bindings only; wildcard, bridge computation, and n
 
 [[features]]
 id = "temporal-process-protocol"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Fixed schedules only; adaptive deadlines are deferred."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Qualified for immutable-topology serial execution with fixed or admitted adaptive schedules."
 
 [[features]]
 id = "ordered-reactive-step-protocol"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Static acyclic Step DAG triggered after temporal batches; reactive quiescence is deferred."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_adaptive_and_iteration.jl"
+limitation = "Changed-input acyclic layers run to deterministic quiescence; dynamic workflow structure remains excluded."
 
 [[features]]
 id = "workflow-cycle-rejection"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_composite_preflight.jl"
-limitation = "Explicit iterative constructs are not implemented."
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_adaptive_and_iteration.jl"
+limitation = "Undeclared cycles fail; cycles are admitted only inside explicit bounded iteration regions."
 
 [[features]]
 id = "exact-integer-logical-time"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_paths_time_canonical.jl"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
 limitation = "Checked Int64 fast path; promotion beyond Int64 is not implemented."
 
 [[features]]
 id = "imminent-event-scheduler"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Bounded static fixed-schedule microfixture runner, not the Phase 15 executor."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Qualified candidate covers the immutable-topology SerialExecutor only."
 
 [[features]]
 id = "actual-elapsed-partial-interval"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Fixed schedules only."
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Exact partial intervals require declared support and remain within one compiled time scale."
 
 [[features]]
 id = "same-time-common-snapshot"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Qualified only in the bounded serial microfixture runner."
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Qualified candidate covers serial immutable-topology batches."
 
 [[features]]
 id = "typed-process-deltas"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_schema_store_effects.jl"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_properties_metamorphic.jl"
 limitation = "Engine-owned transaction buffers and structural requests are deferred."
 
 [[features]]
 id = "versioned-update-algebra"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_schema_store_effects.jl"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_properties_metamorphic.jl"
 limitation = "Seven built-in version-1 laws; open extension declarations and device laws are deferred."
 
 [[features]]
 id = "deterministic-conflict-reconciliation"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_schema_store_effects.jl"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_properties_metamorphic.jl"
 limitation = "CPU scalar/collection laws only."
 
 [[features]]
 id = "atomic-event-commit"
 implementation_status = "implemented"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Static state and Step layers only; no structural barrier."
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_failure_checkpoint.jl"
+limitation = "Atomicity covers in-memory serial state, clocks, continuations, observers, and records; external effects are excluded."
 
 [[features]]
 id = "settled-boundary-checkpoint"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Integrity-hashed in-memory checkpoint/replay; no portable file codec."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_checkpoint_v2.jl"
+limitation = "Canonical portable logical envelope qualifies exact-compatible serial restore at settled boundaries only."
 
 [[features]]
 id = "transactional-failure"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "Invocation/reconciliation/Step atomicity only; external effects and structural failures are deferred."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_failure_checkpoint.jl"
+limitation = "All eight in-memory publication stages are atomic; external side effects and structural failures remain deferred."
 
 [[features]]
 id = "capability-placement-residency"
@@ -208,7 +208,56 @@ limitation = "Declaration and hidden-transfer preflight only; no device executio
 
 [[features]]
 id = "serial-semantic-executor"
-implementation_status = "partial"
-oracle_status = "direct_passing"
-test = "test/test_serial_microfixtures.jl"
-limitation = "PB0 fixed-schedule static microfixture scope; Phase 15 alpha remains open."
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Complete immutable-topology serial candidate; internal-alpha promotion awaits the separate attestation PR."
+
+[[features]]
+id = "explicit-iterative-constructs"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_adaptive_and_iteration.jl"
+limitation = "Named bounded and convergent fixed-structure regions only."
+
+[[features]]
+id = "adaptive-deadlines"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Proposals must be exact, representable, and strictly future."
+
+[[features]]
+id = "versioned-process-continuation"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_observation_continuation.jl"
+limitation = "Alpha paths require typed canonical codecs and explicit registered migration."
+
+[[features]]
+id = "semantic-lineage-rng"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_semantic_rng.jl"
+limitation = "Philox core bits, unbiased integers, and uniforms; stateful solver RNG belongs in typed continuation."
+
+[[features]]
+id = "readonly-observer-protocol"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_observation_continuation.jl"
+limitation = "Required in-memory records are atomic; external emitters are non-atomic extensions."
+
+[[features]]
+id = "multirate-input-semantics"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/phase15c/test_serial_scheduler.jl"
+limitation = "Frozen, exact-linear interpolation, event-updated, and continuously-callable timeline modes."
+
+[[features]]
+id = "independent-julia-specification-oracle"
+implementation_status = "implemented"
+oracle_status = "independent_passing_candidate"
+test = "test/specification_oracle/runtests.jl"
+limitation = "Exactly the 22 Phase 15.C target and supporting rows; broader oracles remain independently required."

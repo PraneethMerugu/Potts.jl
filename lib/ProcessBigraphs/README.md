@@ -44,32 +44,46 @@ persistence, residency, and endpoint transfer contracts must match exactly; no s
 conversion is inferred. Runtime and checkpoint paths still consume only the frozen epoch and
 indexed plan.
 
-Phase 15.B is not the complete Phase 15 internal alpha. Decision 0038 and the completed 64-choice
-owner interview now freeze Phase 15.C as an immutable-topology serial-alpha gate. Its exact
-allowlist, exclusions, C0--C7 order, independent-oracle boundary, and two-PR closure are recorded
-in the repository [entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
-[implementation plan](../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md).
-This is a pre-implementation freeze: package version remains `0.3.0`, `internal_alpha = false`,
-and no Phase 15.C runtime or oracle qualification is claimed.
+Phase 15.C now implements the complete immutable-topology serial candidate frozen by Decision
+0038 and the completed 64-choice owner interview:
+
+- exact fixed and adaptive scheduling with explicit exact/stop-prior horizons;
+- changed-input reactive layers and named bounded or convergent iteration;
+- four declared multirate interval-input policies;
+- typed owner-bound process, step, and observer continuations;
+- Philox4x32-10 semantic RNG with immutable lineage addresses and an isolated observer namespace;
+- declarative typed observation at event, periodic, or explicit-time boundaries;
+- deterministic fail-stop transactions covering all eight registered publication stages; and
+- a canonical, integrity-checked v2 logical checkpoint envelope with exact compatible restart.
+
+Qualification currently passes 440 Phase 15.C assertions, 309 retained historical assertions,
+nine Aqua checks, an independent stdlib-only 22-row specification oracle, five mutation targets,
+eight failure stages, six authoring routes, eight fixtures, and 33 restart cuts. This implementation
+PR also records four checked hot-path/performance guardrails, including bounded allocation and
+event-throughput measurements without a fastest-runtime claim. It deliberately remains package
+version `0.3.0` with `internal_alpha = false`; the separate
+closure-attestation PR must record the merged implementation tree before promotion to `0.4.0`.
 
 Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
 authoring. ProcessBigraphs remains the sole authority for time, scheduling, numerical state,
 reconciliation, commit, RNG, observation, checkpoints, and replay.
 
-Conformance will use a separate checked Julia specification oracle, source-located derivations,
-truth tables, and property, metamorphic, invariance, failure, and restart tests. Project tooling
-will not install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema Python; claims will
-be source-audited feature and semantic parity rather than live upstream-runtime equivalence.
+Conformance uses a separate checked Julia specification oracle, source-located derivations, truth
+tables, and property, metamorphic, invariance, failure, and restart tests. Production, oracle, and
+comparison execute in separate Julia processes; the oracle process is restricted to stdlib roots.
+Project tooling does not install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema
+Python.
 
 The current maturity, limitations, and exact parity pins are recorded in
 [`parity-registry.toml`](parity-registry.toml). Internal contracts, ordinary open-composition
 authoring, and the advanced AlgebraicJulia path are documented in
 [`docs/src/internal.md`](docs/src/internal.md). The bounded Phase 15.B closure is recorded by the
 repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
-[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). Phase 15.C
-entry readiness is recorded separately by its
-[entry audit](../../design/audits/process-bigraph-phase15c-entry-audit.md).
+[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). The Phase 15.C
+scope and current implementation-candidate state are checked from the
+[entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
+[qualification ledger](../../spec/process-bigraph-phase15c-qualification-v1.toml).
 
 Run the package suite with Julia 1.12.6:
 

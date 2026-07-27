@@ -81,9 +81,11 @@ function _lower_static_to_structure(
             continuation_version=declaration.continuation_version)
         actor_rows[id] = actor
         if declaration isa ProcessDeclaration
+            cadence_tick = declaration.schedule isa FixedSchedule ?
+                declaration.schedule.cadence.tick : 0
             process_rows[id] = ACSets.add_part!(structure, :Process;
                 process_actor=actor,
-                cadence_tick=declaration.schedule.cadence.tick,
+                cadence_tick,
                 first_due_tick=declaration.schedule.first_due.tick,
                 supports_partial=declaration.schedule.supports_partial)
         else
@@ -139,7 +141,8 @@ function _canonical_model(
         composite.initial_values,
         (declaration.id => declaration.law for declaration in owners);
         continuations=(declaration.id => declaration.continuation
-            for declaration in owners))
+            for declaration in owners),
+        iterations=composite.iteration_regions)
     CanonicalModel(
         _lower_static_to_structure(composite; reverse_insertion),
         payloads,
@@ -153,9 +156,10 @@ function canonical_model(
     initial_values=Dict(),
     laws,
     continuations=(),
+    iterations=(),
 )
     CanonicalModel(structure,
-        ModelPayloads(initial_values, laws; continuations))
+        ModelPayloads(initial_values, laws; continuations, iterations))
 end
 
 canonical_structure(composite::StaticComposite) =
@@ -431,10 +435,18 @@ function _materialize_static(structure, payloads)
             String(_attr(structure, actor, :continuation_version))
         if actor_kinds[actor] === :process
             row = process_rows[actor]
-            schedule = FixedSchedule(
-                Duration(_attr(structure, row, :cadence_tick), scale);
-                first_due=Duration(_attr(structure, row, :first_due_tick), scale),
-                supports_partial=_attr(structure, row, :supports_partial))
+            cadence_tick = _attr(structure, row, :cadence_tick)
+            schedule = if cadence_tick == 0
+                AdaptiveSchedule(
+                    Duration(_attr(structure, row, :first_due_tick), scale);
+                    supports_partial=_attr(structure, row, :supports_partial))
+            else
+                FixedSchedule(
+                    Duration(cadence_tick, scale);
+                    first_due=Duration(
+                        _attr(structure, row, :first_due_tick), scale),
+                    supports_partial=_attr(structure, row, :supports_partial))
+            end
             push!(processes, ProcessDeclaration(id, law, schedule;
                 domain, continuation=continuations[id], continuation_version))
         else
@@ -466,7 +478,8 @@ function _materialize_static(structure, payloads)
     StaticComposite(schema, payloads.initial_values, scale;
         processes=tuple(processes...),
         steps=tuple(steps...),
-        bindings=tuple(bindings...))
+        bindings=tuple(bindings...),
+        iteration_regions=payloads.iterations)
 end
 
 function _validate_open_structure(structure)
@@ -610,8 +623,10 @@ function _validate_canonical_structure(structure, payloads)
     _validate_open_structure(structure)
     composite = _materialize_static(structure, payloads)
     ids = _validate_identities(composite)
-    all(process -> process.schedule.cadence.scale == composite.scale &&
-        process.schedule.first_due.scale == composite.scale, composite.processes) ||
+    all(process -> process.schedule.first_due.scale == composite.scale &&
+        (!(process.schedule isa FixedSchedule) ||
+            process.schedule.cadence.scale == composite.scale),
+        composite.processes) ||
         _fail(:time_scale_mismatch,
             "every process schedule must use the composite scale")
     layers = _step_layers(composite, ids)
@@ -738,7 +753,8 @@ function compile_composite(model::CanonicalModel)
         composite.scale;
         processes,
         steps,
-        bindings=composite.bindings)
+        bindings=composite.bindings,
+        iteration_regions=composite.iteration_regions)
     process_entries = tuple((_process_plan_entry(declaration, normalized.bindings)
         for declaration in processes)...)
     step_entries = tuple((_step_plan_entry(declaration, normalized.bindings)
@@ -749,13 +765,45 @@ function compile_composite(model::CanonicalModel)
         deepcopy(model.structure),
         model.fingerprint,
         provenance)
+    process_plan_identity = [
+        (
+            entry.declaration.id,
+            entry.declaration.schedule,
+            entry.inputs,
+            entry.outputs,
+            tuple((port.interval_behavior for port in
+                sort!(collect(ports(entry.declaration.law));
+                    by=port -> port.name))...),
+        )
+        for entry in process_entries
+    ]
+    step_plan_identity = [
+        (
+            entry.declaration.id,
+            entry.inputs,
+            entry.outputs,
+            entry.declaration.dependencies,
+        )
+        for entry in step_entries
+    ]
+    plan_identity = (
+        :execution_plan_v1,
+        canonical_fingerprint(normalized.schema),
+        normalized.scale,
+        tuple(process_plan_identity...),
+        tuple(step_plan_identity...),
+        layers,
+        normalized.iteration_regions,
+    )
     plan = ExecutionPlan(
         normalized.schema,
         normalized.scale,
         process_entries,
         step_entries,
         layers,
-        provenance)
+        normalized.iteration_regions,
+        provenance,
+        canonical_fingerprint(plan_identity))
     runtime_identity = (
         canonical_fingerprint(normalized.schema),
         initial.entries,
@@ -772,9 +820,25 @@ function compile_composite(model::CanonicalModel)
         length(_rows(model.structure, :Composite)) != 1 ||
         !isempty(_rows(model.structure, :Endpoint)) ||
         !isempty(_rows(model.structure, :Junction))
-    fingerprint = canonical_fingerprint(has_open_structure ?
-        (:open_static_composite_v1, model.fingerprint, runtime_identity) :
-        (:static_composite_v1, runtime_identity...))
+    phase15c_plan = !isempty(normalized.iteration_regions) ||
+        any(entry -> entry.declaration.schedule isa AdaptiveSchedule,
+            process_entries) ||
+        any(entry -> any(port -> port.direction === :input &&
+                port.interval_behavior !== :event_updated,
+            ports(entry.declaration.law)), process_entries)
+    fingerprint = if phase15c_plan
+        canonical_fingerprint((
+            has_open_structure ? :open_static_composite_v2 :
+                :static_composite_v2,
+            has_open_structure ? model.fingerprint : nothing,
+            runtime_identity,
+            plan.fingerprint,
+        ))
+    else
+        canonical_fingerprint(has_open_structure ?
+            (:open_static_composite_v1, model.fingerprint, runtime_identity) :
+            (:static_composite_v1, runtime_identity...))
+    end
     CompiledComposite(epoch, plan, initial, report, fingerprint)
 end
 

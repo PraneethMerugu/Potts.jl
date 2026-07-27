@@ -154,11 +154,12 @@ end
 
 local_registry = TOML.parsefile(local_registry_path)
 check(local_registry["schema_version"] == "1.3.0" &&
-      local_registry["package_version"] == "0.3.0" &&
-      local_registry["maturity"] == "phase_15b_open_composition",
+      local_registry["maturity"] in (
+        "phase_15b_open_composition",
+        "phase_15c_implementation_candidate",
+        "phase_15c_serial_internal_alpha",
+      ),
     "package-local Phase 15.B maturity is not closed")
-check(local_registry["internal_alpha"] == false,
-    "Phase 15.B incorrectly claims complete internal alpha")
 local_features = Dict(row["id"] => row for row in local_registry["features"])
 target_rows = Set([
     "structured-cospan-open-composition",
@@ -173,9 +174,12 @@ check(all(local_features[id]["implementation_status"] == "implemented" &&
 
 root_registry = TOML.parsefile(root_registry_path)
 check(root_registry["schema_version"] == "1.3.0" &&
-      root_registry["registry_status"] ==
+      root_registry["registry_status"] in (
         "phase15c-entry-frozen-runtime-not-started",
-    "root registry does not preserve bounded Phase 15.B at Phase 15.C entry")
+        "phase15c-implementation-candidate-awaiting-attestation",
+        "phase15c-qualified-serial-internal-alpha",
+      ),
+    "root registry does not preserve bounded Phase 15.B")
 phase15b = root_registry["phase15b_implementation"]
 check(phase15b["status"] == "passed_open_composition" &&
       Set(phase15b["implemented_rows"]) == target_rows,
@@ -185,9 +189,6 @@ check(all(root_features[id]["status"] == "implemented" &&
           root_features[id]["evidence_status"] == "direct_passing_phase15b"
           for id in target_rows),
     "root Phase 15.B feature claims disagree with evidence")
-check(all(row["status"] ∉ ("oracle_passing", "qualified")
-          for row in root_registry["features"]),
-    "Phase 15.B must not claim oracle-passing or qualified features")
 
 evidence = TOML.parsefile(evidence_path)
 check(evidence["status"] == "passed_open_composition" &&

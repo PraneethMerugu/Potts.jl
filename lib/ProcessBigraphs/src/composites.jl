@@ -5,6 +5,7 @@ struct StaticComposite
     processes::Tuple{Vararg{ProcessDeclaration}}
     steps::Tuple{Vararg{StepDeclaration}}
     bindings::Tuple{Vararg{PortBinding}}
+    iteration_regions::Tuple{Vararg{IterationRegion}}
 end
 
 function StaticComposite(
@@ -14,9 +15,11 @@ function StaticComposite(
     processes=(),
     steps=(),
     bindings=(),
+    iteration_regions=(),
 )
     StaticComposite(schema, deepcopy(initial_values), scale,
-        tuple(processes...), tuple(steps...), tuple(bindings...))
+        tuple(processes...), tuple(steps...), tuple(bindings...),
+        tuple(iteration_regions...))
 end
 
 struct CompiledComposite
@@ -29,6 +32,10 @@ end
 
 model_fingerprint(composite::CompiledComposite) = composite.fingerprint
 step_layers(composite::CompiledComposite) = composite.plan.layers
+iteration_regions(composite::CompiledComposite) =
+    deepcopy(composite.plan.iterations)
+execution_plan_fingerprint(composite::CompiledComposite) =
+    composite.plan.fingerprint
 structural_epoch(composite::CompiledComposite) = deepcopy(composite.epoch)
 structural_provenance(composite::CompiledComposite) = composite.epoch.provenance
 structural_fingerprint(composite::CompiledComposite) = composite.epoch.fingerprint
@@ -69,6 +76,9 @@ function _validate_bindings(composite::StaticComposite, layers::Tuple)
         process.id => (:process_batch,) for process in composite.processes)
     for (layer_index, layer) in enumerate(layers), id in layer
         concurrency_group[id] = (:step_layer, layer_index)
+    end
+    for region in composite.iteration_regions, id in region.steps
+        concurrency_group[id] = (:iteration_step, region.id, id)
     end
     binding_keys = [(binding.owner, binding.port) for binding in composite.bindings]
     length(binding_keys) == length(unique(binding_keys)) ||
@@ -130,14 +140,45 @@ end
 
 function _step_layers(composite::StaticComposite, ids::Set{String})
     step_ids = Set(step.id for step in composite.steps)
+    region_ids = String[region.id for region in composite.iteration_regions]
+    length(region_ids) == length(unique(region_ids)) ||
+        _fail(:duplicate_iteration_identity,
+            "iteration region identities must be unique")
+    region_steps = Dict{String,String}()
+    for region in composite.iteration_regions
+        for id in region.steps
+            id in step_ids || _fail(:unknown_iteration_step,
+                "iteration region references an unknown step";
+                region=region.id, step=id)
+            haskey(region_steps, id) &&
+                _fail(:overlapping_iteration_regions,
+                    "one step cannot belong to multiple iteration regions";
+                    step=id)
+            region_steps[id] = region.id
+        end
+        for target in region.watch_paths
+            schema_at(composite.schema, target)
+        end
+    end
     for step in composite.steps, dependency in step.dependencies
         dependency in step_ids ||
             _fail(:unknown_step_dependency, "step dependency is not a declared step";
                 step=step.id, dependency)
-        dependency == step.id &&
+        dependency == step.id && !haskey(region_steps, step.id) &&
             _fail(:step_cycle, "a step cannot depend on itself"; step=step.id)
+        if haskey(region_steps, step.id)
+            get(region_steps, dependency, nothing) == region_steps[step.id] ||
+                _fail(:iteration_external_dependency,
+                    "iteration steps may depend only on steps in the same region";
+                    step=step.id, dependency)
+        elseif haskey(region_steps, dependency)
+            _fail(:iteration_external_consumer,
+                "ordinary reactive steps cannot depend directly on iteration steps";
+                step=step.id, dependency)
+        end
     end
-    remaining = Dict(step.id => Set(step.dependencies) for step in composite.steps)
+    remaining = Dict(step.id => Set(step.dependencies) for step in composite.steps
+        if !haskey(region_steps, step.id))
     layers = Tuple[]
     completed = Set{String}()
     while !isempty(remaining)

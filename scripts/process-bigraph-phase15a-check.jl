@@ -108,14 +108,19 @@ check(occursin("test_phase15a_algebraic_structure.jl", runner),
     "Phase 15.A tests are absent from the package runner")
 
 local_registry = TOML.parsefile(local_registry_path)
-check(local_registry["maturity"] == "phase_15b_open_composition",
-    "package-local maturity does not preserve Phase 15.A through Phase 15.B")
-check(local_registry["internal_alpha"] == false,
-    "Phase 15.A incorrectly claims the complete internal alpha")
+check(local_registry["maturity"] in (
+        "phase_15b_open_composition",
+        "phase_15c_implementation_candidate",
+        "phase_15c_serial_internal_alpha",
+    ),
+    "package-local maturity no longer preserves Phase 15.A")
 root_registry = TOML.parsefile(root_registry_path)
-check(root_registry["registry_status"] ==
-      "phase15c-entry-frozen-runtime-not-started",
-    "root registry does not preserve Phase 15.A through the Phase 15.C entry freeze")
+check(root_registry["registry_status"] in (
+        "phase15c-entry-frozen-runtime-not-started",
+        "phase15c-implementation-candidate-awaiting-attestation",
+        "phase15c-qualified-serial-internal-alpha",
+    ),
+    "root registry no longer preserves Phase 15.A")
 phase15a = root_registry["phase15a_implementation"]
 check(phase15a["status"] == "passed_canonical_structure",
     "root registry does not close Phase 15.A")
