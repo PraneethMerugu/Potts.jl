@@ -231,8 +231,8 @@ CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choic
 interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
 strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
 ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
-heavy computation occurs. The Phase 16 specification packet is ready to start 16.A, while every
-implementation qualification row and internal-beta closure remain open.
+heavy computation occurs. Phase 16.A has qualified the dependency, extension, API, and checker
+boundary; the 28 requirements in 16.B through 16.I and internal-beta closure remain fail-closed.
 
 ## Conformance Principle
 

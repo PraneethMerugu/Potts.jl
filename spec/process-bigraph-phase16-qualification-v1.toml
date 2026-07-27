@@ -14,22 +14,22 @@ qualification_rule = "Every applicable dimension and the aggregate row must be q
 id = "P16-A01"
 subgate = "16.A"
 title = "Accepted authority and scope packet"
-status = "specified"
-evidence = ["Decision 0039", "owner interview", "normative specification", "entry checker"]
+status = "qualified"
+evidence = ["Decision 0039", "owner interview", "normative specification", "entry checker", "design/evidence/process-bigraph-phase16a-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-A02"
 subgate = "16.A"
 title = "Bounded dependency and extension direction"
-status = "specified"
-evidence = ["AlgebraicRewriting direct bound", "SciML extension boundary", "no reverse runtime dependency"]
+status = "qualified"
+evidence = ["AlgebraicRewriting direct bound", "SciML extension boundary", "no reverse runtime dependency", "design/evidence/process-bigraph-phase16a-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-A03"
 subgate = "16.A"
 title = "Honest public API and maturity claim"
-status = "specified"
-evidence = ["internal beta target", "public release false", "generated limitation matrix"]
+status = "qualified"
+evidence = ["internal beta target", "public release false", "generated limitation matrix", "design/evidence/process-bigraph-phase16a-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-B01"

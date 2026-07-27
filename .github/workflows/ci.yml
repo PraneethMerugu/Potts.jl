@@ -50,7 +50,7 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase15b-check.jl
       - name: Enforce ProcessBigraphs Phase 15.C implementation and closure
         run: julia --startup-file=no scripts/process-bigraph-phase15c-entry-check.jl
-      - name: Enforce ProcessBigraphs Phase 16 specification entry
+      - name: Enforce ProcessBigraphs Phase 16.A boundary and open closure
         run: julia --startup-file=no scripts/process-bigraph-phase16-entry-check.jl
       - name: Verify ProcessBigraphs Phase 16 closure remains honestly open
         run: julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
