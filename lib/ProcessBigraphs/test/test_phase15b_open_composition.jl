@@ -291,8 +291,14 @@ end
         initial_values=payloads.initial_values,
         laws=payloads.laws,
         continuations=payloads.continuations)
+    cospan_authored = compile_composite(
+        structured_cospan(forward);
+        phase15b_payload_keywords(forward)...,
+    )
     @test structural_fingerprint(direct) == expected_structure
     @test model_fingerprint(direct) == expected_model
+    @test structural_fingerprint(cospan_authored) == expected_structure
+    @test model_fingerprint(cospan_authored) == expected_model
     typed_runtime = initialize_runtime(compile_composite(forward))
     direct_runtime = initialize_runtime(direct)
     run_until!(typed_runtime, LogicalTime(2, TimeScale(1)))

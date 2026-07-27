@@ -227,6 +227,53 @@ function _make_structured_cospan(model::CanonicalModel)
     )
 end
 
+function _foot_endpoint_ids(foot)
+    Set(String(ACSets.subpart(foot, row, :endpoint_id))
+        for row in ACSets.parts(foot, :Endpoint))
+end
+
+function canonical_model(
+    cospan::ProcessBigraphStructuredMulticospan;
+    initial_values,
+    laws,
+    continuations=(),
+)
+    structure = Catlab.apex(cospan)
+    structure isa ConcreteProcessBigraphACSet ||
+        _fail(:invalid_structured_cospan_apex,
+            "structured cospan apex must be a ProcessBigraphACSet";
+            actual=string(typeof(structure)))
+    model = canonical_model(
+        structure;
+        initial_values,
+        laws,
+        continuations,
+    )
+    endpoints = _open_root_endpoints(model.structure)
+    expected_imports = Set(record.endpoint_id for record in values(endpoints)
+        if record.role in (:import, :bidirectional))
+    expected_exports = Set(record.endpoint_id for record in values(endpoints)
+        if record.role in (:export, :bidirectional))
+    feet = Catlab.feet(cospan)
+    length(feet) == 2 ||
+        _fail(:invalid_structured_cospan_arity,
+            "ProcessBigraph structured cospans require import and export feet";
+            actual=length(feet))
+    actual_imports = _foot_endpoint_ids(feet[1])
+    actual_exports = _foot_endpoint_ids(feet[2])
+    actual_imports == expected_imports ||
+        _fail(:structured_cospan_import_mismatch,
+            "structured cospan import foot disagrees with endpoint roles";
+            expected=sort!(collect(expected_imports)),
+            actual=sort!(collect(actual_imports)))
+    actual_exports == expected_exports ||
+        _fail(:structured_cospan_export_mismatch,
+            "structured cospan export foot disagrees with endpoint roles";
+            expected=sort!(collect(expected_exports)),
+            actual=sort!(collect(actual_exports)))
+    model
+end
+
 function _open_from_model(model::CanonicalModel)
     root = _root_composite(model.structure)
     definition_id =
@@ -786,6 +833,14 @@ compose_open(root_id::AbstractString; kwargs...) =
 compile_composite(composite::OpenComposite) =
     compile_composite(canonical_model(composite))
 preflight(composite::OpenComposite) = preflight(canonical_model(composite))
+compile_composite(
+    cospan::ProcessBigraphStructuredMulticospan;
+    kwargs...,
+) = compile_composite(canonical_model(cospan; kwargs...))
+preflight(
+    cospan::ProcessBigraphStructuredMulticospan;
+    kwargs...,
+) = preflight(canonical_model(cospan; kwargs...))
 
 struct AnnotatedWiringDiagram{D}
     profile_version::String
