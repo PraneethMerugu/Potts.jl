@@ -44,7 +44,7 @@ persistence, residency, and endpoint transfer contracts must match exactly; no s
 conversion is inferred. Runtime and checkpoint paths still consume only the frozen epoch and
 indexed plan.
 
-Phase 15.C now implements the complete immutable-topology serial candidate frozen by Decision
+Phase 15.C now qualifies the complete immutable-topology serial internal alpha frozen by Decision
 0038 and the completed 64-choice owner interview:
 
 - exact fixed and adaptive scheduling with explicit exact/stop-prior horizons;
@@ -56,13 +56,14 @@ Phase 15.C now implements the complete immutable-topology serial candidate froze
 - deterministic fail-stop transactions covering all eight registered publication stages; and
 - a canonical, integrity-checked v2 logical checkpoint envelope with exact compatible restart.
 
-Qualification currently passes 440 Phase 15.C assertions, 309 retained historical assertions,
+Qualification passes 440 Phase 15.C assertions, 309 retained historical assertions,
 nine Aqua checks, an independent stdlib-only 22-row specification oracle, five mutation targets,
 eight failure stages, six authoring routes, eight fixtures, and 33 restart cuts. This implementation
-PR also records four checked hot-path/performance guardrails, including bounded allocation and
-event-throughput measurements without a fastest-runtime claim. It deliberately remains package
-version `0.3.0` with `internal_alpha = false`; the separate
-closure-attestation PR must record the merged implementation tree before promotion to `0.4.0`.
+record also includes four checked hot-path/performance guardrails, including bounded allocation and
+event-throughput measurements without a fastest-runtime claim. Implementation PR #24 passed
+Required CI and its squash-merge tree exactly matches the qualified tree. The metadata-only
+closure attestation promotes package version `0.4.0` with `internal_alpha = true`;
+`public_release = false` remains in force.
 
 Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
@@ -81,9 +82,10 @@ authoring, and the advanced AlgebraicJulia path are documented in
 [`docs/src/internal.md`](docs/src/internal.md). The bounded Phase 15.B closure is recorded by the
 repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
 [evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). The Phase 15.C
-scope and current implementation-candidate state are checked from the
+scope and qualified internal-alpha state are checked from the
 [entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
-[qualification ledger](../../spec/process-bigraph-phase15c-qualification-v1.toml).
+[qualification ledger](../../spec/process-bigraph-phase15c-qualification-v1.toml), with closure
+provenance in the [evidence manifest](../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
 
 Run the package suite with Julia 1.12.6:
 

@@ -2,11 +2,11 @@ schema_version = "1.0.0"
 contract_id = "process-bigraphs-phase15c-entry-v1"
 phase = "15.C"
 title = "ProcessBigraphs serial internal-alpha entry and closure contract"
-status = "implementation_candidate"
-runtime_implementation_status = "implemented_awaiting_attestation"
-internal_alpha = false
+status = "closed_internal_alpha"
+runtime_implementation_status = "qualified_internal_alpha"
+internal_alpha = true
 public_release = false
-current_package_version = "0.3.0"
+current_package_version = "0.4.0"
 closure_package_version = "0.4.0"
 julia = "1.12.6"
 
@@ -367,4 +367,4 @@ workflow = ".github/workflows/ci.yml"
 step = "Enforce ProcessBigraphs Phase 15.C implementation and closure"
 phase15c_runtime_tests_present = true
 phase15c_oracle_lane_present = true
-explanation = "The implementation PR keeps version 0.3.0 and internal_alpha=false while the complete runtime, independent oracle, qualification ledger, and candidate-artifact lane pass. Final promotion remains exclusive to the attestation PR."
+explanation = "Implementation PR #24 passed Required CI, produced the exact-tree candidate artifact, and squash-merged without changing the qualified tree. This metadata-only attestation closes C7 at version 0.4.0 with internal_alpha=true and no public release."

@@ -10,6 +10,8 @@ check(condition, message) = condition || push!(failures, message)
 require_file(path) = (check(isfile(path), "missing $(relpath(path, ROOT))"); path)
 
 project_path = require_file(joinpath(PACKAGE, "Project.toml"))
+phase15c_entry_path = require_file(
+    joinpath(ROOT, "spec", "process-bigraph-phase15c-entry-v1.toml"))
 module_path = require_file(joinpath(PACKAGE, "src", "ProcessBigraphs.jl"))
 registry_path = require_file(joinpath(PACKAGE, "parity-registry.toml"))
 readme_path = require_file(joinpath(PACKAGE, "README.md"))
@@ -24,11 +26,15 @@ check(!isfile(joinpath(PACKAGE, "Manifest.toml")),
     "independent package must not retain lib/ProcessBigraphs/Manifest.toml")
 
 project = TOML.parsefile(project_path)
+phase15c_entry = TOML.parsefile(phase15c_entry_path)
+expected_package_version =
+    phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
+    "0.4.0" : "0.3.0"
 check(project["name"] == "ProcessBigraphs", "package name changed")
 check(project["uuid"] == "efcc6515-205e-41e3-b553-f38f05ad529c",
     "package UUID changed")
-check(project["version"] == "0.3.0",
-    "Phase 15.B package must preserve PB0 under its internal 0.3.0 identity")
+check(project["version"] == expected_package_version,
+    "package identity disagrees with the Phase 15.C lifecycle stage")
 check(project["compat"]["julia"] == "1.12.6",
     "PB0 must target exact active Julia 1.12.6")
 check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),

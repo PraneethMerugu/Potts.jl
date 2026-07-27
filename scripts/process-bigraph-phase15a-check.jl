@@ -15,6 +15,7 @@ function require_file(relative_path)
 end
 
 project_path = require_file("lib/ProcessBigraphs/Project.toml")
+phase15c_entry_path = require_file("spec/process-bigraph-phase15c-entry-v1.toml")
 module_path = require_file("lib/ProcessBigraphs/src/ProcessBigraphs.jl")
 structure_path = require_file("lib/ProcessBigraphs/src/algebraic_structure.jl")
 lowering_path = require_file("lib/ProcessBigraphs/src/lowering.jl")
@@ -31,8 +32,12 @@ audit_path = require_file(
     "design/audits/process-bigraph-phase15a-canonical-structure-audit.md")
 
 project = TOML.parsefile(project_path)
-check(project["version"] == "0.3.0",
-    "current package version must preserve Phase 15.A in Phase 15.B version 0.3.0")
+phase15c_entry = TOML.parsefile(phase15c_entry_path)
+expected_package_version =
+    phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
+    "0.4.0" : "0.3.0"
+check(project["version"] == expected_package_version,
+    "package identity disagrees with the Phase 15.C lifecycle stage")
 deps = Set(keys(get(project, "deps", Dict{String,Any}())))
 check(deps == Set(["ACSets", "Catlab", "SHA"]),
     "ProcessBigraphs runtime dependencies must be exactly ACSets, Catlab, and SHA")
@@ -164,7 +169,9 @@ if isempty(failures)
     println("  typed and direct-ACSet authoring share one canonical structure")
     println("  compiled runtime and checkpoint paths use immutable indexed plans")
     println("  PB0 fingerprints, traces, failure atomicity, and replay are preserved")
-    println("  complete internal alpha and later AlgebraicJulia phases remain fail-closed")
+    println(expected_package_version == "0.4.0" ?
+        "  Phase 15.C internal alpha is qualified; later AlgebraicJulia phases remain fail-closed" :
+        "  complete internal alpha and later AlgebraicJulia phases remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs Phase 15.A closure failed with $(length(failures)) issue(s):")
