@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 15.C implementation candidate passing; closure attestation pending
+Status: Phase 15.C qualified immutable-topology serial internal alpha
 
 ## Authority and maturity
 
@@ -15,17 +15,18 @@ ACSet-to-compiled-plan boundary, and Phase 15.B proves immutable open compositio
 wiring views. Phase 15.C adds the complete immutable-topology serial executor, semantic RNG,
 typed observation and continuation, transactional failure, and portable logical checkpoints.
 Dynamic structural transactions, executable transfers, Threads/Dagger equivalence, device
-kernels, scientific adapters, and public release remain outside this candidate.
+kernels, scientific adapters, and public release remain outside this internal alpha.
 
 Decision 0038 and the completed 64-choice owner interview define the Phase 15.C boundary. The
 [entry contract](../../../../spec/process-bigraph-phase15c-entry-v1.toml) names exactly 15 target
 features, seven supporting oracle-requalification features, four retained direct structural
 features, and the explicit later-work exclusions. The
 [C0--C7 plan](../../../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md) is strictly
-ordered and requires a separately implemented, test-only Julia specification oracle. C1--C6 now
-pass as an implementation candidate. Package version remains `0.3.0` and `internal_alpha = false`
-until C7's separate attestation PR records the merged implementation commit, tree, CI run, and
-candidate artifact digest.
+ordered and requires a separately implemented, test-only Julia specification oracle. C1--C6 pass,
+and C7 records implementation PR #24, its successful Required CI run, the candidate artifact
+digests, and the identical qualified and squash-merge trees. Package version is `0.4.0` with
+`internal_alpha = true` and `public_release = false`. The complete closure provenance is in the
+[evidence manifest](../../../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
 
 Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
 model. Phase 15.A directly depends on `ACSets.jl` 0.2.29 and `Catlab.jl` 0.17.6.

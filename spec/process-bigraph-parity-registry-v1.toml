@@ -1,6 +1,6 @@
 schema_version = "1.3.0"
 registry_id = "process-bigraph-parity-v1"
-registry_status = "phase15c-implementation-candidate-awaiting-attestation"
+registry_status = "phase15c-qualified-serial-internal-alpha"
 registered_at = "2026-07-26"
 decisions = [
     "decisions/0034-process-bigraph-runtime-platform.md",
@@ -78,8 +78,8 @@ implemented_rows = [
 remaining_claim = "Direct Phase 15.B evidence passes. The independent checked Julia specification oracle and complete Phase 15.C serial internal-alpha gate remain open."
 
 [phase15c_entry]
-status = "implementation_candidate"
-runtime_implementation_status = "implemented_awaiting_attestation"
+status = "closed_internal_alpha"
+runtime_implementation_status = "qualified_internal_alpha"
 decision = "decisions/0038-process-bigraph-serial-alpha.md"
 interview = "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md"
 implementation_plan = "../design/audits/process-bigraph-phase15c-serial-alpha-plan.md"
@@ -89,9 +89,9 @@ checker = "../scripts/process-bigraph-phase15c-entry-check.jl"
 target_feature_count = 15
 supporting_oracle_feature_count = 7
 retained_direct_feature_count = 4
-internal_alpha = false
+internal_alpha = true
 public_release = false
-remaining_claim = "The complete immutable-topology serial runtime, independent 22-row Julia oracle, and qualification matrix pass as an implementation candidate. Package version remains 0.3.0 and internal_alpha=false until the separate closure-attestation PR records the implementation merge and promotes only the frozen rows."
+remaining_claim = "The immutable-topology serial runtime is qualified as ProcessBigraphs 0.4.0 internal alpha. Dynamic structure, alternate executors, devices, scientific adapters, Potts cutover, whole-cell qualification, complete pinned parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [
@@ -379,8 +379,8 @@ oracle_ids = ["oracle-whole-cell-composite"]
 [[features]]
 id = "canonical-state-serialization"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Structural schemas", "Checkpoint contents"]
@@ -419,8 +419,8 @@ oracle_ids = ["oracle-nested-composite"]
 [[features]]
 id = "temporal-process-protocol"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Process"]
@@ -429,8 +429,8 @@ oracle_ids = ["oracle-multirate-shared-state", "oracle-independent-specification
 [[features]]
 id = "ordered-reactive-step-protocol"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Step"]
@@ -439,8 +439,8 @@ oracle_ids = ["oracle-step-workflow", "oracle-independent-specification"]
 [[features]]
 id = "workflow-cycle-rejection"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Step"]
@@ -449,8 +449,8 @@ oracle_ids = ["oracle-step-workflow", "oracle-independent-specification"]
 [[features]]
 id = "explicit-iterative-constructs"
 classification = "application_required"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = false
 required_for_first_public_release = true
 spec_sections = ["Step"]
@@ -459,8 +459,8 @@ oracle_ids = ["oracle-step-workflow", "oracle-whole-cell-composite", "oracle-ind
 [[features]]
 id = "exact-integer-logical-time"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Exact logical time"]
@@ -469,8 +469,8 @@ oracle_ids = ["oracle-multirate-shared-state", "oracle-partial-interval", "oracl
 [[features]]
 id = "imminent-event-scheduler"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Imminent-event scheduler"]
@@ -489,8 +489,8 @@ oracle_ids = ["oracle-multirate-shared-state"]
 [[features]]
 id = "actual-elapsed-partial-interval"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Horizon and partial intervals"]
@@ -499,8 +499,8 @@ oracle_ids = ["oracle-partial-interval", "oracle-independent-specification"]
 [[features]]
 id = "same-time-common-snapshot"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Same-time process batch"]
@@ -509,8 +509,8 @@ oracle_ids = ["oracle-multirate-shared-state", "oracle-update-algebra", "oracle-
 [[features]]
 id = "adaptive-deadlines"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Process timing contract"]
@@ -519,8 +519,8 @@ oracle_ids = ["oracle-multirate-shared-state", "oracle-independent-specification
 [[features]]
 id = "typed-process-deltas"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Typed deltas and update algebra"]
@@ -529,8 +529,8 @@ oracle_ids = ["oracle-update-algebra", "oracle-independent-specification"]
 [[features]]
 id = "versioned-update-algebra"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Update-law declarations"]
@@ -539,8 +539,8 @@ oracle_ids = ["oracle-update-algebra", "oracle-independent-specification"]
 [[features]]
 id = "deterministic-conflict-reconciliation"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Reconciliation"]
@@ -549,8 +549,8 @@ oracle_ids = ["oracle-update-algebra", "oracle-failure-atomicity", "oracle-indep
 [[features]]
 id = "atomic-event-commit"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "direct_passing_pb0_plus_phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "direct_passing_pb0_plus_phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Imminent-event scheduler", "Failure and retry"]
@@ -609,8 +609,8 @@ oracle_ids = ["oracle-dynamic-topology"]
 [[features]]
 id = "settled-boundary-checkpoint"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Continuation, checkpoint, and replay"]
@@ -619,8 +619,8 @@ oracle_ids = ["oracle-checkpoint-replay", "oracle-independent-specification"]
 [[features]]
 id = "versioned-process-continuation"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Checkpoint contents"]
@@ -639,8 +639,8 @@ oracle_ids = ["oracle-checkpoint-replay"]
 [[features]]
 id = "semantic-lineage-rng"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Semantic randomness"]
@@ -649,8 +649,8 @@ oracle_ids = ["oracle-division-lineage", "oracle-executor-equivalence", "oracle-
 [[features]]
 id = "transactional-failure"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Failure and retry"]
@@ -659,8 +659,8 @@ oracle_ids = ["oracle-failure-atomicity", "oracle-independent-specification"]
 [[features]]
 id = "readonly-observer-protocol"
 classification = "normative_parity"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Observation and emission"]
@@ -699,8 +699,8 @@ oracle_ids = ["oracle-residency-hardware"]
 [[features]]
 id = "serial-semantic-executor"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = true
 required_for_first_public_release = true
 spec_sections = ["Executor protocol and Dagger boundary"]
@@ -729,8 +729,8 @@ oracle_ids = ["oracle-executor-equivalence", "oracle-residency-hardware"]
 [[features]]
 id = "multirate-input-semantics"
 classification = "application_required"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = false
 required_for_first_public_release = true
 spec_sections = ["Scientific adapter contract"]
@@ -879,8 +879,8 @@ oracle_ids = ["oracle-algebraicdynamics-extension", "oracle-whole-cell-composite
 [[features]]
 id = "independent-julia-specification-oracle"
 classification = "normative_julia"
-status = "oracle_passing"
-evidence_status = "phase15c_candidate_oracle_passing"
+status = "qualified"
+evidence_status = "phase15c_independent_oracle_passing"
 required_for_pinned_parity = false
 required_for_first_public_release = true
 spec_sections = ["Minimum conformance suite"]
@@ -1018,7 +1018,7 @@ acceptance = "The weak-dependency extension lowers admitted AlgebraicDynamics ma
 [[oracles]]
 id = "oracle-independent-specification"
 kind = "independent_julia"
-status = "oracle_passing"
+status = "qualified"
 required = true
 feature_ids = [
     "canonical-state-serialization",

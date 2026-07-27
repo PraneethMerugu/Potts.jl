@@ -1,6 +1,6 @@
 name = "ProcessBigraphs"
 uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]

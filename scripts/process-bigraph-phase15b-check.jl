@@ -24,6 +24,7 @@ function require_file(relative_path)
 end
 
 project_path = require_file("lib/ProcessBigraphs/Project.toml")
+phase15c_entry_path = require_file("spec/process-bigraph-phase15c-entry-v1.toml")
 module_path = require_file("lib/ProcessBigraphs/src/ProcessBigraphs.jl")
 structure_path = require_file("lib/ProcessBigraphs/src/algebraic_structure.jl")
 composition_path = require_file("lib/ProcessBigraphs/src/composition.jl")
@@ -51,8 +52,12 @@ roadmap_path = require_file("design/refactor-roadmap.md")
 ci_path = require_file(".github/workflows/ci.yml")
 
 project = TOML.parsefile(project_path)
-check(project["version"] == "0.3.0",
-    "Phase 15.B package version must be 0.3.0")
+phase15c_entry = TOML.parsefile(phase15c_entry_path)
+expected_package_version =
+    phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
+    "0.4.0" : "0.3.0"
+check(project["version"] == expected_package_version,
+    "package identity disagrees with the Phase 15.C lifecycle stage")
 check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),
     "Phase 15.B runtime dependencies must remain exactly ACSets, Catlab, and SHA")
 check(project["compat"]["ACSets"] == "0.2.29" &&
@@ -282,7 +287,9 @@ if isempty(failures)
     println("  arbitrary-depth immutable hierarchy compiled to flat indexed runtime plans")
     println("  lossless annotated wiring profile with generic diagrams fail-closed")
     println("  193 direct Phase 15.B assertions and preserved PB0/Phase 15.A baselines")
-    println("  independent oracle, complete internal alpha, dynamic rewriting, and release remain open")
+    println(expected_package_version == "0.4.0" ?
+        "  Phase 15.C oracle/internal alpha is qualified; dynamic rewriting and release remain open" :
+        "  independent oracle, complete internal alpha, dynamic rewriting, and release remain open")
 else
     println(stderr,
         "ProcessBigraphs Phase 15.B closure failed with $(length(failures)) issue(s):")

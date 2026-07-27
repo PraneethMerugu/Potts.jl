@@ -99,9 +99,9 @@ Phase 15.A establishes the canonical structure-to-plan boundary in production co
 adds immutable arbitrary-depth open composition, structured cospans, and the lossless annotated
 wiring profile without creating a second runtime authority. Decision 0038 and the Phase 15.C entry
 contract freeze the remaining immutable-topology serial-alpha semantics and their independent
-Julia-oracle qualification. The Phase 15.C implementation candidate now passes those runtime and
-oracle capabilities; its separate closure-attestation PR remains the only authority for
-internal-alpha promotion.
+Julia-oracle qualification. Phase 15.C now qualifies those runtime and oracle capabilities as
+ProcessBigraphs 0.4.0 immutable-topology serial internal alpha. Dynamic structure, alternate
+executors, devices, adapters, complete pinned parity, and public release remain later gates.
 
 KernelAbstractions, AcceleratedKernels, Atomix, KernelIntrinsics, Adapt, and physical device-storage
 machinery belong primarily to `CorePotts`. `PottsToolkit` MAY depend directly on a low-level
