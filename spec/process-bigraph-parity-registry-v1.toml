@@ -42,7 +42,7 @@ implemented_direct_rows = [
     "deterministic-conflict-reconciliation",
     "atomic-event-commit",
 ]
-remaining_claim = "No row is oracle_passing or qualified; Phase 15.A canonical structure has passed, while structured composition, the independent Julia specification oracle, and the complete internal alpha remain open."
+remaining_claim = "PB0 rows remain bounded direct evidence only. Phase 15.A canonical structure and Phase 15.B immutable open composition have since passed; the independent Julia specification oracle and complete internal alpha remain open."
 
 [phase15a_implementation]
 status = "passed_canonical_structure"
@@ -55,7 +55,7 @@ implemented_rows = [
     "canonical-process-bigraph-acset",
     "compiled-structural-epoch",
 ]
-remaining_claim = "Structured-cospan composition, directed wiring views, the independent specification oracle, and the complete serial internal alpha remain open."
+remaining_claim = "Phase 15.B has since passed structured-cospan composition and directed wiring views. The independent specification oracle and complete serial internal alpha remain open."
 
 [phase15b_implementation]
 status = "passed_open_composition"
