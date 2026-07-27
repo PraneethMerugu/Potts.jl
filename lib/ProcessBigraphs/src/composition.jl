@@ -558,8 +558,13 @@ function compose_open(spec::CompositionSpec)
         structure = data.structure
         path_map = Dict{Path,Path}()
         for (source_path, schema) in schema_leaves(flat.schema)
-            target = get(junction_by_endpoint_path, (mount.key, source_path),
+            source_key = (mount.key, source_path)
+            target = get(junction_by_endpoint_path, source_key,
                 _mount_path(mount.key, source_path))
+            target in junction_targets && !haskey(junction_by_endpoint_path, source_key) &&
+                _fail(:junction_path_collision,
+                    "a junction target collides with unexposed mounted state";
+                    mount=mount.key, source_path, target)
             path_map[source_path] = target
             if haskey(leaves, target)
                 _schema_equal(leaves[target], schema) ||
@@ -644,6 +649,14 @@ function compose_open(spec::CompositionSpec)
                 target)
         initial_values[target] = deepcopy(first(values))
     end
+    unresolved = sort!([
+        target for target in keys(leaves)
+        if !haskey(initial_values, target)
+    ])
+    isempty(unresolved) ||
+        _fail(:unresolved_initializer,
+            "every composed store needs one root-resolved initializer";
+            paths=unresolved)
 
     aggregate = StaticComposite(
         schema,

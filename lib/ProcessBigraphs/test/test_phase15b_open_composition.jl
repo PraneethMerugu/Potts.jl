@@ -366,6 +366,25 @@ end
     run_until!(runtime, LogicalTime(2, TimeScale(1)))
     @test current_snapshot(runtime)[path("outer_shared")] == 12
 
+    flat_bindings = tuple((
+        PortBinding(entry.declaration.id, first(route), last(route))
+        for entry in tuple(compiled.plan.processes..., compiled.plan.steps...)
+        for route in tuple(entry.inputs..., entry.outputs...)
+    )...)
+    flat_typed = StaticComposite(
+        compiled.plan.schema,
+        Dict(target => compiled.initial[target] for target in paths(compiled.initial)),
+        compiled.plan.scale;
+        processes=tuple((entry.declaration for entry in compiled.plan.processes)...),
+        steps=tuple((entry.declaration for entry in compiled.plan.steps)...),
+        bindings=flat_bindings,
+    )
+    flat_runtime = initialize_runtime(compile_composite(flat_typed))
+    run_until!(flat_runtime, LogicalTime(2, TimeScale(1)))
+    @test materialize(current_snapshot(flat_runtime)) ==
+        materialize(current_snapshot(runtime))
+    @test event_count(flat_runtime) == event_count(runtime)
+
     current = phase15b_open("depth_zero", 1)
     for level in 1:5
         endpoint = level == 1 ? :state : :shared
@@ -465,7 +484,30 @@ end
         junctions=(JunctionSpec("nway", path("shared"), references),),
         exports=(CompositeExport(:shared, "nway"; role=:bidirectional),),
     )
+    nway_left_grouped = compose_open(
+        "nway_root";
+        mounts=mount_group(
+            mount_group(mount_group(components[1], components[2]), components[3]),
+            components[4],
+        ),
+        junctions=(JunctionSpec("nway", path("shared"), references),),
+        exports=(CompositeExport(:shared, "nway"; role=:bidirectional),),
+    )
+    nway_right_grouped = compose_open(
+        "nway_root";
+        mounts=mount_group(
+            components[1],
+            mount_group(components[2],
+                mount_group(components[3], components[4])),
+        ),
+        junctions=(JunctionSpec("nway", path("shared"), references),),
+        exports=(CompositeExport(:shared, "nway"; role=:bidirectional),),
+    )
     @test ACSets.nparts(canonical_structure(nway), :JunctionEndpoint) == 5
+    @test structural_fingerprint(nway_left_grouped) ==
+        structural_fingerprint(nway)
+    @test structural_fingerprint(nway_right_grouped) ==
+        structural_fingerprint(nway)
     nway_runtime = initialize_runtime(compile_composite(nway))
     run_until!(nway_runtime, LogicalTime(2, TimeScale(1)))
     @test current_snapshot(nway_runtime)[path("shared")] == 20
@@ -540,6 +582,42 @@ end
             (EndpointRef(:left, :state), EndpointRef(:right, :state)),
         ),),
     )
+    transferred_peer = phase15b_contract_open(
+        "transferred_peer",
+        baseline;
+        transfer,
+    )
+    transfer_junction = (JunctionSpec(
+        "transfer_contract",
+        path("shared"),
+        (EndpointRef(:left, :state), EndpointRef(:right, :state)),
+    ),)
+    transfer_mounts = (
+        CompositeMount(:left, transferred),
+        CompositeMount(:right, transferred_peer),
+    )
+    @test_throws ProcessBigraphError compose_open(
+        "transfer_export_mismatch";
+        mounts=transfer_mounts,
+        junctions=transfer_junction,
+        exports=(CompositeExport(
+            :shared,
+            "transfer_contract";
+            role=:bidirectional,
+        ),),
+    )
+    transfer_composed = compose_open(
+        "transfer_export_match";
+        mounts=transfer_mounts,
+        junctions=transfer_junction,
+        exports=(CompositeExport(
+            :shared,
+            "transfer_contract";
+            role=:bidirectional,
+            transfer,
+        ),),
+    )
+    @test ACSets.nparts(canonical_structure(transfer_composed), :Junction) == 1
 end
 
 @testset "Phase 15.B initialization and composition failures are atomic" begin
@@ -570,6 +648,32 @@ end
         initial_values=Dict(path("shared") => 7),
     ))
     @test compile_composite(resolved).initial[path("shared")] == 7
+
+    unresolved = phase15b_contract_open(
+        "unresolved_definition",
+        LeafSchema(Int; required=false, update_law=:add, units="count",
+            ontology="test:shared"),
+    )
+    unresolved_spec = CompositionSpec(
+        "unresolved_root";
+        mounts=(CompositeMount(:required, unresolved),),
+        junctions=(JunctionSpec(
+            "required",
+            path("shared"),
+            (EndpointRef(:required, :state),),
+        ),),
+        exports=(CompositeExport(:shared, "required";
+            role=:bidirectional),),
+    )
+    @test_throws ProcessBigraphError compose_open(unresolved_spec)
+    initialized = compose_open(CompositionSpec(
+        "unresolved_root";
+        mounts=unresolved_spec.mounts,
+        junctions=unresolved_spec.junctions,
+        exports=unresolved_spec.exports,
+        initial_values=Dict(path("shared") => 11),
+    ))
+    @test compile_composite(initialized).initial[path("shared")] == 11
 
     @test_throws ProcessBigraphError compose_open(CompositionSpec(
         "duplicate";
@@ -630,6 +734,37 @@ end
                 (EndpointRef(:right, :state),),
             ),
         ),
+    )
+
+    collision_component = open_composite(
+        "collision_definition",
+        StaticComposite(
+            BranchSchema(
+                state=LeafSchema(Int; default=0, update_law=:add),
+                private=LeafSchema(Int; default=0, update_law=:add),
+            ),
+            Dict(),
+            TimeScale(1),
+        );
+        endpoints=(BoundaryEndpoint(
+            :state,
+            path("state");
+            role=:bidirectional,
+        ),),
+    )
+    @test_throws ProcessBigraphError compose_open(
+        "junction_path_collision";
+        mounts=(CompositeMount(:mounted, collision_component),),
+        junctions=(JunctionSpec(
+            "colliding",
+            path("mounted", "private"),
+            (EndpointRef(:mounted, :state),),
+        ),),
+        exports=(CompositeExport(
+            :shared,
+            "colliding";
+            role=:bidirectional,
+        ),),
     )
 
     incompatible = open_composite(
