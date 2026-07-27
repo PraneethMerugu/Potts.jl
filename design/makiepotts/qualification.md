@@ -123,7 +123,7 @@ The bounded hardening pass on 2026-07-27 adds:
   and custom continuous encoding exercised through the public Makie journey;
 - 100 seeded randomized frames and adversarial geometry, slicing, channel,
   reactive, and recording cases;
-- declared and recurring CairoMakie, GLMakie, and WGLMakie qualification
+- declared CairoMakie, GLMakie, and WGLMakie qualification
   programs; and
 - the accepted four-panel Visual Audit A recorded in
   `visual-audit-a.md`.
@@ -139,7 +139,7 @@ site-scoped numeric values.
 The final bounded pass adds:
 
 - tolerant visual regression with expected, actual, and amplified-difference
-  failure artifacts in CI;
+  failure artifacts during explicit pre-release qualification;
 - actionable missing-channel and geometry diagnostics;
 - owned subscription and inspector cleanup with idempotent `close`;
 - close-safe latest-request-wins reruns;
@@ -155,6 +155,7 @@ Local qualification passed the three package suites, CairoMakie, GLMakie, and
 WGLMakie programs, tolerant visual regression, strict documentation and
 doctests, native example, frozen-API inventory, architecture closure, repository
 structure, metadata and artifact hygiene, TOML/YAML parsing, notebook JSON
-parsing, and whitespace validation. The GitHub workflow implements the same
-backend and release gates; this local report does not claim that an unpushed
-workflow run occurred.
+parsing, and whitespace validation. Pull-request CI keeps the complete
+CairoMakie package suite and release gates; the standalone GLMakie, WGLMakie,
+native-example, and tolerant visual-regression programs are retained for
+explicit pre-release qualification.

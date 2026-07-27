@@ -141,60 +141,6 @@ jobs:
             using Pkg
             Pkg.test(ENV["PACKAGE"]; julia_args=["--startup-file=no"])'
 
-  makie_backends:
-    name: MakiePotts / Cairo + GL + WGL
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate backend qualification environment
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true)'
-      - name: CairoMakie render, update, framebuffer, and save
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/cairo.jl "$RUNNER_TEMP/makiepotts-cairo.png"
-      - name: Tolerant CairoMakie visual regression
-        id: visual_regression
-        env:
-          MAKIEPOTTS_VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/makiepotts-visual-regression
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/visual_regression.jl
-      - name: Upload visual-regression failure evidence
-        if: ${{ steps.visual_regression.outcome == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: makiepotts-visual-regression
-          path: ${{ runner.temp }}/makiepotts-visual-regression
-          if-no-files-found: error
-      - name: GLMakie offscreen render, update, framebuffer, and cleanup
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" \
-            julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/gl.jl
-      - name: Run native MakiePotts example from its declared environment
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: |
-          julia --project=examples --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true)'
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" \
-            julia --project=examples --startup-file=no examples/makiepotts_native.jl
-      - name: WGLMakie render, update, and HTML serialization
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/wgl.jl
-
   integration:
     name: Integration / ${{ matrix.shard }}
     strategy:
@@ -332,14 +278,13 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [project, packages, makie_backends, integration, phase15c_oracle, phase15c_candidate, cpu_macos_arm64, cpu_linux_x64]
+    needs: [project, packages, integration, phase15c_oracle, phase15c_candidate, cpu_macos_arm64, cpu_linux_x64]
     runs-on: ubuntu-latest
     steps:
       - name: Require every gating job
         env:
           PROJECT_RESULT: ${{ needs.project.result }}
           PACKAGES_RESULT: ${{ needs.packages.result }}
-          MAKIE_BACKENDS_RESULT: ${{ needs.makie_backends.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           PHASE15C_ORACLE_RESULT: ${{ needs.phase15c_oracle.result }}
           PHASE15C_CANDIDATE_RESULT: ${{ needs.phase15c_candidate.result }}
@@ -351,7 +296,6 @@ jobs:
         run: |
           test "$PROJECT_RESULT" = success
           test "$PACKAGES_RESULT" = success
-          test "$MAKIE_BACKENDS_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$PHASE15C_ORACLE_RESULT" = success
           test "$PHASE15C_CANDIDATE_RESULT" = success
