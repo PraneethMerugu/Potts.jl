@@ -52,7 +52,8 @@ end
 
     compiled = compile_composite(composite)
     @test structural_fingerprint(compiled) == structural_fingerprint(model)
-    @test structural_epoch(compiled).version == "1.0.0"
+    @test structural_epoch(compiled).version ==
+        ProcessBigraphs.PROCESS_BIGRAPH_ACSET_VERSION
     @test compiled.plan isa ExecutionPlan
     @test StaticComposite ∉ fieldtypes(CompiledComposite)
     @test all(type -> !(type <: ACSets.ACSet), fieldtypes(ExecutionPlan))

@@ -1,7 +1,7 @@
-schema_version = "1.1.0"
+schema_version = "1.3.0"
 registry_id = "process-bigraphs-pb0-local-v1"
-package_version = "0.2.0"
-maturity = "phase_15a_canonical_structure"
+package_version = "0.3.0"
+maturity = "phase_15b_open_composition"
 public_release = false
 internal_alpha = false
 evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
@@ -9,6 +9,7 @@ specification = "../../spec/process-bigraph-runtime-semantics.md"
 decisions = [
     "../../spec/decisions/0034-process-bigraph-runtime-platform.md",
     "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+    "../../spec/decisions/0037-process-bigraph-open-composition.md",
 ]
 
 [pins]
@@ -31,6 +32,9 @@ phase16_direct_dependency = "AlgebraicRewriting.jl"
 phase17_weak_dependency = "AlgebraicDynamics.jl"
 canonical_structure = "one versioned ProcessBigraph ACSet"
 phase15a_status = "passed_canonical_structure"
+phase15b_status = "passed_open_composition"
+phase15b_decision = "../../spec/decisions/0037-process-bigraph-open-composition.md"
+phase15b_plan = "../../design/audits/process-bigraph-phase15b-open-composition-plan.md"
 phase16_status = "not_started"
 
 [[features]]
@@ -38,7 +42,7 @@ id = "canonical-process-bigraph-acset"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
 test = "test/test_phase15a_algebraic_structure.jl"
-limitation = "Static single-root composite scope; structured cospans and derived wiring views remain open."
+limitation = "Static single-root composite scope; Decision 0037 specifies structured cospans and annotated wiring views, but Phase 15.B implementation remains open."
 
 [[features]]
 id = "compiled-structural-epoch"
@@ -46,6 +50,20 @@ implementation_status = "implemented"
 oracle_status = "direct_passing"
 test = "test/test_phase15a_algebraic_structure.jl"
 limitation = "Immutable static epoch and indexed serial plan; dynamic AlgebraicRewriting transactions remain Phase 16 work."
+
+[[features]]
+id = "structured-cospan-open-composition"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_phase15b_open_composition.jl"
+limitation = "Immutable same-schema open composition only; dynamic structural rewriting remains Phase 16 and independent-oracle qualification remains Phase 15.C."
+
+[[features]]
+id = "derived-directed-wiring-view"
+implementation_status = "implemented"
+oracle_status = "direct_passing"
+test = "test/test_phase15b_open_composition.jl"
+limitation = "Only the versioned annotated ProcessBigraph profile is lossless and compilable; generic Catlab wiring diagrams are inspection-only."
 
 [[features]]
 id = "stable-typed-paths"

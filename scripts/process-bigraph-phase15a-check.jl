@@ -114,8 +114,8 @@ check(local_registry["internal_alpha"] == false,
     "Phase 15.A incorrectly claims the complete internal alpha")
 root_registry = TOML.parsefile(root_registry_path)
 check(root_registry["registry_status"] ==
-      "phase15a-canonical-structure-implemented-alpha-open",
-    "root registry does not record bounded Phase 15.A maturity")
+      "phase15b-open-composition-specified-implementation-open",
+    "root registry does not preserve Phase 15.A while recording accepted Phase 15.B design")
 phase15a = root_registry["phase15a_implementation"]
 check(phase15a["status"] == "passed_canonical_structure",
     "root registry does not close Phase 15.A")

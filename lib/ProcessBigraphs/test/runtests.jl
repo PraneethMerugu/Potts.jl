@@ -7,6 +7,7 @@ using ProcessBigraphs
     include("test_composite_preflight.jl")
     include("test_serial_microfixtures.jl")
     include("test_phase15a_algebraic_structure.jl")
+    include("test_phase15b_open_composition.jl")
 end
 
 @testset "Aqua" begin

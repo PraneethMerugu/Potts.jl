@@ -17,6 +17,7 @@ include("declarations.jl")
 include("algebraic_structure.jl")
 include("composites.jl")
 include("lowering.jl")
+include("composition.jl")
 include("runtime.jl")
 include("checkpoint.jl")
 
@@ -43,6 +44,11 @@ export ProcessBigraphACSet, CanonicalModel, canonical_model, canonical_structure
        ExecutionPlan, structural_epoch, structural_provenance
 export StaticComposite, CompiledComposite, compile_composite, preflight,
        model_fingerprint, step_layers
+export BoundaryEndpoint, OpenComposite, CompositeMount, EndpointRef,
+       JunctionSpec, CompositeExport, MountGroup, mount_group, CompositionSpec,
+       open_composite, compose_open, structured_cospan,
+       AnnotatedWiringDiagram, annotated_wiring_diagram, wiring_diagram,
+       wiring_profile_version, diagram_fingerprint
 export SerialRuntime, initialize_runtime, run_until!, current_snapshot,
        settled, event_count
 export SettledCheckpoint, checkpoint, restore, checkpoint_fingerprint

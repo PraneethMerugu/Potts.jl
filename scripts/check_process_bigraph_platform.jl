@@ -41,6 +41,8 @@ registry_path = require_file("spec/process-bigraph-parity-registry-v1.toml")
 decision_path = require_file("spec/decisions/0034-process-bigraph-runtime-platform.md")
 algebraic_decision_path =
     require_file("spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md")
+composition_decision_path =
+    require_file("spec/decisions/0037-process-bigraph-open-composition.md")
 semantics_path = require_file("spec/process-bigraph-runtime-semantics.md")
 audit_path = require_file(
     "design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md")
@@ -48,6 +50,10 @@ interview_path = require_file(
     "design/audits/process-bigraph-runtime-owner-interview.md")
 algebraic_interview_path = require_file(
     "design/audits/process-bigraph-algebraicjulia-owner-interview.md")
+composition_interview_path = require_file(
+    "design/audits/process-bigraph-phase15b-open-composition-owner-interview.md")
+composition_plan_path = require_file(
+    "design/audits/process-bigraph-phase15b-open-composition-plan.md")
 charter_path = require_file("spec/project-charter.md")
 architecture_path = require_file("design/repository-architecture-standard.md")
 roadmap_path = require_file("design/refactor-roadmap.md")
@@ -82,10 +88,10 @@ source_ids = unique_ids(sources, "source registry")
 feature_ids = unique_ids(features, "feature registry")
 oracle_ids = unique_ids(oracles, "oracle registry")
 
-check(registry["schema_version"] == "1.1.0", "unexpected parity-registry schema")
+check(registry["schema_version"] == "1.2.0", "unexpected parity-registry schema")
 check(registry["registry_status"] ==
-      "phase15a-canonical-structure-implemented-alpha-open",
-    "parity registry does not record the bounded Phase 15.A maturity")
+      "phase15b-open-composition-specified-implementation-open",
+    "parity registry does not record Phase 15.A evidence and accepted Phase 15.B design")
 check(registry["package_name"] == "ProcessBigraphs.jl",
     "runtime package identity is not ProcessBigraphs.jl")
 check(registry["incubation_path"] == "lib/ProcessBigraphs",
@@ -93,10 +99,12 @@ check(registry["incubation_path"] == "lib/ProcessBigraphs",
 check(registry["decisions"] == [
     "decisions/0034-process-bigraph-runtime-platform.md",
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+    "decisions/0037-process-bigraph-open-composition.md",
 ], "parity registry decision authorities changed")
 check(registry["owner_interviews"] == [
     "../design/audits/process-bigraph-runtime-owner-interview.md",
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
+    "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
 ], "parity registry owner-interview authorities changed")
 
 minimums = registry["checker"]
@@ -280,8 +288,8 @@ check(get(package_project["compat"], "ACSets", "") == "0.2.29" &&
     "Phase 15.A AlgebraicJulia compatibility bounds changed")
 
 package_registry = TOML.parsefile(package_registry_path)
-check(package_registry["schema_version"] == "1.1.0",
-    "package-local parity registry has not adopted Decision 0036")
+check(package_registry["schema_version"] == "1.2.0",
+    "package-local parity registry has not adopted Decision 0037")
 check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
     "package-local parity registry permits upstream runtime execution")
 check(package_registry["maturity"] == "phase_15a_canonical_structure",
@@ -289,6 +297,9 @@ check(package_registry["maturity"] == "phase_15a_canonical_structure",
 check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
       "passed_canonical_structure",
     "package-local registry does not close the bounded Phase 15.A slice")
+check(package_registry["accepted_next_architecture"]["phase15b_status"] ==
+      "specified_implementation_not_started",
+    "package-local registry does not record the accepted Phase 15.B design boundary")
 check(package_registry["accepted_next_architecture"]["phase16_status"] == "not_started",
     "package-local registry overclaims dynamic AlgebraicRewriting")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
@@ -300,6 +311,21 @@ check(phase15a["status"] == "passed_canonical_structure",
     "root registry does not close the bounded Phase 15.A slice")
 check(Set(phase15a["implemented_rows"]) == expected_phase15a_implemented,
     "Phase 15.A summary does not match implemented registry rows")
+phase15b = registry["phase15b_design"]
+expected_phase15b_targets = Set([
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+])
+check(phase15b["status"] == "accepted_implementation_ready",
+    "root registry does not record accepted Phase 15.B design")
+check(Set(phase15b["target_rows"]) == expected_phase15b_targets &&
+      isempty(phase15b["implemented_rows"]),
+    "Phase 15.B registry summary overclaims or omits its target rows")
+feature_by_id = Dict(feature["id"] => feature for feature in features)
+check(all(feature_by_id[id]["status"] == "specified" &&
+          feature_by_id[id]["evidence_status"] == "not_started"
+          for id in expected_phase15b_targets),
+    "Phase 15.B target rows do not preserve specified/unimplemented status")
 phase15a_evidence = TOML.parsefile(phase15a_evidence_path)
 check(phase15a_evidence["status"] == "passed_canonical_structure",
     "Phase 15.A evidence does not record its bounded pass")
@@ -345,9 +371,13 @@ check(occursin("Status: Complete; all 48 owner decisions resolved", interview),
 algebraic_interview = read(algebraic_interview_path, String)
 check(occursin("Status: Complete; all 34 owner decisions resolved", algebraic_interview),
     "AlgebraicJulia owner interview is not complete")
+composition_interview = read(composition_interview_path, String)
+check(occursin("Status: Complete; all 22 owner decisions resolved", composition_interview),
+    "Phase 15.B owner interview is not complete")
 
 decision = read(decision_path, String)
 algebraic_decision = read(algebraic_decision_path, String)
+composition_decision = read(composition_decision_path, String)
 semantics = read(semantics_path, String)
 charter = read(charter_path, String)
 architecture = read(architecture_path, String)
@@ -362,6 +392,10 @@ end
 for n in 1:34
     check(occursin(Regex("(?m)^$(n)\\."), algebraic_decision),
         "Decision 0036 is missing owner decision $n")
+end
+for n in 1:22
+    check(occursin(Regex("(?m)^$(n)\\."), composition_decision),
+        "Decision 0037 is missing owner decision $n")
 end
 
 for phrase in [
@@ -382,6 +416,8 @@ for phrase in [
     "Dagger",
     "Whole-cell acceptance ladder",
     "source-derived registered traces",
+    "Open-composite semantics",
+    "canonical semantic composition declaration is n-ary",
 ]
     check(occursin(phrase, semantics), "runtime semantics are missing '$phrase'")
 end
@@ -405,14 +441,17 @@ check(occursin("0034-process-bigraph-runtime-platform.md", indices),
     "Decision 0034 is absent from specification indexes")
 check(occursin("0036-algebraicjulia-process-bigraph-foundation.md", indices),
     "Decision 0036 is absent from specification indexes")
+check(occursin("0037-process-bigraph-open-composition.md", indices),
+    "Decision 0037 is absent from specification indexes")
 check(occursin("process-bigraph-runtime-semantics.md", indices),
     "runtime semantics are absent from specification indexes")
 check(occursin("process-bigraph-parity-registry-v1.toml", indices),
     "parity registry is absent from specification indexes")
 
 for path in [
-    decision_path, algebraic_decision_path, semantics_path, audit_path, interview_path,
-    algebraic_interview_path, charter_path,
+    decision_path, algebraic_decision_path, composition_decision_path, semantics_path,
+    audit_path, interview_path, algebraic_interview_path, composition_interview_path,
+    composition_plan_path, charter_path,
     architecture_path, roadmap_path, decision_index_path, spec_index_path,
     evidence_index_path, pb0_audit_path, phase15a_audit_path,
 ]
@@ -465,9 +504,10 @@ if isempty(failures)
     println("  $(length(oracles)) registered conformance oracles")
     println("  all 48 owner decisions recorded")
     println("  all 34 AlgebraicJulia and independent-conformance decisions recorded")
+    println("  all 22 Phase 15.B open-composition decisions recorded")
     println("  $(length(expected_pb0_implemented)) PB0 direct rows implemented and locally tested")
     println("  $(length(expected_phase15a_implemented)) Phase 15.A canonical-structure rows implemented and locally tested")
-    println("  canonical ACSet, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
+    println("  canonical ACSet, open-composition semantics, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
     println("  oracle-passing, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
 else
