@@ -74,6 +74,27 @@ function p16d_error(f)
     end
 end
 
+function p16d_shrink_conflict(structure, requests)
+    reduced = collect(requests)
+    changed = true
+    while changed && length(reduced) > 2
+        changed = false
+        for index in eachindex(reduced)
+            candidate = reduced[setdiff(eachindex(reduced), [index])]
+            error = p16d_error() do
+                ProcessBigraphs._select_requests(candidate, structure)
+            end
+            if error isa ProcessBigraphError &&
+                    error.code === :unresolved_structural_conflict
+                reduced = candidate
+                changed = true
+                break
+            end
+        end
+    end
+    tuple(reduced...)
+end
+
 @testset "Phase 16.D immutable epochs and DPO-backed stable operations" begin
     source = dynamic_structural_epoch(
         p16d_base_structure();
@@ -375,4 +396,48 @@ end
         stage_structural_transaction(source, requests).candidate_structure,
         :Composite,
     ) == 4
+end
+
+@testset "Phase 16.D bounded conflict fuzz and shrink" begin
+    source = dynamic_structural_epoch(p16d_base_structure())
+    root = structural_identity(source, :Composite, "root")
+    structure = structural_structure(source)
+    cases = 0
+    expected_conflicts = 0
+    for left_mount in (:a, :b, :c), right_mount in (:a, :b, :c),
+            left_priority in 0:2, right_priority in 0:2
+        left = AddCompositeRequest(
+            "fuzz-left-$(cases)", 0, root, "cell", left_mount;
+            priority=left_priority)
+        right = AddCompositeRequest(
+            "fuzz-right-$(cases)", 0, root, "cell", right_mount;
+            priority=right_priority)
+        error = p16d_error() do
+            ProcessBigraphs._select_requests((right, left), structure)
+        end
+        conflict =
+            left_mount === right_mount &&
+            left_priority == right_priority
+        if conflict
+            expected_conflicts += 1
+            @test error isa ProcessBigraphError
+            @test error.code === :unresolved_structural_conflict
+        else
+            @test isnothing(error)
+        end
+        cases += 1
+    end
+    @test cases == 81
+    @test expected_conflicts == 9
+
+    conflict_a = AddCompositeRequest(
+        "shrink-a", 0, root, "cell", :collision)
+    irrelevant = AddCompositeRequest(
+        "shrink-independent", 0, root, "cell", :independent)
+    conflict_b = AddCompositeRequest(
+        "shrink-b", 0, root, "cell", :collision)
+    shrunk = p16d_shrink_conflict(
+        structure, (conflict_a, irrelevant, conflict_b))
+    @test length(shrunk) == 2
+    @test Set(request.mount_key for request in shrunk) == Set([:collision])
 end
