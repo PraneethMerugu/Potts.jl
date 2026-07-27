@@ -7,6 +7,7 @@ decisions = [
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "decisions/0037-process-bigraph-open-composition.md",
     "decisions/0038-process-bigraph-serial-alpha.md",
+    "decisions/0039-phase-16-compute-ownership-and-scope.md",
 ]
 specification = "process-bigraph-runtime-semantics.md"
 audit = "../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md"
@@ -15,6 +16,7 @@ owner_interviews = [
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
     "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
     "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md",
+    "../design/audits/process-bigraph-phase16-owner-interview.md",
 ]
 package_name = "ProcessBigraphs.jl"
 incubation_path = "lib/ProcessBigraphs"
@@ -92,6 +94,26 @@ retained_direct_feature_count = 4
 internal_alpha = true
 public_release = false
 remaining_claim = "The immutable-topology serial runtime is qualified as ProcessBigraphs 0.4.0 internal alpha. Dynamic structure, alternate executors, devices, scientific adapters, Potts cutover, whole-cell qualification, complete pinned parity, and public release remain open."
+
+[phase16_entry]
+status = "specified_ready_to_start"
+implementation_status = "not_started"
+decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
+interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
+specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
+implementation_plan = "../design/audits/process-bigraph-phase16-implementation-plan.md"
+entry_contract = "process-bigraph-phase16-entry-v1.toml"
+qualification_ledger = "process-bigraph-phase16-qualification-v1.toml"
+backend_matrix = "process-bigraph-phase16-backend-matrix-v1.toml"
+migration_registry = "process-bigraph-phase16-migration-registry-v1.toml"
+model_scope = "process-bigraph-phase16-model-scope-v1.toml"
+api_contract = "process-bigraph-phase16-api-v1.toml"
+entry_audit = "../design/audits/process-bigraph-phase16-entry-audit.md"
+checker = "../scripts/process-bigraph-phase16-entry-check.jl"
+g4_disposition = "mandatory Phase 16.C"
+internal_beta = false
+public_release = false
+remaining_claim = "All 31 Phase 16 rows are specified and unqualified. Implementation, absorbed G4, dynamic structure, adapters, runnable Merks/CNV, internal beta, complete parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [

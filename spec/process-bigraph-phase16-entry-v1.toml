@@ -1,0 +1,161 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraphs-phase16-entry-v1"
+phase = "16"
+title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
+status = "ready_to_start"
+implementation_status = "not_started"
+internal_beta = false
+public_release = false
+current_package_version = "0.4.0"
+target_package_version = "0.5.0"
+julia = "1.12.6"
+
+[authority]
+owner_interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
+decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
+normative_specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
+runtime_semantics = "process-bigraph-runtime-semantics.md"
+implementation_plan = "../design/audits/process-bigraph-phase16-implementation-plan.md"
+entry_audit = "../design/audits/process-bigraph-phase16-entry-audit.md"
+qualification_ledger = "process-bigraph-phase16-qualification-v1.toml"
+backend_matrix = "process-bigraph-phase16-backend-matrix-v1.toml"
+migration_registry = "process-bigraph-phase16-migration-registry-v1.toml"
+model_scope = "process-bigraph-phase16-model-scope-v1.toml"
+api_contract = "process-bigraph-phase16-api-v1.toml"
+roadmap = "../design/refactor-roadmap.md"
+
+[principle]
+runtime = "ProcessBigraphs owns when and why computation occurs."
+engine = "Optimized solver and CPM kernels own how authorized heavy computation occurs."
+one_authority = true
+publication = "stage-complete-validate-authorize-publish-or-abort"
+
+[prerequisites]
+phase13_frozen = true
+phase14_g3b_attested = true
+process_bigraphs_phase15c_internal_alpha = true
+g4_external_prerequisite = false
+g4_disposition = "absorbed as mandatory Phase 16.C"
+
+[scope]
+required = [
+    "solver-neutral-engine-protocol",
+    "cartesian-field-descriptor-and-realization",
+    "sampling-deposition-exchange-and-splitting",
+    "native-field-cpu-metal-rocm",
+    "algebraic-rewriting-dynamic-hierarchy",
+    "typed-corepotts-structural-requests",
+    "corepotts-strangler-adapter-and-first-cutover",
+    "phase16-logical-checkpoint-and-legacy-conversion",
+    "cpu-sciml-field-adapter",
+    "cpu-independent-custom-field-adapter",
+    "runnable-source-bounded-merks-2006",
+    "runnable-source-bounded-cnv-scenario38-sim902",
+    "failure-observation-restart-and-provenance",
+]
+excluded = [
+    "public-release",
+    "complete-pinned-parity",
+    "dagger-or-distributed-qualification",
+    "multi-gpu",
+    "cuda-qualification",
+    "universal-solver-gpu-support",
+    "moving-mesh-fem-amr",
+    "merge-engulf-burst-general-rewrite",
+    "implicit-spo-cascade",
+    "arbitrary-mid-event-restart",
+    "full-merks-publication-analysis",
+    "full-cnv-publication-analysis",
+    "full-source-ensemble-reproduction",
+    "mandatory-source-faithful-assembled-model-gpu",
+    "broad-ode-dae-biochemical-fba-sbml-ecosystem",
+    "algebraicdynamics",
+    "whole-cell-qualification",
+]
+
+[dependency_policy]
+phase16_direct = ["AlgebraicRewriting.jl"]
+phase16_extension_or_adapter = ["SciMLBase.jl", "CommonSolve.jl"]
+algebraic_rewriting_compat = "0.5"
+scimlbase_compat = "3"
+commonsolve_compat = "0.2.11"
+sciml_extension = "ProcessBigraphsSciMLExt"
+core_hard_sciml_dependency = false
+process_bigraphs_depends_on_corepotts = false
+corepotts_depends_on_process_bigraphs = true
+actual_compat_bounds_required_in_16a = true
+upstream_python_runtime_execution = "forbidden"
+
+[ordering]
+strict_join = true
+subgates = [
+    "16.A-entry-contract-dependencies-api-and-checkers",
+    "16.B-engine-and-field-protocol",
+    "16.C-absorbed-g4-native-field-qualification",
+    "16.D-algebraic-rewriting-dynamic-hierarchy",
+    "16.E-corepotts-adapter-checkpoint-and-first-cutover",
+    "16.F-sciml-custom-and-cross-adapter-qualification",
+    "16.G-runnable-merks-2006",
+    "16.H-runnable-cnv-scenario38",
+    "16.I-reconciliation-and-internal-beta-attestation",
+]
+parallel_after = "16.B"
+parallel_branches = ["16.C", "16.D"]
+compensation_allowed = false
+
+[engine_protocol]
+operation_families = ["interval_advance", "boundary_solve", "discrete_batch", "typed_extension"]
+input_visibility = "immutable versioned projections"
+target_behavior = "exact target or typed early return"
+candidate = "opaque staged leaf candidate plus typed small effects"
+completion = "asynchronous handle allowed"
+engine_owns = ["algorithm", "internal steps", "workspace", "cache", "arrays", "layout", "device buffers", "kernels", "streams", "preconditioners"]
+runtime_owns = ["logical time", "invocation reason", "identity", "schema", "version", "visibility", "RNG coordinates", "validation", "authorization", "publication", "failure", "checkpoint", "replay"]
+
+[fields]
+dimensions = [2, 3]
+geometry = "Cartesian"
+native_placement = "cell_centered"
+boundary_conditions = ["periodic", "Dirichlet", "Neumann", "declared_mixed"]
+required_operations = ["evolution", "sampling", "deposition", "exchange", "uptake", "accounting"]
+splitting_authority = "ProcessBigraphs"
+internal_splitting_authority = "engine within one invisible invocation"
+undeclared_algebraic_loops = "reject"
+
+[structure]
+canonical_orchestration = "ProcessBigraph ACSet"
+optimized_domain_topology = "CorePotts leaf representation"
+stable_operations = ["add", "remove", "binary_divide", "move", "rewire"]
+default_rewrite_semantics = "DPO-safe"
+raw_rewrite_api = "experimental"
+implicit_spo_cascade = false
+atomic_with_numeric_candidate = true
+
+[backends]
+native_required = ["CPU", "Metal", "ROCm"]
+real_hardware_required = ["Metal", "ROCm"]
+sciml_required = ["CPU"]
+custom_adapter_required = ["CPU"]
+cuda = "deferred"
+hidden_transfer = "forbidden"
+hidden_host_fallback = "forbidden"
+portable_device_precision = "Float32"
+cpu_reference_precision = "Float64 separate profile"
+
+[models]
+merks = "runnable source-bounded Merks et al. 2006 elongation/autocrine model"
+cnv = "runnable source-bounded Shirinifard et al. 2012 scenario 38 and simulation 902"
+runnable_lifecycle = ["build", "preflight", "initialize", "advance", "observe", "checkpoint", "restart", "terminate"]
+full_analysis_required = false
+quantitative_reproduction_claim = false
+
+[closure]
+all_required_ledger_rows = "qualified"
+real_hardware_required = true
+exact_head_candidate_required = true
+merged_tree_verification_required = true
+metadata_only_attestation_required = true
+clean_tree_required = true
+content_addressed_evidence_required = true
+publish_package = false
+closure_checker_expected_now = "open"

@@ -91,6 +91,13 @@ behavior.
 - [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
 - [Process-Bigraph Runtime Semantics](process-bigraph-runtime-semantics.md)
 - [Process-Bigraph Parity Registry v1](process-bigraph-parity-registry-v1.toml)
+- [Phase 16 Engine, Field, Structural, and Adapter Semantics](phase-16-engine-field-structural-and-adapter-semantics.md)
+- [Phase 16 Entry Contract](process-bigraph-phase16-entry-v1.toml)
+- [Phase 16 Qualification Ledger](process-bigraph-phase16-qualification-v1.toml)
+- [Phase 16 Backend Matrix](process-bigraph-phase16-backend-matrix-v1.toml)
+- [Phase 16 Migration Registry](process-bigraph-phase16-migration-registry-v1.toml)
+- [Phase 16 Model Scope](process-bigraph-phase16-model-scope-v1.toml)
+- [Phase 16 API Contract](process-bigraph-phase16-api-v1.toml)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
@@ -119,6 +126,10 @@ Engineering realization is described separately in:
 
 Refactor execution evidence:
 
+- [ProcessBigraphs Phase 16 Owner Interview](../design/audits/process-bigraph-phase16-owner-interview.md)
+- [Decision 0039: Phase 16 Compute Ownership and Scope](decisions/0039-phase-16-compute-ownership-and-scope.md)
+- [ProcessBigraphs Phase 16 Implementation Plan](../design/audits/process-bigraph-phase16-implementation-plan.md)
+- [ProcessBigraphs Phase 16 Entry Audit](../design/audits/process-bigraph-phase16-entry-audit.md)
 - [Open-Protocol Audit](../design/audits/open-protocol-audit.md)
 - [Phase 9 Current-Code and Gap Audit](../design/audits/phase-9-current-code-and-gap-audit.md)
 - [Phase 9 SciML and JuliaGPU Research](../design/audits/phase-9-sciml-and-gpu-research.md)
@@ -215,8 +226,13 @@ the [closure audit](../design/audits/process-bigraph-phase15c-closure-audit.md) 
 [evidence manifest](../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
 
 Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
-algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
-CPU/Metal/ROCm qualification for the reusable field substrate.
+algorithm is not an appropriate GPU promotion target. Decision 0039 absorbs the still-open G4
+CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choice Phase 16
+interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
+strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
+ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
+heavy computation occurs. The Phase 16 specification packet is ready to start 16.A, while every
+implementation qualification row and internal-beta closure remain open.
 
 ## Conformance Principle
 

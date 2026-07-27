@@ -11,6 +11,7 @@ decisions = [
     "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "../../spec/decisions/0037-process-bigraph-open-composition.md",
     "../../spec/decisions/0038-process-bigraph-serial-alpha.md",
+    "../../spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
 ]
 
 [pins]
@@ -43,7 +44,15 @@ phase15c_entry_contract = "../../spec/process-bigraph-phase15c-entry-v1.toml"
 phase15c_target_feature_count = 15
 phase15c_supporting_oracle_feature_count = 7
 phase15c_retained_direct_feature_count = 4
-phase16_status = "not_started"
+phase16_status = "specified_ready_to_start"
+phase16_decision = "../../spec/decisions/0039-phase-16-compute-ownership-and-scope.md"
+phase16_specification = "../../spec/phase-16-engine-field-structural-and-adapter-semantics.md"
+phase16_entry_contract = "../../spec/process-bigraph-phase16-entry-v1.toml"
+phase16_qualification_ledger = "../../spec/process-bigraph-phase16-qualification-v1.toml"
+phase16_api_contract = "../../spec/process-bigraph-phase16-api-v1.toml"
+phase16_sciml_extension = "ProcessBigraphsSciMLExt"
+phase16_internal_beta = false
+phase16_public_release = false
 
 [[features]]
 id = "canonical-process-bigraph-acset"

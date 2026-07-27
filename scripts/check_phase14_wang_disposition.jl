@@ -18,8 +18,8 @@ integration = read_repo("integration/runtests.jl")
 check(isfile(joinpath(REPO, decision)), "Decision 0035 is missing")
 check(occursin("Wang G3-B sequential CPU passed", registry["status"]) &&
       occursin("Wang assembled GPU qualification retired", registry["status"]) &&
-      occursin("G4 is current", registry["status"]),
-    "registry does not record the Wang CPU disposition and G4 gate")
+      occursin("G4 preserved and reassigned to Phase 16.C", registry["status"]),
+    "registry does not record the Wang CPU disposition and Phase 16.C G4 gate")
 check(!occursin("Wang G3-C", workflow) &&
       !occursin("phase14_wang_g3c", workflow),
     "GPU workflow still contains Wang G3-C qualification")
@@ -50,7 +50,7 @@ end
 if isempty(failures)
     println("Phase 14 Wang sequential CPU disposition: PASS")
     println("  G3-B remains the paper-faithful CPU reference")
-    println("  assembled Wang GPU qualification is retired; G4 is current")
+    println("  assembled Wang GPU qualification is retired; G4 is preserved as Phase 16.C")
 else
     for failure in failures
         println(stderr, "ERROR: ", failure)
