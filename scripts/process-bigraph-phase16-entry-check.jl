@@ -17,6 +17,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16-owner-interview.md",
     "design/audits/process-bigraph-phase16-implementation-plan.md",
     "design/audits/process-bigraph-phase16-entry-audit.md",
+    "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
     "spec/process-bigraph-phase16-entry-v1.toml",
@@ -47,16 +48,18 @@ api = TOML.parsefile(paths["spec/process-bigraph-phase16-api-v1.toml"])
 parity = TOML.parsefile(paths["spec/process-bigraph-parity-registry-v1.toml"])
 local_parity = TOML.parsefile(paths["lib/ProcessBigraphs/parity-registry.toml"])
 project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
+phase16a_evidence = TOML.parsefile(
+    paths["design/evidence/process-bigraph-phase16a-evidence-v1.toml"])
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
       entry["phase"] == "16",
     "Phase 16 entry identity changed")
-check(entry["status"] == "ready_to_start" &&
-      entry["implementation_status"] == "not_started" &&
+check(entry["status"] == "in_progress" &&
+      entry["implementation_status"] == "phase16a_qualified" &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
-    "entry must claim ready-to-start but no implementation, beta, or release")
+    "entry must claim Phase 16.A qualification without beta or release")
 check(entry["current_package_version"] == "0.4.0" &&
       entry["target_package_version"] == "0.5.0",
     "Phase 16 maturity versions changed")
@@ -158,8 +161,11 @@ check(length(ids) == length(unique(ids)), "duplicate Phase 16 requirement id")
 allowed = Set(ledger["allowed_statuses"])
 check(all(row -> row["status"] in allowed, requirements),
     "qualification ledger contains an invalid status")
-check(all(row -> row["status"] == "specified", requirements),
-    "entry packet may not claim implementation evidence")
+for row in requirements
+    expected = row["subgate"] == "16.A" ? "qualified" : "specified"
+    check(row["status"] == expected,
+        "$(row["id"]) must be $(expected) at the Phase 16.A boundary")
+end
 check(Set(String[row["subgate"] for row in requirements]) ==
       Set(["16.A", "16.B", "16.C", "16.D", "16.E", "16.F", "16.G", "16.H", "16.I"]),
     "qualification ledger does not cover every subgate")
@@ -210,7 +216,7 @@ check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
       model_rows["shirinifard-2012-cnv"]["required_dimension"] == [40, 40, 35],
     "CNV scenario/source/domain changed")
 
-check(api["status"] == "frozen_preimplementation" &&
+check(api["status"] == "phase16a_qualified" &&
       api["current_new_exports"] == [] &&
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
@@ -223,17 +229,31 @@ check(length(planned_exports) == length(unique(planned_exports)) &&
       Set(["engine", "field", "structure", "sciml", "corepotts"]),
     "Phase 16 planned API identities or families are inconsistent")
 
-check(parity["phase16_entry"]["status"] == "specified_ready_to_start" &&
-      parity["phase16_entry"]["implementation_status"] == "not_started" &&
+check(parity["phase16_entry"]["status"] == "in_progress" &&
+      parity["phase16_entry"]["implementation_status"] == "phase16a_qualified" &&
       parity["phase16_entry"]["g4_disposition"] == "mandatory Phase 16.C" &&
       parity["phase16_entry"]["internal_beta"] == false &&
       parity["phase16_entry"]["public_release"] == false,
     "root parity registry misstates Phase 16 entry or maturity")
 check(local_parity["accepted_next_architecture"]["phase16_status"] ==
-      "specified_ready_to_start" &&
+      "phase16a_qualified" &&
       local_parity["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       local_parity["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry misstates Phase 16 entry or maturity")
+
+check(phase16a_evidence["status"] == "qualified" &&
+      phase16a_evidence["phase"] == "16.A" &&
+      phase16a_evidence["internal_beta"] == false &&
+      phase16a_evidence["public_release"] == false &&
+      Set(phase16a_evidence["qualified_rows"]["ids"]) ==
+      Set(["P16-A01", "P16-A02", "P16-A03"]),
+    "Phase 16.A evidence identity or qualified-row scope changed")
+check(phase16a_evidence["dependencies"]["AlgebraicRewriting"] == "0.5.0" &&
+      phase16a_evidence["dependencies"]["CommonSolve"] == "0.2.11" &&
+      phase16a_evidence["dependencies"]["reverse_runtime_dependency"] == false &&
+      phase16a_evidence["api"]["new_public_exports"] == 0 &&
+      phase16a_evidence["qualification"]["total_assertions"] == 765,
+    "Phase 16.A dependency, API, or test evidence changed")
 
 for (path, phrases) in [
     ("spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
@@ -256,7 +276,7 @@ for (path, phrases) in [
 end
 
 if isempty(failures)
-    println("ProcessBigraphs Phase 16 entry check passed: ready to start 16.A; closure remains open.")
+    println("ProcessBigraphs Phase 16.A boundary check passed: 3 rows qualified; 28 remain open.")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("ProcessBigraphs Phase 16 entry check failed with $(length(failures)) error(s)")

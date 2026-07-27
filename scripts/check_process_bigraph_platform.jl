@@ -335,10 +335,10 @@ check(package_registry["accepted_next_architecture"]["phase15b_status"] ==
       "passed_open_composition",
     "package-local registry does not close Phase 15.B")
 check(package_registry["accepted_next_architecture"]["phase16_status"] ==
-      "specified_ready_to_start" &&
+      "phase16a_qualified" &&
       package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
-    "package-local registry must record specified Phase 16 entry without implementation or beta")
+    "package-local registry must record qualified Phase 16.A without beta")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
       ["ACSets.jl", "Catlab.jl"],
     "package-local Phase 15 dependency decision changed")

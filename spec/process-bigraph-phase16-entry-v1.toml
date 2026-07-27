@@ -2,8 +2,8 @@ schema_version = "1.0.0"
 contract_id = "process-bigraphs-phase16-entry-v1"
 phase = "16"
 title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
-status = "ready_to_start"
-implementation_status = "not_started"
+status = "in_progress"
+implementation_status = "phase16a_qualified"
 internal_beta = false
 public_release = false
 current_package_version = "0.4.0"
@@ -22,6 +22,7 @@ backend_matrix = "process-bigraph-phase16-backend-matrix-v1.toml"
 migration_registry = "process-bigraph-phase16-migration-registry-v1.toml"
 model_scope = "process-bigraph-phase16-model-scope-v1.toml"
 api_contract = "process-bigraph-phase16-api-v1.toml"
+phase16a_evidence = "../design/evidence/process-bigraph-phase16a-evidence-v1.toml"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]
