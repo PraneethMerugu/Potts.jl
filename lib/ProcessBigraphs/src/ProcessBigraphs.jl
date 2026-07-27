@@ -19,6 +19,7 @@ include("logical_codec.jl")
 include("engine_protocol.jl")
 include("managed_engine.jl")
 include("fields.jl")
+include("custom_field_adapter.jl")
 include("semantic_rng.jl")
 include("declarations.jl")
 include("continuations.jl")
@@ -97,5 +98,45 @@ export SerialRuntime, initialize_runtime, run_until!, current_snapshot,
 export SettledCheckpoint, checkpoint, restore, checkpoint_fingerprint
 export LogicalCheckpointV2, logical_checkpoint, encode_checkpoint,
        decode_checkpoint
+export AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
+       AbstractCompletionHandle, EngineCapabilities, EngineDeclaration,
+       IntervalAdvance, BoundarySolve, DiscreteBatch, EngineInputProjection,
+       EngineInvocation, EngineCandidate, EngineEarlyReturn,
+       EngineEventRequest, EngineFailure, EngineContinuation,
+       EngineTransactionResult, operation_family, operation_start,
+       operation_target, projection_value, prepare_engine, stage_operation!,
+       complete_operation!, validate_candidate, publish_candidate!,
+       discard_candidate!, execute_engine!, engine_continuation_action,
+       encode_engine_continuation, decode_engine_continuation,
+       aggregate_replay_class
+export ManagedEngineRuntime, managed_engine_runtime, managed_engine_time,
+       managed_engine_settled, managed_engine_instance,
+       advance_managed_engine!, reconstruct_managed_engine!,
+       DomainStructuralIdentity, DomainStructuralRequest,
+       DomainStructuralDisposition, DomainStructuralSelection,
+       select_domain_structural_requests
+export FieldGeometry, FieldBoundary, FieldDescriptor, FieldState,
+       FieldSampler, FieldDeposition, FieldExchange, FieldExchangeResult,
+       FieldAccounting, FieldIterationRegion, NamedFieldOperation,
+       FieldSplitPlan, periodic_field_boundaries, field_values,
+       sample_field, deposit_field, execute_exchange
+export StructuralIdentity, StructuralIdentityRecord, StructuralLineage,
+       StructuralCapacity, CompositeDivisionPolicy, DynamicStructuralEpoch,
+       AddCompositeRequest, RemoveCompositeRequest, DivideCompositeRequest,
+       MoveCompositeRequest, RewireBindingRequest,
+       StructuralRequestDisposition, StagedStructuralTransaction,
+       dynamic_structural_epoch, structural_identity,
+       stage_structural_transaction, publish_structural_transaction,
+       structural_structure, structural_lineage,
+       StructuralEpochCheckpoint, structural_checkpoint,
+       restore_structural_checkpoint
+export CheckpointComponent, LogicalCheckpointV3,
+       RestoredPhase16Checkpoint, AbstractLegacyCheckpointConverter,
+       phase16_checkpoint, decode_phase16_checkpoint,
+       restore_phase16_checkpoint, convert_legacy_checkpoint
+export BoundedCartesianFieldProblem, IndependentCustomFieldAdapter,
+       IndependentCustomFieldInstance, independent_custom_field_declaration,
+       custom_field_snapshot, field_engine_snapshot,
+       sciml_field_adapter, sciml_field_declaration
 
 end

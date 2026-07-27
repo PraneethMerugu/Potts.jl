@@ -13,7 +13,7 @@ using SciMLBase
     @test extension_module.CONTRACT_VERSION ==
           "process-bigraphs-sciml-extension-v1"
 
-    planned = Set(Symbol[
+    qualified_exports = Set(Symbol[
         :AbstractEngineAdapter,
         :AbstractEngineInstance,
         :EngineDeclaration,
@@ -32,8 +32,13 @@ using SciMLBase
         :FieldGeometry,
         :FieldBoundary,
         :FieldState,
+    ])
+    @test intersect(qualified_exports, Set(names(ProcessBigraphs))) ==
+          qualified_exports
+
+    reserved_exports = Set(Symbol[
         :StructuralRequest,
         :StructuralResult,
     ])
-    @test isempty(intersect(planned, Set(names(ProcessBigraphs))))
+    @test isempty(intersect(reserved_exports, Set(names(ProcessBigraphs))))
 end
