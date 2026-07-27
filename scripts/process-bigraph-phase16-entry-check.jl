@@ -17,6 +17,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16-owner-interview.md",
     "design/audits/process-bigraph-phase16-implementation-plan.md",
     "design/audits/process-bigraph-phase16-entry-audit.md",
+    "design/audits/process-bigraph-phase16b-engine-field-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
@@ -30,6 +31,7 @@ const REQUIRED = [
     "lib/ProcessBigraphs/parity-registry.toml",
     "lib/ProcessBigraphs/Project.toml",
     "lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl",
+    "scripts/process-bigraph-phase16b-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -50,16 +52,18 @@ local_parity = TOML.parsefile(paths["lib/ProcessBigraphs/parity-registry.toml"])
 project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 phase16a_evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16a-evidence-v1.toml"])
+phase16b_candidate = entry["implementation_status"] == "phase16b_candidate"
+phase16b_qualified = entry["implementation_status"] == "phase16b_qualified"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
       entry["phase"] == "16",
     "Phase 16 entry identity changed")
 check(entry["status"] == "in_progress" &&
-      entry["implementation_status"] == "phase16a_qualified" &&
+      (phase16b_candidate || phase16b_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
-    "entry must claim Phase 16.A qualification without beta or release")
+    "entry must claim the current Phase 16.B state without beta or release")
 check(entry["current_package_version"] == "0.4.0" &&
       entry["target_package_version"] == "0.5.0",
     "Phase 16 maturity versions changed")
@@ -162,7 +166,13 @@ allowed = Set(ledger["allowed_statuses"])
 check(all(row -> row["status"] in allowed, requirements),
     "qualification ledger contains an invalid status")
 for row in requirements
-    expected = row["subgate"] == "16.A" ? "qualified" : "specified"
+    expected = if row["subgate"] == "16.A"
+        "qualified"
+    elseif row["subgate"] == "16.B"
+        phase16b_candidate ? "implemented" : "qualified"
+    else
+        "specified"
+    end
     check(row["status"] == expected,
         "$(row["id"]) must be $(expected) at the Phase 16.A boundary")
 end
@@ -216,7 +226,8 @@ check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
       model_rows["shirinifard-2012-cnv"]["required_dimension"] == [40, 40, 35],
     "CNV scenario/source/domain changed")
 
-check(api["status"] == "phase16a_qualified" &&
+check(api["status"] ==
+      (phase16b_candidate ? "phase16b_candidate" : "phase16b_qualified") &&
       api["current_new_exports"] == [] &&
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
@@ -230,13 +241,14 @@ check(length(planned_exports) == length(unique(planned_exports)) &&
     "Phase 16 planned API identities or families are inconsistent")
 
 check(parity["phase16_entry"]["status"] == "in_progress" &&
-      parity["phase16_entry"]["implementation_status"] == "phase16a_qualified" &&
+      parity["phase16_entry"]["implementation_status"] ==
+      entry["implementation_status"] &&
       parity["phase16_entry"]["g4_disposition"] == "mandatory Phase 16.C" &&
       parity["phase16_entry"]["internal_beta"] == false &&
       parity["phase16_entry"]["public_release"] == false,
     "root parity registry misstates Phase 16 entry or maturity")
 check(local_parity["accepted_next_architecture"]["phase16_status"] ==
-      "phase16a_qualified" &&
+      entry["implementation_status"] &&
       local_parity["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       local_parity["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry misstates Phase 16 entry or maturity")
@@ -276,7 +288,8 @@ for (path, phrases) in [
 end
 
 if isempty(failures)
-    println("ProcessBigraphs Phase 16.A boundary check passed: 3 rows qualified; 28 remain open.")
+    qualified_count = count(row -> row["status"] == "qualified", requirements)
+    println("ProcessBigraphs Phase 16 entry check passed: $(qualified_count) rows qualified; $(31 - qualified_count) remain open.")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("ProcessBigraphs Phase 16 entry check failed with $(length(failures)) error(s)")

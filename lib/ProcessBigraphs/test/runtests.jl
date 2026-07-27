@@ -26,6 +26,7 @@ end
 
 @testset "ProcessBigraphs Phase 16" begin
     include("phase16/test_phase16a_entry.jl")
+    include("phase16/test_phase16b_engine_field.jl")
 end
 
 @testset "Aqua" begin

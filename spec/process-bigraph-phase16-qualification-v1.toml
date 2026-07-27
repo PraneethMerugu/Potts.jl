@@ -35,42 +35,42 @@ evidence = ["internal beta target", "public release false", "generated limitatio
 id = "P16-B01"
 subgate = "16.B"
 title = "Solver-neutral declaration and instance protocol"
-status = "specified"
+status = "implemented"
 evidence = ["production tests", "independent custom adapter"]
 
 [[requirements]]
 id = "P16-B02"
 subgate = "16.B"
 title = "Transactional staged engine invocation"
-status = "specified"
+status = "implemented"
 evidence = ["failure injection", "publication allocation guard"]
 
 [[requirements]]
 id = "P16-B03"
 subgate = "16.B"
 title = "Field descriptor, geometry, units, and boundaries"
-status = "specified"
+status = "implemented"
 evidence = ["analytic/manufactured solutions", "boundary fixtures", "refinement"]
 
 [[requirements]]
 id = "P16-B04"
 subgate = "16.B"
 title = "Sampling, deposition, exchange, and conservation"
-status = "specified"
+status = "implemented"
 evidence = ["conservation oracle", "insufficiency and positivity truth tables"]
 
 [[requirements]]
 id = "P16-B05"
 subgate = "16.B"
 title = "Exact field clocks, input modes, and named splitting"
-status = "specified"
+status = "implemented"
 evidence = ["split oracle", "restart every settled cut", "algebraic-loop rejection"]
 
 [[requirements]]
 id = "P16-B06"
 subgate = "16.B"
 title = "Typed engine continuation and replay classification"
-status = "specified"
+status = "implemented"
 evidence = ["codec tests", "invalidation matrix", "failure tests"]
 
 [[requirements]]
