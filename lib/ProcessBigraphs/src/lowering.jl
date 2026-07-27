@@ -38,6 +38,7 @@ function _lower_static_to_structure(
     structure = ProcessBigraphACSet()
     root = ACSets.add_part!(structure, :Composite;
         composite_id="root",
+        composite_definition_id="root",
         scale_numerator=composite.scale.numerator,
         scale_denominator=composite.scale.denominator,
         scale_unit=composite.scale.unit)
@@ -49,6 +50,7 @@ function _lower_static_to_structure(
             store_composite=root,
             store_id=_store_identity(target),
             store_path=target,
+            store_local_path=target,
             schema_kind=kind,
             schema_payload=payload)
     end
@@ -70,6 +72,7 @@ function _lower_static_to_structure(
         actor = ACSets.add_part!(structure, :Actor;
             actor_composite=root,
             actor_id=id,
+            actor_local_id=id,
             law_type=string(typeof(declaration.law)),
             law_version=semantic_version(declaration.law),
             law_parameters=semantic_parameters(declaration.law),
@@ -158,13 +161,76 @@ end
 canonical_structure(composite::StaticComposite) =
     canonical_structure(canonical_model(composite))
 
-function _single_composite(structure)
+function _root_composite(structure)
     rows = _rows(structure, :Composite)
-    length(rows) == 1 ||
-        _fail(:phase15a_composite_cardinality,
-            "Phase 15.A static models require exactly one root composite";
-            count=length(rows))
-    only(rows)
+    isempty(rows) &&
+        _fail(:missing_root_composite, "canonical structure has no composite")
+    parents = Dict{Int,Int}()
+    mount_keys = Dict{Int,Set{Symbol}}()
+    children = Dict{Int,Vector{Int}}(row => Int[] for row in rows)
+    for row in _rows(structure, :CompositeContainment)
+        child_row = Int(_attr(structure, row, :composite_child))
+        parent_row = Int(_attr(structure, row, :composite_parent))
+        child_row == parent_row &&
+            _fail(:composite_cycle, "a composite cannot contain itself";
+                composite=String(_attr(structure, child_row, :composite_id)))
+        haskey(parents, child_row) &&
+            _fail(:multiple_composite_parents, "a composite has multiple parents";
+                composite=String(_attr(structure, child_row, :composite_id)))
+        key = _attr(structure, row, :mount_key)
+        key isa Symbol ||
+            _fail(:invalid_mount_key, "canonical mount keys must be symbols";
+                actual=string(typeof(key)))
+        key in get!(mount_keys, parent_row, Set{Symbol}()) &&
+            _fail(:duplicate_mount_key, "one parent contains duplicate mount keys";
+                parent=String(_attr(structure, parent_row, :composite_id)), mount_key=key)
+        push!(mount_keys[parent_row], key)
+        parents[child_row] = parent_row
+        push!(children[parent_row], child_row)
+    end
+    roots = [row for row in rows if !haskey(parents, row)]
+    length(roots) == 1 ||
+        _fail(:composite_root_cardinality,
+            "canonical hierarchy must contain exactly one root composite";
+            count=length(roots))
+    root = only(roots)
+    visited = Set{Int}()
+    active = Set{Int}()
+    function visit(row)
+        row in active &&
+            _fail(:composite_cycle, "composite containment contains a cycle";
+                composite=String(_attr(structure, row, :composite_id)))
+        row in visited && return
+        push!(active, row)
+        foreach(visit, children[row])
+        delete!(active, row)
+        push!(visited, row)
+    end
+    visit(root)
+    length(visited) == length(rows) ||
+        _fail(:orphan_composite, "composite hierarchy is disconnected")
+    root_scale = (
+        _attr(structure, root, :scale_numerator),
+        _attr(structure, root, :scale_denominator),
+        _attr(structure, root, :scale_unit),
+    )
+    for row in rows
+        isempty(String(_attr(structure, row, :composite_id))) &&
+            _fail(:empty_composite_identity, "composite identity cannot be empty")
+        isempty(String(_attr(structure, row, :composite_definition_id))) &&
+            _fail(:empty_composite_definition_identity,
+                "composite definition identity cannot be empty")
+        scale = (
+            _attr(structure, row, :scale_numerator),
+            _attr(structure, row, :scale_denominator),
+            _attr(structure, row, :scale_unit),
+        )
+        scale == root_scale ||
+            _fail(:time_scale_mismatch,
+                "all composites in one immutable hierarchy must share one time scale";
+                composite=String(_attr(structure, row, :composite_id)))
+    end
+    root
 end
 
 function _reconstruct_schema(structure)
@@ -175,6 +241,10 @@ function _reconstruct_schema(structure)
         target isa Path ||
             _fail(:invalid_store_path, "canonical store path must be a Path";
                 actual=string(typeof(target)))
+        local_target = _attr(structure, row, :store_local_path)
+        local_target isa Path ||
+            _fail(:invalid_store_local_path, "canonical local store path must be a Path";
+                actual=string(typeof(local_target)))
         haskey(paths, target) &&
             _fail(:duplicate_store_path, "canonical structure repeats a store path";
                 target)
@@ -275,10 +345,7 @@ function _structure_port_record(structure, row)
 end
 
 function _materialize_static(structure, payloads)
-    composite_row = _single_composite(structure)
-    isempty(_rows(structure, :CompositeContainment)) ||
-        _fail(:phase15a_nested_composite,
-            "nested composites remain outside Phase 15.A")
+    composite_row = _root_composite(structure)
     scale = TimeScale(
         _attr(structure, composite_row, :scale_numerator),
         _attr(structure, composite_row, :scale_denominator),
@@ -402,17 +469,146 @@ function _materialize_static(structure, payloads)
         bindings=tuple(bindings...))
 end
 
+function _validate_open_structure(structure)
+    endpoint_rows = _rows(structure, :Endpoint)
+    endpoint_ids = Set(String(_attr(structure, row, :endpoint_id))
+        for row in endpoint_rows)
+    endpoint_maps = Dict{Int,Int}()
+    endpoint_composites = Dict{Int,Int}()
+    for row in _rows(structure, :BoundaryMap)
+        endpoint = Int(_attr(structure, row, :boundary_map_endpoint))
+        haskey(endpoint_maps, endpoint) &&
+            _fail(:multiple_boundary_maps,
+                "an endpoint must map to exactly one canonical store";
+                endpoint=String(_attr(structure, endpoint, :endpoint_id)))
+        endpoint_maps[endpoint] = Int(_attr(structure, row, :boundary_map_store))
+        endpoint_composites[endpoint] =
+            Int(_attr(structure, row, :boundary_map_composite))
+    end
+    Set(keys(endpoint_maps)) == Set(endpoint_rows) ||
+        _fail(:missing_boundary_map,
+            "every declared endpoint must map to one canonical store")
+
+    endpoint_names = Set{Tuple{Int,Symbol}}()
+    for endpoint in endpoint_rows
+        role = _attr(structure, endpoint, :endpoint_role)
+        role in (:import, :export, :bidirectional) ||
+            _fail(:invalid_endpoint_role, "unknown open-composite endpoint role";
+                endpoint=String(_attr(structure, endpoint, :endpoint_id)), role)
+        name = _attr(structure, endpoint, :endpoint_name)
+        name isa Symbol ||
+            _fail(:invalid_endpoint_name, "endpoint names must be symbols";
+                endpoint=String(_attr(structure, endpoint, :endpoint_id)))
+        key = (endpoint_composites[endpoint], name)
+        key in endpoint_names &&
+            _fail(:duplicate_endpoint_name,
+                "one composite contains duplicate endpoint names";
+                composite=String(_attr(structure, first(key), :composite_id)), name)
+        push!(endpoint_names, key)
+        store = endpoint_maps[endpoint]
+        _attr(structure, store, :schema_kind) === :leaf ||
+            _fail(:endpoint_targets_branch,
+                "open-composite endpoints must map to leaf stores";
+                endpoint=String(_attr(structure, endpoint, :endpoint_id)))
+        schema = _attr(structure, store, :schema_payload)
+        contract = _validated_endpoint_contract(
+            _attr(structure, endpoint, :endpoint_schema_payload))
+        canonical_fingerprint(schema) ==
+            canonical_fingerprint(contract.schema) ||
+            _fail(:endpoint_schema_mismatch,
+                "endpoint schema metadata disagrees with its mapped store";
+                endpoint=String(_attr(structure, endpoint, :endpoint_id)))
+        local_path = _attr(structure, endpoint, :endpoint_local_path)
+        local_path isa Path ||
+            _fail(:invalid_endpoint_local_path,
+                "endpoint local paths must be canonical Path values")
+        isempty(String(_attr(structure, endpoint, :endpoint_origin_store_id))) &&
+            _fail(:empty_endpoint_origin,
+                "endpoint provenance must retain an originating store identity")
+    end
+
+    junction_rows = _rows(structure, :Junction)
+    endpoints_by_junction = Dict{Int,Vector{Int}}(row => Int[] for row in junction_rows)
+    relation_keys = Set{Tuple{Int,Int}}()
+    for row in _rows(structure, :JunctionEndpoint)
+        junction = Int(_attr(structure, row, :junction_endpoint_junction))
+        endpoint = Int(_attr(structure, row, :junction_endpoint_endpoint))
+        key = (junction, endpoint)
+        key in relation_keys &&
+            _fail(:duplicate_junction_endpoint,
+                "a junction repeats one endpoint")
+        push!(relation_keys, key)
+        push!(endpoints_by_junction[junction], endpoint)
+    end
+    junction_ids = Set{String}()
+    for junction in junction_rows
+        id = String(_attr(structure, junction, :junction_id))
+        isempty(id) &&
+            _fail(:empty_junction_identity, "junction identity cannot be empty")
+        id in junction_ids &&
+            _fail(:duplicate_junction_identity, "junction identities must be unique"; id)
+        push!(junction_ids, id)
+        endpoints = endpoints_by_junction[junction]
+        isempty(endpoints) &&
+            _fail(:empty_junction, "a junction must connect at least one endpoint"; id)
+        store = Int(_attr(structure, junction, :junction_store))
+        composite = Int(_attr(structure, junction, :junction_composite))
+        schema = _attr(structure, store, :schema_payload)
+        _attr(structure, store, :schema_kind) === :leaf ||
+            _fail(:junction_targets_branch,
+                "junctions must resolve to leaf stores"; junction=id)
+        contracts = [_validated_endpoint_contract(
+            _attr(structure, endpoint, :endpoint_schema_payload))
+            for endpoint in endpoints]
+        all(contract -> canonical_fingerprint(contract.schema) ==
+                canonical_fingerprint(schema), contracts) ||
+            _fail(:junction_schema_mismatch,
+                "all joined endpoints must have exactly compatible schemas"; junction=id)
+        all(contract -> canonical_fingerprint(contract) ==
+                canonical_fingerprint(first(contracts)), contracts) ||
+            _fail(:junction_schema_mismatch,
+                "all joined endpoints must have exactly compatible transfer metadata";
+                junction=id)
+
+        internal = [endpoint for endpoint in endpoints
+            if endpoint_composites[endpoint] != composite]
+        parent = [endpoint for endpoint in endpoints
+            if endpoint_composites[endpoint] == composite]
+        providers = any(endpoint ->
+            _attr(structure, endpoint, :endpoint_role) in (:export, :bidirectional),
+            internal)
+        consumers = any(endpoint ->
+            _attr(structure, endpoint, :endpoint_role) in (:import, :bidirectional),
+            internal)
+        external_providers = any(endpoint ->
+            _attr(structure, endpoint, :endpoint_role) in (:import, :bidirectional),
+            parent)
+        external_consumers = any(endpoint ->
+            _attr(structure, endpoint, :endpoint_role) in (:export, :bidirectional),
+            parent)
+        (providers || external_providers) ||
+            _fail(:junction_missing_provider,
+                "junction has no provider-capable endpoint"; junction=id)
+        (consumers || external_consumers) ||
+            _fail(:junction_missing_consumer,
+                "junction has no consumer-capable endpoint"; junction=id)
+    end
+    endpoint_ids
+end
+
 function _validate_canonical_structure(structure, payloads)
-    composite = _materialize_static(structure, payloads)
-    root = _single_composite(structure)
-    all(row -> Int(_attr(structure, row, :store_composite)) == root,
+    root = _root_composite(structure)
+    composite_rows = Set(_rows(structure, :Composite))
+    all(row -> Int(_attr(structure, row, :store_composite)) in composite_rows,
         _rows(structure, :StoreNode)) ||
-        _fail(:cross_composite_store,
-            "Phase 15.A store nodes must belong to the root composite")
-    all(row -> Int(_attr(structure, row, :actor_composite)) == root,
+        _fail(:unknown_store_composite,
+            "a store belongs to an unknown composite")
+    all(row -> Int(_attr(structure, row, :actor_composite)) in composite_rows,
         _rows(structure, :Actor)) ||
-        _fail(:cross_composite_actor,
-            "Phase 15.A actors must belong to the root composite")
+        _fail(:unknown_actor_composite,
+            "an actor belongs to an unknown composite")
+    _validate_open_structure(structure)
+    composite = _materialize_static(structure, payloads)
     ids = _validate_identities(composite)
     all(process -> process.schedule.cadence.scale == composite.scale &&
         process.schedule.first_due.scale == composite.scale, composite.processes) ||
@@ -483,11 +679,43 @@ function _provenance(model, composite)
         push!(records,
             String(_attr(structure, row, :containment_id)) => (:containment, index))
     end
+    composite_containment_order = sort!(_rows(structure, :CompositeContainment);
+        by=row -> String(_attr(structure, row, :composite_containment_id)))
+    for (index, row) in enumerate(composite_containment_order)
+        push!(records,
+            String(_attr(structure, row, :composite_containment_id)) =>
+                (:composite_containment, index))
+    end
     dependency_order = sort!(_rows(structure, :StepDependency);
         by=row -> String(_attr(structure, row, :dependency_id)))
     for (index, row) in enumerate(dependency_order)
         push!(records,
             String(_attr(structure, row, :dependency_id)) => (:dependency, index))
+    end
+    endpoint_order = sort!(_rows(structure, :Endpoint);
+        by=row -> String(_attr(structure, row, :endpoint_id)))
+    for (index, row) in enumerate(endpoint_order)
+        push!(records,
+            String(_attr(structure, row, :endpoint_id)) => (:endpoint, index))
+    end
+    boundary_order = sort!(_rows(structure, :BoundaryMap);
+        by=row -> String(_attr(structure, row, :boundary_map_id)))
+    for (index, row) in enumerate(boundary_order)
+        push!(records,
+            String(_attr(structure, row, :boundary_map_id)) => (:boundary_map, index))
+    end
+    junction_order = sort!(_rows(structure, :Junction);
+        by=row -> String(_attr(structure, row, :junction_id)))
+    for (index, row) in enumerate(junction_order)
+        push!(records,
+            String(_attr(structure, row, :junction_id)) => (:junction, index))
+    end
+    junction_endpoint_order = sort!(_rows(structure, :JunctionEndpoint);
+        by=row -> String(_attr(structure, row, :junction_endpoint_id)))
+    for (index, row) in enumerate(junction_endpoint_order)
+        push!(records,
+            String(_attr(structure, row, :junction_endpoint_id)) =>
+                (:junction_endpoint, index))
     end
     StructuralProvenance(tuple(sort!(records; by=first)...))
 end
@@ -528,8 +756,7 @@ function compile_composite(model::CanonicalModel)
         step_entries,
         layers,
         provenance)
-    fingerprint = canonical_fingerprint((
-        :static_composite_v1,
+    runtime_identity = (
         canonical_fingerprint(normalized.schema),
         initial.entries,
         normalized.scale,
@@ -540,7 +767,14 @@ function compile_composite(model::CanonicalModel)
         normalized.bindings,
         layers,
         report.fingerprint,
-    ))
+    )
+    has_open_structure =
+        length(_rows(model.structure, :Composite)) != 1 ||
+        !isempty(_rows(model.structure, :Endpoint)) ||
+        !isempty(_rows(model.structure, :Junction))
+    fingerprint = canonical_fingerprint(has_open_structure ?
+        (:open_static_composite_v1, model.fingerprint, runtime_identity) :
+        (:static_composite_v1, runtime_identity...))
     CompiledComposite(epoch, plan, initial, report, fingerprint)
 end
 

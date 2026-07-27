@@ -7,8 +7,15 @@ Date: 2026-07-26
 Implementation disposition: Phase 15.A passed on 2026-07-26 for Decisions 1, 5, 7--12, and the
 static portion of Decision 23. This bounded slice adds ACSets/Catlab, one canonical ACSet,
 typed/direct-authoring convergence, row-order-invariant identity, and compiled structural
-epoch/plan provenance while preserving PB0 behavior. Structured cospans, wiring diagrams, the
-independent specification oracle, and the complete Phase 15 internal-alpha gate remain open.
+epoch/plan provenance while preserving PB0 behavior. Phase 15.B subsequently implemented
+structured-cospan open composition and annotated wiring diagrams. The independent specification
+oracle and complete Phase 15 internal-alpha gate remain unimplemented.
+
+Post-decision refinement: [Decision 0037](0037-process-bigraph-open-composition.md) fixes the
+same-schema store-endpoint boundary algebra, n-ary mount/junction/export composition, namespace and
+initialization rules, lossless annotated wiring profile, static hierarchy lowering, and exact
+Phase 15.B/16 boundary. It refines Decisions 6, 9--12, 21--24, 30, 33, and 34 without changing this
+decision's architectural ownership.
 
 ## Context
 

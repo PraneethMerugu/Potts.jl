@@ -1,16 +1,18 @@
-schema_version = "1.1.0"
+schema_version = "1.3.0"
 registry_id = "process-bigraph-parity-v1"
-registry_status = "phase15a-canonical-structure-implemented-alpha-open"
+registry_status = "phase15b-open-composition-direct-passing"
 registered_at = "2026-07-26"
 decisions = [
     "decisions/0034-process-bigraph-runtime-platform.md",
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
+    "decisions/0037-process-bigraph-open-composition.md",
 ]
 specification = "process-bigraph-runtime-semantics.md"
 audit = "../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md"
 owner_interviews = [
     "../design/audits/process-bigraph-runtime-owner-interview.md",
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
+    "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
 ]
 package_name = "ProcessBigraphs.jl"
 incubation_path = "lib/ProcessBigraphs"
@@ -54,6 +56,24 @@ implemented_rows = [
     "compiled-structural-epoch",
 ]
 remaining_claim = "Structured-cospan composition, directed wiring views, the independent specification oracle, and the complete serial internal alpha remain open."
+
+[phase15b_implementation]
+status = "passed_open_composition"
+decision = "decisions/0037-process-bigraph-open-composition.md"
+interview = "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md"
+implementation_plan = "../design/audits/process-bigraph-phase15b-open-composition-plan.md"
+audit = "../design/audits/process-bigraph-phase15b-open-composition-audit.md"
+evidence = "../design/evidence/process-bigraph-phase15b-evidence-v1.toml"
+checker = "../scripts/process-bigraph-phase15b-check.jl"
+target_rows = [
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+]
+implemented_rows = [
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+]
+remaining_claim = "Direct Phase 15.B evidence passes. The independent checked Julia specification oracle and complete Phase 15.C serial internal-alpha gate remain open."
 
 [status_vocabulary]
 allowed = [
@@ -223,8 +243,12 @@ phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
 phase16_direct_dependency = "AlgebraicRewriting.jl"
 phase17_weak_dependency = "AlgebraicDynamics.jl"
 canonical_structure = "one versioned integrated ProcessBigraph ACSet"
-open_composition = "structured cospans"
-derived_view = "directed wiring diagrams"
+open_boundary = "same-schema fragment exposing role-annotated typed stores through structure-preserving maps"
+open_composition = "pure n-ary structured cospans over explicit roots, mounts, junctions, exports, and initialization overrides"
+derived_view = "read-only directed wiring diagrams; only the lossless annotated ProcessBigraph profile is compilable"
+namespace = "mounted instances retain child namespaces; only explicit exports enter the parent boundary"
+initialization = "resolved once at the composed root; conflicting defaults require an explicit parent override"
+static_dynamic_boundary = "Phase 15 owns arbitrary-depth immutable hierarchy; Phase 16 owns transactions that publish new structural epochs"
 semantic_identity = "stable ProcessBigraph identities and canonical paths"
 row_identity = "nonsemantic"
 runtime_plan = "immutable indexed tables plus exact structural provenance"
@@ -787,8 +811,8 @@ oracle_ids = ["oracle-algebraic-structure"]
 [[features]]
 id = "structured-cospan-open-composition"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_phase15b"
 required_for_pinned_parity = false
 required_for_first_public_release = true
 spec_sections = ["AlgebraicJulia structural foundation", "Composites"]
@@ -797,8 +821,8 @@ oracle_ids = ["oracle-algebraic-structure"]
 [[features]]
 id = "derived-directed-wiring-view"
 classification = "normative_julia"
-status = "specified"
-evidence_status = "not_started"
+status = "implemented"
+evidence_status = "direct_passing_phase15b"
 required_for_pinned_parity = false
 required_for_first_public_release = true
 spec_sections = ["AlgebraicJulia structural foundation"]
@@ -944,7 +968,7 @@ status = "not_started"
 required = true
 feature_ids = ["canonical-process-bigraph-acset", "structured-cospan-open-composition", "derived-directed-wiring-view", "compiled-structural-epoch"]
 sources = []
-acceptance = "Typed constructors, ACSets, structured cospans, and derived wiring diagrams round-trip through one schema, compose naturally, compile with exact provenance, and produce isomorphism-invariant semantic fingerprints."
+acceptance = "Typed constructors, ACSets, structured cospans, and lossless annotated wiring diagrams round-trip through one schema, compose naturally, compile with exact provenance, and produce isomorphism-invariant semantic fingerprints."
 
 [[oracles]]
 id = "oracle-algebraic-invariance"
@@ -953,7 +977,7 @@ status = "not_started"
 required = true
 feature_ids = ["canonical-process-bigraph-acset", "structured-cospan-open-composition", "derived-directed-wiring-view", "compiled-structural-epoch"]
 sources = []
-acceptance = "ACSet row renumbering, declaration order, traversal order, path aliases, and equivalent composite parenthesization do not alter semantic identity, fingerprints, RNG coordinates, schedules, or committed results."
+acceptance = "ACSet row renumbering, declaration, mount, endpoint, and junction order, traversal order, path aliases, and equivalent composite parenthesization do not alter semantic identity, fingerprints, semantic provenance, plans, RNG coordinates, schedules, or committed results."
 
 [[oracles]]
 id = "oracle-algebraic-rewriting"

@@ -27,9 +27,26 @@ Validated authoring models compile into a frozen `StructuralEpoch` and an immuta
 ACSet or retain the `StaticComposite` declaration as a second authority. The Phase 14.PB0 model,
 initial-state, final-state, and trace baselines remain exact.
 
-Phase 15.A is not the complete Phase 15 internal alpha. Structured-cospan composition, derived
-wiring diagrams, nested open composites, the independent Julia specification oracle, semantic RNG,
-and the broader multirate/failure fixture matrix remain open Phase 15 work.
+Phase 15.B adds immutable open composition without creating a second runtime authority:
+
+- selected typed stores become `import`, `export`, or `bidirectional` endpoints;
+- reusable definitions mount under explicit namespace keys with distinct instance identities;
+- exact-compatible endpoints join through named n-ary junctions;
+- parent exports and initialization overrides are explicit;
+- arbitrary finite static hierarchy is retained in the canonical ACSet and flattened into the
+  existing execution plan;
+- each open component exposes a real Catlab structured cospan; and
+- a versioned annotated directed-wiring view round-trips losslessly, while generic Catlab diagrams
+  remain inspection-only and fail closed if submitted for compilation.
+
+Composition is pure and construction-order invariant. Types, shapes, units, ontology, update law,
+persistence, residency, and endpoint transfer contracts must match exactly; no scientific
+conversion is inferred. Runtime and checkpoint paths still consume only the frozen epoch and
+indexed plan.
+
+Phase 15.B is not the complete Phase 15 internal alpha. The independent Julia specification
+oracle, semantic RNG, observer and continuation completion, and the broader multirate/failure
+fixture matrix remain Phase 15.C work.
 
 Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
@@ -42,11 +59,11 @@ will not install or execute Vivarium, Process-Bigraph Python, or Bigraph-Schema 
 be source-audited feature and semantic parity rather than live upstream-runtime equivalence.
 
 The current maturity, limitations, and exact parity pins are recorded in
-[`parity-registry.toml`](parity-registry.toml). Internal contracts and an
-executable example are in [`docs/src/internal.md`](docs/src/internal.md). The bounded closure is
-recorded by the repository
-[Phase 15.A audit](../../design/audits/process-bigraph-phase15a-canonical-structure-audit.md) and
-[evidence record](../../design/evidence/process-bigraph-phase15a-evidence-v1.toml).
+[`parity-registry.toml`](parity-registry.toml). Internal contracts, ordinary open-composition
+authoring, and the advanced AlgebraicJulia path are documented in
+[`docs/src/internal.md`](docs/src/internal.md). The bounded Phase 15.B closure is recorded by the
+repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
+[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml).
 
 Run the package suite with Julia 1.12.6:
 

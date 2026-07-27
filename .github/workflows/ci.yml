@@ -42,6 +42,8 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-pb0-check.jl
       - name: Enforce ProcessBigraphs Phase 15.A canonical structure
         run: julia --startup-file=no scripts/process-bigraph-phase15a-check.jl
+      - name: Enforce ProcessBigraphs Phase 15.B open composition
+        run: julia --startup-file=no scripts/process-bigraph-phase15b-check.jl
       - name: Enforce Phase 14 Wang sequential CPU disposition
         run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
       - name: Resolve the package workspace without mutation

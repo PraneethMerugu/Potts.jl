@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 15.A canonical structure passed; complete internal alpha and public parity remain open
+Status: Phase 15.B immutable open composition passed; complete internal alpha and public parity remain open
 
 ## Authority and maturity
 
@@ -10,13 +10,12 @@ baseline is Process-Bigraph commit
 `4b208e13620e09e877af52ea07273bc9429a3a17`. Those projects do not own or
 endorse this implementation.
 
-PB0 remains deliberately narrower than the Phase 15 internal alpha. It proves
-domain-neutral values and bounded serial microfixtures. Phase 15.A additionally proves the
-canonical ACSet-to-compiled-plan boundary described below. Neither slice claims
-dynamic structural transactions, nested composites, bridges that execute
-transfers, persisted checkpoint files, a general observer protocol, semantic
-RNG, Threads/Dagger equivalence, device kernels, scientific adapters, or
-independent source-derived Julia oracle qualification.
+PB0 remains deliberately narrower than the Phase 15 internal alpha. It proves domain-neutral
+values and bounded serial microfixtures. Phase 15.A proves the canonical ACSet-to-compiled-plan
+boundary. Phase 15.B proves immutable open composition and derived wiring views. These slices do
+not claim dynamic structural transactions, bridges that execute transfers, persisted checkpoint
+files, a general observer protocol, semantic RNG, Threads/Dagger equivalence, device kernels,
+scientific adapters, or independent source-derived Julia oracle qualification.
 
 Decision 0036 makes one ProcessBigraph ACSet the Phase 15 canonical structural
 model. Phase 15.A directly depends on `ACSets.jl` 0.2.29 and `Catlab.jl` 0.17.6.
@@ -45,9 +44,86 @@ and an exact `StructuralProvenance` map. Public structure accessors return detac
 and checkpoint code use only the compiled plan; they do not traverse the ACSet or retain
 `StaticComposite` as a parallel authority.
 
-Phase 15.A supports one static root composite. Nested/open composition, structured cospans,
-directed wiring views, and dynamic rewriting are intentionally rejected or absent until their
-later gates.
+Phase 15.B extends the same ACSet with composite containment, typed endpoints, boundary maps,
+junctions, and junction-endpoint provenance. Static hierarchy is canonical authoring information;
+compilation resolves it into flat stores, routes, actors, and lookup tables before runtime.
+
+## Immutable open composition
+
+The ordinary API is declarative. An endpoint exposes one leaf store and its complete schema and
+optional transfer contract:
+
+```julia
+producer = open_composite(
+    "counter-definition",
+    StaticComposite(schema, Dict(), scale;
+        processes=(declaration,),
+        bindings);
+    endpoints=(
+        BoundaryEndpoint(:state, path("state"); role=:bidirectional),
+    ),
+)
+
+system = compose_open(
+    "counter-system";
+    mounts=(
+        CompositeMount(:left, producer),
+        CompositeMount(:right, producer),
+    ),
+    junctions=(
+        JunctionSpec(
+            "shared-count",
+            path("shared"),
+            (EndpointRef(:left, :state), EndpointRef(:right, :state)),
+        ),
+    ),
+    exports=(
+        CompositeExport(:shared, "shared-count"; role=:bidirectional),
+    ),
+    initial_values=Dict(path("shared") => 0),
+)
+
+compiled = compile_composite(system)
+```
+
+The definition may be mounted repeatedly. Each instance identity derives from the parent identity
+and mount key; private state remains below that key. A junction may connect any finite number of
+endpoints. Conflicting initializers require one parent override. Duplicate mounts, paths,
+junctions, or exports fail without changing the inputs.
+
+Endpoint roles are capabilities at the composition boundary: `import` is consumer-capable,
+`export` is provider-capable, and `bidirectional` is both. A private junction needs at least one
+provider and consumer. A parent import supplies an external provider, a parent export supplies an
+external consumer, and a parent bidirectional endpoint supplies both.
+
+Compatibility is exact across Julia type and shape, units, ontology, update law, persistence,
+residency, and optional `TransferDeclaration`. Conversion belongs in an explicit process or step.
+
+`mount_group` is a pairwise/nested authoring convenience that flattens into the n-ary
+`CompositionSpec`; grouping and declaration order do not enter semantic identity.
+
+## Advanced AlgebraicJulia access
+
+`canonical_structure(system)` returns a detached `ProcessBigraphACSet`.
+`structured_cospan(system)` returns the corresponding real Catlab structured multicospan with
+import and export feet. Advanced callers can author or transform an ACSet directly, then enter the
+same validator:
+
+```julia
+compiled = compile_composite(
+    structure;
+    initial_values,
+    laws,
+    continuations,
+)
+```
+
+`annotated_wiring_diagram(system)` derives the supported ProcessBigraph directed-wiring profile.
+`wiring_diagram(view)` returns its Catlab diagram for inspection. Compiling the intact annotated
+view is lossless; mutation, missing annotations, unsupported profile versions, or a generic
+`Catlab.WiringDiagram` fail closed. The diagram is never a runtime authority.
+
+Dynamic add/remove/divide/move/rewire operations remain Phase 16 structural transactions.
 
 ## Semantic values
 

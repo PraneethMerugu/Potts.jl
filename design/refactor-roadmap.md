@@ -22,7 +22,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 12.5: Tiled Checkerboard Engine and Sultan-Class Study | Complete; experimental disposition | [Completion audit](audits/phase-12-5-completion-audit.md), [accepted contract](audits/phase-12-5-tiled-checkerboard-contract.md), and [chunk plan](audits/phase-12-5-chunk-plan.md) |
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; G4 is the current Potts gate; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
-| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.A canonical structure passed, while the complete runtime alpha and Potts paper gate remain open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes the remaining serial-alpha semantics without a public release |
+| Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.A canonical structure and Phase 15.B immutable open composition passed, while the Phase 15.C independent oracle, complete runtime alpha, and Potts paper gate remain open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs closes the remaining serial-alpha semantics without a public release |
 | Phase 16: Algebraic Rewriting, Dynamic Hierarchy, and Potts Adapter Internal Beta | Not started | Begins after the serial runtime contracts and canonical structural epoch needed by the first adapter slice stabilize |
 | Phase 17: Algebraic Dynamics, Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta adapter and continuation boundaries pass |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
@@ -173,9 +173,10 @@ unrelated earlier work.
 | D14 | Product identity, pinned Process-Bigraph 2.0 authority, parity meaning, package/dependency boundary, independent development, and no-public-release rule — resolved by Decision 0034 | ProcessBigraphs specification and package incubation |
 | D15 | Canonical ACSet structure, structured-cospan composition, semantic identity, compiled epoch, independent Julia conformance, and no-upstream-execution policy — resolved by Decision 0036 | ACSet-backed internal serial alpha |
 | D16 | Versioned runtime semantics for stores, ports, deltas, update laws, exact time, processes, steps, commits, topology, persistence, failure, RNG, observation, and capability declarations | Internal serial alpha |
-| D17 | AlgebraicRewriting transaction ownership plus per-slice CorePotts adapter ownership, checkpoint compatibility, old/new local differential fixtures, cutover, and rollback/invalidation policy | Each strangler-migration slice and internal beta |
-| D18 | Stable serial runnable batches, reconciliation, structural barriers, placement/residency declarations, executor-order invariance, and failure/retry policy | Qualified Threads and Dagger executors |
-| D19 | Complete pinned parity registry, whole-cell-style acceptance result, documentation, production evidence, and presentation/repository disposition | First public ProcessBigraphs release |
+| D17 | Same-schema store endpoints, n-ary mount/junction/export composition, namespace and initialization ownership, lossless annotated wiring profile, immutable hierarchy lowering, and the static/dynamic phase boundary — resolved by Decision 0037 | Phase 15.B open-composition implementation |
+| D18 | AlgebraicRewriting transaction ownership plus per-slice CorePotts adapter ownership, checkpoint compatibility, old/new local differential fixtures, cutover, and rollback/invalidation policy | Each strangler-migration slice and internal beta |
+| D19 | Stable serial runnable batches, reconciliation, structural barriers, placement/residency declarations, executor-order invariance, and failure/retry policy | Qualified Threads and Dagger executors |
+| D20 | Complete pinned parity registry, whole-cell-style acceptance result, documentation, production evidence, and presentation/repository disposition | First public ProcessBigraphs release |
 
 Every gate produces an accepted specification update or decision record plus its required evidence.
 Implementation convenience MUST NOT decide a gate implicitly.
@@ -1181,9 +1182,29 @@ This closure implements only the `canonical-process-bigraph-acset` and
 `compiled-structural-epoch` registry rows. It does not close the Phase 15 internal-alpha gate.
 Structured cospans, derived directed wiring diagrams, nested open composition, independent Julia
 oracle qualification, semantic RNG/observer work, and the complete multirate/failure/restart
-matrix remain open. See the
+matrix remain unimplemented. See the
 [Phase 15.A audit](audits/process-bigraph-phase15a-canonical-structure-audit.md) and
 [evidence record](evidence/process-bigraph-phase15a-evidence-v1.toml).
+
+### ProcessBigraphs Phase 15.B closure status
+
+Phase 15.B open-composition semantics are implemented and directly passing under
+[Decision 0037](../spec/decisions/0037-process-bigraph-open-composition.md), the completed
+[owner interview](audits/process-bigraph-phase15b-open-composition-owner-interview.md), and the
+[implementation plan](audits/process-bigraph-phase15b-open-composition-plan.md). Boundaries are
+same-schema fragments exposing role-annotated typed stores; composition is a pure n-ary declaration
+of named mounts, semantic junctions, explicit exports, and root-resolved initialization. Static
+hierarchy remains canonical and compiles to flat indexed execution. The annotated ProcessBigraph
+wiring profile is lossless; generic wiring diagrams remain inspection-only.
+
+The `structured-cospan-open-composition` and `derived-directed-wiring-view` rows are implemented
+with direct Phase 15.B evidence. Typed, direct-ACSet, real structured-cospan, pairwise grouping,
+and annotated-wiring paths converge; row/order/grouping invariance, arbitrary-depth hierarchy,
+role/privacy truth tables, exact compatibility, initialization, checkpoint, runtime-trace, and
+fail-closed corruption tests pass. See the
+[closure audit](audits/process-bigraph-phase15b-open-composition-audit.md) and
+[evidence record](evidence/process-bigraph-phase15b-evidence-v1.toml). The independent checked
+Julia specification oracle and complete serial internal-alpha qualification remain Phase 15.C.
 
 ### Potts workstream deliverables
 
@@ -1216,9 +1237,14 @@ matrix remain open. See the
 - Add `ACSets.jl` and `Catlab.jl` as direct dependencies with explicit compatibility bounds and
   recorded resolutions. Define one versioned ProcessBigraph ACSet for composites, nodes, stores,
   processes, steps, ports, links, containment, schemas, and stable semantic identities.
-- Make structured cospans the open-composite composition law and directed wiring diagrams a derived
-  inspection/dataflow view. Lower typed constructors and AlgebraicJulia-native authoring to the
-  same canonical ACSet and fingerprint.
+- Implement same-schema, role-annotated typed-store boundaries and pure n-ary structured-cospan
+  composition over explicit roots, named mounts, semantic junctions, exports, and initialization
+  overrides. Preserve namespaces and arbitrary-depth immutable hierarchy, reject collisions and
+  semantic coercions, and lower typed constructors and AlgebraicJulia-native authoring to the same
+  canonical ACSet and fingerprint.
+- Make directed wiring diagrams a derived inspection/dataflow view. Only the lossless annotated
+  ProcessBigraph profile may round-trip into compilation; generic information-losing diagrams fail
+  closed as authoring inputs.
 - Replace PB0's provisional parallel structural representation with ergonomic typed façades over
   the canonical ACSet. ACSet row numbers and traversal order remain nonsemantic.
 - Compile each validated authoring ACSet into an immutable structural epoch, indexed execution
@@ -1228,7 +1254,8 @@ matrix remain open. See the
   structural schemas, process and step declarations, exact logical ticks, typed deltas, built-in
   update algebra, and deterministic serial reconciliation/commit.
 - Implement imminent-event multirate scheduling, actual elapsed partial intervals, common
-  pre-commit same-time snapshots, declared cycle rejection, and explicit iterative constructs.
+  pre-commit same-time snapshots, declared cycle rejection, and explicit bounded or
+  convergence-checked iterative regions over fixed structure.
 - Guarantee failure atomicity and exact restart at settled commit boundaries. Stateful processes
   declare versioned continuation and invalidation schemas.
 - Add semantic RNG addressing by process, logical time, event, draw, and lineage identity, plus a
@@ -1290,8 +1317,11 @@ matrix remain open. See the
 - Permit AlgebraicRewriting to discover candidates while ProcessBigraphs assigns semantic match
   identities, validates preconditions, orders conflicts, chooses the committed match set, and owns
   the settled structural barrier.
-- Implement recursive composites, place/link topology, ordered step DAGs, fork/join barriers,
-  explicit fixed-point/iteration constructs, and structural add, remove, divide, move, and rewire.
+- Carry Phase 15's arbitrary-depth immutable composites and fixed-structure iterative semantics
+  across structural epochs while adding place/link topology mutations, ordered structural
+  barriers, and structural add, remove, divide, move, and rewire. Phase 16 may admit structural
+  transactions within or between existing iterative regions but does not redefine iteration,
+  exact time, same-time visibility, reconciliation, or commit.
 - Add versioned structural transactions, daughter reconstruction, lineage RNG, dynamic process
   creation/retirement, continuation invalidation, and exact settled-boundary structural restart.
 - Fuzz update algebra and dynamic topology, inject failure during invoke/reconcile/apply/structural
@@ -1564,16 +1594,19 @@ The executable sequence and join rules are:
    frozen, and the independent package plus bounded domain-neutral primitives and non-Potts
    fixtures pass PB0. Phase 15.A now implements Decision 0036's canonical ACSet, typed/direct
    authoring convergence, frozen structural epoch, indexed execution plan, and provenance boundary.
-   No CorePotts dependency or public runtime release was introduced; the complete Phase 15 internal
-   alpha remains a separate gate.
+   Decision 0037 and the accepted Phase 15.B plan now freeze immutable open-composition semantics,
+   but their implementation and evidence remain open. No CorePotts dependency or public runtime
+   release was introduced; the complete Phase 15 internal alpha remains a separate gate.
 4. **Potts join:** Decision 0035 has opened G4 after the passed G3-B CPU reference. Only after G4
    passes may the generic field adapter freeze.
 5. **Phase 14 presentation path:** close required capability rows and bounded model smokes, then
    complete Learn/Examples, preregistered published-model studies, the full manual, and satellites.
 6. **Phase 15 independent gates:** qualify the Potts paper release from frozen Phase 14 evidence
    while completing the remaining ProcessBigraphs serial internal-alpha and independent Julia
-   specification-oracle work after the passed Phase 15.A canonical-structure slice. Failure of one
-   does not rewrite or weaken the other.
+   specification-oracle work after the passed Phase 15.A canonical-structure slice. ProcessBigraphs
+   first executes the accepted Phase 15.B boundary/composition/hierarchy/wiring plan, then closes
+   the Phase 15.C oracle, RNG, observer, continuation, multirate, failure, and restart matrix.
+   Failure of one product gate does not rewrite or weaken the other.
 7. **Phase 16 adapter join:** after serial runtime contracts and the relevant Potts evidence are
    stable, cut over one CorePotts slice at a time through old/new differential execution. No model
    may have two runtime authorities.

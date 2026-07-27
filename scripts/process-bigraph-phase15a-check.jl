@@ -31,8 +31,8 @@ audit_path = require_file(
     "design/audits/process-bigraph-phase15a-canonical-structure-audit.md")
 
 project = TOML.parsefile(project_path)
-check(project["version"] == "0.2.0",
-    "Phase 15.A package version must be 0.2.0")
+check(project["version"] == "0.3.0",
+    "current package version must preserve Phase 15.A in Phase 15.B version 0.3.0")
 deps = Set(keys(get(project, "deps", Dict{String,Any}())))
 check(deps == Set(["ACSets", "Catlab", "SHA"]),
     "ProcessBigraphs runtime dependencies must be exactly ACSets, Catlab, and SHA")
@@ -108,14 +108,14 @@ check(occursin("test_phase15a_algebraic_structure.jl", runner),
     "Phase 15.A tests are absent from the package runner")
 
 local_registry = TOML.parsefile(local_registry_path)
-check(local_registry["maturity"] == "phase_15a_canonical_structure",
-    "package-local maturity is not Phase 15.A")
+check(local_registry["maturity"] == "phase_15b_open_composition",
+    "package-local maturity does not preserve Phase 15.A through Phase 15.B")
 check(local_registry["internal_alpha"] == false,
     "Phase 15.A incorrectly claims the complete internal alpha")
 root_registry = TOML.parsefile(root_registry_path)
 check(root_registry["registry_status"] ==
-      "phase15a-canonical-structure-implemented-alpha-open",
-    "root registry does not record bounded Phase 15.A maturity")
+      "phase15b-open-composition-direct-passing",
+    "root registry does not preserve Phase 15.A through passed Phase 15.B")
 phase15a = root_registry["phase15a_implementation"]
 check(phase15a["status"] == "passed_canonical_structure",
     "root registry does not close Phase 15.A")

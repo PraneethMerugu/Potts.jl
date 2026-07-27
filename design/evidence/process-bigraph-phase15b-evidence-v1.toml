@@ -1,0 +1,127 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase15b-open-composition-2026-07-26"
+phase = "15.B"
+status = "passed_open_composition"
+runtime_package = "ProcessBigraphs"
+runtime_version = "0.3.0"
+runtime_uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
+runtime_commit = "5caff0ce5e87b001a7abe3a77d1be422daf56d76"
+julia = "1.12.6"
+public_release = false
+
+[dependencies]
+ACSets = "0.2.29"
+Catlab = "0.17.6"
+SHA = "stdlib"
+
+[qualification]
+command = "julia --project=<isolated-phase15b-environment> --startup-file=no -e 'using Pkg; Pkg.test(\"ProcessBigraphs\")'"
+result = "passed"
+processbigraphs_tests_passed = 309
+phase15b_open_composition_assertions = 193
+aqua_checks_passed = 9
+required_ci_gate = ".github/workflows/ci.yml"
+implemented_rows = [
+    "structured-cospan-open-composition",
+    "derived-directed-wiring-view",
+]
+pb0_model_fingerprint = "49614f983db7f29d5c19465db95f5a367211a2ddea514fbf6d653f1fbfc90e30"
+pb0_initial_snapshot_fingerprint = "abb28a87d163574e612fabe68ecfbc57cfb234eb312e66fba564bf71a509e573"
+pb0_final_snapshot_fingerprint = "20b33b31def9e172bc7c9a57d4915f18094689667338e0eed90b70aac9ae4a3a"
+pb0_materialized_state = 24
+pb0_event_count = 4
+
+[canonical_open_structure]
+acset_schema_version = "1.1.0"
+annotated_wiring_profile_version = "1.0.0"
+same_schema_boundary_fragments = "passed"
+catlab_structured_multicospans = "passed"
+typed_authoring = "passed"
+direct_acset_authoring = "passed"
+annotated_wiring_reimport = "passed"
+generic_wiring_compile = "rejected"
+row_renumbering_invariance = "passed"
+mount_order_invariance = "passed"
+endpoint_order_invariance = "passed"
+pairwise_parenthesization_invariance = "passed"
+structural_fingerprint_invariance = "passed"
+runtime_fingerprint_invariance = "passed"
+provenance_invariance = "passed"
+checkpoint_invariance = "passed"
+runtime_trace_invariance = "passed"
+
+[composition_matrix]
+endpoint_role_truth_table_cases = 36
+endpoint_role_truth_table_assertions = 100
+repeated_definition_mounting = "passed"
+private_namespace_isolation = "passed"
+explicit_parent_exports = "passed"
+n_way_junctions = "passed_4_way"
+finite_nesting = "passed_depth_5"
+compatible_defaults = "passed"
+conflicting_defaults = "rejected"
+explicit_initialization_override = "passed"
+unresolved_required_initializer = "rejected"
+duplicate_mounts = "rejected"
+duplicate_paths = "rejected"
+junction_private_path_collision = "rejected"
+duplicate_exports = "rejected"
+unknown_endpoints = "rejected"
+missing_provider_or_consumer = "rejected"
+malformed_boundary_maps = "rejected"
+mutated_wiring_annotations = "rejected"
+failure_atomicity = "passed"
+
+[exact_compatibility]
+value_type = "passed_and_mismatch_rejected"
+shape = "passed_and_mismatch_rejected"
+units = "passed_and_mismatch_rejected"
+ontology = "passed_and_mismatch_rejected"
+update_law = "passed_and_mismatch_rejected"
+persistence = "passed_and_mismatch_rejected"
+residency = "passed_and_mismatch_rejected"
+transfer_metadata = "matching_join_and_reexport_passed_mismatches_rejected"
+implicit_conversion = false
+
+[compiled_boundary]
+immutable_hierarchy_retained_in_epoch = true
+runtime_plan_flattened = true
+many_to_one_junction_provenance = true
+runtime_acset_traversal = false
+runtime_cospan_traversal = false
+runtime_wiring_diagram_traversal = false
+checkpoint_authoring_traversal = false
+dynamic_rewriting = false
+
+[claims]
+internal_alpha = false
+structured_cospans = true
+derived_directed_wiring_profile = true
+nested_open_composites = true
+independent_julia_specification_oracle = false
+semantic_rng = false
+dynamic_rewriting = false
+algebraicdynamics_extension = false
+gpu_execution = false
+threads_or_dagger_execution = false
+corepotts_adapter = false
+public_parity = false
+
+[policy]
+upstream_python_runtime_executed = false
+live_differential_equivalence_claimed = false
+runtime_authority = "ProcessBigraphs"
+acset_role = "host_side_canonical_authoring_structure"
+cospan_role = "validated_open_composition_artifact"
+wiring_role = "derived_annotated_inspection_profile"
+row_numbers_semantic = false
+construction_history_semantic = false
+
+[limitations]
+items = [
+    "Phase 15.B implements immutable composition only; runtime structural rewriting remains Phase 16.",
+    "The annotated ProcessBigraph wiring profile is lossless; generic Catlab wiring diagrams remain inspection-only.",
+    "The independent checked Julia specification oracle and complete serial internal-alpha matrix remain Phase 15.C.",
+    "Semantic RNG, general observers, persisted checkpoint codecs, and dynamic structural transactions remain open.",
+    "No device, Threads, Dagger, scientific-adapter, CorePotts-cutover, public-parity, or public-release claim is made.",
+]

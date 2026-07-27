@@ -2,11 +2,11 @@
 
 Status: Normative design; implementation and parity status are tracked separately
 
-Version: 1.1.0
+Version: 1.2.0
 
 Date: 2026-07-26
 
-Authority: Decisions 0034 and 0036, and `process-bigraph-parity-registry-v1.toml`
+Authority: Decisions 0034, 0036, and 0037, and `process-bigraph-parity-registry-v1.toml`
 
 ## Purpose
 
@@ -104,6 +104,114 @@ because of AlgebraicJulia structure. Committed numerical values and backend-resi
 ProcessBigraphs-owned state. The canonical ACSet is host-side, placement-independent topology and
 metadata; every CPU/device bridge remains explicit, bounded, synchronized, measured, and
 fingerprinted.
+
+## Open-composite semantics
+
+### Boundaries and endpoints
+
+An open-composite boundary is a constrained fragment of the versioned ProcessBigraph ACSet schema
+with structure-preserving maps into a canonical component ACSet. It is not a separate interface
+authority. An ordinary typed Julia declaration MUST lower to this representation before structural
+composition.
+
+A boundary exposes selected typed stores as named endpoints. Internal process and step ports remain
+bound to those stores. Each endpoint has exactly one declared role:
+
+- `import` permits state to be supplied through a parent or joined component;
+- `export` permits state to be exposed to a parent or joined component; or
+- `bidirectional` permits both uses.
+
+The role constrains composition but does not duplicate committed state or replace actor-port
+direction and effect declarations. For composition validation, `import` is consumer-capable,
+`export` is provider-capable, and `bidirectional` is both. A junction that is private in the result
+MUST contain at least one provider-capable and one consumer-capable endpoint. A junction explicitly
+re-exported as a parent `import` MAY omit an internal provider; one re-exported as a parent `export`
+MAY omit an internal consumer. An explicitly declared parent `bidirectional` endpoint supplies both
+external capabilities. Multiple providers and consumers are legal only when the ordinary
+compatibility and initialization rules pass. Boundary roles do not infer whether an internal actor
+reads or writes; actor port effects remain authoritative.
+
+Every connection is an explicit semantic wiring declaration. A name-matching convenience MAY
+construct such a declaration, but compilation MUST record and validate the resulting explicit
+mapping. Equal names, declaration position, ACSet rows, and traversal order never imply a
+connection.
+
+Endpoints joined at one junction MUST agree exactly on every applicable semantic property,
+including value type and shape, unit, ontology meaning, update law, persistence, residency, and
+transfer requirements. A conversion or bridge with scientific or numerical meaning MUST be an
+explicit process or step. Structural composition MUST NOT infer or insert one.
+
+### Mounts, junctions, exports, and initialization
+
+The canonical semantic composition declaration is n-ary and contains:
+
+1. one explicit root semantic identity;
+2. a finite set of component definitions mounted under explicit mount keys;
+3. explicit semantic junctions connecting compatible exposed endpoints;
+4. explicit re-exports, including their roles, that define the resulting parent boundary; and
+5. explicit initialization overrides where component defaults do not resolve uniquely.
+
+Pairwise composition, operators, and mutable authoring conveniences MAY exist, but they MUST lower
+to this n-ary declaration before validation, canonicalization, identity derivation, or
+fingerprinting. Their operation history is nonsemantic.
+
+A component definition identity is distinct from a mounted-instance identity. Each mounted identity
+derives canonically from the parent semantic identity and its explicit mount key. Mounting retains
+the child's internal namespace below that key; only explicit re-exports enter the parent boundary.
+Duplicate mount keys, semantic identities, canonical paths, or incompatible exports in one
+namespace MUST fail. Silent renaming, precedence, and collision repair are forbidden.
+
+Every junction has an explicit semantic identity and may join any finite number of compatible
+endpoints. The resulting shared store receives the junction identity rather than an identity
+selected from a left or right operand.
+
+Initialization is resolved once at the composed root. Component-provided values are defaults or
+requirements, not ordered writes. Identical compatible defaults MAY converge. Conflicting defaults
+MUST fail unless the parent supplies an explicit valid override. Every resulting store MUST have
+exactly one resolved initializer before compilation.
+
+Composition is a pure candidate operation: inputs remain unchanged, the complete candidate is
+validated, and no result is published on failure. Joining MUST retain many-to-one provenance from
+the junction, originating component and store identities, and boundary maps to the final compiled
+location. Provenance is excluded from execution-order decisions.
+
+### Hierarchy, invariance, and lowering
+
+The canonical ACSet preserves arbitrary finite immutable composite containment, mounted identities,
+local paths, boundary maps, junctions, and exports. Compilation flattens executable stores, routes,
+processes, and steps into indexed tables while retaining exact hierarchical provenance. Ordinary
+runtime and checkpoint paths MUST NOT traverse an authoring hierarchy, structured cospan, wiring
+view, or composition history.
+
+For equal root identity, mounts, junctions, exports, and resolved initialization, the following are
+nonsemantic:
+
+- ACSet row numbering and traversal order;
+- declaration, mount, endpoint, and junction order;
+- binary composition order and parenthesization; and
+- the choice among supported typed, direct ACSet, cospan, or annotated-wiring authoring paths.
+
+Equivalent declarations MUST produce identical canonical structure, structural and model
+fingerprints, semantic provenance, compiled execution plans, initial committed state, settled
+checkpoints, and serial runtime traces. Optional construction logs MAY differ but are not semantic
+provenance or checkpoint data.
+
+### Directed wiring profile
+
+A directed wiring diagram is a read-only derived dataflow and inspection view.
+ProcessBigraphs defines a versioned lossless annotated profile containing every semantic identity,
+schema, endpoint, effect, boundary map, and route required for exact re-import. Only a diagram that
+fully validates against that profile MAY be accepted for canonical lowering. A generic or
+information-losing diagram MAY be displayed or analyzed, but compilation MUST reject it rather than
+infer missing runtime meaning.
+
+### Static and dynamic boundary
+
+Phase 15 static semantics admit arbitrary-depth immutable open composition and explicit bounded or
+convergence-checked iterative regions over fixed structure. Undeclared cycles remain invalid.
+Runtime add, remove, divide, move, and rewire operations are Phase 16 structural transactions that
+publish a new structural epoch. They may not redefine exact time, same-time visibility, iteration,
+reconciliation, or commit semantics established by the serial runtime.
 
 ## Core semantic values
 

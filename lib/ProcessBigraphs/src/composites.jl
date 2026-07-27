@@ -48,7 +48,7 @@ function _validate_identities(composite::StaticComposite)
     ids = [declaration.id for declaration in _owners(composite)]
     length(ids) == length(unique(ids)) ||
         _fail(:duplicate_declaration_identity, "process and step identities must be unique")
-    Set(ids)
+    Set{String}(ids)
 end
 
 function _port_map(declaration)
