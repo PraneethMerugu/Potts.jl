@@ -10,6 +10,7 @@ decisions = [
     "../../spec/decisions/0034-process-bigraph-runtime-platform.md",
     "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "../../spec/decisions/0037-process-bigraph-open-composition.md",
+    "../../spec/decisions/0038-process-bigraph-serial-alpha.md",
 ]
 
 [pins]
@@ -35,6 +36,13 @@ phase15a_status = "passed_canonical_structure"
 phase15b_status = "passed_open_composition"
 phase15b_decision = "../../spec/decisions/0037-process-bigraph-open-composition.md"
 phase15b_plan = "../../design/audits/process-bigraph-phase15b-open-composition-plan.md"
+phase15c_status = "entry_frozen_runtime_not_started"
+phase15c_decision = "../../spec/decisions/0038-process-bigraph-serial-alpha.md"
+phase15c_plan = "../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md"
+phase15c_entry_contract = "../../spec/process-bigraph-phase15c-entry-v1.toml"
+phase15c_target_feature_count = 15
+phase15c_supporting_oracle_feature_count = 7
+phase15c_retained_direct_feature_count = 4
 phase16_status = "not_started"
 
 [[features]]

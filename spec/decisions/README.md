@@ -42,6 +42,7 @@ corresponding specification document.
 - [0035: Wang sequential reference and GPU suitability disposition](0035-wang-sequential-gpu-disposition.md)
 - [0036: AlgebraicJulia as the ProcessBigraphs structural foundation](0036-algebraicjulia-process-bigraph-foundation.md)
 - [0037: ProcessBigraphs open-composition semantics](0037-process-bigraph-open-composition.md)
+- [0038: ProcessBigraphs Phase 15.C serial internal alpha](0038-process-bigraph-serial-alpha.md)
 
 ## Record Template
 

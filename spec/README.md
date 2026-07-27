@@ -147,6 +147,11 @@ Refactor execution evidence:
 - [ProcessBigraphs Phase 15.B Open-Composition Plan](../design/audits/process-bigraph-phase15b-open-composition-plan.md)
 - [ProcessBigraphs Phase 15.B Open-Composition Audit](../design/audits/process-bigraph-phase15b-open-composition-audit.md)
 - [ProcessBigraphs Phase 15.B Evidence](../design/evidence/process-bigraph-phase15b-evidence-v1.toml)
+- [ProcessBigraphs Phase 15.C Serial-Alpha Owner Interview](../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md)
+- [Decision 0038: ProcessBigraphs Phase 15.C Serial Internal Alpha](decisions/0038-process-bigraph-serial-alpha.md)
+- [ProcessBigraphs Phase 15.C Serial-Alpha Plan](../design/audits/process-bigraph-phase15c-serial-alpha-plan.md)
+- [ProcessBigraphs Phase 15.C Entry Contract](process-bigraph-phase15c-entry-v1.toml)
+- [ProcessBigraphs Phase 15.C Entry Audit](../design/audits/process-bigraph-phase15c-entry-audit.md)
 - [ProcessBigraphs PB0 Implementation Audit](../design/audits/process-bigraph-pb0-implementation-audit.md)
 - [ProcessBigraphs PB0 Evidence](../design/evidence/process-bigraph-pb0-evidence-v1.toml)
 - [ProcessBigraphs Phase 15.A Canonical-Structure Audit](../design/audits/process-bigraph-phase15a-canonical-structure-audit.md)
@@ -190,10 +195,18 @@ as a bounded foundation: the independent package and 11 direct registry rows are
 locally tested. Phase 15.A also passes as a bounded canonical-structure slice: ACSets and Catlab are
 direct bounded dependencies, typed and direct ACSet authoring share one canonical model, and the
 runtime consumes an immutable indexed plan rather than traversing the authoring ACSet. The two
-corresponding registry rows are implemented. Structured cospans, derived wiring views, the
-independent Julia specification oracle, the complete Phase 15 internal alpha, GPU execution,
-parallel executors, structural transactions, the Potts adapter, and public release remain
-explicitly open. CI and release tooling will not execute the upstream Python runtimes.
+corresponding registry rows are implemented. Phase 15.B now passes immutable open composition and
+the annotated wiring view with direct evidence.
+Decision 0038 and the completed 64-choice owner interview freeze Phase 15.C as an
+immutable-topology serial internal-alpha gate. Its exact 15 target rows, seven supporting
+oracle-requalification rows, four retained structural rows, exclusions, fixtures, strict C0--C7
+order, independent-oracle boundary, and two-stage attested closure are machine-readable in the
+Phase 15.C entry contract. This is a passed pre-implementation decision boundary, not a runtime
+implementation claim: package version remains `0.3.0`, `internal_alpha = false`, and the Phase 15.C
+oracle and runtime evidence remain not started. GPU execution, parallel executors, dynamic
+structure, adapters, the Potts cutover, complete parity, and public release remain explicitly
+open. CI and release tooling will not execute the upstream Python runtimes.
+
 Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
 algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
 CPU/Metal/ROCm qualification for the reusable field substrate.

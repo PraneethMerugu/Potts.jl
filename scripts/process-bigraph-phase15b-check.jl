@@ -174,8 +174,8 @@ check(all(local_features[id]["implementation_status"] == "implemented" &&
 root_registry = TOML.parsefile(root_registry_path)
 check(root_registry["schema_version"] == "1.3.0" &&
       root_registry["registry_status"] ==
-        "phase15b-open-composition-direct-passing",
-    "root registry does not close bounded Phase 15.B")
+        "phase15c-entry-frozen-runtime-not-started",
+    "root registry does not preserve bounded Phase 15.B at Phase 15.C entry")
 phase15b = root_registry["phase15b_implementation"]
 check(phase15b["status"] == "passed_open_composition" &&
       Set(phase15b["implemented_rows"]) == target_rows,
@@ -239,7 +239,7 @@ roadmap = read(roadmap_path, String)
 check(occursin("Implemented and directly passing", decision),
     "Decision 0037 implementation disposition is stale")
 check(occursin(
-        "PB0, Phase 15.A, and Phase 15.B passed; Phase 15.C remains open",
+        "PB0, Phase 15.A, and Phase 15.B passed; Decision 0038 freezes Phase 15.C entry while runtime implementation remains open",
         platform_decision),
     "Decision 0034 implementation disposition is stale")
 check(occursin("Status: Implemented and directly passing", plan),

@@ -95,10 +95,12 @@ owns Potts laws, spatial storage, workspaces, kernels, lifecycle operations, and
 PottsToolkit owns biological authoring façades and lowering. CorePotts is the flagship
 spatial-process adapter, not the semantic owner of the general runtime.
 
-Phase 15.A establishes the first half of that boundary in production code: `ProcessBigraphACSet` is
-canonical, typed and direct ACSet authoring lower through one validator, and the serial runtime and
-checkpoint paths consume a frozen structural epoch plus indexed execution plan. Structured cospans,
-derived wiring diagrams, and nested open composition remain later Phase 15 work.
+Phase 15.A establishes the canonical structure-to-plan boundary in production code. Phase 15.B
+adds immutable arbitrary-depth open composition, structured cospans, and the lossless annotated
+wiring profile without creating a second runtime authority. Decision 0038 and the Phase 15.C entry
+contract freeze the remaining immutable-topology serial-alpha semantics and their independent
+Julia-oracle qualification; at entry freeze those runtime and oracle capabilities are planned but
+not implemented.
 
 KernelAbstractions, AcceleratedKernels, Atomix, KernelIntrinsics, Adapt, and physical device-storage
 machinery belong primarily to `CorePotts`. `PottsToolkit` MAY depend directly on a low-level
@@ -298,8 +300,12 @@ semantics, DSL-to-engine equivalence, SciML behavior, reference models, statisti
 and backend conformance.
 
 `ProcessBigraphs` CI owns its package-local unit, property, metamorphic, AlgebraicJulia-structure,
-scheduler, persistence, and source-derived parity-conformance lanes. Its checked Julia
-specification oracle remains structurally independent from production execution. CI, tests,
+scheduler, persistence, and source-derived parity-conformance lanes. Before Phase 15.C
+implementation, Project integrity runs a fail-closed entry checker over its decision, plan,
+machine-readable scope, registries, exclusions, and maturity claims. The later checked Julia
+specification oracle lives under `lib/ProcessBigraphs/test/specification_oracle`, imports no
+production semantic implementation, and remains structurally independent from production
+execution. CI, tests,
 examples, attestations, and release tooling MUST NOT install or execute Vivarium,
 Process-Bigraph Python, or Bigraph-Schema Python. Cross-package CI owns CorePotts adapter
 equivalence, PottsToolkit lowering, and whole-cell-style composite acceptance. A Potts CI lane MUST

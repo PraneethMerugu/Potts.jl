@@ -1,6 +1,6 @@
 # Decision 0034: ProcessBigraphs.jl as the Domain-Neutral Runtime Platform
 
-Status: Accepted architecture and roadmap policy; PB0, Phase 15.A, and Phase 15.B passed; Phase 15.C remains open
+Status: Accepted architecture and roadmap policy; PB0, Phase 15.A, and Phase 15.B passed; Decision 0038 freezes Phase 15.C entry while runtime implementation remains open
 
 Date: 2026-07-26
 
@@ -9,6 +9,12 @@ Amended by
 structural foundation beginning in Phase 15, and upstream Python runtimes are source authorities
 but are never executed as conformance oracles. This decision's package identity, runtime authority,
 Dagger boundary, migration, and release rules otherwise remain in force.
+
+Further refined by
+[Decision 0038](0038-process-bigraph-serial-alpha.md): Phase 15.C is an immutable-topology serial
+internal-alpha gate with an exact allowlist, independent Julia oracle, semantic RNG, observation,
+typed continuation, canonical checkpoint, deterministic fail-stop, and two-stage attested closure.
+The Phase 15.C runtime implementation has not started at entry freeze.
 
 ## Context
 
