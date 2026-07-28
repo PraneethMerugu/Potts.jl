@@ -76,8 +76,22 @@ resolution_files = [
     "Manifest.toml",
     "benchmark/Project.toml",
     "benchmark/Manifest.toml",
+    "docs/Project.toml",
+    "docs/Manifest.toml",
+    "examples/Project.toml",
+    "examples/Manifest.toml",
+    "examples/dashboards/Project.toml",
+    "examples/dashboards/Manifest.toml",
+    "examples/notebooks/Project.toml",
+    "examples/notebooks/Manifest.toml",
+    "integration/Project.toml",
     "lib/CorePotts/Project.toml",
+    "lib/MakiePotts/Project.toml",
+    "lib/MakiePotts/test/backends/Project.toml",
+    "lib/MakiePotts/test/backends/Manifest.toml",
     "lib/ProcessBigraphs/Project.toml",
+    "paper/Project.toml",
+    "paper/Manifest.toml",
 ]
 
 cpu = Sys.cpu_info()
