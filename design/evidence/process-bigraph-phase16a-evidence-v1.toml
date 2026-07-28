@@ -10,8 +10,10 @@ internal_beta = false
 public_release = false
 
 [provenance]
-implementation_commit = "124913643502ed4775e7863a6ecf847ecdd9fd72"
-implementation_tree = "88e4f33e10112969b4c331f1982afd499e7313a1"
+implementation_commit = "fa3aefd65a4b035a0513b566c786e1080e74bbe1"
+implementation_tree = "b489889d853ecdcf22e93ec3a124a0b65f431ce6"
+rebased_from_implementation_commit = "124913643502ed4775e7863a6ecf847ecdd9fd72"
+rebased_from_implementation_tree = "88e4f33e10112969b4c331f1982afd499e7313a1"
 base_commit = "a6862e7c10ee191096c6efffda1cf15f80fb0369"
 branch = "codex/phase-16"
 qualification_scope = "Phase 16.A only"

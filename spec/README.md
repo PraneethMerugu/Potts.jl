@@ -247,13 +247,13 @@ exact-head Metal/ROCm evidence. The Phase 16.HC obligations and claim boundary a
 [high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
 content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
-classified commit `7217f9b` as an unqualified prototype. The resulting
+classified rebased commit `e0fd0b3` as an unqualified prototype. The resulting
 [qualified solver-plurality audit](../design/audits/process-bigraph-phase16f-solver-plurality-audit.md)
-records commit `9f9daf1`: a real injected SciML algorithm, standard solver interfaces, an
+records rebased commit `6cd20d9`: a real injected SciML algorithm, standard solver interfaces, an
 external-style independent custom fixture, numerical replay by default, analytic/convergence
 evidence, and a bounded adapter-author API. The
 [qualified Merks audit](../design/audits/process-bigraph-phase16g-merks-audit.md) records commit
-`09150b5`: one ProcessBigraphs-owned schedule around native, real-SciML, and independent field
+`e9ce80b`: one ProcessBigraphs-owned schedule around native, real-SciML, and independent field
 adapters plus the CorePotts CPM kernel, without claiming the paper's full Figure 5 analysis.
 The [qualified CNV audit](../design/audits/process-bigraph-phase16h-cnv-audit.md) records the
 source-bounded scenario-38/simulation-902 assembly: a generated 40×40×35 startup, four

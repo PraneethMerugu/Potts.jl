@@ -53,7 +53,7 @@ device qualification and dynamic hierarchy; Merks and CNV then exercise the comm
 
 ### 16.F — solver plurality
 
-Qualified at implementation commit `9f9daf1` with the
+Qualified at implementation commit `6cd20d9` after rebase, with the
 [solver-plurality audit](process-bigraph-phase16f-solver-plurality-audit.md) and
 [evidence manifest](../evidence/process-bigraph-phase16f-evidence-v1.toml).
 

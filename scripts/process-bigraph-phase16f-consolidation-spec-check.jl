@@ -59,9 +59,9 @@ solver = entry["solver_integration"]
 check(solver["phase16f_prototype_status"] ==
       (f_qualified ?
        "replaced_by_qualified_real_solver_implementation" :
-       "unqualified_repair_required") &&
+      "unqualified_repair_required") &&
       solver["prototype_commit"] ==
-      "7217f9b67db3bc0e798bab192e81ad3a8923b912" &&
+      "e0fd0b3f51fd681923e7ac8b62963e9713430322" &&
       solver["process_bigraph_owned_sciml_solve"] == "forbidden" &&
       solver["qualified_algorithm_selection"] == "explicit_real_algorithm_object" &&
       solver["automatic_algorithm_selection"] == "experimental" &&

@@ -4,7 +4,7 @@ Status: Accepted repair basis; implementation and qualification open
 
 Date: 2026-07-27
 
-Prototype commit: `7217f9b67db3bc0e798bab192e81ad3a8923b912`
+Prototype commit: `e0fd0b3f51fd681923e7ac8b62963e9713430322`
 
 Prototype tree: `ea4ee239dc596c30fc44c3d396a18ad6e19c1ea5`
 
@@ -82,7 +82,7 @@ interoperability may be considered only as a separately qualified adapter.
 
 ## Prototype audit
 
-Commit `7217f9b67db3bc0e798bab192e81ad3a8923b912` is useful executable exploration, not Phase 16.F
+Commit `e0fd0b3f51fd681923e7ac8b62963e9713430322` is useful executable exploration, not Phase 16.F
 qualification evidence. It currently:
 
 - defines a home-grown `P16FixedEuler` algorithm and

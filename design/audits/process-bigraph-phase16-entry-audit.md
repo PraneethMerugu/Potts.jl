@@ -39,7 +39,7 @@ marking any implementation row qualified.
 ## Current amendment
 
 Phase 16.A/B/D/E/F/G/H have since qualified. Phase 16.C remains independently open for trusted
-exact-head Metal/ROCm artifacts. The first 16.F implementation at commit `7217f9b` is retained as
+exact-head Metal/ROCm artifacts. The first 16.F implementation at rebased commit `e0fd0b3` is retained as
 an unqualified prototype, not admitted evidence. The completed
 [16.F solver-integration consolidation](process-bigraph-phase16f-solver-integration-consolidation-research.md)
 led to the qualified

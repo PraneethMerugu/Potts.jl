@@ -18,8 +18,10 @@ qualified_rows = [
 ]
 
 [provenance]
-implementation_commit = "d423ce94aa3fa933ec87fad9598de001d6924b00"
-implementation_tree = "c1517f8e0325dfea2a472f0d44ed426687848bff"
+implementation_commit = "5c5e2162a37bf7913219b13497ceacad170fb94b"
+implementation_tree = "4b731553a4050903f55fa5513aa5a3974c2641ad"
+rebased_from_implementation_commit = "d423ce94aa3fa933ec87fad9598de001d6924b00"
+rebased_from_implementation_tree = "c1517f8e0325dfea2a472f0d44ed426687848bff"
 branch = "codex/phase-16"
 qualification_scope = "Phase 16.B only"
 exact_head_internal_beta_claim = false

@@ -215,8 +215,8 @@ sciml_hard_dependency = false
 
 [phase16f_consolidation]
 status = "qualified"
-prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
-qualified_implementation_commit = "9f9daf19e34c5430361cb98c8002f025a74d217a"
+prototype_commit = "e0fd0b3f51fd681923e7ac8b62963e9713430322"
+qualified_implementation_commit = "6cd20d9c0533b174a76bf0fd5f10d11b4157775f"
 restore_current_new_exports_to = []
 minimal_admission_rule = "Only the smallest declaration-authoring surface may be admitted after P16-F01 through P16-F03 qualify."
 forbidden_public_details = [
