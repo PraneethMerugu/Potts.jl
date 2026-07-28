@@ -2,10 +2,26 @@ using PottsToolkit
 using MakiePotts
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.differential_adhesion_problem(
-    (12, 12);
-    cells_per_population = 1,
-    target_volume = 8,
+# Two typed cells make the categorical encoding and legend concrete.
+medium = Medium(:Medium)
+population_a = CellType(:PopulationA)
+population_b = CellType(:PopulationB)
+model = PottsModel(
+    medium,
+    population_a,
+    population_b,
+    Volume(
+        population_a => (target = 8, strength = 2),
+        population_b => (target = 8, strength = 2),
+    ),
+)
+labels = zeros(UInt64, 12, 12)
+labels[3:4, 5:8] .= 1
+labels[9:10, 5:8] .= 2
+problem = PottsProblem(
+    model,
+    CartesianDomain((12, 12)),
+    Layout(LabelledCells(labels, (1 => population_a, 2 => population_b)));
     capacity = 4,
     tspan = (0, 1),
     seed = 8,

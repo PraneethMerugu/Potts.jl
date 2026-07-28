@@ -1,13 +1,16 @@
-# [Boundaries and Obstacles](@id boundaries-and-obstacles)
+# [Closed boundaries and immutable obstacles](@id boundaries-and-obstacles)
 
-This example uses closed ownership boundaries and an immutable vertical obstacle segment. Obstacle
-sites remain part of the rectangular array but cannot receive copy attempts.
+A vertical obstacle lives inside a closed rectangular ownership domain. MakiePotts distinguishes
+the cell, mutable medium, immutable obstacle, and cell boundaries semantically.
+
+## Declare cell mechanics
 
 ```@example boundaries-and-obstacles
 using PottsToolkit
 using MakiePotts
 import CorePotts
 
+# The cell mechanics are ordinary; the domain carries the obstacle contract.
 medium = Medium(:medium)
 cell = CellType(:cell)
 model = PottsModel(
@@ -20,6 +23,13 @@ model = PottsModel(
         (cell, cell) => 2,
     ),
 )
+nothing # hide
+```
+
+## Put an obstacle inside the domain
+
+```@example boundaries-and-obstacles
+# Obstacles are immutable medium-owned sites inside the rectangular lattice.
 obstacles = Tuple(
     CartesianIndex(8, y) => CorePotts.MediumOwner(1) for y in 4:9)
 domain = CartesianDomain(
@@ -32,6 +42,7 @@ domain = CartesianDomain(
 )
 mask = falses(14, 14)
 mask[4:5, 6:8] .= true
+# Place the cell to the left of the wall and save the final host state.
 problem = PottsProblem(
     model,
     domain,
@@ -40,6 +51,15 @@ problem = PottsProblem(
     tspan = (0, 4),
     seed = 71,
 )
+nothing # hide
+```
+
+Closed, periodic, and fixed-exterior faces encode different ownership relations. Field boundary
+conditions remain separate.
+
+## Prove obstacle immutability
+
+```@example boundaries-and-obstacles
 solution = CorePotts.solve(
     problem,
     SequentialCPM(temperature = 2.0f0);
@@ -53,28 +73,24 @@ frame = renderframe(solution)
 result = (; problem, solution, obstacle_count = length(obstacles),
     immutable_obstacles = true, frame)
 
-(result.obstacle_count, result.immutable_obstacles,
-    result.solution.stats.completed_mcs)
+(result.obstacle_count, result.immutable_obstacles)
 ```
+
+## Inspect the semantic owners
 
 ```@example boundaries-and-obstacles
 using CairoMakie
 
 figure, axis, potts_plot = plot(
     result.frame;
-    axis = (; title = "Closed domain with immutable obstacles"),
+    figure = (; size = (760, 560)),
+    axis = (; title = "Cell meets an immutable internal wall"),
     boundaries = true,
 )
 potts_legend(figure[1, 2], potts_plot)
+save("boundaries-preview.svg", figure)
 figure
 ```
 
-The numerical contract checks every obstacle site's final owner against the declared immutable
-medium owner. That assertion is stronger than inspecting a wall-colored image.
-
-Closed, periodic, and fixed-exterior faces express different ownership relations. Field boundary
-conditions are separate and must be declared on the field. Do not infer one from the other.
-
-Teaching inspiration: boundary-focused workflows in the
-[CC3D reference manual](https://compucell3dreferencemanual.readthedocs.io/en/latest/). The model
-and source are original.
+The numerical assertion checks every obstacle owner in the final state. That is stronger evidence
+than relying on wall-colored pixels.

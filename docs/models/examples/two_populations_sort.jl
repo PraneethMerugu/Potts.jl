@@ -2,23 +2,39 @@ using PottsToolkit
 using MakiePotts
 import CorePotts
 
-model = PottsToolkit.ReferenceModels.differential_adhesion_model(
-    target_volume = 16,
-    within_a = 2,
-    within_b = 2,
-    between = 18,
-    medium_contact = 20,
+# Heterotypic interfaces cost more than contacts within either population.
+medium = Medium(:Medium)
+population_a = CellType(:PopulationA)
+population_b = CellType(:PopulationB)
+within_energy = 2
+between_energy = 18
+model = PottsModel(
+    medium,
+    population_a,
+    population_b,
+    Volume(
+        population_a => (target = 16, strength = 2),
+        population_b => (target = 16, strength = 2),
+    ),
+    Adhesion(
+        (medium, medium) => 0,
+        (medium, population_a) => 20,
+        (medium, population_b) => 20,
+        (population_a, population_a) => within_energy,
+        (population_b, population_b) => within_energy,
+        (population_a, population_b) => between_energy,
+    ),
 )
-populations = Tuple(
-    declaration for declaration in model.declarations
-    if declaration isa CellType)
+
+# Twelve 4×4 cells begin in an alternating checkerboard.
 labels = zeros(UInt64, 24, 24)
 assignments = Pair{UInt64, CellType}[]
 for block_y in 0:2, block_x in 0:3
     cell_id = 4block_y + block_x + 1
     labels[(4block_x + 5):(4block_x + 8),
         (4block_y + 7):(4block_y + 10)] .= cell_id
-    push!(assignments, UInt64(cell_id) => populations[isodd(cell_id) ? 1 : 2])
+    population = isodd(cell_id) ? population_a : population_b
+    push!(assignments, UInt64(cell_id) => population)
 end
 problem = PottsProblem(
     model,
@@ -31,10 +47,11 @@ problem = PottsProblem(
 solution = CorePotts.solve(
     problem,
     BudgetedSequentialCPM(AttemptsPerSite(4); temperature = 8.0f0);
-    saveat = 40,
+    saveat = 20,
     snapshot_policy = CorePotts.HostSnapshotPolicy(),
 )
 
+# Count unlike cell-cell edges once, using only positive lattice directions.
 function heterotypic_contacts(saved)
     state = CorePotts.snapshot_state(saved)
     contacts = 0
@@ -60,10 +77,7 @@ end
 contact_trace = heterotypic_contacts.(solution.u)
 frames = renderframes(solution)
 @assert solution.stats.completed_mcs == 200
-@assert all(>=(0), contact_trace)
 @assert first(contact_trace) > 0
 @assert last(contact_trace) < first(contact_trace)
 @assert length(frames) == length(solution.t)
-result = (; problem, solution, contact_trace,
-    initial_contacts = first(contact_trace), final_contacts = last(contact_trace),
-    between_energy = 18, within_energy = 2, frames)
+result = (; problem, solution, contact_trace, within_energy, between_energy, frames)

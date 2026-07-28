@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 status = "passed"
 audience = "beginner"
-review_date = "2026-07-27"
+review_date = "2026-07-28"
 reviewer = "Codex documentation auditor"
 method = "rendered_site_task_walkthrough"
 start = "Home"
@@ -11,7 +11,7 @@ limitation = "Auditor-led persona review; future external-user observation remai
 [[checks]]
 step = "Choose the beginner path from Home."
 passed = true
-evidence = "Home links Install and verify, then First simulation."
+evidence = "The outcome-first Home hero links Install and verify and First simulation before any package-internal detail."
 
 [[checks]]
 step = "Identify direct package installation requirements."
@@ -26,9 +26,9 @@ evidence = "Rendered executable output is (true, true, (4, 4))."
 [[checks]]
 step = "Run and interpret the first simulation."
 passed = true
-evidence = "Rendered output records times [0, 2], volume trace [16, 20], and explains the limits of the smoke."
+evidence = "The first simulation declares Medium, CellType, Volume, Adhesion, Model, and PottsProblem directly; its checked volume trace is [16, 35, 34, 34, 35, 37, 36], showing relaxation toward the target."
 
 [[checks]]
 step = "Confirm visual output remains accessible."
 passed = true
-evidence = "The page visibly imports MakiePotts, calls renderframes and the native recipe, and displays the resulting responsive CairoMakie figure."
+evidence = "The page imports MakiePotts and displays native before/after lattice views beside a quantitative volume trace, with comments explaining what to read."

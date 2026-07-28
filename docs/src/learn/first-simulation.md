@@ -1,85 +1,128 @@
-# [First simulation](@id first-simulation)
+# [Your first simulation](@id first-simulation)
 
-The first complete session runs a relaxing cell, records a deterministic volume trace, and creates
-before/after render frames. Rendering remains optional for headless work, but the normal path makes
-the result visible.
+In this tutorial you will build a complete Cellular Potts model, run it for 30 Monte Carlo steps,
+and inspect both the cell geometry and its volume trajectory. Nothing important is hidden behind a
+reference-problem constructor.
 
-## Run the canonical program
+## 1. Declare the model
+
+PottsToolkit models read like a list of biological and mechanical declarations. This cell has a
+preferred volume and pays contact energy where it meets the medium.
 
 ```@example first-simulation
 using PottsToolkit
 using MakiePotts
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
-    (12, 12); target_volume = 16, tspan = (0, 2), seed = 11)
-solution = CorePotts.solve(
-    problem,
-    SequentialCPM(temperature = 2.0f0);
-    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+# Declare the biological vocabulary and the two energetic mechanisms.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+target_volume = 36
+model = PottsModel(
+    medium,
+    cell,
+    Volume(cell => (target = target_volume, strength = 2)),
+    Adhesion(
+        (medium, medium) => 0,
+        (medium, cell) => 8,
+        (cell, cell) => 0,
+    ),
 )
-first_state = CorePotts.snapshot_state(first(solution.u))
-last_state = CorePotts.snapshot_state(last(solution.u))
-cell_id = only(CorePotts.active_cell_ids(last_state))
-volume_trace = [
-    CorePotts.finite_volume(CorePotts.snapshot_state(saved), cell_id)
-    for saved in solution.u
-]
-frames = MakiePotts.renderframes(solution)
-
-@assert solution.stats.completed_mcs == 2
-@assert length(volume_trace) == length(solution.t) == length(frames)
-result = (; times = collect(solution.t), volume_trace,
-    initial_volume = CorePotts.finite_volume(first_state, cell_id),
-    final_volume = last(volume_trace), first_frame = first(frames),
-    last_frame = last(frames))
-
-(result.times, result.volume_trace, result.initial_volume, result.final_volume)
+nothing # hide
 ```
 
-The source is
-[`docs/models/tutorials/first_simulation.jl`](https://github.com/PraneethMerugu/Potts.jl/blob/main/docs/models/tutorials/first_simulation.jl).
-It uses a fixed model, seed, algorithm, and two-MCS time span. Its assertions require one volume
-value and one render frame for every saved time.
+The pairwise table is explicit: there is no implied default for an omitted biological contact.
+`Volume` and `Adhesion` are reusable declarations; lattice size and initial placement come next.
 
-## Read the program
+## 2. Place a deliberately undersized cell
 
-The reusable problem comes from `ReferenceModels.single_cell_fluctuation_problem`. Execution is
-still explicit:
+The cell begins as a 4×4 square—16 lattice sites—while its target is 36. That mismatch gives the
+simulation a visible question to answer.
 
-```julia
-solution = CorePotts.solve(
-    problem,
-    SequentialCPM(temperature = 2.0f0);
-    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+```@example first-simulation
+# Start one cell below its target so the trajectory has something to explain.
+mask = falses(20, 20)
+mask[9:12, 9:12] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain((20, 20)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 30),
+    seed = 11,
 )
+nothing # hide
 ```
 
-`HostSnapshotPolicy` is chosen because this beginner example wants complete before/after frames.
-Production analysis should normally retain only declared observations.
+`capacity` reserves finite-cell identities; it is not the lattice size. The fixed seed makes this
+exact teaching trajectory reproducible.
 
-## Render when a Makie backend is available
+## 3. Solve and measure
 
-The canonical source converts saved host states with `MakiePotts.renderframes`. To draw them, add
-and activate a Makie backend:
+`SequentialCPM` selects the update algorithm. A `HostSnapshotPolicy` is requested because the next
+step needs complete saved states for analysis and rendering.
+
+```@example first-simulation
+# Save host snapshots because analysis and MakiePotts consume explicit saved state.
+solution = CorePotts.solve(
+    problem,
+    SequentialCPM(temperature = 4.0f0);
+    saveat = 5,
+    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+)
+states = CorePotts.snapshot_state.(solution.u)
+cell_id = only(CorePotts.active_cell_ids(first(states)))
+volume_trace = [CorePotts.finite_volume(state, cell_id) for state in states]
+frames = renderframes(solution)
+
+@assert solution.stats.completed_mcs == 30
+@assert length(frames) == length(solution.t) == length(volume_trace)
+@assert all(>(0), volume_trace)
+result = (; problem, solution, target_volume, volume_trace, frames)
+
+(solution.retcode, volume_trace)
+```
+
+## 4. See geometry and measurement together
+
+MakiePotts renders semantic cell types and boundaries directly from saved simulation state. The
+volume trace uses ordinary Makie in the same figure, so the picture and measurement share one
+reproducible result.
 
 ```@example first-simulation
 using CairoMakie
-using MakiePotts
 
-figure, axis, plot = plot(result.last_frame; boundaries = true)
-potts_legend(figure[1, 2], plot)
+figure = Figure(size = (980, 650))
+initial_axis = Axis(
+    figure[1, 1]; title = "Initial state · 0 MCS", aspect = DataAspect())
+final_axis = Axis(
+    figure[1, 2]; title = "Final state · 30 MCS", aspect = DataAspect())
+initial_plot = pottsplot!(initial_axis, first(result.frames); boundaries = true)
+pottsplot!(final_axis, last(result.frames); boundaries = true)
+potts_legend(figure[1, 3], initial_plot)
+
+trace_axis = Axis(
+    figure[2, 1:2];
+    title = "The cell approaches its preferred volume",
+    xlabel = "Monte Carlo steps",
+    ylabel = "Cell area (lattice sites)",
+)
+lines!(trace_axis, result.solution.t, result.volume_trace; linewidth = 3)
+scatter!(trace_axis, result.solution.t, result.volume_trace; markersize = 10)
+hlines!(trace_axis, [result.target_volume];
+    color = :gray45, linestyle = :dash, label = "target = $(result.target_volume)")
+axislegend(trace_axis; position = :rb)
 figure
 ```
 
-The simulation and trace work without CairoMakie. This keeps servers and CI headless while
-preserving the normal visual workflow.
+The trajectory is one seeded realization, not an equilibrium estimate. For a study, predeclare the
+algorithm, temperature, initialization distribution, replicate count, summary statistic, and
+stopping or burn-in rule.
 
-## What this result proves
+## Where to go next
 
-The smoke proves construction, preflight, deterministic execution under the recorded contract,
-volume extraction, and render-frame materialization. It does not prove equilibrium or calibrate
-MCS to physical time. Those stronger claims need their own evidence.
-
-Continue to [Compose a biological model](@ref build-model) to replace the reference constructor
-with declarations you control.
+- [Compose a biological model](@ref build-model) adds multiple cell types.
+- [Observe and analyze](@ref observe-and-analyze) uses typed observables and lean snapshots.
+- [Visualize and export](@ref visualize-and-export) covers encodings, slices, and recording.
+- [Algorithms and guarantees](@ref algorithms-and-guarantees) explains what an update rule does
+  and does not guarantee.

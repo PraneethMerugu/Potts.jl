@@ -24,18 +24,28 @@ temperature.
 ```@example adhesion-and-mechanics
 using PottsToolkit
 
-model = PottsToolkit.ReferenceModels.elongation_driven_angiogenesis_model(
-    target_volume = 8,
-    target_elongation = 2,
-    elongation_strength = 4,
-    preserve_connectivity = true,
+# Compose contact, volume, shape, and connectivity without a reference wrapper.
+medium = Medium(:Medium)
+cell = CellType(:ShapeCell)
+model = PottsModel(
+    medium,
+    cell,
+    Volume(cell => (target = 8, strength = 2)),
+    Elongation(cell => (target = 2, strength = 4)),
+    Adhesion(
+        (medium, medium) => 0,
+        (medium, cell) => 10,
+        (cell, cell) => 4,
+    ),
+    PreserveConnectivity(),
 )
-problem = PottsToolkit.ReferenceModels.elongation_driven_angiogenesis_problem(
-    (12, 12);
-    cells = 2,
-    target_volume = 8,
-    target_elongation = 2,
-    elongation_strength = 4,
+labels = zeros(UInt64, 12, 12)
+labels[3:6, 3:4] .= 1
+labels[8:11, 9:10] .= 2
+problem = PottsProblem(
+    model,
+    CartesianDomain((12, 12)),
+    Layout(LabelledCells(labels, (1 => cell, 2 => cell)));
     capacity = 4,
     tspan = (0, 1),
     seed = 5,

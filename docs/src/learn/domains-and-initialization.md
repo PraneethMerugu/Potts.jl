@@ -20,6 +20,7 @@ recipient sites.
 using PottsToolkit
 import CorePotts
 
+# Domain boundaries and obstacles are experiment geometry, not cell biology.
 medium = Medium(:medium)
 cell = CellType(:cell)
 model = PottsModel(

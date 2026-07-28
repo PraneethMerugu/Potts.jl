@@ -4,7 +4,42 @@ Date: 2026-07-27
 
 Scope: the released documentation redesign on `main`, excluding Phase 16 material.
 
-Status: remediated on `codex/docs-visible-workflows`
+Status: remediated and re-audited on `codex/docs-visible-workflows`
+
+## 2026-07-28 verification result
+
+The failure described below has been corrected. This section records the shipped
+state; the original finding remains in the audit as the reason for the stronger
+contract.
+
+- All required reader-facing Learn and Example pages show their canonical program
+  in evaluated blocks. The checker accepts a program taught across consecutive
+  blocks, so prose can explain each conceptual step without hiding setup.
+- Reader-facing `include(...)` and `ReferenceModels.*` shortcuts are absent.
+- Every gallery program imports MakiePotts and converts saved engine state with
+  `renderframe` or `renderframes`.
+- Every gallery result uses CairoMakie and the MakiePotts recipe. The four dynamic
+  studies call `record_potts` and embed the generated MP4.
+- Each example plots its contract-relevant measurement: volume error, unlike
+  interfaces, directed displacement, lifecycle counts, morphology, fluctuation
+  distribution, ownership, dimensional reuse, exact restoration, or ensemble
+  variability.
+- The strict Documenter build passes with `warnonly = false`. The documentation
+  checker now rejects hidden canonical programs, missing explanatory comments,
+  missing teaching sections, reference-model shortcuts, decorative custom
+  images, and plots that omit the declared scientific evidence.
+- Rendered inspection confirms a clean outcome-first home page, readable visual
+  gallery, copyable code, no large intermediate object dumps, and working local
+  routes.
+- The generated H.264 animations are short inspection loops rather than long
+  simulations: sorting is 11 frames at 3 fps, chemotaxis is 9 frames at 3 fps,
+  growth/division is 9 frames at 2 fps, and elongation is 11 frames at 3 fps.
+  Contact-sheet inspection confirms that both spatial state and quantitative
+  trace change across each animation.
+
+The corrected documentation satisfies the accepted non-Phase-16 9/10 contract.
+This remains an auditor-led assessment, not a substitute for observing new users
+work through the manual.
 
 ## Verdict
 

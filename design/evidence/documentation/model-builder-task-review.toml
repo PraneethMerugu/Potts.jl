@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 status = "passed"
 audience = "model_builder"
-review_date = "2026-07-27"
+review_date = "2026-07-28"
 reviewer = "Codex documentation auditor"
 method = "rendered_site_task_walkthrough"
 start = "Home"
@@ -11,7 +11,7 @@ limitation = "Auditor-led persona review; future external-user observation remai
 [[checks]]
 step = "Choose Compose a biological model from Home."
 passed = true
-evidence = "Home contains a direct study-building path."
+evidence = "Home contains a direct study-building path and a complete, runnable declaration-to-visualization example."
 
 [[checks]]
 step = "Locate validation and model identity."
@@ -21,14 +21,14 @@ evidence = "The composition page exposes validation, semantic_fingerprint, and t
 [[checks]]
 step = "Navigate to Fields and chemotaxis."
 passed = true
-evidence = "The Learn navigation exposes the field workflow by task."
+evidence = "The Learn page constructs Field and Chemotaxis directly and explains the field, coupling, and interpretation boundaries without a ReferenceModels shortcut."
 
 [[checks]]
 step = "Open Follow the Gradient and inspect its quantitative result."
 passed = true
-evidence = "Rendered output shows centroid [9.5, 10.153846153846153], positive displacement 0.6538461538461533, and :positive direction."
+evidence = "Rendered output reports positive displacement 9.6875 after the checked run and pairs the field overlay with a centroid trajectory and displacement annotation."
 
 [[checks]]
 step = "Verify native visualization and provenance."
 passed = true
-evidence = "The page visibly imports MakiePotts, calls renderframes and the native recipe, displays the responsive result, and states original-implementation provenance."
+evidence = "The page imports MakiePotts, generates its MP4 with record_potts, displays native frames over the field, and states original-implementation provenance."
