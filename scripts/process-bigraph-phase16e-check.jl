@@ -48,7 +48,8 @@ requirements = Dict(row["id"] => row for row in ledger["requirements"])
 
 check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
-      "phase16f_qualified_c_hardware_open"),
+      "phase16f_qualified_c_hardware_open",
+      "phase16g_qualified_c_hardware_open"),
     "Phase 16.E checker requires qualified-E/C-hardware-open state")
 for id in ["P16-E01", "P16-E02", "P16-E03"]
     check(requirements[id]["status"] == "qualified",
@@ -72,8 +73,9 @@ check(requirements["P16-C02"]["status"] == "oracle_passing" &&
     "Phase 16.E must not overclaim the open Phase 16.C hardware rows")
 
 families = Dict(row["id"] => row for row in api["families"])
-f_qualified =
-    entry["implementation_status"] == "phase16f_qualified_c_hardware_open"
+f_qualified = entry["implementation_status"] in (
+    "phase16f_qualified_c_hardware_open",
+    "phase16g_qualified_c_hardware_open")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&
@@ -95,7 +97,7 @@ check(get(core_project["deps"], "ProcessBigraphs", nothing) ==
     "CorePotts-to-ProcessBigraphs dependency direction is not exact")
 
 slices = Dict(row["id"] => row for row in migration["slices"])
-check(migration["status"] == "phase16e_qualified" &&
+check(migration["status"] in ("phase16e_qualified", "phase16g_qualified") &&
       migration["checkpoint"]["status"] == "qualified" &&
       migration["checkpoint"]["existing_attested_readers_retained"] == true &&
       migration["checkpoint"]["settled_boundaries_only"] == true &&
@@ -182,6 +184,10 @@ end
 
 check(evidence["status"] == "qualified" &&
       evidence["phase"] == "16.E" &&
+      evidence["compatibility_requalification_commit"] ==
+      "09150b5457ae622093aa6a3ad61a7fc2d70b87e7" &&
+      evidence["compatibility_requalification_tree"] ==
+      "3e81f1affa1c517a32f6026a9d204730dd4aaa46" &&
       Set(evidence["qualified_rows"]) ==
           Set(["P16-E01", "P16-E02", "P16-E03"]) &&
       evidence["authority"]["one_production_authority"] == true &&
@@ -190,6 +196,7 @@ check(evidence["status"] == "qualified" &&
       evidence["checkpoint"]["prototype_free_structural_restore"] == true &&
       evidence["checkpoint"]["existing_readers_retained"] == true &&
       evidence["differential"]["restart_cuts"] == [0, 1, 2, 3] &&
+      evidence["phase16g_compatibility"]["spatial_decay_weights"] == true &&
       evidence["tests"]["process_bigraphs_full_assertions"] == 1061 &&
       evidence["tests"]["corepotts_full_assertions"] == 3772 &&
       evidence["tests"]["process_bigraphs_full_package_suite"] == "passed" &&

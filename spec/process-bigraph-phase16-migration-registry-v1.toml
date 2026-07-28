@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 registry_id = "process-bigraphs-phase16-migration-v1"
 phase = "16"
-status = "phase16e_qualified"
+status = "phase16g_qualified"
 one_production_authority_per_slice = true
 silent_fallback = false
 
@@ -31,7 +31,7 @@ cutover_required = true
 
 [[slices]]
 id = "merks-assembly"
-status = "specified"
+status = "qualified"
 old_authority = "none or test-only legacy assembly"
 target_authority = "ProcessBigraphs model with CorePotts and field adapters"
 differential_dimensions = ["mechanism microfixtures", "schedule", "field balance", "checkpoint"]

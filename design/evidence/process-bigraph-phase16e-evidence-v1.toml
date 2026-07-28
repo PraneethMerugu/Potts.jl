@@ -4,6 +4,8 @@ phase = "16.E"
 status = "qualified"
 implementation_commit = "9157aa4f9659a67f09a1b0641c8805791ca08ec1"
 implementation_tree = "9c034e71a41905cbb49b7cb0f0628880b328b41d"
+compatibility_requalification_commit = "09150b5457ae622093aa6a3ad61a7fc2d70b87e7"
+compatibility_requalification_tree = "3e81f1affa1c517a32f6026a9d204730dd4aaa46"
 branch = "codex/phase-16"
 internal_beta = false
 public_release = false
@@ -23,7 +25,7 @@ checkpoint_v3_sha256 = "08959b9706d746510e941299e0727525187ea1144bad0ceb558c08f0
 logical_codec = "lib/ProcessBigraphs/src/logical_codec.jl"
 logical_codec_sha256 = "51864eef2e6aec8b2ccc26d2f69f6a3f9d52f51498e9e516ffa7c91bdaee0bfa"
 corepotts_adapter = "lib/CorePotts/src/coupled/process_bigraph_adapter.jl"
-corepotts_adapter_sha256 = "efbb50de9cbc3998346a684aa682fbf12cfe8fb288627c83676d6c7370bc27b2"
+corepotts_adapter_sha256 = "55f27cdcb1c64e48a31566185b7cb954cb37df4f6ba18abae90ee44b08c49ab0"
 legacy_conversion = "lib/CorePotts/src/persistence/process_bigraph_conversion.jl"
 legacy_conversion_sha256 = "ff5ba7ec2e5207d0537f654eba33bcfd6a7d03241eb9a359d7e209493feb9fe4"
 process_bigraphs_tests = "lib/ProcessBigraphs/test/phase16/test_phase16e_checkpoint.jl"
@@ -86,6 +88,12 @@ publication_epoch = "exact"
 failure_rollback = "exact"
 remaining_trajectory = "exact"
 authorization_rejection = "source unchanged"
+
+[phase16g_compatibility]
+spatial_decay_weights = true
+forcing_and_weights_rollback = "exact"
+process_bigraphs_full_suite = "passed"
+corepotts_cross_adapter_suite = "passed"
 
 [tests]
 process_bigraphs_phase16e_assertions = 42
