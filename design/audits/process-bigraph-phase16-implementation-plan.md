@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: In progress; Phase 16.A/B/D/E/F/G/H qualified, HC specified, C hardware and I open
+Status: In progress; Phase 16.A/B/D/E/F/G/H/HC qualified, C hardware and I open
 
 Date: 2026-07-28
 

@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16hc_specified_c_hardware_open"
+status = "phase16hc_qualified_c_hardware_open"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false
@@ -259,17 +259,17 @@ export_rule = "CorePotts owns adapter-facing methods; ProcessBigraphs must not i
 [[families]]
 id = "authoring"
 subgate = "16.HC"
-status = "specified"
+status = "qualified"
 export_rule = "Ordinary authors use the complete compose do-block and typed-handle builder API; macros are optional transparent sugar and raw lowering IR is not required."
 
 [phase16hc]
-status = "specified"
+status = "qualified"
 authority = [
     "Decision 0040",
     "spec/process-bigraph-high-level-authoring-semantics.md",
     "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
 ]
-current_uncommitted_spike = "research_only_not_qualified"
+current_uncommitted_spike = "removed_before_qualified_implementation"
 primary_entry = "compose(:Name) do builder"
 semantic_source = "immutable CompositeModel"
 lowered_structure = "canonical ProcessBigraph ACSet plus origin map"

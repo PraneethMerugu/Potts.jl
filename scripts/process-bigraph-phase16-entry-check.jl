@@ -465,13 +465,14 @@ for (path, phrases) in [
     ("spec/process-bigraph-runtime-semantics.md",
         ["Decision 0039", "solver-neutral"]),
     ("spec/README.md", ["Phase 16", "Decision 0039"]),
-    ("spec/conformance-evidence.md", ["Phase 16", "specified"]),
+    ("spec/conformance-evidence.md", ["Phase 16", "qualified"]),
     (".github/workflows/ci.yml",
         ["process-bigraph-phase16-entry-check.jl",
          "process-bigraph-phase16f-consolidation-spec-check.jl",
          "process-bigraph-phase16f-check.jl",
          "process-bigraph-phase16g-check.jl",
-         "process-bigraph-phase16h-check.jl"]),
+         "process-bigraph-phase16h-check.jl",
+         "process-bigraph-phase16hc-check.jl"]),
 ]
     text = read(paths[path], String)
     for phrase in phrases

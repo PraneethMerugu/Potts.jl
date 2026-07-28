@@ -131,6 +131,8 @@ Refactor execution evidence:
 - [Decision 0039: Phase 16 Compute Ownership and Scope](decisions/0039-phase-16-compute-ownership-and-scope.md)
 - [ProcessBigraphs Phase 16.HC High-Level Authoring Owner Interview](../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md)
 - [Decision 0040: ProcessBigraphs High-Level Authoring and Phase 16.HC](decisions/0040-process-bigraph-high-level-authoring.md)
+- [ProcessBigraphs Phase 16.HC Qualification Audit](../design/audits/process-bigraph-phase16hc-high-level-authoring-audit.md)
+- [ProcessBigraphs Phase 16.HC Evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml)
 - [ProcessBigraphs Phase 16 Implementation Plan](../design/audits/process-bigraph-phase16-implementation-plan.md)
 - [ProcessBigraphs Phase 16 Entry Audit](../design/audits/process-bigraph-phase16-entry-audit.md)
 - [Open-Protocol Audit](../design/audits/open-protocol-audit.md)
@@ -237,13 +239,13 @@ ProcessBigraphs owns when and why computation occurs; optimized solver and CPM k
 heavy computation occurs. Phase 16.A, 16.B, 16.D, 16.E, 16.F, 16.G, and 16.H are qualified: the internal
 engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
 domain requests, V3 logical checkpoint, non-destructive legacy conversions, and bounded runnable
-Merks and CNV assemblies are passing. Phase 16.C remains open only for trusted exact-head
-Metal/ROCm evidence. Decision 0040 additionally inserts the specified but unimplemented Phase
-16.HC high-level composition gate before 16.I. Thirteen requirements remain open across 16.C,
-16.HC, and 16.I. The Phase 16.HC semantic model, ordinary Julia builder, deterministic lowering,
-origin-map, raw-IR migration, documentation, and quality obligations are normative in the
-[high-level authoring specification](process-bigraph-high-level-authoring-semantics.md); the
-current uncommitted authoring spike is research rather than qualification evidence. The
+Merks and CNV assemblies are passing. Phase 16.HC is also qualified: the immutable semantic model,
+ordinary Julia builder, deterministic lowering, complete origin map, controlled raw-IR migration,
+executable documentation, and stage-separated authoring performance guardrails pass. Six
+requirements remain open across Phase 16.C and 16.I. Phase 16.C remains open only for trusted
+exact-head Metal/ROCm evidence. The Phase 16.HC obligations and claim boundary are normative in the
+[high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
+content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
 classified commit `7217f9b` as an unqualified prototype. The resulting
 [qualified solver-plurality audit](../design/audits/process-bigraph-phase16f-solver-plurality-audit.md)

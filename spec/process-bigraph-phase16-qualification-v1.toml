@@ -232,84 +232,91 @@ evidence = ["40x40x35 startup", "four-field schedule", "bounded advance", "resta
 id = "P16-HC01"
 subgate = "16.HC"
 title = "Immutable semantic model and complete ordinary Julia builder"
-status = "specified"
+status = "qualified"
 evidence = [
     "Decision 0040",
     "spec/process-bigraph-high-level-authoring-semantics.md",
     "transactional builder and immutable lifecycle tests",
     "macro-free expressibility inventory",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC02"
 subgate = "16.HC"
 title = "Typed handles, junction connections, hierarchy, schedules, and templates"
-status = "specified"
+status = "qualified"
 evidence = [
     "store/port/component/parameter/observable handle contracts",
     "mount privacy and repeated-definition fixtures",
     "exact attach expansion reports",
     "explicit schedule and structural-template fixtures",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC03"
 subgate = "16.HC"
 title = "Structured diagnostics, deterministic lowering, origin maps, and layered identity"
-status = "specified"
+status = "qualified"
 evidence = [
     "stable diagnostic-code matrix",
     "declaration-order and parenthesization invariance",
     "author-origin retention through canonical IR and plan",
     "semantic/IR/plan/problem/checkpoint fingerprint tests",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC04"
 subgate = "16.HC"
 title = "Simulation problems and solver-neutral extension interoperability"
-status = "specified"
+status = "qualified"
 evidence = [
     "typed parameter, initialization, intervention, observation, and remake tests",
     "SciMLBase/CommonSolve remain weak extension triggers",
     "real-solver exact-target and standard-retcode tests",
     "independent non-SciML adapter conformance and negative capabilities",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC05"
 subgate = "16.HC"
 title = "Transactional dynamic-instance authoring and state-transfer contracts"
-status = "specified"
+status = "qualified"
 evidence = [
     "declared immutable templates",
     "spawn/divide/remove/move conflict fixtures",
     "deterministic runtime identity",
     "store and solver-session transfer truth tables",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC06"
 subgate = "16.HC"
 title = "Merks, CNV, library, example, and behavioral-test migration"
-status = "specified"
+status = "qualified"
 evidence = [
     "frozen raw-IR differential fixtures",
     "bounded Merks and CNV authoring equivalence",
     "path-and-purpose raw-IR allowlist",
     "one production authoring authority per migrated slice",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]
 id = "P16-HC07"
 subgate = "16.HC"
 title = "Authoring quality, documentation, compatibility, and performance qualification"
-status = "specified"
+status = "qualified"
 evidence = [
     "clean independent package and optional-extension tests",
     "Aqua, public API, documentation, and doctests",
     "construction/lowering/compilation/warm-runtime benchmark separation",
     "frozen workload-specific budgets and no steady-kernel authoring penalty",
+    "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
 ]
 
 [[requirements]]

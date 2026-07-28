@@ -50,13 +50,27 @@ local_parity = TOML.parsefile(
     paths["lib/ProcessBigraphs/parity-registry.toml"])
 evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16h-evidence-v1.toml"])
+hc_active = entry["implementation_status"] in (
+    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+hc_artifacts = hc_active ? Dict(
+    row["path"] => row["sha256"]
+    for row in TOML.parsefile(joinpath(
+        ROOT,
+        "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
+    ))["artifacts"]
+) : Dict{String,Any}()
+artifact_matches(relative, legacy) = begin
+    actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))
+    actual == legacy || get(hc_artifacts, relative, nothing) == actual
+end
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 slices = Dict(row["id"] => row for row in migration["slices"])
 model_rows = Dict(row["id"] => row for row in models["models"])
 
-check(entry["implementation_status"] ==
+check(entry["implementation_status"] in (
       "phase16h_qualified_c_hardware_open",
+      "phase16hc_qualified_c_hardware_open"),
     "Phase 16.H checker requires qualified-H/C-hardware-open state")
 for id in ["P16-H01", "P16-H02", "P16-H03"]
     check(requirements[id]["status"] == "qualified",
@@ -93,7 +107,7 @@ check(matrix["phase16h_status"] == "qualified" &&
       cnv_envelope["ROCm"] == "unsupported" &&
       cnv_envelope["CUDA"] == "not_applicable",
     "CNV backend envelope is not the qualified CPU-only claim")
-check(migration["status"] == "phase16h_qualified" &&
+check(migration["status"] in ("phase16h_qualified", "phase16hc_qualified") &&
       slices["cnv-assembly"]["status"] == "qualified",
     "CNV migration slice is not qualified")
 cnv_model = model_rows["shirinifard-2012-cnv"]
@@ -207,12 +221,11 @@ for (path_key, hash_key) in (
     ("managed_field_process", "managed_field_process_sha256"),
 )
     relative = evidence["artifacts"][path_key]
-    actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))
-    check(actual == evidence["artifacts"][hash_key],
+    check(artifact_matches(relative, evidence["artifacts"][hash_key]),
         "Phase 16.H artifact hash changed: $(relative)")
 end
 
-phase_state = "phase16h_qualified_c_hardware_open"
+phase_state = entry["implementation_status"]
 check(parity["phase16_entry"]["implementation_status"] == phase_state &&
       parity["phase16_entry"]["phase16h_trace"] ==
       "process-bigraph-phase16-cnv-trace-v1.toml" &&

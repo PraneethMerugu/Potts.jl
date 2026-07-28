@@ -45,12 +45,26 @@ process_project =
     TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 core_project = TOML.parsefile(paths["lib/CorePotts/Project.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
+hc_active = entry["implementation_status"] in (
+    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+hc_artifacts = hc_active ? Dict(
+    row["path"] => row["sha256"]
+    for row in TOML.parsefile(joinpath(
+        ROOT,
+        "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
+    ))["artifacts"]
+) : Dict{String,Any}()
+artifact_matches(relative, legacy) = begin
+    actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))
+    actual == legacy || get(hc_artifacts, relative, nothing) == actual
+end
 
 check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
       "phase16g_qualified_c_hardware_open",
-      "phase16h_qualified_c_hardware_open"),
+      "phase16h_qualified_c_hardware_open",
+      "phase16hc_qualified_c_hardware_open"),
     "Phase 16.E checker requires qualified-E/C-hardware-open state")
 for id in ["P16-E01", "P16-E02", "P16-E03"]
     check(requirements[id]["status"] == "qualified",
@@ -77,7 +91,8 @@ families = Dict(row["id"] => row for row in api["families"])
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&
@@ -100,7 +115,8 @@ check(get(core_project["deps"], "ProcessBigraphs", nothing) ==
 
 slices = Dict(row["id"] => row for row in migration["slices"])
 check(migration["status"] in (
-          "phase16e_qualified", "phase16g_qualified", "phase16h_qualified") &&
+          "phase16e_qualified", "phase16g_qualified", "phase16h_qualified",
+          "phase16hc_qualified") &&
       migration["checkpoint"]["status"] == "qualified" &&
       migration["checkpoint"]["existing_attested_readers_retained"] == true &&
       migration["checkpoint"]["settled_boundaries_only"] == true &&
@@ -215,9 +231,8 @@ for (path_key, hash_key) in (
     "process_bigraphs_tests" => "process_bigraphs_tests_sha256",
     "corepotts_tests" => "corepotts_tests_sha256",
 )
-    artifact = joinpath(ROOT, evidence["artifacts"][path_key])
-    check(bytes2hex(SHA.sha256(read(artifact))) ==
-          evidence["artifacts"][hash_key],
+    relative = evidence["artifacts"][path_key]
+    check(artifact_matches(relative, evidence["artifacts"][hash_key]),
         "Phase 16.E artifact $(path_key) differs from content-addressed evidence")
 end
 

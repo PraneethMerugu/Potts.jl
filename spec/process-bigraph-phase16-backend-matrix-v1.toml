@@ -5,7 +5,7 @@ status = "phase16c_candidate"
 phase16f_status = "qualified"
 phase16g_status = "qualified"
 phase16h_status = "qualified"
-phase16hc_status = "specified"
+phase16hc_status = "qualified"
 allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 
 [[envelopes]]

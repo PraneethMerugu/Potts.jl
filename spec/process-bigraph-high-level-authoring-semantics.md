@@ -1,6 +1,6 @@
 # ProcessBigraphs High-Level Authoring Semantics
 
-Status: Normative specification; Phase 16.HC implementation and qualification open
+Status: Normative specification; Phase 16.HC qualified
 
 Version: 1.0.0
 

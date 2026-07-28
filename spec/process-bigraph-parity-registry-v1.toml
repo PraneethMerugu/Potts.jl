@@ -99,7 +99,7 @@ remaining_claim = "The immutable-topology serial runtime is qualified as Process
 
 [phase16_entry]
 status = "in_progress"
-implementation_status = "phase16hc_specified_c_hardware_open"
+implementation_status = "phase16hc_qualified_c_hardware_open"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 high_level_authoring_decision = "decisions/0040-process-bigraph-high-level-authoring.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
