@@ -45,7 +45,8 @@ envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 
 check(entry["implementation_status"] in (
       "phase16f_qualified_c_hardware_open",
-      "phase16g_qualified_c_hardware_open"),
+      "phase16g_qualified_c_hardware_open",
+      "phase16h_qualified_c_hardware_open"),
     "Phase 16.F checker requires qualified-F/C-hardware-open state")
 for id in ["P16-F01", "P16-F02", "P16-F03"]
     check(requirements[id]["status"] == "qualified",

@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 registry_id = "process-bigraphs-phase16-migration-v1"
 phase = "16"
-status = "phase16g_qualified"
+status = "phase16h_qualified"
 one_production_authority_per_slice = true
 silent_fallback = false
 
@@ -39,7 +39,7 @@ cutover_required = false
 
 [[slices]]
 id = "cnv-assembly"
-status = "specified"
+status = "qualified"
 old_authority = "source-traced clean-room fixtures only"
 target_authority = "ProcessBigraphs model with CorePotts and field adapters"
 differential_dimensions = ["mechanism microfixtures", "schedule", "lifecycle", "relationships", "degradation", "checkpoint"]

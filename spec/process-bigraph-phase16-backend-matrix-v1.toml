@@ -4,6 +4,7 @@ phase = "16"
 status = "phase16c_candidate"
 phase16f_status = "qualified"
 phase16g_status = "qualified"
+phase16h_status = "qualified"
 allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 
 [[envelopes]]
@@ -65,7 +66,7 @@ id = "cnv-source-faithful-assembly"
 adapter = "ProcessBigraphsCorePotts"
 problem = "CNV scenario 38 bounded runnable assembly"
 precision = ["Float64"]
-CPU = "specified"
+CPU = "qualified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"

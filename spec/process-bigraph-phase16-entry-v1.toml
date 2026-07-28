@@ -3,7 +3,7 @@ contract_id = "process-bigraphs-phase16-entry-v1"
 phase = "16"
 title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
 status = "in_progress"
-implementation_status = "phase16g_qualified_c_hardware_open"
+implementation_status = "phase16h_qualified_c_hardware_open"
 internal_beta = false
 public_release = false
 current_package_version = "0.4.0"
@@ -44,6 +44,10 @@ phase16g_trace = "process-bigraph-phase16-merks-trace-v1.toml"
 phase16g_audit = "../design/audits/process-bigraph-phase16g-merks-audit.md"
 phase16g_checker = "../scripts/process-bigraph-phase16g-check.jl"
 phase16g_evidence = "../design/evidence/process-bigraph-phase16g-evidence-v1.toml"
+phase16h_trace = "process-bigraph-phase16-cnv-trace-v1.toml"
+phase16h_audit = "../design/audits/process-bigraph-phase16h-cnv-audit.md"
+phase16h_checker = "../scripts/process-bigraph-phase16h-check.jl"
+phase16h_evidence = "../design/evidence/process-bigraph-phase16h-evidence-v1.toml"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]

@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: In progress; Phase 16.A/B/D/E/F qualified, C hardware and G–I open
+Status: In progress; Phase 16.A/B/D/E/F/G/H qualified, C hardware and I open
 
 Date: 2026-07-27
 
@@ -120,6 +120,6 @@ qualification availability.
 
 ## Current implementation task
 
-Begin Phase 16.G Merks assembly through the qualified generic path. Keep Phase 16.C hardware
-evidence independent and open. Do not broaden the bounded model claim into full publication
-analysis.
+Begin Phase 16.I reconciliation while keeping Phase 16.C real-hardware evidence independently
+open. Do not broaden either bounded model claim into full publication analysis or quantitative
+reproduction.
