@@ -73,7 +73,6 @@ documentation_files = [
 ]
 resolution_files = [
     "Project.toml",
-    "Manifest.toml",
     "benchmark/Project.toml",
     "benchmark/Manifest.toml",
     "docs/Project.toml",
@@ -93,6 +92,16 @@ resolution_files = [
     "paper/Project.toml",
     "paper/Manifest.toml",
 ]
+for relative in resolution_files
+    path = joinpath(ROOT, relative)
+    isfile(path) ||
+        error("missing tracked dependency-resolution input: $(relative)")
+    success(pipeline(
+        `git -C $(ROOT) ls-files --error-unmatch -- $(relative)`;
+        stdout=devnull,
+        stderr=devnull,
+    )) || error("dependency-resolution input is not tracked: $(relative)")
+end
 
 cpu = Sys.cpu_info()
 artifact = Dict(
