@@ -77,6 +77,10 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16-docs.jl --check
       - name: Enforce ProcessBigraphs Phase 16.I reconciliation candidate
         run: julia --startup-file=no scripts/process-bigraph-phase16i-check.jl
+      - name: Instantiate ProcessBigraphs qualification environment
+        run: >-
+          julia --project=benchmark --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Check ProcessBigraphs Phase 16.HC authoring performance guardrails
         run: julia --project=benchmark --startup-file=no benchmark/phase16hc_authoring_qualification.jl --events=128 --repetitions=5
       - name: Check ProcessBigraphs high-level authoring documentation
@@ -319,6 +323,10 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16i-check.jl
       - name: Recheck generated capability documentation
         run: julia --startup-file=no scripts/process-bigraph-phase16-docs.jl --check
+      - name: Instantiate ProcessBigraphs qualification environment
+        run: >-
+          julia --project=benchmark --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Measure frozen Phase 16 authoring guardrails
         run: >-
           julia --project=benchmark --startup-file=no
