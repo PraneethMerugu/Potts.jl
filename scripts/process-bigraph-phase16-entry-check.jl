@@ -21,8 +21,10 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16c-native-field-audit.md",
     "design/audits/process-bigraph-phase16d-structural-transaction-audit.md",
     "design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md",
+    "design/audits/process-bigraph-phase16f-solver-plurality-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
+    "design/evidence/process-bigraph-phase16f-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
     "spec/process-bigraph-phase16-entry-v1.toml",
@@ -39,6 +41,7 @@ const REQUIRED = [
     "scripts/process-bigraph-phase16c-check.jl",
     "scripts/process-bigraph-phase16d-check.jl",
     "scripts/process-bigraph-phase16f-consolidation-spec-check.jl",
+    "scripts/process-bigraph-phase16f-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -64,16 +67,22 @@ phase16b_candidate = phase_state == "phase16b_candidate"
 phase16b_qualified = phase_state in (
     "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
     "phase16d_qualified_c_hardware_open",
-    "phase16e_qualified_c_hardware_open")
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
 phase16c_candidate = phase_state in (
     "phase16c_candidate", "phase16d_qualified_c_hardware_open",
-    "phase16e_qualified_c_hardware_open")
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
 phase16c_qualified = phase_state == "phase16c_qualified"
 phase16d_qualified = phase_state in (
     "phase16d_qualified_c_hardware_open",
-    "phase16e_qualified_c_hardware_open")
-phase16e_qualified =
-    phase_state == "phase16e_qualified_c_hardware_open"
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
+phase16e_qualified = phase_state in (
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
+phase16f_qualified =
+    phase_state == "phase16f_qualified_c_hardware_open"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
@@ -82,7 +91,8 @@ check(entry["schema_version"] == "1.0.0" &&
 check(entry["status"] == "in_progress" &&
       (phase16b_candidate || phase16b_qualified ||
        phase16c_candidate || phase16c_qualified ||
-       phase16d_qualified || phase16e_qualified) &&
+       phase16d_qualified || phase16e_qualified ||
+       phase16f_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
     "entry must claim an admitted Phase 16 state without beta or release")
@@ -152,7 +162,9 @@ check(entry["dependency_policy"]["core_hard_sciml_dependency"] == false &&
       entry["dependency_policy"]["upstream_python_runtime_execution"] == "forbidden",
     "dependency direction or no-Python rule changed")
 check(entry["solver_integration"]["phase16f_prototype_status"] ==
-      "unqualified_repair_required" &&
+      (phase16f_qualified ?
+       "replaced_by_qualified_real_solver_implementation" :
+       "unqualified_repair_required") &&
       entry["solver_integration"]["process_bigraph_owned_sciml_solve"] ==
       "forbidden" &&
       entry["solver_integration"]["qualified_algorithm_selection"] ==
@@ -218,6 +230,8 @@ for row in requirements
         "qualified"
     elseif row["subgate"] == "16.E" && phase16e_qualified
         "qualified"
+    elseif row["subgate"] == "16.F" && phase16f_qualified
+        "qualified"
     else
         "specified"
     end
@@ -250,7 +264,10 @@ check(native["CPU"] == native_cpu_status &&
 for id in ["sciml-cartesian-field", "independent-custom-field",
            "merks-source-faithful-assembly", "cnv-source-faithful-assembly"]
     row = envelopes[id]
-    check(row["CPU"] == "specified" &&
+    expected_cpu = phase16f_qualified &&
+        id in ("sciml-cartesian-field", "independent-custom-field") ?
+        "qualified" : "specified"
+    check(row["CPU"] == expected_cpu &&
           row["Metal"] == "unsupported" &&
           row["ROCm"] == "unsupported",
         "$(id) must make an honest CPU-only Phase 16 claim")
@@ -282,7 +299,8 @@ check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
 
 check(api["status"] ==
       phase_state &&
-      api["current_new_exports"] == [] &&
+      api["current_new_exports"] ==
+      (phase16f_qualified ? api["planned_internal_beta_exports"] : []) &&
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
       api["policy"]["sciml_via_extension"] == true &&
@@ -340,7 +358,8 @@ for (path, phrases) in [
     ("spec/conformance-evidence.md", ["Phase 16", "specified"]),
     (".github/workflows/ci.yml",
         ["process-bigraph-phase16-entry-check.jl",
-         "process-bigraph-phase16f-consolidation-spec-check.jl"]),
+         "process-bigraph-phase16f-consolidation-spec-check.jl",
+         "process-bigraph-phase16f-check.jl"]),
 ]
     text = read(paths[path], String)
     for phrase in phrases

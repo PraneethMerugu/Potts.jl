@@ -35,10 +35,14 @@ candidate = entry["implementation_status"] == "phase16b_candidate"
 qualified = entry["implementation_status"] in (
     "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
     "phase16d_qualified_c_hardware_open",
-    "phase16e_qualified_c_hardware_open")
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
 d_qualified = entry["implementation_status"] in (
     "phase16d_qualified_c_hardware_open",
-    "phase16e_qualified_c_hardware_open")
+    "phase16e_qualified_c_hardware_open",
+    "phase16f_qualified_c_hardware_open")
+f_qualified =
+    entry["implementation_status"] == "phase16f_qualified_c_hardware_open"
 check(candidate || qualified,
     "Phase 16.B checker requires candidate or qualified state")
 expected = candidate ? "implemented" : "qualified"
@@ -54,7 +58,8 @@ qualified_count = count(row -> row["status"] == "qualified", values(requirements
 check(candidate ? qualified_count == 3 : qualified_count >= 9,
     "Phase 16.B ledger does not preserve the admitted Phase 16.A/B qualifications")
 
-check(api["current_new_exports"] == [] &&
+check(api["current_new_exports"] ==
+      (f_qualified ? api["planned_internal_beta_exports"] : []) &&
       api["policy"]["unqualified_names_may_not_be_exported"] == true,
     "Phase 16.B must not widen the public API before Phase 16.F cross-adapter qualification")
 families = Dict(row["id"] => row for row in api["families"])
@@ -62,7 +67,8 @@ check(families["engine"]["status"] == expected &&
       families["field"]["status"] == expected &&
       families["structure"]["status"] ==
           (d_qualified ? "qualified" : "specified") &&
-      families["sciml"]["status"] == "specified",
+      families["sciml"]["status"] ==
+          (f_qualified ? "qualified" : "specified"),
     "Phase 16.B API family states are inconsistent")
 
 check(Set(keys(project["deps"])) ==
@@ -109,9 +115,11 @@ end
 planned = Set(Symbol.(api["planned_internal_beta_exports"]))
 module_source = read(joinpath(
     ROOT, "lib", "ProcessBigraphs", "src", "ProcessBigraphs.jl"), String)
-for name in planned
-    check(!occursin(Regex("(?m)^export[^\\n]*\\b$(name)\\b"), module_source),
-        "unqualified Phase 16 name $(name) was exported early")
+if !f_qualified
+    for name in planned
+        check(!occursin(Regex("(?m)^export[^\\n]*\\b$(name)\\b"), module_source),
+            "unqualified Phase 16 name $(name) was exported early")
+    end
 end
 
 if qualified

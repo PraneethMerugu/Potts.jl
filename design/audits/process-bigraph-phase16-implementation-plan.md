@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: In progress; Phase 16.A/B/D/E qualified, C hardware open, 16.F consolidation next
+Status: In progress; Phase 16.A/B/D/E/F qualified, C hardware and G–I open
 
 Date: 2026-07-27
 
@@ -51,6 +51,10 @@ device qualification and dynamic hierarchy; Merks and CNV then exercise the comm
   remove the old production authority for that slice.
 
 ### 16.F — solver plurality
+
+Qualified at implementation commit `9f9daf1` with the
+[solver-plurality audit](process-bigraph-phase16f-solver-plurality-audit.md) and
+[evidence manifest](../evidence/process-bigraph-phase16f-evidence-v1.toml).
 
 Complete a mandatory 16.F0 repair before qualification:
 
@@ -116,6 +120,6 @@ qualification availability.
 
 ## Current implementation task
 
-Treat commit `7217f9b67db3bc0e798bab192e81ad3a8923b912` as an unqualified 16.F prototype. Perform the
-16.F0 repair above, run all A–E regression gates unchanged, and only then attempt P16-F01 through
-P16-F03 qualification. Do not begin Merks or CNV assembly while 16.F remains open.
+Begin Phase 16.G Merks assembly through the qualified generic path. Keep Phase 16.C hardware
+evidence independent and open. Do not broaden the bounded model claim into full publication
+analysis.

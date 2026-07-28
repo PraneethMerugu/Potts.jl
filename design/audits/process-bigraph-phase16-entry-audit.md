@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16 Entry Audit
 
-Status: Historical entry passed; Phase 16.A/B/D/E qualified, C hardware and F–I open
+Status: Historical entry passed; Phase 16.A/B/D/E/F qualified, C hardware and G–I open
 
 Date: 2026-07-27
 
@@ -38,13 +38,15 @@ marking any implementation row qualified.
 
 ## Current amendment
 
-Phase 16.A/B/D/E have since qualified. Phase 16.C remains independently open for trusted
+Phase 16.A/B/D/E/F have since qualified. Phase 16.C remains independently open for trusted
 exact-head Metal/ROCm artifacts. The first 16.F implementation at commit `7217f9b` is retained as
-an unqualified prototype, not admitted evidence. The
+an unqualified prototype, not admitted evidence. The completed
 [16.F solver-integration consolidation](process-bigraph-phase16f-solver-integration-consolidation-research.md)
-requires a real injected SciML algorithm, standard solver interfaces, numerical replay by default,
-an external-style independent custom fixture, and restored API containment before F01–F03 can
-qualify. Phase 16.G/H must wait for that qualification.
+led to the qualified
+[solver-plurality implementation](process-bigraph-phase16f-solver-plurality-audit.md): a real
+injected algorithm, standard solver interfaces, numerical replay by default, an external-style
+independent custom fixture, analytic/convergence proof, and bounded API admission. Phase 16.G/H
+may now proceed.
 
 ## Risks already controlled
 

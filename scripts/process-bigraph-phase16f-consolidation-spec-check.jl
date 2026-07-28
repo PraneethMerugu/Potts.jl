@@ -33,8 +33,12 @@ api = TOML.parsefile(PATHS["spec/process-bigraph-phase16-api-v1.toml"])
 parity = TOML.parsefile(PATHS["spec/process-bigraph-parity-registry-v1.toml"])
 local_parity = TOML.parsefile(PATHS["lib/ProcessBigraphs/parity-registry.toml"])
 
-check(entry["implementation_status"] == "phase16e_qualified_c_hardware_open",
-    "16.F consolidation must not advance the admitted implementation state")
+f_qualified =
+    entry["implementation_status"] == "phase16f_qualified_c_hardware_open"
+check(entry["implementation_status"] in (
+      "phase16e_qualified_c_hardware_open",
+      "phase16f_qualified_c_hardware_open"),
+    "16.F consolidation checker requires the admitted E or F state")
 check(entry["authority"]["phase16f_consolidation_research"] ==
       "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md" &&
       entry["authority"]["phase16f_consolidation_checker"] ==
@@ -46,7 +50,10 @@ check(entry["ordering"]["phase16f_internal_order"] ==
     "16.F repair/qualification order or Merks/CNV join changed")
 
 solver = entry["solver_integration"]
-check(solver["phase16f_prototype_status"] == "unqualified_repair_required" &&
+check(solver["phase16f_prototype_status"] ==
+      (f_qualified ?
+       "replaced_by_qualified_real_solver_implementation" :
+       "unqualified_repair_required") &&
       solver["prototype_commit"] ==
       "7217f9b67db3bc0e798bab192e81ad3a8923b912" &&
       solver["process_bigraph_owned_sciml_solve"] == "forbidden" &&
@@ -61,9 +68,10 @@ check(solver["phase16f_prototype_status"] == "unqualified_repair_required" &&
     "solver-integration repair contract is incomplete or widened")
 
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
-check(all(id -> requirements[id]["status"] == "specified",
+check(all(id -> requirements[id]["status"] ==
+        (f_qualified ? "qualified" : "specified"),
         ["P16-F01", "P16-F02", "P16-F03"]),
-    "16.F rows must remain specified until repaired evidence qualifies them")
+    "16.F rows disagree with consolidation qualification state")
 check(occursin("real-SciML", requirements["P16-F01"]["title"]) &&
       any(occursin("exact-target", evidence)
           for evidence in requirements["P16-F01"]["evidence"]) &&
@@ -76,34 +84,38 @@ check(occursin("real-SciML", requirements["P16-F01"]["title"]) &&
 envelopes = Dict(row["id"] => row for row in backends["envelopes"])
 sciml = envelopes["sciml-cartesian-field"]
 custom = envelopes["independent-custom-field"]
-check(sciml["CPU"] == "specified" &&
+check(sciml["CPU"] == (f_qualified ? "qualified" : "specified") &&
       occursin("explicit injected real solver", sciml["algorithm"]) &&
       occursin("exact-target", sciml["exact_target"]) &&
       occursin("reconstruct each invocation", sciml["continuation"]) &&
       first(sciml["replay"]) == "numerical by default",
     "SciML backend envelope is not the bounded real-solver target")
-check(custom["CPU"] == "specified" &&
+check(custom["CPU"] == (f_qualified ? "qualified" : "specified") &&
       occursin("outside ProcessBigraphs core", custom["location"]) &&
       occursin("no SciML dependency", custom["independence"]),
     "custom adapter is not an external-style independent conformance envelope")
 
 policy = api["policy"]
 repair = api["phase16f_consolidation"]
-check(api["current_new_exports"] == [] &&
+check(api["current_new_exports"] ==
+      (f_qualified ? api["planned_internal_beta_exports"] : []) &&
       policy["qualified_exports_only"] == true &&
       policy["process_bigraph_owned_sciml_solve"] == false &&
       policy["explicit_real_sciml_algorithm"] == true &&
       policy["automatic_algorithm_selection_qualified"] == false &&
       policy["custom_conformance_adapter_is_core_api"] == false &&
       policy["prototype_exports_are_admitted"] == false &&
-      repair["status"] == "repair_required" &&
+      repair["status"] == (f_qualified ? "qualified" : "repair_required") &&
       repair["restore_current_new_exports_to"] == [],
     "Phase 16.F API containment or repair status changed")
 
+expected_prototype_status = f_qualified ?
+    "replaced_by_qualified_real_solver_implementation" :
+    "unqualified_repair_required"
 check(parity["phase16_entry"]["phase16f_prototype_status"] ==
-      "unqualified_repair_required" &&
+      expected_prototype_status &&
       local_parity["accepted_next_architecture"]["phase16f_prototype_status"] ==
-      "unqualified_repair_required",
+      expected_prototype_status,
     "root and package-local registries disagree about the prototype")
 
 for (path, phrases) in [
@@ -116,7 +128,9 @@ for (path, phrases) in [
         ["Real-solver handoff", "standard SciML return-code/error interface",
          "Mermaid.jl is a research reference"]),
     ("design/audits/process-bigraph-phase16-implementation-plan.md",
-        ["mandatory 16.F0 repair", "unqualified 16.F prototype"]),
+        ["mandatory 16.F0 repair",
+         f_qualified ? "Qualified at implementation commit" :
+         "unqualified 16.F prototype"]),
 ]
     content = read(PATHS[path], String)
     for phrase in phrases
@@ -125,7 +139,9 @@ for (path, phrases) in [
 end
 
 if isempty(failures)
-    println("ProcessBigraphs Phase 16.F consolidation specification check passed; implementation repair and qualification remain open.")
+    println(f_qualified ?
+        "ProcessBigraphs Phase 16.F consolidation check passed: repair is qualified." :
+        "ProcessBigraphs Phase 16.F consolidation specification check passed; implementation repair and qualification remain open.")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("ProcessBigraphs Phase 16.F consolidation specification check failed with $(length(failures)) error(s)")

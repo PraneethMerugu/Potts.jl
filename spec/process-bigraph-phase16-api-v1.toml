@@ -1,43 +1,81 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16e_qualified_c_hardware_open"
+status = "phase16f_qualified_c_hardware_open"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false
 
-current_new_exports = []
-
-planned_internal_beta_exports = [
+current_new_exports = [
     "AbstractEngineAdapter",
     "AbstractEngineInstance",
-    "EngineDeclaration",
-    "EngineCapabilities",
     "AbstractEngineOperation",
+    "AbstractCompletionHandle",
+    "EngineCapabilities",
+    "EngineDeclaration",
     "IntervalAdvance",
     "BoundarySolve",
     "DiscreteBatch",
+    "EngineInputProjection",
     "EngineInvocation",
-    "AbstractCompletionHandle",
     "EngineCandidate",
     "EngineEarlyReturn",
     "EngineEventRequest",
     "EngineFailure",
+    "projection_value",
     "prepare_engine",
     "stage_operation!",
     "complete_operation!",
     "validate_candidate",
     "publish_candidate!",
     "discard_candidate!",
-    "FieldDescriptor",
     "FieldGeometry",
     "FieldBoundary",
+    "FieldDescriptor",
     "FieldState",
     "FieldSampler",
     "FieldDeposition",
     "FieldExchange",
-    "StructuralRequest",
-    "StructuralResult",
+    "BoundedCartesianFieldProblem",
+    "field_engine_snapshot",
+    "sciml_field_adapter",
+    "sciml_field_declaration",
+]
+
+planned_internal_beta_exports = [
+    "AbstractEngineAdapter",
+    "AbstractEngineInstance",
+    "AbstractEngineOperation",
+    "AbstractCompletionHandle",
+    "EngineCapabilities",
+    "EngineDeclaration",
+    "IntervalAdvance",
+    "BoundarySolve",
+    "DiscreteBatch",
+    "EngineInputProjection",
+    "EngineInvocation",
+    "EngineCandidate",
+    "EngineEarlyReturn",
+    "EngineEventRequest",
+    "EngineFailure",
+    "projection_value",
+    "prepare_engine",
+    "stage_operation!",
+    "complete_operation!",
+    "validate_candidate",
+    "publish_candidate!",
+    "discard_candidate!",
+    "FieldGeometry",
+    "FieldBoundary",
+    "FieldDescriptor",
+    "FieldState",
+    "FieldSampler",
+    "FieldDeposition",
+    "FieldExchange",
+    "BoundedCartesianFieldProblem",
+    "field_engine_snapshot",
+    "sciml_field_adapter",
+    "sciml_field_declaration",
 ]
 
 internal_only = [
@@ -73,8 +111,9 @@ custom_conformance_adapter_is_core_api = false
 prototype_exports_are_admitted = false
 
 [phase16f_consolidation]
-status = "repair_required"
+status = "qualified"
 prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
+qualified_implementation_commit = "9f9daf19e34c5430361cb98c8002f025a74d217a"
 restore_current_new_exports_to = []
 minimal_admission_rule = "Only the smallest declaration-authoring surface may be admitted after P16-F01 through P16-F03 qualify."
 forbidden_public_details = [
@@ -105,7 +144,7 @@ export_rule = "Export typed structural requests/results only; raw AlgebraicRewri
 [[families]]
 id = "sciml"
 subgate = "16.F"
-status = "specified"
+status = "qualified"
 export_rule = "Expose only qualified declaration construction with an explicit real algorithm and canonical options through the SciML extension."
 
 [[families]]

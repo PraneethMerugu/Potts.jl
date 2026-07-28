@@ -2,6 +2,7 @@ schema_version = "1.0.0"
 matrix_id = "process-bigraphs-phase16-backend-matrix-v1"
 phase = "16"
 status = "phase16c_candidate"
+phase16f_status = "qualified"
 allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 
 [[envelopes]]
@@ -21,7 +22,7 @@ id = "sciml-cartesian-field"
 adapter = "SciMLFieldAdapter"
 problem = "bounded CPU Cartesian field advance lowered to a real SciML problem"
 precision = ["Float64", "declared Float32"]
-CPU = "specified"
+CPU = "qualified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"
@@ -37,7 +38,7 @@ id = "independent-custom-field"
 adapter = "IndependentCustomFieldAdapter"
 problem = "minimal bounded CPU field advance proving open protocol"
 precision = ["Float64"]
-CPU = "specified"
+CPU = "qualified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"

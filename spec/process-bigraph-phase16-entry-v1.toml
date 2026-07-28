@@ -3,7 +3,7 @@ contract_id = "process-bigraphs-phase16-entry-v1"
 phase = "16"
 title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
 status = "in_progress"
-implementation_status = "phase16e_qualified_c_hardware_open"
+implementation_status = "phase16f_qualified_c_hardware_open"
 internal_beta = false
 public_release = false
 current_package_version = "0.4.0"
@@ -37,6 +37,9 @@ phase16e_checker = "../scripts/process-bigraph-phase16e-check.jl"
 phase16e_evidence = "../design/evidence/process-bigraph-phase16e-evidence-v1.toml"
 phase16f_consolidation_research = "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
 phase16f_consolidation_checker = "../scripts/process-bigraph-phase16f-consolidation-spec-check.jl"
+phase16f_audit = "../design/audits/process-bigraph-phase16f-solver-plurality-audit.md"
+phase16f_checker = "../scripts/process-bigraph-phase16f-check.jl"
+phase16f_evidence = "../design/evidence/process-bigraph-phase16f-evidence-v1.toml"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]
@@ -130,8 +133,9 @@ engine_owns = ["algorithm", "internal steps", "workspace", "cache", "arrays", "l
 runtime_owns = ["logical time", "invocation reason", "identity", "schema", "version", "visibility", "RNG coordinates", "validation", "authorization", "publication", "failure", "checkpoint", "replay"]
 
 [solver_integration]
-phase16f_prototype_status = "unqualified_repair_required"
+phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
 prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
+qualified_implementation_commit = "9f9daf19e34c5430361cb98c8002f025a74d217a"
 process_bigraph_owned_sciml_solve = "forbidden"
 qualified_algorithm_selection = "explicit_real_algorithm_object"
 automatic_algorithm_selection = "experimental"
