@@ -1,0 +1,104 @@
+.potts-hero {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.9fr) minmax(20rem, 1.1fr);
+  gap: 2rem;
+  align-items: center;
+  margin: 1.5rem 0 2.5rem;
+}
+
+.potts-hero img {
+  width: 100%;
+  border-radius: 0.75rem;
+  box-shadow: 0 0.8rem 2rem rgba(20, 30, 50, 0.16);
+}
+
+.potts-kicker {
+  color: #277f8e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.potts-hero-copy {
+  font-size: 1.15rem;
+  line-height: 1.55;
+}
+
+.potts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.25rem;
+}
+
+.potts-actions a {
+  border: 1px solid #277f8e;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.85rem;
+  font-weight: 650;
+}
+
+.potts-actions a:first-child {
+  background: #277f8e;
+  color: white;
+}
+
+.potts-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.25rem;
+  margin: 1.5rem 0 2.5rem;
+}
+
+.potts-card {
+  overflow: hidden;
+  border: 1px solid rgba(120, 130, 150, 0.3);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 0.35rem 1rem rgba(20, 30, 50, 0.08);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.potts-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.6rem 1.4rem rgba(20, 30, 50, 0.14);
+}
+
+.potts-card img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-bottom: 1px solid rgba(120, 130, 150, 0.25);
+}
+
+.potts-card-copy {
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.potts-card h3 {
+  margin: 0 0 0.35rem !important;
+  color: #17212b !important;
+  font-size: 1.05rem !important;
+}
+
+.potts-card p {
+  margin: 0;
+  color: #465362;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.potts-contract {
+  display: inline-block;
+  margin-top: 0.65rem;
+  color: #277f8e;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .potts-hero {
+    grid-template-columns: 1fr;
+  }
+}
