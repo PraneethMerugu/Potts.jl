@@ -1,0 +1,110 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16i-internal-beta-2026-07-28"
+phase = "16.I"
+status = "qualified_internal_beta"
+runtime_package = "ProcessBigraphs"
+qualified_candidate_version = "0.4.0"
+attested_package_version = "0.5.0"
+runtime_uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
+julia = "1.12.6"
+internal_beta = true
+public_release = false
+fastest_runtime_claim = false
+
+[provenance]
+qualified_head_commit = "6a8deb7886761ea7a4142f09a742cb66ebc1f3ee"
+qualified_tree = "71597c3e206928c01eaf9fc7936243ad2f56d3cd"
+base_commit = "536ba7d29173bf619f82c58c64eb22ff965cbe75"
+merge_base = "536ba7d29173bf619f82c58c64eb22ff965cbe75"
+prospective_merge_tree = "71597c3e206928c01eaf9fc7936243ad2f56d3cd"
+tree_identity_verified = true
+dirty_state = "clean"
+branch = "codex/phase-16"
+
+[candidate]
+artifact = "phase-16/phase16i-candidate.toml"
+artifact_sha256 = "7028751add514adb5613d53d115fe2125e26dc5fbe21932e5ee0675c454f02a7"
+performance_report = "phase-16/phase16i-authoring-performance.toml"
+performance_report_sha256 = "050dc8965785e7a190909d62fd6222b766f5abc4221257501d0a6a6dd69dc0f0"
+generated_at_utc = "2026-07-28T17:38:10.151"
+artifact_run_attempt = 1
+required_row_count = 38
+qualified_row_count = 35
+oracle_passing_row_count = 3
+dependency_resolution_input_count = 19
+plan_identity_equal = true
+performance_repetitions = 9
+warm_time_ratio = 1.0034816214967597
+warm_allocation_ratio = 1.0
+all_frozen_budgets_pass = true
+
+[ci]
+repository = "PraneethMerugu/Potts.jl"
+workflow = ".github/workflows/ci.yml"
+run_id = 30381477071
+final_run_attempt = 2
+run_url = "https://github.com/PraneethMerugu/Potts.jl/actions/runs/30381477071"
+head_sha = "6a8deb7886761ea7a4142f09a742cb66ebc1f3ee"
+event = "workflow_dispatch"
+conclusion = "success"
+candidate_job_id = 90396593892
+candidate_conclusion = "success"
+project_job_id = 90396621746
+project_conclusion = "success"
+processbigraphs_package_job_id = 90396592094
+processbigraphs_package_conclusion = "success"
+independent_oracle_job_id = 90396619011
+independent_oracle_conclusion = "success"
+linux_cpu_job_id = 90396591886
+linux_cpu_conclusion = "success"
+macos_cpu_retry_job_id = 90396590755
+macos_cpu_conclusion = "success"
+required_retry_job_id = 90401767505
+required_conclusion = "success"
+retry_reason = "The attempt-1 self-hosted macOS runner disconnected mid-test without a failing step or log; attempt 2 passed the unchanged exact head."
+
+[hardware]
+phase16c_evidence = "process-bigraph-phase16c-evidence-v1.toml"
+phase16c_evidence_sha256 = "997ebbea2db8d1ccde1e1179136a887bd902ac2e119f7f82a4abe509f5db142f"
+native_field_source_sha256 = "46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25"
+gpu_workflow_run_id = 30360086075
+metal_exact_head = true
+rocm_exact_head = true
+cuda_required = false
+
+[qualification]
+required_rows = 38
+qualified_rows = 38
+open_rows = 0
+phase16a_through_phase16hc_retained = true
+phase16i_rows_promoted = ["P16-I01", "P16-I02", "P16-I03"]
+documentation_reconciled = true
+clean_independent_packages = true
+exact_dependency_resolution = true
+frozen_performance_passed = true
+exact_head_candidate_admitted = true
+prospective_merge_tree_verified = true
+
+[attestation]
+metadata_only = true
+runtime_source_changed = false
+scientific_model_source_changed = false
+test_or_fixture_changed = false
+workflow_changed = false
+dependency_set_changed = false
+compatibility_metadata_changed = true
+historical_checker_lifecycle_expectations_changed = true
+package_version = "0.5.0"
+internal_beta = true
+public_release = false
+
+[limitations]
+items = [
+    "This is an unpublished internal beta, not a public release.",
+    "Complete pinned Process-Bigraph parity remains open.",
+    "Dagger, distributed execution, multi-GPU, and CUDA qualification remain open.",
+    "Universal solver GPU support is not claimed.",
+    "Merks and CNV are bounded runnable source-faithful assemblies, not full publication analyses.",
+    "Broad ODE, DAE, biochemical, FBA, SBML, AlgebraicDynamics, and whole-cell qualification remain open.",
+    "Constructor spelling remains pre-1.0; semantic identity is the internal-beta stability authority.",
+]

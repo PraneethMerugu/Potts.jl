@@ -73,11 +73,11 @@ layer. The authoring lifecycle is `CompositeModel` → `LoweredModel` → `Execu
 run session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
 control of how their authorized heavy computation occurs.
 
-Phase 16.A through 16.HC are qualified, including exact-source CPU, real Metal, and real ROCm
-native-field evidence. Phase 16.I has reached the exact-head candidate state: documentation,
-clean-resolution, and frozen-performance reconciliation pass, while the CI candidate artifact and
-metadata-only internal-beta attestation remain. Package version remains `0.4.0`,
-`internal_beta = false`, and `public_release = false` until that attestation closes.
+Phase 16 is qualified as unpublished ProcessBigraphs `0.5.0` internal beta, including exact-source
+CPU, real Metal, and real ROCm native-field evidence. Phase 16.I admits the clean exact-head
+candidate after documentation, clean-resolution, independent-package, integration, and
+frozen-performance qualification. The content-addressed candidate and complete performance report
+are retained in the repository. `internal_beta = true`; `public_release = false` remains mandatory.
 
 Ordinary models use a small Julia API rather than canonical IR:
 

@@ -16,6 +16,7 @@ end
 
 project_path = require_file("lib/ProcessBigraphs/Project.toml")
 phase15c_entry_path = require_file("spec/process-bigraph-phase15c-entry-v1.toml")
+phase16_entry_path = require_file("spec/process-bigraph-phase16-entry-v1.toml")
 module_path = require_file("lib/ProcessBigraphs/src/ProcessBigraphs.jl")
 structure_path = require_file("lib/ProcessBigraphs/src/algebraic_structure.jl")
 lowering_path = require_file("lib/ProcessBigraphs/src/lowering.jl")
@@ -33,7 +34,10 @@ audit_path = require_file(
 
 project = TOML.parsefile(project_path)
 phase15c_entry = TOML.parsefile(phase15c_entry_path)
+phase16_entry = TOML.parsefile(phase16_entry_path)
 expected_package_version =
+    phase16_entry["implementation_status"] ==
+        "phase16_internal_beta_qualified" ? "0.5.0" :
     phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
     "0.4.0" : "0.3.0"
 check(project["version"] == expected_package_version,
@@ -117,6 +121,7 @@ check(local_registry["maturity"] in (
         "phase_15b_open_composition",
         "phase_15c_implementation_candidate",
         "phase_15c_serial_internal_alpha",
+        "phase_16_internal_beta",
     ),
     "package-local maturity no longer preserves Phase 15.A")
 root_registry = TOML.parsefile(root_registry_path)

@@ -6,15 +6,13 @@ Version: 1.5.0
 
 Date: 2026-07-28
 
-Implementation disposition: Phase 15.C C0--C7 passed. ProcessBigraphs 0.4.0 is a qualified
-immutable-topology serial internal alpha with `internal_alpha = true` and
-`public_release = false`. Phase 16.A/B/D/E/F/G/H are qualified on the working branch: the
-solver-neutral protocol, dynamic orchestration transactions, first CorePotts field cutover,
-typed domain requests, V3 logical checkpoint, real solver plurality, and bounded runnable
-Merks/CNV assemblies and Phase 16.HC high-level authoring pass. Phase 16.C is qualified with
-trusted exact-source CPU/Metal/ROCm evidence. Phase 16.I is an exact-head candidate with its
-three attestation rows at `oracle_passing`; CI candidate admission and the metadata-only
-internal-beta attestation remain.
+Implementation disposition: Phase 15.C C0--C7 passed and remains qualified. Phase 16 is qualified
+as unpublished ProcessBigraphs 0.5.0 internal beta with `internal_beta = true` and
+`public_release = false`. The solver-neutral protocol, dynamic orchestration transactions, first
+CorePotts field cutover, typed domain requests, V3 logical checkpoint, real solver plurality,
+bounded runnable Merks/CNV assemblies, and high-level authoring are qualified. Phase 16.C retains
+trusted exact-source CPU/Metal/ROCm evidence. Phase 16.I admits the content-addressed exact-head
+candidate and promotes all three attestation rows to `qualified`.
 
 Authority: Decisions 0034 and 0036–0040,
 `process-bigraph-parity-registry-v1.toml`,

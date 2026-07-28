@@ -1,10 +1,10 @@
 schema_version = "1.0.0"
 qualification_id = "process-bigraphs-phase16-qualification-v1"
 phase = "16"
-status = "open"
+status = "qualified_internal_beta"
 required_row_count = 38
 allowed_statuses = ["not_started", "specified", "implemented", "oracle_passing", "qualified", "blocked", "excluded"]
-closure_status = "open"
+closure_status = "qualified_internal_beta"
 
 [dimensions]
 required = ["semantics", "dependencies", "implementation", "oracle", "tests", "failure", "persistence", "backend", "documentation", "evidence"]
@@ -323,19 +323,19 @@ evidence = [
 id = "P16-I01"
 subgate = "16.I"
 title = "Complete documentation, matrices, and limitations"
-status = "oracle_passing"
-evidence = ["user/adapter/solver/persistence/failure docs", "generated capability pages", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]
+status = "qualified"
+evidence = ["user/adapter/solver/persistence/failure docs", "generated capability pages", "design/audits/process-bigraph-phase16i-reconciliation-audit.md", "design/evidence/process-bigraph-phase16i-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-I02"
 subgate = "16.I"
 title = "Clean independent packages, compatibility, and performance"
-status = "oracle_passing"
-evidence = ["clean temp installs", "exact dependency resolution", "frozen regression budgets", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]
+status = "qualified"
+evidence = ["clean temp installs", "exact dependency resolution", "frozen regression budgets", "design/audits/process-bigraph-phase16i-reconciliation-audit.md", "design/evidence/phase-16/phase16i-authoring-performance.toml", "design/evidence/process-bigraph-phase16i-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-I03"
 subgate = "16.I"
 title = "Exact-head internal-beta closure"
-status = "oracle_passing"
-evidence = ["all rows at least oracle-passing", "content-addressed exact-head candidate required", "prospective merge-tree verification required", "metadata-only attestation pending", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]
+status = "qualified"
+evidence = ["all 38 rows qualified", "content-addressed exact-head candidate admitted", "prospective merge-tree identity verified", "metadata-only attestation complete", "design/evidence/phase-16/phase16i-candidate.toml", "design/evidence/process-bigraph-phase16i-evidence-v1.toml", "design/audits/process-bigraph-phase16-closure-audit.md"]

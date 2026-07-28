@@ -25,6 +25,7 @@ end
 
 project_path = require_file("lib/ProcessBigraphs/Project.toml")
 phase15c_entry_path = require_file("spec/process-bigraph-phase15c-entry-v1.toml")
+phase16_entry_path = require_file("spec/process-bigraph-phase16-entry-v1.toml")
 module_path = require_file("lib/ProcessBigraphs/src/ProcessBigraphs.jl")
 structure_path = require_file("lib/ProcessBigraphs/src/algebraic_structure.jl")
 composition_path = require_file("lib/ProcessBigraphs/src/composition.jl")
@@ -53,7 +54,10 @@ ci_path = require_file(".github/workflows/ci.yml")
 
 project = TOML.parsefile(project_path)
 phase15c_entry = TOML.parsefile(phase15c_entry_path)
+phase16_entry = TOML.parsefile(phase16_entry_path)
 expected_package_version =
+    phase16_entry["implementation_status"] ==
+        "phase16_internal_beta_qualified" ? "0.5.0" :
     phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
     "0.4.0" : "0.3.0"
 check(project["version"] == expected_package_version,
@@ -164,6 +168,7 @@ check(local_registry["schema_version"] == "1.3.0" &&
         "phase_15b_open_composition",
         "phase_15c_implementation_candidate",
         "phase_15c_serial_internal_alpha",
+        "phase_16_internal_beta",
       ),
     "package-local Phase 15.B maturity is not closed")
 local_features = Dict(row["id"] => row for row in local_registry["features"])
