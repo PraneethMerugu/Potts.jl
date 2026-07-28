@@ -14,4 +14,5 @@ using CorePotts
     include("test_phase13_contract_versions.jl")
     include("test_phase13_quality_gates.jl")
     include("test_phase14_generic_fragments.jl")
+    include("test_documentation_quality_checker.jl")
 end

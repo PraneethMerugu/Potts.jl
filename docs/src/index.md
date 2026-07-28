@@ -1,34 +1,43 @@
 # Potts.jl
 
-Potts.jl is a Cellular Potts modeling system built around two paper-core packages and one
-Makie-native visualization extension:
+Potts.jl is a Cellular Potts modeling system for building biological models, running them on an
+explicit execution algorithm, and retaining enough provenance to interpret or reproduce the
+result.
 
-- `PottsToolkit` is the biological authoring interface.
-- `CorePotts` is the scientific execution and extension interface.
-- `MakiePotts` converts explicit host observations into composable Makie recipes.
+The package family separates three responsibilities:
 
-The current development and evidence target is Julia 1.12.6.
+| Package | Use it for |
+|:--|:--|
+| `PottsToolkit` | Biological identities, constraints, fields, lifecycle, layouts, observations, and reusable models |
+| `CorePotts` | Execution algorithms, scientific state, backends, persistence, and extension protocols |
+| `MakiePotts` | Visualization of explicit host observations through native Makie recipes |
 
-## Phase 13 evidence boundary
+This manual targets Julia 1.12.6 and the implementation on the current development branch.
 
-`SequentialCPM` implements the declared conventional sequential process.
-`CheckerboardSweepCPM` is a distinct graph-colored scheduler: it is characterized explicitly and
-does not inherit sequential kinetic, equilibrium, or stationary-distribution claims.
-Use [`CorePotts.algorithm_guarantees`](@ref) and
-[`CorePotts.scientific_contract_versions`](@ref) to inspect the
-machine-readable status attached to an algorithm and the versions embedded in evidence.
+## Choose a path
 
-Backend execution support and scientific qualification are separate claims. A successful
-compatibility preflight does not imply that a backend is represented by the current Phase 13
-evidence archive.
+- **New to the package:** [install and verify Potts.jl](@ref install-and-verify), then run the
+  [first simulation](@ref first-simulation).
+- **Building a study:** follow [Compose a biological model](@ref build-model),
+  [Algorithms and guarantees](@ref algorithms-and-guarantees), and
+  [Observe and analyze](@ref observe-and-analyze).
+- **Looking for working programs:** start in the [Example gallery](@ref example-gallery).
+- **Evaluating a scientific claim:** read [Scientific guarantees](@ref scientific-guarantees)
+  before comparing algorithms or backends.
+- **Extending the engine:** begin with [Architecture](@ref architecture) and the
+  [Extension author reference](@ref extension-author-reference).
+- **Upgrading or diagnosing a failure:** use the
+  [Version and migration guide](@ref version-and-migration),
+  [Glossary](@ref glossary), and [Troubleshooting](@ref troubleshooting).
 
-## Scope
+## Support boundary
 
-Lottery and tiled checkerboard algorithms are later protocol consumers and are not part of the
-initial Phase 13 paper-core qualification matrix. The Phase 14 model-driven manual, published-model
-portfolio and any redesigned neural-model satellite are not part of this API-freeze documentation.
-MakiePotts v0.2 is documented separately because its render-frame boundary never weakens the
-frozen execution and observation contracts.
+`SequentialCPM` and `CheckerboardSweepCPM` are distinct algorithms with distinct guarantee
+profiles. Backend compatibility and scientific qualification are also separate claims. Always
+inspect `backend_report` or `compatibility_report` together with `algorithm_guarantees` for the
+exact model, algorithm, and backend you intend to use.
 
-Start with [Getting Started](@ref), then consult the
-[scientific contract identities and algorithm guarantees](@ref scientific-contract-identities).
+ProcessBigraphs is an internal runtime foundation. Phase 16 develops dynamic hierarchy,
+structural transactions, and the first Potts adapter slices in a separate workstream. This manual
+does not present unfinished Phase 16 behavior as part of the supported Potts path; see
+[Runtime and Phase 16 boundary](@ref runtime-boundary).

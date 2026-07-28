@@ -1,0 +1,34 @@
+schema_version = "1.0.0"
+status = "passed"
+audience = "extension_author"
+review_date = "2026-07-27"
+reviewer = "Codex documentation auditor"
+method = "rendered_site_task_walkthrough"
+start = "Home"
+goal = "Find the stable extension protocol, conformance entry points, and experimental boundary."
+limitation = "Auditor-led persona review; future downstream-author observation remains useful but is not represented as completed here."
+
+[[checks]]
+step = "Choose Extension author reference from Home."
+passed = true
+evidence = "Home links directly to the extension-author path."
+
+[[checks]]
+step = "Find protocol and conformance requirements."
+passed = true
+evidence = "The guide exposes test_energy_component, semantic RNG boundaries, stable_extension classification, and a seven-step review sequence."
+
+[[checks]]
+step = "Inspect the stable CorePotts reference."
+passed = true
+evidence = "The page contains stable solve material and the stable_extension notice; TiledCheckerboardCPM is absent."
+
+[[checks]]
+step = "Inspect the experimental reference."
+passed = true
+evidence = "The page visibly labels experimental status and contains Act, TiledCheckerboardCPM, and the Phase 16 boundary."
+
+[[checks]]
+step = "Verify stable and experimental navigation separation."
+passed = true
+evidence = "CorePotts and Experimental API are separate top-level API destinations."

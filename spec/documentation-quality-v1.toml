@@ -1,0 +1,880 @@
+schema_version = "1.0.0"
+status = "accepted-target"
+title = "Potts.jl non-Phase-16 documentation quality contract"
+docs_root = "docs/src"
+navigation_file = "docs/make.jl"
+phase16_publication_excluded = true
+authorities = [
+    "design/audits/documentation-9-of-10-audit.md",
+    "design/audits/documentation-interview-round-1.md",
+    "design/audits/documentation-interview-round-2.md",
+    "design/audits/documentation-interview-round-3.md",
+]
+required_navigation_sections = [
+    "Home",
+    "Learn",
+    "Examples",
+    "Published Models",
+    "Concepts and Guarantees",
+    "API",
+]
+
+[media]
+manifest = "docs/src/assets/gallery/manifest.toml"
+generator = "docs/models/render_gallery_assets.jl"
+expected_ids = [
+    "relaxing-cell",
+    "two-populations-sort",
+    "follow-the-gradient",
+    "grow-divide-retire",
+    "elongated-network",
+    "fluctuating-droplet",
+    "boundaries-and-obstacles",
+    "same-model-2d-3d",
+    "stop-and-resume",
+    "reproducible-ensemble",
+]
+animation_ids = [
+    "two-populations-sort",
+    "follow-the-gradient",
+    "grow-divide-retire",
+    "elongated-network",
+]
+
+[policy]
+audiences = ["beginner", "model_builder", "researcher", "extension_author", "backend_specialist"]
+support_levels = ["stable", "experimental", "internal"]
+page_kinds = ["home", "learn", "example_index", "example", "published_models", "concept", "api"]
+page_states = ["target", "transitional", "planned_optional"]
+runtime_classes = ["none", "fast", "expensive"]
+provenance_classes = ["original", "concept_inspired", "adapted", "published_reproduction"]
+visual_classes = ["none", "diagram", "figure", "animation"]
+api_classes = ["stable_user", "stable_extension", "experimental", "internal_export", "deprecated"]
+forbidden_public_capability_tags = [
+    "phase16",
+    "dynamic_hierarchy",
+    "structural_add",
+    "structural_remove",
+    "structural_divide",
+    "structural_move",
+    "structural_rewire",
+    "process_bigraph_potts_adapter",
+]
+
+[budgets]
+fast_example_seconds = 15
+warm_suite_seconds = 300
+media_artifact_seconds = 1800
+
+[quality_gate]
+minimum_rubric_score = 90
+required_learn_pages = 14
+required_examples = 10
+required_platform_smokes = ["macos", "linux", "windows"]
+required_task_reviews = ["beginner", "model_builder", "extension_author"]
+stable_docstring_coverage = 1.0
+public_name_classification_coverage = 1.0
+strict_documenter = true
+weekly_external_links = true
+reproducible_media = true
+
+[current_evidence]
+rubric_score = 91
+platform_smokes = ["macos", "linux", "windows"]
+task_reviews = ["beginner", "model_builder", "extension_author"]
+media_visual_review = "design/evidence/documentation/media-visual-review.toml"
+
+[current_evidence.platform_evidence]
+macos = "design/evidence/documentation/macos-install-smoke.toml"
+linux = "design/evidence/documentation/linux-install-smoke.toml"
+windows = "design/evidence/documentation/windows-install-smoke.toml"
+
+[current_evidence.task_review_evidence]
+beginner = "design/evidence/documentation/beginner-task-review.toml"
+model_builder = "design/evidence/documentation/model-builder-task-review.toml"
+extension_author = "design/evidence/documentation/extension-author-task-review.toml"
+
+[api]
+phase13_inventory = "design/audits/phase-13-api-inventory.toml"
+phase14_allowlist = "design/audits/phase-14-public-api-v2.toml"
+makie_inventory = "design/makiepotts/public-api-v0.2.toml"
+phase14_provisional_class = "experimental"
+phase14_required_status = "wortel-vertical-slice-provisional"
+act_class = "experimental"
+
+[api.phase13_class_map]
+stable_corepotts = "stable_extension"
+stable_pottstoolkit = "stable_user"
+limited = "experimental"
+experimental = "experimental"
+internal = "internal_export"
+
+[api.makie_class_map]
+stable = "stable_user"
+limited = "stable_user"
+experimental = "experimental"
+
+[[pages]]
+id = "home"
+title = "Potts.jl"
+kind = "home"
+path = "docs/src/index.md"
+audience = "beginner"
+support = "stable"
+owner = "project"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["orientation"]
+
+[[pages]]
+id = "install-and-verify"
+title = "Install and verify"
+kind = "learn"
+path = "docs/src/learn/install-and-verify.md"
+canonical_source = "docs/models/tutorials/install_and_verify.jl"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "none"
+capabilities = ["installation", "platform_smoke"]
+
+[[pages]]
+id = "cellular-potts-concepts"
+title = "Cellular Potts concepts"
+kind = "learn"
+path = "docs/src/learn/cellular-potts-concepts.md"
+canonical_source = "docs/models/tutorials/cellular_potts_concepts.jl"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "diagram"
+capabilities = ["lattice", "ownership", "mcs", "energy", "temperature"]
+
+[[pages]]
+id = "first-simulation"
+title = "First simulation"
+kind = "learn"
+path = "docs/src/learn/first-simulation.md"
+canonical_source = "docs/models/tutorials/first_simulation.jl"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["volume", "adhesion", "observation", "visualization"]
+
+[[pages]]
+id = "build-model"
+title = "Compose a biological model"
+kind = "learn"
+path = "docs/src/learn/build-model.md"
+canonical_source = "docs/models/tutorials/build_model.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "none"
+capabilities = ["authoring", "validation", "fingerprint"]
+
+[[pages]]
+id = "domains-and-initialization"
+title = "Domains and initialization"
+kind = "learn"
+path = "docs/src/learn/domains-and-initialization.md"
+canonical_source = "docs/models/tutorials/domains_and_initialization.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["domain", "boundary", "layout", "capacity"]
+
+[[pages]]
+id = "adhesion-and-mechanics"
+title = "Adhesion and mechanics"
+kind = "learn"
+path = "docs/src/learn/adhesion-and-mechanics.md"
+canonical_source = "docs/models/tutorials/adhesion_and_mechanics.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["adhesion", "volume", "surface", "elongation", "connectivity"]
+
+[[pages]]
+id = "fields-and-chemotaxis"
+title = "Fields and chemotaxis"
+kind = "learn"
+path = "docs/src/learn/fields-and-chemotaxis.md"
+canonical_source = "docs/models/tutorials/fields_and_chemotaxis.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["prescribed_field", "chemotaxis"]
+
+[[pages]]
+id = "rules-and-lifecycle"
+title = "Rules and lifecycle"
+kind = "learn"
+path = "docs/src/learn/rules-and-lifecycle.md"
+canonical_source = "docs/models/tutorials/rules_and_lifecycle.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "diagram"
+capabilities = ["properties", "rules", "growth", "division", "transition", "death"]
+
+[[pages]]
+id = "algorithms-and-guarantees"
+title = "Algorithms and guarantees"
+kind = "learn"
+path = "docs/src/learn/algorithms-and-guarantees.md"
+canonical_source = "docs/models/tutorials/algorithms_and_guarantees.jl"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "diagram"
+capabilities = ["algorithm", "compatibility", "scientific_guarantee"]
+
+[[pages]]
+id = "observe-and-analyze"
+title = "Observe and analyze"
+kind = "learn"
+path = "docs/src/learn/observe-and-analyze.md"
+canonical_source = "docs/models/tutorials/observe_and_analyze.jl"
+audience = "researcher"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["observation", "analysis", "cell_identity"]
+
+[[pages]]
+id = "checkpoint-and-reproduce"
+title = "Checkpoint and reproduce"
+kind = "learn"
+path = "docs/src/learn/checkpoint-and-reproduce.md"
+canonical_source = "docs/models/tutorials/checkpoint_and_reproduce.jl"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "diagram"
+capabilities = ["checkpoint", "restart", "semantic_rng", "manifest"]
+
+[[pages]]
+id = "visualize-and-export"
+title = "Visualize and export"
+kind = "learn"
+path = "docs/src/learn/visualize-and-export.md"
+canonical_source = "docs/models/tutorials/visualize_and_export.jl"
+audience = "researcher"
+support = "stable"
+owner = "MakiePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["render_frame", "plot", "recording"]
+
+[[pages]]
+id = "backends-and-performance"
+title = "Backends and performance"
+kind = "learn"
+path = "docs/src/learn/backends-and-performance.md"
+canonical_source = "docs/models/tutorials/backends_and_performance.jl"
+audience = "backend_specialist"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["backend", "preflight", "performance"]
+
+[[pages]]
+id = "research-workflow"
+title = "Complete research workflow"
+kind = "learn"
+path = "docs/src/learn/research-workflow.md"
+canonical_source = "docs/models/tutorials/research_workflow.jl"
+audience = "researcher"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+capabilities = ["hypothesis", "ensemble", "analysis", "archive"]
+
+[[pages]]
+id = "example-gallery"
+title = "Example gallery"
+kind = "example_index"
+path = "docs/src/examples/index.md"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "figure"
+capabilities = ["example_discovery"]
+
+[[pages]]
+id = "relaxing-cell"
+title = "Relaxing Cell"
+kind = "example"
+path = "docs/src/examples/relaxing-cell.md"
+canonical_source = "docs/models/examples/relaxing_cell.jl"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://robertgregg.github.io/CellularPotts.jl/dev/ExampleGallery/HelloWorld/HelloWorld/",
+]
+capabilities = ["volume", "adhesion", "observation"]
+
+[[pages]]
+id = "differential-adhesion-example"
+title = "Two Populations Sort"
+kind = "example"
+path = "docs/src/examples/differential-adhesion.md"
+canonical_source = "docs/models/examples/two_populations_sort.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "concept_inspired"
+inspiration_sources = ["https://compucell3d.org/QuickModels"]
+capabilities = ["adhesion", "sorting_metric"]
+
+[[pages]]
+id = "chemotaxis-example"
+title = "Follow the Gradient"
+kind = "example"
+path = "docs/src/examples/chemotaxis.md"
+canonical_source = "docs/models/examples/follow_the_gradient.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "concept_inspired"
+inspiration_sources = ["https://compucell3d.org/QuickModels"]
+capabilities = ["prescribed_field", "chemotaxis", "displacement"]
+
+[[pages]]
+id = "growth-division-example"
+title = "Grow, Divide, Retire"
+kind = "example"
+path = "docs/src/examples/growth-and-division.md"
+canonical_source = "docs/models/examples/grow_divide_retire.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
+]
+capabilities = ["growth", "division", "death", "lineage"]
+
+[[pages]]
+id = "elongated-network"
+title = "Elongated Network"
+kind = "example"
+path = "docs/src/examples/elongated-network.md"
+canonical_source = "docs/models/examples/elongated_network.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "original"
+capabilities = ["elongation", "connectivity", "morphology"]
+
+[[pages]]
+id = "fluctuating-droplet"
+title = "Fluctuating Droplet"
+kind = "example"
+path = "docs/src/examples/fluctuating-droplet.md"
+canonical_source = "docs/models/examples/fluctuating_droplet.jl"
+audience = "researcher"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+provenance = "original"
+capabilities = ["mechanical_noise", "contact_energy", "distribution"]
+
+[[pages]]
+id = "boundaries-and-obstacles"
+title = "Boundaries and Obstacles"
+kind = "example"
+path = "docs/src/examples/boundaries-and-obstacles.md"
+canonical_source = "docs/models/examples/boundaries_and_obstacles.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
+]
+capabilities = ["boundary", "fixed_exterior"]
+
+[[pages]]
+id = "same-model-2d-3d"
+title = "Same Model in 2D and 3D"
+kind = "example"
+path = "docs/src/examples/same-model-2d-3d.md"
+canonical_source = "docs/models/examples/same_model_2d_3d.jl"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://robertgregg.github.io/CellularPotts.jl/dev/ExampleGallery/Going3D/Going3D/",
+]
+capabilities = ["dimension_generic", "visualization"]
+
+[[pages]]
+id = "stop-and-resume"
+title = "Stop and Resume"
+kind = "example"
+path = "docs/src/examples/stop-and-resume.md"
+canonical_source = "docs/models/examples/stop_and_resume.jl"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "diagram"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
+]
+capabilities = ["checkpoint", "restart", "exact_continuation"]
+
+[[pages]]
+id = "reproducible-ensemble"
+title = "Reproducible Ensemble"
+kind = "example"
+path = "docs/src/examples/reproducible-ensemble.md"
+canonical_source = "docs/models/examples/reproducible_ensemble.jl"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "fast"
+visual = "figure"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
+]
+capabilities = ["ensemble", "semantic_rng", "uncertainty"]
+
+[[pages]]
+id = "persistent-wanderer"
+title = "Persistent Wanderer"
+kind = "example"
+path = "docs/src/examples/experimental/persistent-wanderer.md"
+canonical_source = "docs/models/examples/experimental/persistent_wanderer.jl"
+audience = "model_builder"
+support = "experimental"
+owner = "PottsToolkit"
+state = "planned_optional"
+required = false
+in_navigation = false
+visible_status = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://robertgregg.github.io/CellularPotts.jl/dev/ExampleGallery/LetsGetMoving/LetsGetMoving/",
+]
+capabilities = ["act", "persistent_migration"]
+
+[[pages]]
+id = "selective-migration-monolayer"
+title = "Selective Migration Through a Dense Monolayer"
+kind = "example"
+path = "docs/src/examples/experimental/selective-migration-monolayer.md"
+canonical_source = "docs/models/examples/experimental/selective_migration_monolayer.jl"
+audience = "model_builder"
+support = "experimental"
+owner = "PottsToolkit"
+state = "planned_optional"
+required = false
+in_navigation = false
+visible_status = true
+runtime_class = "fast"
+visual = "animation"
+provenance = "concept_inspired"
+inspiration_sources = [
+    "https://robertgregg.github.io/CellularPotts.jl/dev/ExampleGallery/OnPatrol/OnPatrol/",
+]
+capabilities = ["act", "selective_migration"]
+
+[[pages]]
+id = "published-models"
+title = "Published Models"
+kind = "published_models"
+path = "docs/src/published-models/index.md"
+audience = "researcher"
+support = "stable"
+owner = "science"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["admission_status"]
+
+[[pages]]
+id = "architecture"
+title = "Architecture"
+kind = "concept"
+path = "docs/src/concepts/architecture.md"
+audience = "extension_author"
+support = "stable"
+owner = "project"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "diagram"
+capabilities = ["architecture"]
+
+[[pages]]
+id = "execution-model"
+title = "Execution model"
+kind = "concept"
+path = "docs/src/concepts/execution.md"
+audience = "extension_author"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "diagram"
+capabilities = ["execution"]
+
+[[pages]]
+id = "observation-boundary"
+title = "Observation boundary"
+kind = "concept"
+path = "docs/src/concepts/observation.md"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "diagram"
+capabilities = ["observation"]
+
+[[pages]]
+id = "reproducibility"
+title = "Reproducibility and persistence"
+kind = "concept"
+path = "docs/src/concepts/reproducibility.md"
+audience = "researcher"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "diagram"
+capabilities = ["reproducibility", "persistence"]
+
+[[pages]]
+id = "scientific-guarantees"
+title = "Scientific guarantees"
+kind = "concept"
+path = "docs/src/concepts/guarantees.md"
+audience = "researcher"
+support = "stable"
+owner = "science"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "diagram"
+capabilities = ["scientific_guarantee"]
+
+[[pages]]
+id = "runtime-boundary"
+title = "Runtime and Phase 16 boundary"
+kind = "concept"
+path = "docs/src/concepts/runtime-boundary.md"
+audience = "extension_author"
+support = "stable"
+owner = "project"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["phase16_boundary"]
+
+[[pages]]
+id = "capability-status"
+title = "Capability status"
+kind = "concept"
+path = "docs/src/concepts/capability-status.md"
+audience = "model_builder"
+support = "stable"
+owner = "project"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "figure"
+capabilities = ["capability_matrix"]
+
+[[pages]]
+id = "troubleshooting"
+title = "Troubleshooting"
+kind = "concept"
+path = "docs/src/concepts/troubleshooting.md"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["diagnostics"]
+
+[[pages]]
+id = "glossary"
+title = "Glossary"
+kind = "concept"
+path = "docs/src/concepts/glossary.md"
+audience = "beginner"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["terminology"]
+
+[[pages]]
+id = "version-and-migration"
+title = "Version and migration guide"
+kind = "concept"
+path = "docs/src/concepts/version-and-migration.md"
+audience = "model_builder"
+support = "stable"
+owner = "documentation"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["migration"]
+
+[[pages]]
+id = "pottstoolkit-api"
+title = "PottsToolkit API"
+kind = "api"
+path = "docs/src/api/pottstoolkit.md"
+audience = "model_builder"
+support = "stable"
+owner = "PottsToolkit"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["stable_user_api"]
+
+[[pages]]
+id = "corepotts-api"
+title = "CorePotts API"
+kind = "api"
+path = "docs/src/api/corepotts.md"
+audience = "extension_author"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["stable_extension_api"]
+
+[[pages]]
+id = "makiepotts-api"
+title = "MakiePotts API"
+kind = "api"
+path = "docs/src/api/makiepotts.md"
+audience = "model_builder"
+support = "stable"
+owner = "MakiePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["stable_user_api", "visualization"]
+
+[[pages]]
+id = "extension-author-reference"
+title = "Extension author reference"
+kind = "api"
+path = "docs/src/api/extensions.md"
+audience = "extension_author"
+support = "stable"
+owner = "CorePotts"
+state = "target"
+required = true
+in_navigation = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["stable_extension_api", "conformance"]
+
+[[pages]]
+id = "experimental-api"
+title = "Experimental API"
+kind = "api"
+path = "docs/src/api/experimental.md"
+audience = "extension_author"
+support = "experimental"
+owner = "project"
+state = "target"
+required = true
+in_navigation = true
+visible_status = true
+runtime_class = "none"
+visual = "none"
+capabilities = ["experimental_api", "act"]
+
+[[legacy_media]]
+path = "docs/src/tutorials/01_first_simulation.mp4"
+status = "pending_canonical_replacement"
+replacement_page = "first-simulation"
+release_blocker = true
+
+[[legacy_media]]
+path = "docs/src/tutorials/02_cell_sorting.mp4"
+status = "pending_canonical_replacement"
+replacement_page = "differential-adhesion-example"
+release_blocker = true
+
+[[legacy_media]]
+path = "docs/src/tutorials/03_directed_migration.mp4"
+status = "pending_canonical_replacement"
+replacement_page = "chemotaxis-example"
+release_blocker = true
+
+[[commands]]
+id = "documentation_structure"
+command = "julia --project=. --startup-file=no scripts/check_documentation_quality.jl"
+required_for_release = true
+
+[[commands]]
+id = "strict_documenter"
+command = "julia --project=docs --startup-file=no docs/make.jl"
+required_for_release = true
+
+[[commands]]
+id = "phase13_api"
+command = "julia --project=docs --startup-file=no scripts/check_phase13_api_inventory.jl"
+required_for_release = true
+
+[[commands]]
+id = "makie_api"
+command = "julia --project=. --startup-file=no scripts/check_makiepotts_contract.jl"
+required_for_release = true
