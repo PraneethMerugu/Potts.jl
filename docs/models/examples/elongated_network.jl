@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 model = PottsToolkit.ReferenceModels.elongation_driven_angiogenesis_model(
@@ -55,9 +56,11 @@ function mean_bounding_box_elongation(saved)
 end
 
 elongation_trace = mean_bounding_box_elongation.(solution.u)
+frames = renderframes(solution)
 @assert isvalid(model)
 @assert solution.stats.completed_mcs == 100
 @assert CorePotts.n_cells(CorePotts.snapshot_state(last(solution.u))) == 4
 @assert all(>=(1), elongation_trace)
+@assert length(frames) == length(solution.t)
 result = (; model, problem, solution, target_elongation = 3.0,
-    elongation_trace, connectivity_preserved = true)
+    elongation_trace, connectivity_preserved = true, frames)

@@ -1,16 +1,53 @@
 # [Reproducible Ensemble](@id reproducible-ensemble)
 
-![Final volume for each reproducible ensemble trajectory.](../assets/gallery/reproducible-ensemble.svg)
-
 Replicates should derive independent semantic seeds through the engine's ensemble policy, not task
 order or ad hoc arithmetic.
 
 ```@example reproducible-ensemble
-ensemble_run = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "examples",
-    "reproducible_ensemble.jl"))
-(ensemble_run.seeds, ensemble_run.final_volumes,
-    ensemble_run.mean_final_volume)
+using PottsToolkit
+using MakiePotts
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
+    (12, 12); target_volume = 16, tspan = (0, 3), seed = 0x1234)
+ensemble = CorePotts.EnsembleProblem(problem; seed = 0xc0ffee)
+solutions = CorePotts.solve(
+    ensemble,
+    SequentialCPM(temperature = 2.0f0),
+    CorePotts.EnsembleSerial();
+    trajectories = 4,
+    save_start = false,
+    save_end = true,
+    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+)
+seeds = [solution.provenance.seed for solution in solutions.u]
+final_volumes = map(solutions.u) do solution
+    state = CorePotts.snapshot_state(last(solution.u))
+    cell_id = only(CorePotts.active_cell_ids(state))
+    CorePotts.finite_volume(state, cell_id)
+end
+representative_frame = renderframe(first(solutions.u))
+
+@assert length(unique(seeds)) == 4
+@assert all(>(0), final_volumes)
+@assert frame_size(representative_frame) == (12, 12)
+result = (; problem, solutions, seeds, final_volumes,
+    mean_final_volume = sum(final_volumes) / length(final_volumes),
+    representative_frame)
+
+(result.seeds, result.final_volumes, result.mean_final_volume)
+```
+
+```@example reproducible-ensemble
+using CairoMakie
+
+figure, axis, potts_plot = plot(
+    result.representative_frame;
+    axis = (; title = "Representative seeded trajectory"),
+    boundaries = true,
+)
+potts_legend(figure[1, 2], potts_plot)
+figure
 ```
 
 The source requires four distinct derived seeds and positive final cell volume in every

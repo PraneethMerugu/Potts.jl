@@ -31,4 +31,4 @@ evidence = "Rendered output records times [0, 2], volume trace [16, 20], and exp
 [[checks]]
 step = "Confirm visual output remains accessible."
 passed = true
-evidence = "No broken images were present on the First simulation page."
+evidence = "The page visibly imports MakiePotts, calls renderframes and the native recipe, and displays the resulting responsive CairoMakie figure."

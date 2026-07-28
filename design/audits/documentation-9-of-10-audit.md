@@ -1,5 +1,10 @@
 # Documentation 9/10 Audit — Non-Phase-16 Scope
 
+> Superseded on 2026-07-27 by
+> [`documentation-visible-workflow-audit.md`](documentation-visible-workflow-audit.md).
+> This score did not test whether canonical programs were visible on the page and therefore
+> overstated the executable-teaching quality.
+
 Status: implementation audit; numeric 9/10 target met, cross-platform release gate pending
 
 Audit date: 2026-07-27

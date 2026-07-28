@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
@@ -15,8 +16,10 @@ expected = CorePotts.logical_state(uninterrupted)
 observed = CorePotts.logical_state(resumed)
 exact_lattice = CorePotts.lattice_storage(expected) ==
     CorePotts.lattice_storage(observed)
+frame = renderframe(observed, problem; mcs = resumed.t)
 
 @assert exact_lattice
 @assert resumed.t == uninterrupted.t == 6
+@assert frame_mcs(frame) == 6
 result = (; problem, algorithm, checkpoint, exact_lattice,
-    resumed_mcs = resumed.t)
+    resumed_mcs = resumed.t, frame)

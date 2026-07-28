@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 medium = Medium(:medium)
@@ -39,7 +40,9 @@ solution = CorePotts.solve(
     snapshot_policy = CorePotts.HostSnapshotPolicy(),
 )
 final_state = CorePotts.snapshot_state(last(solution.u))
+frame = renderframe(solution)
 
 @assert all(pair -> CorePotts.owner_at(final_state, first(pair)) == last(pair), obstacles)
+@assert frame_size(frame) == (14, 14)
 result = (; problem, solution, obstacle_count = length(obstacles),
-    immutable_obstacles = true)
+    immutable_obstacles = true, frame)

@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 model = PottsToolkit.ReferenceModels.differential_adhesion_model(
@@ -57,10 +58,12 @@ function heterotypic_contacts(saved)
 end
 
 contact_trace = heterotypic_contacts.(solution.u)
+frames = renderframes(solution)
 @assert solution.stats.completed_mcs == 200
 @assert all(>=(0), contact_trace)
 @assert first(contact_trace) > 0
 @assert last(contact_trace) < first(contact_trace)
+@assert length(frames) == length(solution.t)
 result = (; problem, solution, contact_trace,
     initial_contacts = first(contact_trace), final_contacts = last(contact_trace),
-    between_energy = 18, within_energy = 2)
+    between_energy = 18, within_energy = 2, frames)

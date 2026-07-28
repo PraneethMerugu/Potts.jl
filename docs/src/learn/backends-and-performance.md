@@ -6,11 +6,23 @@ and scientific evidence are separate questions.
 ## Preflight the exact run
 
 ```@example backends-and-performance
-performance = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "backends_and_performance.jl"))
-(performance.report.qualified, performance.profile.tested_backends,
-    performance.stats.completed_mcs)
+using PottsToolkit
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
+    (10, 10); target_volume = 12, tspan = (0, 1), seed = 19)
+algorithm = SequentialCPM(temperature = 2.0f0)
+report = backend_report(problem, algorithm)
+profile = CorePotts.algorithm_guarantees(algorithm)
+solution = CorePotts.solve(problem, algorithm; save_everystep = false)
+
+@assert report.qualified
+@assert solution.stats.completed_mcs == 1
+result = (; report, profile, stats = solution.stats,
+    contracts = CorePotts.scientific_contract_versions())
+
+(result.report.qualified, result.profile.tested_backends,
+    result.stats.completed_mcs)
 ```
 
 `backend_report` checks declared requirements against the selected execution path. Read its errors

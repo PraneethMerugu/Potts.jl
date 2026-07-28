@@ -1,10 +1,12 @@
 using Documenter
+using CairoMakie
 using CorePotts
 using MakiePotts
 using PottsToolkit
 using TOML
 
 ENV["POTTS_DOCS_ROOT"] = @__DIR__
+CairoMakie.activate!(type = "svg")
 
 function classified_bindings(api_module, names)
     bindings = IdSet{Any}()
@@ -70,6 +72,10 @@ makedocs(
         edit_link = "main",
         size_threshold = nothing,
         size_threshold_warn = nothing,
+        # Native Makie SVG output is intentionally larger than Documenter's 8 KiB
+        # example default. Keep it vector-sharp instead of warning and falling back
+        # to a raster representation.
+        example_size_threshold = 512 * 2^10,
     ),
     doctest = true,
     linkcheck = get(ENV, "POTTS_DOCS_LINKCHECK", "false") == "true",

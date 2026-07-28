@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
@@ -17,8 +18,11 @@ volume_trace = [
 ]
 target_volume = 20
 absolute_error = abs.(volume_trace .- target_volume)
+frames = renderframes(solution)
 
 @assert solution.stats.completed_mcs == 6
 @assert all(>(0), volume_trace)
+@assert length(frames) == length(solution.t)
 result = (; problem, solution, volume_trace, absolute_error,
-    initial_error = first(absolute_error), final_error = last(absolute_error))
+    initial_error = first(absolute_error), final_error = last(absolute_error),
+    frames)

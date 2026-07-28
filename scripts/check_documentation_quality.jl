@@ -222,8 +222,16 @@ function _validate_gate!(errors, spec)
         push!(errors, "strict Documenter must be required")
     get(gate, "weekly_external_links", false) === true ||
         push!(errors, "weekly external-link checking must be required")
-    get(gate, "reproducible_media", false) === true ||
-        push!(errors, "reproducible media must be required")
+    get(gate, "visible_canonical_programs", false) === true ||
+        push!(errors, "visible canonical programs must be required")
+    get(gate, "forbid_reader_includes", false) === true ||
+        push!(errors, "reader-facing include calls must be forbidden")
+    get(gate, "visual_examples_use_makiepotts", false) === true ||
+        push!(errors, "visual examples must exercise MakiePotts")
+    get(gate, "visual_examples_use_backend", false) === true ||
+        push!(errors, "visual examples must exercise a Makie backend")
+    get(gate, "forbid_custom_example_images", false) === true ||
+        push!(errors, "custom example images must be forbidden")
     platforms = Set(something(_strings(get(gate, "required_platform_smokes", Any[])), String[]))
     platforms == Set(["macos", "linux", "windows"]) ||
         push!(errors, "platform smokes must be macos, linux, and windows")
@@ -241,9 +249,6 @@ function _validate_evidence_shape!(errors, spec)
     score = get(evidence, "rubric_score", nothing)
     score isa Integer && 0 <= score <= 100 ||
         push!(errors, "current evidence rubric_score must be an integer from 0 to 100")
-    media_review = get(evidence, "media_visual_review", nothing)
-    media_review isa AbstractString && !isempty(strip(media_review)) ||
-        push!(errors, "current evidence requires a media_visual_review path")
     for (list_key, map_key) in (
             ("platform_smokes", "platform_evidence"),
             ("task_reviews", "task_review_evidence"))
@@ -365,8 +370,6 @@ function validate_spec(spec::AbstractDict)
         push!(errors, "fast example budget must be 15 seconds")
     get(budgets, "warm_suite_seconds", nothing) == 300 ||
         push!(errors, "warm suite budget must be 300 seconds")
-    get(budgets, "media_artifact_seconds", nothing) == 1800 ||
-        push!(errors, "media artifact budget must be 1800 seconds")
 
     _validate_gate!(errors, spec)
     _validate_evidence_shape!(errors, spec)
@@ -567,13 +570,50 @@ function _validate_repository_pages!(errors, spec, root)
             continue
         end
         get(page, "kind", "") == "home" && continue
+        page_source = replace(read(path, String), "\r\n" => "\n")
         marker = "(@id $(page["id"]))"
-        occursin(marker, read(path, String)) ||
+        occursin(marker, page_source) ||
             push!(errors, "required page $(page["path"]) lacks `$marker`")
         if haskey(page, "canonical_source")
             source = joinpath(root, page["canonical_source"])
-            isfile(source) ||
+            if !isfile(source)
                 push!(errors, "canonical source is missing: $(page["canonical_source"])")
+                continue
+            end
+
+            kind = get(page, "kind", "")
+            kind in ("learn", "example") || continue
+            occursin(r"\b(?:Base\.)?include\s*\(", page_source) &&
+                push!(errors,
+                    "reader-facing include call hides the workflow in $(page["path"])")
+
+            blocks = [
+                match.captures[1] for match in eachmatch(
+                    r"```@example[^\n]*\n(.*?)\n```"s, page_source)
+            ]
+            canonical = strip(replace(read(source, String), "\r\n" => "\n"))
+            any(block -> occursin(canonical, block), blocks) ||
+                push!(errors,
+                    "canonical source is not visible in an evaluated block: $(page["path"])")
+
+            if kind == "example" && get(page, "visual", "none") != "none"
+                visible_code = join(blocks, "\n")
+                occursin(r"!\[[^\]]*\]\([^)]+\)", page_source) &&
+                    push!(errors,
+                        "visual example references a custom image: $(page["path"])")
+                occursin(r"\busing\s+MakiePotts\b", visible_code) ||
+                    push!(errors,
+                        "visual example does not import MakiePotts: $(page["path"])")
+                occursin(r"\brenderframes?\s*\(", visible_code) ||
+                    push!(errors,
+                        "visual example does not materialize a MakiePotts frame: $(page["path"])")
+                occursin(r"\busing\s+CairoMakie\b", visible_code) ||
+                    push!(errors,
+                        "visual example does not import a Makie backend: $(page["path"])")
+                occursin(r"\b(?:plot|pottsplot!)\s*\(", visible_code) ||
+                    push!(errors,
+                        "visual example does not execute the MakiePotts recipe: $(page["path"])")
+            end
         end
     end
 end
@@ -598,75 +638,6 @@ function _validate_media!(errors, spec, root)
         get(record, "release_blocker", false) === true &&
             push!(errors, "legacy media remains a release blocker: $path")
     end
-end
-
-function _validate_generated_media!(errors, spec, root)
-    media = get(spec, "media", nothing)
-    media isa AbstractDict || begin
-        push!(errors, "missing [media] reproducibility policy")
-        return
-    end
-    manifest_path = joinpath(root, get(media, "manifest", ""))
-    generator_path = joinpath(root, get(media, "generator", ""))
-    isfile(generator_path) ||
-        push!(errors, "gallery media generator is missing: $(get(media, "generator", ""))")
-    isfile(manifest_path) || begin
-        push!(errors, "gallery media manifest is missing: $(get(media, "manifest", ""))")
-        return
-    end
-    manifest = TOML.parsefile(manifest_path)
-    get(manifest, "schema_version", nothing) == "1.0.0" ||
-        push!(errors, "gallery media manifest schema must be 1.0.0")
-    get(manifest, "generator", nothing) == get(media, "generator", nothing) ||
-        push!(errors, "gallery media manifest names a different generator")
-    assets = get(manifest, "assets", Any[])
-    assets isa Vector || begin
-        push!(errors, "gallery media manifest assets must be an array")
-        return
-    end
-    expected = Set(something(
-        _strings(get(media, "expected_ids", Any[])), String[]))
-    expected_animations = Set(something(
-        _strings(get(media, "animation_ids", Any[])), String[]))
-    expected_animations == Set([
-            "two-populations-sort", "follow-the-gradient",
-            "grow-divide-retire", "elongated-network"]) ||
-        push!(errors, "gallery animation IDs do not match the accepted media portfolio")
-    seen = Set{String}()
-    seen_animations = Set{String}()
-    for (index, asset) in enumerate(assets)
-        label = "gallery asset[$index]"
-        asset isa AbstractDict || begin
-            push!(errors, "$label must be a table")
-            continue
-        end
-        _require_fields!(errors, asset,
-            ("id", "path", "source", "kind", "alt", "command", "sha256"), label)
-        all(haskey(asset, key) for key in
-            ("id", "path", "source", "kind", "alt", "command", "sha256")) || continue
-        id = String(asset["id"])
-        push!(seen, id)
-        asset["kind"] in ("static", "animation") ||
-            push!(errors, "$label has invalid kind `$(asset["kind"])`")
-        asset["kind"] == "animation" && push!(seen_animations, id)
-        asset["alt"] isa AbstractString && !isempty(strip(asset["alt"])) ||
-            push!(errors, "$label requires accessible alt text")
-        source_path = joinpath(root, asset["source"])
-        isfile(source_path) ||
-            push!(errors, "$label canonical source is missing: $(asset["source"])")
-        output_path = joinpath(root, asset["path"])
-        if !isfile(output_path)
-            push!(errors, "$label output is missing: $(asset["path"])")
-        else
-            observed = bytes2hex(sha256(read(output_path)))
-            observed == asset["sha256"] ||
-                push!(errors, "$label checksum does not match generated output")
-        end
-    end
-    seen == expected ||
-        push!(errors, "gallery media IDs do not match the accepted example portfolio")
-    seen_animations == expected_animations ||
-        push!(errors, "generated animation IDs do not match the accepted media portfolio")
 end
 
 function _validate_current_evidence!(errors, spec, root)
@@ -747,56 +718,6 @@ function _validate_current_evidence!(errors, spec, root)
         end
     end
 
-    media_review_path = get(evidence, "media_visual_review", nothing)
-    media_review_path isa AbstractString || begin
-        push!(errors, "accepted media portfolio lacks a visual-review evidence path")
-        return
-    end
-    full_media_review_path = joinpath(root, media_review_path)
-    if !isfile(full_media_review_path)
-        push!(errors, "media visual-review evidence is missing: $media_review_path")
-        return
-    end
-    media_review = TOML.parsefile(full_media_review_path)
-    get(media_review, "status", nothing) == "passed" ||
-        push!(errors, "media visual-review evidence is not passed")
-    get(media_review, "method", nothing) == "rendered_site_multi_frame_review" ||
-        push!(errors, "media visual review did not exercise multiple rendered frames")
-    reviewed_assets = get(media_review, "assets", Any[])
-    reviewed_assets isa Vector || begin
-        push!(errors, "media visual review assets must be an array")
-        return
-    end
-    expected_animations = Set(String.(
-        get(spec["media"], "animation_ids", String[])))
-    seen_animations = Set{String}()
-    for (index, asset) in enumerate(reviewed_assets)
-        label = "media visual-review asset[$index]"
-        asset isa AbstractDict || begin
-            push!(errors, "$label must be a table")
-            continue
-        end
-        id = get(asset, "id", nothing)
-        id isa AbstractString || begin
-            push!(errors, "$label requires a string id")
-            continue
-        end
-        push!(seen_animations, String(id))
-        for check in (
-                "rendered", "multi_frame", "quantitative_trace",
-                "accessible_alt", "reduced_motion_fallback")
-            get(asset, check, false) === true ||
-                push!(errors, "$label did not pass `$check`")
-        end
-        page = get(asset, "page", nothing)
-        page isa AbstractString && isfile(joinpath(root, page)) ||
-            push!(errors, "$label names a missing page")
-        finding = get(asset, "finding", nothing)
-        finding isa AbstractString && !isempty(strip(finding)) ||
-            push!(errors, "$label lacks a recorded finding")
-    end
-    seen_animations == expected_animations ||
-        push!(errors, "media visual review does not cover every required animation")
 end
 
 function validate_repository(spec::AbstractDict; root::AbstractString = ROOT)
@@ -813,7 +734,6 @@ function validate_repository(spec::AbstractDict; root::AbstractString = ROOT)
     _validate_documenter_config!(errors, spec, root)
     _validate_repository_pages!(errors, spec, root)
     _validate_media!(errors, spec, root)
-    _validate_generated_media!(errors, spec, root)
     _validate_current_evidence!(errors, spec, root)
     return errors
 end

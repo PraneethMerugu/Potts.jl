@@ -25,10 +25,27 @@ clock, solver, exchange, and backend requirements.
 are explicit. Chemotactic work is not folded into a contact-energy table.
 
 ```@example fields-and-chemotaxis
-field_run = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "fields_and_chemotaxis.jl"))
-(field_run.report.qualified, field_run.completed_mcs, field_run.retcode)
+using PottsToolkit
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.chemotaxis_problem(
+    (12, 12);
+    profile = :linear,
+    target_volume = 12,
+    sensitivity = 4,
+    tspan = (0, 2),
+    seed = 21,
+)
+algorithm = SequentialCPM(temperature = 2.0f0)
+report = backend_report(problem, algorithm)
+solution = CorePotts.solve(problem, algorithm)
+
+@assert report.qualified
+@assert solution.stats.completed_mcs == 2
+result = (; problem, report, completed_mcs = solution.stats.completed_mcs,
+    retcode = solution.retcode)
+
+(result.report.qualified, result.completed_mcs, result.retcode)
 ```
 
 The fast source verifies construction and execution. [Follow the Gradient](@ref

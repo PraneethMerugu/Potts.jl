@@ -6,11 +6,32 @@ changes the simulation schedule, random stream, saved observations, or authorita
 ## Materialize a frame
 
 ```@example visualize-and-export
-visual = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "visualize_and_export.jl"))
-(frame_size(visual.frame), length(visual.legend),
-    visual.provenance.source)
+using PottsToolkit
+using MakiePotts
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.differential_adhesion_problem(
+    (12, 12);
+    cells_per_population = 1,
+    target_volume = 8,
+    capacity = 4,
+    tspan = (0, 1),
+    seed = 8,
+)
+solution = CorePotts.solve(
+    problem,
+    SequentialCPM(temperature = 2.0f0);
+    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+)
+frame = renderframe(solution)
+encoded = encode(frame, CellTypeEncoding())
+
+@assert frame_size(frame) == (12, 12)
+@assert size(encoded.values) == frame_size(frame)
+result = (; frame, encoded, legend = legend_entries(encoded),
+    provenance = frame_provenance(frame))
+
+(frame_size(result.frame), length(result.legend), result.provenance.source)
 ```
 
 `PottsRenderFrame` contains logical owners, generation-aware cell metadata, geometry, requested
@@ -18,13 +39,16 @@ channels, and provenance. `encode` converts those values for a selected visual m
 
 ## Plot with an installed backend
 
-```julia
+```@example visualize-and-export
 using CairoMakie
 using MakiePotts
 
-figure, axis, plot = plot(visual.frame; boundaries = true)
+figure, axis, plot = plot(result.frame; boundaries = true)
 potts_legend(figure[1, 2], plot)
-save("population-types.png", figure)
+mktempdir() do directory
+    save(joinpath(directory, "population-types.png"), figure)
+end
+figure
 ```
 
 Use `ChannelEncoding` and ordinary Makie `Colorbar` for continuous channels. Three-dimensional
@@ -33,9 +57,6 @@ state can be converted with an `OrthogonalSlice`; full volume exploration remain
 ## Export policy
 
 Figures should record source fingerprint, saved MCS, render request, encoding, backend, dimensions,
-and output command. Selected CairoMakie PNGs may use tolerant approved regression tests.
-Animations are validated through canonical source, metadata, and representative frames instead of
-byte-comparing encoder output.
-
-The fast documentation suite materializes frames but does not require a display. Expensive
-animation rendering runs separately under the media budget.
+and output command. The documentation executes CairoMakie headlessly, so every displayed example
+figure comes from the visible MakiePotts recipe call. Use `record_potts` when a study needs an
+animation; it validates the render-frame sequence before delegating to Makie's recorder.

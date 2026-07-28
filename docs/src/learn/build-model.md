@@ -15,10 +15,36 @@ The constructor accepts declarations in any order. Normalization resolves depend
 produces a canonical model; declaration order does not change the semantic fingerprint.
 
 ```@example build-model
-composition = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials", "build_model.jl"))
-(isvalid(composition.model), length(composition.model.declarations),
-    composition.fingerprint)
+using PottsToolkit
+
+medium = Medium(:medium)
+first_population = CellType(:first_population)
+second_population = CellType(:second_population)
+model = PottsModel(
+    medium,
+    first_population,
+    second_population,
+    Volume(
+        first_population => (target = 16, strength = 2),
+        second_population => (target = 16, strength = 2),
+    ),
+    Adhesion(
+        (medium, medium) => 0,
+        (medium, first_population) => 8,
+        (medium, second_population) => 8,
+        (first_population, first_population) => 2,
+        (second_population, second_population) => 2,
+        (first_population, second_population) => 15,
+    ),
+)
+normalized = normalize(model)
+fingerprint = semantic_fingerprint(normalized)
+
+@assert isvalid(model)
+@assert semantic_fingerprint(model) == fingerprint
+result = (; model, normalized, fingerprint, report = validate(model))
+
+(isvalid(result.model), length(result.model.declarations), result.fingerprint)
 ```
 
 The
@@ -31,7 +57,7 @@ contains the complete pairwise contact table.
 `normalize(model)` or `PottsProblem(...)` when invalid input should stop execution.
 
 ```@example build-model
-(isvalid(composition.report), length(composition.report.diagnostics))
+(isvalid(result.report), length(result.report.diagnostics))
 ```
 
 `explain`, `dependencies`, `capabilities`, and `provenance` expose progressively deeper views of
