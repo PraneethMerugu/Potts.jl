@@ -211,6 +211,7 @@ artifact = Dict(
         "julia scripts/process-bigraph-phase16i-check.jl",
         "julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'",
         "julia --project=benchmark benchmark/phase16hc_authoring_qualification.jl",
+        "julia --project=benchmark lib/ProcessBigraphs/test/examples/high_level_authoring.jl",
     ],
     "limitations" => entry["scope"]["excluded"],
 )
