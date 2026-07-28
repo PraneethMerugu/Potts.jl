@@ -78,7 +78,7 @@ jobs:
       - name: Enforce ProcessBigraphs Phase 16.I reconciliation candidate
         run: julia --startup-file=no scripts/process-bigraph-phase16i-check.jl
       - name: Check ProcessBigraphs Phase 16.HC authoring performance guardrails
-        run: julia --project=lib/ProcessBigraphs --startup-file=no benchmark/phase16hc_authoring_qualification.jl --events=128 --repetitions=5
+        run: julia --project=benchmark --startup-file=no benchmark/phase16hc_authoring_qualification.jl --events=128 --repetitions=5
       - name: Check ProcessBigraphs high-level authoring documentation
         run: julia --project=lib/ProcessBigraphs --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
       - name: Verify ProcessBigraphs Phase 16 closure state
@@ -321,7 +321,7 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16-docs.jl --check
       - name: Measure frozen Phase 16 authoring guardrails
         run: >-
-          julia --project=lib/ProcessBigraphs --startup-file=no
+          julia --project=benchmark --startup-file=no
           benchmark/phase16hc_authoring_qualification.jl
           --events=128 --repetitions=9
           --output=${{ runner.temp }}/phase16i-authoring-performance.toml
