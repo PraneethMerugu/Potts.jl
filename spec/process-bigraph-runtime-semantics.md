@@ -12,8 +12,9 @@ immutable-topology serial internal alpha with `internal_alpha = true` and
 solver-neutral protocol, dynamic orchestration transactions, first CorePotts field cutover,
 typed domain requests, V3 logical checkpoint, real solver plurality, and bounded runnable
 Merks/CNV assemblies and Phase 16.HC high-level authoring pass. Phase 16.C is qualified with
-trusted exact-head CPU/Metal/ROCm evidence. Phase 16.I reconciliation and internal-beta
-attestation remain open.
+trusted exact-source CPU/Metal/ROCm evidence. Phase 16.I is an exact-head candidate with its
+three attestation rows at `oracle_passing`; CI candidate admission and the metadata-only
+internal-beta attestation remain.
 
 Authority: Decisions 0034 and 0036–0040,
 `process-bigraph-parity-registry-v1.toml`,

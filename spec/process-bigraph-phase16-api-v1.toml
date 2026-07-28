@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 api_id = "process-bigraphs-phase16-api-v1"
 phase = "16"
-status = "phase16hc_qualified"
+status = "phase16i_candidate"
 current_package_version = "0.4.0"
 target_package_version = "0.5.0"
 public_release = false

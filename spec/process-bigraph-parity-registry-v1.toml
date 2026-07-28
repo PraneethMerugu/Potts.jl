@@ -99,7 +99,7 @@ remaining_claim = "The immutable-topology serial runtime is qualified as Process
 
 [phase16_entry]
 status = "in_progress"
-implementation_status = "phase16hc_qualified"
+implementation_status = "phase16i_candidate"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 high_level_authoring_decision = "decisions/0040-process-bigraph-high-level-authoring.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
@@ -142,11 +142,14 @@ phase16h_trace = "process-bigraph-phase16-cnv-trace-v1.toml"
 phase16h_audit = "../design/audits/process-bigraph-phase16h-cnv-audit.md"
 phase16h_checker = "../scripts/process-bigraph-phase16h-check.jl"
 phase16h_evidence = "../design/evidence/process-bigraph-phase16h-evidence-v1.toml"
+phase16i_audit = "../design/audits/process-bigraph-phase16i-reconciliation-audit.md"
+phase16i_checker = "../scripts/process-bigraph-phase16i-check.jl"
+phase16i_candidate_generator = "../scripts/process-bigraph-phase16i-candidate.jl"
 phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
-remaining_claim = "Phase 16.A through 16.HC, including trusted exact-head native-field CPU/Metal/ROCm evidence, are qualified. Phase 16.I internal-beta reconciliation, complete parity, full publication analyses, and public release remain open."
+remaining_claim = "Phase 16.A through 16.HC are qualified and Phase 16.I is an exact-head candidate. Metadata-only 0.5.0 internal-beta attestation, complete parity, full publication analyses, and public release remain open."
 
 [status_vocabulary]
 allowed = [

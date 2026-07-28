@@ -51,7 +51,7 @@ function Base.getindex(table::BindingTable, key)
     throw(KeyError(key))
 end
 
-function Base.get(table::BindingTable, key, default)
+function Base.get(table::BindingTable{K}, key::K, default) where {K}
     for entry in table.entries
         entry.key == key && return entry.value
     end

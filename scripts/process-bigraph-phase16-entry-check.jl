@@ -25,6 +25,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16g-merks-audit.md",
     "design/audits/process-bigraph-phase16h-cnv-audit.md",
     "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
+    "design/audits/process-bigraph-phase16i-reconciliation-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16c-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
@@ -55,6 +56,9 @@ const REQUIRED = [
     "scripts/process-bigraph-phase16g-check.jl",
     "scripts/process-bigraph-phase16h-check.jl",
     "scripts/process-bigraph-phase16hc-ir-guard.jl",
+    "scripts/process-bigraph-phase16-docs.jl",
+    "scripts/process-bigraph-phase16i-check.jl",
+    "scripts/process-bigraph-phase16i-candidate.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -76,6 +80,7 @@ project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 phase16a_evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16a-evidence-v1.toml"])
 phase_state = entry["implementation_status"]
+phase16_closed = phase_state == "phase16_internal_beta_qualified"
 phase16b_candidate = phase_state == "phase16b_candidate"
 phase16b_qualified = phase_state in (
     "phase16b_qualified", "phase16c_candidate", "phase16c_qualified",
@@ -172,15 +177,18 @@ check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
       entry["phase"] == "16",
     "Phase 16 entry identity changed")
-check(entry["status"] == "in_progress" &&
+check(entry["status"] ==
+      (phase16_closed ? "closed_internal_beta" : "in_progress") &&
       (phase16b_candidate || phase16b_qualified ||
        phase16c_candidate || phase16c_qualified ||
        phase16d_qualified || phase16e_qualified ||
        phase16f_qualified || phase16g_qualified || phase16h_qualified) &&
-      entry["internal_beta"] == false &&
+      entry["internal_beta"] == phase16_closed &&
       entry["public_release"] == false,
-    "entry must claim an admitted Phase 16 state without beta or release")
-check(entry["current_package_version"] == "0.4.0" &&
+    "entry must claim the admitted Phase 16 maturity without public release")
+check(entry["current_package_version"] ==
+      (phase16_closed ? "0.5.0" : "0.4.0") &&
+      project["version"] == entry["current_package_version"] &&
       entry["target_package_version"] == "0.5.0",
     "Phase 16 maturity versions changed")
 
@@ -296,14 +304,18 @@ check(entry["backends"]["native_required"] == ["CPU", "Metal", "ROCm"] &&
 check(entry["models"]["full_analysis_required"] == false &&
       entry["models"]["quantitative_reproduction_claim"] == false,
     "model scope must remain runnable, not reproduction")
-check(entry["closure"]["closure_checker_expected_now"] == "open" &&
+check(entry["closure"]["closure_checker_expected_now"] ==
+      (phase16_closed ? "qualified_internal_beta" : "open") &&
       entry["closure"]["publish_package"] == false &&
       entry["closure"]["real_hardware_required"] == true,
     "Phase 16 closure discipline changed")
 
 requirements = ledger["requirements"]
-check(ledger["status"] == "open" && ledger["closure_status"] == "open",
-    "qualification ledger must remain open at entry")
+check(phase16_closed ?
+      (ledger["status"] == "qualified_internal_beta" &&
+       ledger["closure_status"] == "qualified_internal_beta") :
+      (ledger["status"] == "open" && ledger["closure_status"] == "open"),
+    "qualification ledger disagrees with the Phase 16 maturity state")
 check(length(requirements) == ledger["required_row_count"] == 38,
     "Phase 16 ledger must contain exactly 38 required rows")
 ids = String[row["id"] for row in requirements]
@@ -339,6 +351,12 @@ for row in requirements
         "qualified"
     elseif row["subgate"] == "16.HC" && phase16hc_implemented
         "implemented"
+    elseif row["subgate"] == "16.I" &&
+           phase_state == "phase16i_candidate"
+        "oracle_passing"
+    elseif row["subgate"] == "16.I" &&
+           phase_state == "phase16_internal_beta_qualified"
+        "qualified"
     else
         "specified"
     end
@@ -440,16 +458,18 @@ check(length(planned_exports) == length(unique(planned_exports)) &&
       Set(["engine", "field", "structure", "sciml", "corepotts", "authoring"]),
     "Phase 16 planned API identities or families are inconsistent")
 
-check(parity["phase16_entry"]["status"] == "in_progress" &&
+check(parity["phase16_entry"]["status"] ==
+      (phase16_closed ? "closed_internal_beta" : "in_progress") &&
       parity["phase16_entry"]["implementation_status"] ==
       phase_state &&
       parity["phase16_entry"]["g4_disposition"] == "mandatory Phase 16.C" &&
-      parity["phase16_entry"]["internal_beta"] == false &&
+      parity["phase16_entry"]["internal_beta"] == phase16_closed &&
       parity["phase16_entry"]["public_release"] == false,
     "root parity registry misstates Phase 16 entry or maturity")
 check(local_parity["accepted_next_architecture"]["phase16_status"] ==
       phase_state &&
-      local_parity["accepted_next_architecture"]["phase16_internal_beta"] == false &&
+      local_parity["accepted_next_architecture"]["phase16_internal_beta"] ==
+      phase16_closed &&
       local_parity["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry misstates Phase 16 entry or maturity")
 
@@ -491,7 +511,9 @@ for (path, phrases) in [
          "process-bigraph-phase16f-check.jl",
          "process-bigraph-phase16g-check.jl",
          "process-bigraph-phase16h-check.jl",
-         "process-bigraph-phase16hc-check.jl"]),
+         "process-bigraph-phase16hc-check.jl",
+         "process-bigraph-phase16-docs.jl",
+         "process-bigraph-phase16i-check.jl"]),
 ]
     text = read(paths[path], String)
     for phrase in phrases
