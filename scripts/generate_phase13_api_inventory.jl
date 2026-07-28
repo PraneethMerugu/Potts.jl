@@ -10,6 +10,8 @@ const PHASE11_COMPONENT_PATH = joinpath(
     ROOT, "design", "audits", "phase-11-stable-component-inventory.toml")
 const PHASE14_PUBLIC_API_PATH = joinpath(
     ROOT, "design", "audits", "phase-14-public-api-v2.toml")
+const PHASE16_PUBLIC_API_PATH = joinpath(
+    ROOT, "spec", "process-bigraph-phase16-api-v1.toml")
 const DEFAULT_OUTPUT = joinpath(
     ROOT, "design", "audits", "phase-13-api-inventory.toml")
 
@@ -23,13 +25,21 @@ function exported_names(module_value::Module)
                   if name != self]; by = string)
 end
 
+function reviewed_additive_exports(module_name::String)
+    phase14 = TOML.parsefile(PHASE14_PUBLIC_API_PATH)
+    phase16 = TOML.parsefile(PHASE16_PUBLIC_API_PATH)
+    return union(
+        Set(Symbol.(phase14["modules"][module_name])),
+        Set(Symbol.(phase16["cross_package_additive_exports"][module_name])),
+    )
+end
+
 function phase13_exports(module_value::Module, module_name::String)
     actual = Set(exported_names(module_value))
-    registry = TOML.parsefile(PHASE14_PUBLIC_API_PATH)
-    allowed = Set(Symbol.(registry["modules"][module_name]))
+    allowed = reviewed_additive_exports(module_name)
     missing = sort!(collect(setdiff(allowed, actual)); by = string)
     require(isempty(missing),
-        "$module_name is missing registered Phase 14 exports: $(join(missing, ", "))")
+        "$module_name is missing reviewed post-freeze exports: $(join(missing, ", "))")
     return sort!(collect(setdiff(actual, allowed)); by = string)
 end
 
