@@ -84,7 +84,7 @@ jobs:
       - name: Check ProcessBigraphs Phase 16.HC authoring performance guardrails
         run: julia --project=benchmark --startup-file=no benchmark/phase16hc_authoring_qualification.jl --events=128 --repetitions=5
       - name: Check ProcessBigraphs high-level authoring documentation
-        run: julia --project=lib/ProcessBigraphs --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
+        run: julia --project=benchmark --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
       - name: Verify ProcessBigraphs Phase 16 closure state
         run: |
           if grep -q 'implementation_status = "phase16_internal_beta_qualified"' \
