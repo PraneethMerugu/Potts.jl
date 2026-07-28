@@ -5,13 +5,15 @@ CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 KernelIntrinsics = "f9588fbb-d238-4998-b15a-468e8766d49a"
 PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [sources]
 CorePotts = {path = "../lib/CorePotts"}
-KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git", rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"}
+KernelIntrinsics = {rev = "b3a02b6e80f0839082a02f1838af7e10e992062c", url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git"}
 PottsToolkit = {path = ".."}
+ProcessBigraphs = {path = "../lib/ProcessBigraphs"}
 
 [compat]
 Adapt = "4"
