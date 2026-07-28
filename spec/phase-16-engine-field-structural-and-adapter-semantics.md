@@ -468,6 +468,16 @@ connectivity observations, checkpoint/restart, and failure rollback. Unknown ori
 placement algorithm remain explicit profiles. Full Figure 5 ensembles and image-analysis
 reconstruction are not required.
 
+The normative machine-readable mapping is
+`process-bigraph-phase16-merks-trace-v1.toml`. The reference runnable profile is
+`field_then_cpm_v1`: ProcessBigraphs advances and publishes the field every two seconds, publishes
+an MCS field snapshot on every fifteenth field tick, invokes one CorePotts MCS, then derives the
+next frozen secretion and ECM-decay projections from the committed labels. This ordering, the
+periodic morphogen boundary used to minimize border influence, the deterministic placement seed,
+the unstated volume/length strengths, and profiling the source's `E0 > 2000` connectivity penalty
+as hard rejection are explicit ambiguity choices, not recovered source facts. Alternative choices
+require separately named sensitivity profiles.
+
 ### 10.2 CNV scenario 38
 
 The required model is Shirinifard et al. scenario 38 with simulation 902 as the source microfixture:

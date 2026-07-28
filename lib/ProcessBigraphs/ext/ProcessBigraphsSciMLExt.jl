@@ -168,7 +168,9 @@ mutable struct SciMLFieldInstance{
     declaration::D
     published::A
     forcing::A
+    decay_weights::A
     prior_forcing::Union{Nothing,A}
+    prior_decay_weights::Union{Nothing,A}
     candidate::A
     time_tick::Int64
     target_tick::Int64
@@ -181,22 +183,32 @@ function _sciml_instance(
     declaration::ProcessBigraphs.EngineDeclaration{<:SciMLFieldAdapter},
     values,
     forcing,
+    decay_weights,
     time_tick::Integer,
     publication_epoch::Integer,
 )
     problem = declaration.adapter.problem
     published = Array(values)
     normalized_forcing = Array(forcing)
+    normalized_decay_weights = Array(decay_weights)
     size(published) == size(problem.initial_values) &&
         eltype(published) == eltype(problem.initial_values) ||
         throw(ArgumentError("SciML field checkpoint state is incompatible"))
     size(normalized_forcing) == size(published) &&
         eltype(normalized_forcing) == eltype(published) ||
         throw(ArgumentError("SciML field checkpoint forcing is incompatible"))
+    size(normalized_decay_weights) == size(published) &&
+        eltype(normalized_decay_weights) == eltype(published) &&
+        all(value -> isfinite(value) && value >= zero(value),
+            normalized_decay_weights) ||
+        throw(ArgumentError(
+            "SciML field checkpoint decay weights are incompatible"))
     SciMLFieldInstance(
         declaration,
         published,
         normalized_forcing,
+        normalized_decay_weights,
+        nothing,
         nothing,
         published,
         Int64(time_tick),
@@ -218,7 +230,32 @@ function ProcessBigraphs.prepare_engine(
         adapter.problem.initial_values,
         zeros(eltype(adapter.problem.initial_values),
             size(adapter.problem.initial_values)),
+        adapter.problem.decay_weights,
         adapter.problem.initial_tick,
+        0,
+    )
+end
+
+ProcessBigraphs.field_engine_array_type(
+    adapter::SciMLFieldAdapter,
+) = typeof(adapter.problem.initial_values)
+
+ProcessBigraphs.field_engine_expected_diagnostics(
+    ::SciMLFieldAdapter,
+) = (:backend, :algorithm, :retcode)
+
+function ProcessBigraphs.field_engine_reconstruct(
+    declaration::ProcessBigraphs.EngineDeclaration{<:SciMLFieldAdapter},
+    values,
+    time_tick::Integer,
+)
+    problem = declaration.adapter.problem
+    _sciml_instance(
+        declaration,
+        values,
+        zeros(eltype(problem.initial_values), size(problem.initial_values)),
+        problem.decay_weights,
+        time_tick,
         0,
     )
 end
@@ -262,7 +299,7 @@ end
 end
 
 function _field_rhs!(derivative, state, parameters, _)
-    problem, forcing = parameters
+    problem, forcing, decay_weights = parameters
     values = reshape(state, size(problem.initial_values))
     output = reshape(derivative, size(problem.initial_values))
     for index in CartesianIndices(values)
@@ -271,23 +308,34 @@ function _field_rhs!(derivative, state, parameters, _)
             problem.diffusion *
                 _periodic_laplacian(values, index, problem.spacing) +
             forcing[index] -
-            problem.decay * center
+            problem.decay * decay_weights[index] * center
     end
     nothing
 end
 
-function _forcing(instance::SciMLFieldInstance, invocation)
-    length(invocation.inputs) == 1 &&
-        only(invocation.inputs).name === :forcing ||
+function _field_inputs(instance::SciMLFieldInstance, invocation)
+    projections = Dict(projection.name => projection
+        for projection in invocation.inputs)
+    Set(keys(projections)) in
+        (Set((:forcing,)), Set((:forcing, :decay_weights))) ||
         throw(ArgumentError(
-            "SciML field advance requires one forcing projection"))
-    forcing = ProcessBigraphs.projection_value(only(invocation.inputs))
+            "SciML field advance requires `forcing` and optionally `decay_weights` projections"))
+    forcing = ProcessBigraphs.projection_value(projections[:forcing])
     forcing isa AbstractArray &&
         size(forcing) == size(instance.forcing) &&
         eltype(forcing) == eltype(instance.forcing) ||
         throw(ArgumentError(
             "SciML field forcing has incompatible shape or precision"))
-    forcing
+    decay_weights = haskey(projections, :decay_weights) ?
+        ProcessBigraphs.projection_value(projections[:decay_weights]) :
+        instance.decay_weights
+    decay_weights isa AbstractArray &&
+        size(decay_weights) == size(instance.decay_weights) &&
+        eltype(decay_weights) == eltype(instance.decay_weights) &&
+        all(value -> isfinite(value) && value >= zero(value), decay_weights) ||
+        throw(ArgumentError(
+            "SciML field decay weights have incompatible values, shape, or precision"))
+    forcing, decay_weights
 end
 
 function _authorize_resources(instance::SciMLFieldInstance, invocation)
@@ -317,9 +365,11 @@ function ProcessBigraphs.stage_operation!(
         throw(ArgumentError(
             "SciML field and ProcessBigraphs clocks disagree"))
     _authorize_resources(instance, invocation)
-    forcing = _forcing(instance, invocation)
+    forcing, decay_weights = _field_inputs(instance, invocation)
     instance.prior_forcing = copy(instance.forcing)
+    instance.prior_decay_weights = copy(instance.decay_weights)
     copyto!(instance.forcing, forcing)
+    copyto!(instance.decay_weights, decay_weights)
     ticks = operation.target_time.tick - operation.start_time.tick
     duration = convert(eltype(instance.published), ticks) *
         problem.tick_duration
@@ -327,7 +377,7 @@ function ProcessBigraphs.stage_operation!(
         _field_rhs!,
         vec(copy(instance.published)),
         (zero(duration), duration),
-        (problem, copy(instance.forcing)),
+        (problem, copy(instance.forcing), copy(instance.decay_weights)),
     )
     adapter = instance.declaration.adapter
     try
@@ -355,7 +405,9 @@ function ProcessBigraphs.stage_operation!(
         instance.last_retcode = string(retcode)
     catch
         copyto!(instance.forcing, instance.prior_forcing)
+        copyto!(instance.decay_weights, instance.prior_decay_weights)
         instance.prior_forcing = nothing
+        instance.prior_decay_weights = nothing
         rethrow()
     end
     instance.target_tick = operation.target_time.tick
@@ -415,6 +467,7 @@ function ProcessBigraphs.publish_candidate!(
     instance.publication_epoch =
         candidate.payload.publication_epoch
     instance.prior_forcing = nothing
+    instance.prior_decay_weights = nothing
     instance.active_invocation = nothing
     (
         time_tick=instance.time_tick,
@@ -433,7 +486,12 @@ function ProcessBigraphs.discard_candidate!(
         if !isnothing(instance.prior_forcing)
             copyto!(instance.forcing, instance.prior_forcing)
         end
+        if !isnothing(instance.prior_decay_weights)
+            copyto!(
+                instance.decay_weights, instance.prior_decay_weights)
+        end
         instance.prior_forcing = nothing
+        instance.prior_decay_weights = nothing
         instance.active_invocation = nothing
     end
     nothing
@@ -454,6 +512,7 @@ function ProcessBigraphs.engine_checkpoint_payload(
             declaration_fingerprint=declaration.fingerprint,
             values=copy(instance.published),
             forcing=copy(instance.forcing),
+            decay_weights=copy(instance.decay_weights),
             time_tick=instance.time_tick,
             publication_epoch=instance.publication_epoch,
             continuation_policy=:reconstruct_each_invocation,
@@ -476,6 +535,7 @@ function ProcessBigraphs.restore_engine_checkpoint(
         declaration,
         payload.values,
         payload.forcing,
+        payload.decay_weights,
         payload.time_tick,
         payload.publication_epoch,
     )
