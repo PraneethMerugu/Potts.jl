@@ -1,14 +1,14 @@
 # Phase 16 Engine, Field, Structural, and Adapter Semantics
 
-Status: Normative specification; Phase 16.F consolidation amended
+Status: Normative specification; Phase 16.F and Phase 16.HC consolidation amended
 
 Version: 1.0.0
 
-Date: 2026-07-27
+Date: 2026-07-28
 
-Authority: Decision 0039, the Phase 16 owner interview, the Phase 16.F solver-integration
-consolidation research, entry contract, qualification ledger, backend matrix, and migration
-registry
+Authority: Decisions 0039 and 0040, the Phase 16 and Phase 16.HC owner interviews, the Phase 16.F
+solver-integration consolidation research, the high-level authoring specification, entry contract,
+qualification ledger, backend matrix, and migration registry
 
 ## 1. Purpose and claim boundary
 
@@ -19,6 +19,13 @@ observation, continuation, checkpoint, and independent-oracle rules remain norma
 
 Phase 16 is complete only when every required row in the qualification ledger is qualified.
 Specification passage means implementation may start. It is not implementation evidence.
+
+Phase 16.HC is a mandatory high-level composition gate after the bounded Merks and CNV assemblies
+and before Phase 16.I. Its detailed semantic authority is
+[`process-bigraph-high-level-authoring-semantics.md`](process-bigraph-high-level-authoring-semantics.md).
+It adds an immutable author-facing semantic model and deterministic lowering boundary without
+replacing the canonical ACSet, execution plan, runtime, solver protocol, or previously qualified
+scientific mechanisms.
 
 The keywords MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normative.
 
@@ -547,12 +554,17 @@ validity.
   manufactured, convergence, failure, and restart evidence.
 - **16.G** exits with the bounded runnable Merks contract.
 - **16.H** exits with the bounded runnable CNV contract.
+- **16.HC** exits with the complete ordinary Julia semantic API, deterministic lowering and
+  author-origin contract, controlled Merks/CNV/library migration, raw-IR allowlist, documentation,
+  quality, compatibility, and performance evidence.
 - **16.I** exits with full ledger reconciliation, documentation, performance evidence, clean
   dependency resolution, exact-tree candidate, and internal-beta attestation.
 
 After 16.B, 16.C and 16.D may overlap. No subgate substitutes for another.
 16.G and 16.H MUST NOT start until 16.F is qualified. Mermaid.jl is a research reference, not a
 Phase 16 dependency, scheduler, runtime authority, or qualification oracle.
+16.I MUST NOT begin attestation until 16.HC is qualified. The unresolved Phase 16.C real-hardware
+evidence remains independent and mandatory.
 
 ## 13. Explicit exclusions
 
@@ -561,4 +573,5 @@ multi-GPU execution, CUDA qualification, universal third-party solver GPU suppor
 FEM, AMR, merge/engulf/burst/general rewrite, implicit structural cascade, arbitrary mid-event
 restart, full Merks or CNV publication analysis, full source-ensemble reproduction, mandatory
 source-faithful assembled-model GPU execution, AlgebraicDynamics, broad biochemical/FBA/SBML
-adapters, and whole-cell qualification.
+adapters, whole-cell qualification, a mandatory full `@compose` macro language, graphical
+authoring, arbitrary closure serialization, and a universal implicit co-simulation engine.

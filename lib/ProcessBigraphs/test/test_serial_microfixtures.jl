@@ -51,22 +51,25 @@ invoke(::PB0JoinStep, inputs, context) =
 function increment_fixture(order=("fast", "slow"))
     scale = TimeScale(1)
     schema = BranchSchema(state=LeafSchema(Int; default=0, update_law=:add))
-    declarations = Dict(
-        "fast" => ProcessDeclaration("fast", PB0Increment(1),
-            FixedSchedule(Duration(1, scale))),
-        "slow" => ProcessDeclaration("slow", PB0Increment(10),
-            FixedSchedule(Duration(2, scale))),
+    definitions = Dict(
+        "fast" => (amount=1, cadence=1),
+        "slow" => (amount=10, cadence=2),
     )
-    processes = tuple((declarations[id] for id in order)...)
-    bindings = tuple((
-        binding
+    model = compose(:PB0IncrementFixture, schema; scale) do builder, stores
         for id in order
-        for binding in (
-            PortBinding(id, :state, path("state")),
-            PortBinding(id, :increment, path("state")),
-        )
-    )...)
-    compile_composite(StaticComposite(schema, Dict(), scale; processes, bindings))
+            definition = definitions[id]
+            actor = mount!(
+                builder, Symbol(id), PB0Increment(definition.amount))
+            schedule!(
+                builder, actor,
+                Every(Duration(definition.cadence, scale)))
+            attach!(builder, actor, (
+                state=stores.state,
+                increment=stores.state,
+            ))
+        end
+    end
+    compile(model)
 end
 
 @testset "imminent events, same-time snapshot, and declaration-order invariance" begin
@@ -90,20 +93,27 @@ end
 @testset "actual elapsed partial interval and preflight rejection" begin
     scale = TimeScale(1)
     schema = BranchSchema(elapsed=LeafSchema(Int; default=0, update_law=:add))
-    process = ProcessDeclaration("elapsed", PB0Elapsed(),
-        FixedSchedule(Duration(2, scale)))
-    bindings = (PortBinding("elapsed", :elapsed, path("elapsed")),)
-    compiled = compile_composite(StaticComposite(schema, Dict(), scale;
-        processes=(process,), bindings))
+    model = compose(:ElapsedFixture, schema; scale) do builder, stores
+        process = mount!(builder, :elapsed, PB0Elapsed())
+        schedule!(builder, process, Every(Duration(2, scale)))
+        attach!(builder, process, (elapsed=stores.elapsed,))
+    end
+    compiled = compile(model)
     runtime = initialize_runtime(compiled)
     run_until!(runtime, LogicalTime(3, scale))
     @test current_snapshot(runtime)[path("elapsed")] == 3
     @test logical_time(current_snapshot(runtime)) == LogicalTime(3, scale)
 
-    rejecting = ProcessDeclaration("elapsed", PB0Elapsed(),
-        FixedSchedule(Duration(2, scale); supports_partial=false))
-    rejected = initialize_runtime(compile_composite(StaticComposite(
-        schema, Dict(), scale; processes=(rejecting,), bindings)))
+    rejecting = compose(:RejectingElapsedFixture, schema; scale) do builder, stores
+        process = mount!(builder, :elapsed, PB0Elapsed())
+        schedule!(
+            builder,
+            process,
+            Every(Duration(2, scale); supports_partial=false),
+        )
+        attach!(builder, process, (elapsed=stores.elapsed,))
+    end
+    rejected = initialize_runtime(compile(rejecting))
     before = snapshot_fingerprint(current_snapshot(rejected))
     @test_throws ProcessBigraphError run_until!(rejected, LogicalTime(3, scale))
     @test snapshot_fingerprint(current_snapshot(rejected)) == before
@@ -118,23 +128,28 @@ end
         right=LeafSchema(Int; default=0, update_law=:add),
         joined=LeafSchema(Int; default=0, update_law=:add),
     )
-    process = ProcessDeclaration("trigger", PB0Increment(1),
-        FixedSchedule(Duration(1, scale)))
-    fork_left = StepDeclaration("fork_left", PB0ForkStep(:left, 2))
-    fork_right = StepDeclaration("fork_right", PB0ForkStep(:right, 3))
-    join = StepDeclaration("join", PB0JoinStep();
-        dependencies=("fork_left", "fork_right"))
-    bindings = (
-        PortBinding("trigger", :state, path("trigger")),
-        PortBinding("trigger", :increment, path("trigger")),
-        PortBinding("fork_left", :left, path("left")),
-        PortBinding("fork_right", :right, path("right")),
-        PortBinding("join", :left, path("left")),
-        PortBinding("join", :right, path("right")),
-        PortBinding("join", :total, path("joined")),
-    )
-    compiled = compile_composite(StaticComposite(schema, Dict(), scale;
-        processes=(process,), steps=(fork_left, fork_right, join), bindings))
+    model = compose(:ForkJoinFixture, schema; scale) do builder, stores
+        process = mount!(builder, :trigger, PB0Increment(1))
+        schedule!(builder, process, Every(Duration(1, scale)))
+        attach!(builder, process, (
+            state=stores.trigger,
+            increment=stores.trigger,
+        ))
+        fork_left = mount!(
+            builder, :fork_left, PB0ForkStep(:left, 2))
+        attach!(builder, fork_left, (left=stores.left,))
+        fork_right = mount!(
+            builder, :fork_right, PB0ForkStep(:right, 3))
+        attach!(builder, fork_right, (right=stores.right,))
+        join = mount!(builder, :join, PB0JoinStep())
+        schedule!(builder, join, After(fork_left, fork_right))
+        attach!(builder, join, (
+            left=stores.left,
+            right=stores.right,
+            total=stores.joined,
+        ))
+    end
+    compiled = compile(model)
     @test step_layers(compiled) == (("fork_left", "fork_right"), ("join",))
     runtime = initialize_runtime(compiled)
     run_until!(runtime, LogicalTime(1, scale))
@@ -146,17 +161,19 @@ end
 @testset "failure atomicity and settled checkpoint replay" begin
     scale = TimeScale(1)
     schema = BranchSchema(state=LeafSchema(Int; default=0, update_law=:add))
-    good = ProcessDeclaration("good", PB0Increment(1),
-        FixedSchedule(Duration(1, scale)))
-    bad = ProcessDeclaration("bad", PB0Fail(),
-        FixedSchedule(Duration(1, scale)))
-    bindings = (
-        PortBinding("good", :state, path("state")),
-        PortBinding("good", :increment, path("state")),
-        PortBinding("bad", :out, path("state")),
-    )
-    runtime = initialize_runtime(compile_composite(StaticComposite(
-        schema, Dict(), scale; processes=(good, bad), bindings)))
+    failure_model = compose(:FailureFixture, schema; scale) do builder, stores
+        good = mount!(builder, :good, PB0Increment(1))
+        schedule!(builder, good, Every(Duration(1, scale)))
+        attach!(builder, good, (
+            state=stores.state,
+            increment=stores.state,
+        ))
+        bad = mount!(builder, :bad, PB0Fail())
+        schedule!(builder, bad, Every(Duration(1, scale)))
+        attach!(builder, bad, (out=stores.state,))
+    end
+    compiled_failure = compile(failure_model)
+    runtime = initialize_runtime(compiled_failure)
     before = snapshot_fingerprint(current_snapshot(runtime))
     error = try
         run_until!(runtime, LogicalTime(1, scale))

@@ -18,13 +18,15 @@ Phase 14.PB0 provides independently testable serial foundations:
 
 Phase 15.A implements the first bounded AlgebraicJulia slice. `ACSets.jl` 0.2.29 and `Catlab.jl`
 0.17.6 are direct dependencies, and one versioned `ProcessBigraphACSet` is the canonical structural
-authority. The ordinary `StaticComposite` API is an ergonomic façade that lowers to the same
-canonical model as direct ACSet authoring. Stable semantic identities, rather than ACSet row
+authority. The ordinary Julia `compose` builder produces an immutable `CompositeModel`, which
+lowers deterministically through private implementation records to the canonical ACSet. Stable
+semantic identities, rather than ACSet row
 numbers or declaration order, determine fingerprints and compiled provenance.
 
 Validated authoring models compile into a frozen `StructuralEpoch` and an immutable indexed
 `ExecutionPlan`. The serial runtime and checkpoint paths consume that plan and do not traverse the
-ACSet or retain the `StaticComposite` declaration as a second authority. The Phase 14.PB0 model,
+ACSet or retain the authoring declaration or private `StaticComposite` IR as a second authority.
+The Phase 14.PB0 model,
 initial-state, final-state, and trace baselines remain exact.
 
 Phase 15.B adds immutable open composition without creating a second runtime authority:
@@ -65,7 +67,37 @@ Required CI and its squash-merge tree exactly matches the qualified tree. The me
 closure attestation promotes package version `0.4.0` with `internal_alpha = true`;
 `public_release = false` remains in force.
 
-Phase 16 will add `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions.
+Phase 16 adds `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions,
+solver-neutral engine handoff, bounded Merks/CNV assemblies, and a typed high-level authoring
+layer. The authoring lifecycle is `CompositeModel` → `LoweredModel` → `ExecutionPlan` → mutable
+run session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
+control of how their authorized heavy computation occurs.
+
+Ordinary models use a small Julia API rather than canonical IR:
+
+```julia
+model = compose(:CoupledModel; scale) do m
+    field = store!(
+        m, :field,
+        LeafSchema(Float64; default=0.0, update_law=:add))
+    solver = mount!(m, :solver, MySolver(config))
+    schedule!(m, solver, Every(Duration(1, scale)))
+    connect!(m, field, solver.field_in, solver.field_out)
+    expose!(m, :field, field; role=:bidirectional)
+end
+```
+
+Explicit names and typed handles determine semantic identity. `attach!` performs exact declared
+bulk attachment only; it does not autowire approximately. `At` creates exact one-shot boundaries,
+`On(store)` uses committed state publication, and `After` declares reactive stage order.
+`SimulationProblem` binds initial state, typed parameter overrides, selected observables, exact
+state interventions, time span, and master seed without changing the reusable model.
+
+Direct `StaticComposite`, declaration, and port-binding construction is restricted to lowering,
+canonical conformance, migration, and independent oracle code. Supported semantic archives require
+explicit domain-owned component encoders and decoders; ProcessBigraphs does not serialize closures
+or use a global runtime registry.
+
 Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
 authoring. ProcessBigraphs remains the sole authority for time, scheduling, numerical state,
 reconciliation, commit, RNG, observation, checkpoints, and replay.

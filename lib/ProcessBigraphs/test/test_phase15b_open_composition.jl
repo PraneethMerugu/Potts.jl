@@ -1,5 +1,7 @@
 using ACSets
 import Catlab
+import ProcessBigraphs: StaticComposite, ProcessDeclaration, PortBinding,
+    compile_composite
 
 function phase15b_open(
     definition::AbstractString,

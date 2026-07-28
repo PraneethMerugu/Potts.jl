@@ -1,8 +1,14 @@
 # Decision 0039: Phase 16 Compute Ownership, Field Coupling, and Internal-Beta Scope
 
-Status: Accepted architecture; Phase 16.A/B/D/E/F/G/H qualified, C hardware and I open
+Status: Accepted architecture; Phase 16.A/B/D/E/F/G/H qualified, HC specified, C hardware and I open
 
 Date: 2026-07-27
+
+Post-decision refinement: [Decision 0040](0040-process-bigraph-high-level-authoring.md) inserts the
+mandatory Phase 16.HC high-level composition gate after 16.H and before 16.I. It preserves this
+decision's compute ownership, solver-neutral core, model scope, device obligations, and qualified
+runtime evidence while replacing ordinary raw-IR scientific authoring with an immutable semantic
+model and deterministic lowering boundary.
 
 ## Context
 
@@ -150,6 +156,8 @@ Phase 16 executes in this order:
 - **16.F** — CPU SciML and independent custom adapters plus cross-adapter evidence;
 - **16.G** — runnable bounded Merks 2006 model;
 - **16.H** — runnable bounded CNV scenario 38/model 902;
+- **16.HC** — immutable high-level semantic authoring, deterministic lowering and provenance,
+  controlled Merks/CNV/library migration, and authoring quality qualification;
 - **16.I** — reconciliation, documentation, compatibility, performance, exact-tree evidence, and
   internal-beta attestation.
 
@@ -177,6 +185,8 @@ qualification.
 - SciML validates the open protocol early while broad scientific ecosystem work remains bounded.
 - Dynamic orchestration topology and high-volume Potts domain topology remain distinct.
 - The two required models pressure-test the architecture without expanding into full analyses.
+- The high-level authoring gate can harden ordinary Julia composition without reopening qualified
+  solver and CPM kernels or replacing canonical ACSet structure.
 
 ## Supersession
 

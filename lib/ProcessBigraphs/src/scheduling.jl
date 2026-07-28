@@ -63,6 +63,24 @@ struct AdaptiveSchedule <: AbstractSchedule
 end
 
 """
+Internal lowered schedule for one authored `At` occurrence.
+
+The clock becomes inactive after its exact deadline. Ordinary authors use
+`At`; this type exists only so the runtime can represent completion without a
+sentinel time or a fake numerical cadence.
+"""
+struct OneShotSchedule <: AbstractSchedule
+    first_due::Duration
+    supports_partial::Bool
+    function OneShotSchedule(first_due::Duration)
+        first_due.tick > 0 ||
+            _fail(:nonpositive_deadline,
+                "one-shot process deadline must be positive")
+        new(first_due, false)
+    end
+end
+
+"""
 A model-owned explicit fixed-structure iterative region.
 
 `:bounded` executes exactly `max_iterations`; `:convergent` stops when all
@@ -220,6 +238,12 @@ function _canonical(io::IO, schedule::AdaptiveSchedule)
     _canonical(io, "1.0.0")
     _canonical(io, schedule.first_due)
     _canonical(io, schedule.supports_partial)
+end
+
+function _canonical(io::IO, schedule::OneShotSchedule)
+    write(io, "OS")
+    _canonical(io, "1.0.0")
+    _canonical(io, schedule.first_due)
 end
 
 function _canonical(io::IO, identity::EventIdentity)

@@ -1,8 +1,8 @@
 # ProcessBigraphs Phase 16 Entry Audit
 
-Status: Historical entry passed; Phase 16.A/B/D/E/F/G/H qualified, C hardware and I open
+Status: Historical entry passed; Phase 16.A/B/D/E/F/G/H qualified, HC specified, C hardware and I open
 
-Date: 2026-07-27
+Date: 2026-07-28
 
 ## Entry result
 
@@ -38,15 +38,21 @@ marking any implementation row qualified.
 
 ## Current amendment
 
-Phase 16.A/B/D/E/F have since qualified. Phase 16.C remains independently open for trusted
+Phase 16.A/B/D/E/F/G/H have since qualified. Phase 16.C remains independently open for trusted
 exact-head Metal/ROCm artifacts. The first 16.F implementation at commit `7217f9b` is retained as
 an unqualified prototype, not admitted evidence. The completed
 [16.F solver-integration consolidation](process-bigraph-phase16f-solver-integration-consolidation-research.md)
 led to the qualified
 [solver-plurality implementation](process-bigraph-phase16f-solver-plurality-audit.md): a real
 injected algorithm, standard solver interfaces, numerical replay by default, an external-style
-independent custom fixture, analytic/convergence proof, and bounded API admission. Phase 16.G/H
-may now proceed.
+independent custom fixture, analytic/convergence proof, and bounded API admission. The bounded
+Merks and CNV assemblies subsequently qualified as Phase 16.G/H.
+
+Decision 0040 subsequently inserted Phase 16.HC after the bounded G/H assemblies and before 16.I.
+The high-level authoring specification is accepted, but implementation and qualification remain
+open. The current uncommitted authoring changes are a research spike and do not advance any HC
+row. The original qualified G/H runtime and scientific evidence remains valid while their
+authoring migrations are tracked independently.
 
 ## Risks already controlled
 
@@ -57,5 +63,7 @@ may now proceed.
 - dynamic orchestration and high-volume Potts topology are separated;
 - checkpoint conversion is non-destructive and versioned;
 - G4 cannot be skipped;
-- full model analyses and universal GPU claims are excluded; and
+- full model analyses and universal GPU claims are excluded;
+- ordinary scientific authoring must migrate away from direct canonical IR before internal-beta
+  attestation; and
 - final closure requires real Metal/ROCm and exact-tree evidence.

@@ -23,7 +23,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; former G4 work is reassigned intact to Phase 16.C by Decision 0039; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [Decision 0039](../spec/decisions/0039-phase-16-compute-ownership-and-scope.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.C serial internal alpha is qualified and attested, while the independent Potts paper gate remains open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs 0.4.0 remains an internal alpha without a public release |
-| Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, CorePotts Adapter, and Runnable Merks/CNV Internal Beta | In progress; 16.A/B/D/E/F/G/H qualified, 16.C hardware and 16.I open | Decision 0039, qualified engine/field/structure/CorePotts/real-SciML/Merks/CNV evidence, and the entry, qualification, backend, migration, model, and API registries agree |
+| Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, CorePotts Adapter, Runnable Merks/CNV, and High-Level Composition Internal Beta | In progress; 16.A/B/D/E/F/G/H qualified, 16.HC specified, 16.C hardware and 16.I open | Decisions 0039/0040, qualified engine/field/structure/CorePotts/real-SciML/Merks/CNV evidence, the high-level authoring specification, and the entry, qualification, backend, migration, model, and API registries govern |
 | Phase 17: Algebraic Dynamics, Broad Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta; bounded CPU field-level SciML proof moved to Phase 16, while broad ODE/DAE/biochemical/FBA/SBML work remains here |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
 | Phase 19: Pinned Parity Closure and First Public ProcessBigraphs Release | Not started | Public release is forbidden until complete pinned parity and the whole-cell-style acceptance composite pass |
@@ -1335,8 +1335,10 @@ state while retaining historical evidence boundaries.
 
 ## Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, and Spatial Internal Beta
 
-Decision 0039 and the
+Decisions 0039 and 0040, the
 [normative Phase 16 specification](../spec/phase-16-engine-field-structural-and-adapter-semantics.md)
+and the
+[high-level authoring specification](../spec/process-bigraph-high-level-authoring-semantics.md)
 govern this phase. ProcessBigraphs owns when and why work occurs. Optimized field solvers and CPM
 kernels own how the heavy operation occurs. The
 [entry contract](../spec/process-bigraph-phase16-entry-v1.toml) and
@@ -1436,8 +1438,28 @@ After 16.B, 16.C and 16.D may proceed concurrently with separately attributable 
 - Use generated reduced fixtures in ordinary CI and a separate checksum-verified Text S6 source
   lane. Pass full-domain startup and bounded execution, not the full-year ensemble or classifier.
 
+### 16.HC — high-level composition hardening
+
+- Freeze the accepted immutable semantic model, transactional ordinary Julia `compose` builder,
+  typed handles, shared-store junctions, lexical hierarchy, schedules, structural templates,
+  simulation problems, diagnostics, lowering origin maps, and layered identity before code.
+- Keep ProcessBigraphs core solver-neutral. Qualify applicable CommonSolve/SciML behavior through
+  the existing weak-dependency extension and preserve independent non-SciML adapter conformance.
+- Treat the current uncommitted `scheduled`/`reactive`/`@compose` changes as a research spike, not
+  admitted API or evidence.
+- Implement the complete macro-free programmatic API before optional macro sugar.
+- Freeze direct-IR fixtures as differential oracles, migrate the smallest behavioral fixtures,
+  then Merks, reduced CNV, full bounded CNV, examples, and ordinary tests.
+- Restrict remaining direct canonical IR to a path-and-purpose allowlist for lowering,
+  conformance, serialization migration, independent oracles, and explicit expert tooling.
+- Require structured diagnostic, provenance, compatibility, documentation/doctest, Aqua,
+  clean-environment, and stage-separated performance evidence.
+- Preserve qualified runtime, solver, field, structural, persistence, and model mechanisms unless
+  a migration test demonstrates a defect.
+
 ### 16.I — internal-beta reconciliation and attestation
 
+- Require Phase 16.HC qualification and retain the independent Phase 16.C real-hardware gate.
 - Qualify every ledger row and reconcile docs, capability/backend matrices, compatibility,
   failure, persistence, performance, and package-independent tests.
 - Require real Metal/ROCm evidence, content-addressed exact-head candidate artifacts, a clean tree,

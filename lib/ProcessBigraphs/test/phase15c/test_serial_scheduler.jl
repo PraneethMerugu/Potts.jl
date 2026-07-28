@@ -35,8 +35,9 @@
     empty_schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    empty = compile_composite(StaticComposite(
-        empty_schema, Dict(), scale))
+    empty_model = compose(:C15Empty, empty_schema; scale) do _, _
+    end
+    empty = compile(empty_model)
     empty_runtime = initialize_runtime(empty, SerialExecutor())
     run_until!(empty_runtime, LogicalTime(5, scale);
         horizon_policy=ExactHorizon())
@@ -51,14 +52,14 @@ end
     schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    binding = (PortBinding("adaptive", :out, path("state")),)
-    valid = ProcessDeclaration(
-        "adaptive",
-        C15Adaptive(1, 2),
-        AdaptiveSchedule(Duration(1, scale); supports_partial=true),
-    )
-    compiled = compile_composite(StaticComposite(
-        schema, Dict(), scale; processes=(valid,), bindings=binding))
+    valid_model = compose(:C15AdaptiveValid, schema; scale) do builder, stores
+        valid = mount!(builder, :adaptive, C15Adaptive(1, 2))
+        schedule!(
+            builder, valid,
+            AdaptiveSchedule(Duration(1, scale); supports_partial=true))
+        attach!(builder, valid, (out=stores.state,))
+    end
+    compiled = compile(valid_model)
     @test compiled.plan.processes[1].declaration.schedule isa AdaptiveSchedule
     runtime = initialize_runtime(compiled, SerialExecutor())
     run_until!(runtime, LogicalTime(5, scale))
@@ -66,14 +67,14 @@ end
     @test event_count(runtime) == 3
     @test runtime.process_clocks[1].next_due == LogicalTime(7, scale)
 
-    invalid = ProcessDeclaration(
-        "adaptive",
-        C15Adaptive(1, 0),
-        AdaptiveSchedule(Duration(1, scale)),
-    )
+    invalid_model = compose(:C15AdaptiveInvalid, schema; scale) do builder, stores
+        invalid = mount!(builder, :adaptive, C15Adaptive(1, 0))
+        schedule!(
+            builder, invalid, AdaptiveSchedule(Duration(1, scale)))
+        attach!(builder, invalid, (out=stores.state,))
+    end
     invalid_runtime = initialize_runtime(
-        compile_composite(StaticComposite(
-            schema, Dict(), scale; processes=(invalid,), bindings=binding)),
+        compile(invalid_model),
         SerialExecutor(),
     )
     before = snapshot_fingerprint(current_snapshot(invalid_runtime))
@@ -82,14 +83,19 @@ end
     @test snapshot_fingerprint(current_snapshot(invalid_runtime)) == before
     @test event_count(invalid_runtime) == 0
 
-    no_partial = ProcessDeclaration(
-        "adaptive",
-        C15Adaptive(1, 2),
-        AdaptiveSchedule(Duration(2, scale); supports_partial=false),
-    )
+    no_partial_model = compose(
+        :C15AdaptiveNoPartial, schema; scale) do builder, stores
+        no_partial = mount!(builder, :adaptive, C15Adaptive(1, 2))
+        schedule!(
+            builder,
+            no_partial,
+            AdaptiveSchedule(
+                Duration(2, scale); supports_partial=false),
+        )
+        attach!(builder, no_partial, (out=stores.state,))
+    end
     rejecting = initialize_runtime(
-        compile_composite(StaticComposite(
-            schema, Dict(), scale; processes=(no_partial,), bindings=binding)),
+        compile(no_partial_model),
         SerialExecutor(),
     )
     @test_throws ProcessBigraphError run_until!(
@@ -105,24 +111,20 @@ end
             source=LeafSchema(Int; default=0, update_law=:add),
             observed=LeafSchema(Int; default=0, update_law=:replace),
         )
-        producer = ProcessDeclaration(
-            "producer",
-            C15Producer(),
-            FixedSchedule(Duration(1, scale)),
-        )
-        probe = ProcessDeclaration(
-            "probe",
-            C15IntervalProbe(behavior),
-            FixedSchedule(Duration(3, scale)),
-        )
-        bindings = (
-            PortBinding("producer", :out, path("source")),
-            PortBinding("probe", :input, path("source")),
-            PortBinding("probe", :observed, path("observed")),
-        )
-        compiled = compile_composite(StaticComposite(
-            schema, Dict(), scale;
-            processes=(producer, probe), bindings))
+        model = compose(
+            Symbol(:C15Multirate_, behavior), schema; scale) do builder, stores
+            producer = mount!(builder, :producer, C15Producer())
+            schedule!(builder, producer, Every(Duration(1, scale)))
+            attach!(builder, producer, (out=stores.source,))
+            probe = mount!(
+                builder, :probe, C15IntervalProbe(behavior))
+            schedule!(builder, probe, Every(Duration(3, scale)))
+            attach!(builder, probe, (
+                input=stores.source,
+                observed=stores.observed,
+            ))
+        end
+        compiled = compile(model)
         runtime = initialize_runtime(compiled, SerialExecutor())
         run_until!(runtime, LogicalTime(3, scale))
         expected = behavior === :frozen ? 0 :

@@ -44,6 +44,7 @@ corresponding specification document.
 - [0037: ProcessBigraphs open-composition semantics](0037-process-bigraph-open-composition.md)
 - [0038: ProcessBigraphs Phase 15.C serial internal alpha](0038-process-bigraph-serial-alpha.md)
 - [0039: Phase 16 compute ownership, field coupling, and internal-beta scope](0039-phase-16-compute-ownership-and-scope.md)
+- [0040: ProcessBigraphs high-level authoring and Phase 16.HC](0040-process-bigraph-high-level-authoring.md)
 
 ## Record Template
 

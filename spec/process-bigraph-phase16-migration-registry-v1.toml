@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 registry_id = "process-bigraphs-phase16-migration-v1"
 phase = "16"
-status = "phase16h_qualified"
+status = "phase16hc_specified"
 one_production_authority_per_slice = true
 silent_fallback = false
 
@@ -44,3 +44,35 @@ old_authority = "source-traced clean-room fixtures only"
 target_authority = "ProcessBigraphs model with CorePotts and field adapters"
 differential_dimensions = ["mechanism microfixtures", "schedule", "lifecycle", "relationships", "degradation", "checkpoint"]
 cutover_required = false
+
+[[slices]]
+id = "high-level-authoring-core"
+status = "specified"
+old_authority = "direct StaticComposite, declaration, binding, path, and canonical lowering construction"
+target_authority = "immutable CompositeModel created by the ordinary Julia compose builder"
+differential_dimensions = ["semantic declarations", "canonical structure", "origin map", "fingerprints", "diagnostics", "plan", "trace", "failure", "checkpoint"]
+cutover_required = true
+
+[[slices]]
+id = "merks-high-level-authoring"
+status = "specified"
+old_authority = "qualified bounded Merks assembly authored through direct ProcessBigraph lowering records"
+target_authority = "the same qualified bounded Merks mechanisms authored through CompositeModel"
+differential_dimensions = ["mechanism microfixtures", "schedule", "field balance", "canonical lowering", "origin map", "observation", "checkpoint", "rollback"]
+cutover_required = true
+
+[[slices]]
+id = "cnv-high-level-authoring"
+status = "specified"
+old_authority = "qualified bounded CNV assembly authored through direct ProcessBigraph lowering records"
+target_authority = "the same qualified bounded CNV mechanisms authored through CompositeModel"
+differential_dimensions = ["reduced transitions", "full startup", "schedule", "lifecycle", "relationships", "degradation", "canonical lowering", "origin map", "checkpoint", "rollback"]
+cutover_required = true
+
+[[slices]]
+id = "ordinary-tests-examples-and-docs-authoring"
+status = "specified"
+old_authority = "mixed direct lowering records and provisional high-level spike"
+target_authority = "ordinary Julia semantic authoring with a path-and-purpose raw-IR allowlist"
+differential_dimensions = ["behavioral fixtures", "doctests", "public examples", "static IR guard", "compatibility readers", "independent oracles"]
+cutover_required = true
