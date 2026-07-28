@@ -344,7 +344,9 @@ check(package_registry["accepted_next_architecture"]["phase16_status"] in
        "phase16f_qualified_c_hardware_open",
        "phase16g_qualified_c_hardware_open",
        "phase16h_qualified_c_hardware_open",
-       "phase16hc_qualified_c_hardware_open") &&
+       "phase16hc_qualified_c_hardware_open",
+       "phase16hc_qualified",
+       "phase16i_candidate") &&
       package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry must record the current Phase 16.B state without beta")
@@ -576,9 +578,13 @@ if isempty(failures)
     println("  $(length(expected_phase15b_implemented)) Phase 15.B open-composition rows implemented and locally tested")
     println("  canonical ACSet, open-composition semantics, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
-    println(registry["registry_status"] == "phase15c-qualified-serial-internal-alpha" ?
-        "  independent oracle and serial internal alpha qualified; GPU, parallel-executor, and public-release claims remain fail-closed" :
-        "  independent-oracle, internal-alpha, GPU, parallel-executor, and public-release claims remain fail-closed")
+    phase16_status =
+        package_registry["accepted_next_architecture"]["phase16_status"]
+    println(phase16_status in ("phase16hc_qualified", "phase16i_candidate") ?
+        "  serial internal alpha and Phase 16 CPU/Metal/ROCm gates qualified; internal beta, parallel-executor, and public-release claims remain fail-closed" :
+        registry["registry_status"] == "phase15c-qualified-serial-internal-alpha" ?
+        "  independent oracle and serial internal alpha qualified; Phase 16, parallel-executor, and public-release claims remain fail-closed" :
+        "  independent-oracle, internal-alpha, Phase 16, parallel-executor, and public-release claims remain fail-closed")
 else
     println(stderr,
         "ProcessBigraphs platform specification failed with $(length(failures)) issue(s):")

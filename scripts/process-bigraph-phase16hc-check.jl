@@ -72,14 +72,20 @@ requirements = Dict(row["id"] => row for row in ledger["requirements"])
 families = Dict(row["id"] => row for row in api["families"])
 slices = Dict(row["id"] => row for row in migration["slices"])
 
-phase_state = "phase16hc_qualified_c_hardware_open"
-check(entry["implementation_status"] == phase_state &&
+phase_state = entry["implementation_status"]
+check(phase_state in (
+          "phase16hc_qualified_c_hardware_open",
+          "phase16hc_qualified",
+          "phase16i_candidate",
+          "phase16_internal_beta_qualified",
+      ) &&
       entry["phase16hc"]["status"] == "qualified" &&
       entry["phase16hc"]["implementation_authorized"] == true &&
       entry["phase16hc"]["migration_authorized"] == true &&
-      entry["internal_beta"] == false &&
+      entry["internal_beta"] ==
+          (phase_state == "phase16_internal_beta_qualified") &&
       entry["public_release"] == false,
-    "Phase 16.HC entry state is not qualified with hardware honestly open")
+    "Phase 16.HC entry state or retained maturity is inconsistent")
 
 for id in ["P16-HC01", "P16-HC02", "P16-HC03", "P16-HC04",
            "P16-HC05", "P16-HC06", "P16-HC07"]
@@ -102,13 +108,22 @@ for id in [
     check(requirements[id]["status"] == "qualified",
         "$(id) lost prior qualification")
 end
-check(requirements["P16-C02"]["status"] == "oracle_passing" &&
-      requirements["P16-C03"]["status"] == "implemented" &&
-      requirements["P16-C04"]["status"] == "oracle_passing",
-    "Phase 16.HC must not overclaim open real-hardware rows")
+hardware_closed = phase_state in (
+    "phase16hc_qualified", "phase16i_candidate",
+    "phase16_internal_beta_qualified")
+check(hardware_closed ?
+      all(requirements[id]["status"] == "qualified"
+          for id in ["P16-C02", "P16-C03", "P16-C04"]) :
+      (requirements["P16-C02"]["status"] == "oracle_passing" &&
+       requirements["P16-C03"]["status"] == "implemented" &&
+       requirements["P16-C04"]["status"] == "oracle_passing"),
+    "Phase 16.HC disagrees with the independent Phase 16.C hardware state")
 for id in ["P16-I01", "P16-I02", "P16-I03"]
-    check(requirements[id]["status"] == "specified",
-        "$(id) must remain open before Phase 16.I reconciliation")
+    expected = phase_state == "phase16_internal_beta_qualified" ?
+        "qualified" :
+        phase_state == "phase16i_candidate" ? "oracle_passing" : "specified"
+    check(requirements[id]["status"] == expected,
+        "$(id) must be $(expected) at the current Phase 16.I boundary")
 end
 
 check(api["status"] == phase_state &&

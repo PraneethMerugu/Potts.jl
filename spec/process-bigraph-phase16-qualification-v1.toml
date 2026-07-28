@@ -78,28 +78,28 @@ id = "P16-C01"
 subgate = "16.C"
 title = "Native field sequential CPU qualification"
 status = "qualified"
-evidence = ["real CPU evidence", "analytic/manufactured field oracle", "design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"]
+evidence = ["real CPU evidence", "analytic/manufactured field oracle", "design/evidence/process-bigraph-phase16c-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-C02"
 subgate = "16.C"
 title = "Native field real Metal qualification"
-status = "oracle_passing"
-evidence = ["trusted self-hosted real Metal artifact", "residency and transfer trace"]
+status = "qualified"
+evidence = ["trusted self-hosted real Metal artifact", "residency and transfer trace", "design/evidence/process-bigraph-phase16c-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-C03"
 subgate = "16.C"
 title = "Native field real ROCm qualification"
-status = "implemented"
-evidence = ["trusted self-hosted real ROCm artifact", "residency and transfer trace"]
+status = "qualified"
+evidence = ["trusted self-hosted real ROCm artifact", "residency and transfer trace", "design/evidence/process-bigraph-phase16c-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-C04"
 subgate = "16.C"
 title = "Native field performance and hidden-transfer guardrails"
-status = "oracle_passing"
-evidence = ["cold/warm metrics", "zero steady allocation", "no host fallback"]
+status = "qualified"
+evidence = ["cold/warm metrics", "zero steady allocation", "no host fallback", "design/evidence/process-bigraph-phase16c-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-D01"

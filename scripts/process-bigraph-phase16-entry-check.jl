@@ -26,6 +26,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16h-cnv-audit.md",
     "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
+    "design/evidence/process-bigraph-phase16c-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16f-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16g-evidence-v1.toml",
@@ -86,6 +87,8 @@ phase16b_qualified = phase_state in (
     "phase16hc_specified_c_hardware_open",
     "phase16hc_implemented_c_hardware_open",
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16c_candidate = phase_state in (
     "phase16c_candidate", "phase16d_qualified_c_hardware_open",
@@ -98,6 +101,8 @@ phase16c_candidate = phase_state in (
     "phase16hc_qualified_c_hardware_open")
 phase16c_qualified = phase_state in (
     "phase16c_qualified",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16d_qualified = phase_state in (
     "phase16d_qualified_c_hardware_open",
@@ -108,6 +113,8 @@ phase16d_qualified = phase_state in (
     "phase16hc_specified_c_hardware_open",
     "phase16hc_implemented_c_hardware_open",
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16e_qualified = phase_state in (
     "phase16e_qualified_c_hardware_open",
@@ -117,6 +124,8 @@ phase16e_qualified = phase_state in (
     "phase16hc_specified_c_hardware_open",
     "phase16hc_implemented_c_hardware_open",
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16f_qualified = phase_state in (
     "phase16f_qualified_c_hardware_open",
@@ -125,6 +134,8 @@ phase16f_qualified = phase_state in (
     "phase16hc_specified_c_hardware_open",
     "phase16hc_implemented_c_hardware_open",
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16g_qualified =
     phase_state in (
@@ -133,6 +144,8 @@ phase16g_qualified =
         "phase16hc_specified_c_hardware_open",
         "phase16hc_implemented_c_hardware_open",
         "phase16hc_qualified_c_hardware_open",
+        "phase16hc_qualified",
+        "phase16i_candidate",
         "phase16_internal_beta_qualified")
 phase16h_qualified =
     phase_state in (
@@ -140,13 +153,19 @@ phase16h_qualified =
         "phase16hc_specified_c_hardware_open",
         "phase16hc_implemented_c_hardware_open",
         "phase16hc_qualified_c_hardware_open",
+        "phase16hc_qualified",
+        "phase16i_candidate",
         "phase16_internal_beta_qualified")
 phase16hc_implemented = phase_state in (
     "phase16hc_implemented_c_hardware_open",
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 phase16hc_qualified = phase_state in (
     "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
     "phase16_internal_beta_qualified")
 
 check(entry["schema_version"] == "1.0.0" &&

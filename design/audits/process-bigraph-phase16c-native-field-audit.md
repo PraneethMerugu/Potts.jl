@@ -1,6 +1,6 @@
 # ProcessBigraphs Phase 16.C Native Field Audit
 
-Status: Implementation candidate awaiting exact-head Metal and ROCm artifacts
+Status: Qualified on CPU, real Metal, and real ROCm
 
 Date: 2026-07-27
 
@@ -46,12 +46,25 @@ cases on CPU, Metal, or ROCm. It compares real-device output with the Float32 CP
 records residency, transfers, allocations, launches, synchronization, exact target time, source
 hash, runtime, architecture, and hardware identity.
 
-## Current evidence boundary
+## Qualified evidence
 
-The CPU oracle and a local real-Metal execution pass. The production candidate is wired into the
-existing trusted self-hosted Metal and ROCm workflow, but Phase 16.C remains open until exact-head
-artifacts from both required runners are ingested and checked. Existing Wang or Wortel GPU
-artifacts are not reused as Phase 16 native-field evidence.
+Trusted self-hosted workflow run
+[`30360086075`](https://github.com/PraneethMerugu/Potts.jl/actions/runs/30360086075)
+qualified exact commit `83f7aea20a85bb3855a5976ee64e738be15b1866`. The Metal and ROCm jobs
+both passed the pre-existing tiled, device-invariant, and Wortel gates before running the Phase 16
+native-field workload and uploading backend-specific artifacts.
+
+The final evidence uses one source identity across CPU, Metal, and ROCm:
+`46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25`. Both
+the periodic 2D and mixed-boundary 3D cases have zero error against the Float32 CPU reference,
+zero staging transfers, zero warm device allocations, zero publication allocations, exact target
+ticks, and the expected publication epoch. Construction, completion, and requested observation
+transfers remain explicit in the artifact rather than being misreported as a zero-transfer
+lifecycle.
+
+The content-addressed CPU, Metal, and ROCm artifacts and GitHub job provenance are recorded in the
+[Phase 16.C evidence manifest](../evidence/process-bigraph-phase16c-evidence-v1.toml). Existing
+Wang or Wortel GPU artifacts were not reused as Phase 16 native-field evidence.
 
 ## Limits
 
