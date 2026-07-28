@@ -99,6 +99,8 @@ behavior.
 - [Phase 16 Migration Registry](process-bigraph-phase16-migration-registry-v1.toml)
 - [Phase 16 Model Scope](process-bigraph-phase16-model-scope-v1.toml)
 - [Phase 16 API Contract](process-bigraph-phase16-api-v1.toml)
+- [Semantic-Preserving Repository Consolidation Contract](semantic-preserving-consolidation-contract.md)
+- [Semantic-Preserving Consolidation Qualification Ledger](semantic-preserving-consolidation-qualification-v1.toml)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
@@ -131,6 +133,9 @@ Refactor execution evidence:
 - [Decision 0039: Phase 16 Compute Ownership and Scope](decisions/0039-phase-16-compute-ownership-and-scope.md)
 - [ProcessBigraphs Phase 16.HC High-Level Authoring Owner Interview](../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md)
 - [Decision 0040: ProcessBigraphs High-Level Authoring and Phase 16.HC](decisions/0040-process-bigraph-high-level-authoring.md)
+- [Semantic-Preserving Consolidation Owner Interview](../design/audits/semantic-preserving-consolidation-owner-interview.md)
+- [Decision 0041: Semantic-Preserving Repository Consolidation](decisions/0041-semantic-preserving-repository-consolidation.md)
+- [Semantic-Preserving Consolidation Baseline Freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md)
 - [ProcessBigraphs Phase 16.HC Qualification Audit](../design/audits/process-bigraph-phase16hc-high-level-authoring-audit.md)
 - [ProcessBigraphs Phase 16.HC Evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml)
 - [ProcessBigraphs Phase 16 Implementation Plan](../design/audits/process-bigraph-phase16-implementation-plan.md)
@@ -259,6 +264,24 @@ The [qualified CNV audit](../design/audits/process-bigraph-phase16h-cnv-audit.md
 source-bounded scenario-38/simulation-902 assembly: a generated 40×40×35 startup, four
 solver-injectable fields, a CorePotts CPM phase, lifecycle and degradation fixtures, and
 restart/rollback evidence without a publication-analysis claim.
+
+The active engineering contract is the accepted
+[semantic-preserving repository consolidation contract](semantic-preserving-consolidation-contract.md),
+governed by the completed
+[owner interview](../design/audits/semantic-preserving-consolidation-owner-interview.md) and
+[Decision 0041](decisions/0041-semantic-preserving-repository-consolidation.md).
+It freezes the qualified ProcessBigraphs 0.5.0 internal-beta head as the behavioral baseline,
+requires one production authority per concept, replaces living milestone terminology with domain
+vocabulary, consolidates tests and quality tooling without weakening independent oracles,
+preserves API/identity/persistence/backend claims, and forbids new functionality. The
+[37-row qualification ledger](semantic-preserving-consolidation-qualification-v1.toml) separates
+baseline, naming, architecture, deduplication, test/tooling, package, and exact-head reconciliation
+evidence and is now `baseline_frozen`. The qualified
+[baseline freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md) locks the
+exact source, environments, APIs, behavior matrix, identities, performance observations,
+duplication classifications, and hardware impact closures. The next allowed gate is
+`naming_and_archive`; production consolidation has not started, and later roadmap redesign remains
+deferred until consolidation qualifies.
 
 ## Conformance Principle
 
