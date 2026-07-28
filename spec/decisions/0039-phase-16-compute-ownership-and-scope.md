@@ -1,7 +1,6 @@
 # Decision 0039: Phase 16 Compute Ownership, Field Coupling, and Internal-Beta Scope
 
-Status: Accepted architecture with 16.F consolidation; Phase 16.A/B/D/E qualified, C hardware and
-F–I open
+Status: Accepted architecture; Phase 16.A/B/D/E/F qualified, C hardware and G–I open
 
 Date: 2026-07-27
 

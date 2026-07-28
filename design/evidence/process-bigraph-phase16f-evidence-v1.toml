@@ -1,0 +1,94 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16f-solver-plurality-2026-07-27"
+phase = "16.F"
+status = "qualified"
+implementation_commit = "9f9daf19e34c5430361cb98c8002f025a74d217a"
+implementation_tree = "e371867f85c0dd646dc77ba781bd2a746fd4b097"
+branch = "codex/phase-16"
+internal_beta = false
+public_release = false
+qualified_rows = ["P16-F01", "P16-F02", "P16-F03"]
+
+[dependencies]
+CommonSolve = "0.2.11"
+SciMLBase = "3.39.1"
+OrdinaryDiffEqTsit5 = "2.1.0"
+ordinarydiffeq_test_only = true
+core_hard_sciml_dependency = false
+process_bigraphs_depends_on_corepotts = false
+
+[artifacts]
+sciml_extension = "lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl"
+sciml_extension_sha256 = "dc602e639db4e51b9001825ced27e25f9ce6c371392ea8140c773aed170debf3"
+bounded_problem = "lib/ProcessBigraphs/src/bounded_cartesian_field_problem.jl"
+bounded_problem_sha256 = "36432296c42a95f9f7ebcb8a29e853d7948b0c4ff3e6d19e57838ec5d3fc2577"
+module = "lib/ProcessBigraphs/src/ProcessBigraphs.jl"
+module_sha256 = "37a40e06dfd4cd5eb4526f36211e3a31b5f79e210e917380ca6f82bf807a17fc"
+custom_fixture = "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl"
+custom_fixture_sha256 = "41ce38cd233af9f1b63c5bc2d32cdb3b095c0d67523919b83b06810aa3898788"
+process_bigraphs_tests = "lib/ProcessBigraphs/test/phase16/test_phase16f_solver_plurality.jl"
+process_bigraphs_tests_sha256 = "3219020915150fb36cdfc4a5df0bf31576715206f3b58c6224bf3be1c2077e73"
+corepotts_tests = "lib/CorePotts/test/test_phase16_solver_plurality.jl"
+corepotts_tests_sha256 = "c7d387015aa18835b1cbf8e0c4208498d28348302c24a138ef93af57dfc3e016"
+process_bigraphs_project_sha256 = "a4c45e438c1cd9808b9424a57069442658c34b65b909b09c209aa609ecdcb094"
+corepotts_project_sha256 = "1e75bb8d8fd54bb3a4350cf2544a5735540d65b562fc2695d4dd13ce52561d82"
+audit = "design/audits/process-bigraph-phase16f-solver-plurality-audit.md"
+checker = "scripts/process-bigraph-phase16f-check.jl"
+
+[sciml]
+real_problem = "SciMLBase.ODEProblem"
+algorithm_id = "ordinarydiffeq-tsit5"
+algorithm_explicit = true
+automatic_algorithm_selection = false
+canonical_options = true
+required_options = ["abstol", "reltol"]
+undeclared_callbacks_rejected = true
+exact_target = "CommonSolve.step!(integrator, duration, true)"
+standard_error_check = "SciMLBase.check_error"
+standard_success_check = "SciMLBase.successful_retcode"
+process_bigraph_owned_solve = false
+homegrown_solution = false
+
+[continuation]
+policy = "reconstruct_each_invocation"
+published_state_mutated_during_solve = false
+integrator_serialized = false
+integrator_deepcopied = false
+replay_class = "numerical"
+restart_cuts = [0, 1, 2, 3]
+
+[custom]
+location = "test fixture outside ProcessBigraphs src"
+algorithm = "independent classical RK4"
+sciml_dependency = false
+shared_numerical_helper = false
+replay_class = "numerical"
+
+[oracles]
+constant_decay_analytic = true
+tighter_tolerance_reduces_error = true
+sciml_tight_absolute_error_max = 1.0e-9
+custom_refinement_error_reduction_min = 8.0
+periodic_fourier_manufactured = true
+process_sciml_rtol = 2.0e-9
+process_custom_rtol = 2.0e-8
+cross_float64_tolerance = 2.0e-10
+cross_float32_tolerance = 2.0e-5
+native_sciml_custom_logical_time_equal = true
+native_sciml_custom_publication_version_equal = true
+
+[tests]
+process_bigraphs_phase16f_assertions = 88
+corepotts_phase16f_assertions = 14
+process_bigraphs_full_assertions = 1150
+corepotts_full_assertions = 3786
+process_bigraphs_full_package_suite = "passed"
+corepotts_full_package_suite = "passed"
+julia = "1.12.6"
+
+[open]
+phase16c_trusted_metal = true
+phase16c_trusted_rocm = true
+merks_runnable_assembly = true
+cnv_runnable_assembly = true
+phase16_internal_beta = true

@@ -46,8 +46,9 @@ process_project =
 core_project = TOML.parsefile(paths["lib/CorePotts/Project.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 
-check(entry["implementation_status"] ==
+check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
+      "phase16f_qualified_c_hardware_open"),
     "Phase 16.E checker requires qualified-E/C-hardware-open state")
 for id in ["P16-E01", "P16-E02", "P16-E03"]
     check(requirements[id]["status"] == "qualified",
@@ -71,10 +72,14 @@ check(requirements["P16-C02"]["status"] == "oracle_passing" &&
     "Phase 16.E must not overclaim the open Phase 16.C hardware rows")
 
 families = Dict(row["id"] => row for row in api["families"])
+f_qualified =
+    entry["implementation_status"] == "phase16f_qualified_c_hardware_open"
 check(api["status"] == entry["implementation_status"] &&
-      api["current_new_exports"] == [] &&
+      api["current_new_exports"] ==
+      (f_qualified ? api["planned_internal_beta_exports"] : []) &&
       families["corepotts"]["status"] == "qualified" &&
-      families["sciml"]["status"] == "specified" &&
+      families["sciml"]["status"] ==
+          (f_qualified ? "qualified" : "specified") &&
       api["policy"]["unqualified_names_may_not_be_exported"] == true,
     "Phase 16.E API state or no-early-export rule changed")
 

@@ -97,7 +97,7 @@ remaining_claim = "The immutable-topology serial runtime is qualified as Process
 
 [phase16_entry]
 status = "in_progress"
-implementation_status = "phase16e_qualified_c_hardware_open"
+implementation_status = "phase16f_qualified_c_hardware_open"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
 specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
@@ -125,11 +125,14 @@ phase16e_checker = "../scripts/process-bigraph-phase16e-check.jl"
 phase16e_evidence = "../design/evidence/process-bigraph-phase16e-evidence-v1.toml"
 phase16f_consolidation_research = "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
 phase16f_consolidation_checker = "../scripts/process-bigraph-phase16f-consolidation-spec-check.jl"
-phase16f_prototype_status = "unqualified_repair_required"
+phase16f_audit = "../design/audits/process-bigraph-phase16f-solver-plurality-audit.md"
+phase16f_checker = "../scripts/process-bigraph-phase16f-check.jl"
+phase16f_evidence = "../design/evidence/process-bigraph-phase16f-evidence-v1.toml"
+phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
 g4_disposition = "mandatory Phase 16.C"
 internal_beta = false
 public_release = false
-remaining_claim = "Phase 16.A, 16.B, 16.D, and 16.E are qualified. Phase 16.C has qualified CPU and local real-Metal evidence but remains open for exact-head trusted Metal/ROCm artifacts. Commit 7217f9b is an unqualified 16.F prototype that must pass the real-solver/API/custom-fixture consolidation repair before SciML/custom plurality can qualify. Runnable Merks/CNV, internal beta, complete parity, and public release remain open."
+remaining_claim = "Phase 16.A, 16.B, 16.D, 16.E, and 16.F are qualified. Phase 16.C has qualified CPU and local real-Metal evidence but remains open for exact-head trusted Metal/ROCm artifacts. Commit 9f9daf1 replaces the unqualified 16.F prototype with a real injected SciML solver, numerical reconstruction, an external independent custom fixture, and analytic/convergence evidence. Runnable Merks/CNV, internal beta, complete parity, and public release remain open."
 
 [status_vocabulary]
 allowed = [

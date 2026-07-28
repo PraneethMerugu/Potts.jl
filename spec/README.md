@@ -231,16 +231,17 @@ CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choic
 interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
 strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
 ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
-heavy computation occurs. Phase 16.A, 16.B, 16.D, and 16.E are qualified: the internal
+heavy computation occurs. Phase 16.A, 16.B, 16.D, 16.E, and 16.F are qualified: the internal
 engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
 domain requests, V3 logical checkpoint, and non-destructive legacy conversions are passing. Phase
-16.C remains open only for trusted exact-head Metal/ROCm evidence, and 14 requirements remain open
-across 16.C and 16.F–16.I. The
+16.C remains open only for trusted exact-head Metal/ROCm evidence, and 11 requirements remain open
+across 16.C and 16.G–16.I. The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
-classifies commit `7217f9b` as an unqualified prototype and requires a real injected SciML
-algorithm, standard solver interfaces, an external-style independent custom fixture, numerical
-replay by default, and restored API containment before qualification. Merks/CNV assembly waits
-for qualified 16.F; public engine exports remain gated.
+classified commit `7217f9b` as an unqualified prototype. The resulting
+[qualified solver-plurality audit](../design/audits/process-bigraph-phase16f-solver-plurality-audit.md)
+records commit `9f9daf1`: a real injected SciML algorithm, standard solver interfaces, an
+external-style independent custom fixture, numerical replay by default, analytic/convergence
+evidence, and a bounded adapter-author API. Merks/CNV assembly may now proceed.
 
 ## Conformance Principle
 
