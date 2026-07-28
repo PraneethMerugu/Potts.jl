@@ -236,16 +236,14 @@ CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choic
 interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
 strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
 ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
-heavy computation occurs. Phase 16.A, 16.B, 16.D, 16.E, 16.F, 16.G, and 16.H are qualified: the internal
-engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
-domain requests, V3 logical checkpoint, non-destructive legacy conversions, and bounded runnable
-Merks and CNV assemblies are passing. Phase 16.HC is also qualified: the immutable semantic model,
-ordinary Julia builder, deterministic lowering, complete origin map, controlled raw-IR migration,
-executable documentation, and stage-separated authoring performance guardrails pass. Phase 16.C
-is now qualified by trusted exact-source CPU, Metal, and ROCm artifacts. The three Phase 16.I
-rows are at `oracle_passing` in an exact-head candidate: documentation, clean-resolution, and
-frozen-performance reconciliation pass, while CI candidate admission and metadata-only
-attestation remain. The Phase 16.HC obligations and claim boundary are normative in the
+heavy computation occurs. Phase 16 is qualified as unpublished ProcessBigraphs `0.5.0` internal
+beta. All 38 rows pass, including the engine/field boundary, dynamic orchestration transactions,
+CorePotts native-field cutover, typed domain requests, V3 logical checkpoint, non-destructive
+legacy conversions, bounded runnable Merks/CNV assemblies, ordinary Julia authoring,
+deterministic lowering, complete origin mapping, controlled raw-IR migration, and stage-separated
+performance guardrails. Phase 16.C retains trusted exact-source CPU, Metal, and ROCm artifacts;
+Phase 16.I retains the admitted candidate, complete performance report, evidence manifest, and
+closure audit. The Phase 16.HC obligations and claim boundary are normative in the
 [high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
 content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)

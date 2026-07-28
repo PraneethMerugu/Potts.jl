@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 16.A–16.HC qualified; Phase 16.I exact-head candidate awaiting attestation
+Status: Phase 16 qualified as unpublished ProcessBigraphs 0.5.0 internal beta
 
 ## Authority and maturity
 
@@ -18,6 +18,11 @@ Phase 16 adds atomic dynamic structural transactions, solver-neutral engine adap
 SciML field paths, bounded Merks and CNV assemblies, and semantic high-level authoring. Distributed
 execution, Dagger equivalence, universal solver support, full publication analyses, and public
 release remain outside the internal beta boundary.
+
+Phase 16.I admits the clean exact-head candidate after successful Linux x86_64, macOS ARM64,
+independent-package, integration, rendering, oracle, documentation, hardware, and frozen
+performance gates. The metadata-only attestation sets `internal_beta = true` at package version
+`0.5.0`; `public_release = false` remains mandatory.
 
 Decision 0038 and the completed 64-choice owner interview define the Phase 15.C boundary. The
 [entry contract](../../../../spec/process-bigraph-phase15c-entry-v1.toml) names exactly 15 target

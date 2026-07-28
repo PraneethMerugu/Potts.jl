@@ -98,8 +98,8 @@ public_release = false
 remaining_claim = "The immutable-topology serial runtime is qualified as ProcessBigraphs 0.4.0 internal alpha. Dynamic structure, alternate executors, devices, scientific adapters, Potts cutover, whole-cell qualification, complete pinned parity, and public release remain open."
 
 [phase16_entry]
-status = "in_progress"
-implementation_status = "phase16i_candidate"
+status = "closed_internal_beta"
+implementation_status = "phase16_internal_beta_qualified"
 decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
 high_level_authoring_decision = "decisions/0040-process-bigraph-high-level-authoring.md"
 interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
@@ -145,11 +145,15 @@ phase16h_evidence = "../design/evidence/process-bigraph-phase16h-evidence-v1.tom
 phase16i_audit = "../design/audits/process-bigraph-phase16i-reconciliation-audit.md"
 phase16i_checker = "../scripts/process-bigraph-phase16i-check.jl"
 phase16i_candidate_generator = "../scripts/process-bigraph-phase16i-candidate.jl"
+phase16i_candidate = "../design/evidence/phase-16/phase16i-candidate.toml"
+phase16i_performance = "../design/evidence/phase-16/phase16i-authoring-performance.toml"
+phase16i_evidence = "../design/evidence/process-bigraph-phase16i-evidence-v1.toml"
+phase16_closure_audit = "../design/audits/process-bigraph-phase16-closure-audit.md"
 phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
 g4_disposition = "mandatory Phase 16.C"
-internal_beta = false
+internal_beta = true
 public_release = false
-remaining_claim = "Phase 16.A through 16.HC are qualified and Phase 16.I is an exact-head candidate. Metadata-only 0.5.0 internal-beta attestation, complete parity, full publication analyses, and public release remain open."
+remaining_claim = "Phase 16 is qualified as ProcessBigraphs 0.5.0 internal beta. Complete pinned parity, post-Phase-16 consolidation, full Merks/CNV publication analyses, whole-cell qualification, and public release remain open."
 
 [status_vocabulary]
 allowed = [

@@ -94,6 +94,7 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase15c-serial-alpha-plan.md",
     "spec/process-bigraph-phase15c-entry-v1.toml",
     "spec/process-bigraph-phase15c-qualification-v1.toml",
+    "spec/process-bigraph-phase16-entry-v1.toml",
     "spec/process-bigraph-parity-registry-v1.toml",
     "lib/ProcessBigraphs/parity-registry.toml",
     "lib/ProcessBigraphs/Project.toml",
@@ -124,6 +125,8 @@ const REQUIRED = [
 paths = Dict(path => require_file(path) for path in REQUIRED)
 
 entry = TOML.parsefile(paths["spec/process-bigraph-phase15c-entry-v1.toml"])
+phase16_entry =
+    TOML.parsefile(paths["spec/process-bigraph-phase16-entry-v1.toml"])
 qualification = TOML.parsefile(
     paths["spec/process-bigraph-phase15c-qualification-v1.toml"])
 registry = TOML.parsefile(
@@ -174,11 +177,14 @@ if candidate
         "final attestation evidence must not exist in the implementation PR")
 else
     require_file("design/evidence/process-bigraph-phase15c-evidence-v1.toml")
+    expected_version =
+        phase16_entry["implementation_status"] ==
+            "phase16_internal_beta_qualified" ? "0.5.0" : "0.4.0"
     check(entry["status"] == "closed_internal_alpha" &&
           entry["internal_alpha"] == true &&
           entry["current_package_version"] == "0.4.0" &&
-          project["version"] == "0.4.0",
-        "closed Phase 15.C must use version 0.4.0 and internal-alpha=true")
+          project["version"] == expected_version,
+        "closed Phase 15.C must retain its 0.4.0 identity while permitting a qualified Phase 16 package version")
 end
 
 check(entry["entry_ci"]["phase15c_runtime_tests_present"] == true &&

@@ -46,6 +46,8 @@ hc_active = entry["implementation_status"] in (
 c_qualified = entry["implementation_status"] in (
     "phase16hc_qualified", "phase16i_candidate",
     "phase16_internal_beta_qualified")
+phase16_closed =
+    entry["implementation_status"] == "phase16_internal_beta_qualified"
 hc_artifacts = hc_active ? Dict(
     row["path"] => row["sha256"]
     for row in TOML.parsefile(joinpath(
@@ -217,10 +219,20 @@ for (path_key, hash_key) in hash_pairs
     check(artifact_matches(relative, evidence["artifacts"][hash_key]),
         "Phase 16.F artifact hash changed: $(relative)")
 end
-check(bytes2hex(SHA.sha256(read(paths["lib/ProcessBigraphs/Project.toml"]))) ==
-      evidence["artifacts"]["process_bigraphs_project_sha256"] &&
-      bytes2hex(SHA.sha256(read(paths["lib/CorePotts/Project.toml"]))) ==
-      evidence["artifacts"]["corepotts_project_sha256"],
+project_hashes_match = if phase16_closed
+    candidate = TOML.parsefile(require_file(
+        "design/evidence/phase-16/phase16i-candidate.toml"))
+    candidate["dependency_resolution"]["lib/ProcessBigraphs/Project.toml"] ==
+        evidence["artifacts"]["process_bigraphs_project_sha256"] &&
+    candidate["dependency_resolution"]["lib/CorePotts/Project.toml"] ==
+        evidence["artifacts"]["corepotts_project_sha256"]
+else
+    bytes2hex(SHA.sha256(read(paths["lib/ProcessBigraphs/Project.toml"]))) ==
+        evidence["artifacts"]["process_bigraphs_project_sha256"] &&
+    bytes2hex(SHA.sha256(read(paths["lib/CorePotts/Project.toml"]))) ==
+        evidence["artifacts"]["corepotts_project_sha256"]
+end
+check(project_hashes_match,
     "Phase 16.F package dependency evidence changed")
 
 workflow = read(paths[".github/workflows/ci.yml"], String)

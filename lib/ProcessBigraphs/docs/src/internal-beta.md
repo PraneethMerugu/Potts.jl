@@ -1,10 +1,13 @@
 # Phase 16 internal-beta guide
 
-Status: implementation candidate; package version remains `0.4.0` until metadata-only attestation
+Status: qualified unpublished internal beta; package version `0.5.0`
+
+The metadata-only attestation admits the previously qualified exact-head implementation without
+changing runtime or scientific-model behavior.
 
 ## What this beta is
 
-Phase 16 is an unpublished internal beta for composing dynamic scientific processes around
+Phase 16 is a qualified, unpublished internal beta for composing dynamic scientific processes around
 optimized domain engines. ProcessBigraphs owns logical time, invocation reason, visibility,
 identity, reconciliation, validation, publication, failure, checkpoint, and replay. A selected
 solver or CPM kernel owns timesteps, sweeps, device kernels, arrays, caches, workspaces, streams,

@@ -85,6 +85,10 @@ parity = TOML.parsefile(
 local_parity = TOML.parsefile(
     paths["lib/ProcessBigraphs/parity-registry.toml"])
 project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
+core_project = TOML.parsefile(joinpath(
+    ROOT, "lib", "CorePotts", "Project.toml"))
+integration_project = TOML.parsefile(joinpath(
+    ROOT, "integration", "Project.toml"))
 phase16c = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16c-evidence-v1.toml"])
 
@@ -161,6 +165,12 @@ check(Set(keys(project["deps"])) ==
       !haskey(project["deps"], "CorePotts") &&
       !haskey(project["deps"], "SciMLBase"),
     "ProcessBigraphs independent dependency boundary widened")
+expected_process_compat = closed ? "0.4, 0.5" : "0.4"
+check(core_project["compat"]["ProcessBigraphs"] ==
+          expected_process_compat &&
+      integration_project["compat"]["ProcessBigraphs"] ==
+          expected_process_compat,
+    "CorePotts or integration ProcessBigraphs compatibility is inconsistent")
 
 doc_requirements = Dict(
     "lib/ProcessBigraphs/docs/src/internal-beta.md" => [
@@ -238,12 +248,17 @@ else
         "design/evidence/process-bigraph-phase16i-evidence-v1.toml"))
     candidate_artifact = TOML.parsefile(require_file(
         "design/evidence/phase-16/phase16i-candidate.toml"))
+    performance_path = require_file(
+        "design/evidence/phase-16/phase16i-authoring-performance.toml")
+    archived_performance = TOML.parsefile(performance_path)
     check(final_evidence["status"] == "qualified_internal_beta" &&
           final_evidence["phase"] == "16.I" &&
           final_evidence["internal_beta"] == true &&
           final_evidence["public_release"] == false &&
           final_evidence["candidate"]["artifact_sha256"] ==
               bytes2hex(SHA.sha256(read(candidate_path))) &&
+          final_evidence["candidate"]["performance_report_sha256"] ==
+              bytes2hex(SHA.sha256(read(performance_path))) &&
           candidate_artifact["artifact_kind"] ==
               "phase16i-exact-head-internal-beta-candidate" &&
           candidate_artifact["tree_identity_verified"] == true &&
@@ -253,7 +268,12 @@ else
           candidate_artifact["qualification"][
               "all_rows_at_least_oracle_passing"] == true &&
           candidate_artifact["performance"]["all_frozen_budgets_pass"] ==
-              true,
+              true &&
+          candidate_artifact["performance"]["report_sha256"] ==
+              bytes2hex(SHA.sha256(read(performance_path))) &&
+          archived_performance["plan_identity_equal"] == true &&
+          archived_performance["repetitions"] == 9 &&
+          all(values(archived_performance["checks"])),
         "Phase 16.I final attestation or candidate identity is invalid")
 end
 

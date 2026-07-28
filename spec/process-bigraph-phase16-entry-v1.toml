@@ -2,11 +2,11 @@ schema_version = "1.0.0"
 contract_id = "process-bigraphs-phase16-entry-v1"
 phase = "16"
 title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
-status = "in_progress"
-implementation_status = "phase16i_candidate"
-internal_beta = false
+status = "closed_internal_beta"
+implementation_status = "phase16_internal_beta_qualified"
+internal_beta = true
 public_release = false
-current_package_version = "0.4.0"
+current_package_version = "0.5.0"
 target_package_version = "0.5.0"
 julia = "1.12.6"
 
@@ -59,6 +59,10 @@ phase16i_audit = "../design/audits/process-bigraph-phase16i-reconciliation-audit
 phase16i_checker = "../scripts/process-bigraph-phase16i-check.jl"
 phase16i_candidate_generator = "../scripts/process-bigraph-phase16i-candidate.jl"
 phase16i_generated_capabilities = "../lib/ProcessBigraphs/docs/src/phase16-capabilities.md"
+phase16i_candidate = "../design/evidence/phase-16/phase16i-candidate.toml"
+phase16i_performance = "../design/evidence/phase-16/phase16i-authoring-performance.toml"
+phase16i_evidence = "../design/evidence/process-bigraph-phase16i-evidence-v1.toml"
+phase16_closure_audit = "../design/audits/process-bigraph-phase16-closure-audit.md"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]
@@ -167,7 +171,7 @@ qualified_runtime_reimplementation = "forbidden without demonstrated defect"
 independent_phase16c_hardware_gate_preserved = true
 
 [phase16i]
-status = "candidate"
+status = "qualified"
 all_prior_subgates_qualified = true
 documentation_reconciled = true
 clean_independent_packages_required = true
@@ -253,5 +257,5 @@ metadata_only_attestation_required = true
 clean_tree_required = true
 content_addressed_evidence_required = true
 publish_package = false
-closure_checker_expected_now = "open"
+closure_checker_expected_now = "qualified_internal_beta"
 phase16hc_qualified_before_phase16i = true

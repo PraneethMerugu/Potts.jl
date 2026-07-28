@@ -12,6 +12,8 @@ require_file(path) = (check(isfile(path), "missing $(relpath(path, ROOT))"); pat
 project_path = require_file(joinpath(PACKAGE, "Project.toml"))
 phase15c_entry_path = require_file(
     joinpath(ROOT, "spec", "process-bigraph-phase15c-entry-v1.toml"))
+phase16_entry_path = require_file(
+    joinpath(ROOT, "spec", "process-bigraph-phase16-entry-v1.toml"))
 module_path = require_file(joinpath(PACKAGE, "src", "ProcessBigraphs.jl"))
 registry_path = require_file(joinpath(PACKAGE, "parity-registry.toml"))
 readme_path = require_file(joinpath(PACKAGE, "README.md"))
@@ -27,7 +29,10 @@ check(!isfile(joinpath(PACKAGE, "Manifest.toml")),
 
 project = TOML.parsefile(project_path)
 phase15c_entry = TOML.parsefile(phase15c_entry_path)
+phase16_entry = TOML.parsefile(phase16_entry_path)
 expected_package_version =
+    phase16_entry["implementation_status"] ==
+        "phase16_internal_beta_qualified" ? "0.5.0" :
     phase15c_entry["runtime_implementation_status"] == "qualified_internal_alpha" ?
     "0.4.0" : "0.3.0"
 check(project["name"] == "ProcessBigraphs", "package name changed")
@@ -81,6 +86,7 @@ check(registry["maturity"] in (
         "phase_15b_open_composition",
         "phase_15c_implementation_candidate",
         "phase_15c_serial_internal_alpha",
+        "phase_16_internal_beta",
     ),
     "package registry no longer preserves PB0 evidence")
 check(registry["public_release"] == false, "package registry claims a public release")

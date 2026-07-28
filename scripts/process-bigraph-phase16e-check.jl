@@ -51,6 +51,8 @@ hc_active = entry["implementation_status"] in (
 c_qualified = entry["implementation_status"] in (
     "phase16hc_qualified", "phase16i_candidate",
     "phase16_internal_beta_qualified")
+phase16_closed =
+    entry["implementation_status"] == "phase16_internal_beta_qualified"
 hc_artifacts = hc_active ? Dict(
     row["path"] => row["sha256"]
     for row in TOML.parsefile(joinpath(
@@ -121,7 +123,8 @@ check(Set(keys(process_project["deps"])) ==
     "ProcessBigraphs acquired a CorePotts or non-neutral hard dependency")
 check(get(core_project["deps"], "ProcessBigraphs", nothing) ==
       "efcc6515-205e-41e3-b553-f38f05ad529c" &&
-      core_project["compat"]["ProcessBigraphs"] == "0.4" &&
+      core_project["compat"]["ProcessBigraphs"] ==
+          (phase16_closed ? "0.4, 0.5" : "0.4") &&
       core_project["sources"]["ProcessBigraphs"]["path"] ==
           "../ProcessBigraphs",
     "CorePotts-to-ProcessBigraphs dependency direction is not exact")

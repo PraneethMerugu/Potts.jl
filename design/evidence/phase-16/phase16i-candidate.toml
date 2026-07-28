@@ -1,0 +1,139 @@
+artifact_kind = "phase16i-exact-head-internal-beta-candidate"
+base_commit = "536ba7d29173bf619f82c58c64eb22ff965cbe75"
+base_ref = "origin/main"
+commands = ["julia --project=. -e 'using Pkg; Pkg.test()'", "julia --project=lib/CorePotts -e 'using Pkg; Pkg.test()'", "julia --project=lib/ProcessBigraphs -e 'using Pkg; Pkg.test()'", "julia --project=integration integration/runtests.jl", "julia scripts/process-bigraph-phase16-docs.jl --check", "julia scripts/process-bigraph-phase16i-check.jl", "julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'", "julia --project=benchmark benchmark/phase16hc_authoring_qualification.jl", "julia --project=benchmark lib/ProcessBigraphs/test/examples/high_level_authoring.jl"]
+dirty_state = "clean"
+generated_at_utc = "2026-07-28T17:38:10.151"
+internal_beta = false
+limitations = ["public-release", "complete-pinned-parity", "dagger-or-distributed-qualification", "multi-gpu", "cuda-qualification", "universal-solver-gpu-support", "moving-mesh-fem-amr", "merge-engulf-burst-general-rewrite", "implicit-spo-cascade", "arbitrary-mid-event-restart", "full-merks-publication-analysis", "full-cnv-publication-analysis", "full-source-ensemble-reproduction", "mandatory-source-faithful-assembled-model-gpu", "broad-ode-dae-biochemical-fba-sbml-ecosystem", "algebraicdynamics", "whole-cell-qualification", "mandatory-full-compose-macro-language", "graphical-authoring", "arbitrary-closure-serialization", "universal-implicit-cosimulation-engine"]
+merge_base = "536ba7d29173bf619f82c58c64eb22ff965cbe75"
+prospective_merge_tree = "71597c3e206928c01eaf9fc7936243ad2f56d3cd"
+public_release = false
+qualified_head_commit = "6a8deb7886761ea7a4142f09a742cb66ebc1f3ee"
+qualified_tree = "71597c3e206928c01eaf9fc7936243ad2f56d3cd"
+runtime_package = "ProcessBigraphs"
+runtime_version = "0.4.0"
+schema_version = "1.0.0"
+tree_identity_verified = true
+
+[api]
+constructor_spelling_stable = false
+exported_internal_beta_names = 72
+qualified_name_expert_names = 12
+semantic_identity_stable = true
+
+[backend_matrix.cnv-source-faithful-assembly]
+CPU = "qualified"
+CUDA = "not_applicable"
+Metal = "unsupported"
+ROCm = "unsupported"
+
+[backend_matrix.independent-custom-field]
+CPU = "qualified"
+CUDA = "not_applicable"
+Metal = "unsupported"
+ROCm = "unsupported"
+
+[backend_matrix.merks-source-faithful-assembly]
+CPU = "qualified"
+CUDA = "not_applicable"
+Metal = "unsupported"
+ROCm = "unsupported"
+
+[backend_matrix.native-cartesian-field]
+CPU = "qualified"
+CUDA = "not_applicable"
+Metal = "qualified"
+ROCm = "qualified"
+
+[backend_matrix.sciml-cartesian-field]
+CPU = "qualified"
+CUDA = "not_applicable"
+Metal = "unsupported"
+ROCm = "unsupported"
+
+[ci]
+job = "phase16i_candidate"
+repository = "PraneethMerugu/Potts.jl"
+required_jobs = ["project", "packages", "integration", "phase15c_oracle", "phase15c_candidate", "cpu_macos_arm64", "cpu_linux_x64", "phase16i_candidate", "required"]
+run_attempt = "1"
+run_id = "30381477071"
+sha = "6a8deb7886761ea7a4142f09a742cb66ebc1f3ee"
+
+[dependency_resolution]
+"Project.toml" = "18f717713e33aa46439b4d977f747116dc64c572ee5a4d0efd2b68f01ba4aa1d"
+"benchmark/Manifest.toml" = "38995c966d9c190b4fb35f2abccdacc3087c7c231ad7529abfd9e78140c5263f"
+"benchmark/Project.toml" = "0245e3820c2b7e240787100382f9c785aa8edab5e32c4998fd0c7feb1892d422"
+"docs/Manifest.toml" = "18acab8f77a98202475a53452fd27864dbec1f10238f996511dd549614ecc8b3"
+"docs/Project.toml" = "f1082561f68b5fa39f5ddbff91193dc010bd983a9471f4f98965adf27c1d58d3"
+"examples/Manifest.toml" = "306954ff3c7c124fc89dccf9f38c5bd88f7717835de28cd12093a9c00287d61f"
+"examples/Project.toml" = "5b3af52b55e8620cf5e533092150db261a2880f5327a0e8b4a0b827d31b0e49c"
+"examples/dashboards/Manifest.toml" = "73c8a5c991d2c4e226d1c4cc196be4fdce8b3b37932b0197d803e8980ac555e5"
+"examples/dashboards/Project.toml" = "0c08392b232d5df6dd58ae22d53639f32a248beabac5bb910292d3a329e82815"
+"examples/notebooks/Manifest.toml" = "81906be12660360f0b080b3e90d97317b86fb39452852b7741a3994ab959c45b"
+"examples/notebooks/Project.toml" = "06efb6d40cbd81407ea1c9d29cf24c3351cae35ce249d5a82ed4fae669663450"
+"integration/Project.toml" = "1acaf633fdacfb2f43195a141add50cc02fa56ad78265b2727fe7888e460dbd5"
+"lib/CorePotts/Project.toml" = "1e75bb8d8fd54bb3a4350cf2544a5735540d65b562fc2695d4dd13ce52561d82"
+"lib/MakiePotts/Project.toml" = "d398896c0f58718e63f80feac65a7006349c836cedb06898034cc159ed72f370"
+"lib/MakiePotts/test/backends/Manifest.toml" = "6549cb6eab26aa15a4b17ed307d49d5f7468ac41a90818fae2aff92b1719bdea"
+"lib/MakiePotts/test/backends/Project.toml" = "bf69aaf11314e4902c06f5052ff45a575a3a34487ccab4b3683d1fb8be097ef6"
+"lib/ProcessBigraphs/Project.toml" = "a4c45e438c1cd9808b9424a57069442658c34b65b909b09c209aa609ecdcb094"
+"paper/Manifest.toml" = "df22de02499b37ac1c818e8620e3ca12ea733ead7b1aa37144046c89516db618"
+"paper/Project.toml" = "87694c81da8613d7cdc792a0f50514caa5f024ac04f1c4cd7083b5c91e14549c"
+
+[documentation]
+"lib/ProcessBigraphs/README.md" = "7d18ca2ae948668ea417268fd5a6e0141eefb129f2dea89ea6a03d7ab80f4404"
+"lib/ProcessBigraphs/docs/src/adapters-and-solvers.md" = "c17b3152615bae62fd4b1b69116f98101cb86819fddcc6cf159b15fa97995df0"
+"lib/ProcessBigraphs/docs/src/failure-and-persistence.md" = "7dcfa11bede5e7471c1da0a7233512808d6b0f862cb01d7ea8343c064cdd0cd7"
+"lib/ProcessBigraphs/docs/src/internal-beta.md" = "3d0d6b2416d5c7414db967624ab02385d34b458a4a8aa301ce8bdfda258367b7"
+"lib/ProcessBigraphs/docs/src/internal.md" = "e6a0b1ef006cb9ba2a8028a6ff6b579b625344a3374299c7dfdf8b6f757a567c"
+"lib/ProcessBigraphs/docs/src/phase16-capabilities.md" = "ca3477c1985070d480c14a00de5c49ee49446a5415c561b89e1c053c84250164"
+
+[environment]
+architecture = "x86_64"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+cpu_threads = 4
+julia_version = "1.12.6"
+kernel = "Linux"
+total_memory_bytes = 0x03e75b5000
+word_size = 64
+
+[evidence_manifests]
+"design/evidence/process-bigraph-phase16a-evidence-v1.toml" = "8a0bdbb65945a8b4a5bcd435f117538e7eab426531608608f3a99103f9833989"
+"design/evidence/process-bigraph-phase16b-evidence-v1.toml" = "1376abc96f0cc0bb7209bc6e9a7bc74cda6355bd8a5f36dc524984ce9e9b8e57"
+"design/evidence/process-bigraph-phase16c-evidence-v1.toml" = "997ebbea2db8d1ccde1e1179136a887bd902ac2e119f7f82a4abe509f5db142f"
+"design/evidence/process-bigraph-phase16d-evidence-v1.toml" = "c6b7b1383bee136f55d87de37537fad824f3a07d92db012abc34ac968a38883c"
+"design/evidence/process-bigraph-phase16e-evidence-v1.toml" = "b33d32b730890caa5b3ffa0a89c7592454c9b3f5dda02fe7dde5689ce1318364"
+"design/evidence/process-bigraph-phase16f-evidence-v1.toml" = "4e4c19b4359ab33a0a6cfa4d96856205590a697a73640bb5e58a391d6f10eb40"
+"design/evidence/process-bigraph-phase16g-evidence-v1.toml" = "aeef33f775983bec317bf88a7820bcf5296c879387d2d881b02b92ac2b999ab8"
+"design/evidence/process-bigraph-phase16h-evidence-v1.toml" = "08d3a072a299bd1b8fa7e6877fead1ba63876c4fdfb02c2760b2be0f0be5f894"
+"design/evidence/process-bigraph-phase16hc-evidence-v1.toml" = "fb91a032f9334d948fbbda34b271699ef4bf7e106e8345dc6cead83787aa805e"
+
+[hardware]
+metal_exact_head = true
+metal_hardware_id = "metal-runner-gpu-v1"
+native_field_source_sha256 = "46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25"
+phase16c_evidence_sha256 = "997ebbea2db8d1ccde1e1179136a887bd902ac2e119f7f82a4abe509f5db142f"
+rocm_exact_head = true
+rocm_hardware_id = "rocm-runner-gpu-v1"
+workflow_head_sha = "83f7aea20a85bb3855a5976ee64e738be15b1866"
+workflow_run_id = 30360086075
+
+[performance]
+all_frozen_budgets_pass = true
+events = 128
+evidence_id = "process-bigraph-phase16hc-authoring-performance-v1"
+fastest_runtime_claim = false
+plan_identity_equal = true
+repetitions = 9
+report_sha256 = "050dc8965785e7a190909d62fd6222b766f5abc4221257501d0a6a6dd69dc0f0"
+warm_allocation_ratio = 1.0
+warm_time_ratio = 1.0034816214967597
+
+[qualification]
+all_rows_at_least_oracle_passing = true
+closure_status = "open"
+metadata_only_attestation_required = true
+oracle_passing_rows = 3
+qualified_rows = 35
+required_rows = 38

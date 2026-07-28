@@ -1,10 +1,10 @@
 # ProcessBigraphs Phase 16.I Reconciliation Audit
 
-Status: exact-head internal-beta candidate
+Status: qualified unpublished internal beta
 
 Date: 2026-07-28
 
-Package version: `0.4.0` pending metadata-only `0.5.0` attestation
+Package version: `0.5.0`
 
 ## Outcome
 
@@ -13,10 +13,12 @@ content-addressed source identity across CPU, trusted real Metal, and trusted re
 Phase 16.I reconciles those results without adding a new scheduler, numerical solver, runtime
 mechanism, scientific model, or backend claim.
 
-The candidate remains unpublished with `internal_beta = false`. The exact-head artifact is
-generated only from a clean commit after the complete CI, independent-package, integration,
-hardware, documentation, static-guard, and frozen-performance gates pass. Final promotion changes
-only metadata, registries, documentation status, evidence, and attestation checkers.
+The exact-head candidate was generated from a clean commit after the complete CI,
+independent-package, integration, hardware, documentation, static-guard, and frozen-performance
+gates passed. Its content-addressed artifact and performance report are admitted by the Phase 16
+evidence manifest. The final promotion changes only metadata, compatibility declarations and
+tracked manifests, registries, documentation status, evidence, and lifecycle-aware attestation
+checkers. `internal_beta = true`; `public_release = false`.
 
 ## Documentation and claim reconciliation
 
