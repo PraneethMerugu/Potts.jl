@@ -38,6 +38,28 @@ const REQUIRED = [
     ".github/workflows/ci.yml",
 ]
 paths = Dict(path => require_file(path) for path in REQUIRED)
+const RESOLUTION_FILES = Set([
+    "Project.toml",
+    "Manifest.toml",
+    "benchmark/Project.toml",
+    "benchmark/Manifest.toml",
+    "docs/Project.toml",
+    "docs/Manifest.toml",
+    "examples/Project.toml",
+    "examples/Manifest.toml",
+    "examples/dashboards/Project.toml",
+    "examples/dashboards/Manifest.toml",
+    "examples/notebooks/Project.toml",
+    "examples/notebooks/Manifest.toml",
+    "integration/Project.toml",
+    "lib/CorePotts/Project.toml",
+    "lib/MakiePotts/Project.toml",
+    "lib/MakiePotts/test/backends/Project.toml",
+    "lib/MakiePotts/test/backends/Manifest.toml",
+    "lib/ProcessBigraphs/Project.toml",
+    "paper/Project.toml",
+    "paper/Manifest.toml",
+])
 
 entry = TOML.parsefile(paths["spec/process-bigraph-phase16-entry-v1.toml"])
 api = TOML.parsefile(paths["spec/process-bigraph-phase16-api-v1.toml"])
@@ -217,6 +239,8 @@ else
               "phase16i-exact-head-internal-beta-candidate" &&
           candidate_artifact["tree_identity_verified"] == true &&
           candidate_artifact["dirty_state"] == "clean" &&
+          Set(keys(candidate_artifact["dependency_resolution"])) ==
+              RESOLUTION_FILES &&
           candidate_artifact["qualification"][
               "all_rows_at_least_oracle_passing"] == true &&
           candidate_artifact["performance"]["all_frozen_budgets_pass"] ==
