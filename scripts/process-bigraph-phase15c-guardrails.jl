@@ -6,7 +6,8 @@ using SHA
 using TOML
 using ProcessBigraphs
 
-import ProcessBigraphs: invoke, ports, semantic_parameters
+import ProcessBigraphs: PortBinding, ProcessDeclaration, StaticComposite,
+    compile_composite, invoke, ports, semantic_parameters
 
 const ROOT = normpath(joinpath(@__DIR__, ".."))
 length(ARGS) == 1 ||
