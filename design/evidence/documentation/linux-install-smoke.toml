@@ -1,0 +1,11 @@
+architecture = "x86_64"
+completed_utc = "2026-07-28T02:12:33.063"
+julia_version = "1.12.6"
+kernel = "Linux"
+lattice = [4, 4]
+platform = "linux"
+schema_version = "1.0.0"
+smoke_source = "docs/models/tutorials/install_and_verify.jl"
+source_digest = "64f589da3315b4026fd5f8b63c5eee4c2b259f184d781ded441902c6da893c7a"
+started_utc = "2026-07-28T02:10:59.004"
+status = "passed"
