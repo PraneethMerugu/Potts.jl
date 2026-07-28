@@ -1072,44 +1072,6 @@ function cnv2012_composite(
         mmp_forcing=field_leaf(exchange.mmp),
         mmp_decay_weights=field_leaf(ones(Float64, shape)),
     )
-    processes = Tuple(map(
-        pair -> ProcessBigraphs.ProcessDeclaration(
-            begin
-                name = first(pair)
-                "cnv-" * replace(String(name), "_" => "-")
-            end,
-            ProcessBigraphs.ManagedFieldAdvanceProcess(
-                last(pair); resource_authorization),
-            ProcessBigraphs.FixedSchedule(
-                ProcessBigraphs.Duration(1, time_scale))),
-        collect(pairs(field_declarations)),
-    ))
-    cpm = ProcessBigraphs.StepDeclaration(
-        "cnv-cpm", CNV2012CPMStep(profile=profile))
-    biology = ProcessBigraphs.StepDeclaration(
-        "cnv-biology", CNV2012BiologyStep(profile);
-        dependencies=("cnv-cpm",))
-    exchange_step = ProcessBigraphs.StepDeclaration(
-        "cnv-field-exchange", CNV2012ExchangeStep();
-        dependencies=("cnv-biology",))
-    bindings = ProcessBigraphs.PortBinding[]
-    for name in keys(field_declarations)
-        owner = "cnv-" * replace(String(name), "_" => "-")
-        forcing_name = Symbol(name, :_forcing)
-        weights_name = Symbol(name, :_decay_weights)
-        push!(bindings,
-            ProcessBigraphs.PortBinding(owner, :field,
-                ProcessBigraphs.path(String(name))),
-            ProcessBigraphs.PortBinding(owner, :forcing,
-                ProcessBigraphs.path(String(forcing_name))),
-            ProcessBigraphs.PortBinding(owner, :decay_weights,
-                ProcessBigraphs.path(String(weights_name))),
-            ProcessBigraphs.PortBinding(owner, :field_out,
-                ProcessBigraphs.path(String(name))),
-            ProcessBigraphs.PortBinding(owner, :mcs_field,
-                ProcessBigraphs.path(String(name) * "_mcs")),
-        )
-    end
     cpm_bindings = (
         (:labels, :labels), (:cell_types, :cell_types),
         (:target_volume, :target_volume),
@@ -1120,10 +1082,6 @@ function cnv2012_composite(
         (:rpe_vegf, :rpe_vegf_mcs),
         (:labels_out, :labels),
     )
-    for (port, target) in cpm_bindings
-        push!(bindings, ProcessBigraphs.PortBinding(
-            "cnv-cpm", port, ProcessBigraphs.path(String(target))))
-    end
     biology_bindings = (
         (:labels, :labels), (:cell_types, :cell_types),
         (:target_volume, :target_volume), (:target_surface, :target_surface),
@@ -1140,10 +1098,6 @@ function cnv2012_composite(
         (:link_target_out, :link_target),
         (:link_maximum_out, :link_maximum),
     )
-    for (port, target) in biology_bindings
-        push!(bindings, ProcessBigraphs.PortBinding(
-            "cnv-biology", port, ProcessBigraphs.path(String(target))))
-    end
     exchange_bindings = (
         (:labels, :labels), (:cell_types, :cell_types),
         (:oxygen, :oxygen), (:rpe_vegf, :rpe_vegf),
@@ -1153,18 +1107,82 @@ function cnv2012_composite(
         (:rpe_vegf_forcing, :rpe_vegf_forcing),
         (:mmp_forcing, :mmp_forcing),
     )
-    for (port, target) in exchange_bindings
-        push!(bindings, ProcessBigraphs.PortBinding(
-            "cnv-field-exchange", port,
-            ProcessBigraphs.path(String(target))))
+    model = ProcessBigraphs.compose(
+        :CNV2012Scenario38;
+        scale=time_scale,
+        profile=:reproducible,
+    ) do builder
+        stores = Dict{Symbol,Any}()
+        for (name, leaf) in schema.children
+            stores[Symbol(name)] =
+                ProcessBigraphs.store!(builder, Symbol(name), leaf)
+        end
+
+        for (name, declaration) in pairs(field_declarations)
+            forcing_name = Symbol(name, :_forcing)
+            weights_name = Symbol(name, :_decay_weights)
+            actor = ProcessBigraphs.mount!(
+                builder,
+                Symbol("cnv-" * replace(String(name), "_" => "-")),
+                ProcessBigraphs.ManagedFieldAdvanceProcess(
+                    declaration; resource_authorization),
+            )
+            ProcessBigraphs.schedule!(
+                builder,
+                actor,
+                ProcessBigraphs.Every(
+                    ProcessBigraphs.Duration(1, time_scale)),
+            )
+            ProcessBigraphs.attach!(builder, actor, (
+                field=stores[name],
+                forcing=stores[forcing_name],
+                decay_weights=stores[weights_name],
+                field_out=stores[name],
+                mcs_field=stores[Symbol(name, :_mcs)],
+            ))
+        end
+
+        cpm = ProcessBigraphs.mount!(
+            builder, Symbol("cnv-cpm"),
+            CNV2012CPMStep(profile=profile))
+        ProcessBigraphs.attach!(
+            builder,
+            cpm,
+            tuple((
+                port => stores[target]
+                for (port, target) in cpm_bindings
+            )...),
+        )
+
+        biology = ProcessBigraphs.mount!(
+            builder, Symbol("cnv-biology"),
+            CNV2012BiologyStep(profile))
+        ProcessBigraphs.schedule!(
+            builder, biology, ProcessBigraphs.After(cpm))
+        ProcessBigraphs.attach!(
+            builder,
+            biology,
+            tuple((
+                port => stores[target]
+                for (port, target) in biology_bindings
+            )...),
+        )
+
+        exchange_step = ProcessBigraphs.mount!(
+            builder, Symbol("cnv-field-exchange"),
+            CNV2012ExchangeStep())
+        ProcessBigraphs.schedule!(
+            builder, exchange_step, ProcessBigraphs.After(biology))
+        ProcessBigraphs.attach!(
+            builder,
+            exchange_step,
+            tuple((
+                port => stores[target]
+                for (port, target) in exchange_bindings
+            )...),
+        )
     end
-    static = ProcessBigraphs.StaticComposite(
-        schema, Dict(), time_scale;
-        processes=Tuple(processes),
-        steps=(cpm, biology, exchange_step),
-        bindings=Tuple(bindings),
-    )
-    ProcessBigraphs.compile_composite(static)
+    ProcessBigraphs.compile(model)
 end
 
 function cnv2012_native_composite(

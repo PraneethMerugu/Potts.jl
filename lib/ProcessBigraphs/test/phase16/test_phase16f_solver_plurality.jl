@@ -69,13 +69,12 @@ end
 
 function p16f_empty_serial_runtime()
     scale = TimeScale(1)
-    composite = compile_composite(StaticComposite(
-        BranchSchema(
-            marker=LeafSchema(Int; default=0, update_law=:replace),
-        ),
-        Dict(),
-        scale,
-    ))
+    schema = BranchSchema(
+        marker=LeafSchema(Int; default=0, update_law=:replace),
+    )
+    model = compose(:P16FEmptyRuntime, schema; scale) do _, _
+    end
+    composite = compile(model)
     executor = SerialExecutor(root_seed=1606)
     composite, executor, initialize_runtime(composite, executor)
 end

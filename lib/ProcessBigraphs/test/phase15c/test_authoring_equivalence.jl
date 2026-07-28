@@ -1,3 +1,6 @@
+import ProcessBigraphs: StaticComposite, ProcessDeclaration, PortBinding,
+    compile_composite
+
 function c15_open_component(definition, amount)
     scale = TimeScale(1)
     schema = BranchSchema(

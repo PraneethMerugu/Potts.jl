@@ -48,8 +48,9 @@ function p16e_empty_serial_runtime()
     schema = PB.BranchSchema(
         marker=PB.LeafSchema(Int; default=0, update_law=:replace),
     )
-    composite = PB.compile_composite(PB.StaticComposite(
-        schema, Dict(), scale))
+    model = PB.compose(:P16EEmptyRuntime, schema; scale) do _, _
+    end
+    composite = PB.compile(model)
     executor = PB.SerialExecutor(root_seed=1605)
     composite, executor, PB.initialize_runtime(composite, executor)
 end

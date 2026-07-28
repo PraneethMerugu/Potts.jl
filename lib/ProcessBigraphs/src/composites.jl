@@ -28,7 +28,12 @@ struct CompiledComposite
     initial::CommittedSnapshot
     preflight_report::PreflightReport
     fingerprint::String
+    author_origins::Tuple
 end
+
+CompiledComposite(epoch, plan, initial, preflight_report, fingerprint) =
+    CompiledComposite(
+        epoch, plan, initial, preflight_report, fingerprint, ())
 
 model_fingerprint(composite::CompiledComposite) = composite.fingerprint
 step_layers(composite::CompiledComposite) = composite.plan.layers

@@ -14,8 +14,11 @@ function p16d_base_structure(; binding=false)
         left=LeafSchema(Int; default=0, update_law=:add),
         right=LeafSchema(Int; default=0, update_law=:add),
     )
-    structure = canonical_structure(canonical_model(
-        StaticComposite(schema, Dict(), TimeScale(1))))
+    scale = TimeScale(1)
+    model = compose(:P16DBaseStructure, schema; scale) do _, _
+    end
+    composite = compile(model)
+    structure = canonical_structure(composite)
     binding || return structure
 
     root = only(ACSets.incident(structure, "root", :composite_id))

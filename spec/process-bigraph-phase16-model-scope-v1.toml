@@ -8,6 +8,7 @@ full_analysis = false
 [[models]]
 id = "merks-2006-vasculogenesis"
 status = "qualified"
+high_level_authoring_status = "specified"
 source = "Merks et al., Developmental Biology 289(1), 44-54 (2006)"
 required_dimension = [500, 500]
 required_field_dimension = [500, 500]
@@ -24,6 +25,7 @@ excluded = ["Figure_5_full_ensemble", "publication_morphometry_pipeline", "quant
 [[models]]
 id = "shirinifard-2012-cnv"
 status = "qualified"
+high_level_authoring_status = "specified"
 source = "Shirinifard et al., PLOS Computational Biology 8(5), e1002440 (2012), Text S3 and Text S6"
 required_scenario = 38
 required_source_simulation = 902

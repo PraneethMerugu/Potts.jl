@@ -54,30 +54,26 @@ function p16e_counter_composite()
     schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    counter = ProcessDeclaration(
-        "phase16e-counter",
-        C15Counter(),
-        FixedSchedule(Duration(1, scale));
-        continuation=(count=0,),
-    )
-    compile_composite(StaticComposite(
-        schema, Dict(), scale;
-        processes=(counter,),
-        bindings=(
-            PortBinding("phase16e-counter", :out, path("state")),
-        ),
-    ))
+    model = compose(:P16ECounter, schema; scale) do builder, stores
+        counter = mount!(
+            builder, Symbol("phase16e-counter"), C15Counter();
+            continuation=(count=0,))
+        schedule!(builder, counter, Every(Duration(1, scale)))
+        attach!(builder, counter, (out=stores.state,))
+    end
+    compile(model)
 end
 
 function p16e_structural_epoch()
-    structure = canonical_structure(canonical_model(StaticComposite(
-        BranchSchema(
-            left=LeafSchema(Int; default=0, update_law=:add),
-            right=LeafSchema(Int; default=0, update_law=:add),
-        ),
-        Dict(),
-        TimeScale(1),
-    )))
+    schema = BranchSchema(
+        left=LeafSchema(Int; default=0, update_law=:add),
+        right=LeafSchema(Int; default=0, update_law=:add),
+    )
+    scale = TimeScale(1)
+    model = compose(:P16EStructuralEpoch, schema; scale) do _, _
+    end
+    composite = compile(model)
+    structure = canonical_structure(composite)
     dynamic_structural_epoch(
         structure;
         capacity=StructuralCapacity(

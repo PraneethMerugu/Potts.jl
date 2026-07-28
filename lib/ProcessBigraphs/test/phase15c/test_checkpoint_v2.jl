@@ -3,17 +3,15 @@ function c15_counter_composite(; cadence=1)
     schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    counter = ProcessDeclaration(
-        "counter",
-        C15Counter(),
-        FixedSchedule(Duration(cadence, scale));
-        continuation=(count=0,),
-    )
-    compile_composite(StaticComposite(
-        schema, Dict(), scale;
-        processes=(counter,),
-        bindings=(PortBinding("counter", :out, path("state")),),
-    ))
+    model = compose(:C15CounterFixture, schema; scale) do builder, stores
+        counter = mount!(
+            builder, :counter, C15Counter();
+            continuation=(count=0,))
+        schedule!(
+            builder, counter, Every(Duration(cadence, scale)))
+        attach!(builder, counter, (out=stores.state,))
+    end
+    compile(model)
 end
 
 @testset "Phase 15.C logical checkpoint v2" begin

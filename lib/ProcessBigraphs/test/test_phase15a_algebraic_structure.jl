@@ -1,4 +1,6 @@
 using ACSets
+import ProcessBigraphs: StaticComposite, ProcessDeclaration, PortBinding,
+    compile_composite
 
 function phase15a_fixture(order=("fast", "slow"))
     scale = TimeScale(1)

@@ -31,6 +31,7 @@ include("structural_transactions.jl")
 include("composites.jl")
 include("lowering.jl")
 include("composition.jl")
+include("authoring.jl")
 include("executor.jl")
 include("runtime.jl")
 include("checkpoint.jl")
@@ -53,8 +54,8 @@ export AbstractUpdateLaw, AdditiveUpdate, MultiplicativeUpdate, ReplaceUpdate,
        SetPatch, Delta, delta, law_identity, UpdateLawContract,
        update_law_contract, reconcile
 export CapabilitySet, TransferDeclaration, PreflightReport
-export PortSpec, InputPort, OutputPort, PortBinding
-export AbstractProcess, AbstractStep, ProcessDeclaration, StepDeclaration,
+export PortSpec, InputPort, OutputPort
+export AbstractProcess, AbstractStep,
        AbstractSchedule, FixedSchedule, AdaptiveSchedule, IterationRegion,
        AbstractHorizonPolicy, ExactHorizon, StopPrior, EventIdentity,
        InvocationContext, InvocationResult, PortView,
@@ -87,8 +88,16 @@ export ProcessBigraphACSet, CanonicalModel, canonical_model, canonical_structure
        structural_fingerprint, StructuralEpoch, StructuralProvenance,
        ExecutionPlan, structural_epoch, structural_provenance,
        iteration_regions, execution_plan_fingerprint
-export StaticComposite, CompiledComposite, compile_composite, preflight,
-       model_fingerprint, step_layers
+export CompiledComposite, preflight, model_fingerprint, step_layers
+export CompositeModel, LoweredModel, SimulationProblem, StateIntervention,
+       ValidationReport, ModelValidationError,
+       Every, At, On, After,
+       compose, store!, mount!, connect!, attach!, expose!, schedule!,
+       iteration!, parameter!, observable!, allow_instances!,
+       lower, compile, validate, describe, diagram, explain, remake,
+       semantic_fingerprint, ir_fingerprint, plan_fingerprint,
+       problem_fingerprint, origin_map, parameter_names, with_parameters,
+       spawn, divide, remove, move
 export BoundaryEndpoint, OpenComposite, CompositeMount, EndpointRef,
        JunctionSpec, CompositeExport, MountGroup, mount_group, CompositionSpec,
        open_composite, compose_open, structured_cospan,

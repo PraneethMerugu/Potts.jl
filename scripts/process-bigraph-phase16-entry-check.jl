@@ -24,13 +24,16 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16f-solver-plurality-audit.md",
     "design/audits/process-bigraph-phase16g-merks-audit.md",
     "design/audits/process-bigraph-phase16h-cnv-audit.md",
+    "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16f-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16g-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16h-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
+    "spec/decisions/0040-process-bigraph-high-level-authoring.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
+    "spec/process-bigraph-high-level-authoring-semantics.md",
     "spec/process-bigraph-phase16-entry-v1.toml",
     "spec/process-bigraph-phase16-qualification-v1.toml",
     "spec/process-bigraph-phase16-backend-matrix-v1.toml",
@@ -50,6 +53,7 @@ const REQUIRED = [
     "scripts/process-bigraph-phase16f-check.jl",
     "scripts/process-bigraph-phase16g-check.jl",
     "scripts/process-bigraph-phase16h-check.jl",
+    "scripts/process-bigraph-phase16hc-ir-guard.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -78,35 +82,72 @@ phase16b_qualified = phase_state in (
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_specified_c_hardware_open",
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
 phase16c_candidate = phase_state in (
     "phase16c_candidate", "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
-phase16c_qualified = phase_state == "phase16c_qualified"
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_specified_c_hardware_open",
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open")
+phase16c_qualified = phase_state in (
+    "phase16c_qualified",
+    "phase16_internal_beta_qualified")
 phase16d_qualified = phase_state in (
     "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_specified_c_hardware_open",
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
 phase16e_qualified = phase_state in (
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_specified_c_hardware_open",
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
 phase16f_qualified = phase_state in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_specified_c_hardware_open",
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
 phase16g_qualified =
     phase_state in (
         "phase16g_qualified_c_hardware_open",
-        "phase16h_qualified_c_hardware_open")
+        "phase16h_qualified_c_hardware_open",
+        "phase16hc_specified_c_hardware_open",
+        "phase16hc_implemented_c_hardware_open",
+        "phase16hc_qualified_c_hardware_open",
+        "phase16_internal_beta_qualified")
 phase16h_qualified =
-    phase_state == "phase16h_qualified_c_hardware_open"
+    phase_state in (
+        "phase16h_qualified_c_hardware_open",
+        "phase16hc_specified_c_hardware_open",
+        "phase16hc_implemented_c_hardware_open",
+        "phase16hc_qualified_c_hardware_open",
+        "phase16_internal_beta_qualified")
+phase16hc_implemented = phase_state in (
+    "phase16hc_implemented_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
+phase16hc_qualified = phase_state in (
+    "phase16hc_qualified_c_hardware_open",
+    "phase16_internal_beta_qualified")
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
@@ -144,6 +185,7 @@ const SUBGATES = [
     "16.F-sciml-custom-and-cross-adapter-qualification",
     "16.G-runnable-merks-2006",
     "16.H-runnable-cnv-scenario38",
+    "16.HC-high-level-composition-hardening",
     "16.I-reconciliation-and-internal-beta-attestation",
 ]
 check(entry["ordering"]["subgates"] == SUBGATES &&
@@ -152,7 +194,8 @@ check(entry["ordering"]["subgates"] == SUBGATES &&
       entry["ordering"]["compensation_allowed"] == false &&
       entry["ordering"]["phase16f_internal_order"] ==
       ["16.F0-consolidation-repair", "P16-F01", "P16-F02", "P16-F03"] &&
-      entry["ordering"]["models_wait_for_qualified_phase16f"] == true,
+      entry["ordering"]["models_wait_for_qualified_phase16f"] == true &&
+      entry["ordering"]["phase16i_waits_for_qualified_phase16hc"] == true,
     "Phase 16 subgate ordering changed")
 
 required_scope = Set(entry["scope"]["required"])
@@ -165,6 +208,10 @@ for id in [
     "cpu-independent-custom-field-adapter",
     "runnable-source-bounded-merks-2006",
     "runnable-source-bounded-cnv-scenario38-sim902",
+    "immutable-high-level-semantic-model",
+    "ordinary-julia-typed-handle-authoring",
+    "deterministic-lowering-and-author-origin",
+    "raw-ir-scientific-model-migration",
 ]
     check(id in required_scope, "required Phase 16 scope missing $(id)")
 end
@@ -185,6 +232,15 @@ check(entry["dependency_policy"]["core_hard_sciml_dependency"] == false &&
       entry["dependency_policy"]["corepotts_depends_on_process_bigraphs"] == true &&
       entry["dependency_policy"]["upstream_python_runtime_execution"] == "forbidden",
     "dependency direction or no-Python rule changed")
+check(entry["phase16hc"]["status"] in
+      (phase16hc_qualified ? ["qualified"] :
+       phase16hc_implemented ? ["implemented", "qualified"] :
+       ["specified", "implemented", "qualified"]) &&
+      entry["phase16hc"]["primary_api"] ==
+      "ordinary Julia compose do-block with typed handles" &&
+      entry["phase16hc"]["macro_requirement"] == "none" &&
+      entry["phase16hc"]["independent_phase16c_hardware_gate_preserved"] == true,
+    "Phase 16.HC authoring boundary changed")
 check(entry["solver_integration"]["phase16f_prototype_status"] ==
       (phase16f_qualified ?
        "replaced_by_qualified_real_solver_implementation" :
@@ -229,8 +285,8 @@ check(entry["closure"]["closure_checker_expected_now"] == "open" &&
 requirements = ledger["requirements"]
 check(ledger["status"] == "open" && ledger["closure_status"] == "open",
     "qualification ledger must remain open at entry")
-check(length(requirements) == ledger["required_row_count"] == 31,
-    "Phase 16 ledger must contain exactly 31 required rows")
+check(length(requirements) == ledger["required_row_count"] == 38,
+    "Phase 16 ledger must contain exactly 38 required rows")
 ids = String[row["id"] for row in requirements]
 check(length(ids) == length(unique(ids)), "duplicate Phase 16 requirement id")
 allowed = Set(ledger["allowed_statuses"])
@@ -260,6 +316,10 @@ for row in requirements
         "qualified"
     elseif row["subgate"] == "16.H" && phase16h_qualified
         "qualified"
+    elseif row["subgate"] == "16.HC" && phase16hc_qualified
+        "qualified"
+    elseif row["subgate"] == "16.HC" && phase16hc_implemented
+        "implemented"
     else
         "specified"
     end
@@ -267,7 +327,7 @@ for row in requirements
         "$(row["id"]) must be $(expected) at the Phase 16.A boundary")
 end
 check(Set(String[row["subgate"] for row in requirements]) ==
-      Set(["16.A", "16.B", "16.C", "16.D", "16.E", "16.F", "16.G", "16.H", "16.I"]),
+      Set(["16.A", "16.B", "16.C", "16.D", "16.E", "16.F", "16.G", "16.H", "16.HC", "16.I"]),
     "qualification ledger does not cover every subgate")
 
 envelopes = Dict(row["id"] => row for row in backends["envelopes"])
@@ -311,7 +371,16 @@ check(migration["one_production_authority_per_slice"] == true &&
       migration["checkpoint"]["settled_boundaries_only"] == true,
     "migration authority or checkpoint rule changed")
 slice_ids = Set(String[row["id"] for row in migration["slices"]])
-check(slice_ids == Set(["field-substrate", "dynamic-lifecycle", "merks-assembly", "cnv-assembly"]),
+check(slice_ids == Set([
+        "field-substrate",
+        "dynamic-lifecycle",
+        "merks-assembly",
+        "cnv-assembly",
+        "high-level-authoring-core",
+        "merks-high-level-authoring",
+        "cnv-high-level-authoring",
+        "ordinary-tests-examples-and-docs-authoring",
+    ]),
     "migration slice registry changed")
 
 model_rows = Dict(row["id"] => row for row in models["models"])
@@ -336,8 +405,8 @@ check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
 
 check(api["status"] ==
       phase_state &&
-      api["current_new_exports"] ==
-      (phase16f_qualified ? api["planned_internal_beta_exports"] : []) &&
+      Set(api["current_new_exports"]) <=
+      Set(api["planned_internal_beta_exports"]) &&
       api["public_release"] == false &&
       api["policy"]["core_is_solver_neutral"] == true &&
       api["policy"]["sciml_via_extension"] == true &&
@@ -349,7 +418,7 @@ check(api["status"] ==
 planned_exports = String.(api["planned_internal_beta_exports"])
 check(length(planned_exports) == length(unique(planned_exports)) &&
       Set(row["id"] for row in api["families"]) ==
-      Set(["engine", "field", "structure", "sciml", "corepotts"]),
+      Set(["engine", "field", "structure", "sciml", "corepotts", "authoring"]),
     "Phase 16 planned API identities or families are inconsistent")
 
 check(parity["phase16_entry"]["status"] == "in_progress" &&
@@ -382,6 +451,10 @@ check(phase16a_evidence["dependencies"]["AlgebraicRewriting"] == "0.5.0" &&
 for (path, phrases) in [
     ("spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
         ["when and why", "how", "Phase 16.C", "runnable source-bounded"]),
+    ("spec/decisions/0040-process-bigraph-high-level-authoring.md",
+        ["ordinary Julia", "CompositeModel", "raw IR"]),
+    ("spec/process-bigraph-high-level-authoring-semantics.md",
+        ["ProcessBigraphs owns when and why", "CompositeModel", "Phase 16.HC"]),
     ("spec/phase-16-engine-field-structural-and-adapter-semantics.md",
         ["ProcessBigraphs MUST be the only authority", "An engine MUST retain control",
          "Real-solver handoff", "Merks 2006", "CNV scenario 38"]),
@@ -408,7 +481,7 @@ end
 
 if isempty(failures)
     qualified_count = count(row -> row["status"] == "qualified", requirements)
-    println("ProcessBigraphs Phase 16 entry check passed: $(qualified_count) rows qualified; $(31 - qualified_count) remain open.")
+    println("ProcessBigraphs Phase 16 entry check passed: $(qualified_count) rows qualified; $(38 - qualified_count) remain open.")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("ProcessBigraphs Phase 16 entry check failed with $(length(failures)) error(s)")

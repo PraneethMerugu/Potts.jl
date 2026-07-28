@@ -645,65 +645,61 @@ function merks2006_composite(
         resource_authorization,
         subcycles_per_mcs,
     )
-    field = ProcessBigraphs.ProcessDeclaration(
-        "merks-field",
-        field_process,
-        ProcessBigraphs.FixedSchedule(
-            ProcessBigraphs.Duration(1, time_scale)),
-    )
-    cpm = ProcessBigraphs.StepDeclaration(
-        "merks-cpm",
-        Merks2006CPMStep(
-            ;
-            subcycles_per_mcs,
-            root_seed,
-            profile,
-        ),
-    )
-    secretion = ProcessBigraphs.StepDeclaration(
-        "merks-secretion-mask",
-        Merks2006SecretionStep();
-        dependencies=("merks-cpm",),
-    )
-    bindings = (
-        ProcessBigraphs.PortBinding(
-            "merks-field", :field, ProcessBigraphs.path("field")),
-        ProcessBigraphs.PortBinding(
-            "merks-field", :forcing, ProcessBigraphs.path("forcing")),
-        ProcessBigraphs.PortBinding(
-            "merks-field", :decay_weights,
-            ProcessBigraphs.path("decay_weights")),
-        ProcessBigraphs.PortBinding(
-            "merks-field", :field_out, ProcessBigraphs.path("field")),
-        ProcessBigraphs.PortBinding(
-            "merks-field", :mcs_field,
-            ProcessBigraphs.path("mcs_field")),
-        ProcessBigraphs.PortBinding(
-            "merks-cpm", :labels, ProcessBigraphs.path("labels")),
-        ProcessBigraphs.PortBinding(
-            "merks-cpm", :mcs_field,
-            ProcessBigraphs.path("mcs_field")),
-        ProcessBigraphs.PortBinding(
-            "merks-cpm", :labels_out, ProcessBigraphs.path("labels")),
-        ProcessBigraphs.PortBinding(
-            "merks-secretion-mask", :labels,
-            ProcessBigraphs.path("labels")),
-        ProcessBigraphs.PortBinding(
-            "merks-secretion-mask", :forcing,
-            ProcessBigraphs.path("forcing")),
-        ProcessBigraphs.PortBinding(
-            "merks-secretion-mask", :decay_weights,
-            ProcessBigraphs.path("decay_weights")),
-    )
-    ProcessBigraphs.compile_composite(
-        ProcessBigraphs.StaticComposite(
-            schema,
-            Dict(),
-            time_scale;
-            processes=(field,),
-            steps=(cpm, secretion),
-            bindings,
+    model = ProcessBigraphs.compose(
+        :Merks2006;
+        scale=time_scale,
+        profile=:reproducible,
+    ) do builder
+        stores = Dict{Symbol,Any}()
+        for (name, leaf) in schema.children
+            stores[Symbol(name)] =
+                ProcessBigraphs.store!(builder, Symbol(name), leaf)
+        end
+
+        field = ProcessBigraphs.mount!(
+            builder, Symbol("merks-field"), field_process)
+        ProcessBigraphs.schedule!(
+            builder,
+            field,
+            ProcessBigraphs.Every(
+                ProcessBigraphs.Duration(1, time_scale)),
+        )
+        ProcessBigraphs.attach!(builder, field, (
+            field=stores[:field],
+            forcing=stores[:forcing],
+            decay_weights=stores[:decay_weights],
+            field_out=stores[:field],
+            mcs_field=stores[:mcs_field],
         ))
+
+        cpm = ProcessBigraphs.mount!(
+            builder,
+            Symbol("merks-cpm"),
+            Merks2006CPMStep(
+                ;
+                subcycles_per_mcs,
+                root_seed,
+                profile,
+            ),
+        )
+        ProcessBigraphs.attach!(builder, cpm, (
+            labels=stores[:labels],
+            mcs_field=stores[:mcs_field],
+            labels_out=stores[:labels],
+        ))
+
+        secretion = ProcessBigraphs.mount!(
+            builder, Symbol("merks-secretion-mask"),
+            Merks2006SecretionStep())
+        ProcessBigraphs.schedule!(
+            builder, secretion, ProcessBigraphs.After(cpm))
+        ProcessBigraphs.attach!(builder, secretion, (
+            labels=stores[:labels],
+            forcing=stores[:forcing],
+            decay_weights=stores[:decay_weights],
+        ))
+    end
+    ProcessBigraphs.compile(model)
 end
 
 function merks2006_native_composite(

@@ -1,40 +1,35 @@
 function c15_multirate_restart_model()
     scale = TimeScale(1)
-    compile_composite(StaticComposite(
-        BranchSchema(
-            source=LeafSchema(Int; default=0, update_law=:add),
-            observed=LeafSchema(Int; default=0, update_law=:replace),
-        ),
-        Dict(), scale;
-        processes=(
-            ProcessDeclaration("producer", C15Producer(),
-                FixedSchedule(Duration(1, scale))),
-            ProcessDeclaration("probe",
-                C15IntervalProbe(:event_updated),
-                FixedSchedule(Duration(3, scale))),
-        ),
-        bindings=(
-            PortBinding("producer", :out, path("source")),
-            PortBinding("probe", :input, path("source")),
-            PortBinding("probe", :observed, path("observed")),
-        ),
-    ))
+    schema = BranchSchema(
+        source=LeafSchema(Int; default=0, update_law=:add),
+        observed=LeafSchema(Int; default=0, update_law=:replace),
+    )
+    model = compose(:C15MultirateRestart, schema; scale) do builder, stores
+        producer = mount!(builder, :producer, C15Producer())
+        schedule!(builder, producer, Every(Duration(1, scale)))
+        attach!(builder, producer, (out=stores.source,))
+        probe = mount!(
+            builder, :probe, C15IntervalProbe(:event_updated))
+        schedule!(builder, probe, Every(Duration(3, scale)))
+        attach!(builder, probe, (
+            input=stores.source,
+            observed=stores.observed,
+        ))
+    end
+    compile(model)
 end
 
 function c15_adaptive_restart_model()
     scale = TimeScale(1)
-    compile_composite(StaticComposite(
-        BranchSchema(
-            state=LeafSchema(Int; default=0, update_law=:add)),
-        Dict(), scale;
-        processes=(
-            ProcessDeclaration(
-                "adaptive",
-                C15Adaptive(1, 2),
-                AdaptiveSchedule(Duration(1, scale))),
-        ),
-        bindings=(PortBinding("adaptive", :out, path("state")),),
-    ))
+    schema = BranchSchema(
+        state=LeafSchema(Int; default=0, update_law=:add))
+    model = compose(:C15AdaptiveRestart, schema; scale) do builder, stores
+        adaptive = mount!(builder, :adaptive, C15Adaptive(1, 2))
+        schedule!(
+            builder, adaptive, AdaptiveSchedule(Duration(1, scale)))
+        attach!(builder, adaptive, (out=stores.state,))
+    end
+    compile(model)
 end
 
 function c15_iteration_restart_model()
@@ -45,57 +40,47 @@ function c15_iteration_restart_model()
         converged=LeafSchema(Int; default=0, update_law=:replace),
         bounded=LeafSchema(Int; default=0, update_law=:add),
     )
-    compile_composite(StaticComposite(
-        schema, Dict(), scale;
-        processes=(
-            ProcessDeclaration(
-                "trigger", C15Producer(),
-                FixedSchedule(Duration(1, scale))),
-        ),
-        steps=(
-            StepDeclaration("copy", C15ReactiveCopy()),
-            StepDeclaration("converge", C15Converge();
-                dependencies=("converge",)),
-            StepDeclaration("bounded", C15Bounded()),
-        ),
-        bindings=(
-            PortBinding("trigger", :out, path("trigger")),
-            PortBinding("copy", :input, path("trigger")),
-            PortBinding("copy", :out, path("copied")),
-            PortBinding("converge", :state, path("converged")),
-            PortBinding("converge", :out, path("converged")),
-            PortBinding("bounded", :out, path("bounded")),
-        ),
-        iteration_regions=(
-            IterationRegion(
-                "convergence", ("converge",);
-                mode=:convergent,
-                max_iterations=4,
-                watch_paths=(path("converged"),),
-            ),
-            IterationRegion(
-                "bounded-region", ("bounded",);
-                mode=:bounded,
-                max_iterations=3,
-            ),
-        ),
-    ))
+    model = compose(:C15IterationRestart, schema; scale) do builder, stores
+        trigger = mount!(builder, :trigger, C15Producer())
+        schedule!(builder, trigger, Every(Duration(1, scale)))
+        attach!(builder, trigger, (out=stores.trigger,))
+        copy_step = mount!(builder, :copy, C15ReactiveCopy())
+        attach!(builder, copy_step, (
+            input=stores.trigger,
+            out=stores.copied,
+        ))
+        converge = mount!(builder, :converge, C15Converge())
+        schedule!(builder, converge, After(converge))
+        attach!(builder, converge, (
+            state=stores.converged,
+            out=stores.converged,
+        ))
+        bounded = mount!(builder, :bounded, C15Bounded())
+        attach!(builder, bounded, (out=stores.bounded,))
+        iteration!(
+            builder, :convergence, (converge,);
+            mode=:convergent,
+            max_iterations=4,
+            watch=(stores.converged,))
+        iteration!(
+            builder, Symbol("bounded-region"), (bounded,);
+            mode=:bounded,
+            max_iterations=3)
+    end
+    compile(model)
 end
 
 function c15_random_restart_model()
     scale = TimeScale(1)
-    compile_composite(StaticComposite(
-        BranchSchema(
-            state=LeafSchema(UInt64;
-                default=UInt64(0), update_law=:replace)),
-        Dict(), scale;
-        processes=(
-            ProcessDeclaration(
-                "random", C15Random(),
-                FixedSchedule(Duration(1, scale))),
-        ),
-        bindings=(PortBinding("random", :out, path("state")),),
-    ))
+    schema = BranchSchema(
+        state=LeafSchema(UInt64;
+            default=UInt64(0), update_law=:replace))
+    model = compose(:C15RandomRestart, schema; scale) do builder, stores
+        random = mount!(builder, :random, C15Random())
+        schedule!(builder, random, Every(Duration(1, scale)))
+        attach!(builder, random, (out=stores.state,))
+    end
+    compile(model)
 end
 
 function c15_counting_observation_plan()

@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 15.C qualified immutable-topology serial internal alpha
+Status: Phase 16.HC implementation candidate; Phase 16.C hardware evidence remains open
 
 ## Authority and maturity
 
@@ -14,8 +14,10 @@ PB0 proves domain-neutral values and bounded serial microfixtures. Phase 15.A pr
 ACSet-to-compiled-plan boundary, and Phase 15.B proves immutable open composition and derived
 wiring views. Phase 15.C adds the complete immutable-topology serial executor, semantic RNG,
 typed observation and continuation, transactional failure, and portable logical checkpoints.
-Dynamic structural transactions, executable transfers, Threads/Dagger equivalence, device
-kernels, scientific adapters, and public release remain outside this internal alpha.
+Phase 16 adds atomic dynamic structural transactions, solver-neutral engine adapters, native and
+SciML field paths, bounded Merks and CNV assemblies, and semantic high-level authoring. Distributed
+execution, Dagger equivalence, universal solver support, full publication analyses, and public
+release remain outside the internal beta boundary.
 
 Decision 0038 and the completed 64-choice owner interview define the Phase 15.C boundary. The
 [entry contract](../../../../spec/process-bigraph-phase15c-entry-v1.toml) names exactly 15 target
@@ -40,15 +42,86 @@ Python, or Bigraph-Schema Python.
 
 ## Canonical structure and compilation
 
-`ProcessBigraphACSet` is the sole authoring structure. It carries stable identities and relations
+`ProcessBigraphACSet` is the sole canonical lowered structure. It carries stable identities and relations
 for the root composite, hierarchical store, actors, processes, steps, ports, bindings,
 containment, and step dependencies. ACSet row numbers are storage-local and nonsemantic.
 
-`canonical_model(::StaticComposite)` lowers the ordinary typed façade into that ACSet.
+`compose` creates an immutable `CompositeModel` through ordinary Julia calls to `store!`,
+`mount!`, `connect!`, `attach!`, `schedule!`, and `expose!`. `lower` deterministically produces a
+`LoweredModel` containing the canonical ACSet and author-origin map. `StaticComposite`,
+`ProcessDeclaration`, `StepDeclaration`, and `PortBinding` are private lowering and conformance
+records.
 `canonical_model(::ProcessBigraphACSet; initial_values, laws, continuations)` admits direct
-AlgebraicJulia authoring through the same validation path. Both paths reconstruct and validate one
-normalized semantic declaration, and equivalent authoring order produces equal structural and
+AlgebraicJulia conformance fixtures through the same validation path. Ordinary scientific models
+do not construct it directly. Equivalent authoring order produces equal semantic, structural, and
 runtime fingerprints.
+
+### Authoring lifecycle
+
+The author-facing lifecycle is deliberately staged:
+
+```text
+temporary builder
+    → immutable CompositeModel
+    → deterministic LoweredModel plus author-origin map
+    → immutable ExecutionPlan
+    → mutable run-specific runtime and private solver sessions
+```
+
+Builder operations end in `!` because they mutate only the temporary transaction. Closing the
+`compose` block normalizes declaration order, accumulates structured diagnostics, and either
+returns an immutable model or throws one `ModelValidationError`. Captured builder handles cannot
+mutate the completed model.
+
+`connect!(m, store, ports...)` joins one named store junction to explicit typed endpoints.
+`attach!` is exact-name bulk spelling and returns an inspectable expansion report. It never
+performs approximate matching, positional wiring, or hidden conversion. A repeated mounted
+definition exposes only its declared endpoints; mounted internals remain private.
+
+Scheduling separates orchestration from numerical integration:
+
+- `Every(duration)` publishes periodic communication boundaries;
+- `At(times...)` publishes exact one-shot boundaries and becomes inactive afterward;
+- `On(store)` reacts to a committed store change through an explicitly bound input;
+- `After(components...)` declares a reactive stage dependency; and
+- `iteration!` declares bounded or convergence-checked repeated coupling.
+
+None of these constructs chooses a solver timestep. A SciML integrator, CPM implementation, or
+external adapter retains its own adaptive steps, sweeps, device kernels, caches, and workspaces
+inside the interval authorized by ProcessBigraphs.
+
+### Models and simulation problems
+
+`parameter!` declares a typed run parameter. A component opts in with `parameter_names` and
+`with_parameters`; problem compilation rebinds the law before lowering and requires its concrete
+component type to remain stable. Unknown, duplicate, foreign-model, or type-changing bindings fail
+before runtime initialization.
+
+`SimulationProblem` binds run-specific initial values, parameter overrides, selected observables,
+typed boundary interventions, time span, and master seed. Bindings may use handles from the
+completed model; handles from another model are rejected even when names happen to match.
+
+`StateIntervention(id, time, store, law, payload)` is lowered to an ordinary exact one-shot
+component. Its update law must match the store contract, so intervention effects use the same
+validation, reconciliation, failure atomicity, checkpoint, and replay path as every other process.
+It does not introduce a second runtime or mutate committed state out of band.
+
+### Inspection, identity, and semantic archives
+
+`describe`, `diagram`, and `explain` inspect the semantic model without compiling or running it.
+Every compiled structural provenance identity maps to an author location, including repeated
+mount chains, ports, bindings, endpoints, junctions, and generated one-shot occurrences.
+
+Identity is layered: `semantic_fingerprint`, `ir_fingerprint`, `plan_fingerprint`,
+`problem_fingerprint`, and checkpoint fingerprints answer different questions. Backend or resource
+selection can change a plan fingerprint without changing semantic model identity.
+
+`ProcessBigraphs.encode_semantic_model` and `decode_semantic_model` are qualified-name expert
+operations. The caller supplies explicit domain-owned component encoder and decoder functions.
+Archives contain a versioned logical payload plus the complete component contract fingerprint;
+decoding rejects changed science and unsupported versions. Closures, tasks, pointers, live solver
+sessions, device buffers, and caches are never serialized, and there is no global string-based
+runtime registry.
 
 `compile_composite` freezes a private structural copy in a `StructuralEpoch` and creates an
 `ExecutionPlan` containing canonical process and step order, layer indices, pre-resolved routes,
@@ -66,36 +139,28 @@ The ordinary API is declarative. An endpoint exposes one leaf store and its comp
 optional transfer contract:
 
 ```julia
-producer = open_composite(
-    "counter-definition",
-    StaticComposite(schema, Dict(), scale;
-        processes=(declaration,),
-        bindings);
-    endpoints=(
-        BoundaryEndpoint(:state, path("state"); role=:bidirectional),
-    ),
-)
+producer = compose(:CounterDefinition; scale) do model
+    state = store!(
+        model, :state,
+        LeafSchema(Int; default=0, update_law=:add))
+    counter = mount!(model, :counter, Counter())
+    schedule!(model, counter, Every(Duration(1, scale)))
+    attach!(model, counter, (state=state, change=state))
+    expose!(model, :state, state; role=:bidirectional)
+end
 
-system = compose_open(
-    "counter-system";
-    mounts=(
-        CompositeMount(:left, producer),
-        CompositeMount(:right, producer),
-    ),
-    junctions=(
-        JunctionSpec(
-            "shared-count",
-            path("shared"),
-            (EndpointRef(:left, :state), EndpointRef(:right, :state)),
-        ),
-    ),
-    exports=(
-        CompositeExport(:shared, "shared-count"; role=:bidirectional),
-    ),
-    initial_values=Dict(path("shared") => 0),
-)
+system = compose(:CounterSystem; scale) do model
+    shared = store!(
+        model, :shared,
+        LeafSchema(Int; default=0, update_law=:add))
+    left = mount!(model, :left, producer)
+    right = mount!(model, :right, producer)
+    connect!(model, left.state, shared)
+    connect!(model, right.state, shared)
+    expose!(model, :shared, shared; role=:bidirectional)
+end
 
-compiled = compile_composite(system)
+compiled = compile(system)
 ```
 
 The definition may be mounted repeatedly. Each instance identity derives from the parent identity
@@ -230,25 +295,15 @@ function invoke(process::Increment, inputs, context)
 end
 
 scale = TimeScale(1, 1, :second)
-schema = BranchSchema(
-    state=LeafSchema(Int; default=0, update_law=:add),
-)
-declaration = ProcessDeclaration(
-    "increment",
-    Increment(2),
-    FixedSchedule(Duration(1, scale)),
-)
-bindings = (
-    PortBinding("increment", :state, path("state")),
-    PortBinding("increment", :change, path("state")),
-)
-compiled = compile_composite(StaticComposite(
-    schema,
-    Dict(),
-    scale;
-    processes=(declaration,),
-    bindings,
-))
+model = compose(:IncrementModel; scale) do builder
+    state = store!(
+        builder, :state,
+        LeafSchema(Int; default=0, update_law=:add))
+    increment = mount!(builder, :increment, Increment(2))
+    schedule!(builder, increment, Every(Duration(1, scale)))
+    attach!(builder, increment, (state=state, change=state))
+end
+compiled = compile(model)
 
 runtime = initialize_runtime(compiled)
 run_until!(runtime, LogicalTime(3, scale))

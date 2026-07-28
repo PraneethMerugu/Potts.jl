@@ -1,14 +1,15 @@
 # ProcessBigraphs Phase 16 Implementation Plan
 
-Status: In progress; Phase 16.A/B/D/E/F/G/H qualified, C hardware and I open
+Status: In progress; Phase 16.A/B/D/E/F/G/H qualified, HC specified, C hardware and I open
 
-Date: 2026-07-27
+Date: 2026-07-28
 
 ## Outcome
 
-Phase 16 will produce one unpublished `0.5.0` internal beta in nine bounded subgates. G4 is
-implemented and qualified inside 16.C. The generic engine/field protocol precedes both its native
-device qualification and dynamic hierarchy; Merks and CNV then exercise the common path.
+Phase 16 will produce one unpublished `0.5.0` internal beta in ten bounded subgates. G4 is
+absorbed and must qualify inside 16.C. The generic engine/field protocol precedes both its native
+device qualification and dynamic hierarchy; Merks and CNV then exercise the common path. Phase
+16.HC hardens ordinary Julia authoring and migrates those models before final reconciliation.
 
 ## Work sequence
 
@@ -92,8 +93,33 @@ Then:
 - Assemble the full 40 by 40 by 35 configuration and pass startup plus bounded execution.
 - Keep Text S6 fetching in a separate checksum-verified lane.
 
+### 16.HC — high-level composition hardening
+
+Specification and API freeze precede implementation:
+
+- implement a transactional ordinary Julia `compose` builder that returns an immutable semantic
+  `CompositeModel`;
+- add typed store, port, component, parameter, observable, mount, and runtime-instance handles;
+- use shared-store junctions, explicit schedules, lexical hierarchy, exports, and declared
+  structural templates;
+- implement structured diagnostics, deterministic lowering, a complete author-origin map, and
+  layered fingerprints;
+- retain the solver-neutral core and qualify applicable SciML/CommonSolve behavior through the
+  existing weak-dependency extension;
+- freeze direct-IR Merks, CNV, and bounded behavioral fixtures as migration oracles, then migrate
+  the smallest fixtures before the full scientific assemblies;
+- enforce a path-and-purpose raw-IR allowlist;
+- qualify documentation, doctests, Aqua, clean environments, compatibility, and stage-separated
+  authoring/runtime benchmarks; and
+- preserve all applicable qualified Phase 15 and Phase 16 evidence.
+
+The uncommitted `scheduled`/`reactive`/`@compose` implementation is a research spike, not
+qualification evidence. A full macro DSL is not required. Implementation and migration begin only
+after explicit owner authorization.
+
 ### 16.I — reconcile and attest
 
+- Require Phase 16.HC to be qualified.
 - Require every ledger row to be qualified.
 - Run clean package and integration tests, full static guards, real hardware, frozen performance
   workloads, and documentation checks.
@@ -105,8 +131,9 @@ Then:
 16.B is the first code join. After it passes, 16.C and 16.D may run independently. 16.E joins both
 where a dynamic field slice needs them. 16.F requires 16.B but may overlap unresolved 16.C
 hardware work. 16.G requires B, C CPU/native correctness, E's adapter path, and qualified F.
-16.H additionally requires D and qualified F.
-16.I joins everything.
+16.H additionally requires D and qualified F. 16.HC follows G/H but can be specified while the
+independent 16.C hardware lane remains open. 16.I joins everything and cannot attest before HC and
+the hardware rows qualify.
 
 No branch's evidence can compensate for another branch. Hardware unavailability leaves only the
 relevant hardware gate open and does not prevent useful CPU or structural progress.
@@ -120,6 +147,7 @@ qualification availability.
 
 ## Current implementation task
 
-Begin Phase 16.I reconciliation while keeping Phase 16.C real-hardware evidence independently
-open. Do not broaden either bounded model claim into full publication analysis or quantitative
-reproduction.
+Complete the Phase 16.HC specification amendment. Do not begin its implementation or scientific
+migration until the owner explicitly authorizes code work. Keep Phase 16.C real-hardware evidence
+independently open and do not broaden either bounded model claim into full publication analysis or
+quantitative reproduction.

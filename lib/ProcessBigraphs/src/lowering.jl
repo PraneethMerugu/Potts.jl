@@ -82,7 +82,8 @@ function _lower_static_to_structure(
         actor_rows[id] = actor
         if declaration isa ProcessDeclaration
             cadence_tick = declaration.schedule isa FixedSchedule ?
-                declaration.schedule.cadence.tick : 0
+                declaration.schedule.cadence.tick :
+                declaration.schedule isa OneShotSchedule ? -1 : 0
             process_rows[id] = ACSets.add_part!(structure, :Process;
                 process_actor=actor,
                 cadence_tick,
@@ -436,7 +437,10 @@ function _materialize_static(structure, payloads)
         if actor_kinds[actor] === :process
             row = process_rows[actor]
             cadence_tick = _attr(structure, row, :cadence_tick)
-            schedule = if cadence_tick == 0
+            schedule = if cadence_tick < 0
+                OneShotSchedule(
+                    Duration(_attr(structure, row, :first_due_tick), scale))
+            elseif cadence_tick == 0
                 AdaptiveSchedule(
                     Duration(_attr(structure, row, :first_due_tick), scale);
                     supports_partial=_attr(structure, row, :supports_partial))

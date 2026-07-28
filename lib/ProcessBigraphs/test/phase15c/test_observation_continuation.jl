@@ -40,32 +40,28 @@
     state_schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    bad_initial = ProcessDeclaration(
-        "bad",
-        C15Counter(),
-        FixedSchedule(Duration(1, scale));
-        continuation="not-a-counter",
-    )
-    bad_initial_composite = compile_composite(StaticComposite(
-        state_schema, Dict(), scale;
-        processes=(bad_initial,),
-        bindings=(PortBinding("bad", :out, path("state")),),
-    ))
+    bad_initial_model = compose(
+        :C15BadInitialContinuation, state_schema; scale) do builder, stores
+        bad = mount!(
+            builder, :bad, C15Counter();
+            continuation="not-a-counter")
+        schedule!(builder, bad, Every(Duration(1, scale)))
+        attach!(builder, bad, (out=stores.state,))
+    end
+    bad_initial_composite = compile(bad_initial_model)
     @test_throws ProcessBigraphError initialize_runtime(
         bad_initial_composite, SerialExecutor())
 
-    bad_proposal = ProcessDeclaration(
-        "bad",
-        C15BadContinuation(),
-        FixedSchedule(Duration(1, scale));
-        continuation=(count=0,),
-    )
+    bad_proposal_model = compose(
+        :C15BadProposalContinuation, state_schema; scale) do builder, stores
+        bad = mount!(
+            builder, :bad, C15BadContinuation();
+            continuation=(count=0,))
+        schedule!(builder, bad, Every(Duration(1, scale)))
+        attach!(builder, bad, (out=stores.state,))
+    end
     bad_proposal_runtime = initialize_runtime(
-        compile_composite(StaticComposite(
-            state_schema, Dict(), scale;
-            processes=(bad_proposal,),
-            bindings=(PortBinding("bad", :out, path("state")),),
-        )),
+        compile(bad_proposal_model),
         SerialExecutor(),
     )
     before = snapshot_fingerprint(current_snapshot(bad_proposal_runtime))
@@ -115,16 +111,13 @@ end
         state=LeafSchema(Int; default=0, update_law=:add),
         secret=LeafSchema(Int; default=9, update_law=:replace),
     )
-    process = ProcessDeclaration(
-        "producer",
-        C15Producer(),
-        FixedSchedule(Duration(1, scale)),
-    )
-    private_composite = compile_composite(StaticComposite(
-        private_schema, Dict(), scale;
-        processes=(process,),
-        bindings=(PortBinding("producer", :out, path("state")),),
-    ))
+    private_model = compose(
+        :C15PrivateObservation, private_schema; scale) do builder, stores
+        process = mount!(builder, :producer, C15Producer())
+        schedule!(builder, process, Every(Duration(1, scale)))
+        attach!(builder, process, (out=stores.state,))
+    end
+    private_composite = compile(private_model)
     leaky = ObserverSpec(
         "leaky",
         C15LeakyObserver(),

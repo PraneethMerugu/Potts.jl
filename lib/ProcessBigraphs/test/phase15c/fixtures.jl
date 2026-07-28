@@ -162,29 +162,18 @@ function c15_add_composite(;
     schema = BranchSchema(
         state=LeafSchema(Int; default=0, update_law=:add),
     )
-    declarations = tuple((
-        ProcessDeclaration(
-            id,
-            C15Add(amount),
-            FixedSchedule(Duration(cadence, scale)),
-        )
+    model = compose(:C15AddFixture, schema; scale) do builder, stores
         for (id, (amount, cadence)) in processes
-    )...)
-    bindings = tuple((
-        binding
-        for declaration in declarations
-        for binding in (
-            PortBinding(declaration.id, :state, path("state")),
-            PortBinding(declaration.id, :out, path("state")),
-        )
-    )...)
-    compile_composite(StaticComposite(
-        schema,
-        Dict(),
-        scale;
-        processes=declarations,
-        bindings,
-    ))
+            actor = mount!(builder, Symbol(id), C15Add(amount))
+            schedule!(
+                builder, actor, Every(Duration(cadence, scale)))
+            attach!(builder, actor, (
+                state=stores.state,
+                out=stores.state,
+            ))
+        end
+    end
+    compile(model)
 end
 
 function c15_observation_plan(scale; required=true, schedule=EventObservationSchedule())

@@ -6,6 +6,12 @@ Date: 2026-07-27
 
 Decision count: 481
 
+Post-interview refinement: the accepted
+[Phase 16.HC high-level authoring interview](process-bigraph-phase16hc-high-level-authoring-owner-interview.md)
+and [Decision 0040](../../spec/decisions/0040-process-bigraph-high-level-authoring.md) add the
+mandatory authoring gate before 16.I without reopening this interview's compute-ownership,
+solver-neutral, field, structure, device, or bounded-model decisions.
+
 ## Purpose
 
 This interview resolves the architecture and evidence boundary needed to begin Phase 16 without

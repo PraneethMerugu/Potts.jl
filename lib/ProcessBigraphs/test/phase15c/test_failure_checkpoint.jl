@@ -4,22 +4,17 @@ function c15_failure_composite()
         state=LeafSchema(Int; default=0, update_law=:add),
         copied=LeafSchema(Int; default=0, update_law=:replace),
     )
-    process = ProcessDeclaration(
-        "producer",
-        C15Producer(),
-        FixedSchedule(Duration(1, scale)),
-    )
-    step = StepDeclaration("copy", C15ReactiveCopy())
-    compile_composite(StaticComposite(
-        schema, Dict(), scale;
-        processes=(process,),
-        steps=(step,),
-        bindings=(
-            PortBinding("producer", :out, path("state")),
-            PortBinding("copy", :input, path("state")),
-            PortBinding("copy", :out, path("copied")),
-        ),
-    ))
+    model = compose(:C15FailureFixture, schema; scale) do builder, stores
+        process = mount!(builder, :producer, C15Producer())
+        schedule!(builder, process, Every(Duration(1, scale)))
+        attach!(builder, process, (out=stores.state,))
+        step = mount!(builder, :copy, C15ReactiveCopy())
+        attach!(builder, step, (
+            input=stores.state,
+            out=stores.copied,
+        ))
+    end
+    compile(model)
 end
 
 function c15_runtime_boundary(runtime)

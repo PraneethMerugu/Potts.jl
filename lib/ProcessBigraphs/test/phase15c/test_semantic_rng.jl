@@ -52,16 +52,12 @@
     schema = BranchSchema(
         state=LeafSchema(UInt64; default=UInt64(0), update_law=:replace),
     )
-    process = ProcessDeclaration(
-        "random",
-        C15Random(),
-        FixedSchedule(Duration(1, scale)),
-    )
-    compiled = compile_composite(StaticComposite(
-        schema, Dict(), scale;
-        processes=(process,),
-        bindings=(PortBinding("random", :out, path("state")),),
-    ))
+    model = compose(:C15RandomFixture, schema; scale) do builder, stores
+        process = mount!(builder, :random, C15Random())
+        schedule!(builder, process, Every(Duration(1, scale)))
+        attach!(builder, process, (out=stores.state,))
+    end
+    compiled = compile(model)
     plain = initialize_runtime(compiled, SerialExecutor(root_seed=91))
     run_until!(plain, LogicalTime(3, scale))
 
