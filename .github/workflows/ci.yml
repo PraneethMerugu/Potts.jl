@@ -54,7 +54,7 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16-entry-check.jl
       - name: Enforce ProcessBigraphs Phase 16.B engine and field protocol
         run: julia --startup-file=no scripts/process-bigraph-phase16b-check.jl
-      - name: Enforce ProcessBigraphs Phase 16.C native field candidate
+      - name: Enforce ProcessBigraphs Phase 16.C native field qualification
         run: julia --startup-file=no scripts/process-bigraph-phase16c-check.jl
       - name: Enforce ProcessBigraphs Phase 16.D structural transactions
         run: julia --startup-file=no scripts/process-bigraph-phase16d-check.jl
@@ -72,12 +72,22 @@ jobs:
         run: julia --startup-file=no scripts/process-bigraph-phase16hc-ir-guard.jl
       - name: Enforce ProcessBigraphs Phase 16.HC high-level authoring qualification
         run: julia --startup-file=no scripts/process-bigraph-phase16hc-check.jl
+      - name: Enforce ProcessBigraphs Phase 16 generated documentation
+        run: julia --startup-file=no scripts/process-bigraph-phase16-docs.jl --check
+      - name: Enforce ProcessBigraphs Phase 16.I reconciliation candidate
+        run: julia --startup-file=no scripts/process-bigraph-phase16i-check.jl
       - name: Check ProcessBigraphs Phase 16.HC authoring performance guardrails
         run: julia --project=lib/ProcessBigraphs --startup-file=no benchmark/phase16hc_authoring_qualification.jl --events=128 --repetitions=5
       - name: Check ProcessBigraphs high-level authoring documentation
         run: julia --project=lib/ProcessBigraphs --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
-      - name: Verify ProcessBigraphs Phase 16 closure remains honestly open
-        run: julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
+      - name: Verify ProcessBigraphs Phase 16 closure state
+        run: |
+          if grep -q 'implementation_status = "phase16_internal_beta_qualified"' \
+              spec/process-bigraph-phase16-entry-v1.toml; then
+            julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl
+          else
+            julia --startup-file=no scripts/process-bigraph-phase16-closure-check.jl --expect-open
+          fi
       - name: Enforce Phase 14 Wang sequential CPU disposition
         run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
       - name: Resolve the package workspace without mutation
@@ -291,6 +301,52 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  phase16i_candidate:
+    name: Phase 16.I exact-head candidate evidence
+    needs: [project, packages, integration, phase15c_oracle, phase15c_candidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Recheck Phase 16.I reconciliation
+        run: julia --startup-file=no scripts/process-bigraph-phase16i-check.jl
+      - name: Recheck generated capability documentation
+        run: julia --startup-file=no scripts/process-bigraph-phase16-docs.jl --check
+      - name: Measure frozen Phase 16 authoring guardrails
+        run: >-
+          julia --project=lib/ProcessBigraphs --startup-file=no
+          benchmark/phase16hc_authoring_qualification.jl
+          --events=128 --repetitions=9
+          --output=${{ runner.temp }}/phase16i-authoring-performance.toml
+      - name: Prepare exact-head Phase 16.I candidate
+        env:
+          PHASE16_BASE_REF: origin/main
+        run: |
+          if grep -q 'implementation_status = "phase16i_candidate"' \
+              spec/process-bigraph-phase16-entry-v1.toml; then
+            julia --startup-file=no \
+              scripts/process-bigraph-phase16i-candidate.jl \
+              "$RUNNER_TEMP/phase16i-candidate.toml" \
+              "$RUNNER_TEMP/phase16i-authoring-performance.toml"
+          else
+            cp design/evidence/phase-16/phase16i-candidate.toml \
+              "$RUNNER_TEMP/phase16i-candidate.toml"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: process-bigraphs-phase16i-candidate
+          path: |
+            ${{ runner.temp }}/phase16i-candidate.toml
+            ${{ runner.temp }}/phase16i-authoring-performance.toml
+          if-no-files-found: error
+          retention-days: 30
+
   cpu_macos_arm64:
     name: CPU / macOS ARM64 / Julia 1.12.6
     if: >-
@@ -360,7 +416,7 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [project, packages, makie_backends, integration, phase15c_oracle, phase15c_candidate, cpu_macos_arm64, cpu_linux_x64]
+    needs: [project, packages, makie_backends, integration, phase15c_oracle, phase15c_candidate, phase16i_candidate, cpu_macos_arm64, cpu_linux_x64]
     runs-on: ubuntu-latest
     steps:
       - name: Require every gating job
@@ -371,6 +427,7 @@ jobs:
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           PHASE15C_ORACLE_RESULT: ${{ needs.phase15c_oracle.result }}
           PHASE15C_CANDIDATE_RESULT: ${{ needs.phase15c_candidate.result }}
+          PHASE16I_CANDIDATE_RESULT: ${{ needs.phase16i_candidate.result }}
           MACOS_RESULT: ${{ needs.cpu_macos_arm64.result }}
           LINUX_X64_RESULT: ${{ needs.cpu_linux_x64.result }}
           METAL_ENABLED: ${{ vars.METAL_RUNNER_ENABLED }}
@@ -383,6 +440,7 @@ jobs:
           test "$INTEGRATION_RESULT" = success
           test "$PHASE15C_ORACLE_RESULT" = success
           test "$PHASE15C_CANDIDATE_RESULT" = success
+          test "$PHASE16I_CANDIDATE_RESULT" = success
           if [ "$METAL_ENABLED" = true ] && [ "$TRUSTED_SELF_HOSTED" = true ]; then
             test "$MACOS_RESULT" = success
           else

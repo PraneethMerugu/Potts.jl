@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 16.HC qualified; Phase 16.C hardware evidence remains open
+Status: Phase 16.A–16.HC qualified; Phase 16.I exact-head candidate awaiting attestation
 
 ## Authority and maturity
 
@@ -214,7 +214,9 @@ compiled = compile_composite(
 view is lossless; mutation, missing annotations, unsupported profile versions, or a generic
 `Catlab.WiringDiagram` fail closed. The diagram is never a runtime authority.
 
-Dynamic add/remove/divide/move/rewire operations remain Phase 16 structural transactions.
+Dynamic add/remove/divide/move/rewire operations are qualified Phase 16 structural transactions.
+Ordinary authors declare them through structural templates; direct raw rewrite-rule execution
+remains experimental and internal.
 
 ## Semantic values
 
@@ -259,10 +261,10 @@ whole reconciliation. Arbitrary merge functions are not admitted.
 - acyclic step dependencies; and
 - declared execution domains and explicit cross-residency transfers.
 
-PB0 records transfer declarations and their bounds. It does not execute or
-measure a device transfer, so `declared-measured-transfers` is not implemented.
-A missing transfer at a residency boundary fails preflight as
-`:hidden_transfer`.
+PB0 records transfer declarations and their bounds but does not execute or measure a device
+transfer. Phase 16.C separately qualifies the native Cartesian field envelope on real Metal and
+ROCm hardware with explicit construction/observation transfers and zero warm staging transfer.
+A missing transfer at any residency boundary still fails preflight as `:hidden_transfer`.
 
 ## Immutable-topology serial executor
 
@@ -326,15 +328,16 @@ run_until!(runtime, LogicalTime(3, scale))
 
 ## Checkpoint boundary
 
-`checkpoint(runtime)` creates a versioned, integrity-hashed
-`SettledCheckpoint`, and `restore(compiled, checkpoint)` verifies the model,
-process/step identities, and payload hash. This proves same-package,
-same-engine in-memory replay at settled boundaries.
+`checkpoint(runtime)` creates a versioned, integrity-hashed logical checkpoint, and
+`restore(compiled, checkpoint)` verifies the model, plan, engine declarations, process and step
+identities, topology, continuation codecs, observer positions, and payload integrity. Phase 16
+extends this boundary to dynamic structure and typed engine continuation while retaining every
+previously attested reader.
 
-There is intentionally no file writer/reader in PB0. A portable persisted
-codec requires canonical decode, schema migrations, invalidation rules, RNG
-continuations, topology, and observer positions. Julia object serialization is
-not used as a substitute for that contract.
+Filesystem and database I/O remain extension concerns. The logical codec is portable and
+canonical; Julia object serialization is not used. Legacy conversion is explicit,
+non-destructive, and fail-closed. See the
+[failure and persistence guide](failure-and-persistence.md) for the full Phase 16 contract.
 
 ## Extension rule
 

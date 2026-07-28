@@ -324,11 +324,20 @@ check(package_registry["schema_version"] == "1.3.0",
     "package-local parity registry has not closed Decision 0037")
 check(package_registry["status_policy"]["upstream_runtime_execution"] == "forbidden",
     "package-local parity registry permits upstream runtime execution")
+phase16_status =
+    package_registry["accepted_next_architecture"]["phase16_status"]
+phase16_closed = phase16_status == "phase16_internal_beta_qualified"
 check(package_registry["maturity"] in (
         "phase_15b_open_composition",
         "phase_15c_implementation_candidate",
         "phase_15c_serial_internal_alpha",
-    ),
+        "phase_16_internal_beta",
+    ) &&
+      package_registry["maturity"] ==
+      (phase16_closed ? "phase_16_internal_beta" :
+       "phase_15c_serial_internal_alpha") &&
+      package_registry["package_version"] ==
+      (phase16_closed ? "0.5.0" : "0.4.0"),
     "package-local registry no longer preserves Phase 15.B maturity")
 check(package_registry["accepted_next_architecture"]["phase15a_status"] ==
       "passed_canonical_structure",
@@ -346,10 +355,12 @@ check(package_registry["accepted_next_architecture"]["phase16_status"] in
        "phase16h_qualified_c_hardware_open",
        "phase16hc_qualified_c_hardware_open",
        "phase16hc_qualified",
-       "phase16i_candidate") &&
-      package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
+       "phase16i_candidate",
+       "phase16_internal_beta_qualified") &&
+      package_registry["accepted_next_architecture"]["phase16_internal_beta"] ==
+      phase16_closed &&
       package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
-    "package-local registry must record the current Phase 16.B state without beta")
+    "package-local registry must record the current Phase 16 maturity")
 check(package_registry["accepted_next_architecture"]["phase15_direct_dependencies"] ==
       ["ACSets.jl", "Catlab.jl"],
     "package-local Phase 15 dependency decision changed")
@@ -578,9 +589,9 @@ if isempty(failures)
     println("  $(length(expected_phase15b_implemented)) Phase 15.B open-composition rows implemented and locally tested")
     println("  canonical ACSet, open-composition semantics, AlgebraicJulia phase boundaries, and independent Julia oracle policy frozen")
     println("  no upstream Python runtime execution path found in CI, tests, examples, or release tooling")
-    phase16_status =
-        package_registry["accepted_next_architecture"]["phase16_status"]
-    println(phase16_status in ("phase16hc_qualified", "phase16i_candidate") ?
+    println(phase16_closed ?
+        "  Phase 16 internal beta qualified; complete pinned parity, parallel-executor, and public-release claims remain fail-closed" :
+        phase16_status in ("phase16hc_qualified", "phase16i_candidate") ?
         "  serial internal alpha and Phase 16 CPU/Metal/ROCm gates qualified; internal beta, parallel-executor, and public-release claims remain fail-closed" :
         registry["registry_status"] == "phase15c-qualified-serial-internal-alpha" ?
         "  independent oracle and serial internal alpha qualified; Phase 16, parallel-executor, and public-release claims remain fail-closed" :

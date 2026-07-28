@@ -323,19 +323,19 @@ evidence = [
 id = "P16-I01"
 subgate = "16.I"
 title = "Complete documentation, matrices, and limitations"
-status = "specified"
-evidence = ["user/adapter/solver/persistence/failure docs", "generated capability pages"]
+status = "oracle_passing"
+evidence = ["user/adapter/solver/persistence/failure docs", "generated capability pages", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]
 
 [[requirements]]
 id = "P16-I02"
 subgate = "16.I"
 title = "Clean independent packages, compatibility, and performance"
-status = "specified"
-evidence = ["clean temp installs", "exact dependency resolution", "frozen regression budgets"]
+status = "oracle_passing"
+evidence = ["clean temp installs", "exact dependency resolution", "frozen regression budgets", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]
 
 [[requirements]]
 id = "P16-I03"
 subgate = "16.I"
 title = "Exact-head internal-beta closure"
-status = "specified"
-evidence = ["all rows qualified", "content-addressed artifacts", "merged-tree verification", "metadata-only attestation"]
+status = "oracle_passing"
+evidence = ["all rows at least oracle-passing", "content-addressed exact-head candidate required", "prospective merge-tree verification required", "metadata-only attestation pending", "design/audits/process-bigraph-phase16i-reconciliation-audit.md"]

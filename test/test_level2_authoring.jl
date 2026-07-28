@@ -22,6 +22,8 @@ using KernelAbstractions
     normalized_volume = only(component for component in normalized.components
         if component isa L2.VolumeConstraint)
     @test normalized_volume.bindings[cell].target === 12.0f0
+    @test get(normalized_volume.bindings, cell, nothing).target === 12.0f0
+    @test get(normalized_volume.bindings, L2.CellType(:Other), nothing) === nothing
     @test report.fingerprint == L2.semantic_fingerprint(normalized)
     @test length(report.declarations) == 2
     volume_report = only(declaration for declaration in report.declarations

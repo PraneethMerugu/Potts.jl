@@ -242,9 +242,10 @@ domain requests, V3 logical checkpoint, non-destructive legacy conversions, and 
 Merks and CNV assemblies are passing. Phase 16.HC is also qualified: the immutable semantic model,
 ordinary Julia builder, deterministic lowering, complete origin map, controlled raw-IR migration,
 executable documentation, and stage-separated authoring performance guardrails pass. Phase 16.C
-is now qualified by trusted exact-head CPU, Metal, and ROCm artifacts; only the three Phase 16.I
-reconciliation and attestation requirements remain open. The Phase 16.HC obligations and claim
-boundary are normative in the
+is now qualified by trusted exact-source CPU, Metal, and ROCm artifacts. The three Phase 16.I
+rows are at `oracle_passing` in an exact-head candidate: documentation, clean-resolution, and
+frozen-performance reconciliation pass, while CI candidate admission and metadata-only
+attestation remain. The Phase 16.HC obligations and claim boundary are normative in the
 [high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
 content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)

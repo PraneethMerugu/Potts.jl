@@ -73,6 +73,12 @@ layer. The authoring lifecycle is `CompositeModel` → `LoweredModel` → `Execu
 run session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
 control of how their authorized heavy computation occurs.
 
+Phase 16.A through 16.HC are qualified, including exact-source CPU, real Metal, and real ROCm
+native-field evidence. Phase 16.I has reached the exact-head candidate state: documentation,
+clean-resolution, and frozen-performance reconciliation pass, while the CI candidate artifact and
+metadata-only internal-beta attestation remain. Package version remains `0.4.0`,
+`internal_beta = false`, and `public_release = false` until that attestation closes.
+
 Ordinary models use a small Julia API rather than canonical IR:
 
 ```julia
@@ -111,13 +117,19 @@ Python.
 The current maturity, limitations, and exact parity pins are recorded in
 [`parity-registry.toml`](parity-registry.toml). Internal contracts, ordinary open-composition
 authoring, and the advanced AlgebraicJulia path are documented in
-[`docs/src/internal.md`](docs/src/internal.md). The bounded Phase 15.B closure is recorded by the
+[`docs/src/internal.md`](docs/src/internal.md). Start with the
+[Phase 16 internal-beta guide](docs/src/internal-beta.md), then use the
+[adapter and solver guide](docs/src/adapters-and-solvers.md),
+[failure and persistence guide](docs/src/failure-and-persistence.md), and generated
+[capability matrix](docs/src/phase16-capabilities.md). The bounded Phase 15.B closure is recorded by the
 repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
 [evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). The Phase 15.C
 scope and qualified internal-alpha state are checked from the
 [entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
 [qualification ledger](../../spec/process-bigraph-phase15c-qualification-v1.toml), with closure
 provenance in the [evidence manifest](../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
+The qualified native CPU/Metal/ROCm lane is content-addressed in the
+[Phase 16.C evidence manifest](../../design/evidence/process-bigraph-phase16c-evidence-v1.toml).
 
 Run the package suite with Julia 1.12.6:
 

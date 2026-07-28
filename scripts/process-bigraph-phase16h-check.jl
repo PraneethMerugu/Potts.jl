@@ -106,8 +106,12 @@ check(c_qualified ?
        requirements["P16-C04"]["status"] == "oracle_passing"),
     "Phase 16.H disagrees with the Phase 16.C hardware state")
 for id in ["P16-I01", "P16-I02", "P16-I03"]
-    check(requirements[id]["status"] == "specified",
-        "$(id) must remain open before reconciliation")
+    expected = entry["implementation_status"] ==
+        "phase16_internal_beta_qualified" ? "qualified" :
+        entry["implementation_status"] == "phase16i_candidate" ?
+        "oracle_passing" : "specified"
+    check(requirements[id]["status"] == expected,
+        "$(id) must be $(expected) at the current reconciliation boundary")
 end
 
 cnv_envelope = envelopes["cnv-source-faithful-assembly"]
