@@ -80,12 +80,40 @@ end
             "weekly external-link checking must be required", message),
         link_errors)
 
-    missing_media_review = deepcopy(accepted)
-    delete!(missing_media_review["current_evidence"], "media_visual_review")
-    media_review_errors = DocumentationQuality.validate_spec(missing_media_review)
+    hidden_programs = deepcopy(accepted)
+    hidden_programs["quality_gate"]["visible_canonical_programs"] = false
+    hidden_program_errors = DocumentationQuality.validate_spec(hidden_programs)
     @test any(message -> occursin(
-            "current evidence requires a media_visual_review path", message),
-        media_review_errors)
+            "visible canonical programs must be required", message),
+        hidden_program_errors)
+
+    reader_includes = deepcopy(accepted)
+    reader_includes["quality_gate"]["forbid_reader_includes"] = false
+    reader_include_errors = DocumentationQuality.validate_spec(reader_includes)
+    @test any(message -> occursin(
+            "reader-facing include calls must be forbidden", message),
+        reader_include_errors)
+
+    skipped_makiepotts = deepcopy(accepted)
+    skipped_makiepotts["quality_gate"]["visual_examples_use_makiepotts"] = false
+    skipped_makiepotts_errors = DocumentationQuality.validate_spec(skipped_makiepotts)
+    @test any(message -> occursin(
+            "visual examples must exercise MakiePotts", message),
+        skipped_makiepotts_errors)
+
+    skipped_backend = deepcopy(accepted)
+    skipped_backend["quality_gate"]["visual_examples_use_backend"] = false
+    skipped_backend_errors = DocumentationQuality.validate_spec(skipped_backend)
+    @test any(message -> occursin(
+            "visual examples must exercise a Makie backend", message),
+        skipped_backend_errors)
+
+    custom_images = deepcopy(accepted)
+    custom_images["quality_gate"]["forbid_custom_example_images"] = false
+    custom_image_errors = DocumentationQuality.validate_spec(custom_images)
+    @test any(message -> occursin(
+            "custom example images must be forbidden", message),
+        custom_image_errors)
 
     mktempdir() do fixture_root
         repository_root = normpath(joinpath(@__DIR__, ".."))
@@ -119,16 +147,6 @@ end
             mkpath(dirname(destination))
             cp(joinpath(repository_root, relative_path), destination)
         end
-        media_review_path = accepted["current_evidence"]["media_visual_review"]
-        media_review_destination = joinpath(fixture_root, media_review_path)
-        mkpath(dirname(media_review_destination))
-        cp(joinpath(repository_root, media_review_path), media_review_destination)
-        for asset in TOML.parsefile(media_review_destination)["assets"]
-            page_destination = joinpath(fixture_root, asset["page"])
-            mkpath(dirname(page_destination))
-            cp(joinpath(repository_root, asset["page"]), page_destination)
-        end
-
         complete_evidence_errors = String[]
         DocumentationQuality._validate_current_evidence!(
             complete_evidence_errors, accepted, fixture_root)

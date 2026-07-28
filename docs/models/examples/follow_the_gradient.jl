@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 problem = PottsToolkit.ReferenceModels.chemotaxis_problem(
@@ -30,7 +31,9 @@ end
 
 centroid_x = cell_centroid_x.(solution.u)
 displacement = last(centroid_x) - first(centroid_x)
+frames = renderframes(solution)
 @assert solution.stats.completed_mcs == 20
 @assert displacement > 0
+@assert length(frames) == length(solution.t)
 result = (; problem, solution, centroid_x, displacement,
-    gradient_axis = 1, gradient_direction = :positive)
+    gradient_axis = 1, gradient_direction = :positive, frames)

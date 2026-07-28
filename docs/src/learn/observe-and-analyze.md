@@ -9,11 +9,48 @@ The stable high-level requests include cell volume, cell type, boundary measure,
 properties, and lattice ownership. Combine them in `ObservationSet` and derive a snapshot policy:
 
 ```@example observe-and-analyze
-analysis = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "observe_and_analyze.jl"))
-(length(analysis.volume_series), length(analysis.rows),
-    length(analysis.ownership_series))
+using PottsToolkit
+import CorePotts
+
+medium = Medium(:medium)
+cell = CellType(:cell)
+volumes = CellVolume()
+types = CellTypeObservable()
+ownership = LatticeOwnership()
+model = PottsModel(
+    medium,
+    cell,
+    Volume(cell => (target = 4, strength = 2)),
+    volumes,
+    types,
+    ownership,
+)
+mask = falses(6, 6)
+mask[3:4, 3:4] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain((6, 6)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 2),
+    seed = 4,
+)
+requested = ObservationSet(volumes, types, ownership)
+solution = CorePotts.solve(
+    problem,
+    SequentialCPM(temperature = 0.0f0);
+    snapshot_policy = observation_policy(requested),
+)
+volume_series = observe(solution, volumes)
+rows = observation_table(solution, volumes, types)
+
+@assert length(volume_series) == length(solution.t)
+@assert !isempty(rows)
+result = (; solution, volume_series, rows,
+    ownership_series = observe(solution, ownership))
+
+(length(result.volume_series), length(result.rows),
+    length(result.ownership_series))
 ```
 
 The canonical source declares the observations in the model, retains them during execution, and

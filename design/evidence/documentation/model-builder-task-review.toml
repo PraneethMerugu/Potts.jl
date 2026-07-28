@@ -29,6 +29,6 @@ passed = true
 evidence = "Rendered output shows centroid [9.5, 10.153846153846153], positive displacement 0.6538461538461533, and :positive direction."
 
 [[checks]]
-step = "Verify media and provenance."
+step = "Verify native visualization and provenance."
 passed = true
-evidence = "The page has one loaded generated asset and states original-implementation provenance."
+evidence = "The page visibly imports MakiePotts, calls renderframes and the native recipe, displays the responsive result, and states original-implementation provenance."

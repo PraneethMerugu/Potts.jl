@@ -1,4 +1,5 @@
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
@@ -10,5 +11,6 @@ MakiePotts = {path = "../lib/MakiePotts"}
 PottsToolkit = {path = ".."}
 
 [compat]
+CairoMakie = "0.15"
 Documenter = "1"
 julia = "1.12.6"

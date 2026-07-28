@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
@@ -19,8 +20,11 @@ final_volumes = map(solutions.u) do solution
     cell_id = only(CorePotts.active_cell_ids(state))
     CorePotts.finite_volume(state, cell_id)
 end
+representative_frame = renderframe(first(solutions.u))
 
 @assert length(unique(seeds)) == 4
 @assert all(>(0), final_volumes)
+@assert frame_size(representative_frame) == (12, 12)
 result = (; problem, solutions, seeds, final_volumes,
-    mean_final_volume = sum(final_volumes) / length(final_volumes))
+    mean_final_volume = sum(final_volumes) / length(final_volumes),
+    representative_frame)

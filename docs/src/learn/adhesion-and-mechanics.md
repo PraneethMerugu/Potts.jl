@@ -22,11 +22,31 @@ Fluctuating variants add explicit mechanical noise and state rather than overloa
 temperature.
 
 ```@example adhesion-and-mechanics
-mechanics = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "adhesion_and_mechanics.jl"))
-(isvalid(mechanics.model), mechanics.declarations,
-    mechanics.capabilities)
+using PottsToolkit
+
+model = PottsToolkit.ReferenceModels.elongation_driven_angiogenesis_model(
+    target_volume = 8,
+    target_elongation = 2,
+    elongation_strength = 4,
+    preserve_connectivity = true,
+)
+problem = PottsToolkit.ReferenceModels.elongation_driven_angiogenesis_problem(
+    (12, 12);
+    cells = 2,
+    target_volume = 8,
+    target_elongation = 2,
+    elongation_strength = 4,
+    capacity = 4,
+    tspan = (0, 1),
+    seed = 5,
+)
+
+@assert isvalid(model)
+@assert backend_report(problem, SequentialCPM()).qualified
+result = (; model, problem, declarations = length(model.declarations),
+    capabilities = capabilities(model))
+
+(isvalid(result.model), result.declarations, result.capabilities)
 ```
 
 The canonical source composes adhesion, volume, elongation, and connectivity for two sparse

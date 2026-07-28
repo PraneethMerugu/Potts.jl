@@ -1,4 +1,5 @@
 using PottsToolkit
+using MakiePotts
 import CorePotts
 
 medium = Medium(:Medium)
@@ -53,11 +54,13 @@ retiring_counts = [
         CorePotts.active_cell_ids(state))
     for state in states
 ]
+frames = renderframes(solution)
 
 @assert solution.stats.completed_mcs == 8
 @assert maximum(cell_counts) > first(cell_counts)
 @assert first(retiring_counts) == 1
 @assert last(retiring_counts) == 0
+@assert length(frames) == length(solution.t)
 result = (; model, problem, solution, cell_counts, retiring_counts,
     initial_cells = first(cell_counts), final_cells = last(cell_counts),
-    retirement_mcs = 4)
+    retirement_mcs = 4, frames)

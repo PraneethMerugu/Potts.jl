@@ -16,11 +16,28 @@ as connected but separately versioned stages.
 7. Admit a reproduction to Published Models only after its independent evidence gate passes.
 
 ```@example research-workflow
-study = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "tutorials",
-    "research_workflow.jl"))
-(length(study.solutions.u), study.seeds,
-    study.contracts.freeze_status)
+using PottsToolkit
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
+    (10, 10); target_volume = 12, tspan = (0, 2), seed = 0x1234)
+ensemble = CorePotts.EnsembleProblem(problem; seed = 0x5eed)
+solutions = CorePotts.solve(
+    ensemble,
+    SequentialCPM(temperature = 2.0f0),
+    CorePotts.EnsembleSerial();
+    trajectories = 3,
+    save_start = false,
+    save_end = true,
+)
+seeds = [solution.provenance.seed for solution in solutions.u]
+
+@assert length(unique(seeds)) == 3
+@assert length(solutions.u) == 3
+result = (; solutions, seeds,
+    contracts = CorePotts.scientific_contract_versions())
+
+(length(result.solutions.u), result.seeds, result.contracts.freeze_status)
 ```
 
 The canonical program uses `EnsembleProblem` and `EnsembleSerial` to derive three distinct,

@@ -1,15 +1,52 @@
 # [Relaxing Cell](@id relaxing-cell)
 
-![Absolute target-volume error falls during the relaxing-cell smoke.](../assets/gallery/relaxing-cell.svg)
-
 A single cell begins below its target volume and relaxes under an explicit fluctuating-volume
 mechanism. The output is a deterministic volume trace, not merely a picture.
 
 ```@example relaxing-cell
-relaxation = include(joinpath(
-    ENV["POTTS_DOCS_ROOT"], "models", "examples", "relaxing_cell.jl"))
-(relaxation.volume_trace, relaxation.absolute_error,
-    relaxation.initial_error, relaxation.final_error)
+using PottsToolkit
+using MakiePotts
+import CorePotts
+
+problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
+    (14, 14); target_volume = 20, volume_strength = 2,
+    tspan = (0, 6), seed = 11)
+solution = CorePotts.solve(
+    problem,
+    SequentialCPM(temperature = 1.5f0);
+    snapshot_policy = CorePotts.HostSnapshotPolicy(),
+)
+cell_id = only(CorePotts.active_cell_ids(
+    CorePotts.snapshot_state(first(solution.u))))
+volume_trace = [
+    CorePotts.finite_volume(CorePotts.snapshot_state(saved), cell_id)
+    for saved in solution.u
+]
+target_volume = 20
+absolute_error = abs.(volume_trace .- target_volume)
+frames = renderframes(solution)
+
+@assert solution.stats.completed_mcs == 6
+@assert all(>(0), volume_trace)
+@assert length(frames) == length(solution.t)
+result = (; problem, solution, volume_trace, absolute_error,
+    initial_error = first(absolute_error), final_error = last(absolute_error),
+    frames)
+
+(result.volume_trace, result.absolute_error,
+    result.initial_error, result.final_error)
+```
+
+```@example relaxing-cell
+using CairoMakie
+
+figure, axis, potts_plot = plot(
+    last(result.frames);
+    axis = (; title = "Relaxed cell at MCS $(frame_mcs(last(result.frames)))"),
+    boundaries = true,
+)
+potts_legend(figure[1, 2], potts_plot)
+figure
 ```
 
 The canonical source asserts positive volume throughout the run and records the absolute

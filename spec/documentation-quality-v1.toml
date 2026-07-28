@@ -19,28 +19,6 @@ required_navigation_sections = [
     "API",
 ]
 
-[media]
-manifest = "docs/src/assets/gallery/manifest.toml"
-generator = "docs/models/render_gallery_assets.jl"
-expected_ids = [
-    "relaxing-cell",
-    "two-populations-sort",
-    "follow-the-gradient",
-    "grow-divide-retire",
-    "elongated-network",
-    "fluctuating-droplet",
-    "boundaries-and-obstacles",
-    "same-model-2d-3d",
-    "stop-and-resume",
-    "reproducible-ensemble",
-]
-animation_ids = [
-    "two-populations-sort",
-    "follow-the-gradient",
-    "grow-divide-retire",
-    "elongated-network",
-]
-
 [policy]
 audiences = ["beginner", "model_builder", "researcher", "extension_author", "backend_specialist"]
 support_levels = ["stable", "experimental", "internal"]
@@ -64,7 +42,6 @@ forbidden_public_capability_tags = [
 [budgets]
 fast_example_seconds = 15
 warm_suite_seconds = 300
-media_artifact_seconds = 1800
 
 [quality_gate]
 minimum_rubric_score = 90
@@ -76,13 +53,16 @@ stable_docstring_coverage = 1.0
 public_name_classification_coverage = 1.0
 strict_documenter = true
 weekly_external_links = true
-reproducible_media = true
+visible_canonical_programs = true
+forbid_reader_includes = true
+visual_examples_use_makiepotts = true
+visual_examples_use_backend = true
+forbid_custom_example_images = true
 
 [current_evidence]
-rubric_score = 91
+rubric_score = 92
 platform_smokes = ["macos", "linux", "windows"]
 task_reviews = ["beginner", "model_builder", "extension_author"]
-media_visual_review = "design/evidence/documentation/media-visual-review.toml"
 
 [current_evidence.platform_evidence]
 macos = "design/evidence/documentation/macos-install-smoke.toml"
@@ -401,7 +381,7 @@ state = "target"
 required = true
 in_navigation = true
 runtime_class = "fast"
-visual = "animation"
+visual = "figure"
 provenance = "concept_inspired"
 inspiration_sources = ["https://compucell3d.org/QuickModels"]
 capabilities = ["adhesion", "sorting_metric"]
@@ -419,7 +399,7 @@ state = "target"
 required = true
 in_navigation = true
 runtime_class = "fast"
-visual = "animation"
+visual = "figure"
 provenance = "concept_inspired"
 inspiration_sources = ["https://compucell3d.org/QuickModels"]
 capabilities = ["prescribed_field", "chemotaxis", "displacement"]
@@ -437,7 +417,7 @@ state = "target"
 required = true
 in_navigation = true
 runtime_class = "fast"
-visual = "animation"
+visual = "figure"
 provenance = "concept_inspired"
 inspiration_sources = [
     "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
@@ -457,7 +437,7 @@ state = "target"
 required = true
 in_navigation = true
 runtime_class = "fast"
-visual = "animation"
+visual = "figure"
 provenance = "original"
 capabilities = ["elongation", "connectivity", "morphology"]
 
@@ -531,7 +511,7 @@ state = "target"
 required = true
 in_navigation = true
 runtime_class = "fast"
-visual = "diagram"
+visual = "figure"
 provenance = "concept_inspired"
 inspiration_sources = [
     "https://compucell3dreferencemanual.readthedocs.io/en/latest/",
