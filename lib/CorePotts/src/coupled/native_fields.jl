@@ -47,6 +47,7 @@ mutable struct NativeFieldEngine{N,T<:AbstractFloat,A<:AbstractArray{T,N},
     first::A
     second::A
     forcing::A
+    decay_weights::A
     status::S
     failing_index::S
     candidate::A
@@ -90,6 +91,7 @@ function NativeFieldEngine(
     boundaries=_native_periodic_boundaries(T, N),
     diffusion::Real,
     decay::Real=0,
+    decay_weights=ones(T, size(values)),
     tick_duration::Real=1,
     substeps_per_tick::Integer=1,
     reject_negative::Bool=true,
@@ -101,12 +103,20 @@ function NativeFieldEngine(
     normalized_boundaries = _validate_native_boundaries(boundaries, N, T)
     normalized_diffusion = T(diffusion)
     normalized_decay = T(decay)
+    normalized_decay_weights = Array{T,N}(decay_weights)
     normalized_tick = T(tick_duration)
     isfinite(normalized_diffusion) && normalized_diffusion >= zero(T) ||
         throw(ArgumentError(
             "native field diffusion must be finite and nonnegative"))
     isfinite(normalized_decay) && normalized_decay >= zero(T) ||
         throw(ArgumentError("native field decay must be finite and nonnegative"))
+    size(normalized_decay_weights) == size(values) ||
+        throw(ArgumentError(
+            "native field decay weights must match the field dimensions"))
+    all(value -> isfinite(value) && value >= zero(T),
+        normalized_decay_weights) ||
+        throw(ArgumentError(
+            "native field decay weights must be finite and nonnegative"))
     isfinite(normalized_tick) && normalized_tick > zero(T) ||
         throw(ArgumentError(
             "native field tick duration must be finite and positive"))
@@ -118,7 +128,8 @@ function NativeFieldEngine(
     first = similar(values)
     second = similar(values)
     forcing = similar(values)
-    arrays = (published, first, second, forcing)
+    owned_decay_weights = similar(values)
+    arrays = (published, first, second, forcing, owned_decay_weights)
     all(array -> isequal(
             KernelAbstractions.get_backend(array), plan.backend), arrays) ||
         throw(ArgumentError(
@@ -126,6 +137,7 @@ function NativeFieldEngine(
     fill!(first, zero(T))
     fill!(second, zero(T))
     fill!(forcing, zero(T))
+    copyto!(owned_decay_weights, normalized_decay_weights)
     status = similar(values, UInt32, 1)
     failing_index = similar(values, UInt32, 1)
     fill!(status, UInt32(0))
@@ -144,6 +156,7 @@ function NativeFieldEngine(
         first,
         second,
         forcing,
+        owned_decay_weights,
         status,
         failing_index,
         published,
@@ -296,6 +309,7 @@ end
     output,
     input,
     forcing,
+    decay_weights,
     geometry,
     boundaries,
     diffusion,
@@ -311,7 +325,11 @@ end
         input, Int(site), geometry, boundaries, center)
     candidate = muladd(
         dt,
-        muladd(diffusion, laplacian, forcing[site] - decay * center),
+        muladd(
+            diffusion,
+            laplacian,
+            forcing[site] - decay * decay_weights[site] * center,
+        ),
         center,
     )
     if isfinite(candidate) &&
@@ -375,6 +393,7 @@ function _stage_native_field!(
             output,
             input,
             engine.forcing,
+            engine.decay_weights,
             engine.geometry,
             engine.boundaries,
             engine.diffusion,
@@ -428,7 +447,8 @@ function _stage_native_field!(
                     engine.diffusion,
                     laplacian,
                     @inbounds(engine.forcing[site]) -
-                    engine.decay * center,
+                    engine.decay *
+                    @inbounds(engine.decay_weights[site]) * center,
                 ),
                 center,
             )
@@ -534,6 +554,7 @@ function adapt_native_field_engine(
             engine.first,
             engine.second,
             engine.forcing,
+            engine.decay_weights,
             engine.status,
             engine.failing_index,
         ),
@@ -564,6 +585,7 @@ function adapt_native_field_engine(
         arrays[4],
         arrays[5],
         arrays[6],
+        arrays[7],
         arrays[1],
         engine.time_tick,
         engine.time_tick,

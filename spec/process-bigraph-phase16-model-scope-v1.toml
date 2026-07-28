@@ -15,6 +15,10 @@ required_mechanisms = ["contact", "area", "inertia_length", "local_connectivity"
 required_adapters = ["native", "SciML"]
 required_lifecycle = ["build", "preflight", "initialize", "advance", "observe", "checkpoint", "restart", "terminate"]
 required_evidence = ["source_trace", "microfixtures", "canonical_startup", "bounded_trajectory", "invariants", "field_balance", "restart", "rollback"]
+source_trace = "spec/process-bigraph-phase16-merks-trace-v1.toml"
+reference_split = "field_then_cpm_v1"
+reference_ambiguity_profile = "bounded_reference_v1"
+compute_ownership = "ProcessBigraphs schedules and publishes; injected field adapter and CorePotts own heavy computation"
 excluded = ["Figure_5_full_ensemble", "publication_morphometry_pipeline", "quantitative_reproduction"]
 
 [[models]]
@@ -30,4 +34,3 @@ required_lifecycle = ["build", "preflight", "initialize", "advance", "observe", 
 required_evidence = ["source_trace", "generated_reduced_fixtures", "full_domain_startup", "bounded_trajectory", "lifecycle", "relationships", "degradation", "restart", "rollback"]
 source_asset_lane = "separate checksum-verified fetch; never ordinary CI and never vendored"
 excluded = ["full_year_CI", "ten_replica_reproduction", "full_morphology_classifier", "quantitative_reproduction"]
-

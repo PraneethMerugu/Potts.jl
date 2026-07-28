@@ -1,7 +1,7 @@
 const COREPOTTS_PROCESS_BIGRAPH_ADAPTER_VERSION =
-    "corepotts-process-bigraph-native-field-v1"
+    "corepotts-process-bigraph-native-field-v2"
 const COREPOTTS_PROCESS_BIGRAPH_CHECKPOINT_VERSION =
-    "corepotts-native-field-checkpoint-v1"
+    "corepotts-native-field-checkpoint-v2"
 
 """
 An immutable CorePotts native-field configuration. ProcessBigraphs owns invocation
@@ -16,6 +16,7 @@ struct CorePottsNativeFieldAdapter{
     boundaries::B
     diffusion::T
     decay::T
+    decay_weights::Array{T,N}
     tick_duration::T
     substeps_per_tick::Int
     reject_negative::Bool
@@ -31,6 +32,7 @@ function CorePottsNativeFieldAdapter(
     boundaries=_native_periodic_boundaries(T, N),
     diffusion::Real,
     decay::Real=0,
+    decay_weights=ones(T, size(values)),
     tick_duration::Real=1,
     substeps_per_tick::Integer=1,
     reject_negative::Bool=true,
@@ -53,6 +55,7 @@ function CorePottsNativeFieldAdapter(
         boundaries,
         diffusion,
         decay,
+        decay_weights,
         tick_duration,
         substeps_per_tick,
         reject_negative,
@@ -69,6 +72,7 @@ function CorePottsNativeFieldAdapter(
         prototype.boundaries,
         prototype.diffusion,
         prototype.decay,
+        Array(prototype.decay_weights),
         prototype.tick_duration,
         prototype.substeps_per_tick,
         prototype.reject_negative,
@@ -112,6 +116,7 @@ function ProcessBigraphs.engine_semantic_parameters(
             for boundary in adapter.boundaries)...),
         diffusion=adapter.diffusion,
         decay=adapter.decay,
+        decay_weights=copy(adapter.decay_weights),
         tick_duration=adapter.tick_duration,
         substeps_per_tick=adapter.substeps_per_tick,
         reject_negative=adapter.reject_negative,
@@ -210,6 +215,7 @@ mutable struct CorePottsNativeFieldInstance{
     engine::E
     time_scale::ProcessBigraphs.TimeScale
     prior_forcing::Union{Nothing,Array}
+    prior_decay_weights::Union{Nothing,Array}
     active_invocation::Union{Nothing,String}
 end
 
@@ -217,6 +223,7 @@ function _new_native_field_instance(
     adapter::CorePottsNativeFieldAdapter,
     values,
     forcing,
+    decay_weights,
     time_tick::Integer,
     publication_epoch::Integer,
 )
@@ -230,6 +237,7 @@ function _new_native_field_instance(
         boundaries=adapter.boundaries,
         diffusion=adapter.diffusion,
         decay=adapter.decay,
+        decay_weights,
         tick_duration=adapter.tick_duration,
         substeps_per_tick=adapter.substeps_per_tick,
         reject_negative=adapter.reject_negative,
@@ -245,7 +253,7 @@ function _new_native_field_instance(
             "native-field publication epoch must fit UInt64"))
     engine.publication_epoch = UInt64(publication_epoch)
     CorePottsNativeFieldInstance(
-        engine, adapter.time_scale, nothing, nothing)
+        engine, adapter.time_scale, nothing, nothing, nothing)
 end
 
 function ProcessBigraphs.prepare_engine(
@@ -258,10 +266,40 @@ function ProcessBigraphs.prepare_engine(
         adapter,
         adapter.initial_values,
         zeros(eltype(adapter.initial_values), size(adapter.initial_values)),
+        adapter.decay_weights,
         adapter.initial_tick,
         0,
     )
 end
+
+ProcessBigraphs.field_engine_array_type(
+    adapter::CorePottsNativeFieldAdapter,
+) = typeof(adapter.initial_values)
+
+ProcessBigraphs.field_engine_expected_diagnostics(
+    ::CorePottsNativeFieldAdapter,
+) = (:backend, :precision)
+
+function ProcessBigraphs.field_engine_reconstruct(
+    declaration::ProcessBigraphs.EngineDeclaration{
+        <:CorePottsNativeFieldAdapter},
+    values,
+    time_tick::Integer,
+)
+    adapter = declaration.adapter
+    _new_native_field_instance(
+        adapter,
+        values,
+        zeros(eltype(adapter.initial_values), size(adapter.initial_values)),
+        adapter.decay_weights,
+        time_tick,
+        0,
+    )
+end
+
+ProcessBigraphs.field_engine_snapshot(
+    instance::CorePottsNativeFieldInstance,
+) = native_field_snapshot(instance.engine)
 
 struct CorePottsNativeCompletionHandle <: ProcessBigraphs.AbstractCompletionHandle
     invocation_id::String
@@ -301,15 +339,17 @@ function _required_native_resource_authorization(
     required
 end
 
-function _forcing_projection(
+function _field_projections(
     invocation::ProcessBigraphs.EngineInvocation,
     engine::NativeFieldEngine,
 )
-    length(invocation.inputs) == 1 &&
-        only(invocation.inputs).name === :forcing ||
+    projections = Dict(projection.name => projection
+        for projection in invocation.inputs)
+    Set(keys(projections)) in
+        (Set((:forcing,)), Set((:forcing, :decay_weights))) ||
         throw(ArgumentError(
-            "native-field invocation requires exactly one `forcing` projection"))
-    projection = only(invocation.inputs)
+            "native-field invocation requires `forcing` and optionally `decay_weights` projections"))
+    projection = projections[:forcing]
     projection.mode === :frozen ||
         throw(ArgumentError("native-field forcing must be frozen"))
     forcing = ProcessBigraphs.projection_value(projection)
@@ -321,7 +361,21 @@ function _forcing_projection(
     eltype(forcing) == eltype(engine.forcing) ||
         throw(ArgumentError(
             "native-field forcing precision does not match the field"))
-    forcing
+    decay_weights = haskey(projections, :decay_weights) ?
+        ProcessBigraphs.projection_value(projections[:decay_weights]) :
+        engine.decay_weights
+    decay_weights isa AbstractArray ||
+        throw(ArgumentError("native-field decay weights must be an array"))
+    size(decay_weights) == size(engine.decay_weights) ||
+        throw(ArgumentError(
+            "native-field decay-weight dimensions do not match the field"))
+    eltype(decay_weights) == eltype(engine.decay_weights) ||
+        throw(ArgumentError(
+            "native-field decay-weight precision does not match the field"))
+    all(value -> isfinite(value) && value >= zero(value), decay_weights) ||
+        throw(ArgumentError(
+            "native-field decay weights must be finite and nonnegative"))
+    forcing, decay_weights
 end
 
 function ProcessBigraphs.stage_operation!(
@@ -344,15 +398,20 @@ function ProcessBigraphs.stage_operation!(
             "ProcessBigraphs and native-field time scales disagree"))
     _required_native_resource_authorization(
         invocation, eltype(instance.engine.published))
-    forcing = _forcing_projection(invocation, instance.engine)
+    forcing, decay_weights = _field_projections(invocation, instance.engine)
     instance.prior_forcing = copy(instance.engine.forcing)
+    instance.prior_decay_weights = copy(instance.engine.decay_weights)
     copyto!(instance.engine.forcing, forcing)
+    copyto!(instance.engine.decay_weights, decay_weights)
     instance.active_invocation = invocation.id
     try
         stage_native_field!(instance.engine, operation.target_time.tick)
     catch
         copyto!(instance.engine.forcing, instance.prior_forcing)
+        copyto!(
+            instance.engine.decay_weights, instance.prior_decay_weights)
         instance.prior_forcing = nothing
+        instance.prior_decay_weights = nothing
         instance.active_invocation = nothing
         rethrow()
     end
@@ -411,6 +470,7 @@ function ProcessBigraphs.publish_candidate!(
             "native-field candidate does not belong to this invocation"))
     publish_native_field!(instance.engine)
     instance.prior_forcing = nothing
+    instance.prior_decay_weights = nothing
     instance.active_invocation = nothing
     CorePottsNativePublication(
         instance.engine.name,
@@ -429,7 +489,14 @@ function ProcessBigraphs.discard_candidate!(
         if !isnothing(instance.prior_forcing)
             copyto!(instance.engine.forcing, instance.prior_forcing)
         end
+        if !isnothing(instance.prior_decay_weights)
+            copyto!(
+                instance.engine.decay_weights,
+                instance.prior_decay_weights,
+            )
+        end
         instance.prior_forcing = nothing
+        instance.prior_decay_weights = nothing
         instance.active_invocation = nothing
     end
     nothing
@@ -451,6 +518,7 @@ function ProcessBigraphs.engine_checkpoint_payload(
             declaration_fingerprint=declaration.fingerprint,
             values=native_field_snapshot(engine),
             forcing=Array(engine.forcing),
+            decay_weights=Array(engine.decay_weights),
             time_tick=engine.time_tick,
             publication_epoch=engine.publication_epoch,
         ),
@@ -469,6 +537,7 @@ function ProcessBigraphs.restore_engine_checkpoint(
         adapter,
         payload.values,
         payload.forcing,
+        payload.decay_weights,
         payload.time_tick,
         payload.publication_epoch,
     )

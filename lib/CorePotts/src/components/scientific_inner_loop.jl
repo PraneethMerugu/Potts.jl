@@ -164,6 +164,16 @@ function _proposal_constraint_allowed(component::PreserveConnectedCells,
         proposal::CopyProposal, context::ScientificProposalContext, workspace)
     throw(ArgumentError("PreserveConnectedCells requires a ConnectivityWorkspace"))
 end
+@inline proposal_constraint_allowed(
+    component::MerksLocalConnectivityConstraint,
+    proposal::CopyProposal,
+    context::ScientificProposalContext,
+) = _merks_local_connectivity_allowed(
+    component,
+    proposal,
+    context.state,
+    context.state.domain,
+)
 @inline proposal_constraint_allowed(component::FixedFocalEndpointConstraint,
     proposal::CopyProposal, context::ScientificProposalContext) =
     is_allowed(component, proposal, context.state)
@@ -340,6 +350,8 @@ scientific_access(::PositiveYield) = SnapshotScientificAccess()
 scientific_access(component::PreserveConnectedCells) =
     SnapshotScientificAccess((component.relation,);
         cell_wide = true, private_workspace = true)
+scientific_access(component::MerksLocalConnectivityConstraint) =
+    SnapshotScientificAccess((component.relation,))
 scientific_access(::FluctuatingVolumePressure) =
     SnapshotScientificAccess(; cell_wide = true)
 component_rng_streams(::FluctuatingVolumePressure) =

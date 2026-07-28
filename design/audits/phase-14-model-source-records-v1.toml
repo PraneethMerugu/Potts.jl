@@ -210,12 +210,12 @@ authority_order = ["paper and equations", "original source implementation if obt
 domain = "two-dimensional square lattice"
 dimensions = [500, 500]
 lattice_spacing = "2 micrometers per lattice site"
-boundary_conditions = "the paper states frozen border pixels with cell-border contact energy JcB=100; morphogen face behavior remains unresolved"
+boundary_conditions = "the paper states frozen border pixels with cell-border contact energy JcB=100; morphogen face behavior is source-unresolved and the bounded reference uses the named periodic_minimize_boundary_effects profile"
 proposal_relation = "second-nearest-neighbor square lattice with eight neighbors"
 contact_relation = "second-nearest-neighbor square lattice with eight neighbors"
 surface_relation = "cell boundary relation used by contact energy on the stated eight-neighbor CPM lattice"
-query_relation = "the paper's local connectivity and chemotaxis neighborhoods; exact offset use by each term remains a registered microfixture"
-field_relation = "matched 500 by 500 finite-difference morphogen grid at 2 micrometers per site; exact face boundary implementation remains unresolved"
+query_relation = "the paper's cyclic eight-neighbor local-connectivity collision test and donor-recipient chemotaxis difference; the exact local-connectivity truth table is qualified by source microfixtures"
+field_relation = "matched 500 by 500 finite-difference morphogen grid at 2 micrometers per site; source-unresolved face behavior is explicit in the bounded reference profile"
 algorithm = "sequential modified Metropolis CPM coupled to morphogen evolution"
 attempt_budget = "N copy attempts per MCS for N lattice sites"
 temperature = "50"
@@ -224,8 +224,8 @@ simulation_horizon = "paper maps 1 MCS to 30 seconds"
 initialization = "282 randomly positioned endothelial cells in a 333 by 333 pixel central region of a 500 by 500 lattice"
 initialization_checksum = "unavailable"
 staged_protocol = "initial random seeding followed by coupled CPM and morphogen evolution"
-update_schedule = "CPM copy dynamics plus autocrine secretion at every cell site, diffusion, decay only in ECM, chemotactic response, inertia-based elongation, and local-connectivity rejection; exact CPM/field split order remains unresolved"
-field_splitting = "15 finite-difference field steps per MCS at 2 seconds per field step; ordering relative to CPM remains unresolved"
+update_schedule = "CPM copy dynamics plus autocrine secretion at every cell site, diffusion, decay only in ECM, chemotactic response, inertia-based elongation, and local-connectivity rejection; the source-unresolved split order is closed for the bounded runnable reference by field_then_cpm_v1"
+field_splitting = "15 finite-difference field steps per MCS at 2 seconds per field step; the bounded runnable reference advances and publishes the field first, then runs one CPM MCS and refreshes secretion/decay projections"
 lifecycle = "no division or death in the bounded target unless source review shows otherwise"
 seed_policy = "not reported"
 source_replicates = "Figure 5 reports in-silico n=10 and in-vitro n=28"
@@ -257,12 +257,15 @@ parameters = [
     "1 MCS = 30 seconds",
 ]
 parameter_ownership = "Every listed value remains explicit published-model assembly; solver, splitting, unit conversion, and elongation interpretation are governed by the mapped capability contracts and the Merks sensitivity envelope."
+bounded_reference_trace = "../../spec/process-bigraph-phase16-merks-trace-v1.toml"
+bounded_reference_profile = "bounded_reference_v1"
+bounded_reference_claim = "runnable source-bounded reimplementation; not Figure 5 quantitative reproduction"
 capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-system-language", "multirate-global-scheduling", "cross-domain-symbol-mapping", "elongation-equivalence", "paper-observables", "paper-initialization"]
 unresolved_ambiguities = [
     "original simulator source and exact revision",
-    "exact morphogen face boundary implementation and term-specific use of the stated neighborhoods",
-    "exact elongation law equivalence to current Potts.jl Elongation",
-    "exact CPM/field split order and any unstated finite-difference or chemotactic implementation detail",
+    "source-exact morphogen face boundary implementation",
+    "unstated area and inertia-length penalty strengths",
+    "source-exact CPM/field split order",
     "seeds, precision, and exact random-placement algorithm",
     "exact lacuna and branch-point analysis programs and source numerical data",
 ]
