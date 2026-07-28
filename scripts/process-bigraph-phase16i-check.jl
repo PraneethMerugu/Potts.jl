@@ -40,7 +40,6 @@ const REQUIRED = [
 paths = Dict(path => require_file(path) for path in REQUIRED)
 const RESOLUTION_FILES = Set([
     "Project.toml",
-    "Manifest.toml",
     "benchmark/Project.toml",
     "benchmark/Manifest.toml",
     "docs/Project.toml",
@@ -60,6 +59,16 @@ const RESOLUTION_FILES = Set([
     "paper/Project.toml",
     "paper/Manifest.toml",
 ])
+for relative in RESOLUTION_FILES
+    check(isfile(joinpath(ROOT, relative)),
+        "missing tracked dependency-resolution input: $(relative)")
+    check(success(pipeline(
+            `git -C $(ROOT) ls-files --error-unmatch -- $(relative)`;
+            stdout=devnull,
+            stderr=devnull,
+        )),
+        "dependency-resolution input is not tracked: $(relative)")
+end
 
 entry = TOML.parsefile(paths["spec/process-bigraph-phase16-entry-v1.toml"])
 api = TOML.parsefile(paths["spec/process-bigraph-phase16-api-v1.toml"])
