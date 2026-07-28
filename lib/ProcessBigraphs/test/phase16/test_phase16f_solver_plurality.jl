@@ -1,29 +1,44 @@
 using CommonSolve
+using OrdinaryDiffEqTsit5: Tsit5
 using SciMLBase
 
-import ProcessBigraphs: BoundedCartesianFieldProblem,
-    IndependentCustomFieldAdapter, independent_custom_field_declaration,
-    sciml_field_adapter, sciml_field_declaration, field_engine_snapshot,
-    managed_engine_runtime, advance_managed_engine!, phase16_checkpoint,
-    restore_phase16_checkpoint, decode_phase16_checkpoint
+import ProcessBigraphs: managed_engine_runtime, advance_managed_engine!,
+    phase16_checkpoint, restore_phase16_checkpoint,
+    decode_phase16_checkpoint
+
+include(joinpath(
+    @__DIR__, "..", "fixtures", "independent_custom_field_adapter.jl"))
+using .IndependentCustomFieldAdapterFixture
 
 function p16f_problem(
     values;
     diffusion=0.1,
     decay=0.03,
     tick=0.01,
-    substeps=1,
+    scale=TimeScale(1, 100, :second),
     id="phase16f-field",
 )
-    scale = TimeScale(1, 100, :second)
     BoundedCartesianFieldProblem(
         id,
         values;
         diffusion,
         decay,
         tick_duration=tick,
-        substeps_per_tick=substeps,
         time_scale=scale,
+    )
+end
+
+function p16f_sciml_declaration(
+    problem;
+    abstol=1.0e-10,
+    reltol=1.0e-10,
+    options=(;),
+)
+    sciml_field_declaration(
+        problem,
+        Tsit5();
+        algorithm_id="ordinarydiffeq-tsit5",
+        solver_options=merge((; abstol, reltol), options),
     )
 end
 
@@ -48,41 +63,8 @@ function p16f_advance!(runtime, target, forcing)
             residency=:host,
         ),
         expected_outputs=(:field_state,),
-        expected_diagnostics=(:backend, :algorithm),
+        expected_diagnostics=(:backend, :algorithm, :retcode),
     )
-end
-
-function p16f_reference_step(problem, values, forcing)
-    result = similar(values)
-    dt = problem.tick_duration / problem.substeps_per_tick
-    input = copy(values)
-    for _ in 1:problem.substeps_per_tick
-        for index in CartesianIndices(input)
-            center = input[index]
-            laplacian = zero(center)
-            coordinates = Tuple(index)
-            for axis in 1:ndims(input)
-                low = Base.setindex(
-                    coordinates,
-                    mod1(coordinates[axis] - 1, size(input, axis)),
-                    axis,
-                )
-                high = Base.setindex(
-                    coordinates,
-                    mod1(coordinates[axis] + 1, size(input, axis)),
-                    axis,
-                )
-                laplacian += (
-                    input[low...] + input[high...] - 2center
-                ) / (problem.spacing[axis] * problem.spacing[axis])
-            end
-            result[index] = center + dt * (
-                problem.diffusion * laplacian +
-                forcing[index] - problem.decay * center)
-        end
-        input, result = result, input
-    end
-    input
 end
 
 function p16f_empty_serial_runtime()
@@ -98,79 +80,200 @@ function p16f_empty_serial_runtime()
     composite, executor, initialize_runtime(composite, executor)
 end
 
-@testset "Phase 16.F CPU SciML and independent custom adapters" begin
-    initial = reshape(Float64.(1:20), 4, 5)
-    forcing = reshape(range(0.0, 0.19; length=20), 4, 5)
-    problem = p16f_problem(initial)
-    sciml_declaration = sciml_field_declaration(problem)
-    custom_declaration = independent_custom_field_declaration(problem)
-    @test sciml_field_adapter(problem) isa
-        Base.get_extension(
-            ProcessBigraphs, :ProcessBigraphsSciMLExt).SciMLFieldAdapter
-    @test sciml_declaration.capabilities.problem_envelopes ==
-        ("sciml-odeproblem-periodic-cartesian-diffusion-decay",)
-    @test custom_declaration.capabilities.problem_envelopes ==
-        ("periodic-cartesian-diffusion-decay",)
-    @test sciml_declaration.capabilities.replay_class === :exact
-    @test custom_declaration.capabilities.replay_class === :exact
-    @test sciml_declaration.capabilities.backends == (:cpu,)
-    @test custom_declaration.capabilities.backends == (:cpu,)
-    @test sciml_declaration.capabilities.boundary_kinds == (:periodic,)
-    @test custom_declaration.capabilities.boundary_kinds == (:periodic,)
-
-    sciml = p16f_managed(sciml_declaration, problem)
-    custom = p16f_managed(custom_declaration, problem)
-    expected = p16f_reference_step(problem, initial, forcing)
-    sciml_result = p16f_advance!(sciml, 1, forcing)
-    custom_result = p16f_advance!(custom, 1, forcing)
-    @test field_engine_snapshot(sciml.instance) == expected
-    @test field_engine_snapshot(custom.instance) == expected
-    @test field_engine_snapshot(sciml.instance) ==
-        field_engine_snapshot(custom.instance)
-    @test sciml_result.outcome.diagnostics.algorithm ===
-        :sciml_fixed_euler
-    @test custom_result.outcome.diagnostics.algorithm ===
-        :independent_custom_euler
-    @test sciml.logical_time == custom.logical_time ==
-        LogicalTime(1, problem.time_scale)
-
-    initial3 = reshape(Float32.(1:60), 3, 4, 5)
-    forcing3 = fill(0.02f0, size(initial3))
-    problem3 = p16f_problem(
-        initial3; diffusion=0.05f0, decay=0.01f0, id="phase16f-3d")
-    sciml3 = p16f_managed(sciml_field_declaration(problem3), problem3)
-    custom3 = p16f_managed(
-        independent_custom_field_declaration(problem3), problem3)
-    p16f_advance!(sciml3, 1, forcing3)
-    p16f_advance!(custom3, 1, forcing3)
-    expected3 = p16f_reference_step(problem3, initial3, forcing3)
-    @test field_engine_snapshot(sciml3.instance) == expected3
-    @test field_engine_snapshot(custom3.instance) == expected3
-
-    constant = fill(2.0, 4, 4)
-    constant_problem = p16f_problem(
-        constant; diffusion=0.2, decay=0.1, substeps=2,
-        id="phase16f-decay")
-    decay = p16f_managed(
-        sciml_field_declaration(constant_problem), constant_problem)
-    p16f_advance!(decay, 1, zeros(size(constant)))
-    dt = 0.01 / 2
-    analytic_discrete = 2.0 * (1 - 0.1dt)^2
-    @test all(value -> isapprox(
-            value, analytic_discrete; rtol=2eps(Float64), atol=0),
-        field_engine_snapshot(decay.instance))
+function p16f_fourier_fixture(
+    ::Type{T}=Float64;
+    dimensions=(12, 10),
+    mode=2,
+    offset=T(2),
+    amplitude=T(0.2),
+) where {T<:AbstractFloat}
+    values = Array{T}(undef, dimensions)
+    for index in CartesianIndices(values)
+        values[index] = offset + amplitude *
+            cos(T(2pi * mode * (index[1] - 1) / dimensions[1]))
+    end
+    values
 end
 
-@testset "Phase 16.F continuation, failure, restart, and capability matrix" begin
-    initial = reshape(Float64.(1:12), 3, 4)
+function p16f_fourier_exact(
+    initial,
+    diffusion,
+    spacing,
+    duration;
+    mode=2,
+    offset=2.0,
+)
+    n = size(initial, 1)
+    eigenvalue = -4sin(pi * mode / n)^2 / spacing[1]^2
+    amplitude = maximum(initial) - offset
+    result = similar(initial)
+    for index in CartesianIndices(result)
+        result[index] = offset + amplitude *
+            exp(diffusion * eigenvalue * duration) *
+            cos(2pi * mode * (index[1] - 1) / n)
+    end
+    result
+end
+
+@testset "Phase 16.F real solver handoff and declaration provenance" begin
+    initial = p16f_fourier_fixture()
+    problem = p16f_problem(initial)
+    declaration = p16f_sciml_declaration(problem)
+    adapter = declaration.adapter
+    @test adapter.algorithm isa Tsit5
+    @test adapter.algorithm_id == "ordinarydiffeq-tsit5"
+    @test adapter.algorithm_package == "OrdinaryDiffEqTsit5"
+    @test adapter.algorithm_package_uuid ==
+        "b1df2697-797e-41e3-8120-5422d3b24e4a"
+    @test v"2.0.0" <=
+        VersionNumber(adapter.algorithm_package_version) < v"3.0.0"
+    @test adapter.solver_options.abstol == 1.0e-10
+    @test adapter.solver_options.reltol == 1.0e-10
+    @test adapter.solver_options.save_everystep == false
+    @test declaration.parameters.exact_target_policy ==
+        "CommonSolve.step!(integrator, duration, true)"
+    @test declaration.parameters.continuation_policy ==
+        "reconstruct_each_invocation"
+    @test declaration.capabilities.replay_class === :numerical
+    @test declaration.capabilities.continuation_actions ==
+        (:reconstruct, :reject)
+
+    reordered = sciml_field_declaration(
+        problem,
+        Tsit5();
+        algorithm_id="ordinarydiffeq-tsit5",
+        solver_options=(reltol=1.0e-10, abstol=1.0e-10),
+    )
+    changed = p16f_sciml_declaration(problem; reltol=1.0e-8)
+    @test reordered.fingerprint == declaration.fingerprint
+    @test changed.fingerprint != declaration.fingerprint
+    @test_throws MethodError sciml_field_declaration(problem)
+    @test_throws ArgumentError sciml_field_declaration(
+        problem,
+        Tsit5();
+        algorithm_id="ordinarydiffeq-tsit5",
+        solver_options=(
+            abstol=1.0e-8,
+            reltol=1.0e-8,
+            callback=:undeclared_global_callback,
+        ),
+    )
+
+    extension_source = read(joinpath(
+        dirname(pathof(ProcessBigraphs)),
+        "..", "ext", "ProcessBigraphsSciMLExt.jl"), String)
+    fixture_source = read(joinpath(
+        @__DIR__, "..", "fixtures",
+        "independent_custom_field_adapter.jl"), String)
+    @test !occursin("P16FixedEuler", extension_source)
+    @test !occursin("P16SciMLSolution", extension_source)
+    @test !occursin("function CommonSolve.solve", extension_source)
+    @test !occursin("SciML", fixture_source)
+    @test !occursin("_fixture_laplacian", extension_source)
+end
+
+@testset "Phase 16.F analytic and convergence evidence" begin
+    constant = fill(2.0, 4, 4)
+    scale = TimeScale(1, 10, :second)
+    decay_problem = p16f_problem(
+        constant;
+        diffusion=0.0,
+        decay=10.0,
+        tick=0.1,
+        scale,
+        id="phase16f-decay",
+    )
+    exact = 2exp(-1)
+
+    loose = p16f_managed(
+        p16f_sciml_declaration(
+            decay_problem; abstol=1.0e-3, reltol=1.0e-3),
+        decay_problem,
+    )
+    tight = p16f_managed(
+        p16f_sciml_declaration(
+            decay_problem; abstol=1.0e-11, reltol=1.0e-11),
+        decay_problem,
+    )
+    p16f_advance!(loose, 1, zeros(size(constant)))
+    tight_result = p16f_advance!(tight, 1, zeros(size(constant)))
+    loose_error = maximum(abs.(
+        field_engine_snapshot(loose.instance) .- exact))
+    tight_error = maximum(abs.(
+        field_engine_snapshot(tight.instance) .- exact))
+    @test tight_error < loose_error
+    @test tight_error < 1.0e-9
+    @test tight_result.outcome.diagnostics.algorithm ===
+        :ordinarydiffeq_tsit5
+    @test occursin(
+        "Success", tight_result.outcome.diagnostics.retcode)
+
+    custom_errors = Float64[]
+    for substeps in (1, 2, 4)
+        declaration = independent_custom_field_declaration(
+            decay_problem; substeps_per_tick=substeps)
+        runtime = p16f_managed(declaration, decay_problem)
+        result = p16f_advance!(runtime, 1, zeros(size(constant)))
+        push!(custom_errors, maximum(abs.(
+            field_engine_snapshot(runtime.instance) .- exact)))
+        @test result.outcome.diagnostics.algorithm ===
+            :independent_classical_rk4
+        @test declaration.capabilities.replay_class === :numerical
+    end
+    @test custom_errors[2] < custom_errors[1] / 8
+    @test custom_errors[3] < custom_errors[2] / 8
+
+    initial = p16f_fourier_fixture()
+    spatial_problem = p16f_problem(
+        initial;
+        diffusion=0.2,
+        decay=0.0,
+        id="phase16f-manufactured-fourier",
+    )
+    forcing = zeros(size(initial))
+    target_tick = 20
+    exact_spatial = p16f_fourier_exact(
+        initial,
+        spatial_problem.diffusion,
+        spatial_problem.spacing,
+        target_tick * spatial_problem.tick_duration,
+    )
+    sciml = p16f_managed(
+        p16f_sciml_declaration(spatial_problem), spatial_problem)
+    custom = p16f_managed(
+        independent_custom_field_declaration(
+            spatial_problem; substeps_per_tick=4),
+        spatial_problem,
+    )
+    p16f_advance!(sciml, target_tick, forcing)
+    p16f_advance!(custom, target_tick, forcing)
+    @test isapprox(
+        field_engine_snapshot(sciml.instance),
+        exact_spatial;
+        rtol=2.0e-9,
+        atol=2.0e-9,
+    )
+    @test isapprox(
+        field_engine_snapshot(custom.instance),
+        exact_spatial;
+        rtol=2.0e-8,
+        atol=2.0e-8,
+    )
+end
+
+@testset "Phase 16.F transaction, numerical restart, and capability matrix" begin
+    initial = p16f_fourier_fixture()
     forcings = [fill(0.01 * tick, size(initial)) for tick in 1:4]
     problem = p16f_problem(initial; id="phase16f-restart")
     declarations = (
-        sciml_field_declaration(problem),
+        p16f_sciml_declaration(problem),
         independent_custom_field_declaration(problem),
     )
     composite, executor, serial = p16f_empty_serial_runtime()
     for declaration in declarations
+        @test declaration.capabilities.backends == (:cpu,)
+        @test declaration.capabilities.boundary_kinds == (:periodic,)
+        @test declaration.capabilities.replay_class === :numerical
         baseline = p16f_managed(declaration, problem)
         for tick in 1:4
             p16f_advance!(baseline, tick, forcings[tick])
@@ -183,6 +286,7 @@ end
             end
             checkpoint_value = phase16_checkpoint(
                 serial; managed_engines=(prefix,))
+            @test checkpoint_value.payload.aggregate_replay === :numerical
             restored = restore_phase16_checkpoint(
                 composite,
                 executor,
@@ -194,7 +298,12 @@ end
             for tick in (cut + 1):4
                 p16f_advance!(resumed, tick, forcings[tick])
             end
-            @test field_engine_snapshot(resumed.instance) == expected
+            @test isapprox(
+                field_engine_snapshot(resumed.instance),
+                expected;
+                rtol=4eps(Float64),
+                atol=4eps(Float64),
+            )
             @test resumed.logical_time ==
                 LogicalTime(4, problem.time_scale)
             @test resumed.publication_version == UInt64(4)
@@ -212,7 +321,7 @@ end
                 residency=:host,
             ),
             expected_outputs=(:field_state,),
-            expected_diagnostics=(:backend, :algorithm),
+            expected_diagnostics=(:backend, :algorithm, :retcode),
             authorize=(candidate, invocation) -> false,
         )
         @test field_engine_snapshot(rejected.instance) == before
@@ -221,9 +330,12 @@ end
     end
 
     failing_problem = p16f_problem(
-        zeros(Float64, 3, 4); id="phase16f-failure")
+        zeros(Float64, 3, 4);
+        diffusion=0.0,
+        id="phase16f-failure",
+    )
     for declaration in (
-        sciml_field_declaration(failing_problem),
+        p16f_sciml_declaration(failing_problem),
         independent_custom_field_declaration(failing_problem),
     )
         runtime = p16f_managed(declaration, failing_problem)
@@ -236,14 +348,7 @@ end
         @test !isnothing(runtime.last_failure)
     end
 
-    @test_throws ProcessBigraphError BoundedCartesianFieldProblem(
-        "unstable",
-        zeros(Float64, 3, 4);
-        diffusion=100.0,
-        tick_duration=1.0,
-        time_scale=TimeScale(1),
-    ) |> ProcessBigraphs._bounded_field_stability
-    declaration = sciml_field_declaration(problem)
+    declaration = p16f_sciml_declaration(problem)
     runtime = p16f_managed(declaration, problem)
     @test_throws ProcessBigraphError advance_managed_engine!(
         runtime,
@@ -255,6 +360,6 @@ end
             residency=:device,
         ),
         expected_outputs=(:field_state,),
-        expected_diagnostics=(:backend, :algorithm),
+        expected_diagnostics=(:backend, :algorithm, :retcode),
     )
 end

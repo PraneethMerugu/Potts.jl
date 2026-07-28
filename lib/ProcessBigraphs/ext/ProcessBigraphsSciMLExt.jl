@@ -4,90 +4,145 @@ import CommonSolve
 import ProcessBigraphs
 import SciMLBase
 
-const CONTRACT_VERSION = "process-bigraphs-sciml-extension-v1"
-const CHECKPOINT_VERSION = "sciml-periodic-field-checkpoint-v1"
-
-struct P16FixedEuler
-    steps::Int
-    function P16FixedEuler(steps::Integer)
-        steps > 0 || throw(ArgumentError(
-            "SciML fixed Euler requires a positive step count"))
-        new(Int(steps))
-    end
-end
-
-struct P16SciMLSolution{U,T}
-    u::U
-    t::T
-    retcode::Symbol
-end
-
-function CommonSolve.solve(
-    problem::SciMLBase.ODEProblem,
-    algorithm::P16FixedEuler;
-    kwargs...,
+const CONTRACT_VERSION = "process-bigraphs-sciml-extension-v2"
+const CHECKPOINT_VERSION = "sciml-periodic-field-checkpoint-v2"
+const QUALIFIED_SOLVER_OPTION_KEYS = (
+    :abstol,
+    :reltol,
+    :adaptive,
+    :dt,
+    :dtmin,
+    :dtmax,
+    :maxiters,
 )
-    isempty(kwargs) ||
+
+function _normalized_solver_options(options::NamedTuple)
+    supplied = Set(keys(options))
+    allowed = Set(QUALIFIED_SOLVER_OPTION_KEYS)
+    supplied <= allowed ||
         throw(ArgumentError(
-            "bounded SciML field solver rejects undeclared solver keywords"))
-    start, target = problem.tspan
-    target > start ||
+            "unsupported SciML solver options: " *
+            join(sort!(String.(collect(setdiff(supplied, allowed)))), ", ")))
+    (:abstol in supplied && :reltol in supplied) ||
         throw(ArgumentError(
-            "bounded SciML field solve requires a positive interval"))
-    dt = (target - start) / algorithm.steps
-    state = copy(problem.u0)
-    derivative = similar(state)
-    time = start
-    for _ in 1:algorithm.steps
-        problem.f(derivative, state, problem.p, time)
-        @. state = state + dt * derivative
-        time += dt
+            "qualified SciML declarations require explicit abstol and reltol"))
+    for key in (:abstol, :reltol)
+        value = getproperty(options, key)
+        value isa Real && isfinite(value) && value > zero(value) ||
+            throw(ArgumentError("$(key) must be finite and positive"))
     end
-    P16SciMLSolution(state, target, :Success)
+    for key in (:dt, :dtmin, :dtmax)
+        key in supplied || continue
+        value = getproperty(options, key)
+        value isa Real && isfinite(value) && value > zero(value) ||
+            throw(ArgumentError("$(key) must be finite and positive"))
+    end
+    if :adaptive in supplied
+        getproperty(options, :adaptive) isa Bool ||
+            throw(ArgumentError("adaptive must be Bool"))
+    end
+    if :maxiters in supplied
+        value = getproperty(options, :maxiters)
+        value isa Integer && 0 < value <= typemax(Int) ||
+            throw(ArgumentError("maxiters must fit positive Int"))
+    end
+    ordered = Pair{Symbol,Any}[]
+    for key in QUALIFIED_SOLVER_OPTION_KEYS
+        key in supplied &&
+            push!(ordered, key => getproperty(options, key))
+    end
+    normalized = (;
+        ordered...,
+        save_everystep=false,
+        save_start=false,
+        save_end=false,
+        dense=false,
+    )
+    ProcessBigraphs.encode_logical_value(normalized)
+    normalized
 end
 
-function _field_rhs!(derivative, state, parameters, time)
-    problem, forcing = parameters
-    values = reshape(state, size(problem.initial_values))
-    output = reshape(derivative, size(problem.initial_values))
-    for index in CartesianIndices(values)
-        @inbounds center = values[index]
-        @inbounds output[index] =
-            problem.diffusion *
-                ProcessBigraphs._periodic_laplacian(
-                    values, index, problem.spacing) +
-            forcing[index] -
-            problem.decay * center
-    end
-    nothing
+function _algorithm_package_identity(algorithm)
+    algorithm_module = parentmodule(typeof(algorithm))
+    root_module = Base.moduleroot(algorithm_module)
+    package_id = Base.PkgId(root_module)
+    version = Base.pkgversion(root_module)
+    (
+        package=String(package_id.name),
+        package_uuid=string(package_id.uuid),
+        package_version=isnothing(version) ? "unversioned" : string(version),
+        algorithm_type=string(typeof(algorithm)),
+    )
 end
 
 struct SciMLFieldAdapter{
-        P<:ProcessBigraphs.BoundedCartesianFieldProblem} <:
+        P<:ProcessBigraphs.BoundedCartesianFieldProblem,A,O<:NamedTuple} <:
         ProcessBigraphs.AbstractEngineAdapter
     problem::P
+    algorithm::A
+    algorithm_id::String
+    algorithm_package::String
+    algorithm_package_uuid::String
+    algorithm_package_version::String
+    algorithm_type::String
+    solver_options::O
 end
 
-ProcessBigraphs.sciml_field_adapter(
+function ProcessBigraphs.sciml_field_adapter(
     problem::ProcessBigraphs.BoundedCartesianFieldProblem,
-) = SciMLFieldAdapter(problem)
+    algorithm;
+    algorithm_id::AbstractString,
+    solver_options::NamedTuple,
+)
+    isempty(algorithm_id) &&
+        throw(ArgumentError("SciML algorithm identity cannot be empty"))
+    package = _algorithm_package_identity(algorithm)
+    options = _normalized_solver_options(solver_options)
+    SciMLFieldAdapter(
+        problem,
+        algorithm,
+        String(algorithm_id),
+        package.package,
+        package.package_uuid,
+        package.package_version,
+        package.algorithm_type,
+        options,
+    )
+end
 
-ProcessBigraphs.engine_semantic_version(::SciMLFieldAdapter) = "1.0.0"
+ProcessBigraphs.engine_semantic_version(::SciMLFieldAdapter) = "2.0.0"
 ProcessBigraphs.engine_semantic_parameters(adapter::SciMLFieldAdapter) = (
     contract_version=CONTRACT_VERSION,
     problem_fingerprint=adapter.problem.fingerprint,
     problem_type="SciMLBase.ODEProblem",
-    algorithm="bounded-fixed-euler",
+    algorithm_id=adapter.algorithm_id,
+    algorithm_package=adapter.algorithm_package,
+    algorithm_package_uuid=adapter.algorithm_package_uuid,
+    algorithm_package_version=adapter.algorithm_package_version,
+    algorithm_type=adapter.algorithm_type,
+    solver_options=adapter.solver_options,
+    exact_target_policy="CommonSolve.step!(integrator, duration, true)",
+    continuation_policy="reconstruct_each_invocation",
+    replay_class=:numerical,
 )
 
 function ProcessBigraphs.sciml_field_declaration(
     problem::ProcessBigraphs.BoundedCartesianFieldProblem,
+    algorithm;
+    algorithm_id::AbstractString,
+    solver_options::NamedTuple,
 )
+    adapter = ProcessBigraphs.sciml_field_adapter(
+        problem,
+        algorithm;
+        algorithm_id,
+        solver_options,
+    )
     precision = eltype(problem.initial_values) === Float32 ?
         :float32 : :float64
     ProcessBigraphs.EngineDeclaration(
         problem.id,
-        SciMLFieldAdapter(problem);
+        adapter;
         capabilities=ProcessBigraphs.EngineCapabilities(
             operation_families=(:interval_advance,),
             problem_envelopes=(
@@ -97,8 +152,8 @@ function ProcessBigraphs.sciml_field_declaration(
             residencies=(:host,),
             input_modes=(:frozen,),
             boundary_kinds=(:periodic,),
-            continuation_actions=(:preserve, :reconstruct, :reject),
-            replay_class=:exact,
+            continuation_actions=(:reconstruct, :reject),
+            replay_class=:numerical,
             cancellation=false,
             diagnostics=true,
             resize=false,
@@ -108,9 +163,9 @@ function ProcessBigraphs.sciml_field_declaration(
 end
 
 mutable struct SciMLFieldInstance{
-        P<:ProcessBigraphs.BoundedCartesianFieldProblem,A<:Array} <:
+        D<:ProcessBigraphs.EngineDeclaration,A<:Array} <:
         ProcessBigraphs.AbstractEngineInstance
-    problem::P
+    declaration::D
     published::A
     forcing::A
     prior_forcing::Union{Nothing,A}
@@ -119,15 +174,17 @@ mutable struct SciMLFieldInstance{
     target_tick::Int64
     publication_epoch::UInt64
     active_invocation::Union{Nothing,String}
+    last_retcode::String
 end
 
 function _sciml_instance(
-    problem::ProcessBigraphs.BoundedCartesianFieldProblem,
+    declaration::ProcessBigraphs.EngineDeclaration{<:SciMLFieldAdapter},
     values,
     forcing,
     time_tick::Integer,
     publication_epoch::Integer,
 )
+    problem = declaration.adapter.problem
     published = Array(values)
     normalized_forcing = Array(forcing)
     size(published) == size(problem.initial_values) &&
@@ -137,7 +194,7 @@ function _sciml_instance(
         eltype(normalized_forcing) == eltype(published) ||
         throw(ArgumentError("SciML field checkpoint forcing is incompatible"))
     SciMLFieldInstance(
-        problem,
+        declaration,
         published,
         normalized_forcing,
         nothing,
@@ -146,6 +203,7 @@ function _sciml_instance(
         Int64(time_tick),
         UInt64(publication_epoch),
         nothing,
+        "uninitialized",
     )
 end
 
@@ -153,8 +211,10 @@ function ProcessBigraphs.prepare_engine(
     adapter::SciMLFieldAdapter,
     declaration::ProcessBigraphs.EngineDeclaration,
 )
+    declaration.adapter === adapter ||
+        throw(ArgumentError("SciML declaration and adapter disagree"))
     _sciml_instance(
-        adapter.problem,
+        declaration,
         adapter.problem.initial_values,
         zeros(eltype(adapter.problem.initial_values),
             size(adapter.problem.initial_values)),
@@ -172,6 +232,74 @@ struct SciMLCandidate
     invocation_id::String
     target_tick::Int64
     publication_epoch::UInt64
+    retcode::String
+end
+
+@inline function _periodic_laplacian(
+    input,
+    index::CartesianIndex{N},
+    spacing::NTuple{N},
+) where {N}
+    coordinates = Tuple(index)
+    center = @inbounds input[index]
+    laplacian = zero(center)
+    for axis in 1:N
+        low = Base.setindex(
+            coordinates,
+            mod1(coordinates[axis] - 1, size(input, axis)),
+            axis,
+        )
+        high = Base.setindex(
+            coordinates,
+            mod1(coordinates[axis] + 1, size(input, axis)),
+            axis,
+        )
+        @inbounds laplacian += (
+            input[low...] + input[high...] - 2center
+        ) / (spacing[axis] * spacing[axis])
+    end
+    laplacian
+end
+
+function _field_rhs!(derivative, state, parameters, _)
+    problem, forcing = parameters
+    values = reshape(state, size(problem.initial_values))
+    output = reshape(derivative, size(problem.initial_values))
+    for index in CartesianIndices(values)
+        @inbounds center = values[index]
+        @inbounds output[index] =
+            problem.diffusion *
+                _periodic_laplacian(values, index, problem.spacing) +
+            forcing[index] -
+            problem.decay * center
+    end
+    nothing
+end
+
+function _forcing(instance::SciMLFieldInstance, invocation)
+    length(invocation.inputs) == 1 &&
+        only(invocation.inputs).name === :forcing ||
+        throw(ArgumentError(
+            "SciML field advance requires one forcing projection"))
+    forcing = ProcessBigraphs.projection_value(only(invocation.inputs))
+    forcing isa AbstractArray &&
+        size(forcing) == size(instance.forcing) &&
+        eltype(forcing) == eltype(instance.forcing) ||
+        throw(ArgumentError(
+            "SciML field forcing has incompatible shape or precision"))
+    forcing
+end
+
+function _authorize_resources(instance::SciMLFieldInstance, invocation)
+    precision = eltype(instance.published) === Float32 ?
+        :float32 : :float64
+    expected = (backend=:cpu, precision, residency=:host)
+    all(key -> haskey(invocation.resource_authorization, key) &&
+        getproperty(invocation.resource_authorization, key) ==
+            getproperty(expected, key), keys(expected)) ||
+        throw(ArgumentError(
+            "SciML field requires explicit CPU/precision/host authorization"))
+    nothing
 end
 
 function ProcessBigraphs.stage_operation!(
@@ -180,46 +308,51 @@ function ProcessBigraphs.stage_operation!(
 )
     operation = invocation.operation
     operation isa ProcessBigraphs.IntervalAdvance ||
-        throw(ArgumentError(
-            "bounded SciML field supports only interval advance"))
+        throw(ArgumentError("SciML field supports only interval advance"))
     isnothing(instance.active_invocation) ||
-        throw(ArgumentError(
-            "bounded SciML field already has an active candidate"))
+        throw(ArgumentError("SciML field already has an active candidate"))
+    problem = instance.declaration.adapter.problem
     operation.start_time == ProcessBigraphs.LogicalTime(
-        instance.time_tick, instance.problem.time_scale) ||
+        instance.time_tick, problem.time_scale) ||
         throw(ArgumentError(
             "SciML field and ProcessBigraphs clocks disagree"))
-    ProcessBigraphs._bounded_resource_authorization(
-        instance, invocation)
-    forcing = ProcessBigraphs._bounded_forcing(instance, invocation)
+    _authorize_resources(instance, invocation)
+    forcing = _forcing(instance, invocation)
     instance.prior_forcing = copy(instance.forcing)
     copyto!(instance.forcing, forcing)
-    ProcessBigraphs._bounded_field_stability(instance.problem)
     ticks = operation.target_time.tick - operation.start_time.tick
-    steps = Base.Checked.checked_mul(
-        ticks, instance.problem.substeps_per_tick)
     duration = convert(eltype(instance.published), ticks) *
-        instance.problem.tick_duration
+        problem.tick_duration
     ode_problem = SciMLBase.ODEProblem(
         _field_rhs!,
         vec(copy(instance.published)),
         (zero(duration), duration),
-        (instance.problem, copy(instance.forcing)),
+        (problem, copy(instance.forcing)),
     )
+    adapter = instance.declaration.adapter
     try
-        solution = CommonSolve.solve(
-            ode_problem, P16FixedEuler(steps))
-        solution.retcode === :Success ||
+        integrator = CommonSolve.init(
+            ode_problem,
+            adapter.algorithm;
+            adapter.solver_options...,
+        )
+        CommonSolve.step!(integrator, duration, true)
+        integrator.t == duration ||
             throw(ArgumentError(
-                "bounded SciML field solver did not succeed"))
+                "SciML solver failed to reach the exact authorized target"))
+        retcode = SciMLBase.check_error(integrator)
+        SciMLBase.successful_retcode(retcode) ||
+            throw(ArgumentError(
+                "SciML solver failed with return code $(retcode)"))
         candidate = reshape(
-            copy(solution.u), size(instance.published))
+            copy(integrator.u), size(instance.published))
         all(isfinite, candidate) &&
-            (!instance.problem.reject_negative ||
+            (!problem.reject_negative ||
              all(>=(zero(eltype(candidate))), candidate)) ||
             throw(ArgumentError(
-                "bounded SciML field produced an invalid candidate"))
+                "SciML field produced an invalid candidate"))
         instance.candidate = candidate
+        instance.last_retcode = string(retcode)
     catch
         copyto!(instance.forcing, instance.prior_forcing)
         instance.prior_forcing = nothing
@@ -242,7 +375,9 @@ function ProcessBigraphs.complete_operation!(
         instance.target_tick,
         Base.Checked.checked_add(
             instance.publication_epoch, UInt64(1)),
+        instance.last_retcode,
     )
+    adapter = instance.declaration.adapter
     ProcessBigraphs.EngineCandidate(
         handle.target,
         token;
@@ -250,12 +385,18 @@ function ProcessBigraphs.complete_operation!(
             target_tick=token.target_tick,
             publication_epoch=token.publication_epoch,
         ),),
-        diagnostics=(backend=:cpu, algorithm=:sciml_fixed_euler),
+        diagnostics=(
+            backend=:cpu,
+            algorithm=Symbol(replace(adapter.algorithm_id, '-' => '_')),
+            retcode=token.retcode,
+        ),
         fingerprint=ProcessBigraphs.canonical_fingerprint((
             CONTRACT_VERSION,
+            instance.declaration.fingerprint,
             token.invocation_id,
             token.target_tick,
             token.publication_epoch,
+            token.retcode,
         )),
     )
 end
@@ -308,13 +449,14 @@ function ProcessBigraphs.engine_checkpoint_payload(
     ProcessBigraphs.CheckpointComponent(
         declaration.id,
         CHECKPOINT_VERSION,
-        :exact,
+        :numerical,
         (
             declaration_fingerprint=declaration.fingerprint,
             values=copy(instance.published),
             forcing=copy(instance.forcing),
             time_tick=instance.time_tick,
             publication_epoch=instance.publication_epoch,
+            continuation_policy=:reconstruct_each_invocation,
         ),
     )
 end
@@ -327,8 +469,11 @@ function ProcessBigraphs.restore_engine_checkpoint(
     payload.declaration_fingerprint == declaration.fingerprint ||
         throw(ArgumentError(
             "SciML field declaration changed during restore"))
+    payload.continuation_policy === :reconstruct_each_invocation ||
+        throw(ArgumentError(
+            "unsupported SciML continuation policy"))
     _sciml_instance(
-        adapter.problem,
+        declaration,
         payload.values,
         payload.forcing,
         payload.time_tick,
