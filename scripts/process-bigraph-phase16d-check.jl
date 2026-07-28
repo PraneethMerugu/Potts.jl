@@ -32,13 +32,27 @@ ledger = TOML.parsefile(
 evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16d-evidence-v1.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
+hc_active = entry["implementation_status"] in (
+    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+hc_artifacts = hc_active ? Dict(
+    row["path"] => row["sha256"]
+    for row in TOML.parsefile(joinpath(
+        ROOT,
+        "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
+    ))["artifacts"]
+) : Dict{String,Any}()
+artifact_matches(relative, legacy) = begin
+    actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))
+    actual == legacy || get(hc_artifacts, relative, nothing) == actual
+end
 
 check(entry["implementation_status"] in (
       "phase16d_qualified_c_hardware_open",
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
       "phase16g_qualified_c_hardware_open",
-      "phase16h_qualified_c_hardware_open"),
+      "phase16h_qualified_c_hardware_open",
+      "phase16hc_qualified_c_hardware_open"),
     "Phase 16.D checker requires qualified-D/C-hardware-open state")
 for id in ["P16-D01", "P16-D02", "P16-D03", "P16-D04"]
     check(requirements[id]["status"] == "qualified",
@@ -64,7 +78,8 @@ families = Dict(row["id"] => row for row in api["families"])
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&
@@ -121,10 +136,14 @@ check(evidence["status"] == "qualified" &&
       evidence["tests"]["full_package_assertions"] == 1019 &&
       evidence["tests"]["full_package_suite"] == "passed",
     "Phase 16.D evidence identity, semantics, or totals changed")
-check(bytes2hex(SHA.sha256(read(source_path))) ==
-      evidence["artifacts"]["source_sha256"] &&
-      bytes2hex(SHA.sha256(read(tests_path))) ==
-      evidence["artifacts"]["tests_sha256"],
+check(artifact_matches(
+          relpath(source_path, ROOT),
+          evidence["artifacts"]["source_sha256"],
+      ) &&
+      artifact_matches(
+          relpath(tests_path, ROOT),
+          evidence["artifacts"]["tests_sha256"],
+      ),
     "Phase 16.D source or tests differ from content-addressed evidence")
 
 workflow = read(paths[".github/workflows/ci.yml"], String)

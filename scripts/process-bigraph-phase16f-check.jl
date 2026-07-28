@@ -40,13 +40,27 @@ evidence = TOML.parsefile(
     paths["design/evidence/process-bigraph-phase16f-evidence-v1.toml"])
 process_project = TOML.parsefile(paths["lib/ProcessBigraphs/Project.toml"])
 core_project = TOML.parsefile(paths["lib/CorePotts/Project.toml"])
+hc_active = entry["implementation_status"] in (
+    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+hc_artifacts = hc_active ? Dict(
+    row["path"] => row["sha256"]
+    for row in TOML.parsefile(joinpath(
+        ROOT,
+        "design/evidence/process-bigraph-phase16hc-evidence-v1.toml",
+    ))["artifacts"]
+) : Dict{String,Any}()
+artifact_matches(relative, legacy) = begin
+    actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))
+    actual == legacy || get(hc_artifacts, relative, nothing) == actual
+end
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 
 check(entry["implementation_status"] in (
       "phase16f_qualified_c_hardware_open",
       "phase16g_qualified_c_hardware_open",
-      "phase16h_qualified_c_hardware_open"),
+      "phase16h_qualified_c_hardware_open",
+      "phase16hc_qualified_c_hardware_open"),
     "Phase 16.F checker requires qualified-F/C-hardware-open state")
 for id in ["P16-F01", "P16-F02", "P16-F03"]
     check(requirements[id]["status"] == "qualified",
@@ -190,8 +204,7 @@ hash_pairs = [
 ]
 for (path_key, hash_key) in hash_pairs
     relative = evidence["artifacts"][path_key]
-    check(bytes2hex(SHA.sha256(read(joinpath(ROOT, relative)))) ==
-          evidence["artifacts"][hash_key],
+    check(artifact_matches(relative, evidence["artifacts"][hash_key]),
         "Phase 16.F artifact hash changed: $(relative)")
 end
 check(bytes2hex(SHA.sha256(read(paths["lib/ProcessBigraphs/Project.toml"]))) ==

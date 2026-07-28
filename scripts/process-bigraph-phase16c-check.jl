@@ -36,7 +36,8 @@ candidate = entry["implementation_status"] in (
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
-    "phase16h_qualified_c_hardware_open")
+    "phase16h_qualified_c_hardware_open",
+    "phase16hc_qualified_c_hardware_open")
 qualified = entry["implementation_status"] == "phase16c_qualified"
 check(candidate || qualified,
     "Phase 16.C checker requires candidate or qualified state")

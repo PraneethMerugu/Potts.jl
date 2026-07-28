@@ -1,6 +1,6 @@
 # ProcessBigraphs internal contracts
 
-Status: Phase 16.HC implementation candidate; Phase 16.C hardware evidence remains open
+Status: Phase 16.HC qualified; Phase 16.C hardware evidence remains open
 
 ## Authority and maturity
 
@@ -122,6 +122,20 @@ Archives contain a versioned logical payload plus the complete component contrac
 decoding rejects changed science and unsupported versions. Closures, tasks, pointers, live solver
 sessions, device buffers, and caches are never serialized, and there is no global string-based
 runtime registry.
+
+The complete
+[high-level authoring example](../../test/examples/high_level_authoring.jl) is executable as a
+standalone documentation check:
+
+```sh
+julia --project=lib/ProcessBigraphs \
+    lib/ProcessBigraphs/test/examples/high_level_authoring.jl
+```
+
+It defines a component through the open functional protocol, builds and validates a semantic
+model, inspects lowering and plan identity, binds a `SimulationProblem`, and executes the result.
+Unlike conceptual snippets that use a placeholder domain solver, this example is kept executable
+in CI.
 
 `compile_composite` freezes a private structural copy in a `StructuralEpoch` and creates an
 `ExecutionPlan` containing canonical process and step order, layer indices, pre-resolved routes,

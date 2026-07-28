@@ -3,7 +3,7 @@ contract_id = "process-bigraphs-phase16-entry-v1"
 phase = "16"
 title = "ProcessBigraphs dynamic spatial-solver internal-beta entry contract"
 status = "in_progress"
-implementation_status = "phase16hc_specified_c_hardware_open"
+implementation_status = "phase16hc_qualified_c_hardware_open"
 internal_beta = false
 public_release = false
 current_package_version = "0.4.0"
@@ -51,6 +51,9 @@ phase16h_evidence = "../design/evidence/process-bigraph-phase16h-evidence-v1.tom
 phase16hc_owner_interview = "../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md"
 phase16hc_decision = "decisions/0040-process-bigraph-high-level-authoring.md"
 phase16hc_normative_specification = "process-bigraph-high-level-authoring-semantics.md"
+phase16hc_audit = "../design/audits/process-bigraph-phase16hc-high-level-authoring-audit.md"
+phase16hc_checker = "../scripts/process-bigraph-phase16hc-check.jl"
+phase16hc_evidence = "../design/evidence/process-bigraph-phase16hc-evidence-v1.toml"
 roadmap = "../design/refactor-roadmap.md"
 
 [principle]
@@ -145,10 +148,10 @@ models_wait_for_qualified_phase16f = true
 phase16i_waits_for_qualified_phase16hc = true
 
 [phase16hc]
-status = "specified"
-implementation_authorized = false
-migration_authorized = false
-current_uncommitted_spike = "research_only_not_qualified"
+status = "qualified"
+implementation_authorized = true
+migration_authorized = true
+current_uncommitted_spike = "removed_before_qualified_implementation"
 primary_api = "ordinary Julia compose do-block with typed handles"
 semantic_source = "immutable CompositeModel"
 canonical_lowering = "ProcessBigraph ACSet plus complete author-origin map"

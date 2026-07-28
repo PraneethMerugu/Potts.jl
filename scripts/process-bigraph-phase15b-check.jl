@@ -58,8 +58,9 @@ expected_package_version =
     "0.4.0" : "0.3.0"
 check(project["version"] == expected_package_version,
     "package identity disagrees with the Phase 15.C lifecycle stage")
-check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),
-    "Phase 15.B runtime dependencies must remain exactly ACSets, Catlab, and SHA")
+check(Set(keys(project["deps"])) ==
+      Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
+    "Phase 15.B dependencies must be retained alongside admitted Phase 16 AlgebraicRewriting")
 check(project["compat"]["ACSets"] == "0.2.29" &&
       project["compat"]["Catlab"] == "0.17.6" &&
       project["compat"]["julia"] == "1.12.6",

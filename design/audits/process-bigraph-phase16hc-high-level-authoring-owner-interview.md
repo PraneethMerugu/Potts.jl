@@ -290,5 +290,5 @@ Accepted:
 Decision 0040 and
 [`process-bigraph-high-level-authoring-semantics.md`](../../spec/process-bigraph-high-level-authoring-semantics.md)
 are the consolidated authority. The specification pass changes no implementation or prior
-qualification claim. Phase 16.HC implementation and migration remain open until separately
-authorized and evidenced.
+qualification claim. The separately authorized implementation and migration are now qualified by
+the Phase 16.HC audit, checker, and content-addressed evidence record.

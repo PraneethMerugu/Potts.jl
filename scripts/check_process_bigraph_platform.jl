@@ -123,6 +123,7 @@ check(registry["decisions"] == [
     "decisions/0037-process-bigraph-open-composition.md",
     "decisions/0038-process-bigraph-serial-alpha.md",
     "decisions/0039-phase-16-compute-ownership-and-scope.md",
+    "decisions/0040-process-bigraph-high-level-authoring.md",
 ], "parity registry decision authorities changed")
 check(registry["owner_interviews"] == [
     "../design/audits/process-bigraph-runtime-owner-interview.md",
@@ -130,6 +131,7 @@ check(registry["owner_interviews"] == [
     "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
     "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md",
     "../design/audits/process-bigraph-phase16-owner-interview.md",
+    "../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
 ], "parity registry owner-interview authorities changed")
 
 minimums = registry["checker"]
@@ -341,7 +343,8 @@ check(package_registry["accepted_next_architecture"]["phase16_status"] in
        "phase16e_qualified_c_hardware_open",
        "phase16f_qualified_c_hardware_open",
        "phase16g_qualified_c_hardware_open",
-       "phase16h_qualified_c_hardware_open") &&
+       "phase16h_qualified_c_hardware_open",
+       "phase16hc_qualified_c_hardware_open") &&
       package_registry["accepted_next_architecture"]["phase16_internal_beta"] == false &&
       package_registry["accepted_next_architecture"]["phase16_public_release"] == false,
     "package-local registry must record the current Phase 16.B state without beta")

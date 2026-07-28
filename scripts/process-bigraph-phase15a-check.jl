@@ -39,8 +39,8 @@ expected_package_version =
 check(project["version"] == expected_package_version,
     "package identity disagrees with the Phase 15.C lifecycle stage")
 deps = Set(keys(get(project, "deps", Dict{String,Any}())))
-check(deps == Set(["ACSets", "Catlab", "SHA"]),
-    "ProcessBigraphs runtime dependencies must be exactly ACSets, Catlab, and SHA")
+check(deps == Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
+    "ProcessBigraphs dependencies must preserve the Phase 15 set plus admitted Phase 16 AlgebraicRewriting")
 compat = project["compat"]
 check(get(compat, "ACSets", "") == "0.2.29",
     "ACSets compatibility must begin at accepted v0.2.29")

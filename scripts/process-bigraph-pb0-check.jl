@@ -37,8 +37,9 @@ check(project["version"] == expected_package_version,
     "package identity disagrees with the Phase 15.C lifecycle stage")
 check(project["compat"]["julia"] == "1.12.6",
     "PB0 must target exact active Julia 1.12.6")
-check(Set(keys(project["deps"])) == Set(["ACSets", "Catlab", "SHA"]),
-    "Phase 15.A dependencies must preserve SHA and add only ACSets/Catlab")
+check(Set(keys(project["deps"])) ==
+      Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
+    "PB0 dependencies must preserve SHA/ACSets/Catlab and the admitted Phase 16 AlgebraicRewriting dependency")
 check(project["compat"]["SHA"] == "0.7", "SHA compatibility is missing")
 check(project["compat"]["Aqua"] == "0.8", "Aqua compatibility is missing")
 check(project["compat"]["Test"] == "1", "Test compatibility is missing")
