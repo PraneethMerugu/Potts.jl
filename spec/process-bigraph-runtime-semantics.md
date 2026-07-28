@@ -11,9 +11,9 @@ immutable-topology serial internal alpha with `internal_alpha = true` and
 `public_release = false`. Phase 16.A/B/D/E/F/G/H are qualified on the working branch: the
 solver-neutral protocol, dynamic orchestration transactions, first CorePotts field cutover,
 typed domain requests, V3 logical checkpoint, real solver plurality, and bounded runnable
-Merks/CNV assemblies pass. Phase 16.C remains open for trusted exact-head Metal/ROCm evidence,
-Phase 16.HC is qualified, and Phase 16.I remains open behind the independent Phase 16.C hardware
-gate.
+Merks/CNV assemblies and Phase 16.HC high-level authoring pass. Phase 16.C is qualified with
+trusted exact-head CPU/Metal/ROCm evidence. Phase 16.I reconciliation and internal-beta
+attestation remain open.
 
 Authority: Decisions 0034 and 0036–0040,
 `process-bigraph-parity-registry-v1.toml`,

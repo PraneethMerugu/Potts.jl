@@ -46,7 +46,11 @@ process_project =
 core_project = TOML.parsefile(paths["lib/CorePotts/Project.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 hc_active = entry["implementation_status"] in (
-    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+    "phase16hc_qualified_c_hardware_open", "phase16hc_qualified",
+    "phase16i_candidate", "phase16_internal_beta_qualified")
+c_qualified = entry["implementation_status"] in (
+    "phase16hc_qualified", "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 hc_artifacts = hc_active ? Dict(
     row["path"] => row["sha256"]
     for row in TOML.parsefile(joinpath(
@@ -64,8 +68,11 @@ check(entry["implementation_status"] in (
       "phase16f_qualified_c_hardware_open",
       "phase16g_qualified_c_hardware_open",
       "phase16h_qualified_c_hardware_open",
-      "phase16hc_qualified_c_hardware_open"),
-    "Phase 16.E checker requires qualified-E/C-hardware-open state")
+      "phase16hc_qualified_c_hardware_open",
+      "phase16hc_qualified",
+      "phase16i_candidate",
+      "phase16_internal_beta_qualified"),
+    "Phase 16.E checker requires a state retaining qualified 16.E")
 for id in ["P16-E01", "P16-E02", "P16-E03"]
     check(requirements[id]["status"] == "qualified",
         "$(id) is not qualified")
@@ -82,17 +89,23 @@ for id in [
     check(requirements[id]["status"] == "qualified",
         "$(id) lost prior qualification")
 end
-check(requirements["P16-C02"]["status"] == "oracle_passing" &&
-      requirements["P16-C03"]["status"] == "implemented" &&
-      requirements["P16-C04"]["status"] == "oracle_passing",
-    "Phase 16.E must not overclaim the open Phase 16.C hardware rows")
+check(c_qualified ?
+      all(requirements[id]["status"] == "qualified"
+          for id in ["P16-C02", "P16-C03", "P16-C04"]) :
+      (requirements["P16-C02"]["status"] == "oracle_passing" &&
+       requirements["P16-C03"]["status"] == "implemented" &&
+       requirements["P16-C04"]["status"] == "oracle_passing"),
+    "Phase 16.E disagrees with the Phase 16.C hardware state")
 
 families = Dict(row["id"] => row for row in api["families"])
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
     "phase16h_qualified_c_hardware_open",
-    "phase16hc_qualified_c_hardware_open")
+    "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&

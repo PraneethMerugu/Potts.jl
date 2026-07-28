@@ -241,9 +241,10 @@ engine/field boundary, dynamic orchestration transactions, CorePotts native-fiel
 domain requests, V3 logical checkpoint, non-destructive legacy conversions, and bounded runnable
 Merks and CNV assemblies are passing. Phase 16.HC is also qualified: the immutable semantic model,
 ordinary Julia builder, deterministic lowering, complete origin map, controlled raw-IR migration,
-executable documentation, and stage-separated authoring performance guardrails pass. Six
-requirements remain open across Phase 16.C and 16.I. Phase 16.C remains open only for trusted
-exact-head Metal/ROCm evidence. The Phase 16.HC obligations and claim boundary are normative in the
+executable documentation, and stage-separated authoring performance guardrails pass. Phase 16.C
+is now qualified by trusted exact-head CPU, Metal, and ROCm artifacts; only the three Phase 16.I
+reconciliation and attestation requirements remain open. The Phase 16.HC obligations and claim
+boundary are normative in the
 [high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
 content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)

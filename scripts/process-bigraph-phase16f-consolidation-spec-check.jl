@@ -37,13 +37,19 @@ f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
     "phase16h_qualified_c_hardware_open",
-    "phase16hc_qualified_c_hardware_open")
+    "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
       "phase16g_qualified_c_hardware_open",
       "phase16h_qualified_c_hardware_open",
-      "phase16hc_qualified_c_hardware_open"),
+      "phase16hc_qualified_c_hardware_open",
+      "phase16hc_qualified",
+      "phase16i_candidate",
+      "phase16_internal_beta_qualified"),
     "16.F consolidation checker requires the admitted E or F state")
 check(entry["authority"]["phase16f_consolidation_research"] ==
       "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md" &&

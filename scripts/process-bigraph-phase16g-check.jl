@@ -47,7 +47,11 @@ evidence = TOML.parsefile(
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 hc_active = entry["implementation_status"] in (
-    "phase16hc_qualified_c_hardware_open", "phase16_internal_beta_qualified")
+    "phase16hc_qualified_c_hardware_open", "phase16hc_qualified",
+    "phase16i_candidate", "phase16_internal_beta_qualified")
+c_qualified = entry["implementation_status"] in (
+    "phase16hc_qualified", "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 hc_artifacts = hc_active ? Dict(
     row["path"] => row["sha256"]
     for row in TOML.parsefile(joinpath(
@@ -65,8 +69,11 @@ model_rows = Dict(row["id"] => row for row in models["models"])
 check(entry["implementation_status"] in (
       "phase16g_qualified_c_hardware_open",
       "phase16h_qualified_c_hardware_open",
-      "phase16hc_qualified_c_hardware_open"),
-    "Phase 16.G checker requires qualified-G/C-hardware-open state")
+      "phase16hc_qualified_c_hardware_open",
+      "phase16hc_qualified",
+      "phase16i_candidate",
+      "phase16_internal_beta_qualified"),
+    "Phase 16.G checker requires a state retaining qualified 16.G")
 for id in ["P16-G01", "P16-G02"]
     check(requirements[id]["status"] == "qualified",
         "$(id) is not qualified")
@@ -85,10 +92,13 @@ for id in [
     check(requirements[id]["status"] == "qualified",
         "$(id) lost prior qualification")
 end
-check(requirements["P16-C02"]["status"] == "oracle_passing" &&
-      requirements["P16-C03"]["status"] == "implemented" &&
-      requirements["P16-C04"]["status"] == "oracle_passing",
-    "Phase 16.G must not overclaim open Phase 16.C hardware rows")
+check(c_qualified ?
+      all(requirements[id]["status"] == "qualified"
+          for id in ["P16-C02", "P16-C03", "P16-C04"]) :
+      (requirements["P16-C02"]["status"] == "oracle_passing" &&
+       requirements["P16-C03"]["status"] == "implemented" &&
+       requirements["P16-C04"]["status"] == "oracle_passing"),
+    "Phase 16.G disagrees with the Phase 16.C hardware state")
 
 merks_envelope = envelopes["merks-source-faithful-assembly"]
 check(merks_envelope["CPU"] == "qualified" &&

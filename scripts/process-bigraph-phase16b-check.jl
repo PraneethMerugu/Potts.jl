@@ -39,19 +39,28 @@ qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
     "phase16h_qualified_c_hardware_open",
-    "phase16hc_qualified_c_hardware_open")
+    "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 d_qualified = entry["implementation_status"] in (
     "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
     "phase16h_qualified_c_hardware_open",
-    "phase16hc_qualified_c_hardware_open")
+    "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
     "phase16g_qualified_c_hardware_open",
     "phase16h_qualified_c_hardware_open",
-    "phase16hc_qualified_c_hardware_open")
+    "phase16hc_qualified_c_hardware_open",
+    "phase16hc_qualified",
+    "phase16i_candidate",
+    "phase16_internal_beta_qualified")
 check(candidate || qualified,
     "Phase 16.B checker requires candidate or qualified state")
 expected = candidate ? "implemented" : "qualified"
