@@ -272,9 +272,9 @@ check(performance["evidence_id"] ==
 check(evidence["status"] == "qualified" &&
       evidence["phase"] == "16.HC" &&
       evidence["implementation_commit"] ==
-      "927ecb8b84667be2c0d058cd33965825551b4460" &&
+      "50e4af354ca18c63908f3525519319034abc788f" &&
       evidence["implementation_tree"] ==
-      "db702ca9092288ad9e95c23393ff59c826ee03b7" &&
+      "1b42c5e0b18f37d1df0ec07bd1f95803393bd4fa" &&
       Set(evidence["qualified_rows"]) ==
       Set(["P16-HC01", "P16-HC02", "P16-HC03", "P16-HC04",
            "P16-HC05", "P16-HC06", "P16-HC07"]) &&

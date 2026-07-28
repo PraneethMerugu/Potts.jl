@@ -168,9 +168,9 @@ end
 check(evidence["status"] == "qualified" &&
       evidence["phase"] == "16.G" &&
       evidence["implementation_commit"] ==
-      "09150b5457ae622093aa6a3ad61a7fc2d70b87e7" &&
+      "e9ce80b8f4d1d7619dbe9efa0596d7629e86714e" &&
       evidence["implementation_tree"] ==
-      "3e81f1affa1c517a32f6026a9d204730dd4aaa46" &&
+      "d5523abe300e9cd74fe292631efe2a3b7e8c27f1" &&
       Set(evidence["qualified_rows"]) == Set(["P16-G01", "P16-G02"]) &&
       evidence["quantitative_reproduction"] == false &&
       evidence["full_analysis"] == false &&

@@ -196,9 +196,9 @@ check(occursin("where {T<:Unsigned}", canonical) &&
 check(evidence["status"] == "qualified" &&
       evidence["phase"] == "16.H" &&
       evidence["implementation_commit"] ==
-      "eb007dee16d6e4eba22c518eed06424a72d5cb29" &&
+      "66f6f147f34a24e96ba4be2c36751b1ebafd5abd" &&
       evidence["implementation_tree"] ==
-      "ac452d879cf122b75118d36582e6dbe288be14cb" &&
+      "6d19d235a64fe58ca6db0b583148de29aa50086d" &&
       Set(evidence["qualified_rows"]) ==
       Set(["P16-H01", "P16-H02", "P16-H03"]) &&
       evidence["quantitative_reproduction"] == false &&

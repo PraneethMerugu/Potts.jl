@@ -172,8 +172,8 @@ runtime_owns = ["logical time", "invocation reason", "identity", "schema", "vers
 
 [solver_integration]
 phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
-prototype_commit = "7217f9b67db3bc0e798bab192e81ad3a8923b912"
-qualified_implementation_commit = "9f9daf19e34c5430361cb98c8002f025a74d217a"
+prototype_commit = "e0fd0b3f51fd681923e7ac8b62963e9713430322"
+qualified_implementation_commit = "6cd20d9c0533b174a76bf0fd5f10d11b4157775f"
 process_bigraph_owned_sciml_solve = "forbidden"
 qualified_algorithm_selection = "explicit_real_algorithm_object"
 automatic_algorithm_selection = "experimental"
