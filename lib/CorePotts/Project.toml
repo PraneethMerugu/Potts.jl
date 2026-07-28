@@ -46,6 +46,7 @@ HDF5 = "0.17"
 KernelAbstractions = "0.9.42"
 LinearAlgebra = "1"
 Metal = "1.10"
+OrdinaryDiffEqTsit5 = "2"
 ProcessBigraphs = "0.4"
 Random = "1"
 SHA = "0.7"
@@ -64,8 +65,9 @@ CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
 
 [targets]
-test = ["Aqua", "CommonSolve", "Zarr", "HDF5", "Test"]
+test = ["Aqua", "CommonSolve", "OrdinaryDiffEqTsit5", "Zarr", "HDF5", "Test"]

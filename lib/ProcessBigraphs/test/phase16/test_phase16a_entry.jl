@@ -11,7 +11,7 @@ using SciMLBase
         Base.get_extension(ProcessBigraphs, :ProcessBigraphsSciMLExt)
     @test !isnothing(extension_module)
     @test extension_module.CONTRACT_VERSION ==
-          "process-bigraphs-sciml-extension-v1"
+          "process-bigraphs-sciml-extension-v2"
 
     qualified_exports = Set(Symbol[
         :AbstractEngineAdapter,

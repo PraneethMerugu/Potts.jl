@@ -1,5 +1,10 @@
 import ProcessBigraphs as PB
-using CommonSolve
+using OrdinaryDiffEqTsit5: Tsit5
+
+include(joinpath(
+    @__DIR__, "..", "..", "ProcessBigraphs", "test", "fixtures",
+    "independent_custom_field_adapter.jl"))
+using .IndependentCustomFieldAdapterFixture
 
 function p16f_cross_advance!(runtime, target, forcing, native::Bool)
     PB.advance_managed_engine!(
@@ -14,7 +19,7 @@ function p16f_cross_advance!(runtime, target, forcing, native::Bool)
         ),
         expected_outputs=(:field_state,),
         expected_diagnostics=native ?
-            (:backend, :precision) : (:backend, :algorithm),
+            (:backend, :precision) : (:backend, :algorithm, :retcode),
     )
 end
 
@@ -24,21 +29,42 @@ function p16f_cross_snapshot(runtime, native::Bool)
         PB.field_engine_snapshot(runtime.instance)
 end
 
-@testset "Phase 16.F native SciML custom cross-adapter evidence" begin
-    for initial in (
-        reshape(Float64.(1:20), 4, 5),
-        reshape(Float32.(1:60), 3, 4, 5),
-    )
-        T = eltype(initial)
+function p16f_cross_exact(initial, diffusion, decay, tick_duration, ticks)
+    offset = eltype(initial)(2)
+    amplitude = maximum(initial) - offset
+    mode = 2
+    n = size(initial, 1)
+    eigenvalue = -4sin(pi * mode / n)^2
+    rate = diffusion * eigenvalue - decay
+    duration = tick_duration * ticks
+    result = similar(initial)
+    for index in CartesianIndices(result)
+        result[index] =
+            offset * exp(-decay * duration) +
+            amplitude * exp(rate * duration) *
+            cos(2pi * mode * (index[1] - 1) / n)
+    end
+    result
+end
+
+@testset "Phase 16.F native real-solver custom cross-adapter evidence" begin
+    for T in (Float64, Float32)
+        dimensions = T === Float64 ? (12, 10) : (12, 10, 4)
+        initial = Array{T}(undef, dimensions)
+        for index in CartesianIndices(initial)
+            initial[index] = T(2) +
+                T(0.2) * cos(T(4pi * (index[1] - 1) / dimensions[1]))
+        end
         scale = PB.TimeScale(1, 100, :second)
         diffusion = T(0.1)
         decay = T(0.03)
+        tick_duration = T(0.01)
         problem = PB.BoundedCartesianFieldProblem(
             "phase16f-cross",
             initial;
             diffusion,
             decay,
-            tick_duration=T(0.01),
+            tick_duration,
             time_scale=scale,
         )
         native_adapter = CorePotts.CorePottsNativeFieldAdapter(
@@ -46,7 +72,7 @@ end
             initial;
             diffusion,
             decay,
-            tick_duration=T(0.01),
+            tick_duration,
             time_scale=scale,
             block_size=64,
         )
@@ -55,9 +81,18 @@ end
             native_adapter;
             structural_epoch="field-epoch-0",
         )
-        sciml_declaration = PB.sciml_field_declaration(problem)
+        sciml_declaration = PB.sciml_field_declaration(
+            problem,
+            Tsit5();
+            algorithm_id="ordinarydiffeq-tsit5",
+            solver_options=(
+                abstol=T === Float32 ? 1.0f-6 : 1.0e-11,
+                reltol=T === Float32 ? 1.0f-6 : 1.0e-11,
+            ),
+        )
         custom_declaration =
-            PB.independent_custom_field_declaration(problem)
+            independent_custom_field_declaration(
+                problem; substeps_per_tick=4)
         sciml = PB.managed_engine_runtime(
             sciml_declaration,
             PB.LogicalTime(0, scale);
@@ -68,8 +103,9 @@ end
             PB.LogicalTime(0, scale);
             structural_epoch="field-epoch-0",
         )
-        for tick in 1:4
-            forcing = fill(T(0.01 * tick), size(initial))
+        ticks = 8
+        forcing = zeros(T, size(initial))
+        for tick in 1:ticks
             p16f_cross_advance!(native, tick, forcing, true)
             p16f_cross_advance!(sciml, tick, forcing, false)
             p16f_cross_advance!(custom, tick, forcing, false)
@@ -77,14 +113,22 @@ end
         native_values = p16f_cross_snapshot(native, true)
         sciml_values = p16f_cross_snapshot(sciml, false)
         custom_values = p16f_cross_snapshot(custom, false)
-        @test sciml_values == custom_values
-        tolerance = T === Float32 ? 16eps(Float32) : 16eps(Float64)
+        exact = p16f_cross_exact(
+            initial, diffusion, decay, tick_duration, ticks)
+        native_error = maximum(abs.(native_values .- exact))
+        sciml_error = maximum(abs.(sciml_values .- exact))
+        custom_error = maximum(abs.(custom_values .- exact))
+        tolerance = T === Float32 ? T(2.0e-5) : T(2.0e-10)
+        @test sciml_error <= tolerance
+        @test custom_error <= tolerance
+        @test native_error >= sciml_error
+        @test native_error >= custom_error
         @test isapprox(
-            native_values, sciml_values;
+            sciml_values, custom_values;
             rtol=tolerance, atol=tolerance)
         @test native.logical_time == sciml.logical_time ==
-            custom.logical_time == PB.LogicalTime(4, scale)
+            custom.logical_time == PB.LogicalTime(ticks, scale)
         @test native.publication_version == sciml.publication_version ==
-            custom.publication_version == UInt64(4)
+            custom.publication_version == UInt64(ticks)
     end
 end
