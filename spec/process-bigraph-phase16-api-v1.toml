@@ -193,6 +193,12 @@ excluded_api_claims = [
     "arbitrary closure serialization",
 ]
 
+[cross_package_additive_exports]
+authority = "Phase 16 reviewed cross-package API additions excluded from the immutable Phase 13 inventory"
+stability = "internal_beta"
+CorePotts = ["MixedFieldBoundary"]
+PottsToolkit = []
+
 [policy]
 core_is_solver_neutral = true
 sciml_via_extension = true

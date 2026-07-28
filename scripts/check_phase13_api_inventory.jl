@@ -22,6 +22,8 @@ end
 inventory = TOML.parsefile(INVENTORY)
 phase14_registry = TOML.parsefile(joinpath(
     ROOT, "design", "audits", "phase-14-public-api-v2.toml"))
+phase16_registry = TOML.parsefile(joinpath(
+    ROOT, "spec", "process-bigraph-phase16-api-v1.toml"))
 for module_name in ("CorePotts", "PottsToolkit")
     module_inventory = inventory["modules"][module_name]
     isempty(module_inventory["undocumented_stable"]) || error(
@@ -31,11 +33,21 @@ for module_name in ("CorePotts", "PottsToolkit")
         error("$module_name API classifications do not cover every export")
     module_value = module_name == "CorePotts" ? CorePotts : PottsToolkit
     frozen = Set(Symbol(entry["name"]) for entry in module_inventory["exports"])
-    allowed = Set(Symbol.(phase14_registry["modules"][module_name]))
+    phase14_allowed =
+        Set(Symbol.(phase14_registry["modules"][module_name]))
+    phase16_allowed = Set(Symbol.(phase16_registry[
+        "cross_package_additive_exports"][module_name]))
+    isempty(intersect(frozen, phase14_allowed)) || error(
+        "$module_name Phase 14 additions overlap the frozen Phase 13 inventory")
+    isempty(intersect(frozen, phase16_allowed)) || error(
+        "$module_name Phase 16 additions overlap the frozen Phase 13 inventory")
+    isempty(intersect(phase14_allowed, phase16_allowed)) || error(
+        "$module_name Phase 16 additions duplicate the Phase 14 registry")
+    allowed = union(phase14_allowed, phase16_allowed)
     actual = Set(exported_names(module_value))
     actual == union(frozen, allowed) || error(
         "$module_name exports differ from the frozen Phase 13 inventory plus " *
-        "the reviewed Phase 14 v2 allowlist")
+        "the reviewed post-freeze registries")
 end
 
-println("Phase 13 API inventory is unchanged; additive exports exactly match the reviewed Phase 14 v2 allowlist")
+println("Phase 13 API inventory is unchanged; additive exports exactly match the reviewed post-freeze registries")
