@@ -1,0 +1,34 @@
+schema_version = "1.0.0"
+status = "passed"
+audience = "model_builder"
+review_date = "2026-07-27"
+reviewer = "Codex documentation auditor"
+method = "rendered_site_task_walkthrough"
+start = "Home"
+goal = "Compose and validate a model, find the field workflow, and reach a quantitative working example."
+limitation = "Auditor-led persona review; future external-user observation remains useful but is not represented as completed here."
+
+[[checks]]
+step = "Choose Compose a biological model from Home."
+passed = true
+evidence = "Home contains a direct study-building path."
+
+[[checks]]
+step = "Locate validation and model identity."
+passed = true
+evidence = "The composition page exposes validation, semantic_fingerprint, and the next domain boundary."
+
+[[checks]]
+step = "Navigate to Fields and chemotaxis."
+passed = true
+evidence = "The Learn navigation exposes the field workflow by task."
+
+[[checks]]
+step = "Open Follow the Gradient and inspect its quantitative result."
+passed = true
+evidence = "Rendered output shows centroid [9.5, 10.153846153846153], positive displacement 0.6538461538461533, and :positive direction."
+
+[[checks]]
+step = "Verify media and provenance."
+passed = true
+evidence = "The page has one loaded generated asset and states original-implementation provenance."

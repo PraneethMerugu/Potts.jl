@@ -17,10 +17,19 @@ env:
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
 jobs:
-  build:
-    name: Build
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+  cpu-install-smoke:
+    name: CPU install / ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -30,8 +39,40 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Install and execute the public CPU smoke
+        shell: bash
+        run: >-
+          julia --startup-file=no scripts/documentation_cpu_install_smoke.jl
+          --output "$RUNNER_TEMP/${{ matrix.platform }}-install-smoke.toml"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: documentation-install-${{ matrix.platform }}-${{ github.sha }}
+          path: ${{ runner.temp }}/${{ matrix.platform }}-install-smoke.toml
+          if-no-files-found: error
+
+  build:
+    name: Build
+    if: github.event_name == 'pull_request'
+    needs: [cpu-install-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: documentation-install-*-${{ github.sha }}
+          path: design/evidence/documentation
+          merge-multiple: true
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environment
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Enforce the documentation quality specification
+        run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
       - name: Build documentation without publishing
         env:
           POTTS_DEPLOY_DOCS: 'false'
@@ -40,18 +81,26 @@ jobs:
   deploy:
     name: Deploy
     if: github.event_name != 'pull_request'
+    needs: [cpu-install-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: documentation-install-*-${{ github.sha }}
+          path: design/evidence/documentation
+          merge-multiple: true
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environment
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Enforce the documentation quality specification
+        run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
       - name: Publish documentation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

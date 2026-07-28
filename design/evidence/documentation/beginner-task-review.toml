@@ -1,0 +1,34 @@
+schema_version = "1.0.0"
+status = "passed"
+audience = "beginner"
+review_date = "2026-07-27"
+reviewer = "Codex documentation auditor"
+method = "rendered_site_task_walkthrough"
+start = "Home"
+goal = "Find installation, verify the CPU path, and interpret the first simulation without reading package source."
+limitation = "Auditor-led persona review; future external-user observation remains useful but is not represented as completed here."
+
+[[checks]]
+step = "Choose the beginner path from Home."
+passed = true
+evidence = "Home links Install and verify, then First simulation."
+
+[[checks]]
+step = "Identify direct package installation requirements."
+passed = true
+evidence = "Rendered install page shows direct CorePotts and PottsToolkit Pkg.add commands and optional MakiePotts."
+
+[[checks]]
+step = "Verify the CPU authoring path."
+passed = true
+evidence = "Rendered executable output is (true, true, (4, 4))."
+
+[[checks]]
+step = "Run and interpret the first simulation."
+passed = true
+evidence = "Rendered output records times [0, 2], volume trace [16, 20], and explains the limits of the smoke."
+
+[[checks]]
+step = "Confirm visual output remains accessible."
+passed = true
+evidence = "No broken images were present on the First simulation page."
