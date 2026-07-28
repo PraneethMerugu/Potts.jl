@@ -23,10 +23,12 @@ const REQUIRED = [
     "design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md",
     "design/audits/process-bigraph-phase16f-solver-plurality-audit.md",
     "design/audits/process-bigraph-phase16g-merks-audit.md",
+    "design/audits/process-bigraph-phase16h-cnv-audit.md",
     "design/evidence/process-bigraph-phase16a-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16d-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16f-evidence-v1.toml",
     "design/evidence/process-bigraph-phase16g-evidence-v1.toml",
+    "design/evidence/process-bigraph-phase16h-evidence-v1.toml",
     "spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
     "spec/phase-16-engine-field-structural-and-adapter-semantics.md",
     "spec/process-bigraph-phase16-entry-v1.toml",
@@ -35,6 +37,7 @@ const REQUIRED = [
     "spec/process-bigraph-phase16-migration-registry-v1.toml",
     "spec/process-bigraph-phase16-model-scope-v1.toml",
     "spec/process-bigraph-phase16-merks-trace-v1.toml",
+    "spec/process-bigraph-phase16-cnv-trace-v1.toml",
     "spec/process-bigraph-phase16-api-v1.toml",
     "spec/process-bigraph-parity-registry-v1.toml",
     "lib/ProcessBigraphs/parity-registry.toml",
@@ -46,6 +49,7 @@ const REQUIRED = [
     "scripts/process-bigraph-phase16f-consolidation-spec-check.jl",
     "scripts/process-bigraph-phase16f-check.jl",
     "scripts/process-bigraph-phase16g-check.jl",
+    "scripts/process-bigraph-phase16h-check.jl",
     "spec/process-bigraph-runtime-semantics.md",
     "spec/phase-14-semantic-kernel.md",
     "design/refactor-roadmap.md",
@@ -73,27 +77,36 @@ phase16b_qualified = phase_state in (
     "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 phase16c_candidate = phase_state in (
     "phase16c_candidate", "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 phase16c_qualified = phase_state == "phase16c_qualified"
 phase16d_qualified = phase_state in (
     "phase16d_qualified_c_hardware_open",
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 phase16e_qualified = phase_state in (
     "phase16e_qualified_c_hardware_open",
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 phase16f_qualified = phase_state in (
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 phase16g_qualified =
-    phase_state == "phase16g_qualified_c_hardware_open"
+    phase_state in (
+        "phase16g_qualified_c_hardware_open",
+        "phase16h_qualified_c_hardware_open")
+phase16h_qualified =
+    phase_state == "phase16h_qualified_c_hardware_open"
 
 check(entry["schema_version"] == "1.0.0" &&
       entry["contract_id"] == "process-bigraphs-phase16-entry-v1" &&
@@ -103,7 +116,7 @@ check(entry["status"] == "in_progress" &&
       (phase16b_candidate || phase16b_qualified ||
        phase16c_candidate || phase16c_qualified ||
        phase16d_qualified || phase16e_qualified ||
-       phase16f_qualified || phase16g_qualified) &&
+       phase16f_qualified || phase16g_qualified || phase16h_qualified) &&
       entry["internal_beta"] == false &&
       entry["public_release"] == false,
     "entry must claim an admitted Phase 16 state without beta or release")
@@ -245,6 +258,8 @@ for row in requirements
         "qualified"
     elseif row["subgate"] == "16.G" && phase16g_qualified
         "qualified"
+    elseif row["subgate"] == "16.H" && phase16h_qualified
+        "qualified"
     else
         "specified"
     end
@@ -281,6 +296,8 @@ for id in ["sciml-cartesian-field", "independent-custom-field",
         (phase16f_qualified &&
          id in ("sciml-cartesian-field", "independent-custom-field")) ||
         (phase16g_qualified && id == "merks-source-faithful-assembly") ?
+        "qualified" :
+        (phase16h_qualified && id == "cnv-source-faithful-assembly") ?
         "qualified" : "specified"
     check(row["CPU"] == expected_cpu &&
           row["Metal"] == "unsupported" &&
@@ -312,7 +329,9 @@ check(model_rows["merks-2006-vasculogenesis"]["status"] ==
     "Merks model status disagrees with the Phase 16.G state")
 check(model_rows["shirinifard-2012-cnv"]["required_scenario"] == 38 &&
       model_rows["shirinifard-2012-cnv"]["required_source_simulation"] == 902 &&
-      model_rows["shirinifard-2012-cnv"]["required_dimension"] == [40, 40, 35],
+      model_rows["shirinifard-2012-cnv"]["required_dimension"] == [40, 40, 35] &&
+      model_rows["shirinifard-2012-cnv"]["status"] ==
+      (phase16h_qualified ? "qualified" : "specified"),
     "CNV scenario/source/domain changed")
 
 check(api["status"] ==
@@ -378,7 +397,8 @@ for (path, phrases) in [
         ["process-bigraph-phase16-entry-check.jl",
          "process-bigraph-phase16f-consolidation-spec-check.jl",
          "process-bigraph-phase16f-check.jl",
-         "process-bigraph-phase16g-check.jl"]),
+         "process-bigraph-phase16g-check.jl",
+         "process-bigraph-phase16h-check.jl"]),
 ]
     text = read(paths[path], String)
     for phrase in phrases

@@ -37,7 +37,8 @@ check(entry["implementation_status"] in (
       "phase16d_qualified_c_hardware_open",
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
-      "phase16g_qualified_c_hardware_open"),
+      "phase16g_qualified_c_hardware_open",
+      "phase16h_qualified_c_hardware_open"),
     "Phase 16.D checker requires qualified-D/C-hardware-open state")
 for id in ["P16-D01", "P16-D02", "P16-D03", "P16-D04"]
     check(requirements[id]["status"] == "qualified",
@@ -62,7 +63,8 @@ check(requirements["P16-C02"]["status"] == "oracle_passing" &&
 families = Dict(row["id"] => row for row in api["families"])
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&

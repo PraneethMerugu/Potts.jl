@@ -49,8 +49,9 @@ envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 slices = Dict(row["id"] => row for row in migration["slices"])
 model_rows = Dict(row["id"] => row for row in models["models"])
 
-check(entry["implementation_status"] ==
+check(entry["implementation_status"] in (
       "phase16g_qualified_c_hardware_open",
+      "phase16h_qualified_c_hardware_open"),
     "Phase 16.G checker requires qualified-G/C-hardware-open state")
 for id in ["P16-G01", "P16-G02"]
     check(requirements[id]["status"] == "qualified",

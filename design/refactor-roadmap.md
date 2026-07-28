@@ -23,7 +23,7 @@ Status: Working execution roadmap derived from accepted specifications and engin
 | Phase 13: Algorithmic Conformance and API Freeze | Complete | [Completion audit](audits/phase-13-completion-audit.md), [approved owner freeze packet](audits/phase-13-owner-freeze-packet.md), [accepted transition-kernel contract](../spec/transition-kernel-verification.md), and [entry policy](../spec/decisions/0028-phase-13-entry-and-freeze-policy.md) |
 | Phase 14: Model-Driven Capability Completion, Documentation, and Runtime Foundation | Phase 14.0 complete; Wortel CPU/Metal/ROCm G2 passed; Wang G3-A and attested sequential-CPU G3-B complete; assembled Wang GPU qualification retired by Decision 0035; former G4 work is reassigned intact to Phase 16.C by Decision 0039; ProcessBigraphs PB0 bounded foundation passed | [Phase 14.0 completion audit](audits/phase-14-0-corpus-and-requirements-audit.md), [G3-B closure ledger](audits/phase-14-g3b-closure-ledger-v1.toml), [G3-B attested evidence](evidence/phase-14/g3b-closure/manifest-v1.toml), [GPU-native implementation plan](audits/phase-14-gpu-native-implementation-plan.md), [Decision 0035](../spec/decisions/0035-wang-sequential-gpu-disposition.md), [Decision 0039](../spec/decisions/0039-phase-16-compute-ownership-and-scope.md), [runtime parity audit](audits/process-bigraph-runtime-parity-and-parallel-development-audit.md), [PB0 implementation audit](audits/process-bigraph-pb0-implementation-audit.md), [PB0 evidence](evidence/process-bigraph-pb0-evidence-v1.toml), [Decision 0034](../spec/decisions/0034-process-bigraph-runtime-platform.md), and [registry v2](../spec/phase-14-contract-registry-v2.toml) |
 | Phase 15: Potts Paper/Release Qualification and ACSet-Backed ProcessBigraphs Internal Alpha | In progress; ProcessBigraphs Phase 15.C serial internal alpha is qualified and attested, while the independent Potts paper gate remains open | Two independent product gates: Potts consumes the frozen Phase 14 portfolio; ProcessBigraphs 0.4.0 remains an internal alpha without a public release |
-| Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, CorePotts Adapter, and Runnable Merks/CNV Internal Beta | In progress; 16.A/B/D/E/F/G qualified, 16.C hardware and 16.H–I open | Decision 0039, qualified engine/field/structure/CorePotts/real-SciML/Merks evidence, and the entry, qualification, backend, migration, model, and API registries agree |
+| Phase 16: Engine/Field Protocol, Absorbed G4, Dynamic Hierarchy, CorePotts Adapter, and Runnable Merks/CNV Internal Beta | In progress; 16.A/B/D/E/F/G/H qualified, 16.C hardware and 16.I open | Decision 0039, qualified engine/field/structure/CorePotts/real-SciML/Merks/CNV evidence, and the entry, qualification, backend, migration, model, and API registries agree |
 | Phase 17: Algebraic Dynamics, Broad Scientific Process Ecosystem, and Whole-Cell-Style Composite | Not started | Begins after internal beta; bounded CPU field-level SciML proof moved to Phase 16, while broad ODE/DAE/biochemical/FBA/SBML work remains here |
 | Phase 18: Dagger and Heterogeneous Execution | Not started | Qualification begins only after serial runnable-batch, reconciliation, commit, and structural-barrier semantics stabilize |
 | Phase 19: Pinned Parity Closure and First Public ProcessBigraphs Release | Not started | Public release is forbidden until complete pinned parity and the whole-cell-style acceptance composite pass |
@@ -1421,6 +1421,14 @@ After 16.B, 16.C and 16.D may proceed concurrently with separately attributable 
 - Claim only a runnable source-bounded reimplementation; full Figure 5 analysis is later.
 
 ### 16.H — runnable CNV scenario 38
+
+- **Qualified 2026-07-27:** the
+  [audit](audits/process-bigraph-phase16h-cnv-audit.md), source trace, generated
+  40×40×35 startup, reduced mechanism fixtures, bounded four-field/CorePotts
+  trajectory, and restart/rollback evidence close P16-H01 through P16-H03.
+- The claim remains a runnable source-bounded reimplementation; one-year,
+  ten-replica, morphology-classifier, and quantitative-reproduction work is
+  excluded.
 
 - Implement the 40 by 40 by 35 scenario-38/simulation-902 configuration with four fields, exact
   declared field schedule, tip/stalk lifecycle, hypoxia timers, growth/division/death, plastic

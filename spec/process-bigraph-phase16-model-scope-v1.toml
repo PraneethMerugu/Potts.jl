@@ -23,7 +23,7 @@ excluded = ["Figure_5_full_ensemble", "publication_morphometry_pipeline", "quant
 
 [[models]]
 id = "shirinifard-2012-cnv"
-status = "specified"
+status = "qualified"
 source = "Shirinifard et al., PLOS Computational Biology 8(5), e1002440 (2012), Text S3 and Text S6"
 required_scenario = 38
 required_source_simulation = 902
@@ -32,5 +32,7 @@ required_fields = ["oxygen", "RPE_VEGF", "EC_VEGF", "MMP"]
 required_mechanisms = ["chemotaxis", "tip_stalk", "hypoxia_timers", "growth", "contact_inhibition", "division", "phenotype", "death", "plastic_relationships", "BrM_degradation"]
 required_lifecycle = ["build", "preflight", "initialize", "advance", "observe", "checkpoint", "restart", "terminate"]
 required_evidence = ["source_trace", "generated_reduced_fixtures", "full_domain_startup", "bounded_trajectory", "lifecycle", "relationships", "degradation", "restart", "rollback"]
+source_trace = "spec/process-bigraph-phase16-cnv-trace-v1.toml"
+compute_ownership = "ProcessBigraphs schedules and publishes; injected field adapters and CorePotts own heavy computation"
 source_asset_lane = "separate checksum-verified fetch; never ordinary CI and never vendored"
 excluded = ["full_year_CI", "ten_replica_reproduction", "full_morphology_classifier", "quantitative_reproduction"]

@@ -49,7 +49,8 @@ requirements = Dict(row["id"] => row for row in ledger["requirements"])
 check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
-      "phase16g_qualified_c_hardware_open"),
+      "phase16g_qualified_c_hardware_open",
+      "phase16h_qualified_c_hardware_open"),
     "Phase 16.E checker requires qualified-E/C-hardware-open state")
 for id in ["P16-E01", "P16-E02", "P16-E03"]
     check(requirements[id]["status"] == "qualified",
@@ -75,7 +76,8 @@ check(requirements["P16-C02"]["status"] == "oracle_passing" &&
 families = Dict(row["id"] => row for row in api["families"])
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 check(api["status"] == entry["implementation_status"] &&
       api["current_new_exports"] ==
       (f_qualified ? api["planned_internal_beta_exports"] : []) &&
@@ -97,7 +99,8 @@ check(get(core_project["deps"], "ProcessBigraphs", nothing) ==
     "CorePotts-to-ProcessBigraphs dependency direction is not exact")
 
 slices = Dict(row["id"] => row for row in migration["slices"])
-check(migration["status"] in ("phase16e_qualified", "phase16g_qualified") &&
+check(migration["status"] in (
+          "phase16e_qualified", "phase16g_qualified", "phase16h_qualified") &&
       migration["checkpoint"]["status"] == "qualified" &&
       migration["checkpoint"]["existing_attested_readers_retained"] == true &&
       migration["checkpoint"]["settled_boundaries_only"] == true &&

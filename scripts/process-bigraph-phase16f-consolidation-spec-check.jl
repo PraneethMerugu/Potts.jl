@@ -35,11 +35,13 @@ local_parity = TOML.parsefile(PATHS["lib/ProcessBigraphs/parity-registry.toml"])
 
 f_qualified = entry["implementation_status"] in (
     "phase16f_qualified_c_hardware_open",
-    "phase16g_qualified_c_hardware_open")
+    "phase16g_qualified_c_hardware_open",
+    "phase16h_qualified_c_hardware_open")
 check(entry["implementation_status"] in (
       "phase16e_qualified_c_hardware_open",
       "phase16f_qualified_c_hardware_open",
-      "phase16g_qualified_c_hardware_open"),
+      "phase16g_qualified_c_hardware_open",
+      "phase16h_qualified_c_hardware_open"),
     "16.F consolidation checker requires the admitted E or F state")
 check(entry["authority"]["phase16f_consolidation_research"] ==
       "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md" &&

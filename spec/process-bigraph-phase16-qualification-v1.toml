@@ -211,22 +211,22 @@ evidence = ["canonical startup", "bounded scheduled trajectory", "native/SciML/i
 id = "P16-H01"
 subgate = "16.H"
 title = "CNV scenario 38/simulation 902 source and mechanism trace"
-status = "specified"
-evidence = ["paper/Text S3/Text S6", "checksummed source lane", "generated CI fixture"]
+status = "qualified"
+evidence = ["paper/Text S3/Text S6", "checksummed source lane", "generated CI fixture", "spec/process-bigraph-phase16-cnv-trace-v1.toml", "design/evidence/process-bigraph-phase16h-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-H02"
 subgate = "16.H"
 title = "CNV reduced lifecycle and relationship fixtures"
-status = "specified"
-evidence = ["MCS 400 transition", "division/death", "plastic links", "BrM degradation"]
+status = "qualified"
+evidence = ["MCS 400 transition", "division/death", "plastic links", "BrM degradation", "design/evidence/process-bigraph-phase16h-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-H03"
 subgate = "16.H"
 title = "CNV full-domain startup and bounded runnable assembly"
-status = "specified"
-evidence = ["40x40x35 startup", "four-field schedule", "bounded advance", "restart/rollback"]
+status = "qualified"
+evidence = ["40x40x35 startup", "four-field schedule", "bounded advance", "restart/rollback", "design/evidence/process-bigraph-phase16h-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-I01"

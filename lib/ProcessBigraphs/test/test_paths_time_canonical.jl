@@ -41,3 +41,27 @@ end
     @test canonical_fingerprint(1 // 2) != canonical_fingerprint(2 // 3)
     @test_throws ProcessBigraphError canonical_bytes(identity)
 end
+
+@testset "canonical numeric array specialization parity" begin
+    function elementwise_array_bytes(values)
+        io = IOBuffer()
+        write(io, 'A')
+        ProcessBigraphs._canonical(io, string(eltype(values)))
+        ProcessBigraphs._canonical(io, size(values))
+        for value in values
+            ProcessBigraphs._canonical(io, value)
+        end
+        take!(io)
+    end
+
+    for values in (
+        UInt8[0, 1, typemax(UInt8)],
+        UInt32[0, 17, typemax(UInt32)],
+        Int32[typemin(Int32), -1, 0, typemax(Int32)],
+        Float32[-0.0, 0.0, 1.25, Inf, NaN],
+        Float64[-0.0, 0.0, 1.25, Inf, NaN],
+    )
+        @test canonical_bytes(values) ==
+            elementwise_array_bytes(values)
+    end
+end
