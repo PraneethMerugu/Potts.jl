@@ -1,0 +1,220 @@
+schema_version = "1.0.0"
+evidence_id = "semantic-preserving-consolidation-baseline-performance-v1"
+status = "frozen"
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+measurement_date = "2026-07-28"
+new_budget_created = false
+all_existing_frozen_budgets_pass = true
+
+[policy]
+purpose = "comparison baseline for semantic-preserving consolidation"
+timings_are_machine_local = true
+timings_are_new_release_claims = false
+regression_authorities = [
+    "design/audits/phase-12-performance-contract.md",
+    "design/evidence/process-bigraph-phase15c-evidence-v1.toml",
+    "design/evidence/phase-16/phase16i-authoring-performance.toml",
+    "design/evidence/process-bigraph-phase16c-evidence-v1.toml",
+]
+
+[local_environment]
+julia_version = "1.12.6"
+architecture = "aarch64"
+machine = "arm64-apple-darwin"
+kernel = "Darwin"
+cpu = "apple-m1"
+cpu_threads = 6
+word_size = 64
+startup_file = false
+manifest_reresolved = false
+manifest_staleness_warning_observed = true
+
+[precompile.core_package_family]
+project = "Project.toml"
+isolated_depot = true
+package_sources_reused = true
+compiled_cache_reused = false
+network_resolution = false
+real_seconds = 201.62
+user_seconds = 420.15
+system_seconds = 20.36
+stdlib_dependency_count = 26
+stdlib_precompile_seconds_reported = 53
+package_dependency_count = 116
+package_precompile_seconds_reported = 147
+result = "passed"
+
+[precompile.visualization_increment]
+project = "lib/MakiePotts/Project.toml"
+isolated_depot = true
+same_depot_after_core_package_family = true
+package_sources_reused = true
+compiled_cache_reused_for_core_dependencies = true
+network_resolution = false
+real_seconds = 191.48
+user_seconds = 425.60
+system_seconds = 27.99
+precompiled_dependency_count = 215
+already_precompiled_dependency_count = 142
+offline_texture_atlas_download_failed = true
+offline_texture_atlas_fallback_succeeded = true
+result = "passed"
+
+[precompile.combined]
+sequential_real_seconds = 393.10
+scope = "root package family followed by optional MakiePotts visualization stack"
+
+[[package_load]]
+package = "ProcessBigraphs"
+project = "lib/ProcessBigraphs"
+cache_state = "warm"
+real_seconds = 1.84
+user_seconds = 2.66
+system_seconds = 0.29
+result = "passed"
+
+[[package_load]]
+package = "CorePotts"
+project = "lib/CorePotts"
+cache_state = "warm"
+real_seconds = 2.15
+user_seconds = 3.08
+system_seconds = 0.32
+result = "passed"
+
+[[package_load]]
+package = "PottsToolkit"
+project = "."
+cache_state = "warm"
+real_seconds = 2.85
+user_seconds = 3.06
+system_seconds = 0.36
+result = "passed"
+
+[[package_load]]
+package = "MakiePotts"
+project = "lib/MakiePotts"
+cache_state = "warm"
+real_seconds = 6.00
+user_seconds = 7.22
+system_seconds = 1.21
+result = "passed"
+
+[qualified_authoring]
+authority = "design/evidence/phase-16/phase16i-authoring-performance.toml"
+julia_version = "1.12.6"
+architecture = "x86_64"
+events = 128
+repetitions = 9
+plan_identity_equal = true
+construction_median_seconds = 0.000115565
+construction_median_allocated_bytes = 71304
+validation_median_seconds = 0.000048781
+validation_median_allocated_bytes = 39760
+lowering_median_seconds = 0.00496918
+lowering_median_allocated_bytes = 2805672
+compilation_median_seconds = 0.001217082
+compilation_median_allocated_bytes = 342168
+initialization_median_seconds = 0.000157724
+initialization_median_allocated_bytes = 56936
+semantic_execution_median_seconds = 0.051656676
+direct_ir_execution_median_seconds = 0.051477451
+semantic_execution_median_allocated_bytes = 18737072
+direct_ir_execution_median_allocated_bytes = 18737072
+warm_time_ratio = 1.0034816214967597
+warm_allocation_ratio = 1.0
+all_checks_pass = true
+
+[qualified_serial_runtime]
+authority = "design/evidence/process-bigraph-phase15c-evidence-v1.toml"
+julia_version = "1.12.6"
+short_horizon_events = 64
+short_horizon_events_per_second = 4292.583281313708
+short_horizon_allocation_bytes = 7777104
+short_horizon_bytes_per_event = 121517.25
+long_horizon_events = 256
+long_horizon_events_per_second = 4600.259630746863
+long_horizon_allocation_bytes = 31103096
+long_horizon_bytes_per_event = 121496.46875
+allocation_growth_limit_bytes_per_event = 155992.5625
+all_guardrails_pass = true
+
+[qualified_publication]
+engine_authority = "design/evidence/process-bigraph-phase16b-evidence-v1.toml"
+native_field_authority = "design/evidence/process-bigraph-phase16c-evidence-v1.toml"
+engine_protocol_publication_host_allocated_bytes = 0
+native_field_cpu_publication_host_allocated_bytes = 0
+native_field_metal_publication_host_allocated_bytes = 0
+native_field_rocm_publication_host_allocated_bytes = 0
+metal_warm_device_allocations = 0
+rocm_warm_device_allocations = 0
+metal_hidden_host_fallback = false
+rocm_hidden_host_fallback = false
+all_guardrails_pass = true
+
+[[test_domain]]
+domain = "PottsToolkit package"
+command = "julia --project=. --startup-file=no -e 'using Pkg; Pkg.test(; allow_reresolve=false)'"
+assertions = 731
+real_seconds = 252.56
+user_seconds = 242.92
+system_seconds = 6.50
+result = "passed"
+
+[[test_domain]]
+domain = "ProcessBigraphs package"
+command = "julia --project=lib/ProcessBigraphs --startup-file=no -e 'using Pkg; Pkg.test(; allow_reresolve=false)'"
+assertions = 1221
+real_seconds = 482.51
+user_seconds = 464.68
+system_seconds = 9.84
+result = "passed"
+
+[[test_domain]]
+domain = "CorePotts package"
+command = "julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test(; allow_reresolve=false)'"
+assertions = 3863
+real_seconds = 500.66
+user_seconds = 478.16
+system_seconds = 12.17
+result = "passed"
+
+[[test_domain]]
+domain = "MakiePotts package"
+command = "julia --project=lib/MakiePotts --startup-file=no -e 'using Pkg; Pkg.test(; allow_reresolve=false)'"
+assertions = 505
+real_seconds = 288.29
+user_seconds = 391.35
+system_seconds = 19.91
+result = "passed"
+
+[[test_domain]]
+domain = "cross-package integration CPU"
+command = "julia --project=integration --startup-file=no integration/runtests.jl"
+assertions = 4793
+real_seconds = 150.63
+user_seconds = 144.74
+system_seconds = 4.28
+result = "passed"
+
+[[test_domain]]
+domain = "independent ProcessBigraphs specification oracle units"
+command = "julia --project=lib/ProcessBigraphs --startup-file=no lib/ProcessBigraphs/test/specification_oracle/runtests.jl"
+assertions = 16
+real_seconds = 1.80
+user_seconds = 2.74
+system_seconds = 0.18
+result = "passed"
+
+[test_domain_totals]
+assertions = 11129
+sequential_real_seconds = 1676.45
+all_pass = true
+
+[limitations]
+items = [
+    "Local wall times are observational baselines, not new budgets or fastest-runtime claims.",
+    "Package test timings include each Pkg.test temporary-environment setup and any configuration-specific precompile.",
+    "The isolated Makie precompile used its supported offline texture-atlas fallback after network access was unavailable.",
+    "Trusted Metal and ROCm performance remains governed by the retained exact-source artifacts, not by this CPU host.",
+]

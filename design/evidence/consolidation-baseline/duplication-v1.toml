@@ -1,0 +1,471 @@
+detector = "exact duplicate windows after comment/blank removal and whitespace normalization"
+evidence_id = "semantic-preserving-consolidation-baseline-duplication-v1"
+exact_clone_cluster_count = 51
+limitations = ["The exact-clone detector intentionally does not equate semantically different code.", "The named semantic responsibility clusters supplement exact clone detection.", "A candidate classification is not permission to deduplicate independent evidence."]
+minimum_normalized_lines = 16
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+resolution_candidate_count = 17
+scanned_file_count = 362
+schema_version = "1.0.0"
+status = "frozen"
+
+[[exact_clone_clusters]]
+classification = "accidental_production_duplication_candidate"
+normalized_line_count = 16
+occurrences = ["lib/CorePotts/src/algorithms/checkerboard.jl:411", "lib/CorePotts/src/components/scientific_trackers.jl:343"]
+paths = ["lib/CorePotts/src/algorithms/checkerboard.jl", "lib/CorePotts/src/components/scientific_trackers.jl"]
+requires_resolution = true
+sample = ["proposal = transaction.proposal", "delta = transaction.trackers", "core = state.core", "trackers = state.trackers", "recipient = proposal.recipient", "@inbounds begin", "core.ownership.tags[recipient] = proposal.gaining.tag", "core.ownership.ids[recipient] = proposal.gaining.value", "if delta.losing_cell != 0", "losing = Int(delta.losing_cell)", "trackers.finite_volumes[losing] -= Int32(1)", "trackers.boundary_measures[losing] += delta.losing_boundary", "if trackers.finite_volumes[losing] == 0", "core.active[losing] = UInt8(0)", "core.cell_types[losing] = UInt32(0)", "_reset_columns!(Tuple(core.properties), Tuple(state.retirement_defaults), losing)"]
+window_sha256 = "a7bcfaf54603c4804ee87acb613fb6f6d910390d7636629d208c990275c02f2f"
+[[exact_clone_clusters]]
+classification = "accidental_production_duplication_candidate"
+normalized_line_count = 16
+occurrences = ["lib/CorePotts/src/algorithms/checkerboard.jl:413", "lib/CorePotts/src/components/scientific_trackers.jl:345"]
+paths = ["lib/CorePotts/src/algorithms/checkerboard.jl", "lib/CorePotts/src/components/scientific_trackers.jl"]
+requires_resolution = true
+sample = ["core = state.core", "trackers = state.trackers", "recipient = proposal.recipient", "@inbounds begin", "core.ownership.tags[recipient] = proposal.gaining.tag", "core.ownership.ids[recipient] = proposal.gaining.value", "if delta.losing_cell != 0", "losing = Int(delta.losing_cell)", "trackers.finite_volumes[losing] -= Int32(1)", "trackers.boundary_measures[losing] += delta.losing_boundary", "if trackers.finite_volumes[losing] == 0", "core.active[losing] = UInt8(0)", "core.cell_types[losing] = UInt32(0)", "_reset_columns!(Tuple(core.properties), Tuple(state.retirement_defaults), losing)", "end", "else"]
+window_sha256 = "bb51b4a505ce56f735f6e7f99827388e3e5d961ecd588744004fcafd4e54471e"
+[[exact_clone_clusters]]
+classification = "accidental_production_duplication_candidate"
+normalized_line_count = 16
+occurrences = ["lib/CorePotts/src/algorithms/checkerboard.jl:412", "lib/CorePotts/src/components/scientific_trackers.jl:344"]
+paths = ["lib/CorePotts/src/algorithms/checkerboard.jl", "lib/CorePotts/src/components/scientific_trackers.jl"]
+requires_resolution = true
+sample = ["delta = transaction.trackers", "core = state.core", "trackers = state.trackers", "recipient = proposal.recipient", "@inbounds begin", "core.ownership.tags[recipient] = proposal.gaining.tag", "core.ownership.ids[recipient] = proposal.gaining.value", "if delta.losing_cell != 0", "losing = Int(delta.losing_cell)", "trackers.finite_volumes[losing] -= Int32(1)", "trackers.boundary_measures[losing] += delta.losing_boundary", "if trackers.finite_volumes[losing] == 0", "core.active[losing] = UInt8(0)", "core.cell_types[losing] = UInt32(0)", "_reset_columns!(Tuple(core.properties), Tuple(state.retirement_defaults), losing)", "end"]
+window_sha256 = "da1915270e831311fb95d9fdc23cef27675923453a7e3e4bba92e1c5f125c144"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_adapter"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl:481", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl:405"]
+paths = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl"]
+requires_resolution = false
+sample = ["candidate,", ")", "if instance.active_invocation == invocation.id", "instance.candidate = instance.published", "instance.target_tick = instance.time_tick", "if !isnothing(instance.prior_forcing)", "copyto!(instance.forcing, instance.prior_forcing)", "end", "if !isnothing(instance.prior_decay_weights)", "copyto!(", "instance.decay_weights, instance.prior_decay_weights)", "end", "instance.prior_forcing = nothing", "instance.prior_decay_weights = nothing", "instance.active_invocation = nothing", "end"]
+window_sha256 = "3ff584170f54c596b08a8065aabe8773985a1b29ed5721842f2e368cd851560c"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_adapter"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl:483", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl:407"]
+paths = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl"]
+requires_resolution = false
+sample = ["if instance.active_invocation == invocation.id", "instance.candidate = instance.published", "instance.target_tick = instance.time_tick", "if !isnothing(instance.prior_forcing)", "copyto!(instance.forcing, instance.prior_forcing)", "end", "if !isnothing(instance.prior_decay_weights)", "copyto!(", "instance.decay_weights, instance.prior_decay_weights)", "end", "instance.prior_forcing = nothing", "instance.prior_decay_weights = nothing", "instance.active_invocation = nothing", "end", "nothing", "end"]
+window_sha256 = "82f09a1d4e749ba1a4661f2dbb872cf44c59986d0f08a6202d6a877122fbf261"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_adapter"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl:482", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl:406"]
+paths = ["lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl", "lib/ProcessBigraphs/test/fixtures/independent_custom_field_adapter.jl"]
+requires_resolution = false
+sample = [")", "if instance.active_invocation == invocation.id", "instance.candidate = instance.published", "instance.target_tick = instance.time_tick", "if !isnothing(instance.prior_forcing)", "copyto!(instance.forcing, instance.prior_forcing)", "end", "if !isnothing(instance.prior_decay_weights)", "copyto!(", "instance.decay_weights, instance.prior_decay_weights)", "end", "instance.prior_forcing = nothing", "instance.prior_decay_weights = nothing", "instance.active_invocation = nothing", "end", "nothing"]
+window_sha256 = "c2f67fe2c4a3a42821b195a5d7bf84b53386f26bd2f47c527f0c1996ea256708"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_oracle"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl:45", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl:71"]
+paths = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl"]
+requires_resolution = false
+sample = ["schedule!(builder, trigger, Every(Duration(1, scale)))", "attach!(builder, trigger, (out=stores.trigger,))", "copy_step = mount!(builder, :copy, C15ReactiveCopy())", "attach!(builder, copy_step, (", "input=stores.trigger,", "out=stores.copied,", "))", "converge = mount!(builder, :converge, C15Converge())", "schedule!(builder, converge, After(converge))", "attach!(builder, converge, (", "state=stores.converged,", "out=stores.converged,", "))", "bounded = mount!(builder, :bounded, C15Bounded())", "attach!(builder, bounded, (out=stores.bounded,))", "iteration!("]
+window_sha256 = "44a02fb60b977fab8631a5b0137416e29a3ad29e7d8488e822bb6fdfbac55c96"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_oracle"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl:46", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl:72"]
+paths = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl"]
+requires_resolution = false
+sample = ["attach!(builder, trigger, (out=stores.trigger,))", "copy_step = mount!(builder, :copy, C15ReactiveCopy())", "attach!(builder, copy_step, (", "input=stores.trigger,", "out=stores.copied,", "))", "converge = mount!(builder, :converge, C15Converge())", "schedule!(builder, converge, After(converge))", "attach!(builder, converge, (", "state=stores.converged,", "out=stores.converged,", "))", "bounded = mount!(builder, :bounded, C15Bounded())", "attach!(builder, bounded, (out=stores.bounded,))", "iteration!(", "builder, :convergence, (converge,);"]
+window_sha256 = "ae39bc3526f2702b33532064b16ad757b2a89129ca08573cc51f284eb7284bf4"
+[[exact_clone_clusters]]
+classification = "deliberate_independent_oracle"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl:44", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl:70"]
+paths = ["lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl", "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl"]
+requires_resolution = false
+sample = ["trigger = mount!(builder, :trigger, C15Producer())", "schedule!(builder, trigger, Every(Duration(1, scale)))", "attach!(builder, trigger, (out=stores.trigger,))", "copy_step = mount!(builder, :copy, C15ReactiveCopy())", "attach!(builder, copy_step, (", "input=stores.trigger,", "out=stores.copied,", "))", "converge = mount!(builder, :converge, C15Converge())", "schedule!(builder, converge, After(converge))", "attach!(builder, converge, (", "state=stores.converged,", "out=stores.converged,", "))", "bounded = mount!(builder, :bounded, C15Bounded())", "attach!(builder, bounded, (out=stores.bounded,))"]
+window_sha256 = "c7bd6e3ed66892b34f877b86574d70e246e39437f9fad83651050070082c162d"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:90", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:173"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":composite_parent => :Composite,", ":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,", ":junction_store => :StoreNode,", ":junction_composite => :Composite,", ":junction_endpoint_junction => :Junction,", ":junction_endpoint_endpoint => :Endpoint,"]
+window_sha256 = "0582f7338859d19d5f454249cced359d906465502591e42e77a9f20cfafb9ec9"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:88", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:171"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":containment_parent => :StoreNode,", ":composite_child => :Composite,", ":composite_parent => :Composite,", ":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,", ":junction_store => :StoreNode,", ":junction_composite => :Composite,"]
+window_sha256 = "5786ac43ad7b26fab54206f99972983b1bb74a954e41dd98fdf68d12cdde7f89"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:91", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:174"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,", ":junction_store => :StoreNode,", ":junction_composite => :Composite,", ":junction_endpoint_junction => :Junction,", ":junction_endpoint_endpoint => :Endpoint,", ")"]
+window_sha256 = "9a45cb4888084c9a0af7b86223a25b50c72d7eb998b6a5f4c639a05970c1bf2c"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:89", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:172"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":composite_child => :Composite,", ":composite_parent => :Composite,", ":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,", ":junction_store => :StoreNode,", ":junction_composite => :Composite,", ":junction_endpoint_junction => :Junction,"]
+window_sha256 = "d64b42d24d0628f453a2409d476d3498fec651e9927a38cd436192fbb36f5fb8"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:86", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:169"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":store_composite => :Composite,", ":containment_child => :StoreNode,", ":containment_parent => :StoreNode,", ":composite_child => :Composite,", ":composite_parent => :Composite,", ":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,"]
+window_sha256 = "dab4f304365eddc6d3a08203f9f98f276b782960c4bf6363b8f8460a86b0edd3"
+[[exact_clone_clusters]]
+classification = "deliberate_test_oracle_literal"
+normalized_line_count = 16
+occurrences = ["lib/ProcessBigraphs/src/structural_transactions.jl:87", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl:170"]
+paths = ["lib/ProcessBigraphs/src/structural_transactions.jl", "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"]
+requires_resolution = false
+sample = [":containment_child => :StoreNode,", ":containment_parent => :StoreNode,", ":composite_child => :Composite,", ":composite_parent => :Composite,", ":actor_composite => :Composite,", ":process_actor => :Actor,", ":step_actor => :Actor,", ":port_actor => :Actor,", ":binding_port => :Port,", ":binding_store => :StoreNode,", ":dependency_before => :Step,", ":dependency_after => :Step,", ":boundary_map_endpoint => :Endpoint,", ":boundary_map_store => :StoreNode,", ":boundary_map_composite => :Composite,", ":junction_store => :StoreNode,"]
+window_sha256 = "f8d4ab32e8cae577ad3f9c7f6cec3b4ed7126e2a4e31c65ef5f38795145da997"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:197", "src/authoring/Authoring.jl:81"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement"]
+window_sha256 = "04671eab812e67737ce72aeb73211b91f01f51af1ff3655382618cc93b8d8562"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:190", "src/authoring/Authoring.jl:74"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast"]
+window_sha256 = "1f032b2554169ba69f20ffea8feac56a0c0f7377a02b1bac7e137405641add6c"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:193", "src/authoring/Authoring.jl:77"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision"]
+window_sha256 = "239e7e227e40d63464111b4170f0740d429ef41ce64acfba652a0b51f57f8518"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:186", "src/authoring/Authoring.jl:70"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue"]
+window_sha256 = "30a7a49e8d0d82ae5f929fa55f32516afac7a5a51c6f216348b0967d159e8a06"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:199", "src/authoring/Authoring.jl:83"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement", "export ConstitutiveMeanInitialization, StationaryMechanicalInitialization", "export PreserveMechanicalInitialization"]
+window_sha256 = "49f4969c39b158d7fa4baa0123eb64fdd71bf31b26fc0b73237b659072517e51"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:189", "src/authoring/Authoring.jl:73"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis"]
+window_sha256 = "4ce4448c0bca60b413c667031befd324b7384a86d44ddb9e44f012aa47c47e33"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:191", "src/authoring/Authoring.jl:75"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty"]
+window_sha256 = "504978f4cfe6a4eaa97afd53896799073cbabd9123991be3890cc1e824357585"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:194", "src/authoring/Authoring.jl:78"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision"]
+window_sha256 = "51935b00612adc00645fc3640ed8d2ec9c99d80fe1756e4377bd12fab554eb7c"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:188", "src/authoring/Authoring.jl:72"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse"]
+window_sha256 = "58c2ca7d9cb10c512fde85419f1eff15b666fd8e33e4e183aaf477c8a704cb3c"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:178", "src/authoring/Authoring.jl:62"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export AbstractLevel1Declaration, Volume, Surface", "export Act", "export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector"]
+window_sha256 = "5d27b3c3fd57605ed728a28296ec1585905033326f616f9ea0a8ce8c15e64f94"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:183", "src/authoring/Authoring.jl:67"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate"]
+window_sha256 = "7fe77ae1156471e8fbf0c0410280637197193ddac25b77248d9c0ca6229ddaba"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:181", "src/authoring/Authoring.jl:65"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count"]
+window_sha256 = "943abc59b89921a3762af71a33d32c5f206c97ba834048b3c20980c6971552b5"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:187", "src/authoring/Authoring.jl:71"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field"]
+window_sha256 = "9b792ee943ef4474fad4ee5c2843b1536bfd78b29d470bb1aec9a3e01c7a7b15"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:185", "src/authoring/Authoring.jl:69"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered"]
+window_sha256 = "a67d159daebecacf5acdc8cafccd1a5c6510b224ff3677221a39112a4ec58e68"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:182", "src/authoring/Authoring.jl:66"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean"]
+window_sha256 = "cdf0dbccd4018bb0a7cc0e8df5c37da83d84860c951adbc988016916ce6cb4c7"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:184", "src/authoring/Authoring.jl:68"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger"]
+window_sha256 = "d16e80266ab959c5e46ba782986151791fd1df201b875f75b80160361567e09a"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:196", "src/authoring/Authoring.jl:80"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition"]
+window_sha256 = "d49e3f2284d7c3458d38039a7216476088ae442ec94aea5c687195990fe41e5e"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:198", "src/authoring/Authoring.jl:82"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement", "export ConstitutiveMeanInitialization, StationaryMechanicalInitialization"]
+window_sha256 = "d7ae16bda1c55de6b20ef38a9fb71336295fab67c69e4d6e179b898585f2ae37"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:180", "src/authoring/Authoring.jl:64"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter"]
+window_sha256 = "d86dc8300ab464663278beb3b4ed8dd9deb34bdba9a5e3ab2b8eb0cf6959d259"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:195", "src/authoring/Authoring.jl:79"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision"]
+window_sha256 = "e69f9624231eefa98bb37a1ee44c9d5bd12147a1f5eb2636ed0e93ebc182d461"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:192", "src/authoring/Authoring.jl:76"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision"]
+window_sha256 = "ebe738786758a749ef0762e316dd7fe29c93c112492fd187b74a1aa5bcf8079c"
+[[exact_clone_clusters]]
+classification = "public_facade_reexport"
+normalized_line_count = 16
+occurrences = ["src/PottsToolkit.jl:179", "src/authoring/Authoring.jl:63"]
+paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
+requires_resolution = false
+sample = ["export Act", "export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw"]
+window_sha256 = "f242352bcd7520b1bc84049d39233cab2eee18e1317a9b5f10d697af4e556d6e"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16d-check.jl:35", "scripts/process-bigraph-phase16g-check.jl:49", "scripts/process-bigraph-phase16h-check.jl:53"]
+paths = ["scripts/process-bigraph-phase16d-check.jl", "scripts/process-bigraph-phase16g-check.jl", "scripts/process-bigraph-phase16h-check.jl"]
+requires_resolution = true
+sample = ["hc_active = entry[\"implementation_status\"] in (", "\"phase16hc_qualified_c_hardware_open\", \"phase16hc_qualified\",", "\"phase16i_candidate\", \"phase16_internal_beta_qualified\")", "c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin", "actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))", "actual == legacy || get(hc_artifacts, relative, nothing) == actual"]
+window_sha256 = "8d1c7ab2ff399956a9f4e72442a06c647006da0a1d97b6007886ef4ba56ece8a"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16d-check.jl:36", "scripts/process-bigraph-phase16g-check.jl:50", "scripts/process-bigraph-phase16h-check.jl:54"]
+paths = ["scripts/process-bigraph-phase16d-check.jl", "scripts/process-bigraph-phase16g-check.jl", "scripts/process-bigraph-phase16h-check.jl"]
+requires_resolution = true
+sample = ["\"phase16hc_qualified_c_hardware_open\", \"phase16hc_qualified\",", "\"phase16i_candidate\", \"phase16_internal_beta_qualified\")", "c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin", "actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))", "actual == legacy || get(hc_artifacts, relative, nothing) == actual", "end"]
+window_sha256 = "bba2f1e2f6b7363b535142de917a7c1c837dd3f8eb551094282196cc3ae2405e"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16e-check.jl:51", "scripts/process-bigraph-phase16f-check.jl:46"]
+paths = ["scripts/process-bigraph-phase16e-check.jl", "scripts/process-bigraph-phase16f-check.jl"]
+requires_resolution = true
+sample = ["c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "phase16_closed =", "entry[\"implementation_status\"] == \"phase16_internal_beta_qualified\"", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin", "actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))", "actual == legacy || get(hc_artifacts, relative, nothing) == actual", "end"]
+window_sha256 = "a3a8ae93f65fe6a6d875bbc2f1e301bbe4bcdf10ee2c3d5830c5a4e0af8abb3d"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16e-check.jl:49", "scripts/process-bigraph-phase16f-check.jl:44"]
+paths = ["scripts/process-bigraph-phase16e-check.jl", "scripts/process-bigraph-phase16f-check.jl"]
+requires_resolution = true
+sample = ["\"phase16hc_qualified_c_hardware_open\", \"phase16hc_qualified\",", "\"phase16i_candidate\", \"phase16_internal_beta_qualified\")", "c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "phase16_closed =", "entry[\"implementation_status\"] == \"phase16_internal_beta_qualified\"", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin", "actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))"]
+window_sha256 = "a964f756c8c170ba97a2cf619c70b751b9e99d32c67eb6cfa2b2c80394a4dc68"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16e-check.jl:48", "scripts/process-bigraph-phase16f-check.jl:43"]
+paths = ["scripts/process-bigraph-phase16e-check.jl", "scripts/process-bigraph-phase16f-check.jl"]
+requires_resolution = true
+sample = ["hc_active = entry[\"implementation_status\"] in (", "\"phase16hc_qualified_c_hardware_open\", \"phase16hc_qualified\",", "\"phase16i_candidate\", \"phase16_internal_beta_qualified\")", "c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "phase16_closed =", "entry[\"implementation_status\"] == \"phase16_internal_beta_qualified\"", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin"]
+window_sha256 = "fd04fea7bb1bb892fad37a57a67b4749f0ed3f4f1c08cb40369c67c2f5d37a8e"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16e-check.jl:50", "scripts/process-bigraph-phase16f-check.jl:45"]
+paths = ["scripts/process-bigraph-phase16e-check.jl", "scripts/process-bigraph-phase16f-check.jl"]
+requires_resolution = true
+sample = ["\"phase16i_candidate\", \"phase16_internal_beta_qualified\")", "c_qualified = entry[\"implementation_status\"] in (", "\"phase16hc_qualified\", \"phase16i_candidate\",", "\"phase16_internal_beta_qualified\")", "phase16_closed =", "entry[\"implementation_status\"] == \"phase16_internal_beta_qualified\"", "hc_artifacts = hc_active ? Dict(", "row[\"path\"] => row[\"sha256\"]", "for row in TOML.parsefile(joinpath(", "ROOT,", "\"design/evidence/process-bigraph-phase16hc-evidence-v1.toml\",", "))[\"artifacts\"]", ") : Dict{String,Any}()", "artifact_matches(relative, legacy) = begin", "actual = bytes2hex(SHA.sha256(read(joinpath(ROOT, relative))))", "actual == legacy || get(hc_artifacts, relative, nothing) == actual"]
+window_sha256 = "ffaf5817cd91d7b2fd4b9515fca0fa151c189069a0a2b5caaac9de811fed3b87"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16i-candidate.jl:75", "scripts/process-bigraph-phase16i-check.jl:42"]
+paths = ["scripts/process-bigraph-phase16i-candidate.jl", "scripts/process-bigraph-phase16i-check.jl"]
+requires_resolution = true
+sample = ["\"Project.toml\",", "\"benchmark/Project.toml\",", "\"benchmark/Manifest.toml\",", "\"docs/Project.toml\",", "\"docs/Manifest.toml\",", "\"examples/Project.toml\",", "\"examples/Manifest.toml\",", "\"examples/dashboards/Project.toml\",", "\"examples/dashboards/Manifest.toml\",", "\"examples/notebooks/Project.toml\",", "\"examples/notebooks/Manifest.toml\",", "\"integration/Project.toml\",", "\"lib/CorePotts/Project.toml\",", "\"lib/MakiePotts/Project.toml\",", "\"lib/MakiePotts/test/backends/Project.toml\",", "\"lib/MakiePotts/test/backends/Manifest.toml\","]
+window_sha256 = "00d393b3a9776f2b14edcce426f27270096362eaa1a24e3227326c81d241180d"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16i-candidate.jl:76", "scripts/process-bigraph-phase16i-check.jl:43"]
+paths = ["scripts/process-bigraph-phase16i-candidate.jl", "scripts/process-bigraph-phase16i-check.jl"]
+requires_resolution = true
+sample = ["\"benchmark/Project.toml\",", "\"benchmark/Manifest.toml\",", "\"docs/Project.toml\",", "\"docs/Manifest.toml\",", "\"examples/Project.toml\",", "\"examples/Manifest.toml\",", "\"examples/dashboards/Project.toml\",", "\"examples/dashboards/Manifest.toml\",", "\"examples/notebooks/Project.toml\",", "\"examples/notebooks/Manifest.toml\",", "\"integration/Project.toml\",", "\"lib/CorePotts/Project.toml\",", "\"lib/MakiePotts/Project.toml\",", "\"lib/MakiePotts/test/backends/Project.toml\",", "\"lib/MakiePotts/test/backends/Manifest.toml\",", "\"lib/ProcessBigraphs/Project.toml\","]
+window_sha256 = "0297df78f0afbb4ed1f5e169f52b59c4bb640448ecc6f1e20ab7fccabbc5eb5e"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16i-candidate.jl:77", "scripts/process-bigraph-phase16i-check.jl:44"]
+paths = ["scripts/process-bigraph-phase16i-candidate.jl", "scripts/process-bigraph-phase16i-check.jl"]
+requires_resolution = true
+sample = ["\"benchmark/Manifest.toml\",", "\"docs/Project.toml\",", "\"docs/Manifest.toml\",", "\"examples/Project.toml\",", "\"examples/Manifest.toml\",", "\"examples/dashboards/Project.toml\",", "\"examples/dashboards/Manifest.toml\",", "\"examples/notebooks/Project.toml\",", "\"examples/notebooks/Manifest.toml\",", "\"integration/Project.toml\",", "\"lib/CorePotts/Project.toml\",", "\"lib/MakiePotts/Project.toml\",", "\"lib/MakiePotts/test/backends/Project.toml\",", "\"lib/MakiePotts/test/backends/Manifest.toml\",", "\"lib/ProcessBigraphs/Project.toml\",", "\"paper/Project.toml\","]
+window_sha256 = "8d9c7ed827554d7f48dae22be037ddc7d5ef206382bf84552d7587d886e512ac"
+[[exact_clone_clusters]]
+classification = "quality_tooling_duplication"
+normalized_line_count = 16
+occurrences = ["scripts/process-bigraph-phase16i-candidate.jl:78", "scripts/process-bigraph-phase16i-check.jl:45"]
+paths = ["scripts/process-bigraph-phase16i-candidate.jl", "scripts/process-bigraph-phase16i-check.jl"]
+requires_resolution = true
+sample = ["\"docs/Project.toml\",", "\"docs/Manifest.toml\",", "\"examples/Project.toml\",", "\"examples/Manifest.toml\",", "\"examples/dashboards/Project.toml\",", "\"examples/dashboards/Manifest.toml\",", "\"examples/notebooks/Project.toml\",", "\"examples/notebooks/Manifest.toml\",", "\"integration/Project.toml\",", "\"lib/CorePotts/Project.toml\",", "\"lib/MakiePotts/Project.toml\",", "\"lib/MakiePotts/test/backends/Project.toml\",", "\"lib/MakiePotts/test/backends/Manifest.toml\",", "\"lib/ProcessBigraphs/Project.toml\",", "\"paper/Project.toml\",", "\"paper/Manifest.toml\","]
+window_sha256 = "b296bb3a4eee6d2dfbad47b717e20e4adec88f9bf7a6a8c08dfa41f2c40aa09d"
+[[exact_clone_clusters]]
+classification = "test_fixture_or_contract_duplication"
+normalized_line_count = 16
+occurrences = ["integration/transition/analyze_phase13_realistic.jl:14", "integration/transition/run_phase13_realistic.jl:13"]
+paths = ["integration/transition/analyze_phase13_realistic.jl", "integration/transition/run_phase13_realistic.jl"]
+requires_resolution = true
+sample = ["options = Dict{String, String}()", "force = false", "index = 1", "while index <= length(args)", "if args[index] == \"--force\"", "force = true", "index += 1", "else", "startswith(args[index], \"--\") || throw(ArgumentError(", "\"unexpected positional argument: $(args[index])\"))", "index < length(args) || throw(ArgumentError(\"missing value for $(args[index])\"))", "options[args[index][3:end]] = args[index + 1]", "index += 2", "end", "end", "return (; options, force)"]
+window_sha256 = "8a37e8ac1464924cc0f0dcc5db70681eeef8c667da0b1d148db2a5217592193a"
+[[exact_clone_clusters]]
+classification = "test_fixture_or_contract_duplication"
+normalized_line_count = 16
+occurrences = ["integration/transition/analyze_phase13_realistic.jl:13", "integration/transition/run_phase13_realistic.jl:12"]
+paths = ["integration/transition/analyze_phase13_realistic.jl", "integration/transition/run_phase13_realistic.jl"]
+requires_resolution = true
+sample = ["function parse_options(args)", "options = Dict{String, String}()", "force = false", "index = 1", "while index <= length(args)", "if args[index] == \"--force\"", "force = true", "index += 1", "else", "startswith(args[index], \"--\") || throw(ArgumentError(", "\"unexpected positional argument: $(args[index])\"))", "index < length(args) || throw(ArgumentError(\"missing value for $(args[index])\"))", "options[args[index][3:end]] = args[index + 1]", "index += 2", "end", "end"]
+window_sha256 = "ca4675451ba555bf9de58370466a69d06ced6db58faf3683f53201937600be2b"
+[[exact_clone_clusters]]
+classification = "test_fixture_or_contract_duplication"
+normalized_line_count = 16
+occurrences = ["integration/transition/analyze_phase13_realistic.jl:15", "integration/transition/run_phase13_realistic.jl:14"]
+paths = ["integration/transition/analyze_phase13_realistic.jl", "integration/transition/run_phase13_realistic.jl"]
+requires_resolution = true
+sample = ["force = false", "index = 1", "while index <= length(args)", "if args[index] == \"--force\"", "force = true", "index += 1", "else", "startswith(args[index], \"--\") || throw(ArgumentError(", "\"unexpected positional argument: $(args[index])\"))", "index < length(args) || throw(ArgumentError(\"missing value for $(args[index])\"))", "options[args[index][3:end]] = args[index + 1]", "index += 2", "end", "end", "return (; options, force)", "end"]
+window_sha256 = "e32843bfd0fe1006368aff95893bb4499c0b9cf57c8aeee1e7000a959962daf0"
+[[exact_clone_clusters]]
+classification = "test_fixture_or_contract_duplication"
+normalized_line_count = 16
+occurrences = ["lib/CorePotts/test/test_checkerboard_algorithms.jl:147", "lib/CorePotts/test/test_lottery_algorithms.jl:60"]
+paths = ["lib/CorePotts/test/test_checkerboard_algorithms.jl", "lib/CorePotts/test/test_lottery_algorithms.jl"]
+requires_resolution = true
+sample = ["@test first_report.realized_proposals ==", "first_report.dynamic_conflicts + first_report.constraint_rejections +", "first_report.acceptance_rejections + first_report.accepted_copies", "@test first_report.activated_attempts ==", "first_report.same_owner_no_ops + first_report.boundary_no_ops +", "first_report.immutable_recipient_no_ops + first_report.dynamic_conflicts +", "first_report.constraint_rejections + first_report.acceptance_rejections +", "first_report.accepted_copies", "first_snapshot = logical_state(first_run)", "second_snapshot = logical_state(second_run)", "@test lattice_storage(first_snapshot) == lattice_storage(second_snapshot)", "@test isempty(tracker_conformance_errors(", "first_state, fixture.tracker, first_snapshot))", "@test isempty(tracker_conformance_errors(", "second_state, fixture.tracker, second_snapshot))", "end"]
+window_sha256 = "131f2e7dd4e2579c26334896c9588b0f136127a68ef0518aaf72c172853ddeaa"
+
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "fingerprint builders"
+disposition_gate = "process_bigraphs"
+scope = ["ProcessBigraphs", "CorePotts", "PottsToolkit"]
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "canonical bytes and integrity hashing"
+disposition_gate = "process_bigraphs"
+scope = ["ProcessBigraphs", "CorePotts"]
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "validation reports and errors"
+disposition_gate = "process_bigraphs"
+scope = ["all packages"]
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "engine transaction lifecycle"
+disposition_gate = "process_bigraphs"
+scope = ["ProcessBigraphs", "CorePotts adapters"]
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "field operations and accounting"
+disposition_gate = "core_and_frontends"
+scope = ["ProcessBigraphs", "CorePotts"]
+[[semantic_responsibility_clusters]]
+classification = "compatibility_plus_production_authority_review"
+concept = "checkpoint validation and legacy conversion"
+disposition_gate = "process_bigraphs"
+scope = ["ProcessBigraphs", "CorePotts"]
+[[semantic_responsibility_clusters]]
+classification = "production_authority_review"
+concept = "authoring handles and origin maps"
+disposition_gate = "process_bigraphs"
+scope = ["ProcessBigraphs", "PottsToolkit"]
+[[semantic_responsibility_clusters]]
+classification = "backend_specific_realization_review"
+concept = "host and portable dispatch"
+disposition_gate = "core_and_frontends"
+scope = ["CorePotts"]
+[[semantic_responsibility_clusters]]
+classification = "test_fixture_review"
+concept = "model fixture construction"
+disposition_gate = "test_and_quality_harness"
+scope = ["tests", "integration"]
+[[semantic_responsibility_clusters]]
+classification = "quality_tooling_review"
+concept = "CI and specification integrity helpers"
+disposition_gate = "test_and_quality_harness"
+scope = ["scripts", "workflows"]
+
