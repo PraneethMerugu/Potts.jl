@@ -3,6 +3,7 @@ matrix_id = "process-bigraphs-phase16-backend-matrix-v1"
 phase = "16"
 status = "phase16c_candidate"
 phase16f_status = "qualified"
+phase16g_status = "qualified"
 allowed_statuses = ["not_started", "specified", "implemented", "qualified", "unsupported", "not_applicable"]
 
 [[envelopes]]
@@ -52,7 +53,7 @@ id = "merks-source-faithful-assembly"
 adapter = "ProcessBigraphsCorePotts"
 problem = "Merks 2006 bounded runnable assembly"
 precision = ["Float64"]
-CPU = "specified"
+CPU = "qualified"
 Metal = "unsupported"
 ROCm = "unsupported"
 CUDA = "not_applicable"

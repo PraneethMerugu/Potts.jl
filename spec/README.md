@@ -231,17 +231,20 @@ CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choic
 interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
 strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
 ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
-heavy computation occurs. Phase 16.A, 16.B, 16.D, 16.E, and 16.F are qualified: the internal
+heavy computation occurs. Phase 16.A, 16.B, 16.D, 16.E, 16.F, and 16.G are qualified: the internal
 engine/field boundary, dynamic orchestration transactions, CorePotts native-field cutover, typed
-domain requests, V3 logical checkpoint, and non-destructive legacy conversions are passing. Phase
-16.C remains open only for trusted exact-head Metal/ROCm evidence, and 11 requirements remain open
-across 16.C and 16.G–16.I. The
+domain requests, V3 logical checkpoint, non-destructive legacy conversions, and bounded runnable
+Merks assembly are passing. Phase 16.C remains open only for trusted exact-head Metal/ROCm
+evidence, and 9 requirements remain open across 16.C and 16.H–16.I. The
 [16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
 classified commit `7217f9b` as an unqualified prototype. The resulting
 [qualified solver-plurality audit](../design/audits/process-bigraph-phase16f-solver-plurality-audit.md)
 records commit `9f9daf1`: a real injected SciML algorithm, standard solver interfaces, an
 external-style independent custom fixture, numerical replay by default, analytic/convergence
-evidence, and a bounded adapter-author API. Merks/CNV assembly may now proceed.
+evidence, and a bounded adapter-author API. The
+[qualified Merks audit](../design/audits/process-bigraph-phase16g-merks-audit.md) records commit
+`09150b5`: one ProcessBigraphs-owned schedule around native, real-SciML, and independent field
+adapters plus the CorePotts CPM kernel, without claiming the paper's full Figure 5 analysis.
 
 ## Conformance Principle
 

@@ -197,15 +197,15 @@ evidence = [
 id = "P16-G01"
 subgate = "16.G"
 title = "Merks 2006 machine-readable source and mechanism trace"
-status = "specified"
-evidence = ["primary paper", "corrected source record", "ambiguity profiles"]
+status = "qualified"
+evidence = ["primary paper", "corrected source record", "ambiguity profiles", "design/evidence/process-bigraph-phase16g-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-G02"
 subgate = "16.G"
 title = "Merks runnable bounded assembly"
-status = "specified"
-evidence = ["canonical startup", "bounded scheduled trajectory", "native/SciML", "restart/rollback"]
+status = "qualified"
+evidence = ["canonical startup", "bounded scheduled trajectory", "native/SciML/independent external adapter", "observation/restart/rollback", "design/evidence/process-bigraph-phase16g-evidence-v1.toml"]
 
 [[requirements]]
 id = "P16-H01"

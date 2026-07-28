@@ -43,8 +43,9 @@ core_project = TOML.parsefile(paths["lib/CorePotts/Project.toml"])
 requirements = Dict(row["id"] => row for row in ledger["requirements"])
 envelopes = Dict(row["id"] => row for row in matrix["envelopes"])
 
-check(entry["implementation_status"] ==
+check(entry["implementation_status"] in (
       "phase16f_qualified_c_hardware_open",
+      "phase16g_qualified_c_hardware_open"),
     "Phase 16.F checker requires qualified-F/C-hardware-open state")
 for id in ["P16-F01", "P16-F02", "P16-F03"]
     check(requirements[id]["status"] == "qualified",
@@ -156,6 +157,10 @@ check(evidence["status"] == "qualified" &&
       "9f9daf19e34c5430361cb98c8002f025a74d217a" &&
       evidence["implementation_tree"] ==
       "e371867f85c0dd646dc77ba781bd2a746fd4b097" &&
+      evidence["compatibility_requalification_commit"] ==
+      "09150b5457ae622093aa6a3ad61a7fc2d70b87e7" &&
+      evidence["compatibility_requalification_tree"] ==
+      "3e81f1affa1c517a32f6026a9d204730dd4aaa46" &&
       Set(evidence["qualified_rows"]) ==
       Set(["P16-F01", "P16-F02", "P16-F03"]) &&
       evidence["sciml"]["algorithm_explicit"] == true &&
@@ -163,6 +168,9 @@ check(evidence["status"] == "qualified" &&
       evidence["continuation"]["replay_class"] == "numerical" &&
       evidence["custom"]["sciml_dependency"] == false &&
       evidence["custom"]["shared_numerical_helper"] == false &&
+      evidence["phase16g_compatibility"]["spatial_decay_weights"] == true &&
+      evidence["phase16g_compatibility"]["legacy_forcing_only_invocations"] ==
+      true &&
       evidence["tests"]["process_bigraphs_phase16f_assertions"] == 88 &&
       evidence["tests"]["corepotts_phase16f_assertions"] == 14 &&
       evidence["tests"]["process_bigraphs_full_assertions"] == 1150 &&

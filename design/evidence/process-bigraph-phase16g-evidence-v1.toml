@@ -1,0 +1,74 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16g-merks-2026-07-27"
+phase = "16.G"
+status = "qualified"
+implementation_commit = "09150b5457ae622093aa6a3ad61a7fc2d70b87e7"
+implementation_tree = "3e81f1affa1c517a32f6026a9d204730dd4aaa46"
+branch = "codex/phase-16"
+internal_beta = false
+public_release = false
+quantitative_reproduction = false
+full_analysis = false
+qualified_rows = ["P16-G01", "P16-G02"]
+
+[authority]
+primary = "Merks et al., Developmental Biology 289(1), 44-54 (2006)"
+doi = "10.1016/j.ydbio.2005.10.003"
+paper_url = "https://pmc.ncbi.nlm.nih.gov/articles/PMC2562951/"
+source_closure = "closed-with-named-ambiguity-profiles"
+claim = "runnable source-bounded reimplementation"
+
+[architecture]
+scheduler = "ProcessBigraphs"
+field_computation = "injected EngineDeclaration adapter"
+cpm_computation = "CorePotts SequentialCPM"
+reference_split = "field_then_cpm_v1"
+field_ticks_per_mcs = 15
+seconds_per_field_tick = 2
+seconds_per_mcs = 30
+adapters_exercised = ["CorePotts native", "SciML Tsit5", "independent external-style RK4"]
+model_owned_time_loop = false
+process_bigraph_owned_solver = false
+
+[canonical_startup]
+shape = [500, 500]
+cell_count = 282
+central_extent = [333, 333]
+occupied_sites = 27354
+placement_profile = "deterministic_seeded_nonoverlap"
+seed = 2006
+
+[tests]
+source_mechanism_microfixtures = 11
+canonical_native_restart_rollback_observation = 21
+sciml_assembly = 4
+independent_external_adapter_assembly = 4
+phase16g_total_assertions = 40
+process_bigraphs_full_assertions = 1150
+process_bigraphs_full_package_suite = "passed"
+corepotts_preexisting_regression_assertions = 3805
+corepotts_preexisting_regressions = "passed in the package run; final G-only corrections did not alter pre-existing paths"
+corepotts_phase16f_final_cross_adapter_assertions = 14
+corepotts_phase16f_final_cross_adapter = "passed"
+julia = "1.12.6"
+
+[artifacts]
+trace = "spec/process-bigraph-phase16-merks-trace-v1.toml"
+trace_sha256 = "dbe5013f43be43203fd5d8da6636dae25cd2aca077119c67eb9248d8e836ea9b"
+source_record = "design/audits/phase-14-model-source-records-v1.toml"
+source_record_sha256 = "f5f37e6f13d2e8b16a8ad3bd141ed70e30f476eaa37a17a526bc8705024192d6"
+connectivity = "lib/CorePotts/src/components/merks_local_connectivity.jl"
+connectivity_sha256 = "4fc59682bec496cd0a65f4ab6771515783786a3a60eadf5210f771e40f0fcb1e"
+assembly = "lib/CorePotts/src/coupled/merks2006.jl"
+assembly_sha256 = "b10dc1399abcb0e2033988cf2cbefd63f96fc97829544a442ee4593a2c5e21bd"
+tests = "lib/CorePotts/test/test_phase16_merks2006.jl"
+tests_sha256 = "e6f6d21f76608afd54a6bfcccd8479485aaebd1bbedcc28ea12a4955cebf7326"
+managed_field_process = "lib/ProcessBigraphs/src/managed_field_process.jl"
+managed_field_process_sha256 = "e9aa484fd9d730dff04afab34bce9680871d55d3bcb73f92686f8e1378eb1f5f"
+
+[open]
+phase16c_trusted_metal = true
+phase16c_trusted_rocm = true
+cnv_scenario38 = true
+phase16_internal_beta = true
+full_merks_analysis = false

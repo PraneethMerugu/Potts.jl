@@ -7,7 +7,7 @@ full_analysis = false
 
 [[models]]
 id = "merks-2006-vasculogenesis"
-status = "specified"
+status = "qualified"
 source = "Merks et al., Developmental Biology 289(1), 44-54 (2006)"
 required_dimension = [500, 500]
 required_field_dimension = [500, 500]
