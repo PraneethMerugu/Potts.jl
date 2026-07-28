@@ -10,8 +10,20 @@ ancestry.
 using PottsToolkit
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
-    (10, 10); target_volume = 12, tspan = (0, 4), seed = 33)
+# The exact-continuation contract starts from a fully explicit public problem.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+model = PottsModel(medium, cell, Volume(cell => (target = 12, strength = 2)))
+mask = falses(10, 10)
+mask[4:6, 4:7] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain(size(mask)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 4),
+    seed = 33,
+)
 algorithm = SequentialCPM(temperature = 2.0f0)
 uninterrupted = CorePotts.init(
     problem, algorithm; save_start = false, save_end = false)

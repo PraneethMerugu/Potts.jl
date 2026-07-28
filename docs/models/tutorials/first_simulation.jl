@@ -2,25 +2,46 @@ using PottsToolkit
 using MakiePotts
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
-    (12, 12); target_volume = 16, tspan = (0, 2), seed = 11)
+# Declare the biological vocabulary and the two energetic mechanisms.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+target_volume = 36
+model = PottsModel(
+    medium,
+    cell,
+    Volume(cell => (target = target_volume, strength = 2)),
+    Adhesion(
+        (medium, medium) => 0,
+        (medium, cell) => 8,
+        (cell, cell) => 0,
+    ),
+)
+
+# Start one cell below its target so the trajectory has something to explain.
+mask = falses(20, 20)
+mask[9:12, 9:12] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain((20, 20)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 30),
+    seed = 11,
+)
+
+# Save host snapshots because analysis and MakiePotts consume explicit saved state.
 solution = CorePotts.solve(
     problem,
-    SequentialCPM(temperature = 2.0f0);
+    SequentialCPM(temperature = 4.0f0);
+    saveat = 5,
     snapshot_policy = CorePotts.HostSnapshotPolicy(),
 )
-first_state = CorePotts.snapshot_state(first(solution.u))
-last_state = CorePotts.snapshot_state(last(solution.u))
-cell_id = only(CorePotts.active_cell_ids(last_state))
-volume_trace = [
-    CorePotts.finite_volume(CorePotts.snapshot_state(saved), cell_id)
-    for saved in solution.u
-]
-frames = MakiePotts.renderframes(solution)
+states = CorePotts.snapshot_state.(solution.u)
+cell_id = only(CorePotts.active_cell_ids(first(states)))
+volume_trace = [CorePotts.finite_volume(state, cell_id) for state in states]
+frames = renderframes(solution)
 
-@assert solution.stats.completed_mcs == 2
-@assert length(volume_trace) == length(solution.t) == length(frames)
-result = (; times = collect(solution.t), volume_trace,
-    initial_volume = CorePotts.finite_volume(first_state, cell_id),
-    final_volume = last(volume_trace), first_frame = first(frames),
-    last_frame = last(frames))
+@assert solution.stats.completed_mcs == 30
+@assert length(frames) == length(solution.t) == length(volume_trace)
+@assert all(>(0), volume_trace)
+result = (; problem, solution, target_volume, volume_trace, frames)

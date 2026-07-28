@@ -2,6 +2,7 @@ using PottsToolkit
 using MakiePotts
 import CorePotts
 
+# Give cycling and retiring cells separate lifecycle rules.
 medium = Medium(:Medium)
 cycling = CellType(:CyclingCell)
 retiring = CellType(:RetiringCell)
@@ -29,6 +30,7 @@ model = PottsModel(
     medium, cycling, retiring, volume, Adhesion(contact_energy),
     growth, division, retirement)
 
+# Start one cell of each type so both lifecycle events are visible.
 labels = zeros(UInt64, 16, 16)
 labels[5:7, 8:9] .= 1
 labels[11:13, 8:9] .= 2
@@ -47,6 +49,7 @@ solution = CorePotts.solve(
     snapshot_policy = CorePotts.HostSnapshotPolicy(),
 )
 
+# Count the full population and the retiring subtype at each saved MCS.
 states = CorePotts.snapshot_state.(solution.u)
 cell_counts = CorePotts.n_cells.(states)
 retiring_counts = [

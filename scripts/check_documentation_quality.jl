@@ -176,6 +176,18 @@ function _validate_pages!(errors, spec)
     required_examples isa Integer && example_count == required_examples ||
         push!(errors,
             "target registers $example_count required examples; expected $required_examples")
+
+    required_animations = Set(String.(
+        get(gate, "required_animations", Any[])))
+    actual_animations = Set(String(page["id"]) for page in pages
+        if page isa AbstractDict &&
+           get(page, "kind", "") == "example" &&
+           get(page, "state", "") == "target" &&
+           get(page, "required", false) === true &&
+           get(page, "visual", "") == "animation")
+    actual_animations == required_animations ||
+        push!(errors,
+            "required animation pages do not match the accepted four-example contract")
 end
 
 function _validate_api_policy!(errors, spec)
@@ -246,9 +258,9 @@ function _validate_evidence_shape!(errors, spec)
         push!(errors, "missing [current_evidence]")
         return
     end
-    score = get(evidence, "rubric_score", nothing)
-    score isa Integer && 0 <= score <= 100 ||
-        push!(errors, "current evidence rubric_score must be an integer from 0 to 100")
+    rubric = get(evidence, "rubric", nothing)
+    rubric isa AbstractDict ||
+        push!(errors, "missing [current_evidence.rubric]")
     for (list_key, map_key) in (
             ("platform_smokes", "platform_evidence"),
             ("task_reviews", "task_review_evidence"))
@@ -523,6 +535,20 @@ function _registered_relative_pages(spec)
     return result
 end
 
+function _visible_canonical_source(canonical::AbstractString, blocks)
+    canonical_lines = filter(!isempty,
+        strip.(split(replace(canonical, "\r\n" => "\n"), '\n')))
+    visible_lines = filter(!isempty,
+        strip.(split(join(blocks, "\n"), '\n')))
+    cursor = firstindex(visible_lines)
+    for line in canonical_lines
+        found = findnext(==(line), visible_lines, cursor)
+        found === nothing && return false
+        cursor = found + 1
+    end
+    return true
+end
+
 function _validate_repository_pages!(errors, spec, root)
     nav_path = joinpath(root, spec["navigation_file"])
     isfile(nav_path) || begin
@@ -592,13 +618,31 @@ function _validate_repository_pages!(errors, spec, root)
                     r"```@example[^\n]*\n(.*?)\n```"s, page_source)
             ]
             canonical = strip(replace(read(source, String), "\r\n" => "\n"))
-            any(block -> occursin(canonical, block), blocks) ||
+            _visible_canonical_source(canonical, blocks) ||
                 push!(errors,
-                    "canonical source is not visible in an evaluated block: $(page["path"])")
+                    "canonical source is not visible in order across evaluated blocks: " *
+                    "$(page["path"])")
+
+            comment_lines = count(line -> startswith(strip(line), "#"),
+                split(canonical, '\n'))
+            minimum_comments = page["id"] == "install-and-verify" ? 0 :
+                kind == "example" ? 3 : 1
+            comment_lines >= minimum_comments ||
+                push!(errors,
+                    "$(page["canonical_source"]) needs at least $minimum_comments " *
+                    "explanatory comments")
+
+            occursin("ReferenceModels.", canonical) &&
+                push!(errors,
+                    "reader-facing canonical source hides model construction behind " *
+                    "ReferenceModels: $(page["canonical_source"])")
 
             if kind == "example" && get(page, "visual", "none") != "none"
                 visible_code = join(blocks, "\n")
-                occursin(r"!\[[^\]]*\]\([^)]+\)", page_source) &&
+                visual_blocks = filter(
+                    block -> occursin(r"\busing\s+CairoMakie\b", block), blocks)
+                visual_code = join(visual_blocks, "\n")
+                occursin(r"!\[[^\]]*\]\([^)]*\.(?:png|jpe?g|gif|svg)\)", page_source) &&
                     push!(errors,
                         "visual example references a custom image: $(page["path"])")
                 occursin(r"\busing\s+MakiePotts\b", visible_code) ||
@@ -613,6 +657,33 @@ function _validate_repository_pages!(errors, spec, root)
                 occursin(r"\b(?:plot|pottsplot!)\s*\(", visible_code) ||
                     push!(errors,
                         "visual example does not execute the MakiePotts recipe: $(page["path"])")
+                heading_count = length(collect(eachmatch(r"^##\s+"m, page_source)))
+                heading_count >= 3 ||
+                    push!(errors,
+                        "visual example needs at least three teaching sections: " *
+                        "$(page["path"])")
+                evidence = _strings(get(page, "visual_evidence", Any[]))
+                if evidence === nothing || isempty(evidence)
+                    push!(errors,
+                        "visual example lacks a page-level visual evidence contract: " *
+                        "$(page["path"])")
+                else
+                    for token in evidence
+                        occursin(token, visual_code) ||
+                            push!(errors,
+                                "visual example does not show required evidence `$token`: " *
+                                "$(page["path"])")
+                    end
+                end
+                if get(page, "visual", "") == "animation"
+                    occursin(r"\brecord_potts\s*\(", visible_code) ||
+                        push!(errors,
+                            "animation example does not call record_potts: $(page["path"])")
+                    occursin(r"!\[[^\]]+\]\([^)]*\.mp4\)", page_source) ||
+                        push!(errors,
+                            "animation example does not embed its generated MP4: " *
+                            "$(page["path"])")
+                end
             end
         end
     end
@@ -643,10 +714,31 @@ end
 function _validate_current_evidence!(errors, spec, root)
     gate = spec["quality_gate"]
     evidence = get(spec, "current_evidence", Dict{String, Any}())
-    score = get(evidence, "rubric_score", 0)
-    score >= gate["minimum_rubric_score"] ||
+    rubric = get(evidence, "rubric", Dict{String, Any}())
+    required_dimensions = (
+        "scientific_accuracy",
+        "build_and_reproducibility",
+        "information_architecture",
+        "beginner_pedagogy",
+        "visual_communication",
+        "example_quality",
+        "api_usability",
+        "showcase_quality",
+    )
+    scores = Int[]
+    for dimension in required_dimensions
+        score = get(rubric, dimension, nothing)
+        score isa Integer && 0 <= score <= 10 || begin
+            push!(errors, "documentation rubric dimension `$dimension` must be an integer 0–10")
+            continue
+        end
+        push!(scores, score)
+    end
+    rubric_score = isempty(scores) ? 0 : 10sum(scores) / length(scores)
+    rubric_score >= gate["minimum_rubric_score"] ||
         push!(errors,
-            "current documentation rubric score $score is below $(gate["minimum_rubric_score"])")
+            "current documentation rubric score $rubric_score is below " *
+            "$(gate["minimum_rubric_score"])")
     platforms = Set(something(
         _strings(get(evidence, "platform_smokes", Any[])), String[]))
     platform_evidence = get(evidence, "platform_evidence", Dict{String, Any}())

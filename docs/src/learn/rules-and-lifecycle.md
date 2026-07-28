@@ -28,16 +28,27 @@ generation-aware, so analysis must join longitudinal records on both ID and gene
 using PottsToolkit
 import CorePotts
 
-model = PottsToolkit.ReferenceModels.monolayer_growth_model(
-    target_volume = 6,
-    division_target = 8,
-    growth_rate = 1,
+# Growth updates a property; division reads that property through an explicit trigger.
+medium = Medium(:Medium)
+cell = CellType(:CyclingCell)
+volume = Volume(cell => (target = 6, strength = 2))
+model = PottsModel(
+    medium,
+    cell,
+    volume,
+    Growth(volume, cell; rate = 1),
+    Division(
+        cell;
+        geometry = RandomOrientationSplit(),
+        trigger = PropertyAtLeast(:volume__target, Float32(8)),
+    ),
 )
-problem = PottsToolkit.ReferenceModels.monolayer_growth_problem(
-    (12, 12);
-    target_volume = 6,
-    division_target = 8,
-    growth_rate = 1,
+mask = falses(12, 12)
+mask[5:7, 5:6] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain((12, 12)),
+    Layout(Place(cell, mask; identity = 1));
     capacity = 8,
     tspan = (0, 2),
     seed = 12,

@@ -9,8 +9,20 @@ and scientific evidence are separate questions.
 using PottsToolkit
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
-    (10, 10); target_volume = 12, tspan = (0, 1), seed = 19)
+# Preflight the exact model–algorithm pair before measuring or changing backends.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+model = PottsModel(medium, cell, Volume(cell => (target = 12, strength = 2)))
+mask = falses(10, 10)
+mask[4:6, 4:7] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain(size(mask)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 1),
+    seed = 19,
+)
 algorithm = SequentialCPM(temperature = 2.0f0)
 report = backend_report(problem, algorithm)
 profile = CorePotts.algorithm_guarantees(algorithm)

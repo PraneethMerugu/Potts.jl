@@ -1,5 +1,6 @@
 using PottsToolkit
 
+# Keep biological declarations independent of lattice and run configuration.
 medium = Medium(:medium)
 first_population = CellType(:first_population)
 second_population = CellType(:second_population)

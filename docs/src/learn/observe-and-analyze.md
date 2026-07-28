@@ -12,6 +12,7 @@ properties, and lattice ownership. Combine them in `ObservationSet` and derive a
 using PottsToolkit
 import CorePotts
 
+# Declare only the scientific observations this analysis will consume.
 medium = Medium(:medium)
 cell = CellType(:cell)
 volumes = CellVolume()

@@ -2,6 +2,7 @@ using PottsToolkit
 using MakiePotts
 import CorePotts
 
+# The cell mechanics are ordinary; the domain carries the obstacle contract.
 medium = Medium(:medium)
 cell = CellType(:cell)
 model = PottsModel(
@@ -14,6 +15,7 @@ model = PottsModel(
         (cell, cell) => 2,
     ),
 )
+# Obstacles are immutable medium-owned sites inside the rectangular lattice.
 obstacles = Tuple(
     CartesianIndex(8, y) => CorePotts.MediumOwner(1) for y in 4:9)
 domain = CartesianDomain(
@@ -26,6 +28,7 @@ domain = CartesianDomain(
 )
 mask = falses(14, 14)
 mask[4:5, 6:8] .= true
+# Place the cell to the left of the wall and save the final host state.
 problem = PottsProblem(
     model,
     domain,

@@ -66,7 +66,7 @@ makedocs(
     authors = "Praneeth Merugu",
     modules = [CorePotts, PottsToolkit, MakiePotts],
     format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing) == "true",
+        prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
         repolink = "https://github.com/PraneethMerugu/Potts.jl",
         edit_link = "main",
@@ -76,6 +76,7 @@ makedocs(
         # example default. Keep it vector-sharp instead of warning and falling back
         # to a raster representation.
         example_size_threshold = 512 * 2^10,
+        assets = ["assets/docs.css"],
     ),
     doctest = true,
     linkcheck = get(ENV, "POTTS_DOCS_LINKCHECK", "false") == "true",

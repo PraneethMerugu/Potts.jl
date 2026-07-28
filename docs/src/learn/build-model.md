@@ -17,6 +17,7 @@ produces a canonical model; declaration order does not change the semantic finge
 ```@example build-model
 using PottsToolkit
 
+# Keep biological declarations independent of lattice and run configuration.
 medium = Medium(:medium)
 first_population = CellType(:first_population)
 second_population = CellType(:second_population)

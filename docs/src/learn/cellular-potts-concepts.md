@@ -35,8 +35,20 @@ documented normalization. An MCS is not automatically seconds, minutes, or cell-
 using PottsToolkit
 import CorePotts
 
-problem = PottsToolkit.ReferenceModels.single_cell_fluctuation_problem(
-    (8, 8); target_volume = 12, tspan = (0, 1), seed = 7)
+# A cell is an extended set of owned sites, not a point particle.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+model = PottsModel(medium, cell, Volume(cell => (target = 12, strength = 2)))
+mask = falses(8, 8)
+mask[3:5, 3:6] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain(size(mask)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 1),
+    seed = 7,
+)
 algorithm = SequentialCPM(temperature = 2.0f0)
 profile = CorePotts.algorithm_guarantees(algorithm)
 state = problem.u0
