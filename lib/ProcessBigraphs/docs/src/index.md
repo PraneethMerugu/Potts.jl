@@ -4,8 +4,9 @@
 CurrentModule = ProcessBigraphs
 ```
 
-<div class="pb-hero">
-<div>
+```@raw html
+<div class="pb-hero"><div>
+```
 
 ## Compose mechanisms. Keep authority explicit.
 
@@ -18,13 +19,15 @@ work with solver and engine adapters.
 [Understand the guarantees](@ref architecture-concept) ·
 [Read the API by task](@ref user-authoring-api)
 
-</div>
-<div>
+```@raw html
+</div><div>
+```
 
 ![Authoring lowers to a canonical structure and execution plan; the runtime schedules an engine adapter and publishes observable state.](assets/architecture.svg)
 
-</div>
-</div>
+```@raw html
+</div></div>
+```
 
 > **Support level — qualified unpublished internal beta.** This manual
 > documents the admitted ProcessBigraphs 0.6.0 boundary on this repository
@@ -33,8 +36,9 @@ work with solver and engine adapters.
 
 ## Choose a route
 
-<div class="pb-grid">
-<div class="pb-card">
+```@raw html
+<div class="pb-grid"><div class="pb-card">
+```
 
 ### Compose a model
 
@@ -42,24 +46,27 @@ Start with [the mental model](@ref mental-model), then build
 [a multirate composite](@ref first-multirate-composite). Every connection and
 schedule stays visible.
 
-</div>
-<div class="pb-card">
+```@raw html
+</div><div class="pb-card">
+```
 
 ### Integrate an engine
 
 Learn the [adapter boundary](@ref engines-and-compute) and implement the
 [public extension protocol](@ref extension-experimental-api).
 
-</div>
-<div class="pb-card">
+```@raw html
+</div><div class="pb-card">
+```
 
 ### Reproduce a run
 
 Follow [RNG, observation, checkpoints, and replay](@ref rng-observation-persistence),
 then audit the source-bounded [scientific case studies](@ref case-studies-index).
 
-</div>
-</div>
+```@raw html
+</div></div>
+```
 
 ## What the package owns
 

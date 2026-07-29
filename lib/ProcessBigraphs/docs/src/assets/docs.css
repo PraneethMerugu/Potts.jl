@@ -12,6 +12,33 @@ body.pb-beta-visible {
   padding-top: 2.65rem;
 }
 
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+pre,
+code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+.pb-skip-link {
+  position: fixed;
+  left: 1rem;
+  top: .5rem;
+  z-index: 1200;
+  padding: .65rem .9rem;
+  border-radius: .3rem;
+  color: #fff;
+  background: #123b49;
+  transform: translateY(-180%);
+}
+
+.pb-skip-link:focus {
+  transform: translateY(0);
+}
+
 .pb-beta-banner {
   position: fixed;
   inset: 0 0 auto 0;
@@ -105,6 +132,126 @@ body.pb-beta-visible {
   outline-offset: .12rem;
 }
 
+pre .copy-button {
+  opacity: 1;
+  width: auto;
+  min-width: 3.7rem;
+  padding: .45rem .65rem;
+  border: 1px solid #49656f;
+  border-radius: 0 0 0 .3rem;
+  color: #123b49;
+  background: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+pre .copy-button:hover,
+pre .copy-button:focus {
+  opacity: 1;
+  color: #082a35;
+  background: #eaf6f8;
+}
+
+.fa-bars::before {
+  content: "☰";
+}
+
+.fa-gear::before {
+  content: "⚙";
+}
+
+.fa-chevron-up::before {
+  content: "⌃";
+}
+
+.fa-chevron-down::before {
+  content: "⌄";
+}
+
+.fa-brands::before {
+  content: "GitHub";
+  font-family: system-ui, sans-serif;
+  font-size: .85rem;
+}
+
+.pb-search-modal[hidden] {
+  display: none;
+}
+
+.pb-search-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: start center;
+  padding: min(8vh, 4rem) 1rem 1rem;
+}
+
+.pb-search-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #0009;
+}
+
+.pb-search-card {
+  position: relative;
+  width: min(48rem, 100%);
+  max-height: 82vh;
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: .65rem;
+  color: #1d2528;
+  background: #fff;
+  box-shadow: 0 1rem 3rem #0007;
+}
+
+.pb-search-card header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pb-search-card h2 {
+  margin: 0;
+}
+
+.pb-search-card input {
+  width: 100%;
+  margin: .4rem 0;
+  padding: .7rem;
+  border: 2px solid #68777d;
+  border-radius: .35rem;
+  font: inherit;
+}
+
+.pb-search-card button {
+  padding: .5rem .75rem;
+  border: 2px solid #35535e;
+  border-radius: .35rem;
+  color: #123b49;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.pb-search-card li {
+  margin: .75rem 0;
+}
+
+.pb-search-card li p {
+  margin: .2rem 0 0;
+  color: #46555b;
+  font-size: .9rem;
+}
+
+.pb-search-card a {
+  color: #005a78;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 @media (prefers-color-scheme: light) {
   .content .hljs-literal {
     color: #3f6f32 !important;
@@ -123,6 +270,26 @@ body.pb-beta-visible {
   }
   .pb-result {
     background: #18341a;
+  }
+  .pb-search-card {
+    color: #eef6f7;
+    background: #172328;
+  }
+  .pb-search-card li p {
+    color: #c8d4d7;
+  }
+  .pb-search-card a {
+    color: #8bdcf2;
+  }
+  pre .copy-button {
+    color: #f2fbfd;
+    background: #193a45;
+    border-color: #92bdc9;
+  }
+  pre .copy-button:hover,
+  pre .copy-button:focus {
+    color: #fff;
+    background: #245462;
   }
 }
 

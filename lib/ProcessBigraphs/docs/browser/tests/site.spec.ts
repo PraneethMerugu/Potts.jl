@@ -14,7 +14,11 @@ const sourcePaths = [...contract.matchAll(
   /^path = "lib\/ProcessBigraphs\/docs\/src\/(.+)\.md"$/gm,
 )].map((match) => match[1]);
 const curatedRoutes = sourcePaths.map((source) =>
-  source === "index" ? "/" : `/${source}/`
+  source === "index"
+    ? "/"
+    : source.endsWith("/index")
+      ? `/${source.slice(0, -"/index".length)}/`
+      : `/${source}/`
 );
 
 const viewports = [
@@ -38,6 +42,13 @@ test.describe("all curated routes", () => {
     }) => {
       const consoleDefects: string[] = [];
       const requestDefects: string[] = [];
+      page.on("request", (request) => {
+        if (new URL(request.url()).origin !== "http://127.0.0.1:4173") {
+          requestDefects.push(
+            `external runtime request: ${request.method()} ${request.url()}`,
+          );
+        }
+      });
       page.on("console", (message) => {
         if (message.type() === "error" || message.type() === "warning") {
           consoleDefects.push(`${message.type()}: ${message.text()}`);
@@ -48,6 +59,18 @@ test.describe("all curated routes", () => {
           requestDefects.push(
             `${request.method()} ${request.url()}: ${
               request.failure()?.errorText ?? "unknown failure"
+            }`,
+          );
+        }
+      });
+      page.on("response", (response) => {
+        if (
+          new URL(response.url()).origin === "http://127.0.0.1:4173" &&
+          response.status() >= 400
+        ) {
+          requestDefects.push(
+            `${response.request().method()} ${response.url()}: ${
+              response.status()
             }`,
           );
         }
@@ -89,7 +112,10 @@ test.describe("terminal route matrix", () => {
           });
           expect(overflow).toBeLessThanOrEqual(1);
 
-          const images = page.locator("main img");
+          const article = page.locator("#documenter-page");
+          await expect(article).toBeVisible();
+
+          const images = article.locator("img");
           for (let index = 0; index < await images.count(); index += 1) {
             const image = images.nth(index);
             await expect(image).toHaveAttribute("alt", /.+/);
@@ -108,10 +134,11 @@ test.describe("terminal route matrix", () => {
             expect(["auto", "scroll"]).toContain(overflowMode);
           }
 
-          expect(await page.locator("main").innerText()).not.toContain(
+          const articleText = await article.innerText();
+          expect(articleText).not.toContain(
             "ReferenceModels.Wortel2021.model(",
           );
-          expect(await page.locator("main").innerText()).not.toContain(
+          expect(articleText).not.toContain(
             "ReferenceModels.Merks2006.model(",
           );
         });
@@ -126,14 +153,28 @@ test("complete source, navigation, copy control, and claim boundaries", async ({
   await page.goto("/case-studies/wortel-2021/", {
     waitUntil: "networkidle",
   });
-  await expect(page.getByText("Complete executed source")).toBeVisible();
-  await expect(page.getByText("What this does not establish")).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Complete executed source",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "What this does not establish",
+    exact: true,
+  })).toBeVisible();
   await expect(page.getByText("51-parameter", { exact: false })).toBeVisible();
   await expect(page.locator("pre").first()).toContainText(
     "potts_model = PottsModel(",
   );
   await expect(page.locator("pre").first()).toContainText(
     "composite_model = PB.compose(",
+  );
+  await expect(page.locator("video")).toHaveAttribute(
+    "aria-label",
+    /Wortel/,
+  );
+  await expect(page.locator("video source")).toHaveAttribute(
+    "src",
+    /wortel-animation\.mp4$/,
   );
 
   const copyButton = page.locator(
@@ -151,6 +192,11 @@ test("complete source, navigation, copy control, and claim boundaries", async ({
   await expect(page.locator("pre").first()).toContainText(
     "field_process = PB.managed_field_process(",
   );
+  await expect(page.locator("video")).toHaveAttribute("aria-label", /Merks/);
+  await expect(page.locator("video source")).toHaveAttribute(
+    "src",
+    /merks-animation\.mp4$/,
+  );
 
   await page.goto("/examples/custom-engine-adapter/", {
     waitUntil: "networkidle",
@@ -161,19 +207,24 @@ test("complete source, navigation, copy control, and claim boundaries", async ({
   await expect(page.locator("pre").first()).toContainText("discard_candidate!");
 });
 
-test("keyboard focus, skip link, and search dismissal", async ({ page }) => {
+test("keyboard focus, skip link, and search dismissal", async ({
+  page,
+  browserName,
+}) => {
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.keyboard.press("Tab");
-  const focused = page.locator(":focus");
-  await expect(focused).toBeVisible();
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  await expect(page.locator(".pb-skip-link")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#documenter-page")).toBeFocused();
 
-  const search = page.locator(
-    "input#documenter-search-query, input[aria-label*='Search']",
-  ).first();
-  if (await search.count()) {
-    await search.focus();
-    await search.fill("checkpoint");
-    await page.keyboard.press("Escape");
-    await expect(search).toBeVisible();
-  }
+  const trigger = page.locator("#documenter-search-query");
+  await trigger.click();
+  const search = page.locator("#pb-search-input");
+  await expect(search).toBeFocused();
+  await search.fill("checkpoint");
+  await expect(page.locator("#pb-search-results a").first()).toBeVisible();
+  await expect(page.locator("#pb-search-status")).toContainText("result");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#pb-search-modal")).toBeHidden();
+  await expect(trigger).toBeFocused();
 });

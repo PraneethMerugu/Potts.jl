@@ -15,7 +15,11 @@ makedocs(
         edit_link = "main",
         size_threshold = nothing,
         size_threshold_warn = nothing,
-        assets = ["assets/docs.css", "assets/beta.js"],
+        assets = [
+            "assets/docs.css",
+            "assets/beta.js",
+            "assets/offline.js",
+        ],
     ),
     doctest = true,
     warnonly = false,
@@ -70,6 +74,39 @@ makedocs(
         ],
     ],
 )
+
+function enforce_offline_runtime(build_root::AbstractString)
+    external_stylesheet =
+        r"<link href=\"https://[^\"]+\" rel=\"stylesheet\" type=\"text/css\"/>"
+    external_script = r"<script src=\"https://[^\"]+\"[^>]*></script>"
+    external_script_asset = r"<script[^>]+src=\"https://"
+    external_stylesheet_asset =
+        r"<link[^>]+href=\"https://[^\"]+\"[^>]+rel=\"stylesheet\""
+    inline_favicon =
+        "<link rel=\"icon\" href=\"data:image/svg+xml," *
+        "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E" *
+        "%3Crect width='64' height='64' rx='12' fill='%23176b87'/%3E" *
+        "%3Cpath d='M18 48V16h17c9 0 15 5 15 13s-6 13-15 13h-8v6zm9-14h8c4 0 6-2 6-5s-2-5-6-5h-8z' fill='white'/%3E" *
+        "%3C/svg%3E\">"
+
+    for (directory, _, files) in walkdir(build_root)
+        for file in files
+            endswith(file, ".html") || continue
+            path = joinpath(directory, file)
+            source = read(path, String)
+            source = replace(source, external_stylesheet => "")
+            source = replace(source, external_script => "")
+            occursin("rel=\"icon\"", source) ||
+                (source = replace(source, "</head>" => inline_favicon * "</head>"))
+            (occursin(external_script_asset, source) ||
+             occursin(external_stylesheet_asset, source)) &&
+                error("rendered documentation retains an external runtime asset: $path")
+            write(path, source)
+        end
+    end
+end
+
+enforce_offline_runtime(joinpath(DOCS_ROOT, "build"))
 
 const DEPLOY_DOCS =
     get(ENV, "PROCESS_BIGRAPHS_DEPLOY_DOCS", "false") == "true"
