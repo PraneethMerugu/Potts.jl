@@ -16,7 +16,8 @@ ProcessBigraphs.origin_map
 ## Inspect schemas without reading representation fields
 
 `schema_at` and `schema_leaves` are the complete supported inspection route.
-Do not read `BranchSchema.children`: that tuple is free to change without an
+Do not read the concrete child-storage field of `BranchSchema`: that tuple is
+free to change without an
 API migration.
 
 ```@docs

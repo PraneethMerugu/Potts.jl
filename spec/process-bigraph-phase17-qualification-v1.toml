@@ -129,57 +129,57 @@ evidence = ["design/evidence/phase-17/phase17b-public-boundary-v1.toml"]
 id = "P17-C01"
 subgate = "17.C"
 title = "ReferenceModels split into model-family ownership"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C02"
 subgate = "17.C"
 title = "Reusable Wortel 2021 semantic model v1"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C03"
 subgate = "17.C"
 title = "Wortel facade-to-frozen-oracle equivalence"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C04"
 subgate = "17.C"
 title = "Reusable Merks 2006 semantic model v2"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C05"
 subgate = "17.C"
 title = "Merks v1-to-v2 differential and canonical 500x500 preservation"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C06"
 subgate = "17.C"
 title = "Model lifecycle build, run, observe, checkpoint, and restore"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C07"
 subgate = "17.C"
 title = "Compatibility shims and explicit persistence migration"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-C08"
 subgate = "17.C"
 title = "Zero internal API references in canonical models"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 
 [[requirements]]
 id = "P17-D01"

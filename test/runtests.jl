@@ -11,6 +11,7 @@ using CorePotts
     include("test_component_inventory.jl")
     include("test_authoring_macro_contract.jl")
     include("test_tiled_authoring.jl")
+    include("test_reference_model_families.jl")
     include("test_contract_versions.jl")
     include("test_package_quality.jl")
     include("test_generic_model_fragments.jl")

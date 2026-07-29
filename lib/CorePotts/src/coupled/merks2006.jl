@@ -1,3 +1,8 @@
+# Phase 17 retains this semantic-v1 implementation as compatibility and
+# historical checkpoint authority. The canonical semantic-v2 scientific model
+# is owned downstream by `PottsToolkit.ReferenceModels.Merks2006`; CorePotts
+# continues to own only the generic mechanisms used by both generations.
+
 const MERKS_2006_ASSEMBLY_VERSION =
     "merks-vasculogenesis-reference-assembly-v1"
 

@@ -147,6 +147,17 @@ function _declaration_report(component::PreserveConnectivity)
         CorePotts.ScientificCapabilities())
 end
 
+function _declaration_report(component::LocalConnectivity)
+    return DeclarationReport(component.name, :constraint, (), (),
+        (:reject_local_fragmenting_copy,), (), (:MerksLocalConnectivityConstraint,),
+        (
+            scope=:copy_neighborhood,
+            neighborhood=:clockwise_moore_2d,
+            two_cell_exception=true,
+        ),
+        CorePotts.ScientificCapabilities(dimensions=(2,)))
+end
+
 function _declaration_report(component::Adhesion)
     members = Tuple(item for entry in component.law.values
         for item in (entry.key.left, entry.key.right))

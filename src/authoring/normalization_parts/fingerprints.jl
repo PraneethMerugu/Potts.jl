@@ -154,6 +154,7 @@ _canonical_write(io::IO, value::BoundaryConstraint) = _canonical_fields(io, valu
 _canonical_write(io::IO, value::FluctuatingBoundaryConstraint) =
     _canonical_fields(io, value)
 _canonical_write(io::IO, value::PreserveConnectivity) = _canonical_fields(io, value)
+_canonical_write(io::IO, value::LocalConnectivity) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::Adhesion) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::PrescribedField) = _canonical_fields(io, value)
 _canonical_write(io::IO, value::Chemotaxis) = _canonical_fields(io, value)

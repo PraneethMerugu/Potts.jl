@@ -247,6 +247,12 @@ function _lower_component(::PreserveConnectivity, context::_LoweringContext)
         (CorePotts.required_properties(core),), ())
 end
 
+function _lower_component(::LocalConnectivity, context::_LoweringContext)
+    core = CorePotts.MerksLocalConnectivityConstraint()
+    return _LoweredComponents((), (), (core,), (), (), (),
+        (CorePotts.required_properties(core),), ())
+end
+
 function _biological_index(context::_LoweringContext, value::AbstractBiologicalType)
     index = findfirst(==(value), (context.cell_types..., context.media...))
     index === nothing && throw(ArgumentError("undeclared biological identity $value"))

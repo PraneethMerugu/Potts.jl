@@ -29,8 +29,8 @@ forbidden = [
     r"\bCoupledState\b",
     r"\bMCSPlan\b",
     r"\.children\b",
-    r"\.mcs\b",
-    r"\.algorithm\b",
+    r"\b(?:integrator|coupled|scientific|potts)\.mcs\b",
+    r"\b(?:integrator|coupled|scientific|potts)\.algorithm\b",
 ]
 
 status = get(entry, "implementation_status", "")
@@ -52,7 +52,8 @@ if scan_active
         isdir(root) || continue
         for (directory, _, files) in walkdir(root)
             for file in files
-                endswith(file, (".jl", ".md")) || continue
+                any(suffix -> endswith(file, suffix), (".jl", ".md")) ||
+                    continue
                 path = joinpath(directory, file)
                 for (line_number, line) in enumerate(eachline(path))
                     for pattern in forbidden

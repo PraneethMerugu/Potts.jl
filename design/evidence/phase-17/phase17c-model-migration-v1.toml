@@ -1,0 +1,66 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase17c-model-migration-v1"
+phase = "17.C"
+status = "qualified"
+recorded_at = "2026-07-29"
+
+[source_ownership]
+reference_models_split = true
+canonical_module = "PottsToolkit.ReferenceModels"
+wortel_family = "PottsToolkit.ReferenceModels.Wortel2021"
+merks_family = "PottsToolkit.ReferenceModels.Merks2006"
+corepotts_merks_v1_retained_as_compatibility_authority = true
+pottstoolkit_direct_process_bigraphs_dependency = true
+
+[wortel]
+semantic_model_version = 1
+named_profiles = ["canonical", "reduced_cpu"]
+constructor_kinds = [
+    "model",
+    "problem",
+    "composite",
+    "observation_plan",
+    "profile",
+]
+act_topology_directions = 8
+act_maximum = 10.0
+act_strength = 20.0
+frozen_bounded_oracle_fingerprint = "70fb3041bbf4585f17452453a7c82a8650572f4ae0ce6c4379bce0a6231fc61b"
+exact_checkpoint_continuation = true
+focused_tests = 9
+reduced_profile_warm_seconds = 0.055079208
+reduced_profile_warm_budget_seconds = 30
+
+[merks]
+semantic_model_version = 2
+named_profiles = ["canonical_500x500", "reduced_docs_cpu"]
+constructor_kinds = [
+    "model",
+    "problem",
+    "composite",
+    "observation_plan",
+    "profile",
+]
+canonical_dimensions = [500, 500]
+canonical_cells = 282
+canonical_occupied_sites = 28200
+managed_field_constructor = true
+public_sciml_lifecycle = true
+v1_to_v2_differential_registry = true
+v1_reader_retained = true
+silent_v1_as_v2_restore_rejected = true
+exact_process_bigraph_continuation = true
+focused_tests = 8
+reduced_profile_warm_seconds = 0.696702584
+reduced_profile_warm_budget_seconds = 60
+
+[qualification]
+family_profile_tests = 17
+focused_model_tests = 34
+pottstoolkit_full_tests = 768
+pottstoolkit_full_test_passed = true
+specification_checker_passed = true
+api_inventory_checker_passed = true
+api_inventory_mutation_tests_passed = 4
+canonical_internal_api_violations = 0
+git_diff_check_passed = true

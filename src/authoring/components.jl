@@ -244,6 +244,23 @@ PreserveConnectivity(; name::Symbol = :connectivity,
 
 semantic_identity(component::PreserveConnectivity) = component.name
 
+"""
+Eight-neighbor local connectedness test used by lattice-vascular models.
+
+Unlike [`PreserveConnectivity`](@ref), this is the source-bounded local
+connectivity rule: it rejects a fragmenting copy unless the donor
+neighborhood contains exactly two distinct finite-cell identities.
+"""
+struct LocalConnectivity
+    name::SemanticName
+end
+
+LocalConnectivity(; name::Symbol=:local_connectivity,
+    namespace::Namespace=Namespace()) =
+    LocalConnectivity(SemanticName(name; namespace))
+
+semantic_identity(component::LocalConnectivity) = component.name
+
 """Unordered contact/adhesion Hamiltonian declaration."""
 struct Adhesion{T <: AbstractFloat}
     name::SemanticName

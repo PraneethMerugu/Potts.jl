@@ -435,6 +435,11 @@ function _scope_declaration(component::PreserveConnectivity,
     return PreserveConnectivity(_mapped_identity(mapping, component.name))
 end
 
+function _scope_declaration(component::LocalConnectivity,
+        fragment::ModelFragment, mapping)
+    return LocalConnectivity(_mapped_identity(mapping, component.name))
+end
+
 function _scope_declaration(component::Adhesion{T},
         fragment::ModelFragment, mapping) where {T}
     entries = Tuple(Binding{PairIdentity, T}(

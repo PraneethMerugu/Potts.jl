@@ -13,7 +13,7 @@ const RESULT_EVIDENCE_SCHEMA_VERSION =
 
 include("compatibility.jl")
 include("authoring/Authoring.jl")
-include("reference_models.jl")
+include("reference_models/ReferenceModels.jl")
 
 using .Authoring: Namespace, SemanticName, AbstractBiologicalType, CellType, Medium,
                   AbstractFragmentRole, CellRole, FieldRole,
@@ -28,7 +28,8 @@ using .Authoring: Namespace, SemanticName, AbstractBiologicalType, CellType, Med
                   VolumeParameters, VolumeConstraint, FluctuatingVolumeConstraint,
                   ElongationParameters, Elongation,
                   BoundaryParameters, BoundaryConstraint, FluctuatingBoundaryConstraint,
-                  Adhesion, PreserveConnectivity, PrescribedField, Chemotaxis,
+                  Adhesion, PreserveConnectivity, LocalConnectivity,
+                  PrescribedField, Chemotaxis,
                   PropertyUpdate, StochasticPropertyUpdate, Growth, Transition,
                   Division, ShrinkDeath, ImmediateDeath, NamedCoreComponent,
                   ModelFragment, bind, PottsModel, NormalizedModel, add, remove, replace,
@@ -163,7 +164,7 @@ export CellParameter, ModelParameter
 export VolumeParameters, VolumeConstraint, FluctuatingVolumeConstraint
 export ElongationParameters, Elongation
 export BoundaryParameters, BoundaryConstraint, FluctuatingBoundaryConstraint
-export Adhesion, PreserveConnectivity, PrescribedField, Chemotaxis
+export Adhesion, PreserveConnectivity, LocalConnectivity, PrescribedField, Chemotaxis
 export PropertyUpdate, StochasticPropertyUpdate, Growth, Transition
 export Division, ShrinkDeath, ImmediateDeath, NamedCoreComponent
 export ModelFragment, bind, PottsModel, NormalizedModel
