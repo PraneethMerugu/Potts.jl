@@ -824,13 +824,13 @@ function compile_composite(model::CanonicalModel)
         length(_rows(model.structure, :Composite)) != 1 ||
         !isempty(_rows(model.structure, :Endpoint)) ||
         !isempty(_rows(model.structure, :Junction))
-    phase15c_plan = !isempty(normalized.iteration_regions) ||
+    requires_runtime_identity = !isempty(normalized.iteration_regions) ||
         any(entry -> entry.declaration.schedule isa AdaptiveSchedule,
             process_entries) ||
         any(entry -> any(port -> port.direction === :input &&
                 port.interval_behavior !== :event_updated,
             ports(entry.declaration.law)), process_entries)
-    fingerprint = if phase15c_plan
+    fingerprint = if requires_runtime_identity
         canonical_fingerprint((
             has_open_structure ? :open_static_composite_v2 :
                 :static_composite_v2,

@@ -2,7 +2,7 @@ using ProcessBigraphs
 using TOML
 
 length(ARGS) == 2 || error("usage: production_driver.jl FIXTURE OUTPUT")
-include(joinpath(@__DIR__, "..", "phase15c", "fixtures.jl"))
+include(joinpath(@__DIR__, "..", "fixtures", "serial_runtime.jl"))
 
 fixture = TOML.parsefile(ARGS[1])
 scale = TimeScale(1)

@@ -5,7 +5,7 @@ multirate process-bigraph runtime. It is incubating inside the Potts.jl
 monorepo and is not yet a published package or a complete Process-Bigraph 2.0
 implementation.
 
-Phase 14.PB0 provides independently testable serial foundations:
+The package provides independently testable serial foundations:
 
 - canonical typed hierarchical paths and deterministic encodings;
 - structural leaf/branch schemas and logically immutable committed snapshots;
@@ -16,20 +16,18 @@ Phase 14.PB0 provides independently testable serial foundations:
 - a bounded imminent-event microfixture runner; and
 - settled-boundary in-memory checkpoint/replay.
 
-Phase 15.A implements the first bounded AlgebraicJulia slice. `ACSets.jl` 0.2.29 and `Catlab.jl`
-0.17.6 are direct dependencies, and one versioned `ProcessBigraphACSet` is the canonical structural
-authority. The ordinary Julia `compose` builder produces an immutable `CompositeModel`, which
-lowers deterministically through private implementation records to the canonical ACSet. Stable
-semantic identities, rather than ACSet row
-numbers or declaration order, determine fingerprints and compiled provenance.
+`ACSets.jl` 0.2.29, `Catlab.jl` 0.17.6, and `AlgebraicRewriting.jl` are direct dependencies.
+One versioned `ProcessBigraphACSet` is the canonical structural authority. The ordinary Julia
+`compose` builder produces an immutable `CompositeModel`, which lowers deterministically through
+private implementation records to that canonical ACSet. Stable semantic identities, rather than
+ACSet row numbers or declaration order, determine fingerprints and compiled provenance.
 
 Validated authoring models compile into a frozen `StructuralEpoch` and an immutable indexed
 `ExecutionPlan`. The serial runtime and checkpoint paths consume that plan and do not traverse the
 ACSet or retain the authoring declaration or private `StaticComposite` IR as a second authority.
-The Phase 14.PB0 model,
-initial-state, final-state, and trace baselines remain exact.
+The frozen model, initial-state, final-state, and trace baselines remain exact.
 
-Phase 15.B adds immutable open composition without creating a second runtime authority:
+Immutable open composition does not create a second runtime authority:
 
 - selected typed stores become `import`, `export`, or `bidirectional` endpoints;
 - reusable definitions mount under explicit namespace keys with distinct instance identities;
@@ -46,8 +44,7 @@ persistence, residency, and endpoint transfer contracts must match exactly; no s
 conversion is inferred. Runtime and checkpoint paths still consume only the frozen epoch and
 indexed plan.
 
-Phase 15.C now qualifies the complete immutable-topology serial internal alpha frozen by Decision
-0038 and the completed 64-choice owner interview:
+The immutable-topology serial runtime qualifies:
 
 - exact fixed and adaptive scheduling with explicit exact/stop-prior horizons;
 - changed-input reactive layers and named bounded or convergent iteration;
@@ -58,26 +55,19 @@ Phase 15.C now qualifies the complete immutable-topology serial internal alpha f
 - deterministic fail-stop transactions covering all eight registered publication stages; and
 - a canonical, integrity-checked v2 logical checkpoint envelope with exact compatible restart.
 
-Qualification passes 440 Phase 15.C assertions, 309 retained historical assertions,
-nine Aqua checks, an independent stdlib-only 22-row specification oracle, five mutation targets,
-eight failure stages, six authoring routes, eight fixtures, and 33 restart cuts. This implementation
-record also includes four checked hot-path/performance guardrails, including bounded allocation and
-event-throughput measurements without a fastest-runtime claim. Implementation PR #24 passed
-Required CI and its squash-merge tree exactly matches the qualified tree. The metadata-only
-closure attestation promotes package version `0.4.0` with `internal_alpha = true`;
-`public_release = false` remains in force.
+Current qualification covers the package suites, an independent stdlib-only 22-row specification
+oracle, mutation targets, all registered failure stages, six authoring routes, restart cuts, and
+frozen performance and allocation guardrails. Atomic structural transactions, solver-neutral
+engine handoff, bounded Merks/CNV assemblies, and typed high-level authoring are included.
 
-Phase 16 adds `AlgebraicRewriting.jl` for ProcessBigraphs-owned atomic structural transactions,
-solver-neutral engine handoff, bounded Merks/CNV assemblies, and a typed high-level authoring
-layer. The authoring lifecycle is `CompositeModel` → `LoweredModel` → `ExecutionPlan` → mutable
-run session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
+The authoring lifecycle is `CompositeModel` → `LoweredModel` → `ExecutionPlan` → mutable run
+session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
 control of how their authorized heavy computation occurs.
 
-Phase 16 is qualified as unpublished ProcessBigraphs `0.5.0` internal beta, including exact-source
-CPU, real Metal, and real ROCm native-field evidence. Phase 16.I admits the clean exact-head
-candidate after documentation, clean-resolution, independent-package, integration, and
-frozen-performance qualification. The content-addressed candidate and complete performance report
-are retained in the repository. `internal_beta = true`; `public_release = false` remains mandatory.
+ProcessBigraphs `0.5.1` is the semantic-preserving consolidation candidate for the unpublished
+internal beta. The retained source-addressed CPU, real Metal, and real ROCm claims require
+exact-head requalification before this candidate is qualified. `internal_beta = true`;
+`public_release = false` remains mandatory.
 
 Ordinary models use a small Julia API rather than canonical IR:
 
@@ -104,9 +94,9 @@ canonical conformance, migration, and independent oracle code. Supported semanti
 explicit domain-owned component encoders and decoders; ProcessBigraphs does not serialize closures
 or use a global runtime registry.
 
-Phase 17 will add an `AlgebraicDynamics.jl` weak-dependency extension for suitable scientific
-authoring. ProcessBigraphs remains the sole authority for time, scheduling, numerical state,
-reconciliation, commit, RNG, observation, checkpoints, and replay.
+`AlgebraicDynamics.jl` is not currently a dependency or qualified extension. ProcessBigraphs
+remains the sole authority for time, scheduling, logical state, reconciliation, commit, RNG,
+observation, checkpoints, and replay.
 
 Conformance uses a separate checked Julia specification oracle, source-located derivations, truth
 tables, and property, metamorphic, invariance, failure, and restart tests. Production, oracle, and
@@ -117,19 +107,16 @@ Python.
 The current maturity, limitations, and exact parity pins are recorded in
 [`parity-registry.toml`](parity-registry.toml). Internal contracts, ordinary open-composition
 authoring, and the advanced AlgebraicJulia path are documented in
-[`docs/src/internal.md`](docs/src/internal.md). Start with the
-[Phase 16 internal-beta guide](docs/src/internal-beta.md), then use the
+[`docs/src/architecture.md`](docs/src/architecture.md). Start with the
+[internal-beta guide](docs/src/internal-beta.md), then use the
 [adapter and solver guide](docs/src/adapters-and-solvers.md),
 [failure and persistence guide](docs/src/failure-and-persistence.md), and generated
-[capability matrix](docs/src/phase16-capabilities.md). The bounded Phase 15.B closure is recorded by the
-repository [audit](../../design/audits/process-bigraph-phase15b-open-composition-audit.md) and
-[evidence record](../../design/evidence/process-bigraph-phase15b-evidence-v1.toml). The Phase 15.C
-scope and qualified internal-alpha state are checked from the
-[entry contract](../../spec/process-bigraph-phase15c-entry-v1.toml) and
-[qualification ledger](../../spec/process-bigraph-phase15c-qualification-v1.toml), with closure
-provenance in the [evidence manifest](../../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
-The qualified native CPU/Metal/ROCm lane is content-addressed in the
-[Phase 16.C evidence manifest](../../design/evidence/process-bigraph-phase16c-evidence-v1.toml).
+[capability matrix](docs/src/capabilities.md).
+
+Historical qualification artifacts retain their original milestone-coded paths and identifiers.
+They are indexed by the repository
+[historical artifact index](../../design/evidence/consolidation-naming/historical-artifact-index-v1.toml);
+primary documentation does not use those milestones as the current architecture.
 
 Run the package suite with Julia 1.12.6:
 

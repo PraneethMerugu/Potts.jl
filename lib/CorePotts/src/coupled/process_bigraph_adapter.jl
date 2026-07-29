@@ -142,7 +142,7 @@ function corepotts_native_field_declaration(
     precision = T === Float32 ? :float32 :
         T === Float64 ? :float64 :
         throw(ArgumentError(
-            "the Phase 16 native-field adapter supports Float32 or Float64"))
+            "the native-field adapter supports Float32 or Float64"))
     kinds = unique!(Symbol[
         _process_bigraph_boundary_payload(face).kind
         for axis in adapter.boundaries

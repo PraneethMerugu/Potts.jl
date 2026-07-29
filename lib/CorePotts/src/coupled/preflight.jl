@@ -20,9 +20,9 @@ function Base.showerror(io::IO, error::UnsupportedCoupledCapabilities)
     capabilities = join(
         (String(row.capability) for row in error.rows), ", ")
     print(io, "backend ", error.backend,
-        " does not support Phase 14 coupled capabilities: ",
+        " does not support the requested coupled capabilities: ",
         capabilities,
-        ". Remove or replace the unqualified declarations; Phase 13 backend qualification ",
+        ". Remove or replace the unqualified declarations; frozen backend qualification ",
         "does not imply coupled-state support.")
 end
 
@@ -180,7 +180,7 @@ function coupled_backend_report(plan::MCSPlan, state::CoupledState,
         activity_gpu ? :qualified_gpu_native : :unsupported,
         cpu ? "phase14-cpu-reference-conformance-v1" :
         activity_gpu ? "phase14-wortel-gpu-native-qualification-v1" :
-        "no exact Phase 14 real-hardware qualification",
+        "no exact coupled real-hardware qualification",
         cpu ? "supported by the sequential CPU reference path" :
         activity_gpu ?
         "qualified for the Float32 backend-resident Wortel Act slice" :
@@ -205,7 +205,7 @@ end
 
 struct CoupledSemanticManifest{P, S, B}
     schema_version::VersionNumber
-    contract_versions::Phase14ContractVersions
+    contract_versions::CoupledContractVersions
     base_model_fingerprint::NTuple{32, UInt8}
     coupled_model_fingerprint::NTuple{32, UInt8}
     initial_state_fingerprint::NTuple{32, UInt8}
@@ -253,7 +253,7 @@ function coupled_manifest(integrator::CoupledIntegrator)
         integrator.potts.plan.capabilities)
     return CoupledSemanticManifest(
         COUPLED_CHECKPOINT_SCHEMA_VERSION,
-        phase14_contract_versions(),
+        coupled_contract_versions(),
         scientific_model_fingerprint(integrator.potts),
         _coupled_model_fingerprint(integrator, blocks),
         integrator.initial_state_fingerprint,

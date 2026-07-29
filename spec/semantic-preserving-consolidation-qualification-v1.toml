@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 qualification_id = "semantic-preserving-repository-consolidation-v1"
-status = "baseline_frozen"
+status = "reconciliation_candidate"
 contract = "semantic-preserving-consolidation-contract.md"
 required_row_count = 37
 allowed_statuses = ["specified", "implemented", "oracle_passing", "qualified", "blocked", "excluded"]
@@ -8,6 +8,14 @@ closure_status = "open"
 public_release = false
 new_functionality_allowed = false
 removed_functionality_allowed = false
+
+[candidate]
+status = "local_candidate_passing"
+version = "0.5.1"
+audit = "../design/audits/semantic-preserving-consolidation-candidate.md"
+evidence = "../design/evidence/consolidation-candidate/local-reconciliation-v1.toml"
+exact_head_qualified = false
+pending = ["cpu_x86_64", "trusted_metal_exact_head", "trusted_rocm", "linux_install_smoke", "windows_install_smoke", "aggregate_ci"]
 
 [baseline_freeze]
 status = "qualified"
@@ -118,7 +126,7 @@ id = "CON-N01"
 gate = "naming_and_archive"
 dimension = "naming"
 title = "Canonical domain vocabulary and old-to-new naming map"
-status = "specified"
+status = "qualified"
 evidence = ["types", "functions", "constants", "files", "testsets", "CI jobs", "documentation"]
 
 [[requirements]]
@@ -126,7 +134,7 @@ id = "CON-N02"
 gate = "naming_and_archive"
 dimension = "naming"
 title = "Zero unallowlisted milestone names in living source"
-status = "specified"
+status = "qualified"
 evidence = ["source scan", "message scan", "identifier scan", "historical/compatibility allowlist"]
 
 [[requirements]]
@@ -134,7 +142,7 @@ id = "CON-N03"
 gate = "naming_and_archive"
 dimension = "tests"
 title = "Domain-oriented active test paths, fixtures, and testsets"
-status = "specified"
+status = "qualified"
 evidence = ["ProcessBigraphs", "CorePotts", "PottsToolkit", "MakiePotts", "integration"]
 
 [[requirements]]
@@ -142,7 +150,7 @@ id = "CON-N04"
 gate = "naming_and_archive"
 dimension = "evidence"
 title = "Immutable historical evidence and protocol identity index"
-status = "specified"
+status = "qualified"
 evidence = ["hashes", "paths", "run IDs", "frozen identifiers", "reproduction disposition"]
 
 [[requirements]]
@@ -150,7 +158,7 @@ id = "CON-N05"
 gate = "naming_and_archive"
 dimension = "api"
 title = "Enumerated public-name compatibility policy"
-status = "specified"
+status = "qualified"
 evidence = ["canonical names", "deprecated aliases", "export delta", "removal disposition"]
 
 [[requirements]]
@@ -158,7 +166,7 @@ id = "CON-A01"
 gate = "architecture"
 dimension = "architecture"
 title = "Checked one-way responsibility-layer dependency graph"
-status = "specified"
+status = "qualified"
 evidence = ["ProcessBigraphs graph", "CorePotts graph", "frontend graph", "extension boundaries"]
 
 [[requirements]]
@@ -166,7 +174,7 @@ id = "CON-A02"
 gate = "architecture"
 dimension = "architecture"
 title = "One production authority for every accepted concept"
-status = "specified"
+status = "qualified"
 evidence = ["authority inventory", "consumer map", "parallel-path disposition"]
 
 [[requirements]]
@@ -174,7 +182,7 @@ id = "CON-A03"
 gate = "architecture"
 dimension = "architecture"
 title = "Domain-oriented file ownership and large-file waiver audit"
-status = "specified"
+status = "qualified"
 evidence = ["responsibility map", "file metrics", "waivers", "entry-module audit"]
 
 [[requirements]]
@@ -182,7 +190,7 @@ id = "CON-A04"
 gate = "architecture"
 dimension = "architecture"
 title = "Package and optional-extension dependency boundaries unchanged"
-status = "specified"
+status = "qualified"
 evidence = ["Projects", "Manifests", "weak dependencies", "extension triggers", "forbidden edges"]
 
 [[requirements]]
@@ -190,7 +198,7 @@ id = "CON-D01"
 gate = "production_deduplication"
 dimension = "dryness"
 title = "All nontrivial code duplication classified"
-status = "specified"
+status = "qualified"
 evidence = ["clone report", "production duplicates", "oracles", "kernels", "compatibility", "specializations"]
 
 [[requirements]]
@@ -198,7 +206,7 @@ id = "CON-D02"
 gate = "production_deduplication"
 dimension = "dryness"
 title = "Accidental production duplication eliminated"
-status = "specified"
+status = "qualified"
 evidence = ["canonical mechanisms", "removed paths", "consumer migration", "equivalence tests"]
 
 [[requirements]]
@@ -206,7 +214,7 @@ id = "CON-D03"
 gate = "production_deduplication"
 dimension = "dryness"
 title = "Independent evidence implementations remain independent"
-status = "specified"
+status = "qualified"
 evidence = ["oracle boundary", "custom adapter boundary", "reference/production boundary", "backend boundary"]
 
 [[requirements]]
@@ -214,7 +222,7 @@ id = "CON-T01"
 gate = "test_and_quality_harness"
 dimension = "tests"
 title = "One reusable fixture authority per test scenario"
-status = "specified"
+status = "qualified"
 evidence = ["fixture inventory", "ownership", "consumer list", "production exclusion"]
 
 [[requirements]]
@@ -222,7 +230,7 @@ id = "CON-T02"
 gate = "test_and_quality_harness"
 dimension = "tests"
 title = "Shared protocol contract suites across implementations"
-status = "specified"
+status = "qualified"
 evidence = ["engine adapters", "fields", "codecs", "checkpoint stores", "backends", "authoring equivalence"]
 
 [[requirements]]
@@ -230,7 +238,7 @@ id = "CON-T03"
 gate = "test_and_quality_harness"
 dimension = "tests"
 title = "Every baseline test obligation maps to surviving evidence"
-status = "specified"
+status = "qualified"
 evidence = ["coverage reconciliation", "deleted-test disposition", "negative paths", "restart", "models"]
 
 [[requirements]]
@@ -238,7 +246,7 @@ id = "CON-Q01"
 gate = "test_and_quality_harness"
 dimension = "quality_tooling"
 title = "Stable reusable current-state quality checker"
-status = "specified"
+status = "qualified"
 evidence = ["architecture", "contracts", "evidence", "docs", "performance", "root runner"]
 
 [[requirements]]
@@ -246,7 +254,7 @@ id = "CON-Q02"
 gate = "test_and_quality_harness"
 dimension = "quality_tooling"
 title = "Historical phase checkers removed from active lifecycle authority"
-status = "specified"
+status = "qualified"
 evidence = ["CI inventory", "archive index", "current obligation map", "hash preservation"]
 
 [[requirements]]
@@ -254,7 +262,7 @@ id = "CON-Q03"
 gate = "test_and_quality_harness"
 dimension = "quality_tooling"
 title = "Durable domain-named CI gate topology"
-status = "specified"
+status = "qualified"
 evidence = ["job names", "required dependencies", "platform coverage", "required aggregate"]
 
 [[requirements]]
@@ -262,7 +270,7 @@ id = "CON-P01"
 gate = "process_bigraphs"
 dimension = "architecture"
 title = "ProcessBigraphs primitives, structure, lowering, and provenance consolidated"
-status = "specified"
+status = "qualified"
 evidence = ["one canonical structure", "one lowering path", "identity equivalence", "origin map"]
 
 [[requirements]]
@@ -270,7 +278,7 @@ id = "CON-P02"
 gate = "process_bigraphs"
 dimension = "architecture"
 title = "ProcessBigraphs runtime, engine, and field transactions consolidated"
-status = "specified"
+status = "qualified"
 evidence = ["scheduling", "transaction state machine", "publication", "failure", "adapter contracts"]
 
 [[requirements]]
@@ -278,7 +286,7 @@ id = "CON-P03"
 gate = "process_bigraphs"
 dimension = "persistence"
 title = "ProcessBigraphs checkpoint front door and versioned codecs consolidated"
-status = "specified"
+status = "qualified"
 evidence = ["current format", "legacy formats", "bytes", "restore", "conversion", "replay"]
 
 [[requirements]]
@@ -286,7 +294,7 @@ id = "CON-P04"
 gate = "process_bigraphs"
 dimension = "api"
 title = "ProcessBigraphs authoring, validation, inspection, and serialization consolidated"
-status = "specified"
+status = "qualified"
 evidence = ["semantic model", "builder", "diagnostics", "lowering", "serialization", "raw-IR boundary"]
 
 [[requirements]]
@@ -294,7 +302,7 @@ id = "CON-C01"
 gate = "core_and_frontends"
 dimension = "architecture"
 title = "CorePotts state, components, algorithms, and coupled execution consolidated"
-status = "specified"
+status = "qualified"
 evidence = ["authority map", "host/portable dispatch", "continuous fields", "relationships", "persistence"]
 
 [[requirements]]
@@ -302,7 +310,7 @@ id = "CON-C02"
 gate = "core_and_frontends"
 dimension = "api"
 title = "ProcessBigraphs adapters and bounded model assemblies preserve behavior"
-status = "specified"
+status = "qualified"
 evidence = ["native", "SciML", "custom", "Merks", "CNV", "claim boundary"]
 
 [[requirements]]
@@ -310,7 +318,7 @@ id = "CON-C03"
 gate = "core_and_frontends"
 dimension = "api"
 title = "PottsToolkit and MakiePotts preserve public behavior"
-status = "specified"
+status = "qualified"
 evidence = ["authoring", "lowering", "reports", "requests", "rendering", "extensions"]
 
 [[requirements]]
@@ -318,7 +326,7 @@ id = "CON-R01"
 gate = "reconciliation"
 dimension = "identity"
 title = "Baseline fingerprints, canonical bytes, traces, and observations reconcile"
-status = "specified"
+status = "qualified"
 evidence = ["exact comparisons", "approved compatibility exceptions", "model outputs"]
 
 [[requirements]]
@@ -326,7 +334,7 @@ id = "CON-R02"
 gate = "reconciliation"
 dimension = "persistence"
 title = "Current and retained legacy checkpoint matrices pass"
-status = "specified"
+status = "qualified"
 evidence = ["encode", "decode", "restore", "restart cuts", "replay classes", "non-destructive conversion"]
 
 [[requirements]]
@@ -334,7 +342,7 @@ id = "CON-R03"
 gate = "reconciliation"
 dimension = "performance"
 title = "All frozen runtime, authoring, allocation, and device budgets pass"
-status = "specified"
+status = "implemented"
 evidence = ["stage-separated report", "steady state", "publication", "device", "test wall time"]
 
 [[requirements]]
@@ -342,7 +350,7 @@ id = "CON-R04"
 gate = "reconciliation"
 dimension = "backend"
 title = "CPU and every invalidated trusted hardware claim requalified"
-status = "specified"
+status = "implemented"
 evidence = ["CPU x86_64", "CPU ARM64", "Metal", "ROCm", "exact source", "no hidden fallback"]
 
 [[requirements]]
@@ -350,7 +358,7 @@ id = "CON-R05"
 gate = "reconciliation"
 dimension = "documentation"
 title = "Domain-oriented docs, examples, generated pages, and limitations reconcile"
-status = "specified"
+status = "implemented"
 evidence = ["manual", "examples", "generated pages", "API", "limitations", "historical index"]
 
 [[requirements]]
@@ -358,5 +366,5 @@ id = "CON-R06"
 gate = "reconciliation"
 dimension = "evidence"
 title = "Exact-head evidence and zero-functional-delta attestation"
-status = "specified"
+status = "implemented"
 evidence = ["commit/tree", "clean resolution", "all CI jobs", "artifact hashes", "API delta", "functionality delta"]

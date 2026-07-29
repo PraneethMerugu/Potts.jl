@@ -1,4 +1,4 @@
-module Phase15CSpecificationOracle
+module SpecificationOracle
 
 using SHA
 using TOML

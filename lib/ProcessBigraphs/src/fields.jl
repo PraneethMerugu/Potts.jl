@@ -19,7 +19,7 @@ function FieldGeometry(
     axis_order::NTuple{N,Symbol}=ntuple(i -> Symbol(:x, i), N),
 ) where {N}
     N in (2, 3) ||
-        _fail(:unsupported_field_rank, "Phase 16 fields must be 2D or 3D"; rank=N)
+        _fail(:unsupported_field_rank, "coupled fields must be 2D or 3D"; rank=N)
     all(value -> value > 0, dimensions) ||
         _fail(:invalid_field_dimensions, "field dimensions must be positive";
             dimensions)
@@ -89,7 +89,7 @@ end
 
 function periodic_field_boundaries(rank::Integer)
     rank in (2, 3) ||
-        _fail(:unsupported_field_rank, "Phase 16 fields must be 2D or 3D"; rank)
+        _fail(:unsupported_field_rank, "coupled fields must be 2D or 3D"; rank)
     tuple((
         FieldBoundary(axis, side, :periodic)
         for axis in 1:rank for side in (:low, :high)
@@ -152,7 +152,7 @@ function FieldDescriptor(
             "field units must cover each species exactly once")
     placement in FIELD_PLACEMENTS ||
         _fail(:unsupported_field_placement,
-            "Phase 16 stable fields are cell-centered"; placement)
+            "stable coupled fields are cell-centered"; placement)
     sampling_law in FIELD_SAMPLING_LAWS ||
         _fail(:unsupported_sampling_law, "unsupported field sampling law";
             sampling_law)

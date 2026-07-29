@@ -1,6 +1,6 @@
 # Semantic-Preserving Repository Consolidation Contract
 
-Status: Accepted normative specification; baseline frozen, production consolidation not started
+Status: Accepted normative specification; local reconciliation candidate implemented, exact-head platform qualification pending
 
 Version: 1.0.0
 
@@ -185,7 +185,7 @@ names, and generated capability names:
 
 Names MUST instead identify the exact concept, role, or envelope, for example:
 
-- `LOGICAL_CHECKPOINT_SCHEMA`;
+- `COUPLED_CHECKPOINT_SCHEMA`;
 - `capture_logical_checkpoint`;
 - `requires_iteration_fingerprint`;
 - `CoupledContractVersions`;

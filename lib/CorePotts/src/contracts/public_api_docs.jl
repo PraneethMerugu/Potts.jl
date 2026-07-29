@@ -1,11 +1,11 @@
-@doc "Closed Phase 13 taxonomy of algorithm scientific-guarantee labels." ALGORITHM_GUARANTEE_TAXONOMY
+@doc "Closed taxonomy of algorithm scientific-guarantee labels." ALGORITHM_GUARANTEE_TAXONOMY
 @doc "Semantic RNG contract version embedded in replay and evidence identities." RNG_CONTRACT_VERSION
 @doc "PottsToolkit Level 1 authoring-language contract version." AUTHORING_DSL_CONTRACT_VERSION
 @doc "Normalized authoring-IR contract version." NORMALIZED_IR_CONTRACT_VERSION
 @doc "Canonical exact-checkpoint schema version." CHECKPOINT_SCHEMA_VERSION
 @doc "Semantic model-fingerprint contract version." SEMANTIC_FINGERPRINT_VERSION
 @doc "Compiled execution-fingerprint contract version." EXECUTION_FINGERPRINT_VERSION
-@doc "Phase 13 result/evidence schema contract version." PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
+@doc "result/evidence schema contract version." RESULT_EVIDENCE_SCHEMA_VERSION
 @doc "SequentialCPM algorithm semantic-contract version." SEQUENTIAL_ALGORITHM_CONTRACT_VERSION
 @doc "CheckerboardSweepCPM scheduler semantic-contract version." CHECKERBOARD_SCHEDULER_CONTRACT_VERSION
 @doc "LotteryCPM algorithm semantic-contract version." LOTTERY_ALGORITHM_CONTRACT_VERSION

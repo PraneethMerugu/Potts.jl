@@ -1,7 +1,7 @@
 using SciMLBase
 using KernelAbstractions
 
-@testset "Phase 10 immutable Level 2 authoring foundation" begin
+@testset "immutable authoring immutable Level 2 authoring foundation" begin
     L2 = PottsToolkit.Authoring
 
     medium = L2.Medium(:Medium)
@@ -419,7 +419,7 @@ end
         L2.validate(L2.PottsModel(medium, cell, bad)))
 end
 
-@testset "Phase 10 Level 2 public lowering vertical slice" begin
+@testset "immutable authoring Level 2 public lowering vertical slice" begin
     L2 = PottsToolkit.Authoring
 
     medium = L2.Medium(:Medium)

@@ -201,7 +201,7 @@ algorithm_guarantees(::SequentialReference) = AlgorithmGuaranteeProfile(
     dimensions = (2,),
 )
 
-"""The temporary, explicitly versioned random-bit contract of the Phase 4 reference engine."""
+"""The temporary, explicitly versioned random-bit contract of the reference engine."""
 reference_rng_version(::SequentialReference) = v"0.1.0-reference-splitmix64"
 
 @enum _ReferenceDrawRole::UInt64 begin
@@ -285,7 +285,7 @@ logical_state(integrator::ReferenceIntegrator) = integrator.state
 function init_reference(state::LogicalPottsState, model::ReferenceModel,
         algorithm::SequentialReference = SequentialReference())
     ndims(lattice_storage(state)) == 2 || throw(ArgumentError(
-        "the Phase 4 sequential reference slice currently supports only 2D state"))
+        "the sequential reference slice currently supports only 2D state"))
     assert_valid_state(state)
     return ReferenceIntegrator(state, model, algorithm, UInt64(0), CellID[], nothing)
 end

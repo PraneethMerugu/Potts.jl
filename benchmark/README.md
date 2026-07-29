@@ -18,7 +18,7 @@ JULIA_LOAD_PATH="benchmark/backends/metal:benchmark:@stdlib" \
   --backend=metal --profile=smoke
 ```
 
-GPU samples synchronize the active KernelAbstractions backend inside the timed region. Phase 12
+GPU samples synchronize the active KernelAbstractions backend inside the timed region. performance comparison
 performance decisions use the lean `benchmark/performance_worker.jl` through `repeat.jl`, or the
 `Benchmarks` GitHub workflow. `benchmark/matrix.jl` remains a correctness/qualification diagnostic
 and no longer executes the deleted historical engine benchmark. GPU jobs run only on explicitly
@@ -39,7 +39,7 @@ not inferred from launch-dominated toy domains. They are separate comparison ide
 profile may compensate for a regression in the other. Throughput records use ten independently
 synchronized one-MCS samples per workload; the full profile uses five MCS per sample.
 
-Phase 12 comparisons consume repeated fresh-process schema `3.0.0` records. The comparator refuses
+performance comparison comparisons consume repeated fresh-process schema `3.0.0` records. The comparator refuses
 different hardware, precision, algorithm, model fingerprint, workload shape, or measurement-contract
 versions before calculating a performance ratio:
 
@@ -62,7 +62,7 @@ fresh-depot tier-1 records. `warm` is the default.
 Smoke diagnostics may explicitly pass `--minimum-processes=1`; such output is not regression or
 paper evidence.
 
-Warm regression evidence is collected with the `Phase 12 paired benchmarks` workflow. It checks out
+Warm regression evidence is collected with the `paired performance comparison` workflow. It checks out
 the immutable baseline and candidate separately, then alternates them inside each fresh-process
 pair (`baseline/candidate`, `candidate/baseline`, ...). This counterbalances host-frequency and
 thermal drift without changing the fixed scientific seed or workload. The resulting process IDs
@@ -76,7 +76,7 @@ retain separate harness and implementation commits and reject either a dirty sub
 harness; analysis-only harness evolution does not make scientific implementation revisions
 incomparable.
 
-Phase 12.CPU dispatches that paired workflow independently at `1`, `2`, `4`, `8`, and `physical`
+performance comparison.CPU dispatches that paired workflow independently at `1`, `2`, `4`, `8`, and `physical`
 threads where the requested count exists on the runner. A thread-count result is never compared as
 if it were the same comparison identity as another count; scaling summaries are derived only after
 each fixed-thread baseline/candidate gate has been evaluated independently.
@@ -122,5 +122,5 @@ host stages from initialization and warm execution, and retains actual proposal 
 residency, observation, checkpoint, and direct-CorePotts evidence. `smoke` is the CI gate; `full`
 uses paper-scalable problem sizes and longer synchronized samples.
 
-Phase 1 and the refactor target Julia 1.12.6 exclusively. Older-version compatibility is deferred
+The benchmark and refactor contracts target Julia 1.12.6 exclusively. Older-version compatibility is deferred
 until dedicated compatibility CI lanes are established during final release qualification.

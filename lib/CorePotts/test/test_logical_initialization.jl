@@ -66,7 +66,7 @@ using CorePotts
 end
 
 
-@testset "deterministic and stochastic Phase 8 layouts" begin
+@testset "deterministic and stochastic lifecycle and persistence layouts" begin
     dense = DenseCellLabels(Int[9 0 3; 0 3 0], [9 => 2, 3 => 1])
     dense_state = logical_state(finalize_initial_state((2, 3), dense;
         capacity = CellCapacity(2), medium_domains = (MediumID(1),)))

@@ -63,7 +63,7 @@ family_deps = Dict(
 )
 require(family_deps["ProcessBigraphs"] ==
         Set(["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]),
-    "ProcessBigraphs Phase 16 must depend directly on ACSets, AlgebraicRewriting, Catlab, and SHA")
+    "ProcessBigraphs must depend directly on ACSets, AlgebraicRewriting, Catlab, and SHA")
 require(isempty(intersect(family_deps["CorePotts"], Set(["PottsToolkit", "MakiePotts", "NeuralPotts"]))),
     "CorePotts depends on an upward layer")
 require(isempty(intersect(family_deps["ProcessBigraphs"],

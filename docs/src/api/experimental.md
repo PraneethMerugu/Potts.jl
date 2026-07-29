@@ -21,11 +21,12 @@ showing the examples first.
 - `PottsVolume`, `PottsExplorer`, and `RerunController` are experimental MakiePotts reference
   implementations.
 
-## Phase 16 boundary
+## ProcessBigraph boundary
 
 Dynamic hierarchy, structural add/remove/divide/move/rewire transactions, and the
-ProcessBigraphs–Potts adapter remain outside this public manual until their slice gates pass.
-Internal implementation work is not a public runtime release.
+ProcessBigraphs–Potts adapter are qualified for the unpublished internal beta but remain outside
+the public Potts workflow until a separate API promotion. Internal qualification is not a public
+runtime release.
 
 ## Using experimental names responsibly
 

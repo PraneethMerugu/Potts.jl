@@ -1,7 +1,7 @@
 # [Extension author reference](@id extension-author-reference)
 
-CorePotts extension contracts are stable only where classified `stable_extension` by the Phase 13
-inventory. PottsToolkit is still the preferred biological authoring interface.
+CorePotts extension contracts are stable only where classified `stable_extension` by the frozen
+stability inventory. PottsToolkit is still the preferred biological authoring interface.
 
 ## Choose the smallest extension point
 
@@ -60,5 +60,5 @@ resources, RNG addresses, proposal contribution, commit behavior, observation su
 persistence behavior, conformance commands, and evidence needed for each advertised backend.
 
 The complete stable binding inventory is
-`design/audits/phase-13-api-inventory.toml`. Names from the provisional Phase 14 allowlist remain
+`design/audits/phase-13-api-inventory.toml`. Names from the provisional additive allowlist remain
 experimental.

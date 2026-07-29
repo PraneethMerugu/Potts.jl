@@ -25,7 +25,7 @@ decision changes the model or input. A failed attempt does not consume published
 
 ## Settled checkpoints
 
-Checkpoints are admitted only at settled event boundaries. The Phase 16 logical envelope records
+Checkpoints are admitted only at settled event boundaries. The coupled logical envelope records
 canonical state, exact time, structural identities and lineage, scheduler positions, continuation
 payloads, observer positions, model/plan identity, and integrity hashes. It excludes live tasks,
 pointers, device buffers, solver caches, and ordinary Julia object serialization.
@@ -49,7 +49,7 @@ next authorization.
 
 ## Legacy conversion
 
-Previously attested checkpoint readers remain available. Conversion to the Phase 16 envelope is
+Previously attested checkpoint readers remain available. Conversion to the coupled envelope is
 explicit and non-destructive: read the old logical record, validate it under its original
 contract, produce a new record, and retain the source. Conversion never infers scientific units,
 solver state, lineage, or missing topology. Unsupported or corrupt inputs fail without modifying

@@ -1,17 +1,17 @@
 using KernelAbstractions
 
-@kernel function _phase5_increment!(output, input)
+@kernel function _execution_increment!(output, input)
     index = @index(Global, Linear)
     @inbounds output[index] = input[index] + UInt32(1)
 end
 
-@kernel function _phase5_double!(output, input)
+@kernel function _execution_double!(output, input)
     index = @index(Global, Linear)
     @inbounds output[index] = input[index] * UInt32(2)
 end
 
-@testset "Phase 5 compiled execution contracts" begin
-    provenance = ComponentIdentity(:phase5_execution_test, v"1.0.0", :test)
+@testset "execution contract compiled execution contracts" begin
+    provenance = ComponentIdentity(:execution_contract_test, v"1.0.0", :test)
     schema = PropertySchema(PropertyDescriptor(:target_volume, Int32,
         ConstantInitializer(Int32(0)); requester = provenance))
     logical = LogicalPottsState(reshape(OwnerRef[
@@ -92,8 +92,8 @@ end
     input = UInt32[1, 2, 3, 4]
     stage = similar(input)
     output = similar(input)
-    increment = _phase5_increment!(backend, 64)
-    double = _phase5_double!(backend, 64)
+    increment = _execution_increment!(backend, 64)
+    double = _execution_double!(backend, 64)
     launch!(plan, increment, stage, input; ndrange = length(input))
     launch!(plan, double, output, stage; ndrange = length(input))
     @test metrics.host_synchronizations == 0
@@ -104,7 +104,7 @@ end
 
     cpu_grained_output = similar(input)
     cpu_grained_kernel = CorePotts._execution_kernel(
-        plan, _phase5_increment!, length(input))
+        plan, _execution_increment!, length(input))
     launch!(plan, cpu_grained_kernel, cpu_grained_output, input;
         ndrange = length(input))
     @test cpu_grained_output == UInt32[2, 3, 4, 5]

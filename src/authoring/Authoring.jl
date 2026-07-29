@@ -100,7 +100,7 @@ export SequentialCPM, AttemptsPerSite, BudgetedSequentialCPM,
        SequentialEquilibrium, CheckerboardSweepCPM,
        TiledCheckerboardCPM, LotteryCPM
 export SpatialRoles
-# Registry-v1 Phase 14 façades are internalized; `Act` is the first retained v2 façade.
+# Registry-v1 coupled façades are internalized; `Act` is the first retained v2 façade.
 #=
 export FillSites, SiteValues, InitializeFromOwnership,
        PreserveAtSite, ResetChangedSites, AcceptedCopyManaged, SiteProperty,

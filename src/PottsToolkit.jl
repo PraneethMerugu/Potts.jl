@@ -8,9 +8,10 @@ const AUTHORING_DSL_CONTRACT_VERSION = CorePotts.AUTHORING_DSL_CONTRACT_VERSION
 const NORMALIZED_IR_CONTRACT_VERSION = CorePotts.NORMALIZED_IR_CONTRACT_VERSION
 const SEMANTIC_FINGERPRINT_VERSION = CorePotts.SEMANTIC_FINGERPRINT_VERSION
 const EXECUTION_FINGERPRINT_VERSION = CorePotts.EXECUTION_FINGERPRINT_VERSION
-const PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION =
-    CorePotts.PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
+const RESULT_EVIDENCE_SCHEMA_VERSION =
+    CorePotts.RESULT_EVIDENCE_SCHEMA_VERSION
 
+include("compatibility.jl")
 include("authoring/Authoring.jl")
 include("reference_models.jl")
 
@@ -148,7 +149,7 @@ export Authoring, ReferenceModels
 export ScientificContractVersions, scientific_contract_versions,
        AUTHORING_DSL_CONTRACT_VERSION, NORMALIZED_IR_CONTRACT_VERSION,
        SEMANTIC_FINGERPRINT_VERSION, EXECUTION_FINGERPRINT_VERSION,
-       PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
+       RESULT_EVIDENCE_SCHEMA_VERSION, PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
 export Namespace, SemanticName, AbstractBiologicalType, CellType, Medium
 export AbstractFragmentRole, CellRole, FieldRole
 export FragmentPortContract, FragmentRequirement, FragmentExport
@@ -216,7 +217,7 @@ export SequentialCPM, SequentialEquilibrium, CheckerboardSweepCPM,
        TiledCheckerboardCPM, LotteryCPM
 export AttemptsPerSite, BudgetedSequentialCPM
 export SpatialRoles
-# Registry-v1 Phase 14 façades remain implementation details during kernel migration.
+# Registry-v1 coupled façades remain implementation details during kernel migration.
 #=
 export FillSites, SiteValues, InitializeFromOwnership,
        PreserveAtSite, ResetChangedSites, AcceptedCopyManaged, SiteProperty,

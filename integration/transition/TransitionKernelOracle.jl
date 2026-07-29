@@ -598,7 +598,7 @@ function validate_kernel(kernel::SparseTransitionKernel; tolerance = nothing)
         normalized, row_sums, maximum_residual)
 end
 
-"""The reviewed two-site, no-flux, zero-energy derivation used by Phase 13A."""
+"""The reviewed two-site, no-flux, zero-energy derivation used by sequential transition."""
 function hand_derived_1d_fixture()
     medium = oracle_medium(1)
     cell = oracle_cell(1)

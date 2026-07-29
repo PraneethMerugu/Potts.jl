@@ -27,7 +27,7 @@ end
 
 backend_name = option("backend", "cpu")
 backend_name in ("cpu", "metal", "amdgpu") || error(
-    "Phase 12 precompile measurement requires cpu, metal, or amdgpu")
+    "performance comparison precompile measurement requires cpu, metal, or amdgpu")
 
 repository_root = normpath(joinpath(@__DIR__, ".."))
 base_project = joinpath(@__DIR__, "Project.toml")
@@ -70,11 +70,11 @@ precompile_harness_checksum = PottsBenchmarks.file_set_checksum(
 process_id = get(ENV, "POTTS_BENCHMARK_PROCESS_ID",
     string(Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS.sss"), "-", getpid()))
 record = Dict(
-    "schema_version" => PottsBenchmarks.Phase12Comparison.PHASE12_SCHEMA_VERSION,
+    "schema_version" => PottsBenchmarks.PerformanceComparison.PERFORMANCE_SCHEMA_VERSION,
     "record_kind" => "phase12-precompile-run",
     "recorded_at_utc" => string(now(UTC)),
     "comparison_identity" => Dict(
-        "contract_version" => PottsBenchmarks.Phase12Comparison.PHASE12_CONTRACT_VERSION,
+        "contract_version" => PottsBenchmarks.PerformanceComparison.PERFORMANCE_CONTRACT_VERSION,
         "precompile_workload_version" => "isolated-environment-1.0.0",
         "precompile_harness_tree_sha256" => precompile_harness_checksum,
         "backend" => backend_name,
@@ -99,15 +99,15 @@ record = Dict(
     ),
 )
 
-issues = PottsBenchmarks.Phase12Comparison.validate_precompile_record(record)
-isempty(issues) || error("refusing to write invalid Phase 12 precompile result:\n- " *
+issues = PottsBenchmarks.PerformanceComparison.validate_precompile_record(record)
+isempty(issues) || error("refusing to write invalid performance comparison precompile result:\n- " *
                          join(issues, "\n- "))
 directory = joinpath(PottsBenchmarks.RESULTS_ROOT, provenance["subject_id"],
     "precompile", backend_name)
 mkpath(directory)
 timestamp = Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS")
-path = joinpath(directory, "$(timestamp)-phase12-precompile-$process_id.toml")
+path = joinpath(directory, "$(timestamp)-precompile-run-$process_id.toml")
 open(path, "w") do io
     TOML.print(io, record; sorted = true)
 end
-println("PHASE12_PRECOMPILE_RESULT=", path)
+println("PERFORMANCE_PRECOMPILE_RESULT=", path)

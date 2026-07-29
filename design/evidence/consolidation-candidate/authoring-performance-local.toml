@@ -1,0 +1,63 @@
+architecture = "aarch64"
+events = 128
+evidence_id = "process-bigraph-phase16hc-authoring-performance-v1"
+julia_version = "1.12.6"
+plan_identity_equal = true
+repetitions = 9
+schema_version = "1.0.0"
+
+[budgets]
+compilation_median_allocated_bytes_max = 50000000
+compilation_median_seconds_max = 0.5
+construction_median_allocated_bytes_max = 20000000
+construction_median_seconds_max = 0.25
+initialization_median_allocated_bytes_max = 20000000
+initialization_median_seconds_max = 0.25
+lowering_median_allocated_bytes_max = 50000000
+lowering_median_seconds_max = 0.5
+validation_median_allocated_bytes_max = 10000000
+validation_median_seconds_max = 0.1
+warm_allocation_ratio_max = 1.1
+warm_runtime_ratio_max = 1.5
+
+[checks]
+compilation_allocations = true
+compilation_time = true
+construction_allocations = true
+construction_time = true
+initialization_allocations = true
+initialization_time = true
+lowering_allocations = true
+lowering_time = true
+steady_allocations = true
+steady_runtime = true
+validation_allocations = true
+validation_time = true
+
+[compilation]
+median_allocated_bytes = 342144
+median_seconds = 0.000978792
+
+[construction]
+median_allocated_bytes = 71304
+median_seconds = 6.525e-5
+
+[initialization]
+median_allocated_bytes = 59968
+median_seconds = 9.4792e-5
+
+[lowering]
+median_allocated_bytes = 2806624
+median_seconds = 0.003788416
+
+[validation]
+median_allocated_bytes = 39760
+median_seconds = 3.0333e-5
+
+[warm_execution]
+allocation_ratio = 1.0
+direct_ir_median_allocated_bytes = 19513632
+direct_ir_median_seconds = 0.03249875
+semantic_median_allocated_bytes = 19513632
+semantic_median_seconds = 0.031402375
+time_ratio = 0.9662640870802724

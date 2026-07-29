@@ -133,33 +133,19 @@ end
     @test step!(second_run) === second_run
     launches_before_report = first_run.plan.metrics.launches
     synchronizations_before_report = first_run.plan.metrics.host_synchronizations
-    first_report = current_mcs_report(first_run)
-    second_report = current_mcs_report(second_run)
+    reports = test_parallel_algorithm_report_contract(first_run, second_run)
+    first_report = reports.first_report
+    second_report = reports.second_report
     @test first_run.plan.metrics.launches == launches_before_report + 1
     @test first_run.plan.metrics.host_synchronizations ==
           synchronizations_before_report + 1
-    @test first_report == second_report
     @test first_report.mcs == 1
     @test first_report.internal_rounds ==
           first_run.algorithm_workspace.color_count
     @test first_report.scheduler_candidates == mutable_site_count(fixture.domain)
     @test first_report.activated_attempts == mutable_site_count(fixture.domain)
-    @test first_report.realized_proposals ==
-          first_report.dynamic_conflicts + first_report.constraint_rejections +
-          first_report.acceptance_rejections + first_report.accepted_copies
-    @test first_report.activated_attempts ==
-          first_report.same_owner_no_ops + first_report.boundary_no_ops +
-          first_report.immutable_recipient_no_ops + first_report.dynamic_conflicts +
-          first_report.constraint_rejections + first_report.acceptance_rejections +
-          first_report.accepted_copies
-
-    first_snapshot = logical_state(first_run)
-    second_snapshot = logical_state(second_run)
-    @test lattice_storage(first_snapshot) == lattice_storage(second_snapshot)
-    @test isempty(tracker_conformance_errors(
-        first_state, fixture.tracker, first_snapshot))
-    @test isempty(tracker_conformance_errors(
-        second_state, fixture.tracker, second_snapshot))
+    test_parallel_algorithm_replay_contract(
+        first_run, second_run, first_state, second_state, fixture.tracker)
 end
 
 @testset "Checkerboard realized coloring handles odd periodic domains" begin

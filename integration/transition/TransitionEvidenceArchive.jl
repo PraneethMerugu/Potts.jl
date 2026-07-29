@@ -494,7 +494,7 @@ function validate_fixture_manifest(manifest::AbstractDict)
     empirical_count <= maximum_rows || push!(errors,
         "fixture manifest registers $empirical_count empirical source states; maximum is $maximum_rows")
     empirical_count <= 24 || push!(errors,
-        "fixture manifest exceeds the Phase 13 cap of 24 empirical source states")
+        "fixture manifest exceeds the transition-kernel cap of 24 empirical source states")
     for required in (2, 3)
         any(fixture -> get(fixture, "dimension", 0) == required, empirical) ||
             push!(errors, "empirical fixture grid does not cover dimension $required")

@@ -99,7 +99,7 @@ function quarantined_signature(path)
     return bytes2hex(sha256(codeunits(join(matching_lines, "\n") * "\n")))
 end
 
-require(isfile(FREEZE_FILE), "missing Phase 7 legacy freeze manifest")
+require(isfile(FREEZE_FILE), "missing legacy freeze manifest")
 
 for path in DELETED_TOOLKIT_PATHS
     require(!isfile(joinpath(ROOT, path)),
@@ -115,9 +115,9 @@ end
 
 freeze = TOML.parsefile(FREEZE_FILE)
 require(get(freeze, "version", nothing) == 2,
-    "Phase 13 requires the closed version-2 legacy manifest")
+    "legacy closure requires the closed version-2 manifest")
 require(get(freeze, "status", nothing) == "closed",
-    "Phase 13 legacy manifest is not closed")
+    "legacy manifest is not closed")
 frozen_files = get(freeze, "files", Dict{String, Any}())
 frozen_signatures = get(freeze, "signatures", Dict{String, Any}())
 consumer_signatures = get(freeze, "consumer_signatures", Dict{String, Any}())
@@ -134,7 +134,7 @@ for (path, expected_digest) in sort!(collect(frozen_files); by = first)
         "frozen legacy file `$path` disappeared; remove it from the manifest in the owning migration")
     actual_digest = bytes2hex(sha256(read(absolute)))
     require(actual_digest == expected_digest,
-        "frozen legacy file `$path` changed; historical code is read-only during Phase 7")
+        "frozen legacy file `$path` changed; historical code is read-only")
 end
 
 for (path, expected_digest) in sort!(collect(frozen_signatures); by = first)
@@ -173,5 +173,5 @@ for path in all_sources
         "scientific source `$path` references quarantined vocabulary: $(join(matches, ", "))")
 end
 
-println("Phase 13 legacy closure passes: the historical engine, Toolkit compiler, " *
+println("Legacy closure passes: the historical engine, Toolkit compiler, " *
         "mixed production paths, and executable legacy consumers are absent")

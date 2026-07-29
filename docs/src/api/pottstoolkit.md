@@ -63,5 +63,5 @@ Order = [:type, :function]
 Filter = is_stable_pottstoolkit
 ```
 
-The index is filtered through the owner-approved Phase 13 stable inventory. Internal and
+The index is filtered through the owner-approved frozen stability inventory. Internal and
 experimental exports do not appear here; see [Experimental API](@ref experimental-api).

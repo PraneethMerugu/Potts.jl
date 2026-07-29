@@ -1,4 +1,4 @@
-module Phase12BackendProfile
+module BackendProfile
 
 using CorePotts
 using Dates
@@ -25,7 +25,7 @@ function algorithm(name::String)
     name == "CheckerboardSweepCPM" &&
         return CheckerboardSweepCPM(temperature = 2.0f0)
     name == "LotteryCPM" && return LotteryCPM(temperature = 2.0f0)
-    throw(ArgumentError("unknown Phase 12 profile algorithm `$name`"))
+    throw(ArgumentError("unknown performance comparison profile algorithm `$name`"))
 end
 
 function prepare_integrator(backend_name::String, backend, algorithm_name::String)
@@ -112,7 +112,7 @@ function write_record(directory::String, backend_name::String, provenance,
         backend_package::String, backend_version::String, profiles;
         trace_kind::String, trace_status::String)
     Set(keys(profiles)) == Set(PROFILE_ALGORITHMS) || error(
-        "backend profile must cover every Phase 12 scientific algorithm")
+        "backend profile must cover every performance comparison scientific algorithm")
     for (algorithm_name, profile) in profiles
         code = profile["code"]
         code["file_count"] > 0 || error("$algorithm_name produced no device code")
@@ -165,7 +165,7 @@ function write_record(directory::String, backend_name::String, provenance,
         ),
         "profiles" => profiles,
     )
-    path = joinpath(directory, "phase12-backend-profile.toml")
+    path = joinpath(directory, "backend-profile.toml")
     open(path, "w") do io
         TOML.print(io, record; sorted = true)
     end

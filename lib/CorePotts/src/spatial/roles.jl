@@ -6,7 +6,7 @@ const OMITTED_SPATIAL_ROLE = OmittedSpatialRole()
 """
     SpatialRoles(; proposal, contact, surface, connectivity, query, field)
 
-Immutable explicit scientific-role record. Omitted entries retain the Phase 13 lowering for that
+Immutable explicit scientific-role record. Omitted entries retain the frozen lowering for that
 role. `connectivity=nothing` is an explicit disable request and is therefore distinct from
 omission.
 """

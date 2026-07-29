@@ -51,4 +51,4 @@ for rule in rules
 end
 
 isempty(failures) || error(join(failures, "\n"))
-println("Phase 15.C oracle boundary: stdlib isolation and 22 derivations passed")
+println("specification oracle boundary: stdlib isolation and 22 derivations passed")

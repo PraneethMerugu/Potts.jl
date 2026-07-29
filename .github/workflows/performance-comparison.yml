@@ -1,0 +1,176 @@
+name: paired performance comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: Authoritative backend to measure
+        type: choice
+        required: true
+        default: cpu-arm64
+        options: [cpu-arm64, cpu-x86_64, metal, amdgpu]
+      baseline_ref:
+        description: Immutable immediate-parent commit SHA
+        type: string
+        required: true
+      candidate_ref:
+        description: Immutable candidate commit SHA
+        type: string
+        required: true
+      precision:
+        description: Numerical precision (Float64 is CPU-only)
+        type: choice
+        required: true
+        default: Float32
+        options: [Float32, Float64]
+      cpu_threads:
+        description: Julia threads for CPU targets (GPU targets require 1)
+        type: choice
+        required: true
+        default: '1'
+        options: ['1', '2', '4', '8', physical]
+      pairs:
+        description: Balanced fresh-process A/B pairs
+        type: choice
+        required: true
+        default: '4'
+        options: ['4', '5']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-comparison-${{ inputs.backend }}-${{ inputs.precision }}-${{ inputs.cpu_threads }}-${{ inputs.baseline_ref }}-${{ inputs.candidate_ref }}
+  cancel-in-progress: false
+
+env:
+  JULIA_VERSION: 1.12.6
+  JULIA_NUM_PRECOMPILE_TASKS: 2
+
+jobs:
+  paired:
+    name: ${{ inputs.backend }} / paired full / ${{ inputs.precision }} / ${{ inputs.cpu_threads }}
+    if: (inputs.backend == 'cpu-arm64' || inputs.backend == 'metal') && vars.METAL_RUNNER_ENABLED == 'true' ||
+        (inputs.backend == 'cpu-x86_64' || inputs.backend == 'amdgpu') && vars.ROCM_RUNNER_ENABLED == 'true'
+    runs-on: ${{ (inputs.backend == 'cpu-arm64' || inputs.backend == 'metal') && fromJSON('["self-hosted", "metal"]') || fromJSON('["self-hosted", "rocm"]') }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          path: _ci/harness
+          fetch-depth: 0
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          path: _ci/baseline
+          ref: ${{ inputs.baseline_ref }}
+          fetch-depth: 0
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          path: _ci/candidate
+          ref: ${{ inputs.candidate_ref }}
+          fetch-depth: 0
+      - name: Verify paired benchmark provenance
+        run: |
+          test "$(git -C _ci/harness rev-parse --is-shallow-repository)" = "false"
+          test "$(git -C _ci/baseline rev-parse --is-shallow-repository)" = "false"
+          test "$(git -C _ci/candidate rev-parse --is-shallow-repository)" = "false"
+          test "$(git -C _ci/baseline rev-parse HEAD)" = "${{ inputs.baseline_ref }}"
+          test "$(git -C _ci/candidate rev-parse HEAD)" = "${{ inputs.candidate_ref }}"
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+      - name: Configure ARM64 Julia
+        if: inputs.backend == 'cpu-arm64' || inputs.backend == 'metal'
+        uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+          arch: aarch64
+          force-arch: true
+      - name: Configure CPU policy
+        if: inputs.backend == 'cpu-arm64' || inputs.backend == 'cpu-x86_64'
+        shell: bash
+        run: |
+          requested="${{ inputs.cpu_threads }}"
+          if [[ "${{ inputs.backend }}" == "cpu-arm64" ]]; then
+            physical="$(sysctl -n hw.physicalcpu)"
+            threads="$requested"
+            [[ "$requested" == "physical" ]] && threads="$physical"
+            (( threads >= 1 && threads <= physical )) || exit 1
+            echo "JULIA_NUM_THREADS=$threads" >> "$GITHUB_ENV"
+            echo "POTTS_BENCHMARK_CPU_AFFINITY=fixed-$threads-of-$physical-physical-cores; scheduler-managed on Darwin" >> "$GITHUB_ENV"
+            echo "POTTS_BENCHMARK_HARDWARE_ID=metal-runner-cpu-arm64-v1-$threads-physical-threads" >> "$GITHUB_ENV"
+          else
+            mapfile -t physical_cpus < <(lscpu -p=CPU,CORE,SOCKET | awk -F, '!/^#/ && !seen[$2 FS $3]++ {print $1}')
+            physical="${#physical_cpus[@]}"
+            threads="$requested"
+            [[ "$requested" == "physical" ]] && threads="$physical"
+            (( threads >= 1 && threads <= physical )) || exit 1
+            selected=("${physical_cpus[@]:0:threads}")
+            cpuset="$(IFS=,; echo "${selected[*]}")"
+            echo "JULIA_NUM_THREADS=$threads" >> "$GITHUB_ENV"
+            echo "POTTS_BENCHMARK_CPUSET=$cpuset" >> "$GITHUB_ENV"
+            echo "POTTS_BENCHMARK_CPU_AFFINITY=taskset-one-logical-cpu-per-physical-core:$cpuset" >> "$GITHUB_ENV"
+            echo "POTTS_BENCHMARK_HARDWARE_ID=rocm-runner-cpu-x86_64-v1-$threads-pinned-physical-threads" >> "$GITHUB_ENV"
+          fi
+      - name: Configure GPU policy
+        if: inputs.backend == 'metal' || inputs.backend == 'amdgpu'
+        shell: bash
+        run: |
+          test "${{ inputs.precision }}" = "Float32"
+          test "${{ inputs.cpu_threads }}" = "1"
+          if [[ "${{ inputs.backend }}" == "metal" ]]; then
+            echo "POTTS_BENCHMARK_HARDWARE_ID=metal-runner-gpu-v1" >> "$GITHUB_ENV"
+          else
+            echo "POTTS_BENCHMARK_HARDWARE_ID=rocm-runner-gpu-v1" >> "$GITHUB_ENV"
+          fi
+      - name: Instantiate paired subjects
+        shell: bash
+        run: |
+          if [[ "${{ inputs.backend }}" == "cpu-x86_64" ]]; then
+            taskset -c "$POTTS_BENCHMARK_CPUSET" julia --project=_ci/baseline/benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+            taskset -c "$POTTS_BENCHMARK_CPUSET" julia --project=_ci/candidate/benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          else
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/baseline/benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/candidate/benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          fi
+          if [[ "${{ inputs.backend }}" == "metal" ]]; then
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/baseline/benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/candidate/benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          elif [[ "${{ inputs.backend }}" == "amdgpu" ]]; then
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/baseline/benchmark/backends/amdgpu --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+            JULIA_LOAD_PATH="@:@stdlib" julia --project=_ci/candidate/benchmark/backends/amdgpu --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          fi
+      - name: Run balanced paired warm evidence
+        shell: bash
+        env:
+          POTTS_BENCHMARK_POWER_MODE: ac-power
+        run: |
+          case "${{ inputs.backend }}" in
+            cpu-arm64|cpu-x86_64) runtime_backend=cpu ;;
+            metal) runtime_backend=metal ;;
+            amdgpu) runtime_backend=amdgpu ;;
+            *) exit 1 ;;
+          esac
+          if [[ "$runtime_backend" == "metal" ]]; then
+            export JULIA_LOAD_PATH="benchmark/backends/metal:benchmark:@stdlib"
+          elif [[ "$runtime_backend" == "amdgpu" ]]; then
+            export JULIA_LOAD_PATH="benchmark/backends/amdgpu:benchmark:@stdlib"
+          else
+            export JULIA_LOAD_PATH="@:@stdlib"
+          fi
+          command=(julia --project=_ci/harness/benchmark --startup-file=no _ci/harness/benchmark/paired_repeat.jl
+            --baseline-root=_ci/baseline --candidate-root=_ci/candidate
+            --backend="$runtime_backend" --profile=full
+            --precision=${{ inputs.precision }} --repetitions=${{ inputs.pairs }})
+          if [[ "${{ inputs.backend }}" == "cpu-x86_64" ]]; then
+            taskset -c "$POTTS_BENCHMARK_CPUSET" "${command[@]}"
+          else
+            "${command[@]}"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: performance-comparison-${{ inputs.backend }}-${{ inputs.precision }}-${{ inputs.cpu_threads }}-${{ inputs.pairs }}-${{ inputs.baseline_ref }}-${{ inputs.candidate_ref }}
+          path: |
+            _ci/baseline/benchmark/results/
+            _ci/candidate/benchmark/results/
+          if-no-files-found: error

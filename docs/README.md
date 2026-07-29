@@ -22,7 +22,7 @@ generated and ignored.
 
 ## Check the accepted quality target
 
-The accepted non-Phase-16 target lives in `spec/documentation-quality-v1.toml`:
+The accepted documentation target lives in `spec/documentation-quality-v1.toml`:
 
 ```bash
 # Validate the accepted decisions and registry structure.
@@ -49,11 +49,11 @@ documentation claims 9/10 readiness.
 - Internal ProcessBigraphs behavior stays package-local until its applicable runtime or adapter
   gate passes.
 
-## Adding Phase 16 material
+## Adding ProcessBigraph material
 
-Add a Phase 16 workflow to Learn or Examples only after its slice passes the corresponding
-cutover/conformance gate. Add hierarchy, transaction, failure, or checkpoint semantics to Concepts
-and Guarantees at the same time. Add new names to API only at their declared stability level.
+Add a ProcessBigraph workflow to Learn or Examples only after its public integration contract
+passes. Add hierarchy, transaction, failure, or checkpoint semantics to Concepts and Guarantees
+at the same time. Add new names to API only at their declared stability level.
 
 Documentation must never imply that a not-yet-cut Potts path uses ProcessBigraphs or that internal
 runtime alpha/beta status is a public release.
