@@ -106,7 +106,7 @@ jobs:
         env:
           POTTS_BENCHMARK_POWER_MODE: ac-power
         run: julia --project=benchmark --startup-file=no benchmark/cold_repeat.jl --backend=cpu --repetitions=${{ inputs.repetitions }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-cpu-arm64-${{ inputs.profile }}-${{ inputs.precision }}-${{ inputs.cpu_threads }}threads-${{ inputs.repetitions }}-${{ inputs.subject_ref || github.sha }}
           path: _ci/source/benchmark/results/
@@ -165,7 +165,7 @@ jobs:
         env:
           POTTS_BENCHMARK_POWER_MODE: ac-power
         run: taskset -c "$POTTS_BENCHMARK_CPUSET" julia --project=benchmark --startup-file=no benchmark/cold_repeat.jl --backend=cpu --repetitions=${{ inputs.repetitions }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-cpu-x86_64-${{ inputs.profile }}-${{ inputs.precision }}-${{ inputs.cpu_threads }}threads-${{ inputs.repetitions }}-${{ inputs.subject_ref || github.sha }}
           path: _ci/source/benchmark/results/
@@ -226,7 +226,7 @@ jobs:
           POTTS_BENCHMARK_HARDWARE_ID: metal-runner-gpu-v1
           POTTS_BENCHMARK_POWER_MODE: ac-power
         run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_metal.jl
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-metal-${{ inputs.profile }}-${{ inputs.repetitions }}-${{ inputs.subject_ref || github.sha }}
           path: _ci/source/benchmark/results/
@@ -294,7 +294,7 @@ jobs:
             --hip-trace --hsa-trace --kernel-trace -- \
             julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_amdgpu.jl
           find benchmark/results/rocprof -type f -name '*.pftrace' -size +0 -print -quit | grep .
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-rocm-${{ inputs.profile }}-${{ inputs.repetitions }}-${{ inputs.subject_ref || github.sha }}
           path: _ci/source/benchmark/results/
