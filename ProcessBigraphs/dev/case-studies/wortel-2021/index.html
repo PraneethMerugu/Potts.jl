@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Wortel 2021 · ProcessBigraphs.jl</title><meta name="title" content="Wortel 2021 · ProcessBigraphs.jl"/><meta property="og:title" content="Wortel 2021 · ProcessBigraphs.jl"/><meta property="twitter:title" content="Wortel 2021 · ProcessBigraphs.jl"/><meta name="description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="og:description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="twitter:description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="og:url" content="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/wortel-2021/"/><meta property="twitter:url" content="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/wortel-2021/"/><link rel="canonical" href="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/wortel-2021/"/><script data-outdated-warner src="../../assets/warner.js"></script><script>documenterBaseURL="../.."</script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/docs.css" rel="stylesheet" type="text/css"/><script src="../../assets/beta.js"></script><script src="../../assets/offline.js"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23176b87'/%3E%3Cpath d='M18 48V16h17c9 0 15 5 15 13s-6 13-15 13h-8v6zm9-14h8c4 0 6-2 6-5s-2-5-6-5h-8z' fill='white'/%3E%3C/svg%3E"></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ProcessBigraphs.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Learn</span><ul><li><a class="tocitem" href="../../learn/install-and-verify/">Install and verify the internal beta</a></li><li><a class="tocitem" href="../../learn/mental-model/">The process-bigraph mental model</a></li><li><a class="tocitem" href="../../learn/first-multirate-composite/">Your first multirate composite</a></li><li><a class="tocitem" href="../../learn/stores-ports-updates/">Stores, ports, schemas, and updates</a></li><li><a class="tocitem" href="../../learn/compose-and-inspect/">Compose and inspect a system</a></li><li><a class="tocitem" href="../../learn/time-scheduling-publication/">Logical time, scheduling, and publication</a></li><li><a class="tocitem" href="../../learn/write-components/">Write processes, steps, and observers</a></li><li><a class="tocitem" href="../../learn/adapters-and-solvers/">Integrate adapters and solvers</a></li><li><a class="tocitem" href="../../learn/dynamic-structure/">Change structure transactionally</a></li><li><a class="tocitem" href="../../learn/checkpoint-failure-replay/">Checkpoint, fail, restore, and replay</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../../examples/">Example gallery</a></li><li><a class="tocitem" href="../../examples/pulse-and-decay/">Pulse and decay</a></li><li><a class="tocitem" href="../../examples/nested-composites/">Reusable nested composites</a></li><li><a class="tocitem" href="../../examples/n-way-junctions/">N-way junctions</a></li><li><a class="tocitem" href="../../examples/sciml-field-adapter/">SciML field adapter</a></li><li><a class="tocitem" href="../../examples/custom-engine-adapter/">Independent custom engine adapter</a></li><li><a class="tocitem" href="../../examples/divide-fail-recover/">Divide, fail, and recover</a></li></ul></li><li><span class="tocitem">Scientific Case Studies</span><ul><li><a class="tocitem" href="../">Scientific case-study boundary</a></li><li class="is-active"><a class="tocitem" href>Wortel 2021</a><ul class="internal"><li><a class="tocitem" href="#Source-and-accepted-profile"><span>Source and accepted profile</span></a></li><li><a class="tocitem" href="#Complete-executed-source"><span>Complete executed source</span></a></li><li><a class="tocitem" href="#State,-trace,-and-inspection-loop"><span>State, trace, and inspection loop</span></a></li><li><a class="tocitem" href="#What-this-establishes"><span>What this establishes</span></a></li><li><a class="tocitem" href="#What-this-does-not-establish"><span>What this does not establish</span></a></li></ul></li><li><a class="tocitem" href="../merks-2006/">Merks 2006</a></li></ul></li><li><span class="tocitem">Concepts and Guarantees</span><ul><li><a class="tocitem" href="../../concepts/architecture/">Architecture and compute ownership</a></li><li><a class="tocitem" href="../../concepts/canonical-identity/">Canonical structure and semantic identity</a></li><li><a class="tocitem" href="../../concepts/state-effects-reconciliation/">Logical state, effects, and reconciliation</a></li><li><a class="tocitem" href="../../concepts/time-schedules-visibility/">Time, schedules, and visibility</a></li><li><a class="tocitem" href="../../concepts/hierarchy-open-composition/">Hierarchy and open composition</a></li><li><a class="tocitem" href="../../concepts/structural-transactions/">Dynamic structural transactions</a></li><li><a class="tocitem" href="../../concepts/engines-and-compute/">Engines, adapters, and heavy computation</a></li><li><a class="tocitem" href="../../concepts/rng-observation-persistence/">RNG, observation, checkpoints, and replay</a></li><li><a class="tocitem" href="../../concepts/capability-migration-troubleshooting/">Capability status, migration, and troubleshooting</a></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/user-authoring/">User authoring API</a></li><li><a class="tocitem" href="../../api/semantic-values/">Semantic values, schemas, schedules, and effects</a></li><li><a class="tocitem" href="../../api/runtime-checkpoint/">Process, step, observer, runtime, and checkpoint API</a></li><li><a class="tocitem" href="../../api/composition-structure/">Composition and structure API</a></li><li><a class="tocitem" href="../../api/extension-experimental/">Extension protocols, experimental surface, and compatibility</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Scientific Case Studies</a></li><li class="is-active"><a href>Wortel 2021</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Wortel 2021</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/PraneethMerugu/Potts.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="wortel-2021-case"><a class="docs-heading-anchor" href="#wortel-2021-case">Wortel 2021</a><a id="wortel-2021-case-1"></a><a class="docs-heading-anchor-permalink" href="#wortel-2021-case" title="Permalink"></a></h1><blockquote><p><strong>Content class:</strong> qualified source-bounded case study. <strong>Support level:</strong> qualified unpublished internal beta.</p></blockquote><p><strong>Outcome.</strong> Assemble the reduced Wortel activity-CPM mechanism from ordinary PottsToolkit declarations, execute it through an explicit ProcessBigraph, and record a typed bounded-state summary.</p><p><strong>Prerequisites.</strong> <a href="../../learn/first-multirate-composite/#first-multirate-composite">Your first multirate composite</a>, <a href="../../learn/write-components/#write-components">write components</a>, and familiarity with Cellular Potts models.</p><h2 id="Source-and-accepted-profile"><a class="docs-heading-anchor" href="#Source-and-accepted-profile">Source and accepted profile</a><a id="Source-and-accepted-profile-1"></a><a class="docs-heading-anchor-permalink" href="#Source-and-accepted-profile" title="Permalink"></a></h2><p>Source: Wortel et al. (2021), DOI <a href="https://doi.org/10.1016/j.bpj.2021.04.036"><code>10.1016/j.bpj.2021.04.036</code></a>. The traced mechanism is the geometric Act memory term with a Moore neighborhood and explicit activity parameters.</p><table><tr><th style="text-align: right">Choice</th><th style="text-align: right">Reduced docs profile</th></tr><tr><td style="text-align: right">Domain</td><td style="text-align: right">24×24 lattice</td></tr><tr><td style="text-align: right">Initial cells</td><td style="text-align: right">deterministic 4×4 blocks</td></tr><tr><td style="text-align: right">Activity</td><td style="text-align: right">maximum 10, strength 20</td></tr><tr><td style="text-align: right">Volume</td><td style="text-align: right">target 16, strength 1</td></tr><tr><td style="text-align: right">Temperature</td><td style="text-align: right">20</td></tr><tr><td style="text-align: right">CPM budget</td><td style="text-align: right">one attempt per site per MCS</td></tr><tr><td style="text-align: right">Observation cadence</td><td style="text-align: right">2 MCS</td></tr><tr><td style="text-align: right">Horizon</td><td style="text-align: right">4 MCS</td></tr><tr><td style="text-align: right">Seed</td><td style="text-align: right"><code>0x7068617365313403</code></td></tr><tr><td style="text-align: right">Backend</td><td style="text-align: right">CPU</td></tr></table><p>Deviations are the reduced domain, short horizon, and documentation seed.</p><h2 id="Complete-executed-source"><a class="docs-heading-anchor" href="#Complete-executed-source">Complete executed source</a><a id="Complete-executed-source-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-executed-source" title="Permalink"></a></h2><p>This is the entire program. The biological declarations, initialization, Act mechanism, ProcessBigraph stores, component, bindings, schedule, observer, runtime, and assertions are all visible and evaluated.</p><pre><code class="language-julia hljs">using PottsToolkit
+import CorePotts
+import ProcessBigraphs as PB
+import SciMLBase
+
+const WORTEL_SOURCE_DOI = &quot;10.1016/j.bpj.2021.04.036&quot;
+const WORTEL_SEMANTIC_VERSION = &quot;1.0.0&quot;
+
+profile = (
+    identity=:reduced_cpu,
+    dimensions=(24, 24),
+    cell_side=4,
+    maximum_activity=10.0f0,
+    activity_strength=20.0f0,
+    volume_strength=1.0f0,
+    temperature=20.0f0,
+    observation_every=2,
+    mcs=4,
+    seed=UInt64(0x7068617365313403),
+)
+
+medium = Medium(:extracellular)
+cell = CellType(:endothelial)
+potts_model = PottsModel(
+    medium,
+    cell,
+    Volume(
+        cell =&gt; (
+            target=Float32(profile.cell_side^2),
+            strength=profile.volume_strength,
+        ),
+    ),
+    Adhesion(PairwiseLaw(
+        :contact_energy,
+        (medium, medium) =&gt; 0.0f0,
+        (medium, cell) =&gt; 6.0f0,
+        (cell, cell) =&gt; 2.0f0,
+    )),
+)
+activity = Act(
+    maximum_activity=profile.maximum_activity,
+    strength=profile.activity_strength,
+    neighborhood=CorePotts.MooreTopology{2}(),
+    spacing=(1.0f0, 1.0f0),
+    algorithm=BudgetedSequentialCPM(
+        AttemptsPerSite(1);
+        temperature=profile.temperature,
+    ),
+    observation_every=profile.observation_every,
+)
+
+function initial_wortel_labels(profile)
+    labels = zeros(UInt64, profile.dimensions)
+    pitch = profile.cell_side + 2
+    identity = UInt64(0)
+    for y in 2:pitch:(profile.dimensions[2] - profile.cell_side),
+            x in 2:pitch:(profile.dimensions[1] - profile.cell_side)
+        identity += UInt64(1)
+        labels[
+            x:(x + profile.cell_side - 1),
+            y:(y + profile.cell_side - 1),
+        ] .= identity
+    end
+    labels
+end
+labels = initial_wortel_labels(profile)
+identities = Tuple(
+    id =&gt; cell for id in sort!(collect(Set(filter(!iszero, labels))))
+)
+base_problem = PottsProblem(
+    potts_model,
+    CartesianDomain(profile.dimensions; spacing=(1.0f0, 1.0f0)),
+    Layout(LabelledCells(labels, identities));
+    capacity=length(identities),
+    tspan=(0, profile.mcs),
+    seed=profile.seed,
+)
+activity_problem = CorePotts.ActivityPottsProblem(
+    base_problem,
+    lower(activity),
+)
+
+function activity_arrays(problem, dimensions, mcs)
+    integrator = SciMLBase.init(problem)
+    SciMLBase.step!(integrator, mcs)
+    state = CorePotts.logical_state(integrator)
+    labels = zeros(UInt64, dimensions)
+    activity = zeros(Float32, dimensions)
+    for site in eachindex(labels)
+        owner = CorePotts.owner_at(state, site)
+        labels[site] = CorePotts.is_cell_owner(owner) ?
+            UInt64(CorePotts.value(CorePotts.cell_id(owner))) : UInt64(0)
+        activity[site] =
+            Float32(CorePotts.site_property_value(integrator, site))
+    end
+    return labels, activity, CorePotts.current_mcs_report(integrator)
+end
+
+struct WortelActivityBatch{P,T} &lt;: PB.AbstractProcess
+    problem::P
+    profile::T
+    model_fingerprint::String
+end
+
+PB.ports(::WortelActivityBatch) = (
+    PB.PortSpec(Array{UInt64,2}, :labels, :output; update_law=:replace),
+    PB.PortSpec(Array{Float32,2}, :activity, :output; update_law=:replace),
+)
+PB.semantic_version(::WortelActivityBatch) = WORTEL_SEMANTIC_VERSION
+PB.semantic_parameters(batch::WortelActivityBatch) = (
+    family=:Wortel2021,
+    source_doi=WORTEL_SOURCE_DOI,
+    profile=batch.profile.identity,
+    potts_fingerprint=batch.model_fingerprint,
+)
+function PB.invoke(batch::WortelActivityBatch, inputs, context)
+    labels, activity, report = activity_arrays(
+        batch.problem,
+        batch.profile.dimensions,
+        batch.profile.mcs,
+    )
+    PB.InvocationResult((
+        PB.emit(context, :labels, PB.ReplaceUpdate(), labels),
+        PB.emit(context, :activity, PB.ReplaceUpdate(), activity),
+    ); diagnostics=(
+        accepted_copies=report.accepted_copies,
+        profile=batch.profile.identity,
+    ))
+end
+
+scale = PB.TimeScale(1, 1, :mcs)
+composite_model = PB.compose(
+    :Wortel2021;
+    scale,
+    profile=:reproducible,
+) do system
+    label_store = PB.store!(
+        system, :labels,
+        PB.LeafSchema(
+            UInt64;
+            shape=profile.dimensions,
+            default=zeros(UInt64, profile.dimensions),
+            update_law=:replace,
+            ontology=&quot;CPM cell identity&quot;,
+        ),
+    )
+    activity_store = PB.store!(
+        system, :activity,
+        PB.LeafSchema(
+            Float32;
+            shape=profile.dimensions,
+            default=zeros(Float32, profile.dimensions),
+            update_law=:replace,
+            ontology=&quot;Act memory&quot;,
+        ),
+    )
+    simulation = PB.mount!(
+        system,
+        :activity_cpm,
+        WortelActivityBatch(
+            activity_problem,
+            profile,
+            semantic_fingerprint(potts_model).digest,
+        ),
+    )
+    PB.attach!(
+        system,
+        simulation,
+        (labels=label_store, activity=activity_store),
+    )
+    PB.schedule!(
+        system,
+        simulation,
+        PB.At(PB.LogicalTime(profile.mcs, scale)),
+    )
+    PB.observable!(system, :labels, label_store)
+    PB.observable!(system, :activity, activity_store)
+end
+
+struct WortelSummary &lt;: PB.AbstractObserver end
+PB.observer_semantic_version(::WortelSummary) = WORTEL_SEMANTIC_VERSION
+PB.observer_semantic_parameters(::WortelSummary) = (
+    family=:Wortel2021,
+    observation=:bounded_state_summary,
+)
+function PB.observe(::WortelSummary, projection, context)
+    labels = projection[PB.path(&quot;labels&quot;)]
+    activity = projection[PB.path(&quot;activity&quot;)]
+    PB.ObservationResult((
+        mcs=Int(context.time.tick),
+        cells=length(Set(filter(!iszero, labels))),
+        occupied=count(!iszero, labels),
+        active_sites=count(&gt;(0), activity),
+        activity_mass=sum(activity),
+    ))
+end
+
+observer = PB.ObserverSpec(
+    &quot;wortel-state-summary&quot;,
+    WortelSummary(),
+    (PB.path(&quot;labels&quot;), PB.path(&quot;activity&quot;)),
+    PB.AtTimesObservationSchedule((
+        PB.LogicalTime(profile.mcs, scale),
+    ));
+    record_schema=PB.RecordSchema(
+        NamedTuple; identity=&quot;wortel-state-summary-v1&quot;),
+)
+runtime = PB.initialize_runtime(
+    PB.compile(composite_model),
+    PB.SerialExecutor(
+        root_seed=profile.seed,
+        observation_plan=PB.ObservationPlan((observer,)),
+    ),
+)
+PB.run_until!(runtime, PB.LogicalTime(profile.mcs, scale))
+
+record = only(PB.observation_records(runtime)).payload
+result = (
+    record,
+    model_fingerprint=semantic_fingerprint(potts_model).digest,
+    composite_fingerprint=PB.semantic_fingerprint(composite_model),
+    source_doi=WORTEL_SOURCE_DOI,
+)
+@assert result.record.mcs == profile.mcs
+@assert result.record.cells == length(identities)
+@assert result.record.occupied &gt; 0</code></pre><h2 id="State,-trace,-and-inspection-loop"><a class="docs-heading-anchor" href="#State,-trace,-and-inspection-loop">State, trace, and inspection loop</a><a id="State,-trace,-and-inspection-loop-1"></a><a class="docs-heading-anchor-permalink" href="#State,-trace,-and-inspection-loop" title="Permalink"></a></h2><p><img src="../../assets/wortel-state.png" alt="A paper-inspired native MakiePotts time strip shows the same fixed-seed reduced Act-CPM trajectory at MCS 0, 30, and 60, with white cell boundaries over the black-to-green-to-yellow-to-red activity field."/></p><p><img src="../../assets/case-traces.png" alt="A native Makie trace shows occupied and active Wortel sites across the longer visualization profile, sampled every five MCS through MCS 60."/></p><div class="pb-native-animation">
+<video autoplay loop muted playsinline controls preload="metadata"
+       width="1800" height="820"
+       poster="../../assets/wortel-state.png"
+       aria-label="Native MakiePotts animation of the fixed-seed reduced Wortel trajectory from MCS zero through sixty">
+  <source src="../../assets/wortel-animation.mp4" type="video/mp4">
+  <a href="../../assets/wortel-animation.mp4">Download the Wortel Makie animation.</a>
+</video>
+<img class="pb-animation-fallback"
+     src="../../assets/wortel-state.png"
+     alt="Static MakiePotts fallback showing Wortel cell identities and Act memory at MCS zero, thirty, and sixty.">
+</div><p>Text alternative for the animation: thirteen native MakiePotts states sample the declared seed every 5 MCS from initialization through MCS 60. White cell boundaries evolve over an activity field that runs from black (inactive) through green and yellow to red (most active). Reduced-motion users receive the three-panel MCS 0/30/60 time strip. The executed four-MCS program above remains the fast, fully displayed tutorial and typed-record authority; the longer media profile changes only the observation horizon and sampling cadence so that the stochastic dynamics are legible during a presentation.</p><h2 id="What-this-establishes"><a class="docs-heading-anchor" href="#What-this-establishes">What this establishes</a><a id="What-this-establishes-1"></a><a class="docs-heading-anchor-permalink" href="#What-this-establishes" title="Permalink"></a></h2><p>The displayed program establishes that the reduced profile:</p><ul><li>constructs the intended Potts volume/contact model and explicit Act mechanism;</li><li>uses the supported <code>ActivityPottsProblem</code> and SciML lifecycle;</li><li>publishes labels and activity through a typed ProcessBigraph component;</li><li>records cell count, occupied sites, active sites, and activity mass at 4 MCS;</li><li>reproduces the same stochastic trajectory for the stated seed on CPU; and</li><li>shares the packaged family’s Potts semantic fingerprint and frozen bounded behavior check.</li></ul><h2 id="What-this-does-not-establish"><a class="docs-heading-anchor" href="#What-this-does-not-establish">What this does not establish</a><a id="What-this-does-not-establish-1"></a><a class="docs-heading-anchor-permalink" href="#What-this-does-not-establish" title="Permalink"></a></h2><p>It does <strong>not</strong> reproduce Figure 2, execute the paper’s 51-parameter × 30-seed study, estimate an ensemble or output distribution, validate physical time, establish backend equivalence from this docs run, or imply endorsement by the source authors. Exact package/tutorial equality is fixed-seed reproducibility, not a claim that one stochastic trajectory characterizes the model. Separate retained qualification covers the same Act mechanism on CPU, Metal, and ROCm at its frozen evidence boundary; this page executes CPU only.</p><p><strong>Material defaults.</strong> All values are listed in the accepted-profile table and in <code>profile</code> at the top of the program.</p><p><strong>Expected result.</strong> One observation at 4 MCS with the initialized cell count, positive occupied sites, deterministic fingerprints, and a complete MCS report.</p><p><strong>Backend / runtime / seed.</strong> CPU; four bounded MCS; seed <code>0x7068617365313403</code>.</p><p><strong>Reproduction command.</strong> <code>julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/models/case_studies/wortel_2021.jl</code></p><p><strong>Full qualification command.</strong> <code>julia --project=. -e &#39;using Pkg; Pkg.test(&quot;PottsToolkit&quot;)&#39;</code></p><p><strong>Next step.</strong> Compare the more tightly coupled field/CPM assembly in <a href="../merks-2006/#merks-2006-case">Merks 2006</a>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Scientific case-study boundary</a><a class="docs-footer-nextpage" href="../merks-2006/">Merks 2006 »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 29 July 2026 23:24">Wednesday 29 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

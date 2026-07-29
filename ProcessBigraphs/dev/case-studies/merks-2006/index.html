@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Merks 2006 · ProcessBigraphs.jl</title><meta name="title" content="Merks 2006 · ProcessBigraphs.jl"/><meta property="og:title" content="Merks 2006 · ProcessBigraphs.jl"/><meta property="twitter:title" content="Merks 2006 · ProcessBigraphs.jl"/><meta name="description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="og:description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="twitter:description" content="Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl."/><meta property="og:url" content="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/merks-2006/"/><meta property="twitter:url" content="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/merks-2006/"/><link rel="canonical" href="https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/case-studies/merks-2006/"/><script data-outdated-warner src="../../assets/warner.js"></script><script>documenterBaseURL="../.."</script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/docs.css" rel="stylesheet" type="text/css"/><script src="../../assets/beta.js"></script><script src="../../assets/offline.js"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23176b87'/%3E%3Cpath d='M18 48V16h17c9 0 15 5 15 13s-6 13-15 13h-8v6zm9-14h8c4 0 6-2 6-5s-2-5-6-5h-8z' fill='white'/%3E%3C/svg%3E"></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ProcessBigraphs.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Learn</span><ul><li><a class="tocitem" href="../../learn/install-and-verify/">Install and verify the internal beta</a></li><li><a class="tocitem" href="../../learn/mental-model/">The process-bigraph mental model</a></li><li><a class="tocitem" href="../../learn/first-multirate-composite/">Your first multirate composite</a></li><li><a class="tocitem" href="../../learn/stores-ports-updates/">Stores, ports, schemas, and updates</a></li><li><a class="tocitem" href="../../learn/compose-and-inspect/">Compose and inspect a system</a></li><li><a class="tocitem" href="../../learn/time-scheduling-publication/">Logical time, scheduling, and publication</a></li><li><a class="tocitem" href="../../learn/write-components/">Write processes, steps, and observers</a></li><li><a class="tocitem" href="../../learn/adapters-and-solvers/">Integrate adapters and solvers</a></li><li><a class="tocitem" href="../../learn/dynamic-structure/">Change structure transactionally</a></li><li><a class="tocitem" href="../../learn/checkpoint-failure-replay/">Checkpoint, fail, restore, and replay</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../../examples/">Example gallery</a></li><li><a class="tocitem" href="../../examples/pulse-and-decay/">Pulse and decay</a></li><li><a class="tocitem" href="../../examples/nested-composites/">Reusable nested composites</a></li><li><a class="tocitem" href="../../examples/n-way-junctions/">N-way junctions</a></li><li><a class="tocitem" href="../../examples/sciml-field-adapter/">SciML field adapter</a></li><li><a class="tocitem" href="../../examples/custom-engine-adapter/">Independent custom engine adapter</a></li><li><a class="tocitem" href="../../examples/divide-fail-recover/">Divide, fail, and recover</a></li></ul></li><li><span class="tocitem">Scientific Case Studies</span><ul><li><a class="tocitem" href="../">Scientific case-study boundary</a></li><li><a class="tocitem" href="../wortel-2021/">Wortel 2021</a></li><li class="is-active"><a class="tocitem" href>Merks 2006</a><ul class="internal"><li><a class="tocitem" href="#Source,-ambiguity-trace,-and-profiles"><span>Source, ambiguity trace, and profiles</span></a></li><li><a class="tocitem" href="#Complete-executed-source"><span>Complete executed source</span></a></li><li><a class="tocitem" href="#State,-trace,-and-inspection-loop"><span>State, trace, and inspection loop</span></a></li><li><a class="tocitem" href="#What-this-establishes"><span>What this establishes</span></a></li><li><a class="tocitem" href="#What-this-does-not-establish"><span>What this does not establish</span></a></li></ul></li></ul></li><li><span class="tocitem">Concepts and Guarantees</span><ul><li><a class="tocitem" href="../../concepts/architecture/">Architecture and compute ownership</a></li><li><a class="tocitem" href="../../concepts/canonical-identity/">Canonical structure and semantic identity</a></li><li><a class="tocitem" href="../../concepts/state-effects-reconciliation/">Logical state, effects, and reconciliation</a></li><li><a class="tocitem" href="../../concepts/time-schedules-visibility/">Time, schedules, and visibility</a></li><li><a class="tocitem" href="../../concepts/hierarchy-open-composition/">Hierarchy and open composition</a></li><li><a class="tocitem" href="../../concepts/structural-transactions/">Dynamic structural transactions</a></li><li><a class="tocitem" href="../../concepts/engines-and-compute/">Engines, adapters, and heavy computation</a></li><li><a class="tocitem" href="../../concepts/rng-observation-persistence/">RNG, observation, checkpoints, and replay</a></li><li><a class="tocitem" href="../../concepts/capability-migration-troubleshooting/">Capability status, migration, and troubleshooting</a></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/user-authoring/">User authoring API</a></li><li><a class="tocitem" href="../../api/semantic-values/">Semantic values, schemas, schedules, and effects</a></li><li><a class="tocitem" href="../../api/runtime-checkpoint/">Process, step, observer, runtime, and checkpoint API</a></li><li><a class="tocitem" href="../../api/composition-structure/">Composition and structure API</a></li><li><a class="tocitem" href="../../api/extension-experimental/">Extension protocols, experimental surface, and compatibility</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Scientific Case Studies</a></li><li class="is-active"><a href>Merks 2006</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Merks 2006</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/PraneethMerugu/Potts.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="merks-2006-case"><a class="docs-heading-anchor" href="#merks-2006-case">Merks 2006</a><a id="merks-2006-case-1"></a><a class="docs-heading-anchor-permalink" href="#merks-2006-case" title="Permalink"></a></h1><blockquote><p><strong>Content class:</strong> qualified source-bounded case study. <strong>Support level:</strong> qualified unpublished internal beta.</p></blockquote><p><strong>Outcome.</strong> Assemble the reduced Merks vasculogenesis mechanism from ordinary PottsToolkit declarations and an explicit multirate ProcessBigraph coupling CPM, secretion, diffusion, decay, and typed observations.</p><p><strong>Prerequisites.</strong> <a href="../../learn/adapters-and-solvers/#adapters-and-solvers">Adapters and solvers</a>, <a href="../../learn/write-components/#write-components">write components</a>, and Cellular Potts concepts.</p><h2 id="Source,-ambiguity-trace,-and-profiles"><a class="docs-heading-anchor" href="#Source,-ambiguity-trace,-and-profiles">Source, ambiguity trace, and profiles</a><a id="Source,-ambiguity-trace,-and-profiles-1"></a><a class="docs-heading-anchor-permalink" href="#Source,-ambiguity-trace,-and-profiles" title="Permalink"></a></h2><p>Source: Merks et al. (2006), DOI <a href="https://doi.org/10.1016/j.ydbio.2005.10.003"><code>10.1016/j.ydbio.2005.10.003</code></a>. The trace covers equations 3–6 and the explicit software choices for periodic field boundaries, Moore local-connectivity rejection, and deterministic nonoverlapping placement.</p><table><tr><th style="text-align: right">Choice</th><th style="text-align: right">Canonical profile</th><th style="text-align: right">Executed docs profile</th></tr><tr><td style="text-align: right">Domain</td><td style="text-align: right">500×500</td><td style="text-align: right">20×20</td></tr><tr><td style="text-align: right">Cells</td><td style="text-align: right">282</td><td style="text-align: right">2</td></tr><tr><td style="text-align: right">Initially occupied sites</td><td style="text-align: right">28,200</td><td style="text-align: right">10</td></tr><tr><td style="text-align: right">Target area</td><td style="text-align: right">100</td><td style="text-align: right">5</td></tr><tr><td style="text-align: right">Target length</td><td style="text-align: right">50</td><td style="text-align: right">5</td></tr><tr><td style="text-align: right">Temperature</td><td style="text-align: right">50</td><td style="text-align: right">50</td></tr><tr><td style="text-align: right">Chemotaxis γ</td><td style="text-align: right">1000</td><td style="text-align: right">1000</td></tr><tr><td style="text-align: right">Field subcycles / MCS</td><td style="text-align: right">15</td><td style="text-align: right">15</td></tr><tr><td style="text-align: right">Horizon</td><td style="text-align: right">bounded qualification</td><td style="text-align: right">2 MCS</td></tr><tr><td style="text-align: right">Seed</td><td style="text-align: right">declared canonical</td><td style="text-align: right">11</td></tr></table><p>The high-level biological model is shared exactly; domain, population, targets, runtime, and seed are intentional documentation reductions.</p><h2 id="Complete-executed-source"><a class="docs-heading-anchor" href="#Complete-executed-source">Complete executed source</a><a id="Complete-executed-source-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-executed-source" title="Permalink"></a></h2><p>The following is the entire program. No reference-model constructor or hidden scientific setup is used.</p><pre><code class="language-julia hljs">using PottsToolkit
+using OrdinaryDiffEqTsit5: Tsit5
+import CorePotts
+import ProcessBigraphs as PB
+import SciMLBase
+
+const MERKS_SOURCE_DOI = &quot;10.1016/j.ydbio.2005.10.003&quot;
+const MERKS_SEMANTIC_VERSION = &quot;2.0.0&quot;
+
+profile = (
+    identity=:reduced_docs_cpu,
+    dimensions=(20, 20),
+    cells=2,
+    central_extent=16,
+    target_area_sites=5.0,
+    target_length_sites=5.0,
+    temperature=50.0,
+    chemotaxis_gamma=1000.0,
+    volume_strength=50.0,
+    source_length_strength=5.0,
+    secretion_rate=1.8e-4,
+    diffusion=0.1,
+    decay=1.8e-4,
+    subcycles_per_mcs=15,
+    mcs=2,
+    seed=UInt64(11),
+)
+
+cell = CellType(:endothelial)
+extracellular = Medium(:extracellular_matrix)
+border = Medium(:border)
+chemoattractant = Field(
+    :chemoattractant;
+    placement=CellCentered(),
+    boundary=PeriodicField(),
+    interpolation=Nearest(),
+)
+moore = CorePotts.MooreTopology{2}()
+spatial_roles = CorePotts.SpatialRoles(
+    proposal=CorePotts.static_relation(CorePotts.ProposalRole(), moore),
+    contact=CorePotts.static_relation(CorePotts.ContactRole(), moore),
+    surface=CorePotts.static_relation(CorePotts.SurfaceRole(), moore),
+    connectivity=CorePotts.static_relation(CorePotts.ConnectivityRole(), moore),
+    query=CorePotts.static_relation(CorePotts.SpatialQueryRole(), moore),
+)
+potts_model = PottsModel(
+    cell,
+    extracellular,
+    border,
+    Volume(
+        cell =&gt; (
+            target=profile.target_area_sites,
+            strength=profile.volume_strength,
+        ),
+    ),
+    Elongation(
+        cell =&gt; (
+            target=profile.target_length_sites / 4,
+            strength=16 * profile.source_length_strength,
+        );
+        target_division=CloneOnDivision(),
+    ),
+    Adhesion(PairwiseLaw(
+        :contact_energy,
+        (cell, cell) =&gt; 40.0,
+        (cell, extracellular) =&gt; 20.0,
+        (cell, border) =&gt; 100.0,
+        (extracellular, extracellular) =&gt; 0.0,
+        (extracellular, border) =&gt; 0.0,
+        (border, border) =&gt; 0.0,
+    )),
+    chemoattractant,
+    Chemotaxis(
+        chemoattractant,
+        cell =&gt; profile.chemotaxis_gamma / profile.temperature;
+        response=LinearResponse(),
+        mode=ExtensionChemotaxis(),
+    ),
+    LocalConnectivity(),
+    spatial_roles,
+)
+
+function initial_merks_labels(profile)
+    labels = zeros(UInt64, profile.dimensions)
+    grid_width = ceil(Int, sqrt(profile.cells))
+    lower = ntuple(axis -&gt;
+        fld(profile.dimensions[axis] - profile.central_extent, 2) + 1, 2)
+    spacing = profile.central_extent / grid_width
+    radius = sqrt(profile.target_area_sites / pi)
+    identity = 0
+    for gy in 1:grid_width, gx in 1:grid_width
+        identity == profile.cells &amp;&amp; break
+        identity += 1
+        center = (
+            lower[1] - 1 + (gx - 0.5) * spacing,
+            lower[2] - 1 + (gy - 0.5) * spacing,
+        )
+        bound = ceil(Int, radius) + 1
+        xbounds = (
+            max(1, floor(Int, center[1]) - bound):
+            min(profile.dimensions[1], ceil(Int, center[1]) + bound)
+        )
+        ybounds = (
+            max(1, floor(Int, center[2]) - bound):
+            min(profile.dimensions[2], ceil(Int, center[2]) + bound)
+        )
+        candidates = [
+            CartesianIndex(x, y) for y in ybounds for x in xbounds
+        ]
+        sort!(candidates; by=site -&gt; (
+            sum((site[axis] - center[axis])^2 for axis in 1:2),
+            Tuple(site),
+        ))
+        for site in candidates[1:round(Int, profile.target_area_sites)]
+            iszero(labels[site]) ||
+                throw(ArgumentError(&quot;initial cells overlap&quot;))
+            labels[site] = UInt64(identity)
+        end
+    end
+    labels
+end
+
+labels = initial_merks_labels(profile)
+initial_field = zeros(Float64, profile.dimensions)
+field_scale = PB.TimeScale(2, 1, :second)
+field_problem = PB.BoundedCartesianFieldProblem(
+    &quot;merks-chemoattractant&quot;,
+    initial_field;
+    spacing=(2.0, 2.0),
+    diffusion=profile.diffusion,
+    decay=profile.decay,
+    tick_duration=2.0,
+    time_scale=field_scale,
+)
+field_declaration = PB.sciml_field_declaration(
+    field_problem,
+    Tsit5();
+    algorithm_id=&quot;ordinarydiffeq-tsit5&quot;,
+    solver_options=(abstol=1.0e-9, reltol=1.0e-9),
+)
+field_process = PB.managed_field_process(
+    field_declaration;
+    resource_authorization=(
+        backend=:cpu,
+        precision=:float64,
+        residency=:host,
+    ),
+    subcycles_per_mcs=profile.subcycles_per_mcs,
+)
+
+function merks_problem(
+        potts_model, cell, chemoattractant, profile, labels, field, mcs)
+    identities = Tuple(
+        id =&gt; cell for id in sort!(collect(Set(filter(!iszero, labels))))
+    )
+    PottsProblem(
+        potts_model,
+        CartesianDomain(
+            profile.dimensions;
+            spacing=(1.0, 1.0),
+            boundaries=(
+                AxisBoundary(ClosedBoundary()),
+                AxisBoundary(ClosedBoundary()),
+            ),
+        ),
+        Layout(LabelledCells(labels, identities));
+        fields=(chemoattractant =&gt; field,),
+        capacity=profile.cells,
+        tspan=(mcs - 1, mcs),
+        seed=profile.seed,
+    )
+end
+
+function logical_labels(state, dimensions)
+    labels = zeros(UInt64, dimensions)
+    for site in eachindex(labels)
+        owner = CorePotts.owner_at(state, site)
+        labels[site] = CorePotts.is_cell_owner(owner) ?
+            UInt64(CorePotts.value(CorePotts.cell_id(owner))) : UInt64(0)
+    end
+    labels
+end
+
+struct MerksCPMStep{M,C,F,P} &lt;: PB.AbstractStep
+    model::M
+    cell::C
+    field::F
+    profile::P
+end
+
+PB.ports(::MerksCPMStep) = (
+    PB.PortSpec(Array{UInt64,2}, :labels, :input;
+        interval_behavior=:event_updated),
+    PB.PortSpec(Array{Float64,2}, :mcs_field, :input;
+        interval_behavior=:event_updated),
+    PB.PortSpec(Array{UInt64,2}, :labels_out, :output;
+        update_law=:replace),
+)
+PB.semantic_version(::MerksCPMStep) = MERKS_SEMANTIC_VERSION
+PB.semantic_parameters(step::MerksCPMStep) = (
+    family=:Merks2006,
+    source_doi=MERKS_SOURCE_DOI,
+    profile=step.profile.identity,
+    potts_fingerprint=semantic_fingerprint(step.model).digest,
+)
+function PB.invoke(step::MerksCPMStep, inputs, context)
+    mcs = Int(div(context.end_time.tick, step.profile.subcycles_per_mcs))
+    experiment = merks_problem(
+        step.model,
+        step.cell,
+        step.field,
+        step.profile,
+        inputs[:labels],
+        inputs[:mcs_field],
+        mcs,
+    )
+    integrator = SciMLBase.init(
+        experiment,
+        SequentialCPM(temperature=step.profile.temperature),
+    )
+    SciMLBase.step!(integrator)
+    updated = logical_labels(
+        CorePotts.logical_state(integrator),
+        step.profile.dimensions,
+    )
+    PB.InvocationResult((
+        PB.emit(context, :labels_out, PB.ReplaceUpdate(), updated),
+    ); diagnostics=(
+        mcs,
+        accepted_copies=CorePotts.current_mcs_report(integrator).accepted_copies,
+    ))
+end
+
+struct MerksSecretion &lt;: PB.AbstractStep
+    rate::Float64
+end
+
+PB.ports(::MerksSecretion) = (
+    PB.PortSpec(Array{UInt64,2}, :labels, :input;
+        interval_behavior=:event_updated),
+    PB.PortSpec(Array{Float64,2}, :forcing, :output;
+        update_law=:replace),
+    PB.PortSpec(Array{Float64,2}, :decay_weights, :output;
+        update_law=:replace),
+)
+PB.semantic_version(::MerksSecretion) = MERKS_SEMANTIC_VERSION
+PB.semantic_parameters(step::MerksSecretion) = (
+    family=:Merks2006,
+    source_equation=6,
+    secretion_rate=step.rate,
+)
+function PB.invoke(step::MerksSecretion, inputs, context)
+    labels = inputs[:labels]
+    forcing = map(label -&gt; iszero(label) ? 0.0 : step.rate, labels)
+    decay_weights = map(label -&gt; iszero(label) ? 1.0 : 0.0, labels)
+    PB.InvocationResult((
+        PB.emit(context, :forcing, PB.ReplaceUpdate(), forcing),
+        PB.emit(context, :decay_weights, PB.ReplaceUpdate(), decay_weights),
+    ))
+end
+
+forcing = map(
+    label -&gt; iszero(label) ? 0.0 : profile.secretion_rate,
+    labels,
+)
+decay_weights = map(label -&gt; iszero(label) ? 1.0 : 0.0, labels)
+composite_model = PB.compose(
+    :Merks2006;
+    scale=field_scale,
+    profile=:reproducible,
+) do system
+    label_store = PB.store!(system, :labels, PB.LeafSchema(
+        UInt64; shape=profile.dimensions, default=labels,
+        update_law=:replace, ontology=&quot;CPM cell identity&quot;))
+    field_store = PB.store!(system, :field, PB.LeafSchema(
+        Float64; shape=profile.dimensions, default=initial_field,
+        update_law=:replace, units=&quot;concentration&quot;))
+    mcs_field_store = PB.store!(system, :mcs_field, PB.LeafSchema(
+        Float64; shape=profile.dimensions, default=initial_field,
+        update_law=:replace, units=&quot;concentration&quot;))
+    forcing_store = PB.store!(system, :forcing, PB.LeafSchema(
+        Float64; shape=profile.dimensions, default=forcing,
+        update_law=:replace, units=&quot;concentration/second&quot;))
+    decay_store = PB.store!(system, :decay_weights, PB.LeafSchema(
+        Float64; shape=profile.dimensions, default=decay_weights,
+        update_law=:replace))
+
+    field = PB.mount!(system, :field_solver, field_process)
+    PB.attach!(system, field, (
+        field=field_store,
+        forcing=forcing_store,
+        decay_weights=decay_store,
+        field_out=field_store,
+        mcs_field=mcs_field_store,
+    ))
+    PB.schedule!(system, field, PB.Every(PB.Duration(1, field_scale)))
+
+    cpm = PB.mount!(
+        system,
+        :cellular_potts,
+        MerksCPMStep(potts_model, cell, chemoattractant, profile),
+    )
+    PB.attach!(system, cpm, (
+        labels=label_store,
+        mcs_field=mcs_field_store,
+        labels_out=label_store,
+    ))
+
+    secretion = PB.mount!(
+        system,
+        :secretion_mask,
+        MerksSecretion(profile.secretion_rate),
+    )
+    PB.attach!(system, secretion, (
+        labels=label_store,
+        forcing=forcing_store,
+        decay_weights=decay_store,
+    ))
+    PB.schedule!(system, secretion, PB.After(cpm))
+    PB.observable!(system, :labels, label_store)
+    PB.observable!(system, :field, field_store)
+end
+
+struct MerksSummary &lt;: PB.AbstractObserver
+    subcycles_per_mcs::Int
+end
+PB.observer_semantic_version(::MerksSummary) = MERKS_SEMANTIC_VERSION
+PB.observer_semantic_parameters(observer::MerksSummary) = (
+    family=:Merks2006,
+    subcycles_per_mcs=observer.subcycles_per_mcs,
+)
+function PB.observe(observer::MerksSummary, projection, context)
+    labels = projection[PB.path(&quot;labels&quot;)]
+    field = projection[PB.path(&quot;field&quot;)]
+    PB.ObservationResult((
+        mcs=Int(div(context.time.tick, observer.subcycles_per_mcs)),
+        cells=length(Set(filter(!iszero, labels))),
+        occupied=count(!iszero, labels),
+        field_mass=sum(field),
+        field_minimum=minimum(field),
+        field_maximum=maximum(field),
+    ))
+end
+
+observer = PB.ObserverSpec(
+    &quot;merks-state-summary&quot;,
+    MerksSummary(profile.subcycles_per_mcs),
+    (PB.path(&quot;labels&quot;), PB.path(&quot;field&quot;)),
+    PB.PeriodicObservationSchedule(
+        PB.Duration(profile.subcycles_per_mcs, field_scale),
+    );
+    record_schema=PB.RecordSchema(
+        NamedTuple; identity=&quot;merks-state-summary-v2&quot;),
+)
+runtime = PB.initialize_runtime(
+    PB.compile(composite_model),
+    PB.SerialExecutor(
+        root_seed=profile.seed,
+        observation_plan=PB.ObservationPlan((observer,)),
+    ),
+)
+horizon = PB.LogicalTime(
+    profile.mcs * profile.subcycles_per_mcs,
+    field_scale,
+)
+PB.run_until!(runtime, horizon)
+
+records = Tuple(record.payload for record in PB.observation_records(runtime))
+result = (
+    final=last(records),
+    model_fingerprint=semantic_fingerprint(potts_model).digest,
+    composite_fingerprint=PB.semantic_fingerprint(composite_model),
+    source_doi=MERKS_SOURCE_DOI,
+)
+@assert length(records) == profile.mcs
+@assert 0 &lt; result.final.cells &lt;= profile.cells
+@assert result.final.occupied &gt; 0
+@assert result.final.field_mass &gt; 0
+@assert result.final.field_minimum &gt;= 0</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Precompiling packages...
+   2497.0 ms  ✓ FunctionWrappersWrappers
+   1465.1 ms  ✓ RespecializeParams
+  10095.6 ms  ✓ SciMLBase
+    774.9 ms  ✓ SciMLBase → SciMLBaseDifferentiationInterfaceExt
+   1031.1 ms  ✓ SciMLBase → SciMLBaseStaticArraysExt
+   3309.5 ms  ✓ ProcessBigraphs → ProcessBigraphsSciMLExt
+   3725.0 ms  ✓ SciMLJacobianOperators
+   8318.6 ms  ✓ NonlinearSolveBase
+   1195.8 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseSparseArraysExt
+  11210.1 ms  ✓ CorePotts
+   2723.8 ms  ✓ BracketingNonlinearSolve
+   3133.4 ms  ✓ DiffEqBase
+   1126.0 ms  ✓ DiffEqBase → DiffEqBaseSparseArraysExt
+   4441.1 ms  ✓ OrdinaryDiffEqCore
+   1226.2 ms  ✓ OrdinaryDiffEqCore → OrdinaryDiffEqCoreSparseArraysExt
+   6665.6 ms  ✓ OrdinaryDiffEqTsit5
+  34443.4 ms  ✓ PottsToolkit
+  17 dependencies successfully precompiled in 79 seconds. 160 already precompiled.</code></pre><h2 id="State,-trace,-and-inspection-loop"><a class="docs-heading-anchor" href="#State,-trace,-and-inspection-loop">State, trace, and inspection loop</a><a id="State,-trace,-and-inspection-loop-1"></a><a class="docs-heading-anchor-permalink" href="#State,-trace,-and-inspection-loop" title="Permalink"></a></h2><p><img src="../../assets/merks-state.png" alt="A paper-inspired native MakiePotts time strip shows nine endothelial cells and their chemoattractant field at MCS 0, 30, and 60, using red cell boundaries and green field contours."/></p><p><img src="../../assets/case-traces.png" alt="A native Makie trace shows field mass and surviving cells across the longer fixed-seed Merks visualization profile, sampled every five MCS through MCS 60."/></p><div class="pb-native-animation">
+<video autoplay loop muted playsinline controls preload="metadata"
+       width="1800" height="820"
+       poster="../../assets/merks-state.png"
+       aria-label="Native MakiePotts animation of the fixed-seed reduced Merks trajectory from initialization through MCS sixty">
+  <source src="../../assets/merks-animation.mp4" type="video/mp4">
+  <a href="../../assets/merks-animation.mp4">Download the Merks Makie animation.</a>
+</video>
+<img class="pb-animation-fallback"
+     src="../../assets/merks-state.png"
+     alt="Static MakiePotts fallback showing nine Merks cells and their chemoattractant field at MCS zero, thirty, and sixty.">
+</div><p>Text alternative for the animation: thirteen native MakiePotts states sample a fixed-seed 40 × 40, nine-cell visualization profile every 5 MCS through MCS 60. Red cell boundaries remain visible over the grayscale chemoattractant field; green contours reveal the evolving local and shared field structure. Reduced-motion users receive the three-panel MCS 0/30/60 time strip. The executed two-MCS program above remains the compact, fully displayed tutorial and typed-record authority. This longer profile is a paper-inspired mechanism visualization, not a reproduction of the paper’s lacuna, branch-length, or ensemble morphometry.</p><h2 id="What-this-establishes"><a class="docs-heading-anchor" href="#What-this-establishes">What this establishes</a><a id="What-this-establishes-1"></a><a class="docs-heading-anchor-permalink" href="#What-this-establishes" title="Permalink"></a></h2><p>The displayed program establishes:</p><ul><li>explicit volume, elongation, adhesion, field, chemotaxis, local-connectivity, and Moore spatial-role declarations;</li><li>deterministic nonoverlapping placement for the reduced two-cell profile;</li><li>explicit stores and wiring for labels, field, MCS-visible field, forcing, and decay weights;</li><li>a real Tsit5 field adapter with visible tolerances and CPU authorization;</li><li>15 field publications per CPM step, followed by secretion-mask refresh;</li><li>typed cell-count, occupied-site, and field-range/mass observations; and</li><li>exact Potts semantic identity and fixed-seed bounded outputs with the packaged reduced Merks model.</li></ul><p>The CPM is stochastic. Exact equality here means that the displayed and packaged assemblies use the same seed, MCS clock, initial state, and solver path. It is not evidence that one trajectory characterizes the output distribution.</p><h2 id="What-this-does-not-establish"><a class="docs-heading-anchor" href="#What-this-does-not-establish">What this does not establish</a><a id="What-this-does-not-establish-1"></a><a class="docs-heading-anchor-permalink" href="#What-this-does-not-establish" title="Permalink"></a></h2><p>It does <strong>not</strong> reproduce Figure 5, perform morphometry, estimate an ensemble or distribution, validate the canonical 500×500/282-cell run from this page, establish physical time calibration, prove solver independence, or imply source-author endorsement. In this small fixed-seed trajectory, one initially five-site identity has no occupied sites by MCS 2; that observation is not a cell-survival conclusion.</p><p><strong>Material defaults.</strong> Every scientific and execution value appears in <code>profile</code>, the field declaration, or the explicit CPM algorithm call.</p><p><strong>Expected result.</strong> Two typed observations; cell counts <code>2</code> then <code>1</code>; occupied site counts <code>5</code> then <code>1</code>; increasing, nonnegative field mass; and stable model/composite identities for seed 11.</p><p><strong>Backend / runtime / seed.</strong> CPU/Float64/host; 30 field ticks = 2 bounded MCS; seed 11.</p><p><strong>Reproduction command.</strong> <code>julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/models/case_studies/merks_2006.jl</code></p><p><strong>Full qualification command.</strong> <code>julia --project=. -e &#39;using Pkg; Pkg.test(&quot;PottsToolkit&quot;)&#39;</code></p><p><strong>Next step.</strong> Audit <a href="../../concepts/engines-and-compute/#engines-and-compute">engines and compute ownership</a> or return to the <a href="../#case-studies-index">case-study boundary</a>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../wortel-2021/">« Wortel 2021</a><a class="docs-footer-nextpage" href="../../concepts/architecture/">Architecture and compute ownership »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 29 July 2026 23:24">Wednesday 29 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

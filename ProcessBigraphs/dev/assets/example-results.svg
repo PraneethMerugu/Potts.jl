@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Result summaries for the six complete examples</title>
+  <desc id="desc">Six panels show pulse accumulation and decay, nested counter growth, an n-way sum, exponential field decay, custom adapter candidate publication, and exact checkpoint recovery.</desc>
+  <defs><style>
+    .panel{fill:#f6fbfc;stroke:#176b87;stroke-width:2}.axis{stroke:#4c6670;stroke-width:1.5}
+    .line{fill:none;stroke:#176b87;stroke-width:4}.alt{fill:none;stroke:#b85c00;stroke-width:4}
+    .title{font:700 17px system-ui,sans-serif;fill:#18323a}.label{font:13px system-ui,sans-serif;fill:#18323a}
+  </style></defs>
+  <g transform="translate(20 20)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">Pulse and decay</text><path class="axis" d="M35 115H245M35 45V115"/><path class="line" d="M35 110L100 90L165 70L230 50"/><path class="alt" d="M35 45L100 75L165 94L230 105"/><text class="label" x="150" y="135">ticks</text></g>
+  <g transform="translate(315 20)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">Nested composites</text><path class="axis" d="M35 115H245M35 45V115"/><path class="line" d="M35 110L100 90L165 70L230 50"/><text class="label" x="58" y="65">two +1 children</text></g>
+  <g transform="translate(610 20)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">N-way junction</text><path class="axis" d="M35 115H245"/><rect x="55" y="90" width="35" height="25" fill="#176b87"/><rect x="115" y="65" width="35" height="50" fill="#176b87"/><rect x="175" y="40" width="35" height="75" fill="#176b87"/><text class="label" x="56" y="135">+1</text><text class="label" x="116" y="135">+2</text><text class="label" x="176" y="135">+3</text></g>
+  <g transform="translate(20 190)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">SciML field</text><path class="axis" d="M35 115H245M35 45V115"/><path class="line" d="M35 45C95 58 165 77 230 98"/><text class="label" x="70" y="135">constant field decays</text></g>
+  <g transform="translate(315 190)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">Custom adapter</text><rect x="25" y="53" width="65" height="45" rx="5" fill="#fff3e6" stroke="#b85c00"/><rect x="105" y="53" width="65" height="45" rx="5" fill="#eef8fa" stroke="#176b87"/><rect x="185" y="53" width="65" height="45" rx="5" fill="#eef8ee" stroke="#2f7d32"/><path class="axis" d="M90 75H105M170 75H185"/><text class="label" x="38" y="80">stage</text><text class="label" x="113" y="80">validate</text><text class="label" x="195" y="80">publish</text></g>
+  <g transform="translate(610 190)"><rect class="panel" width="270" height="145" rx="8"/><text class="title" x="15" y="26">Fail and recover</text><path class="line" d="M30 105L85 85L140 65"/><circle cx="140" cy="65" r="7" fill="#b85c00"/><path class="alt" d="M140 65L195 45L240 30"/><path class="line" stroke-dasharray="7 5" d="M140 65L195 45L240 30"/><text class="label" x="30" y="130">checkpoint → exact continuation</text></g>
+  <text class="label" x="20" y="385">Illustrative summaries generated from the deterministic values asserted by each displayed program.</text>
+</svg>
