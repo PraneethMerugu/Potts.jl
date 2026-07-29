@@ -439,7 +439,7 @@ function compile(
 )
     backend === :serial ||
         _fail(:unsupported_execution_backend,
-            "Phase 16.HC compile currently admits the serial orchestrator";
+            "authoring compilation currently admits the serial orchestrator";
             backend)
     lowered = model isa CompositeModel ? lower(model) : model
     compiled = compile_composite(lowered.canonical)

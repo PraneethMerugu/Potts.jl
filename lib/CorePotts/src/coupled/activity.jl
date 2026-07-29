@@ -46,9 +46,9 @@ function ActivityHamiltonian(property::Union{Symbol, SiteProperty};
         maximum::Real, strength::Real,
         relation::StaticCartesianRelation{<:SpatialQueryRole},
         reduction::GeometricActivity = GeometricActivity(),
-        version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
-    version == PHASE14_SEMANTIC_KERNEL_VERSION || throw(ArgumentError(
-        "ActivityHamiltonian supports only semantic-kernel version $(PHASE14_SEMANTIC_KERNEL_VERSION)"))
+        version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
+    version == COUPLED_SEMANTIC_KERNEL_VERSION || throw(ArgumentError(
+        "ActivityHamiltonian supports only semantic-kernel version $(COUPLED_SEMANTIC_KERNEL_VERSION)"))
     maximum_value, strength_value = promote(float(maximum), float(strength))
     T = typeof(maximum_value)
     isfinite(maximum_value) && maximum_value > zero(T) ||
@@ -61,7 +61,7 @@ function ActivityHamiltonian(property::Union{Symbol, SiteProperty};
 end
 
 component_identity(component::ActivityHamiltonian) =
-    ComponentIdentity(:activity_bias, PHASE14_SEMANTIC_KERNEL_VERSION, :energy)
+    ComponentIdentity(:activity_bias, COUPLED_SEMANTIC_KERNEL_VERSION, :energy)
 component_semantic_data(component::ActivityHamiltonian) = (
     property = _activity_property(component),
     maximum = component.maximum,
@@ -165,15 +165,15 @@ function ActivityProgram(; maximum::Real, strength::Real,
     property = SiteProperty(:activity; initial = zero(T),
         invariant = ActivityBounds(zero(T), maximum_value),
         ownership = AcceptedCopyManaged(),
-        version = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version = COUPLED_SEMANTIC_KERNEL_VERSION)
     accepted_copy = AcceptedCopyUpdate(
         :activity_on_accept, property;
         when = GainingCellCopy(), gained = SetTo(maximum_value),
-        version = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version = COUPLED_SEMANTIC_KERNEL_VERSION)
     decay = SiteDynamics(:activity_decay, property;
         update = SaturatingSubtract(one(T); lower = zero(T)),
         schedule = EveryMCS(),
-        version = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version = COUPLED_SEMANTIC_KERNEL_VERSION)
     hamiltonian = ActivityHamiltonian(property;
         maximum = maximum_value, strength = strength_value,
         relation = relation)
@@ -292,12 +292,12 @@ function realize_activity(program::ActivityProgram, ownership::AbstractArray)
         PeriodicMCS(cadence, cadence)
     summary = ActivitySummary(
         program.property.name, site_state.values,
-        PHASE14_SEMANTIC_KERNEL_VERSION)
+        COUPLED_SEMANTIC_KERNEL_VERSION)
     observation = PhaseObservation(:activity_summary, summary;
         schedule,
         schema = RecordSchema(:activity_summary, v"1.0.0"),
         failure = RequiredObservation(),
-        version = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version = COUPLED_SEMANTIC_KERNEL_VERSION)
     plan = MCSPlan(
         PottsAttempts(on_accept = (program.accepted_copy,)),
         CoupledPhase(:activity_decay, Update(program.decay)),

@@ -1,37 +1,49 @@
 using Test
 using ProcessBigraphs
 
-@testset "ProcessBigraphs PB0" begin
-    include("test_paths_time_canonical.jl")
-    include("test_schema_store_effects.jl")
-    include("test_composite_preflight.jl")
-    include("test_serial_microfixtures.jl")
-    include("test_high_level_authoring.jl")
+@testset "ProcessBigraphs primitives and canonical values" begin
+    include("primitives/test_paths_time_canonical.jl")
+    include("primitives/test_schema_store_effects.jl")
+    include("runtime/test_serial_microfixtures.jl")
+end
+
+@testset "ProcessBigraphs authoring and validation" begin
+    include("authoring/test_high_level_authoring.jl")
     include("examples/high_level_authoring.jl")
-    include("test_phase15a_algebraic_structure.jl")
-    include("test_phase15b_open_composition.jl")
+    include("fixtures/serial_runtime.jl")
+    include("authoring/test_authoring_equivalence.jl")
 end
 
-@testset "ProcessBigraphs Phase 15.C" begin
-    include("phase15c/fixtures.jl")
-    include("phase15c/test_serial_scheduler.jl")
-    include("phase15c/test_adaptive_and_iteration.jl")
-    include("phase15c/test_semantic_rng.jl")
-    include("phase15c/test_observation.jl")
-    include("phase15c/test_observation_continuation.jl")
-    include("phase15c/test_checkpoint_v2.jl")
-    include("phase15c/test_failure_checkpoint.jl")
-    include("phase15c/test_properties_metamorphic.jl")
-    include("phase15c/test_authoring_equivalence.jl")
-    include("phase15c/test_restart_matrix.jl")
+@testset "ProcessBigraphs static and dynamic structure" begin
+    include("structure/test_composite_preflight.jl")
+    include("structure/test_algebraic_structure.jl")
+    include("structure/test_open_composition.jl")
+    include("structure/test_structural_transactions.jl")
 end
 
-@testset "ProcessBigraphs Phase 16" begin
-    include("phase16/test_phase16a_entry.jl")
-    include("phase16/test_phase16b_engine_field.jl")
-    include("phase16/test_phase16d_structural_transactions.jl")
-    include("phase16/test_phase16e_checkpoint.jl")
-    include("phase16/test_phase16f_solver_plurality.jl")
+@testset "ProcessBigraphs scheduling and runtime transactions" begin
+    include("runtime/test_serial_scheduler.jl")
+    include("runtime/test_adaptive_and_iteration.jl")
+    include("runtime/test_semantic_rng.jl")
+    include("runtime/test_observation.jl")
+    include("runtime/test_observation_continuation.jl")
+    include("runtime/test_properties_metamorphic.jl")
+end
+
+@testset "ProcessBigraphs engine and field protocols" begin
+    include("engine/test_engine_field_protocol.jl")
+    include("engine/test_solver_adapter_contract.jl")
+end
+
+@testset "ProcessBigraphs persistence and migration" begin
+    include("persistence/test_checkpoint_v2.jl")
+    include("persistence/test_failure_checkpoint.jl")
+    include("persistence/test_restart_matrix.jl")
+    include("persistence/test_logical_checkpoint.jl")
+end
+
+@testset "ProcessBigraphs current contract" begin
+    include("contracts/test_internal_beta_contract.jl")
 end
 
 @testset "Aqua" begin

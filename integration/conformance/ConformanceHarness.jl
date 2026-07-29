@@ -58,7 +58,7 @@ end
 
 function validate_guarantee_profile(profile::AlgorithmGuaranteeProfile)
     profile.name in (:sequential, :checkerboard, :lottery) || throw(ArgumentError(
-        "Phase 3 profiles must name a supported algorithm family"))
+        "conformance profiles must name a supported algorithm family"))
     profile.proposal_process in (:uniform_recipient_direction, :parallel_round) || throw(ArgumentError(
         "proposal_process must name the scientific proposal family"))
     profile.equilibrium in (:depends_on_acceptance_law, :unproven, :not_claimed) || throw(ArgumentError(
@@ -92,7 +92,8 @@ end
 function ConformanceCase(; algorithm::Symbol, numeric_type::DataType, dimension::Integer,
         backend::Symbol, numerical_policy::ReferenceNumericalPolicy =
             portable_numerical_policy(numeric_type))
-    dimension in (2, 3) || throw(ArgumentError("Phase 3 conformance currently covers dimensions 2 and 3"))
+    dimension in (2, 3) || throw(ArgumentError(
+        "transition conformance currently covers dimensions 2 and 3"))
     numerical_policy.real === numeric_type || throw(ArgumentError(
         "numeric_type must match the policy primary real type"))
     return ConformanceCase(algorithm, numeric_type, numerical_policy, Int(dimension), backend)

@@ -1,6 +1,6 @@
 # Decision 0041: Semantic-Preserving Repository Consolidation
 
-Status: Accepted architecture and qualification policy; baseline frozen, production consolidation not started
+Status: Accepted architecture and qualification policy; local reconciliation candidate implemented, exact-head platform qualification pending
 
 Date: 2026-07-28
 
@@ -76,9 +76,9 @@ after exact-head consolidation qualification.
 
 ## Consequences
 
-- The qualified baseline now consists of exact inventories, equivalence fixtures, performance
-  observations, duplicate classifications, and hardware impact maps; production source has not
-  moved.
+- The qualified baseline consists of exact inventories, equivalence fixtures, performance
+  observations, duplicate classifications, and hardware impact maps. The consolidated production
+  candidate is now implemented against that frozen authority.
 - Historical evidence remains legible but no longer shapes living naming or CI topology.
 - Test assertion and file counts may change, but the complete behavior matrix may not shrink.
 - Some apparent duplication will remain because it is part of the proof structure.
@@ -95,7 +95,9 @@ The `baseline_freeze` gate qualified on 2026-07-28. Its authority is
 and the machine-readable
 [`baseline-freeze-v1.toml`](../../design/evidence/consolidation-baseline/baseline-freeze-v1.toml).
 
-The next gate is `naming_and_archive`. All later conformance evidence remains required.
+Naming, archive, test-harness, ProcessBigraphs, CorePotts, and frontend gates pass locally. The
+candidate is in final reconciliation; exact-head CPU-platform, trusted-device, documentation-smoke,
+and aggregate CI evidence remain required before closure.
 
 ## Alternatives considered
 

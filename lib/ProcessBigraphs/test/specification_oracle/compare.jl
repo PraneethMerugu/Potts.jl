@@ -13,4 +13,4 @@ for id in sort!(collect(keys(oracle_results)))
     production_results[id] == oracle_results[id] ||
         error("oracle mismatch for $(id): production=$(repr(production_results[id])) oracle=$(repr(oracle_results[id]))")
 end
-println("Phase 15.C independent oracle: $(length(oracle_results)) exact rows passed")
+println("specification independent oracle: $(length(oracle_results)) exact rows passed")

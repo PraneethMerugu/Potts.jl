@@ -19,7 +19,7 @@ end
 """
     PottsModel(proposal_relation, boundary_tracker; components, parameters, ...)
 
-Reusable scientific meaning for the Phase 9 interface. A custom `parameterization` is an ordinary
+Reusable scientific meaning for the SciML interface. A custom `parameterization` is an ordinary
 typed callable which maps the problem's concrete parameter container to a `ScientificComponentSet`
 on the host before device adaptation.
 """
@@ -111,7 +111,7 @@ struct DeviceObservationEffect <: AbstractPottsDeviceCallbackEffect end
 device_callback_requirements(callback::AbstractPottsDeviceCallback) =
     throw(MethodError(device_callback_requirements, (callback,)))
 
-"""Declared effects of a device callback; Phase 9 qualifies pure resident observation only."""
+"""Declared effects of a device callback; the qualified path admits pure resident observation."""
 device_callback_effects(callback::AbstractPottsDeviceCallback) =
     throw(MethodError(device_callback_effects, (callback,)))
 
@@ -138,7 +138,7 @@ function validate_device_callback(callback::AbstractPottsDeviceCallback)
             "device callback effects must be typed AbstractPottsDeviceCallbackEffect values"))
     all(effect -> effect isa DeviceObservationEffect, effects) || throw(
         UnsupportedSolverOptionError(:callback,
-            "Phase 9 qualifies GPU-resident pure observation effects; control effects use a standard host DiscreteCallback"))
+            "the qualified device path admits pure resident observation effects; control effects use a standard host DiscreteCallback"))
     priority = device_callback_priority(callback)
     priority isa Integer || throw(ArgumentError(
         "device callback priority must be an integer"))

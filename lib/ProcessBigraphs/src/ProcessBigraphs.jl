@@ -36,7 +36,8 @@ include("executor.jl")
 include("runtime.jl")
 include("checkpoint.jl")
 include("checkpoint_codec.jl")
-include("checkpoint_v3.jl")
+include("coupled_checkpoint.jl")
+include("compatibility.jl")
 
 export ProcessBigraphError
 export AbstractPathSegment, NameSegment, IndexSegment, Path,
@@ -108,6 +109,10 @@ export SerialRuntime, initialize_runtime, run_until!, current_snapshot,
 export SettledCheckpoint, checkpoint, restore, checkpoint_fingerprint
 export LogicalCheckpointV2, logical_checkpoint, encode_checkpoint,
        decode_checkpoint
+export COUPLED_CHECKPOINT_FORMAT_VERSION, COUPLED_CHECKPOINT_SCHEMA,
+       CoupledLogicalCheckpoint, RestoredLogicalCheckpoint,
+       capture_logical_checkpoint, decode_logical_checkpoint,
+       restore_logical_checkpoint
 export AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
        AbstractCompletionHandle, EngineCapabilities, EngineDeclaration,
        IntervalAdvance, BoundarySolve, DiscreteBatch, EngineInputProjection,

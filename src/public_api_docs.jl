@@ -22,7 +22,7 @@ Construct one typed lifecycle trigger rule using the closed Level 1 trigger gram
 @doc "Semantic version of the normalized PottsToolkit IR contract." NORMALIZED_IR_CONTRACT_VERSION
 @doc "Semantic version of the model semantic-fingerprint contract." SEMANTIC_FINGERPRINT_VERSION
 @doc "Semantic version of the execution-fingerprint contract." EXECUTION_FINGERPRINT_VERSION
-@doc "Semantic version of the Phase 13 result/evidence schema contract." PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
+@doc "Semantic version of the result/evidence schema contract." RESULT_EVIDENCE_SCHEMA_VERSION
 
 @doc "Normalize a valid `PottsModel` into deterministic typed IR or throw `ModelValidationError`." normalize
 @doc "Return the structured, deterministic inspection report for a model or normalized model." explain

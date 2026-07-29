@@ -1,4 +1,4 @@
-const PHASE14_SEMANTIC_KERNEL_VERSION = v"0.2.0"
+const COUPLED_SEMANTIC_KERNEL_VERSION = v"0.2.0"
 
 """
 One canonical state declaration. Domain-specific state values lower to this record; they do not
@@ -19,7 +19,7 @@ end
 function StateSpec(id::Symbol; owner::Symbol, schema,
         storage::Symbol = :current, initialization,
         lifecycle, persistence::Symbol = :checkpointed,
-        adaptation = (:cpu,), version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
+        adaptation = (:cpu,), version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
     isempty(String(id)) && throw(ArgumentError("state identity must not be empty"))
     owner in (:global, :cell, :site, :field, :membrane, :relationship) ||
         throw(ArgumentError("unsupported semantic state owner `$owner`"))
@@ -53,7 +53,7 @@ function ProcessSpec(id::Symbol; reads = (), writes = (), law,
         snapshot::Symbol, commit::Symbol, numerics = nothing, rng = (),
         conflicts = :not_applicable, lifecycle_requests::Bool = false,
         failure::Symbol = :terminal, backends = (:cpu,),
-        version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
     isempty(String(id)) && throw(ArgumentError("process identity must not be empty"))
     snapshot in (:accepted_copy, :phase_entry, :process_entry,
         :completed_process, :completed_mcs) ||
@@ -97,7 +97,7 @@ struct PlanSpec{E <: Tuple, T}
 end
 
 function PlanSpec(entries::Tuple; mcs_duration = 1//1,
-        version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
     isempty(entries) && throw(ArgumentError("semantic plan must not be empty"))
     all(entry -> entry isa PlanEntrySpec, entries) ||
         throw(ArgumentError("semantic plan entries must be PlanEntrySpec values"))
@@ -120,7 +120,7 @@ struct LifecycleSpec{P}
 end
 LifecycleSpec(policy = :frozen_phase13_lifecycle;
     commit::Symbol = :after_processes,
-    version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION) =
+    version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION) =
     LifecycleSpec(policy, commit, version)
 
 """Canonical read-only observation declaration."""
@@ -139,10 +139,10 @@ function ObservationSpec(id::Symbol; inputs = (), transform,
         snapshot::Symbol = :completed_mcs, cadence::Integer = 1,
         schema = (name = id, version = v"1.0.0"),
         failure::Symbol = :required,
-        version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
     cadence > 0 || throw(ArgumentError("observation cadence must be positive"))
     snapshot === :completed_mcs || throw(ArgumentError(
-        "the stable Phase 14 slice supports completed-MCS observations"))
+        "the stable coupled slice supports completed-MCS observations"))
     failure in (:required, :best_effort) ||
         throw(ArgumentError("unsupported observation failure policy `$failure`"))
     return ObservationSpec(id, Tuple(inputs), transform, snapshot,
@@ -150,7 +150,7 @@ function ObservationSpec(id::Symbol; inputs = (), transform,
 end
 
 """
-The single immutable Phase 14 semantic authority. Runtime state, checkpoints, preflight, and
+The single immutable coupled semantic authority. Runtime state, checkpoints, preflight, and
 inspection are projections of this value.
 """
 struct SemanticModel{S <: Tuple, P <: Tuple, E <: PlanSpec, L <: LifecycleSpec,
@@ -168,7 +168,7 @@ end
 function SemanticModel(states::Tuple, processes::Tuple, plan::PlanSpec;
         lifecycle::LifecycleSpec = LifecycleSpec(), observations::Tuple = (),
         spatial_roles::SpatialRoles = SpatialRoles(), algorithm,
-        version::VersionNumber = PHASE14_SEMANTIC_KERNEL_VERSION)
+        version::VersionNumber = COUPLED_SEMANTIC_KERNEL_VERSION)
     all(state -> state isa StateSpec, states) ||
         throw(ArgumentError("semantic model states must be StateSpec values"))
     all(process -> process isa ProcessSpec, processes) ||

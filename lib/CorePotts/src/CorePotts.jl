@@ -42,6 +42,7 @@ include("components/scientific_focal_points.jl")
 include("components/scientific_elongation.jl")
 include("components/scientific_inner_loop.jl")
 include("coupled/semantic_kernel.jl")
+include("contracts/compatibility.jl")
 include("components/scientific_mechanics.jl")
 include("lifecycle/compiled.jl")
 include("algorithms/sequential.jl")
@@ -81,12 +82,15 @@ export ScientificContractVersions, scientific_contract_versions,
        SCIENTIFIC_CONTRACT_VERSIONS, RNG_CONTRACT_VERSION,
        AUTHORING_DSL_CONTRACT_VERSION, NORMALIZED_IR_CONTRACT_VERSION,
        CHECKPOINT_SCHEMA_VERSION, SEMANTIC_FINGERPRINT_VERSION,
-       EXECUTION_FINGERPRINT_VERSION, PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+       EXECUTION_FINGERPRINT_VERSION, RESULT_EVIDENCE_SCHEMA_VERSION,
+       PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
        SEQUENTIAL_ALGORITHM_CONTRACT_VERSION,
        CHECKERBOARD_SCHEDULER_CONTRACT_VERSION,
        LOTTERY_ALGORITHM_CONTRACT_VERSION,
        TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION
-export Phase14ContractVersions, phase14_contract_versions,
+export CoupledContractVersions, coupled_contract_versions,
+       COUPLED_CONTRACT_VERSIONS, COUPLED_CONTRACT_SET_VERSION,
+       Phase14ContractVersions, phase14_contract_versions,
        PHASE14_CONTRACT_VERSIONS, PHASE14_CONTRACT_SET_VERSION
 export AbstractTopology, VonNeumannTopology, MooreTopology, NoFluxVonNeumannTopology,
        NoFluxMooreTopology, ExtendedVonNeumannTopology, ExtendedMooreTopology,
@@ -356,7 +360,7 @@ export AbstractInitialOverlapPolicy, RejectInitialOverlap, StableInitialPriority
        initialization_report,
        finalize_initial_state, CellCapacityError
 export AbstractTracker
-export PHASE14_SEMANTIC_KERNEL_VERSION,
+export COUPLED_SEMANTIC_KERNEL_VERSION, PHASE14_SEMANTIC_KERNEL_VERSION,
        StateSpec, ProcessSpec, PlanEntrySpec, PlanSpec,
        LifecycleSpec, ObservationSpec, SemanticModel,
        canonical_coupled_model, semantic_model_fingerprint,

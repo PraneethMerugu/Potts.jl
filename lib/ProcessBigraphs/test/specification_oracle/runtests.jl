@@ -3,15 +3,15 @@ using TOML
 using SHA
 
 include(joinpath(@__DIR__, "Oracle.jl"))
-using .Phase15CSpecificationOracle
+using .SpecificationOracle
 
 const FIXTURE = joinpath(@__DIR__, "fixtures.toml")
 
-@testset "Phase 15.C independent oracle units" begin
-    results = Phase15CSpecificationOracle.oracle_results(FIXTURE)
+@testset "specification independent oracle units" begin
+    results = SpecificationOracle.oracle_results(FIXTURE)
     @test length(results) == 22
     @test Set(keys(results)) ==
-        Set(Phase15CSpecificationOracle.FEATURE_IDS)
+        Set(SpecificationOracle.FEATURE_IDS)
     @test results["imminent-event-scheduler"] ==
         "fast|fast+slow|fast|fast+slow"
     @test results["serial-semantic-executor"] ==
@@ -21,10 +21,10 @@ const FIXTURE = joinpath(@__DIR__, "fixtures.toml")
     @test results["semantic-lineage-rng"] ==
         "6627e8d5,e169c58d,bc57ac4c,9b00dbd8"
 end
-@testset "Phase 15.C oracle mutation sensitivity" begin
-    reference = Phase15CSpecificationOracle.oracle_results(FIXTURE)
+@testset "specification oracle mutation sensitivity" begin
+    reference = SpecificationOracle.oracle_results(FIXTURE)
     for mutant in (:scheduler, :update, :rng, :failure, :checkpoint)
-        candidate = Phase15CSpecificationOracle.mutated_results(
+        candidate = SpecificationOracle.mutated_results(
             FIXTURE, mutant)
         @test candidate != reference
         @test count(id -> candidate[id] != reference[id],

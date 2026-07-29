@@ -124,7 +124,7 @@ function _validate_pages!(errors, spec)
         end
         overlap = sort!(collect(intersect(Set(capabilities), forbidden)))
         isempty(overlap) || push!(errors,
-            "$label publishes excluded Phase 16 capability tags: $(join(overlap, ", "))")
+            "$label publishes excluded milestone-coded capability tags: $(join(overlap, ", "))")
 
         kind = get(page, "kind", "")
         state = get(page, "state", "")
@@ -197,13 +197,13 @@ function _validate_api_policy!(errors, spec)
         return
     end
     _require_fields!(errors, api, (
-        "phase13_inventory", "phase14_allowlist", "makie_inventory",
-        "phase14_provisional_class", "phase14_required_status", "act_class",
-        "phase13_class_map", "makie_class_map",
+        "stability_inventory", "provisional_api_allowlist", "makie_inventory",
+        "provisional_api_class", "provisional_api_required_status", "act_class",
+        "stability_class_map", "makie_class_map",
     ), "api")
 
     allowed = _allowed(spec, "api_classes")
-    for map_name in ("phase13_class_map", "makie_class_map")
+    for map_name in ("stability_class_map", "makie_class_map")
         mapping = get(api, map_name, nothing)
         mapping isa AbstractDict || continue
         for (source_class, target_class) in mapping
@@ -212,10 +212,10 @@ function _validate_api_policy!(errors, spec)
                     "api.$map_name maps `$source_class` to invalid class `$target_class`")
         end
     end
-    get(api, "phase14_provisional_class", nothing) == "experimental" ||
-        push!(errors, "Phase 14 provisional exports must classify as experimental")
+    get(api, "provisional_api_class", nothing) == "experimental" ||
+        push!(errors, "provisional exports must classify as experimental")
     get(api, "act_class", nothing) == "experimental" ||
-        push!(errors, "Act must remain experimental while the Phase 14 registry is provisional")
+        push!(errors, "Act must remain experimental while its API registry is provisional")
 end
 
 function _validate_gate!(errors, spec)
@@ -326,8 +326,8 @@ function _validate_commands!(errors, spec)
             "julia --project=. --startup-file=no scripts/check_documentation_quality.jl",
         "strict_documenter" =>
             "julia --project=docs --startup-file=no docs/make.jl",
-        "phase13_api" =>
-            "julia --project=docs --startup-file=no scripts/check_phase13_api_inventory.jl",
+        "project_integrity" =>
+            "julia --project=. --startup-file=no scripts/check_project_integrity.jl",
         "makie_api" =>
             "julia --project=. --startup-file=no scripts/check_makiepotts_contract.jl",
     )
@@ -362,8 +362,8 @@ function validate_spec(spec::AbstractDict)
         push!(errors, "schema_version must be 1.0.0")
     get(spec, "status", nothing) == "accepted-target" ||
         push!(errors, "status must be accepted-target")
-    get(spec, "phase16_publication_excluded", false) === true ||
-        push!(errors, "Phase 16 publication must remain excluded")
+    get(spec, "process_bigraph_publication_excluded", false) === true ||
+        push!(errors, "ProcessBigraph publication must remain excluded")
 
     authorities = _strings(get(spec, "authorities", Any[]))
     authorities !== nothing && length(authorities) == 4 ||
@@ -392,27 +392,27 @@ function validate_spec(spec::AbstractDict)
     return errors
 end
 
-function _validate_phase13_inventory!(errors, spec, root)
+function _validate_stability_inventory!(errors, spec, root)
     api = spec["api"]
-    path = joinpath(root, api["phase13_inventory"])
+    path = joinpath(root, api["stability_inventory"])
     isfile(path) || begin
-        push!(errors, "missing Phase 13 API inventory: $(relpath(path, root))")
+        push!(errors, "missing stability API inventory: $(relpath(path, root))")
         return
     end
     inventory = TOML.parsefile(path)
     modules = get(inventory, "modules", Dict{String, Any}())
-    class_map = api["phase13_class_map"]
+    class_map = api["stability_class_map"]
     allowed_target = _allowed(spec, "api_classes")
     for module_name in ("CorePotts", "PottsToolkit")
         module_inventory = get(modules, module_name, nothing)
         module_inventory isa AbstractDict || begin
-            push!(errors, "Phase 13 inventory lacks $module_name")
+            push!(errors, "stability inventory lacks $module_name")
             continue
         end
         entries = get(module_inventory, "exports", Any[])
         counts = get(module_inventory, "counts", Dict{String, Any}())
         sum(values(counts)) == get(module_inventory, "export_count", -1) ||
-            push!(errors, "$module_name Phase 13 classifications do not cover every export")
+            push!(errors, "$module_name stability classifications do not cover every export")
         isempty(get(module_inventory, "undocumented_stable", Any[])) ||
             push!(errors, "$module_name has undocumented frozen stable API")
         seen = Set{String}()
@@ -428,30 +428,30 @@ function _validate_phase13_inventory!(errors, spec, root)
             target_class = get(class_map, map_key, nothing)
             target_class isa AbstractString && String(target_class) in allowed_target ||
                 push!(errors,
-                    "$module_name `$name` has unmapped Phase 13 class `$source_class`")
+                    "$module_name `$name` has unmapped stability class `$source_class`")
             source_class == "stable" && get(entry, "documented", false) !== true &&
                 push!(errors, "$module_name stable API `$name` lacks a docstring")
         end
         length(seen) == get(module_inventory, "export_count", -1) ||
-            push!(errors, "$module_name Phase 13 export count does not match unique entries")
+            push!(errors, "$module_name stability export count does not match unique entries")
     end
 end
 
-function _validate_phase14_allowlist!(errors, spec, root)
+function _validate_provisional_allowlist!(errors, spec, root)
     api = spec["api"]
-    path = joinpath(root, api["phase14_allowlist"])
+    path = joinpath(root, api["provisional_api_allowlist"])
     isfile(path) || begin
-        push!(errors, "missing Phase 14 API allowlist: $(relpath(path, root))")
+        push!(errors, "missing provisional API allowlist: $(relpath(path, root))")
         return
     end
     registry = TOML.parsefile(path)
-    get(registry, "status", nothing) == api["phase14_required_status"] ||
-        push!(errors, "Phase 14 API status changed; re-interview Act and additive classifications")
+    get(registry, "status", nothing) == api["provisional_api_required_status"] ||
+        push!(errors, "provisional API status changed; re-interview Act and additive classifications")
     modules = get(registry, "modules", Dict{String, Any}())
     toolkit = Set(String.(get(modules, "PottsToolkit", Any[])))
-    "Act" in toolkit || push!(errors, "Phase 14 allowlist no longer contains Act")
-    get(api, "phase14_provisional_class", nothing) == "experimental" ||
-        push!(errors, "Phase 14 provisional allowlist must map to experimental")
+    "Act" in toolkit || push!(errors, "provisional allowlist no longer contains Act")
+    get(api, "provisional_api_class", nothing) == "experimental" ||
+        push!(errors, "provisional allowlist must map to experimental")
 end
 
 function _validate_makie_inventory!(errors, spec, root)
@@ -820,8 +820,8 @@ function validate_repository(spec::AbstractDict; root::AbstractString = ROOT)
         isfile(joinpath(root, authority)) ||
             push!(errors, "missing accepted authority: $authority")
     end
-    _validate_phase13_inventory!(errors, spec, root)
-    _validate_phase14_allowlist!(errors, spec, root)
+    _validate_stability_inventory!(errors, spec, root)
+    _validate_provisional_allowlist!(errors, spec, root)
     _validate_makie_inventory!(errors, spec, root)
     _validate_documenter_config!(errors, spec, root)
     _validate_repository_pages!(errors, spec, root)

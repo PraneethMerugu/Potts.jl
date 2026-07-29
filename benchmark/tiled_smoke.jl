@@ -17,7 +17,7 @@ include(joinpath(@__DIR__, "src", "PottsBenchmarks.jl"))
 using .PottsBenchmarks
 using CorePotts
 
-measurement = PottsBenchmarks.measure_phase10_reference_backend(backend;
+measurement = PottsBenchmarks.measure_reference_backend(backend;
     profile = "smoke", algorithm = TiledCheckerboardCPM(temperature = 2.0f0),
     skip_incompatible = true)
 workloads = measurement["workloads"]

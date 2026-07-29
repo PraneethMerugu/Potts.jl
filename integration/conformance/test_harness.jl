@@ -28,7 +28,7 @@ using .ConformanceHarness
     state = ReferenceState((1, 1), Int32[0]; medium_ids = Int32[0])
     context = ReproductionContext(
         semantic_seed = 0x42,
-        rng_version = "phase-3-test",
+        rng_version = "conformance-test-v1",
         model_fingerprint = "reference-fixture-v1",
         initial_state = state,
         algorithm = :sequential,

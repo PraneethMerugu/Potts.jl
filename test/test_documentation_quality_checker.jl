@@ -37,12 +37,12 @@ end
             "requires at least one inspiration source", message),
         unattributed_errors)
 
-    phase16_leak = deepcopy(accepted)
-    push!(documentation_page(phase16_leak, "home")["capabilities"], "phase16")
-    phase16_errors = DocumentationQuality.validate_spec(phase16_leak)
+    process_bigraph_leak = deepcopy(accepted)
+    push!(documentation_page(process_bigraph_leak, "home")["capabilities"], "phase16")
+    process_bigraph_errors = DocumentationQuality.validate_spec(process_bigraph_leak)
     @test any(message -> occursin(
-            "publishes excluded Phase 16 capability tags: phase16", message),
-        phase16_errors)
+            "publishes excluded milestone-coded capability tags: phase16", message),
+        process_bigraph_errors)
 
     promoted_act = deepcopy(accepted)
     promoted_act["api"]["act_class"] = "stable_user"

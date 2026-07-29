@@ -4,36 +4,36 @@ VERSION == v"1.12.6" ||
 using AMDGPU
 
 include(joinpath(@__DIR__, "profile_common.jl"))
-using .Phase12BackendProfile
+using .BackendProfile
 
 backend_name = "amdgpu"
 probe = AMDGPU.ROCArray(zeros(UInt8, 1))
-backend = Phase12BackendProfile.KernelAbstractions.get_backend(probe)
-directory, provenance = Phase12BackendProfile.profile_directory(
+backend = BackendProfile.KernelAbstractions.get_backend(probe)
+directory, provenance = BackendProfile.profile_directory(
     backend_name, string(backend))
 profiles = Dict{String, Any}()
 
-for algorithm_name in Phase12BackendProfile.PROFILE_ALGORITHMS
-    integrator = Phase12BackendProfile.prepare_integrator(
+for algorithm_name in BackendProfile.PROFILE_ALGORITHMS
+    integrator = BackendProfile.prepare_integrator(
         backend_name, backend, algorithm_name)
     code_directory = joinpath(directory, algorithm_name, "device-code")
     AMDGPU.@device_code dir=code_directory begin
-        Phase12BackendProfile.synchronized_steps!(integrator, 1)
+        BackendProfile.synchronized_steps!(integrator, 1)
     end
-    Phase12BackendProfile.synchronized_steps!(integrator, 1)
-    println("PHASE12_ROCPROF_BEGIN=", algorithm_name)
-    profiled_seconds = Phase12BackendProfile.synchronized_steps!(integrator, 5)
-    println("PHASE12_ROCPROF_END=", algorithm_name)
+    BackendProfile.synchronized_steps!(integrator, 1)
+    println("PERFORMANCE_ROCPROF_BEGIN=", algorithm_name)
+    profiled_seconds = BackendProfile.synchronized_steps!(integrator, 5)
+    println("PERFORMANCE_ROCPROF_END=", algorithm_name)
     profiles[algorithm_name] = Dict(
-        "code" => Phase12BackendProfile.code_summary(code_directory),
+        "code" => BackendProfile.code_summary(code_directory),
         "profiled_mcs" => 5,
         "profiled_wall_seconds" => profiled_seconds,
     )
 end
 
 trace_status = get(ENV, "POTTS_ROCPROF_TRACE_STATUS", "external-capture-required")
-path = Phase12BackendProfile.write_record(directory, backend_name, provenance,
+path = BackendProfile.write_record(directory, backend_name, provenance,
     "AMDGPU", string(Base.pkgversion(AMDGPU)), profiles;
     trace_kind = "rocprofv3 HIP/HSA/kernel Perfetto trace",
     trace_status)
-println("PHASE12_BACKEND_PROFILE=", path)
+println("PERFORMANCE_BACKEND_PROFILE=", path)

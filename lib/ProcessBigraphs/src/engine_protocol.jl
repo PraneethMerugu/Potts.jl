@@ -521,7 +521,7 @@ function decode_engine_continuation(
     payload = decode_logical_value(bytes)
     payload isa NamedTuple && payload.schema === :process_bigraph_engine_continuation_v1 ||
         _fail(:invalid_engine_continuation,
-            "payload is not a Phase 16 engine continuation")
+            "payload is not a managed-engine continuation")
     payload.owner == owner && payload.identity == identity ||
         _fail(:engine_continuation_owner_mismatch,
             "engine continuation owner or identity changed";

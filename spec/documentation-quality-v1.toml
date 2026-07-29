@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 status = "accepted-target"
-title = "Potts.jl non-Phase-16 documentation quality contract"
+title = "Potts.jl documentation quality contract"
 docs_root = "docs/src"
 navigation_file = "docs/make.jl"
-phase16_publication_excluded = true
+process_bigraph_publication_excluded = true
 authorities = [
     "design/audits/documentation-9-of-10-audit.md",
     "design/audits/documentation-interview-round-1.md",
@@ -80,7 +80,7 @@ api_usability = 9
 showcase_quality = 9
 
 [current_evidence.platform_evidence]
-macos = "design/evidence/documentation/macos-install-smoke.toml"
+macos = "design/evidence/consolidation-candidate/macos-install-smoke-local.toml"
 linux = "design/evidence/documentation/linux-install-smoke.toml"
 windows = "design/evidence/documentation/windows-install-smoke.toml"
 
@@ -90,14 +90,14 @@ model_builder = "design/evidence/documentation/model-builder-task-review.toml"
 extension_author = "design/evidence/documentation/extension-author-task-review.toml"
 
 [api]
-phase13_inventory = "design/audits/phase-13-api-inventory.toml"
-phase14_allowlist = "design/audits/phase-14-public-api-v2.toml"
+stability_inventory = "design/audits/phase-13-api-inventory.toml"
+provisional_api_allowlist = "design/audits/phase-14-public-api-v2.toml"
 makie_inventory = "design/makiepotts/public-api-v0.2.toml"
-phase14_provisional_class = "experimental"
-phase14_required_status = "wortel-vertical-slice-provisional"
+provisional_api_class = "experimental"
+provisional_api_required_status = "wortel-vertical-slice-provisional"
 act_class = "experimental"
 
-[api.phase13_class_map]
+[api.stability_class_map]
 stable_corepotts = "stable_extension"
 stable_pottstoolkit = "stable_user"
 limited = "experimental"
@@ -697,7 +697,7 @@ capabilities = ["scientific_guarantee"]
 
 [[pages]]
 id = "runtime-boundary"
-title = "Runtime and Phase 16 boundary"
+title = "Runtime and orchestration boundary"
 kind = "concept"
 path = "docs/src/concepts/runtime-boundary.md"
 audience = "extension_author"
@@ -708,7 +708,7 @@ required = true
 in_navigation = true
 runtime_class = "none"
 visual = "none"
-capabilities = ["phase16_boundary"]
+capabilities = ["orchestration_boundary"]
 
 [[pages]]
 id = "capability-status"
@@ -875,8 +875,8 @@ command = "julia --project=docs --startup-file=no docs/make.jl"
 required_for_release = true
 
 [[commands]]
-id = "phase13_api"
-command = "julia --project=docs --startup-file=no scripts/check_phase13_api_inventory.jl"
+id = "project_integrity"
+command = "julia --project=. --startup-file=no scripts/check_project_integrity.jl"
 required_for_release = true
 
 [[commands]]

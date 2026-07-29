@@ -1,0 +1,111 @@
+schema_version = "1.0.0"
+status = "architecture-candidate"
+large_file_threshold = 1000
+line_metric = "nonblank_noncomment"
+policy = "One production authority per accepted concept; dependencies point from general mechanisms toward domain consumers; independent oracles and backend realizations remain separate."
+
+[[package_layers]]
+package = "ProcessBigraphs"
+order = ["primitives", "canonical_structure", "composition", "authoring", "runtime", "engine_and_fields", "persistence", "compatibility"]
+entrypoint = "lib/ProcessBigraphs/src/ProcessBigraphs.jl"
+forbidden_family_dependencies = ["CorePotts", "PottsToolkit", "MakiePotts"]
+
+[[package_layers]]
+package = "CorePotts"
+order = ["logical_foundation", "scientific_components", "algorithms", "coupled_state", "coupled_processes", "solver_interface", "persistence", "compatibility"]
+entrypoint = "lib/CorePotts/src/CorePotts.jl"
+forbidden_family_dependencies = ["PottsToolkit", "MakiePotts"]
+
+[[package_layers]]
+package = "PottsToolkit"
+order = ["identities", "declarations", "normalization", "lowering", "authoring_facades", "compatibility"]
+entrypoint = "src/PottsToolkit.jl"
+forbidden_family_dependencies = ["MakiePotts"]
+
+[[package_layers]]
+package = "MakiePotts"
+order = ["render_frames", "recipes", "backend_extensions"]
+entrypoint = "lib/MakiePotts/src/MakiePotts.jl"
+forbidden_family_dependencies = []
+
+[[authorities]]
+concept = "process_bigraph_canonical_structure"
+owner = "lib/ProcessBigraphs/src/algebraic_structure.jl"
+consumers = ["composition", "lowering", "runtime", "structural_transactions"]
+
+[[authorities]]
+concept = "process_bigraph_semantic_authoring"
+owner = "lib/ProcessBigraphs/src/authoring/model.jl"
+consumers = ["authoring_builder", "authoring_validation", "authoring_lowering", "model_assemblies"]
+
+[[authorities]]
+concept = "process_bigraph_open_composition"
+owner = "lib/ProcessBigraphs/src/composition_parts/open_composites.jl"
+consumers = ["composition_lowering", "wiring_diagrams", "authoring"]
+
+[[authorities]]
+concept = "process_bigraph_runtime_schedule"
+owner = "lib/ProcessBigraphs/src/executor.jl"
+consumers = ["runtime", "checkpoint", "managed_engine_runtime"]
+
+[[authorities]]
+concept = "managed_engine_transaction"
+owner = "lib/ProcessBigraphs/src/managed_engine.jl"
+consumers = ["engine_adapters", "field_processes", "coupled_checkpoint"]
+
+[[authorities]]
+concept = "logical_checkpoint_v2"
+owner = "lib/ProcessBigraphs/src/checkpoint_codec.jl"
+consumers = ["legacy_restore", "compatibility_tests"]
+
+[[authorities]]
+concept = "coupled_logical_checkpoint"
+owner = "lib/ProcessBigraphs/src/coupled_checkpoint.jl"
+consumers = ["managed_runtime", "CorePotts_adapter", "legacy_conversion"]
+
+[[authorities]]
+concept = "logical_potts_state"
+owner = "lib/CorePotts/src/state/logical.jl"
+consumers = ["scientific_components", "algorithms", "persistence", "coupled_state"]
+
+[[authorities]]
+concept = "staged_copy_commit"
+owner = "lib/CorePotts/src/components/scientific_trackers.jl"
+consumers = ["sequential", "checkerboard", "lottery", "device_kernels"]
+
+[[authorities]]
+concept = "coupled_dynamic_state"
+owner = "lib/CorePotts/src/coupled/dynamic_state.jl"
+consumers = ["relationships", "polarity", "continuous_processes", "persistence"]
+
+[[authorities]]
+concept = "continuous_field_exchange"
+owner = "lib/CorePotts/src/coupled/continuous_parts/field_exchange.jl"
+consumers = ["portable_field_exchange", "bounded_models", "ProcessBigraph_adapter"]
+
+[[authorities]]
+concept = "PottsToolkit_normalization"
+owner = "src/authoring/normalization.jl"
+consumers = ["lowering", "fingerprints", "reports", "problem_construction"]
+
+[[authorities]]
+concept = "PottsToolkit_rule_language"
+owner = "src/authoring/level1_rules.jl"
+consumers = ["normalization", "lowering", "macro_sugar"]
+
+[[authorities]]
+concept = "Makie_render_frame"
+owner = "lib/MakiePotts/src/frames.jl"
+consumers = ["recipes", "CairoMakie", "GLMakie", "WGLMakie"]
+
+[[large_file_waivers]]
+path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
+expected_lines = 1181
+rationale = "One bounded scientific model assembly whose declarations, initialization, process wiring, and admitted observations are reviewed as a single source-faithful claim boundary."
+review_gate = "core_and_frontends"
+
+[[large_file_waivers]]
+path = "lib/CorePotts/src/lifecycle/compiled.jl"
+expected_lines = 1077
+rationale = "One performance-critical compiled lifecycle state machine; definition order and shared inlining are part of its host/portable kernel review boundary."
+review_gate = "core_and_frontends"

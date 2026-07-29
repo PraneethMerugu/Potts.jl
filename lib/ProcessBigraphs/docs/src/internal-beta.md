@@ -1,13 +1,13 @@
-# Phase 16 internal-beta guide
+# Internal-beta guide
 
-Status: qualified unpublished internal beta; package version `0.5.0`
+Status: unpublished internal-beta consolidation candidate; package version `0.5.1`
 
 The metadata-only attestation admits the previously qualified exact-head implementation without
 changing runtime or scientific-model behavior.
 
 ## What this beta is
 
-Phase 16 is a qualified, unpublished internal beta for composing dynamic scientific processes around
+ProcessBigraphs 0.5 is a qualified, unpublished internal beta for composing dynamic scientific processes around
 optimized domain engines. ProcessBigraphs owns logical time, invocation reason, visibility,
 identity, reconciliation, validation, publication, failure, checkpoint, and replay. A selected
 solver or CPM kernel owns timesteps, sweeps, device kernels, arrays, caches, workspaces, streams,
@@ -35,12 +35,12 @@ directly.
 - CPU SciML integration with an explicitly injected real algorithm.
 - An independent CPU custom adapter proving the protocol is not SciML-specific.
 - Atomic add, remove, divide, move, and rewire structural transactions.
-- A CorePotts strangler adapter and Phase 16 logical checkpoints.
+- A CorePotts adapter and canonical coupled logical checkpoints.
 - Source-bounded runnable Merks 2006 and CNV scenario-38/simulation-902 assemblies.
 - Immutable semantic authoring, deterministic lowering, complete author-origin maps, typed
   problems and interventions, semantic archives with caller-owned codecs, and layered identity.
 
-The generated [capability matrix](phase16-capabilities.md) is derived from the normative
+The generated [capability matrix](capabilities.md) is derived from the normative
 registries and is checked for drift in CI.
 
 ## How to author and run

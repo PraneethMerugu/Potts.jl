@@ -1444,7 +1444,7 @@ version = "1.11.0"
 deps = ["ACSets", "AlgebraicRewriting", "Catlab", "SHA"]
 path = "../lib/ProcessBigraphs"
 uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
-version = "0.5.0"
+version = "0.5.1"
 weakdeps = ["CommonSolve", "SciMLBase"]
 
     [deps.ProcessBigraphs.extensions]

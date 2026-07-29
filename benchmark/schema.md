@@ -1,6 +1,6 @@
 # Benchmark Result Schemas
 
-## Phase 12 performance schema
+## performance comparison performance schema
 
 Schema version: `3.0.0`
 
@@ -51,7 +51,7 @@ benchmark `Project.toml` and `Manifest.toml` contents are retained separately as
 to be measured as part of the candidate implementation without pretending that the timing procedure
 changed; reviewers can still detect and audit every environment difference.
 
-## Phase 10 reference-suite schema
+## Reference-suite schema
 
 Schema version: `2.1.0`
 
@@ -71,9 +71,9 @@ Each `phase10-reference-suite` TOML record is a self-contained artifact containi
   bytes, and total backend-resident bytes;
 - the matched direct-CorePotts comparison and canonical checkpoint capture/restore measurements;
 - explicit kernel-resource status. Kernel compilation and rejection of dynamic device invocation
-  are required in Phase 10. Numeric register counts are deliberately not fabricated: current
+  are required by the reference-suite contract. Numeric register counts are deliberately not fabricated: current
   KernelAbstractions has no portable register-count interface, so backend-native register/spill and
-  occupancy profiling belongs to Phase 12.
+  occupancy profiling belongs to performance comparison.
 
 Smoke records are CI qualification evidence. Full records use paper-scalable configurations and
 more samples, but they are not publication claims until hardware, environment, repetition count,
@@ -106,7 +106,7 @@ Each TOML record contains:
 - Known measurement limitations
 
 The schema deliberately labels expected attempts rather than actual attempts because the current
-engine exposes no proposal/acceptance counters. Phase 5 instrumentation will add launches,
+engine exposes no proposal/acceptance counters. Future instrumentation may add launches,
 synchronizations, transfers, device allocation, actual proposals, acceptances, conflicts, and scratch
 memory without silently changing the meaning of existing fields.
 

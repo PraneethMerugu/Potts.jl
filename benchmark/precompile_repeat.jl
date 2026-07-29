@@ -10,8 +10,8 @@ end
 backend = option("backend", "cpu")
 repetitions = parse(Int, option("repetitions", "1"))
 backend in ("cpu", "metal", "amdgpu") || error(
-    "Phase 12 precompile repetitions require cpu, metal, or amdgpu")
-repetitions in (1, 3, 5) || error("Phase 12 repetitions must be 1, 3, or 5")
+    "performance comparison precompile repetitions require cpu, metal, or amdgpu")
+repetitions in (1, 3, 5) || error("performance comparison repetitions must be 1, 3, or 5")
 
 worker = joinpath(@__DIR__, "precompile_worker.jl")
 project = Base.active_project()

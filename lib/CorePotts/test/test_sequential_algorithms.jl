@@ -8,7 +8,7 @@ function _sequential_fixture(::Type{T} = Float32) where {T <: AbstractFloat}
     return (; fixture..., tracker, components)
 end
 
-@testset "Phase 7 sequential algorithm values" begin
+@testset "scientific component sequential algorithm values" begin
     conventional = SequentialCPM(temperature = 7.5f0)
     equilibrium = SequentialEquilibrium(temperature = 7.5)
     @test conventional.temperature === 7.5f0

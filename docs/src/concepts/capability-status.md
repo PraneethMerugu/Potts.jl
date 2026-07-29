@@ -5,7 +5,7 @@ interfaces, and unavailable roadmap behavior. Export status alone never changes 
 
 | Capability | User support | Extension support | Evidence boundary |
 |:--|:--|:--|:--|
-| PottsToolkit model composition | Stable | Stable lowering contracts | Phase 13 authoring inventory |
+| PottsToolkit model composition | Stable | Stable lowering contracts | Frozen stability inventory |
 | 2D/3D Cartesian domains | Stable | Stable topology/domain access | Dimension-specific preflight |
 | Volume, surface, adhesion, elongation | Stable | Stable component protocols | Component conformance plus applicable algorithm evidence |
 | Connectivity constraint | Stable | Stable constraint protocol | Executability is not network validation |
@@ -17,9 +17,9 @@ interfaces, and unavailable roadmap behavior. Export status alone never changes 
 | Metal and AMDGPU | Combination-dependent | Backend extension protocol | Consult `backend_report` and retained evidence |
 | MakiePotts 2D and slices | Stable | Stable render-frame protocol | Explicit host materialization |
 | Full volume explorer | Experimental | Experimental | Not a stable workflow |
-| `Act` facade and persistence examples | Experimental | Experimental | Phase 14 registry remains provisional |
-| ProcessBigraphs runtime cutover | Unavailable as a Potts claim | Internal development | Excluded pending Phase 16 slice gates |
-| Dynamic hierarchy and structural rewiring | Unavailable | Internal development | Excluded pending Phase 16 |
+| `Act` facade and persistence examples | Experimental | Experimental | Provisional API registry |
+| ProcessBigraphs orchestration | Not yet a public Potts workflow | Qualified internal-beta integration | Public promotion requires a separate API decision |
+| Dynamic hierarchy and structural rewiring | Not yet a public Potts workflow | Qualified internal-beta transactions | Public promotion requires a separate API decision |
 | Published-model reproduction | No models currently admitted | Separate admission contract | Evidence required per model |
 
 ## How status changes
@@ -36,7 +36,7 @@ details even when Julia requires them to be exported between repository packages
 - `backend_report` and `compatibility_report` describe executability.
 - `algorithm_guarantees` describes scientific profiles.
 - `scientific_contract_versions` records frozen semantic identities.
-- the Phase 13, Phase 14, and MakiePotts inventories classify public names.
+- the frozen stability, provisional additive, and MakiePotts inventories classify public names.
 
 See [Scientific guarantees](@ref scientific-guarantees) for claim interpretation and
 [Experimental API](@ref experimental-api) for the visible provisional surface.

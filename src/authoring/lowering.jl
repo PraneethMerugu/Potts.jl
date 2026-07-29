@@ -569,7 +569,7 @@ function lower(model::PottsModel; dimensions::Integer,
         (normalized.cell_types..., normalized.media...), cell_type_ids, medium_ids)
 end
 
-"""Return the explicit Phase 14 spatial-role declaration, or `nothing` for a Phase 13 model."""
+"""Return the explicit coupled spatial-role declaration, or `nothing` for a frozen model."""
 spatial_roles(lowered::LoweredModel) =
     _declared_spatial_roles(lowered.normalized.components)
 

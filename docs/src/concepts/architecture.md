@@ -50,10 +50,11 @@ streams.
 
 ## ProcessBigraphs
 
-ProcessBigraphs is an independently testable internal runtime package. Phase 15 established its
-serial, fixed-structure runtime foundation. Phase 16 adds dynamic structure and begins bounded
-adapter cutover. Until a slice passes its cutover gate, CorePotts remains the authority for that
-Potts behavior.
+ProcessBigraphs is an independently testable internal runtime package. Its unpublished internal
+beta owns coupled orchestration, canonical hierarchy, structural transactions, logical
+checkpoints, and solver-neutral engine and field boundaries. CorePotts remains the authority for
+CPM semantics and optimized kernels; selected numerical solvers retain authority over their
+internal stepping.
 
-See [Runtime and Phase 16 boundary](@ref runtime-boundary) for the documentation rule during this
+See [Runtime and orchestration boundary](@ref runtime-boundary) for the documentation rule during this
 transition.
