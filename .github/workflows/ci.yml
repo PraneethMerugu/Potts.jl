@@ -257,6 +257,10 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate ProcessBigraphs qualification environment
+        run: >-
+          julia --project=lib/ProcessBigraphs --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Recheck consolidated project integrity
         run: julia --startup-file=no scripts/check_project_integrity.jl
       - name: Recheck frozen identity fixtures
