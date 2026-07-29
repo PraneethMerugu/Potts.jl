@@ -1,4 +1,4 @@
-artifact_count = 343
+artifact_count = 358
 baseline_ci_run = "30399756947"
 baseline_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
 schema_version = "1.0.0"
@@ -723,6 +723,36 @@ category = "historical_audit"
 path = "design/audits/process-bigraph-phase16i-reconciliation-audit.md"
 reproduction = "immutable_current_tree_artifact"
 sha256 = "c1874cb05fb440bd0f916cdf9a918e6a2b5c6cb833fe99bf8b19f12a423926f8"
+[[artifacts]]
+bytes = 15872
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase17-implementation-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b0c286f9f6134d0bf90954c2c85380fbd06ed274b7751d34bc662ec0d481eda8"
+[[artifacts]]
+bytes = 9674
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase17-owner-interview-round-1.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "63daf94cc1f074d588028e4640d1193eba71772a5b71f17c847b1c713ed69770"
+[[artifacts]]
+bytes = 14829
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase17-owner-interview-round-2.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e5bd3bf676dee9f5ef1c7d9b6f3bd35ff8fb846e161743d0d0f747cdfdcb4010"
+[[artifacts]]
+bytes = 24793
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase17-owner-interview-round-3.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "54086e1180a8ace4417133e721806aaec3521547a17b4bf214c3e35da00f6c90"
+[[artifacts]]
+bytes = 5736
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase17-specification-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e43bb9bacfcf9ee697e551d3bdae9dbf99b56c9f16b49e1b306ae47e1063a900"
 [[artifacts]]
 bytes = 1052041
 category = "qualified_evidence"
@@ -1570,6 +1600,24 @@ path = "design/evidence/phase-16/phase16i-candidate.toml"
 reproduction = "immutable_current_tree_artifact"
 sha256 = "7028751add514adb5613d53d115fe2125e26dc5fbe21932e5ee0675c454f02a7"
 [[artifacts]]
+bytes = 943
+category = "qualified_evidence"
+path = "design/evidence/phase-17/phase17a-baseline-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5d8fb3deca61de82f0285af2365a53ea3593e713bc66079bff42421a91920c69"
+[[artifacts]]
+bytes = 1306
+category = "qualified_evidence"
+path = "design/evidence/phase-17/phase17b-public-boundary-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "cb95342b9cb0a93263c2d3519d473ba04f949b5dbf97e2f9e39f0b51e44b6d68"
+[[artifacts]]
+bytes = 1896
+category = "qualified_evidence"
+path = "design/evidence/phase-17/phase17c-model-migration-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d277e5e86d6c68340a1b91634b5ff35b892f0e5808e2dccf243cfde2b2988fea"
+[[artifacts]]
 bytes = 3083
 category = "qualified_evidence"
 path = "design/evidence/process-bigraph-pb0-evidence-v1.toml"
@@ -2002,6 +2050,12 @@ path = "spec/phase-16-engine-field-structural-and-adapter-semantics.md"
 reproduction = "immutable_current_tree_artifact"
 sha256 = "813236eadba3b6b30d59b8307862901dfb54c122b17b0a8ff258a77b70c02e00"
 [[artifacts]]
+bytes = 21844
+category = "historical_specification"
+path = "spec/phase-17-process-bigraph-model-and-documentation-productization.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d950f7b888e31080ccc329d59b9d150766c068894a3cde557b516e6d8e8e033b"
+[[artifacts]]
 bytes = 12946
 category = "historical_specification"
 path = "spec/process-bigraph-phase15c-entry-v1.toml"
@@ -2061,3 +2115,39 @@ category = "historical_specification"
 path = "spec/process-bigraph-phase16-qualification-v1.toml"
 reproduction = "immutable_current_tree_artifact"
 sha256 = "3ff59574ddb8c82d493c072562032ba73d0b51ff22133ea5ca84ed37d8b58eba"
+[[artifacts]]
+bytes = 122898
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-api-inventory-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "01fbc552856a867687dd42fc8f75a0477d1e521456133c32e327c9ddbf4a8175"
+[[artifacts]]
+bytes = 4939
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-api-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c61091947f8bd52a7ec77c0a4c08817fc1fdb0ce72ae4ba7692f8af202036e20"
+[[artifacts]]
+bytes = 7271
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-browser-qa-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a95cf6cc7f607a8fdef59df6b8c1715e1a2a6b0129dedf660755f826b15e07e5"
+[[artifacts]]
+bytes = 16212
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-documentation-quality-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5b854a597a41d017039bc541276fec400dfb70a7fe226036fbd9bfb96ce0bdb6"
+[[artifacts]]
+bytes = 7880
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-entry-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2c6abbdb6966363c476df45bc79b7e7b5ccba81e6555f8c2fdc7da1bb371515e"
+[[artifacts]]
+bytes = 8769
+category = "historical_specification"
+path = "spec/process-bigraph-phase17-qualification-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "674397d15a71cbcff3361a07b2fa0c301ae6d00018bfd0a61799b98f38b72060"

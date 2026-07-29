@@ -71,7 +71,29 @@ makedocs(
     ],
 )
 
-if get(ENV, "PROCESS_BIGRAPHS_DEPLOY_DOCS", "false") == "true"
+const DEPLOY_DOCS =
+    get(ENV, "PROCESS_BIGRAPHS_DEPLOY_DOCS", "false") == "true"
+
+if !DEPLOY_DOCS
+    write(
+        joinpath(DOCS_ROOT, "build", "siteinfo.js"),
+        """
+        var DOCUMENTER_CURRENT_VERSION = "local";
+        var DOCUMENTER_STABLE = "local";
+        var DOCUMENTER_IS_DEV_VERSION = true;
+        var DOCUMENTER_VERSION_SELECTOR_DISABLED = true;
+        """,
+    )
+    write(
+        joinpath(DOCS_ROOT, "build", "versions.js"),
+        """
+        var DOC_VERSIONS = [];
+        var DOCUMENTER_NEWEST = "local";
+        """,
+    )
+end
+
+if DEPLOY_DOCS
     get(ENV, "GITHUB_ACTIONS", "false") == "true" ||
         error("ProcessBigraphs documentation deployment is GitHub Actions-only")
     get(ENV, "GITHUB_EVENT_NAME", "") == "pull_request" &&

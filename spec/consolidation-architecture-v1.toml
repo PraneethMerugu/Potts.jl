@@ -100,8 +100,14 @@ consumers = ["recipes", "CairoMakie", "GLMakie", "WGLMakie"]
 
 [[large_file_waivers]]
 path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
-expected_lines = 1181
+expected_lines = 1185
 rationale = "One bounded scientific model assembly whose declarations, initialization, process wiring, and admitted observations are reviewed as a single source-faithful claim boundary."
+review_gate = "core_and_frontends"
+
+[[large_file_waivers]]
+path = "lib/CorePotts/src/sciml/interface.jl"
+expected_lines = 1024
+rationale = "The SciML protocol boundary centralizes problem, integrator, solution, callback, checkpoint, and backend-adaptor contracts whose shared type relationships must remain reviewable as one interface authority."
 review_gate = "core_and_frontends"
 
 [[large_file_waivers]]

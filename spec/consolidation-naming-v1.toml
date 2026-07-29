@@ -193,6 +193,28 @@ living_consumers = [
 ]
 living_consumer_policy = "These paths read, verify, reproduce, or write frozen historical artifacts and may name only their retained milestone-coded artifact identities."
 
+[qualification]
+living_milestone_consumers = [
+    "lib/CorePotts/src/coupled/merks2006.jl",
+    "lib/ProcessBigraphs/docs/src/architecture.md",
+    "lib/ProcessBigraphs/docs/src/assets/provenance.toml",
+    "lib/ProcessBigraphs/src/api_docstrings.jl",
+    "scripts/check_consolidation_api.jl",
+    "scripts/check_process_bigraph_phase17_api.jl",
+    "scripts/check_process_bigraph_phase17_browser_contract.jl",
+    "scripts/check_process_bigraph_phase17_case_equivalence.jl",
+    "scripts/check_process_bigraph_phase17_closure.jl",
+    "scripts/check_process_bigraph_phase17_docs.jl",
+    "scripts/check_process_bigraph_phase17_docs_runtime.jl",
+    "scripts/check_process_bigraph_phase17_internal_use.jl",
+    "scripts/check_process_bigraph_phase17_spec.jl",
+    "scripts/generate_process_bigraph_phase17_api_inventory.jl",
+    "scripts/test_process_bigraph_phase17_api.jl",
+    "scripts/test_process_bigraph_phase17_spec.jl",
+    "src/reference_models/merks_2006.jl",
+]
+policy = "These paths are the explicit, bounded qualification authority for the active milestone and may name that milestone only where traceability requires it."
+
 [[legacy_protocol_tokens]]
 token = "phase13_frozen"
 category = "serialized_legacy_identity"

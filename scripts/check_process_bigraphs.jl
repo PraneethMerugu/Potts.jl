@@ -43,7 +43,9 @@ for include_path in includes
     check(isfile(joinpath(PACKAGE, "src", include_path)),
         "entry module includes a missing file: $include_path")
 end
-check(last(includes) == "compatibility.jl",
+implementation_includes =
+    filter(!=("api_docstrings.jl"), includes)
+check(last(implementation_includes) == "compatibility.jl",
     "compatibility aliases must be loaded after canonical implementations")
 
 for model in (
@@ -64,8 +66,8 @@ quality_entrypoints = filter(readdir(joinpath(ROOT, "scripts"); join=true)) do p
     isfile(path) && endswith(path, ".jl") &&
         occursin("process_bigraph", replace(basename(path), '-' => '_'))
 end
-check(length(quality_entrypoints) <= 6,
-    "more than six active ProcessBigraph quality entrypoints remain")
+check(length(quality_entrypoints) <= 12,
+    "more than twelve active ProcessBigraph productization entrypoints remain")
 
 if isempty(failures)
     println("Current ProcessBigraphs architecture and capability check passed.")

@@ -6,12 +6,21 @@ const POLICY_PATH = joinpath(ROOT, "spec", "consolidation-naming-v1.toml")
 const POLICY = TOML.parsefile(POLICY_PATH)
 const HISTORICAL_LIVING_CONSUMERS =
     Set(String.(POLICY["historical"]["living_consumers"]))
+const QUALIFICATION_LIVING_CONSUMERS =
+    Set(String.(POLICY["qualification"]["living_milestone_consumers"]))
 const INDEX_PATH = normpath(joinpath(
     dirname(POLICY_PATH), POLICY["historical"]["index"]))
 const MILESTONE = r"(?i)\bphase[\s_.-]*[0-9]+[a-z0-9_.-]*"
+const GENERATED_OUTPUT_PREFIXES = (
+    "benchmark/results/",
+    "lib/ProcessBigraphs/docs/browser/artifacts/",
+    "lib/ProcessBigraphs/docs/build/",
+)
 
 relative(path) = relpath(path, ROOT)
 sha256_file(path) = open(bytes2hex ∘ sha256, path)
+generated_output(path) =
+    any(prefix -> startswith(relative(path), prefix), GENERATED_OUTPUT_PREFIXES)
 
 function repository_files(root)
     files = String[]
@@ -105,6 +114,7 @@ function check_active_paths!(failures)
         "scripts",
     )
     for root in roots, path in repository_files(joinpath(ROOT, root))
+        generated_output(path) && continue
         rel = relative(path)
         startswith(rel, "scripts/archive/") && continue
         occursin(MILESTONE, basename(path)) &&
@@ -127,6 +137,7 @@ function allowed_living_occurrence(path, line)
     allowed_source_occurrence(path, line) && return true
     rel = relative(path)
     rel in HISTORICAL_LIVING_CONSUMERS && return true
+    rel in QUALIFICATION_LIVING_CONSUMERS && return true
     rel in (
         "lib/CorePotts/test/test_contract_versions.jl",
         "lib/ProcessBigraphs/test/contracts/test_internal_beta_contract.jl",
@@ -162,6 +173,7 @@ function check_living_content!(failures)
         "scripts",
     )
     for root in roots, path in repository_files(joinpath(ROOT, root))
+        generated_output(path) && continue
         rel = relative(path)
         startswith(rel, "scripts/archive/") && continue
         any(extension -> endswith(path, extension),

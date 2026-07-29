@@ -91,6 +91,26 @@ body.pb-beta-visible {
   border-radius: .5rem;
 }
 
+.content p a,
+.content li a,
+.content dd a {
+  text-decoration: underline;
+  text-underline-offset: .12em;
+  text-decoration-thickness: .08em;
+}
+
+.content pre:focus,
+.content code.nohighlight:focus {
+  outline: .18rem solid var(--pb-accent);
+  outline-offset: .12rem;
+}
+
+@media (prefers-color-scheme: light) {
+  .content .hljs-literal {
+    color: #3f6f32 !important;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --pb-accent-soft: #102f38;

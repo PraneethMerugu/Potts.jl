@@ -274,18 +274,20 @@ result = (
 
 ![A native Makie trace shows occupied and active Wortel sites across the longer visualization profile, sampled every five MCS through MCS 60.](../assets/case-traces.png)
 
+```@raw html
 <div class="pb-native-animation">
 <video autoplay loop muted playsinline controls preload="metadata"
        width="1800" height="820"
-       poster="../assets/wortel-state.png"
+       poster="../../assets/wortel-state.png"
        aria-label="Native MakiePotts animation of the fixed-seed reduced Wortel trajectory from MCS zero through sixty">
-  <source src="../assets/wortel-animation.mp4" type="video/mp4">
-  <a href="../assets/wortel-animation.mp4">Download the Wortel Makie animation.</a>
+  <source src="../../assets/wortel-animation.mp4" type="video/mp4">
+  <a href="../../assets/wortel-animation.mp4">Download the Wortel Makie animation.</a>
 </video>
 <img class="pb-animation-fallback"
-     src="../assets/wortel-state.png"
+     src="../../assets/wortel-state.png"
      alt="Static MakiePotts fallback showing Wortel cell identities and Act memory at MCS zero, thirty, and sixty.">
 </div>
+```
 
 Text alternative for the animation: thirteen native MakiePotts states sample
 the declared seed every 5 MCS from initialization through MCS 60. White cell

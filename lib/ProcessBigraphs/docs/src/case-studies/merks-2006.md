@@ -427,18 +427,20 @@ result = (
 
 ![A native Makie trace shows field mass and surviving cells across the longer fixed-seed Merks visualization profile, sampled every five MCS through MCS 60.](../assets/case-traces.png)
 
+```@raw html
 <div class="pb-native-animation">
 <video autoplay loop muted playsinline controls preload="metadata"
        width="1800" height="820"
-       poster="../assets/merks-state.png"
+       poster="../../assets/merks-state.png"
        aria-label="Native MakiePotts animation of the fixed-seed reduced Merks trajectory from initialization through MCS sixty">
-  <source src="../assets/merks-animation.mp4" type="video/mp4">
-  <a href="../assets/merks-animation.mp4">Download the Merks Makie animation.</a>
+  <source src="../../assets/merks-animation.mp4" type="video/mp4">
+  <a href="../../assets/merks-animation.mp4">Download the Merks Makie animation.</a>
 </video>
 <img class="pb-animation-fallback"
-     src="../assets/merks-state.png"
+     src="../../assets/merks-state.png"
      alt="Static MakiePotts fallback showing nine Merks cells and their chemoattractant field at MCS zero, thirty, and sixty.">
 </div>
+```
 
 Text alternative for the animation: thirteen native MakiePotts states sample a
 fixed-seed 40 × 40, nine-cell visualization profile every 5 MCS through MCS 60.

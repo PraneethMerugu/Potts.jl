@@ -179,6 +179,9 @@ required_constructor_kinds = [
 preserve_merks_call_shapes = true
 prebuilt_constructors_allowed_in_case_study_tutorials = false
 
+[pottstoolkit.user_additions]
+exported = ["LocalConnectivity"]
+
 [topology]
 required_signature = "static_relation(role, topology; spacing, weights)"
 act_accepts = ["supported-topology", "supported-relation"]
