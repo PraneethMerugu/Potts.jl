@@ -1,0 +1,131 @@
+:root {
+  --pb-accent: #176b87;
+  --pb-accent-soft: #eaf6f8;
+  --pb-beta: #7b3f00;
+}
+
+html {
+  scroll-padding-top: 4.5rem;
+}
+
+body.pb-beta-visible {
+  padding-top: 2.65rem;
+}
+
+.pb-beta-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 1000;
+  min-height: 2.65rem;
+  padding: .65rem 1rem;
+  color: #fff;
+  background: #713b00;
+  text-align: center;
+  font-size: .92rem;
+  line-height: 1.3;
+  box-shadow: 0 1px 4px #0005;
+}
+
+.pb-beta-banner a {
+  color: #fff;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+.pb-contract,
+.pb-result,
+.pb-boundary {
+  border-left: .3rem solid var(--pb-accent);
+  border-radius: .2rem;
+  padding: .8rem 1rem;
+  margin: 1rem 0;
+  background: var(--pb-accent-soft);
+}
+
+.pb-boundary {
+  border-left-color: #b85c00;
+  background: #fff4e8;
+}
+
+.pb-result {
+  border-left-color: #2f7d32;
+  background: #eef8ee;
+}
+
+.pb-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(16rem, .65fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.4rem;
+  border: 1px solid #176b8733;
+  border-radius: .75rem;
+  background: linear-gradient(135deg, #f5fcfd, #eef4ff);
+}
+
+.pb-hero img,
+.pb-figure img,
+.pb-native-animation video,
+.pb-native-animation img {
+  width: 100%;
+  height: auto;
+}
+
+.pb-native-animation {
+  margin: 1rem 0;
+}
+
+.pb-animation-fallback {
+  display: none;
+}
+
+.pb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.pb-card {
+  padding: 1rem;
+  border: 1px solid #8884;
+  border-radius: .5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pb-accent-soft: #102f38;
+  }
+  .pb-hero {
+    background: linear-gradient(135deg, #13292f, #18243b);
+  }
+  .pb-boundary {
+    background: #3a250f;
+  }
+  .pb-result {
+    background: #18341a;
+  }
+}
+
+@media (max-width: 650px) {
+  .pb-hero {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+  .pb-beta-banner {
+    font-size: .82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .pb-native-animation video {
+    display: none;
+  }
+  .pb-native-animation .pb-animation-fallback {
+    display: block;
+  }
+}

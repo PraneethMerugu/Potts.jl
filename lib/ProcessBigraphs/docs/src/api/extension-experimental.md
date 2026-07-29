@@ -1,4 +1,4 @@
-# Extension and experimental API
+# [Extension and experimental API](@id extension-experimental-api)
 
 > **Support level:** qualified extension API for the listed protocol;
 > everything else on this page is experimental internal beta.

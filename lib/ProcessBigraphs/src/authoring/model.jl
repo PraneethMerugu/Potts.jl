@@ -1,4 +1,4 @@
-const AUTHORING_CONTRACT_VERSION = "process-bigraph-authoring-v1"
+const AUTHORING_CONTRACT_VERSION = "process-bigraph-authoring-v2"
 
 abstract type AbstractAuthoringHandle end
 

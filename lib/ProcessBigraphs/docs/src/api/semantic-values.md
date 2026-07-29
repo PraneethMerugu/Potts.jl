@@ -1,4 +1,4 @@
-# Semantic values and identity API
+# [Semantic values and identity API](@id semantic-values-api)
 
 > **Support level:** supported internal beta.
 

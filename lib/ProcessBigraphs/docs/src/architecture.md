@@ -1,6 +1,6 @@
 # ProcessBigraphs architecture and internal contracts
 
-Status: ProcessBigraphs 0.5.1 semantic-preserving consolidation candidate for the unpublished internal beta
+Status: ProcessBigraphs 0.6.0 Phase 17 candidate for the unpublished internal beta
 
 ## Authority and maturity
 

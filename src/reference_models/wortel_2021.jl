@@ -10,7 +10,7 @@ export model, problem, composite, observation_plan, initial_labels
 export semantic_manifest, run
 
 const SEMANTIC_VERSION = v"1.0.0"
-const SOURCE_DOI = "10.1371/journal.pone.0255151"
+const SOURCE_DOI = "10.1016/j.bpj.2021.04.036"
 
 """
 Named, source-bounded execution profile for the Wortel 2021 Act-CPM case.
@@ -279,7 +279,9 @@ end
 ProcessBigraphs.semantic_version(::_BatchProcess) = string(SEMANTIC_VERSION)
 ProcessBigraphs.semantic_parameters(step::_BatchProcess) = (
     family=:Wortel2021,
-    manifest=semantic_manifest(step.definition),
+    source_doi=SOURCE_DOI,
+    profile=step.definition.profile.identity,
+    potts_fingerprint=semantic_fingerprint(step.definition.potts).digest,
 )
 
 function ProcessBigraphs.invoke(
@@ -302,17 +304,20 @@ function ProcessBigraphs.invoke(
         ),
     ); diagnostics=(
         accepted_copies=result.report.accepted_copies,
-        activity_records=length(result.observations),
+        profile=step.definition.profile.identity,
     ))
 end
 
 """
-Build an executable ProcessBigraph composite for one bounded Wortel profile.
+Build a ProcessBigraph composite for one bounded Wortel profile.
 
 The composite makes orchestration explicit while the reusable SciML problem
-remains available independently through [`problem`](@ref).
+remains available independently through [`problem`](@ref). The default
+`compile=true` preserves the executable constructor call shape. Pass
+`compile=false` to inspect or compare the immutable semantic assembly before
+lowering.
 """
-function composite(definition::Model=model())
+function composite(definition::Model=model(); compile::Bool=true)
     spec = definition.profile
     scale = ProcessBigraphs.TimeScale(1, 1, :mcs)
     assembled = ProcessBigraphs.compose(
@@ -344,7 +349,7 @@ function composite(definition::Model=model())
         )
         simulation = ProcessBigraphs.mount!(
             system,
-            :wortel_activity_run,
+            :activity_cpm,
             _BatchProcess(definition),
         )
         ProcessBigraphs.attach!(
@@ -355,12 +360,13 @@ function composite(definition::Model=model())
         ProcessBigraphs.schedule!(
             system,
             simulation,
-            ProcessBigraphs.At((
-                ProcessBigraphs.LogicalTime(spec.mcs, scale),
-            )),
+            ProcessBigraphs.At(
+                ProcessBigraphs.LogicalTime(spec.mcs, scale)),
         )
+        ProcessBigraphs.observable!(system, :labels, labels)
+        ProcessBigraphs.observable!(system, :activity, activity)
     end
-    return ProcessBigraphs.compile(assembled)
+    return compile ? ProcessBigraphs.compile(assembled) : assembled
 end
 
 struct _Observer <: ProcessBigraphs.AbstractObserver end

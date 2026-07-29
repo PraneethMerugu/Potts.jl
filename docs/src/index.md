@@ -102,6 +102,13 @@ Start with `using PottsToolkit`. Import `CorePotts` when selecting lower-level e
 persistence operations, and add a Makie backend plus `MakiePotts` when producing figures or
 animations.
 
+ProcessBigraphs is a fourth, independently documented orchestration package in
+qualified unpublished internal beta. Its
+[standalone manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/) teaches typed stores,
+multirate composition, engine adapters, structural transactions, replay, and
+the complete inline Wortel and Merks source-bounded case studies. It is not
+part of the public three-package workflow above.
+
 ## Scientific boundary
 
 The manual distinguishes implemented mechanisms from qualified scientific claims. Pinned example

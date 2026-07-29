@@ -26,7 +26,7 @@ Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
 CorePotts = {path = "../lib/CorePotts"}
 KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git", rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"}
 MakiePotts = {path = "../lib/MakiePotts"}
-Mermaid = {url = "https://github.com/eebio/Mermaid.jl.git", rev = "d4c89d0ea09af8d96bcdc42ef6bd5dd967fc7a0d"}
+Mermaid = {url = "https://github.com/eebio/Mermaid.jl.git", rev = "8db1a68bc7fc85129db18a8892e2e692a90b8d68"}
 PottsToolkit = {path = ".."}
 ProcessBigraphs = {path = "../lib/ProcessBigraphs"}
 
@@ -37,7 +37,7 @@ HDF5 = "0.17"
 Images = "0.26"
 KernelAbstractions = "0.9.42"
 Mermaid = "0.1"
-ProcessBigraphs = "0.4, 0.5"
+ProcessBigraphs = "0.6"
 SciMLBase = "3"
 StaticArrays = "1"
 StructArrays = "0.7"

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-labelledby="title desc">
+  <title id="title">ProcessBigraphs architecture</title>
+  <desc id="desc">Explicit authoring lowers to one canonical structure and execution plan. The serial runtime schedules adapters, reconciles effects, publishes state, observes, and checkpoints.</desc>
+  <defs><style>
+    .box{fill:#eef8fa;stroke:#176b87;stroke-width:2}.heavy{fill:#fff3e6;stroke:#b85c00;stroke-width:2}
+    .text{font:15px system-ui,sans-serif;fill:#18323a}.small{font:12px system-ui,sans-serif;fill:#18323a}
+    .arrow{stroke:#176b87;stroke-width:2;marker-end:url(#m)}
+  </style><marker id="m" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#176b87"/></marker></defs>
+  <rect class="box" x="20" y="35" width="150" height="60" rx="8"/><text class="text" x="95" y="62" text-anchor="middle">Explicit authoring</text><text class="small" x="95" y="82" text-anchor="middle">stores · ports · schedules</text>
+  <rect class="box" x="225" y="35" width="150" height="60" rx="8"/><text class="text" x="300" y="62" text-anchor="middle">Canonical model</text><text class="small" x="300" y="82" text-anchor="middle">one structural authority</text>
+  <rect class="box" x="430" y="35" width="150" height="60" rx="8"/><text class="text" x="505" y="62" text-anchor="middle">Execution plan</text><text class="small" x="505" y="82" text-anchor="middle">validated and indexed</text>
+  <rect class="box" x="225" y="185" width="150" height="70" rx="8"/><text class="text" x="300" y="214" text-anchor="middle">Serial runtime</text><text class="small" x="300" y="235" text-anchor="middle">time · reconcile · publish</text>
+  <rect class="heavy" x="430" y="185" width="150" height="70" rx="8"/><text class="text" x="505" y="214" text-anchor="middle">Engine adapter</text><text class="small" x="505" y="235" text-anchor="middle">solver / CPM / device</text>
+  <rect class="box" x="620" y="185" width="120" height="70" rx="8"/><text class="text" x="680" y="211" text-anchor="middle">Published state</text><text class="small" x="680" y="232" text-anchor="middle">observe · save</text>
+  <path class="arrow" d="M170 65H225"/><path class="arrow" d="M375 65H430"/><path class="arrow" d="M505 95V145H300V185"/><path class="arrow" d="M375 220H430"/><path class="arrow" d="M580 220H620"/>
+</svg>

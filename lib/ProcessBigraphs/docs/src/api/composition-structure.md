@@ -1,4 +1,4 @@
-# Composition and dynamic structure API
+# [Composition and dynamic structure API](@id composition-structure-api)
 
 > **Support level:** supported internal beta.
 

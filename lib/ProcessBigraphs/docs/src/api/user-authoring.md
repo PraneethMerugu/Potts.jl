@@ -1,4 +1,4 @@
-# User authoring API
+# [User authoring API](@id user-authoring-api)
 
 > **Support level:** supported internal beta. These names form the ordinary
 > ProcessBigraphs 0.6 authoring boundary. The package is not yet a public

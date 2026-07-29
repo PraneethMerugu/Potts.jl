@@ -1,0 +1,17 @@
+{
+  "name": "process-bigraphs-docs-browser-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned rendered-site qualification for the ProcessBigraphs manual",
+  "scripts": {
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.61.1",
+    "lighthouse": "12.8.2",
+    "serve-handler": "6.1.6"
+  }
+}

@@ -1,13 +1,13 @@
 # Internal-beta guide
 
-Status: unpublished internal-beta consolidation candidate; package version `0.5.1`
+Status: unpublished internal beta; package version `0.6.0`
 
 The metadata-only attestation admits the previously qualified exact-head implementation without
 changing runtime or scientific-model behavior.
 
 ## What this beta is
 
-ProcessBigraphs 0.5 is a qualified, unpublished internal beta for composing dynamic scientific processes around
+ProcessBigraphs 0.6 is a qualified, unpublished internal beta for composing dynamic scientific processes around
 optimized domain engines. ProcessBigraphs owns logical time, invocation reason, visibility,
 identity, reconciliation, validation, publication, failure, checkpoint, and replay. A selected
 solver or CPM kernel owns timesteps, sweeps, device kernels, arrays, caches, workspaces, streams,

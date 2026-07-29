@@ -1,0 +1,101 @@
+schema_version = "1.0.0"
+contract = "process-bigraph-phase17-media-provenance-v1"
+generated_media_total_bytes_max = 15728640
+reduced_motion_fallback = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/architecture.svg"
+sha256 = "032d7a323973d47ca62b3167bbc3a57e92e5a6ec2e8c70bd3ab9660af1129855"
+kind = "architecture-diagram"
+source = "spec/phase-17-process-bigraph-model-and-documentation-productization.md"
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/make.jl"
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/example-results.svg"
+sha256 = "e977fd364b00ec20b532d45e3818bc32242652d5cbca4bea649e02337533b558"
+kind = "six-example-result-summary"
+source_hashes = [
+    "5e075894f3701dea9413b4b8089e9ad94afc2d627b91b1e8508a734c20972c2c",
+    "c4049d681a4d0d9f74d854f892e5515e0657768fd0c37f01e74036509b626a9d",
+    "8dd7f998cd3371b400bf0d47717ea2d2a432360c7e1d727f7ad4df38814dc00a",
+    "13029d10b6174b363a1eb34666feb6bd0c49fa84809e66b94d75d1bc05aaab55",
+    "5c12a8d93c10ceb26e5951d8d59ab85dec4c0c54da4e7a64f2331c4332475794",
+    "098438bd0c7471e471792fb741104a5de9a40f502820bbb5be04b09a57eacfa0",
+]
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/models/examples/{pulse_and_decay,nested_composites,n_way_junctions,sciml_field_adapter,custom_engine_adapter,divide_fail_recover}.jl"
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/wortel-state.png"
+sha256 = "5d688e52a905ebc1b1f1ee1269b578b000c853d4ce6e576c1add823121481db8"
+kind = "case-study-state"
+source = "lib/ProcessBigraphs/docs/generate_case_media.jl"
+source_sha256 = "22ea44bb75ac7e372abac5613666a18db209d2defb3b399789663f0acc60951f"
+model_source = "lib/ProcessBigraphs/docs/models/case_studies/wortel_2021.jl"
+model_source_sha256 = "113b4b2e038da41065705deabd78967b9ec3460cfe9da142d4240ea8ac60c2db"
+framework = "MakiePotts 0.2 / CairoMakie 0.15"
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/generate_case_media.jl"
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/merks-state.png"
+sha256 = "c665a3254e6284e77fb526e5fc7ae4609b80162875883851d9cd7d9f6b5e57df"
+kind = "case-study-state"
+source = "lib/ProcessBigraphs/docs/generate_case_media.jl"
+source_sha256 = "22ea44bb75ac7e372abac5613666a18db209d2defb3b399789663f0acc60951f"
+model_source = "lib/ProcessBigraphs/docs/models/case_studies/merks_2006.jl"
+model_source_sha256 = "4abe563ff6463f0084472a3baa4e9d2e0b4653da0e96cf4cd5169d08e59fa4ae"
+framework = "MakiePotts 0.2 / CairoMakie 0.15"
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/generate_case_media.jl"
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/case-traces.png"
+sha256 = "77c10e1600d2de12bc6ab540e7a1c931da904200099d76d48e32ec076071aa67"
+kind = "case-study-quantitative-traces"
+source = "lib/ProcessBigraphs/docs/generate_case_media.jl"
+source_sha256 = "22ea44bb75ac7e372abac5613666a18db209d2defb3b399789663f0acc60951f"
+source_hashes = [
+    "113b4b2e038da41065705deabd78967b9ec3460cfe9da142d4240ea8ac60c2db",
+    "4abe563ff6463f0084472a3baa4e9d2e0b4653da0e96cf4cd5169d08e59fa4ae",
+]
+framework = "MakiePotts 0.2 / CairoMakie 0.15"
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/generate_case_media.jl"
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/wortel-animation.mp4"
+sha256 = "441511f0fba46a1762e46fa67436ecce2da39ad2768cf6a7f7dba7b334bcdce4"
+kind = "case-study-animation"
+source = "lib/ProcessBigraphs/docs/generate_case_media.jl"
+source_sha256 = "22ea44bb75ac7e372abac5613666a18db209d2defb3b399789663f0acc60951f"
+model_source = "lib/ProcessBigraphs/docs/models/case_studies/wortel_2021.jl"
+model_source_sha256 = "113b4b2e038da41065705deabd78967b9ec3460cfe9da142d4240ea8ac60c2db"
+framework = "MakiePotts 0.2 / CairoMakie 0.15"
+codec = "H.264"
+frames = 39
+framerate = 12
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/generate_case_media.jl"
+static_fallback = "lib/ProcessBigraphs/docs/src/assets/wortel-state.png"
+text_summary_page = "lib/ProcessBigraphs/docs/src/case-studies/wortel-2021.md"
+reduced_motion = true
+alt_text_required = true
+
+[[assets]]
+path = "lib/ProcessBigraphs/docs/src/assets/merks-animation.mp4"
+sha256 = "a8fc6933f365d6be11b2250decc3c8c2552f40283515b50300e9703ff68cefaf"
+kind = "case-study-animation"
+source = "lib/ProcessBigraphs/docs/generate_case_media.jl"
+source_sha256 = "22ea44bb75ac7e372abac5613666a18db209d2defb3b399789663f0acc60951f"
+model_source = "lib/ProcessBigraphs/docs/models/case_studies/merks_2006.jl"
+model_source_sha256 = "4abe563ff6463f0084472a3baa4e9d2e0b4653da0e96cf4cd5169d08e59fa4ae"
+framework = "MakiePotts 0.2 / CairoMakie 0.15"
+codec = "H.264"
+frames = 39
+framerate = 12
+command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/generate_case_media.jl"
+static_fallback = "lib/ProcessBigraphs/docs/src/assets/merks-state.png"
+text_summary_page = "lib/ProcessBigraphs/docs/src/case-studies/merks-2006.md"
+reduced_motion = true
+alt_text_required = true

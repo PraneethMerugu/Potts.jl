@@ -9,6 +9,10 @@ This manual documents behavior available through the current PottsToolkit, CoreP
 MakiePotts interfaces. ProcessBigraphs is an unpublished internal beta with canonical hierarchy,
 open composition, serial orchestration, structural transactions, solver and field adapters,
 observation, continuation, and logical checkpoint contracts documented inside its package.
+Read the
+[independent ProcessBigraphs manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/) for that
+qualified boundary; its deployment is versioned separately under the
+`ProcessBigraphs` documentation directory.
 
 That internal capability is not presented here as:
 

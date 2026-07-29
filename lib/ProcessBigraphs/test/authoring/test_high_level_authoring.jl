@@ -1,7 +1,30 @@
 import ProcessBigraphs: StaticComposite, ProcessDeclaration,
     StepDeclaration, PortBinding, compile_composite, AbstractProcess,
     AbstractStep, ports, invoke,
-    semantic_parameters, parameter_names, with_parameters
+    semantic_version, semantic_parameters, parameter_names, with_parameters
+
+struct PB0IdentityBeforeRename <: AbstractProcess
+    amount::Int
+end
+
+struct PB0IdentityAfterRename <: AbstractProcess
+    amount::Int
+end
+
+const PB0IdentityRenamePair =
+    Union{PB0IdentityBeforeRename,PB0IdentityAfterRename}
+
+ports(::PB0IdentityRenamePair) = (
+    InputPort(Int, :state),
+    OutputPort(Int, :increment; update_law=:add),
+)
+semantic_version(::PB0IdentityRenamePair) = "2.3.0"
+semantic_parameters(law::PB0IdentityRenamePair) = (amount=law.amount,)
+function invoke(law::PB0IdentityRenamePair, inputs, context)
+    InvocationResult((
+        emit(context, :increment, AdditiveUpdate(), law.amount),
+    ))
+end
 
 struct PB0ParameterizedIncrement <: AbstractProcess
     amount::Int
@@ -343,6 +366,21 @@ end
     end
     @test semantic_fingerprint(observed(:a)) !=
         semantic_fingerprint(observed(:b))
+
+    function renamed_component(law)
+        compose(:RenamedComponent; scale) do m
+            state = store!(
+                m, :state,
+                LeafSchema(Int; default=0, update_law=:add))
+            actor = mount!(m, :increment, law)
+            schedule!(m, actor, Every(Duration(1, scale)))
+            attach!(m, actor, (state=state, increment=state))
+        end
+    end
+    before = renamed_component(PB0IdentityBeforeRename(2))
+    after = renamed_component(PB0IdentityAfterRename(2))
+    @test semantic_fingerprint(before) == semantic_fingerprint(after)
+    @test ir_fingerprint(lower(before)) != ir_fingerprint(lower(after))
 end
 
 @testset "hierarchy, shared junctions, and explicit exports" begin

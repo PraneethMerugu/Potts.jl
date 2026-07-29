@@ -1,4 +1,4 @@
-# Runtime, observation, and checkpoint API
+# [Runtime, observation, and checkpoint API](@id runtime-checkpoint-api)
 
 > **Support level:** supported internal beta.
 

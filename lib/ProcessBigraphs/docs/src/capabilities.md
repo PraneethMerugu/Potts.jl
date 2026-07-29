@@ -3,7 +3,7 @@
 <!-- Derived from lib/ProcessBigraphs/parity-registry.toml. -->
 
 - Implementation state: `internal_beta`
-- Current package version: `0.5.1`
+- Current package version: `0.6.0`
 - Baseline qualified internal-beta version: `0.5.0`
 - Internal beta: `true`
 - Public release: `false`

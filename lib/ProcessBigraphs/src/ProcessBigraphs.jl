@@ -129,4 +129,6 @@ public AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
        prepare_engine, stage_operation!, complete_operation!,
        validate_candidate, publish_candidate!, discard_candidate!
 
+include("api_docstrings.jl")
+
 end

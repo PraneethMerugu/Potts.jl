@@ -32,6 +32,8 @@ jobs:
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Run consolidated project integrity checker
         run: julia --startup-file=no scripts/check_project_integrity.jl
+      - name: Check the ProcessBigraphs Phase 17 documentation contract
+        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
       - name: Instantiate ProcessBigraphs qualification environment
         run: >-
           julia --project=benchmark --startup-file=no -e

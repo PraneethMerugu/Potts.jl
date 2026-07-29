@@ -71,12 +71,22 @@ jobs:
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environment
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Instantiate ProcessBigraphs documentation environment
+        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Enforce the documentation quality specification
         run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
+      - name: Enforce the ProcessBigraphs documentation contract
+        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
+      - name: Enforce ProcessBigraphs warm program budgets
+        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no scripts/check_process_bigraph_phase17_docs_runtime.jl
       - name: Build documentation without publishing
         env:
           POTTS_DEPLOY_DOCS: 'false'
         run: julia --project=docs --startup-file=no docs/make.jl
+      - name: Build ProcessBigraphs documentation without publishing
+        env:
+          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
+        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
 
   deploy:
     name: Deploy
@@ -99,11 +109,21 @@ jobs:
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environment
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Instantiate ProcessBigraphs documentation environment
+        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Enforce the documentation quality specification
         run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
-      - name: Publish documentation
+      - name: Enforce the ProcessBigraphs documentation contract
+        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
+      - name: Publish root documentation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
           POTTS_DEPLOY_DOCS: 'true'
         run: julia --project=docs --startup-file=no docs/make.jl
+      - name: Publish ProcessBigraphs documentation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'true'
+        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl

@@ -1,6 +1,7 @@
 module Merks2006
 
 using ...Authoring
+using OrdinaryDiffEqTsit5: Tsit5
 import CorePotts
 import ProcessBigraphs
 import SciMLBase
@@ -393,7 +394,9 @@ end
 ProcessBigraphs.semantic_version(::_CPMStep) = string(SEMANTIC_VERSION)
 ProcessBigraphs.semantic_parameters(step::_CPMStep) = (
     family=:Merks2006,
-    manifest=semantic_manifest(step.definition),
+    source_doi=SOURCE_DOI,
+    profile=step.definition.profile.identity,
+    potts_fingerprint=semantic_fingerprint(step.definition.potts).digest,
 )
 
 function ProcessBigraphs.invoke(
@@ -477,292 +480,9 @@ function ProcessBigraphs.invoke(
     ))
 end
 
-struct _FieldAdapter{P<:ProcessBigraphs.BoundedCartesianFieldProblem} <:
-       ProcessBigraphs.AbstractEngineAdapter
-    problem::P
-    substeps_per_tick::Int
-end
-
-ProcessBigraphs.engine_semantic_version(::_FieldAdapter) = "2.0.0"
-ProcessBigraphs.engine_semantic_parameters(adapter::_FieldAdapter) = (
-    family=:Merks2006,
-    semantic_model_version=string(SEMANTIC_VERSION),
-    problem_fingerprint=adapter.problem.fingerprint,
-    algorithm=:explicit_periodic_reaction_diffusion,
-    substeps_per_tick=adapter.substeps_per_tick,
-    continuation_policy=:reconstruct_each_invocation,
-    replay_class=:numerical,
-)
-
-mutable struct _FieldInstance{D,A<:Array} <:
-        ProcessBigraphs.AbstractEngineInstance
-    declaration::D
-    published::A
-    forcing::A
-    decay_weights::A
-    candidate::A
-    time_tick::Int64
-    target_tick::Int64
-    publication_epoch::UInt64
-    active_invocation::Union{Nothing,String}
-end
-
-function _field_instance(
-        declaration,
-        values,
-        time_tick::Integer,
-        publication_epoch::Integer=0)
-    problem = declaration.adapter.problem
-    published = Array(values)
-    size(published) == size(problem.initial_values) &&
-        eltype(published) == eltype(problem.initial_values) ||
-        throw(ArgumentError("Merks field checkpoint is incompatible"))
-    forcing = zeros(eltype(published), size(published))
-    decay_weights = copy(problem.decay_weights)
-    return _FieldInstance(
-        declaration,
-        published,
-        forcing,
-        decay_weights,
-        published,
-        Int64(time_tick),
-        Int64(time_tick),
-        UInt64(publication_epoch),
-        nothing,
-    )
-end
-
-function ProcessBigraphs.prepare_engine(
-        adapter::_FieldAdapter,
-        declaration::ProcessBigraphs.EngineDeclaration)
-    declaration.adapter === adapter ||
-        throw(ArgumentError("Merks field declaration and adapter disagree"))
-    return _field_instance(
-        declaration,
-        adapter.problem.initial_values,
-        adapter.problem.initial_tick,
-    )
-end
-
-ProcessBigraphs.field_engine_array_type(adapter::_FieldAdapter) =
-    typeof(adapter.problem.initial_values)
-ProcessBigraphs.field_engine_expected_diagnostics(::_FieldAdapter) =
-    (:backend, :algorithm, :retcode)
-ProcessBigraphs.field_engine_reconstruct(
-    declaration::ProcessBigraphs.EngineDeclaration{<:_FieldAdapter},
-    values,
-    time_tick::Integer,
-) = _field_instance(declaration, values, time_tick)
-
-struct _FieldCompletion <: ProcessBigraphs.AbstractCompletionHandle
-    invocation_id::String
-    target::ProcessBigraphs.LogicalTime
-end
-
-struct _FieldCandidate
-    invocation_id::String
-    target_tick::Int64
-    publication_epoch::UInt64
-end
-
-@inline function _periodic_laplacian(
-        values,
-        index::CartesianIndex{N},
-        spacing::NTuple{N}) where {N}
-    coordinates = Tuple(index)
-    center = values[index]
-    result = zero(center)
-    for axis in 1:N
-        low = Base.setindex(
-            coordinates,
-            mod1(coordinates[axis] - 1, size(values, axis)),
-            axis,
-        )
-        high = Base.setindex(
-            coordinates,
-            mod1(coordinates[axis] + 1, size(values, axis)),
-            axis,
-        )
-        result += (
-            values[low...] + values[high...] - 2center
-        ) / spacing[axis]^2
-    end
-    return result
-end
-
-function _advance_field(
-        values,
-        forcing,
-        decay_weights,
-        problem,
-        steps::Int,
-        duration)
-    current = copy(values)
-    next = similar(current)
-    dt = duration / steps
-    for _ in 1:steps
-        for index in CartesianIndices(current)
-            center = current[index]
-            derivative =
-                problem.diffusion *
-                    _periodic_laplacian(
-                        current, index, problem.spacing) +
-                forcing[index] -
-                problem.decay * decay_weights[index] * center
-            next[index] = max(zero(center), center + dt * derivative)
-        end
-        current, next = next, current
-    end
-    return current
-end
-
-function _field_inputs(instance::_FieldInstance, invocation)
-    projections = Dict(
-        projection.name => projection for projection in invocation.inputs)
-    Set(keys(projections)) == Set((:forcing, :decay_weights)) ||
-        throw(ArgumentError(
-            "Merks field advance requires forcing and decay_weights"))
-    forcing =
-        ProcessBigraphs.projection_value(projections[:forcing])
-    decay_weights =
-        ProcessBigraphs.projection_value(projections[:decay_weights])
-    for (name, values) in (
-            (:forcing, forcing),
-            (:decay_weights, decay_weights))
-        values isa AbstractArray &&
-            size(values) == size(instance.published) &&
-            eltype(values) == eltype(instance.published) ||
-            throw(ArgumentError(
-                "Merks field $name has incompatible shape or precision"))
-    end
-    all(value -> isfinite(value) && value >= 0, decay_weights) ||
-        throw(ArgumentError(
-            "Merks field decay weights must be finite and nonnegative"))
-    return forcing, decay_weights
-end
-
-function ProcessBigraphs.stage_operation!(
-        instance::_FieldInstance,
-        invocation::ProcessBigraphs.EngineInvocation)
-    operation = invocation.operation
-    operation isa ProcessBigraphs.IntervalAdvance ||
-        throw(ArgumentError(
-            "Merks field supports only interval advance"))
-    isnothing(instance.active_invocation) ||
-        throw(ArgumentError(
-            "Merks field already has an active candidate"))
-    problem = instance.declaration.adapter.problem
-    operation.start_time ==
-        ProcessBigraphs.LogicalTime(instance.time_tick, problem.time_scale) ||
-        throw(ArgumentError(
-            "Merks field and ProcessBigraph clocks disagree"))
-    authorization = invocation.resource_authorization
-    authorization == (
-        backend=:cpu,
-        precision=:float64,
-        residency=:host,
-    ) || throw(ArgumentError(
-        "Merks field requires explicit CPU/Float64/host authorization"))
-    forcing, decay_weights = _field_inputs(instance, invocation)
-    copyto!(instance.forcing, forcing)
-    copyto!(instance.decay_weights, decay_weights)
-    ticks = operation.target_time.tick - operation.start_time.tick
-    steps = Base.Checked.checked_mul(
-        ticks, instance.declaration.adapter.substeps_per_tick)
-    duration =
-        Float64(ticks) * problem.tick_duration
-    candidate = _advance_field(
-        instance.published,
-        instance.forcing,
-        instance.decay_weights,
-        problem,
-        steps,
-        duration,
-    )
-    all(isfinite, candidate) ||
-        throw(ArgumentError(
-            "Merks field produced a nonfinite candidate"))
-    instance.candidate = candidate
-    instance.target_tick = operation.target_time.tick
-    instance.active_invocation = invocation.id
-    return _FieldCompletion(invocation.id, operation.target_time)
-end
-
-function ProcessBigraphs.complete_operation!(
-        instance::_FieldInstance,
-        handle::_FieldCompletion)
-    instance.active_invocation == handle.invocation_id ||
-        throw(ArgumentError(
-            "Merks completion does not own the staged candidate"))
-    token = _FieldCandidate(
-        handle.invocation_id,
-        instance.target_tick,
-        Base.Checked.checked_add(
-            instance.publication_epoch, UInt64(1)),
-    )
-    return ProcessBigraphs.EngineCandidate(
-        handle.target,
-        token;
-        effects=(:field_state => (
-            target_tick=token.target_tick,
-            publication_epoch=token.publication_epoch,
-        ),),
-        diagnostics=(
-            backend=:cpu,
-            algorithm=:explicit_periodic_reaction_diffusion,
-            retcode="completed",
-        ),
-        fingerprint=ProcessBigraphs.canonical_fingerprint((
-            :merks_field_adapter_v2,
-            instance.declaration.fingerprint,
-            token.invocation_id,
-            token.target_tick,
-            token.publication_epoch,
-        )),
-    )
-end
-
-function ProcessBigraphs.publish_candidate!(
-        instance::_FieldInstance,
-        invocation::ProcessBigraphs.EngineInvocation,
-        candidate::ProcessBigraphs.EngineCandidate{<:_FieldCandidate})
-    instance.active_invocation == invocation.id &&
-        candidate.payload.invocation_id == invocation.id ||
-        throw(ArgumentError(
-            "Merks field candidate belongs to another invocation"))
-    instance.published = instance.candidate
-    instance.time_tick = instance.target_tick
-    instance.publication_epoch =
-        candidate.payload.publication_epoch
-    instance.active_invocation = nothing
-    return (
-        time_tick=instance.time_tick,
-        publication_epoch=instance.publication_epoch,
-    )
-end
-
-function ProcessBigraphs.discard_candidate!(
-        instance::_FieldInstance,
-        invocation::ProcessBigraphs.EngineInvocation,
-        candidate)
-    if instance.active_invocation == invocation.id
-        instance.candidate = instance.published
-        instance.target_tick = instance.time_tick
-        instance.active_invocation = nothing
-    end
-    return nothing
-end
-
-ProcessBigraphs.field_engine_snapshot(instance::_FieldInstance) =
-    copy(instance.published)
-
 function field_declaration(
         spec::Profile=profile();
-        initial_field=zeros(Float64, spec.dimensions),
-        substeps_per_tick::Integer=4)
-    0 < substeps_per_tick <= typemax(Int) ||
-        throw(ArgumentError(
-            "Merks field substeps must fit positive Int"))
+        initial_field=zeros(Float64, spec.dimensions))
     field_problem = ProcessBigraphs.BoundedCartesianFieldProblem(
         "merks-chemoattractant",
         initial_field;
@@ -772,26 +492,11 @@ function field_declaration(
         tick_duration=2.0,
         time_scale=ProcessBigraphs.TimeScale(2, 1, :second),
     )
-    adapter = _FieldAdapter(field_problem, Int(substeps_per_tick))
-    return ProcessBigraphs.EngineDeclaration(
-        field_problem.id,
-        adapter;
-        capabilities=ProcessBigraphs.EngineCapabilities(
-            operation_families=(:interval_advance,),
-            problem_envelopes=(
-                "merks-periodic-reaction-diffusion",),
-            backends=(:cpu,),
-            precisions=(:float64,),
-            residencies=(:host,),
-            input_modes=(:frozen,),
-            boundary_kinds=(:periodic,),
-            continuation_actions=(:reconstruct, :reject),
-            replay_class=:numerical,
-            cancellation=false,
-            diagnostics=true,
-            resize=false,
-            bridges=(),
-        ),
+    return ProcessBigraphs.sciml_field_declaration(
+        field_problem,
+        Tsit5();
+        algorithm_id="ordinarydiffeq-tsit5",
+        solver_options=(abstol=1.0e-9, reltol=1.0e-9),
     )
 end
 
@@ -804,7 +509,8 @@ function composite(
             backend=:cpu,
             precision=:float64,
             residency=:host,
-        ))
+        ),
+        compile::Bool=true)
     spec = definition.profile
     size(labels) == spec.dimensions ||
         throw(ArgumentError("Merks labels do not match the profile"))
@@ -880,7 +586,7 @@ function composite(
         )
 
         field = ProcessBigraphs.mount!(
-            system, :merks_field, field_process)
+            system, :field_solver, field_process)
         ProcessBigraphs.attach!(system, field, (
             field=field_store,
             forcing=forcing_store,
@@ -896,7 +602,7 @@ function composite(
         )
 
         cpm = ProcessBigraphs.mount!(
-            system, :merks_cpm, _CPMStep(definition))
+            system, :cellular_potts, _CPMStep(definition))
         ProcessBigraphs.attach!(system, cpm, (
             labels=label_store,
             mcs_field=mcs_field_store,
@@ -905,7 +611,7 @@ function composite(
 
         secretion = ProcessBigraphs.mount!(
             system,
-            :merks_secretion_mask,
+            :secretion_mask,
             _SecretionStep(spec.secretion_rate),
         )
         ProcessBigraphs.attach!(system, secretion, (
@@ -918,8 +624,10 @@ function composite(
             secretion,
             ProcessBigraphs.After(cpm),
         )
+        ProcessBigraphs.observable!(system, :labels, label_store)
+        ProcessBigraphs.observable!(system, :field, field_store)
     end
-    return ProcessBigraphs.compile(assembled)
+    return compile ? ProcessBigraphs.compile(assembled) : assembled
 end
 
 composite(spec::Profile; kwargs...) = composite(model(spec); kwargs...)

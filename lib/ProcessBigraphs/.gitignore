@@ -1,2 +1,5 @@
 /Manifest.toml
 /coverage/
+/docs/build/
+/docs/browser/node_modules/
+/docs/browser/artifacts/
