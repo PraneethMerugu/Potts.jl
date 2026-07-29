@@ -42,6 +42,8 @@ if browser_active
         "lib/ProcessBigraphs/docs/browser/package.json",
         "lib/ProcessBigraphs/docs/browser/playwright.config.ts",
         "lib/ProcessBigraphs/docs/browser/tests/site.spec.ts",
+        "lib/ProcessBigraphs/docs/browser/tests/visual.spec.ts",
+        "lib/ProcessBigraphs/docs/browser/scripts/lighthouse.mjs",
     )
     for relative in required
         check(isfile(joinpath(ROOT, relative)),

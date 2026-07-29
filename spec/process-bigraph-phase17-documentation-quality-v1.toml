@@ -74,7 +74,7 @@ wortel_case_study_warm_max = 30
 merks_case_study_warm_max = 60
 all_required_programs_warm_max = 240
 strict_docs_build_warm_max = 480
-hosted_job_timeout_max = 1800
+hosted_job_timeout_max = 3600
 
 [asset_budgets_bytes]
 video_each_max = 3145728

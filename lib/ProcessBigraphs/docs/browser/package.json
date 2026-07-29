@@ -5,12 +5,16 @@
   "description": "Pinned rendered-site qualification for the ProcessBigraphs manual",
   "scripts": {
     "test": "playwright test",
-    "test:update": "playwright test --update-snapshots",
+    "test:visual": "playwright test --project=chromium-visual",
+    "lighthouse": "node scripts/lighthouse.mjs",
+    "test:update": "playwright test --project=chromium-visual --update-snapshots",
     "report": "playwright show-report"
   },
+  "packageManager": "pnpm@11.9.0",
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",
     "@playwright/test": "1.61.1",
+    "chrome-launcher": "1.2.1",
     "lighthouse": "12.8.2",
     "serve-handler": "6.1.6"
   }

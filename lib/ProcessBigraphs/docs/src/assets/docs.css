@@ -54,9 +54,13 @@ code {
 }
 
 .pb-beta-banner a {
-  color: #fff;
+  color: #fff !important;
   text-decoration: underline;
   font-weight: 700;
+}
+
+pre .copy-button {
+  color: #fff !important;
 }
 
 .pb-contract,
@@ -315,4 +319,19 @@ pre .copy-button:focus {
   .pb-native-animation .pb-animation-fallback {
     display: block;
   }
+}
+
+/* Keep generated copy controls legible in every Documenter theme. */
+pre button.copy-button {
+  color: #fff !important;
+  background-color: #282f2f !important;
+  opacity: 1 !important;
+}
+
+#documenter-article-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
 }

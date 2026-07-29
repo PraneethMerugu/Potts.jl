@@ -11,6 +11,7 @@ makedocs(
     format = Documenter.HTML(
         prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/",
+        description = "Compose, execute, inspect, and reproduce multirate scientific models with ProcessBigraphs.jl.",
         repolink = REPOSITORY,
         edit_link = "main",
         size_threshold = nothing,

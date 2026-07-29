@@ -87,6 +87,36 @@ jobs:
         env:
           PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
         run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          package_json_file: lib/ProcessBigraphs/docs/browser/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: lib/ProcessBigraphs/docs/browser/pnpm-lock.yaml
+      - name: Install pinned rendered-site QA dependencies
+        working-directory: lib/ProcessBigraphs/docs/browser
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Qualify all routes in Chromium, Firefox, and WebKit
+        working-directory: lib/ProcessBigraphs/docs/browser
+        run: pnpm test --project=chromium --project=firefox --project=webkit
+      - name: Enforce Lighthouse and pinned Linux Chromium visual gates
+        working-directory: lib/ProcessBigraphs/docs/browser
+        run: |
+          pnpm lighthouse
+          pnpm test:visual
+      - name: Retain rendered-site qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: process-bigraphs-browser-qa-${{ github.sha }}
+          path: |
+            lib/ProcessBigraphs/docs/browser/artifacts
+            lib/ProcessBigraphs/docs/browser/tests/visual.spec.ts-snapshots
+          if-no-files-found: warn
 
   deploy:
     name: Deploy

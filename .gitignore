@@ -11,6 +11,9 @@
 # Documentation build output
 /docs/build/
 /docs/site/
+/lib/ProcessBigraphs/docs/browser/artifacts/
+/lib/ProcessBigraphs/docs/browser/tests/visual.spec.ts-snapshots/*-darwin.png
+/.pnpm-store/
 
 # OS/Editor files
 .DS_Store

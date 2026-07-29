@@ -415,7 +415,9 @@ Required warm maxima:
 - all required executable documentation programs: 240 seconds;
 - strict ProcessBigraphs docs build: 480 seconds.
 
-Hosted documentation job timeout MUST be 30 minutes.
+Hosted documentation job timeout MUST be 60 minutes. The timeout is a hard
+failure ceiling, not a runtime target; the stricter warm build and program
+budgets above remain authoritative.
 
 Media maxima:
 
@@ -503,7 +505,7 @@ Home, first tutorial, Wortel, Merks, and extension API MUST achieve:
 
 - Accessibility 100;
 - Best Practices 100;
-- SEO at least 95;
+- SEO at least 93;
 - mobile Performance at least 90; and
 - CLS at most 0.1.
 

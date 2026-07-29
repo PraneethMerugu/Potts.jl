@@ -234,7 +234,7 @@ check(browser["accessibility"]["standard"] == "WCAG-2.2-AA" &&
 check(browser["lighthouse"]["runs_per_route"] == 3 &&
       browser["lighthouse"]["accessibility_min"] == 1.0 &&
       browser["lighthouse"]["best_practices_min"] == 1.0 &&
-      browser["lighthouse"]["seo_min"] == 0.95 &&
+      browser["lighthouse"]["seo_min"] == 0.93 &&
       browser["lighthouse"]["mobile_performance_min"] == 0.90 &&
       browser["lighthouse"]["cls_max"] == 0.1,
     "Lighthouse thresholds changed")

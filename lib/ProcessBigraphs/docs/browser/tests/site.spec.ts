@@ -228,3 +228,36 @@ test("keyboard focus, skip link, and search dismissal", async ({
   await expect(page.locator("#pb-search-modal")).toBeHidden();
   await expect(trigger).toBeFocused();
 });
+
+const journeys = [
+  ["first-model", "/learn/first-multirate-composite/", ["Complete executed source", "Expected result"]],
+  ["nested-composite", "/examples/nested-composites/", ["mount", "schedule"]],
+  ["extension-discovery", "/api/extension-experimental/", ["Experimental", "internal"]],
+  ["minimal-adapter", "/examples/custom-engine-adapter/", ["stage_operation!", "discard_candidate!"]],
+  ["checkpoint-restart", "/learn/checkpoint-failure-replay/", ["checkpoint", "restore"]],
+  ["wortel-case", "/case-studies/wortel-2021/", ["reduced", "What this does not establish"]],
+  ["merks-case", "/case-studies/merks-2006/", ["500×500", "What this does not establish"]],
+  ["status-and-migration", "/concepts/capability-migration-troubleshooting/", ["internal beta", "migration"]],
+] as const;
+
+test.describe("registered persona journeys", () => {
+  for (const [id, route, evidence] of journeys) {
+    test(`journey:${id}`, async ({ page }) => {
+      await page.goto("/", { waitUntil: "networkidle" });
+      const searchTrigger = page.locator("#documenter-search-query");
+      await searchTrigger.click();
+      const search = page.locator("#pb-search-input");
+      await search.fill(id.split("-")[0]);
+      await page.keyboard.press("Escape");
+
+      const response = await page.goto(route, { waitUntil: "networkidle" });
+      expect(response?.ok()).toBeTruthy();
+      const article = page.locator("#documenter-page");
+      await expect(article).toBeVisible();
+      for (const phrase of evidence) {
+        await expect(article.getByText(phrase, { exact: false }).first()).toBeVisible();
+      }
+      await expect(page.locator(".docs-footer")).toBeVisible();
+    });
+  }
+});
