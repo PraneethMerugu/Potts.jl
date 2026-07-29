@@ -543,4 +543,3 @@ function _freeze(builder::CompositeBuilder)
         fingerprint,
     )
 end
-

@@ -61,4 +61,3 @@ explain(report::AttachmentReport) = (
     extra=report.extra,
     exact=isempty(report.missing_required) && isempty(report.extra),
 )
-

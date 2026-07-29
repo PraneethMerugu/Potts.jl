@@ -55,6 +55,8 @@ jobs:
           # whitespace normalization would invalidate admitted evidence.
           EVIDENCE_EXCLUSIONS=(
             ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
+            ':(exclude,glob)design/evidence/consolidation-baseline/**'
+            ':(exclude,glob)scripts/archive/**'
           )
           if [ -n "$BASE_SHA" ]; then
             git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
