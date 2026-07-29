@@ -18,6 +18,14 @@ const DEFAULT_OUTPUT = joinpath(
     "consolidation-baseline",
     "identity-fixtures-v1.toml",
 )
+const BASELINE_FREEZE = joinpath(
+    ROOT,
+    "design",
+    "evidence",
+    "consolidation-baseline",
+    "baseline-freeze-v1.toml",
+)
+const IDENTITY_ARTIFACT_NAME = "identity-fixtures-v1.toml"
 
 function option(name, default)
     prefix = "--$name="
@@ -203,11 +211,30 @@ function rendered(value)
 end
 
 output = option("output", DEFAULT_OUTPUT)
-bytes = rendered(capture())
+captured = capture()
+bytes = rendered(captured)
 if "--check" in ARGS
     isfile(output) || error("missing identity fixture artifact: $output")
-    read(output) == bytes || error("identity fixture artifact changed: $output")
-    println("verified ", relpath(output, ROOT))
+    expected_bytes = read(output)
+    baseline = TOML.parsefile(BASELINE_FREEZE)
+    expected_artifact_sha256 = baseline["artifacts"][IDENTITY_ARTIFACT_NAME]
+    bytes2hex(sha256(expected_bytes)) == expected_artifact_sha256 ||
+        error("frozen identity fixture artifact changed: $output")
+
+    expected = TOML.parse(String(expected_bytes))
+    expected_architecture = pop!(expected, "architecture")
+    actual_architecture = pop!(captured, "architecture")
+    rendered(expected) == rendered(captured) ||
+        error("semantic identity fixture changed: $output")
+    println(
+        "verified ",
+        relpath(output, ROOT),
+        " (captured on ",
+        expected_architecture,
+        "; checked on ",
+        actual_architecture,
+        ")",
+    )
 else
     mkpath(dirname(output))
     open(output, "w") do io
