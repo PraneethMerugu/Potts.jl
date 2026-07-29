@@ -1,5 +1,6 @@
 import ProcessBigraphs: StaticComposite, ProcessDeclaration,
-    StepDeclaration, PortBinding, compile_composite, ports, invoke,
+    StepDeclaration, PortBinding, compile_composite, AbstractProcess,
+    AbstractStep, ports, invoke,
     semantic_parameters, parameter_names, with_parameters
 
 struct PB0ParameterizedIncrement <: AbstractProcess

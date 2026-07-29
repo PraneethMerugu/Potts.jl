@@ -640,7 +640,7 @@ function merks2006_composite(
             owner=:shared,
         ),
     )
-    field_process = ProcessBigraphs.ManagedFieldAdvanceProcess(
+    field_process = ProcessBigraphs.managed_field_process(
         field_declaration;
         resource_authorization,
         subcycles_per_mcs,
@@ -651,9 +651,13 @@ function merks2006_composite(
         profile=:reproducible,
     ) do builder
         stores = Dict{Symbol,Any}()
-        for (name, leaf) in schema.children
-            stores[Symbol(name)] =
-                ProcessBigraphs.store!(builder, Symbol(name), leaf)
+        for (store_path, leaf) in ProcessBigraphs.schema_leaves(schema)
+            segment = only(ProcessBigraphs.segments(store_path))
+            segment isa ProcessBigraphs.NameSegment ||
+                error("Merks store schema must remain flat and named")
+            name = Symbol(segment.value)
+            stores[name] =
+                ProcessBigraphs.store!(builder, name, leaf)
         end
 
         field = ProcessBigraphs.mount!(

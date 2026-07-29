@@ -35,6 +35,19 @@ using SciMLBase
     ])
     @test intersect(qualified_exports, Set(names(ProcessBigraphs))) ==
           qualified_exports
+    @test all(name -> Base.ispublic(ProcessBigraphs, name),
+        qualified_exports)
+    engine_extension_names = setdiff(qualified_exports, Set(Symbol[
+        :FieldDescriptor,
+        :FieldGeometry,
+        :FieldBoundary,
+        :FieldState,
+    ]))
+    @test all(name -> !Base.isexported(ProcessBigraphs, name),
+        engine_extension_names)
+    @test Base.isexported(ProcessBigraphs, :managed_field_process)
+    @test !Base.ispublic(
+        ProcessBigraphs, :ManagedFieldAdvanceProcess)
 
     reserved_exports = Set(Symbol[
         :StructuralRequest,

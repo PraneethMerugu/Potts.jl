@@ -9,18 +9,39 @@ field_engine_array_type(
     declaration::EngineDeclaration,
 ) = field_engine_array_type(declaration.adapter)
 
-"""
-    ManagedFieldAdvanceProcess(declaration; ...)
-
-A scheduled ProcessBigraphs process that owns field-engine invocation and
-publication timing. The declared adapter retains ownership of numerical
-reconstruction, stepping, validation, and its heavy kernels.
-"""
 struct ManagedFieldAdvanceProcess{
         D<:EngineDeclaration,A,R<:NamedTuple} <: AbstractProcess
     declaration::D
     resource_authorization::R
     subcycles_per_mcs::Int
+end
+
+function _validate_managed_field_authorization(
+        declaration::EngineDeclaration,
+        resource_authorization::NamedTuple)
+    isempty(resource_authorization) &&
+        _fail(:missing_field_resource_authorization,
+            "managed field execution requires explicit resource authorization")
+    required = (:backend, :precision, :residency)
+    missing = Tuple(filter(
+        key -> !haskey(resource_authorization, key), required))
+    isempty(missing) ||
+        _fail(:incomplete_field_resource_authorization,
+            "managed field authorization must select a backend, precision, and residency";
+            missing)
+    resource_authorization.backend in declaration.capabilities.backends ||
+        _fail(:unsupported_engine_backend,
+            "resource authorization selected an unsupported backend";
+            backend=resource_authorization.backend)
+    resource_authorization.precision in declaration.capabilities.precisions ||
+        _fail(:unsupported_engine_precision,
+            "resource authorization selected an unsupported precision";
+            precision=resource_authorization.precision)
+    resource_authorization.residency in declaration.capabilities.residencies ||
+        _fail(:unsupported_engine_residency,
+            "resource authorization selected unsupported residency";
+            residency=resource_authorization.residency)
+    return resource_authorization
 end
 
 function ManagedFieldAdvanceProcess(
@@ -34,6 +55,8 @@ function ManagedFieldAdvanceProcess(
     subcycles_per_mcs <= typemax(Int) ||
         _fail(:field_subcycle_overflow,
             "managed field process subcycle count exceeds Int")
+    _validate_managed_field_authorization(
+        declaration, resource_authorization)
     A = field_engine_array_type(declaration)
     A <: AbstractArray ||
         _fail(:invalid_field_array_type,
@@ -43,6 +66,33 @@ function ManagedFieldAdvanceProcess(
         declaration,
         deepcopy(resource_authorization),
         Int(subcycles_per_mcs),
+    )
+end
+
+"""
+    managed_field_process(
+        declaration;
+        resource_authorization,
+        subcycles_per_mcs=1,
+    )
+
+Construct a scheduled process that advances a declared field engine and
+publishes its committed field state. `resource_authorization` must explicitly
+select a backend, precision, and residency admitted by `declaration`.
+
+The concrete process type is intentionally private. Compose, inspect, and
+schedule the returned value through the ordinary [`AbstractProcess`](@ref)
+protocol.
+"""
+function managed_field_process(
+    declaration::EngineDeclaration;
+    resource_authorization::NamedTuple,
+    subcycles_per_mcs::Integer=1,
+)
+    return ManagedFieldAdvanceProcess(
+        declaration;
+        resource_authorization,
+        subcycles_per_mcs,
     )
 end
 

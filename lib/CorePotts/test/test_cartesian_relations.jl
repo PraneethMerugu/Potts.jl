@@ -123,3 +123,30 @@ end
             AxisBoundary(ClosedBoundary())))
     @test_throws ArgumentError validate_relation_domain(ambiguous, diagonal)
 end
+
+@testset "topology-based public relation construction" begin
+    topology = MooreTopology{2}()
+    direct = static_relation(
+        SpatialQueryRole(),
+        topology;
+        spacing=(0.5f0, 1.5f0),
+    )
+    legacy = static_relation(
+        SpatialQueryRole(),
+        CorePotts.offsets(topology);
+        spacing=(0.5f0, 1.5f0),
+    )
+    @test direct == legacy
+    @test component_semantic_data(direct) ==
+          component_semantic_data(legacy)
+    @test_throws ArgumentError static_relation(
+        SpatialQueryRole(), topology; spacing=(1.0f0,))
+    @test_throws ArgumentError static_relation(
+        SpatialQueryRole(), topology; weights=(1.0f0,))
+    @test_throws ArgumentError static_relation(
+        SpatialQueryRole(), topology; spacing=(1.0f0, 0.0f0))
+    @test_throws ArgumentError static_relation(
+        SpatialQueryRole(), topology;
+        weights=ntuple(index -> index == 1 ? -1.0f0 : 1.0f0, 8),
+    )
+end

@@ -17,6 +17,12 @@ function mutated_copy(transform)
         "spec/process-bigraph-phase17-api-inventory-v1.toml",
         "spec/process-bigraph-phase17-entry-v1.toml",
         "lib/ProcessBigraphs/src/ProcessBigraphs.jl",
+        "lib/CorePotts/src/CorePotts.jl",
+        "lib/ProcessBigraphs/docs/src/api/user-authoring.md",
+        "lib/ProcessBigraphs/docs/src/api/semantic-values.md",
+        "lib/ProcessBigraphs/docs/src/api/runtime-checkpoint.md",
+        "lib/ProcessBigraphs/docs/src/api/composition-structure.md",
+        "lib/ProcessBigraphs/docs/src/api/extension-experimental.md",
     )
         target = joinpath(temporary, relative)
         mkpath(dirname(target))

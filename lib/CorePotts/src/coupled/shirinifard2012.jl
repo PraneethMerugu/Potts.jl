@@ -1113,9 +1113,13 @@ function cnv2012_composite(
         profile=:reproducible,
     ) do builder
         stores = Dict{Symbol,Any}()
-        for (name, leaf) in schema.children
-            stores[Symbol(name)] =
-                ProcessBigraphs.store!(builder, Symbol(name), leaf)
+        for (store_path, leaf) in ProcessBigraphs.schema_leaves(schema)
+            segment = only(ProcessBigraphs.segments(store_path))
+            segment isa ProcessBigraphs.NameSegment ||
+                error("CNV store schema must remain flat and named")
+            name = Symbol(segment.value)
+            stores[name] =
+                ProcessBigraphs.store!(builder, name, leaf)
         end
 
         for (name, declaration) in pairs(field_declarations)
@@ -1124,7 +1128,7 @@ function cnv2012_composite(
             actor = ProcessBigraphs.mount!(
                 builder,
                 Symbol("cnv-" * replace(String(name), "_" => "-")),
-                ProcessBigraphs.ManagedFieldAdvanceProcess(
+                ProcessBigraphs.managed_field_process(
                     declaration; resource_authorization),
             )
             ProcessBigraphs.schedule!(

@@ -1,4 +1,5 @@
-import ProcessBigraphs: ports, invoke, semantic_parameters
+import ProcessBigraphs: AbstractProcess, AbstractStep, ports, invoke,
+    semantic_parameters
 
 struct PB0Increment <: AbstractProcess
     amount::Int

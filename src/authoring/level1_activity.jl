@@ -13,12 +13,27 @@ struct Act{T <: AbstractFloat, R, A} <: AbstractLevel1Declaration
 end
 
 function Act(; maximum_activity::Real, strength::Real, neighborhood,
+        spacing=nothing, weights=nothing,
         algorithm = CorePotts.BudgetedSequentialCPM(
             CorePotts.AttemptsPerSite(1)),
         observation_every::Integer = 1)
-    neighborhood isa CorePotts.StaticCartesianRelation{
-        <:CorePotts.SpatialQueryRole} || throw(ArgumentError(
-        "Act neighborhood must be a SpatialQueryRole relation"))
+    relation = if neighborhood isa CorePotts.AbstractTopology
+        CorePotts.static_relation(
+            CorePotts.SpatialQueryRole(),
+            neighborhood;
+            spacing,
+            weights,
+        )
+    elseif neighborhood isa CorePotts.StaticCartesianRelation{
+            <:CorePotts.SpatialQueryRole}
+        spacing === nothing && weights === nothing || throw(ArgumentError(
+            "Act spacing and weights belong to topology construction; " *
+            "an existing relation is already canonical"))
+        neighborhood
+    else
+        throw(ArgumentError(
+            "Act neighborhood must be a supported topology or SpatialQueryRole relation"))
+    end
     algorithm isa CorePotts.AbstractSequentialCPMAlgorithm ||
         throw(ArgumentError("Act requires an ordered sequential algorithm"))
     algorithm isa CorePotts.SequentialEquilibrium && throw(ArgumentError(
@@ -27,7 +42,7 @@ function Act(; maximum_activity::Real, strength::Real, neighborhood,
         throw(ArgumentError("Act observation cadence must be positive"))
     maximum_value, strength_value =
         promote(float(maximum_activity), float(strength))
-    return Act(maximum_value, strength_value, neighborhood,
+    return Act(maximum_value, strength_value, relation,
         algorithm, UInt64(observation_every))
 end
 

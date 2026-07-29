@@ -1,5 +1,6 @@
-import ProcessBigraphs: ports, invoke, semantic_parameters,
-    continuation_schema, observe, observer_semantic_parameters
+import ProcessBigraphs: AbstractProcess, AbstractStep, AbstractObserver,
+    ports, invoke, semantic_parameters, continuation_schema, observe,
+    observer_semantic_parameters
 
 struct C15Add <: AbstractProcess
     amount::Int

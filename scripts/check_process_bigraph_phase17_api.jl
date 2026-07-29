@@ -45,6 +45,10 @@ entrypoint =
     joinpath(ROOT, "lib", "ProcessBigraphs", "src", "ProcessBigraphs.jl")
 exports = declared_names(entrypoint, :export)
 publics = declared_names(entrypoint, :public)
+core_entrypoint =
+    joinpath(ROOT, "lib", "CorePotts", "src", "CorePotts.jl")
+core_exports = declared_names(core_entrypoint, :export)
+core_publics = declared_names(core_entrypoint, :public)
 
 rows = get(inventory, "bindings", Any[])
 names = [String(row["name"]) for row in rows]
@@ -114,6 +118,26 @@ if boundary_active
         "ProcessBigraphs exports differ from the frozen desired boundary")
     check(publics == desired_publics,
         "ProcessBigraphs Julia-public declarations differ from the frozen desired boundary")
+    for row in rows
+        row["class"] in ("exported_user", "public_extension") || continue
+        page = String(row["owner_page"])
+        check(isfile(joinpath(ROOT, page)),
+            "admitted binding $(row["name"]) owning page does not resolve: $page")
+    end
+
+    core_additions = vcat(
+        contract["corepotts"]["user_additions"]["exported_types"],
+        contract["corepotts"]["user_additions"]["exported_functions"],
+        contract["corepotts"]["reused_supported_functions"]["exported"],
+    )
+    for name in core_additions
+        check(String(name) in core_exports,
+            "required CorePotts façade binding $name is not exported")
+    end
+    for name in contract["corepotts"]["internal_required"]["bindings"]
+        check(String(name) ∉ core_exports && String(name) ∉ core_publics,
+            "CorePotts internal binding $name is advertised")
+    end
 end
 
 if isempty(failures)

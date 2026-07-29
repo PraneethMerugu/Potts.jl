@@ -1,6 +1,6 @@
 import ProcessBigraphs: ports, capabilities, semantic_parameters,
     StaticComposite, ProcessDeclaration, StepDeclaration, PortBinding,
-    compile_composite
+    compile_composite, AbstractProcess, AbstractStep
 
 struct PB0PortLaw <: AbstractProcess
     amount::Int
