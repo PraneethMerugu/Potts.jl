@@ -1,5 +1,5 @@
 schema_version = "1.0.0"
-status = "naming-and-harness-candidate"
+status = "qualified"
 baseline_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
 policy = "Every renamed baseline test or support file has exactly one domain-oriented successor. Unlisted baseline paths must remain at their original path."
 direct_entrypoints = [

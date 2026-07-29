@@ -1,21 +1,30 @@
 schema_version = "1.0.0"
 qualification_id = "semantic-preserving-repository-consolidation-v1"
-status = "reconciliation_candidate"
+status = "consolidation_qualified"
 contract = "semantic-preserving-consolidation-contract.md"
 required_row_count = 37
+qualified_row_count = 37
+open_row_count = 0
 allowed_statuses = ["specified", "implemented", "oracle_passing", "qualified", "blocked", "excluded"]
-closure_status = "open"
+closure_status = "closed"
 public_release = false
 new_functionality_allowed = false
 removed_functionality_allowed = false
 
 [candidate]
-status = "local_candidate_passing"
+status = "qualified"
 version = "0.5.1"
-audit = "../design/audits/semantic-preserving-consolidation-candidate.md"
-evidence = "../design/evidence/consolidation-candidate/local-reconciliation-v1.toml"
-exact_head_qualified = false
-pending = ["cpu_x86_64", "trusted_metal_exact_head", "trusted_rocm", "linux_install_smoke", "windows_install_smoke", "aggregate_ci"]
+audit = "../design/audits/semantic-preserving-consolidation-closure.md"
+evidence = "../design/evidence/consolidation-qualified/exact-head-v1.toml"
+audit_sha256 = "5465968597b60666e1186c4b42455829705e9a6eaf206ef46d8c6f9af20612fb"
+evidence_sha256 = "99ebd4bd300b60be62a474b1b12a43114dba63df529d723973d58a1875a74da6"
+qualified_date = "2026-07-29"
+qualified_commit = "3e4946d9aac8ed4b1fadd1455a148b27620fdad6"
+qualified_tree = "6a74b82ffbdfb92a501323d377c976a495e40904"
+tested_pull_request_merge_commit = "55449c6c8d12de5dc7c7963c0d7e947019dcb92a"
+tested_pull_request_merge_tree = "6a74b82ffbdfb92a501323d377c976a495e40904"
+exact_head_qualified = true
+pending = []
 
 [baseline_freeze]
 status = "qualified"
@@ -342,29 +351,29 @@ id = "CON-R03"
 gate = "reconciliation"
 dimension = "performance"
 title = "All frozen runtime, authoring, allocation, and device budgets pass"
-status = "implemented"
-evidence = ["stage-separated report", "steady state", "publication", "device", "test wall time"]
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/native-field-metal.toml", "design/evidence/consolidation-qualified/native-field-rocm.toml"]
 
 [[requirements]]
 id = "CON-R04"
 gate = "reconciliation"
 dimension = "backend"
 title = "CPU and every invalidated trusted hardware claim requalified"
-status = "implemented"
-evidence = ["CPU x86_64", "CPU ARM64", "Metal", "ROCm", "exact source", "no hidden fallback"]
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/native-field-metal.toml", "design/evidence/consolidation-qualified/native-field-rocm.toml"]
 
 [[requirements]]
 id = "CON-R05"
 gate = "reconciliation"
 dimension = "documentation"
 title = "Domain-oriented docs, examples, generated pages, and limitations reconcile"
-status = "implemented"
-evidence = ["manual", "examples", "generated pages", "API", "limitations", "historical index"]
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/linux-install-smoke.toml", "design/evidence/consolidation-qualified/macos-install-smoke.toml", "design/evidence/consolidation-qualified/windows-install-smoke.toml", "design/audits/semantic-preserving-consolidation-closure.md"]
 
 [[requirements]]
 id = "CON-R06"
 gate = "reconciliation"
 dimension = "evidence"
 title = "Exact-head evidence and zero-functional-delta attestation"
-status = "implemented"
-evidence = ["commit/tree", "clean resolution", "all CI jobs", "artifact hashes", "API delta", "functionality delta"]
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/audits/semantic-preserving-consolidation-closure.md"]

@@ -1,5 +1,5 @@
 schema_version = "1.0.0"
-status = "naming-and-harness-candidate"
+status = "qualified"
 policy = "Reusable fixtures live only in test or integration trees. Production code is never a fixture authority. Independent evidence implementations remain separate from production."
 
 [[fixtures]]

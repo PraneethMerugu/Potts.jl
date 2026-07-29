@@ -276,12 +276,14 @@ vocabulary, consolidates tests and quality tooling without weakening independent
 preserves API/identity/persistence/backend claims, and forbids new functionality. The
 [37-row qualification ledger](semantic-preserving-consolidation-qualification-v1.toml) separates
 baseline, naming, architecture, deduplication, test/tooling, package, and exact-head reconciliation
-evidence and is now `baseline_frozen`. The qualified
-[baseline freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md) locks the
-exact source, environments, APIs, behavior matrix, identities, performance observations,
-duplication classifications, and hardware impact closures. The next allowed gate is
-`naming_and_archive`; production consolidation has not started, and later roadmap redesign remains
-deferred until consolidation qualifies.
+evidence. All 37 rows are now qualified. The
+[baseline freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md) remains
+the behavioral authority, while the
+[closure audit](../design/audits/semantic-preserving-consolidation-closure.md) and
+[exact-head evidence](../design/evidence/consolidation-qualified/exact-head-v1.toml) record the
+qualified `0.5.1` internal-beta candidate, exact CPU and trusted-hardware runs, platform
+installation smokes, performance results, API disposition, and zero-functional-delta attestation.
+Repository consolidation is closed; later roadmap redesign remains a separate decision.
 
 ## Conformance Principle
 

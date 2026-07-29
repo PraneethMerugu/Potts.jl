@@ -1,6 +1,6 @@
 # Semantic-preserving consolidation candidate audit
 
-Status: Local reconciliation candidate passes; exact-head platform qualification remains open
+Status: Superseded local reconciliation candidate; exact-head closure recorded
 
 Date: 2026-07-28
 
@@ -18,9 +18,10 @@ canonical spelling, compatibility placement, test/tooling ownership, and duplica
 structure without adding or removing an accepted feature, algorithm, backend, scientific claim, or
 supported envelope.
 
-The candidate is not yet consolidation-qualified. The repository contract requires committed
-exact-head CI and trusted hardware evidence, which cannot be represented by an uncommitted local
-tree.
+At this local-candidate checkpoint, the repository was not yet consolidation-qualified because
+committed exact-head CI and trusted hardware evidence could not be represented by an uncommitted
+tree. That evidence is now recorded in the
+[closure audit](semantic-preserving-consolidation-closure.md).
 
 ## Consolidated architecture
 
@@ -83,13 +84,10 @@ The final local candidate passed:
 - the macOS clean-install documentation smoke; and
 - a complete local documentation build with doctests.
 
-## Remaining closure work
+## Closure disposition
 
-Closure still requires a clean committed candidate, exact-head Linux x86_64 and macOS aarch64 CPU
-attestations, trusted Metal and ROCm attestations, Linux and Windows clean-install documentation
-smokes, and the required aggregate CI conclusion. The documentation quality checker intentionally
-continues to reject the retained baseline platform-smoke artifacts until exact-head replacements
-are supplied.
-
-No roadmap redesign or new scientific work may begin until those rows are qualified and the final
-zero-functional-delta attestation is recorded.
+The clean committed candidate, Linux x86_64 and macOS aarch64 CPU attestations, trusted Metal and
+ROCm attestations, three-platform clean-install documentation smokes, performance guardrails,
+frozen identity, and required aggregate CI conclusion all passed. The
+[exact-head evidence](../evidence/consolidation-qualified/exact-head-v1.toml) supersedes this local
+checkpoint for closure claims.
