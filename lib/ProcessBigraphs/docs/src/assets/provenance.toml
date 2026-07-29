@@ -5,7 +5,7 @@ reduced_motion_fallback = true
 
 [[assets]]
 path = "lib/ProcessBigraphs/docs/src/assets/architecture.svg"
-sha256 = "032d7a323973d47ca62b3167bbc3a57e92e5a6ec2e8c70bd3ab9660af1129855"
+sha256 = "e29cbc72a8d519ed017ad913659b9f77e898df0298da8843e148c16ceb83a2ba"
 kind = "architecture-diagram"
 source = "spec/phase-17-process-bigraph-model-and-documentation-productization.md"
 command = "julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/make.jl"
