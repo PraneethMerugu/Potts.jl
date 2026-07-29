@@ -390,4 +390,3 @@ end
 Base.propertynames(model::CompositeModel; private::Bool=false) =
     tuple(fieldnames(typeof(model))...,
         :state, :components, :parameters, :observables)
-
