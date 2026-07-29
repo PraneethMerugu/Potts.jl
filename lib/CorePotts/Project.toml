@@ -56,7 +56,7 @@ StaticArrays = "1.9"
 Statistics = "1"
 Test = "1"
 Zarr = "0.10"
-julia = "1.12.6"
+julia = "1.12"
 
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"

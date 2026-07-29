@@ -5,7 +5,7 @@
 **Outcome.** Verify the local package, exact logical-time arithmetic, canonical
 encoding, and semantic identity in one standalone program.
 
-**Prerequisites.** Julia 1.12.6 and a checkout of this repository.
+**Prerequisites.** Julia 1.12 or a later Julia 1.x release and a checkout of this repository.
 
 ```sh
 julia --project=lib/ProcessBigraphs/docs -e 'using Pkg; Pkg.instantiate()'

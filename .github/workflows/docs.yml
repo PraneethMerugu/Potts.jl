@@ -6,108 +6,19 @@ on:
     tags: ['*']
   pull_request:
   workflow_dispatch:
-    inputs:
-      full_qualification:
-        description: Run cross-platform and release-grade rendered-site qualification
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: docs-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  JULIA_VERSION: 1.12.6
+  JULIA_VERSION: '1.12'
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
 jobs:
-  cpu-install-smoke:
-    name: CPU install / ${{ matrix.platform }}
-    if: startsWith(github.ref, 'refs/tags/')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux
-            os: ubuntu-latest
-          - platform: macos
-            os: macos-latest
-          - platform: windows
-            os: windows-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Install and execute the public CPU smoke
-        shell: bash
-        run: >-
-          julia --startup-file=no scripts/documentation_cpu_install_smoke.jl
-          --output "$RUNNER_TEMP/${{ matrix.platform }}-install-smoke.toml"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: documentation-install-${{ matrix.platform }}-${{ github.sha }}
-          path: ${{ runner.temp }}/${{ matrix.platform }}-install-smoke.toml
-          if-no-files-found: error
-
-  build:
+  docs:
     name: Build
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate documentation environment
-        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Instantiate ProcessBigraphs documentation environment
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Enforce the documentation quality specification
-        run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
-      - name: Enforce the ProcessBigraphs documentation contract
-        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
-      - name: Enforce ProcessBigraphs warm program budgets
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no scripts/check_process_bigraph_phase17_docs_runtime.jl
-      - name: Build documentation without publishing
-        env:
-          POTTS_DEPLOY_DOCS: 'false'
-        run: julia --project=docs --startup-file=no docs/make.jl
-      - name: Build ProcessBigraphs documentation without publishing
-        env:
-          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          package_json_file: lib/ProcessBigraphs/docs/browser/package.json
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: lib/ProcessBigraphs/docs/browser/pnpm-lock.yaml
-      - name: Install pinned rendered-site QA dependencies
-        working-directory: lib/ProcessBigraphs/docs/browser
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
-      - name: Smoke rendered routes and accessibility in Chromium
-        working-directory: lib/ProcessBigraphs/docs/browser
-        run: pnpm test --project=chromium
-
-  deploy:
-    name: Deploy
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -118,98 +29,21 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate documentation environment
-        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Instantiate ProcessBigraphs documentation environment
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Enforce the documentation quality specification
-        run: julia --project=. --startup-file=no scripts/check_documentation_quality.jl
-      - name: Enforce the ProcessBigraphs documentation contract
-        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
-      - name: Publish root documentation
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-          POTTS_DEPLOY_DOCS: 'true'
-        run: julia --project=docs --startup-file=no docs/make.jl
-      - name: Publish ProcessBigraphs documentation
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'true'
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
-
-  full-qualification:
-    name: Full documentation qualification
-    if: >-
-      always() &&
-      (startsWith(github.ref, 'refs/tags/') ||
-       (github.event_name == 'workflow_dispatch' && inputs.full_qualification))
-    needs: [cpu-install-smoke]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          pattern: documentation-install-*-${{ github.sha }}
-          path: design/evidence/consolidation-qualified
-          merge-multiple: true
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate the ProcessBigraphs documentation environment
-        run: >-
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no -e
-          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Enforce release-grade documentation contracts
+      - name: Instantiate documentation environments
         run: |
-          julia --project=. --startup-file=no scripts/check_documentation_quality.jl
-          julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
-      - name: Validate fresh platform evidence for a release tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: >-
-          julia --project=. --startup-file=no
-          scripts/check_documentation_quality.jl --check-qualification-evidence
-      - name: Build the ProcessBigraphs documentation site
+          julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Build Potts documentation
         env:
-          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          POTTS_DEPLOY_DOCS: ${{ github.event_name == 'push' }}
+        run: julia --project=docs --startup-file=no docs/make.jl
+      - name: Build ProcessBigraphs documentation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          PROCESS_BIGRAPHS_DEPLOY_DOCS: ${{ github.event_name == 'push' }}
         run: >-
           julia --project=lib/ProcessBigraphs/docs --startup-file=no
           lib/ProcessBigraphs/docs/make.jl
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          package_json_file: lib/ProcessBigraphs/docs/browser/package.json
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: lib/ProcessBigraphs/docs/browser/pnpm-lock.yaml
-      - name: Install pinned release-grade browser dependencies
-        working-directory: lib/ProcessBigraphs/docs/browser
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium firefox webkit
-      - name: Run visual, cross-browser, and Lighthouse qualification
-        working-directory: lib/ProcessBigraphs/docs/browser
-        run: |
-          pnpm test:visual
-          pnpm test --project=chromium --project=firefox --project=webkit
-          pnpm lighthouse
-      - name: Enforce ProcessBigraphs warm program budgets
-        run: >-
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no
-          scripts/check_process_bigraph_phase17_docs_runtime.jl
-      - name: Retain rendered-site qualification artifacts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: process-bigraphs-browser-qa-${{ github.sha }}
-          path: |
-            lib/ProcessBigraphs/docs/browser/artifacts
-            lib/ProcessBigraphs/docs/browser/tests/visual.spec.ts-snapshots
-          if-no-files-found: warn

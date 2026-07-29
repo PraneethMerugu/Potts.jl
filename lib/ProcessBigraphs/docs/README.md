@@ -1,8 +1,6 @@
 # ProcessBigraphs.jl documentation
 
-This is the independent, pinned documentation environment for the
-ProcessBigraphs internal beta. It builds only the 35 curated pages registered in
-`spec/process-bigraph-phase17-documentation-quality-v1.toml`.
+This is the independent Documenter environment for ProcessBigraphs.jl.
 
 From the repository root:
 
@@ -11,39 +9,22 @@ julia --project=lib/ProcessBigraphs/docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/make.jl
 ```
 
-Every executable manual page displays and evaluates the same complete program
-stored under `models/`. Reader-facing pages never use `include`. Generated
-assets are checked against `assets/provenance.toml`; deployment is disabled
-unless an explicit GitHub Actions-only environment flag is present.
+The build is strict: doctest, executable-example, and cross-reference failures
+are errors. Every executable manual page displays and evaluates the same
+complete program stored under `models/`; reader-facing pages do not hide model
+construction behind `include`.
 
-## Rendered-site checks
+The Wortel and Merks case studies use public package APIs, exercise fixed-seed
+stochastic runs, and generate their native Makie figures and animations during
+the build. Generated output lives in `docs/build/` and is ignored.
 
-The pull-request gate intentionally stays small: it builds both manuals and
-runs the ProcessBigraphs route, interaction, and accessibility suite in
-Chromium. This is the normal feedback loop.
-
-Release-grade rendered-site qualification is deliberately separate. A version
-tag, or a manual **Documentation** workflow dispatch with
-`full_qualification` enabled, runs:
-
-- Chromium, Firefox, and WebKit;
-- the pinned Lighthouse budget; and
-- Chromium visual regression.
-
-A version tag additionally regenerates clean-install evidence on Linux, macOS,
-and Windows. A manual rendered-site dispatch reuses the already-qualified
-platform evidence instead of repeating three unrelated jobs.
-
-Run the same browser profiles locally from `docs/browser` with:
+External-link checking is intentionally optional because network failures
+should not block an ordinary code change. Run it with:
 
 ```sh
-pnpm test --project=chromium
-pnpm test --project=chromium --project=firefox --project=webkit
-pnpm lighthouse
-pnpm test:visual
+PROCESS_BIGRAPHS_DOCS_LINKCHECK=true \
+  julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/make.jl
 ```
 
-Generated integrity inventories are maintained evidence, not ordinary PR
-blockers. Check or refresh them explicitly with
-`scripts/check_project_baseline_freshness.jl` and
-`scripts/update_project_integrity_baselines.jl`.
+Historical browser baselines and phase specifications are retained for
+provenance, but they are not release or pull-request gates.

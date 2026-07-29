@@ -1,21 +1,19 @@
 name: Documentation links
 
 on:
-  schedule:
-    - cron: '17 9 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  JULIA_VERSION: 1.12.6
+  JULIA_VERSION: '1.12'
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
 jobs:
   external-links:
-    name: External link audit
+    name: Check external links
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,16 +22,16 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate documentation environment
-        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Instantiate ProcessBigraphs documentation environment
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Build and check external links
+      - name: Instantiate documentation environments
+        run: |
+          julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+          julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Build documentation and check links
         env:
           POTTS_DEPLOY_DOCS: 'false'
           POTTS_DOCS_LINKCHECK: 'true'
-        run: julia --project=docs --startup-file=no docs/make.jl
-      - name: Build ProcessBigraphs documentation
-        env:
           PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
-        run: julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
+          PROCESS_BIGRAPHS_DOCS_LINKCHECK: 'true'
+        run: |
+          julia --project=docs --startup-file=no docs/make.jl
+          julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl

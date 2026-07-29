@@ -6,7 +6,7 @@ or reproduce the CPU examples.
 
 ## Requirements
 
-- Julia 1.12.6, the repository's development and evidence target;
+- Julia 1.12 or a later Julia 1.x release;
 - Git when installing an unregistered checkout;
 - a 64-bit macOS, Linux, or Windows host.
 

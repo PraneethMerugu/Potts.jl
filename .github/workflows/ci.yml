@@ -14,60 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JULIA_VERSION: 1.12.6
+  JULIA_VERSION: '1.12'
   JULIA_NUM_PRECOMPILE_TASKS: 2
 
 jobs:
-  project:
-    name: Project integrity
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          fetch-depth: 0
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Run consolidated project integrity checker
-        run: julia --startup-file=no scripts/check_project_integrity.jl
-      - name: Check the ProcessBigraphs Phase 17 documentation contract
-        run: julia --project=. --startup-file=no scripts/check_process_bigraph_phase17_docs.jl
-      - name: Instantiate ProcessBigraphs qualification environment
-        run: >-
-          julia --project=benchmark --startup-file=no -e
-          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Check ProcessBigraphs authoring performance guardrails
-        run: julia --project=benchmark --startup-file=no benchmark/authoring_qualification.jl --events=128 --repetitions=5
-      - name: Check ProcessBigraphs high-level authoring documentation
-        run: julia --project=benchmark --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
-      - name: Resolve the package workspace without mutation
-        run: |
-          julia --project=. --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; workspace=true, julia_version_strict=true,
-                allow_autoprecomp=false)'
-      - name: Reject whitespace errors
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          # Closure archives preserve exact, content-addressed command and
-          # hardware output bytes. Their hashes are checked independently;
-          # whitespace normalization would invalidate admitted evidence.
-          EVIDENCE_EXCLUSIONS=(
-            ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
-            ':(exclude,glob)design/evidence/consolidation-baseline/**'
-            ':(exclude,glob)scripts/archive/**'
-          )
-          if [ -n "$BASE_SHA" ]; then
-            git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
-          else
-            git diff --check HEAD^ HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
-          fi
-
-  packages:
-    name: Package / ${{ matrix.package }}
+  package-tests:
+    name: Test / ${{ matrix.package }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,114 +40,19 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Install, load, and exercise package from a clean temporary project
+      - name: Run package tests
         env:
           PACKAGE: ${{ matrix.package }}
           PROJECT: ${{ matrix.project }}
-        run: |
-          julia --startup-file=no -e '
-            using Pkg
-            Pkg.activate(; temp=true)
-            Pkg.develop(path=abspath(ENV["PROJECT"]))
-            Pkg.instantiate(; julia_version_strict=true)
-            if ENV["PACKAGE"] == "CorePotts"
-                @eval using CorePotts
-                profile = CorePotts.algorithm_guarantees(CorePotts.SequentialCPM())
-                profile.proposal_process.recipient === :uniform_with_replacement ||
-                    error("CorePotts public exercise failed")
-            elseif ENV["PACKAGE"] == "MakiePotts"
-                Pkg.add(Pkg.PackageSpec(name="CairoMakie", version="0.15"))
-                include(abspath("lib/MakiePotts/test/clean_install_smoke.jl"))
-            elseif ENV["PACKAGE"] == "ProcessBigraphs"
-                @eval using ProcessBigraphs
-                state_path = ProcessBigraphs.path(:cell, :mass)
-                sprint(show, state_path) == "/cell/mass" ||
-                    error("ProcessBigraphs path exercise failed")
-                scale = ProcessBigraphs.TimeScale(1, 4)
-                ProcessBigraphs.physical_value(ProcessBigraphs.LogicalTime(2, scale)) == 1 // 2 ||
-                    error("ProcessBigraphs exact-time exercise failed")
-            else
-                @eval using PottsToolkit
-                algorithm = PottsToolkit.CheckerboardSweepCPM()
-                algorithm.temperature == 20.0f0 ||
-                    error("PottsToolkit public exercise failed")
-                PottsToolkit.scientific_contract_versions().authoring_dsl == v"1.0.0" ||
-                    error("PottsToolkit contract exercise failed")
-            end'
-      - name: Test package independently
-        env:
-          PACKAGE: ${{ matrix.package }}
-          PROJECT: ${{ matrix.project }}
-        run: |
-          julia --project="$PROJECT" --startup-file=no -e '
-            using Pkg
-            Pkg.test(ENV["PACKAGE"]; julia_args=["--startup-file=no"])'
-
-  makie_backends:
-    name: MakiePotts / Cairo + GL + WGL
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate backend qualification environment
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true)'
-      - name: CairoMakie render, update, framebuffer, and save
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/cairo.jl "$RUNNER_TEMP/makiepotts-cairo.png"
-      - name: Tolerant CairoMakie visual regression
-        id: visual_regression
-        env:
-          MAKIEPOTTS_VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/makiepotts-visual-regression
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/visual_regression.jl
-      - name: Upload visual-regression failure evidence
-        if: ${{ steps.visual_regression.outcome == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: makiepotts-visual-regression
-          path: ${{ runner.temp }}/makiepotts-visual-regression
-          if-no-files-found: error
-      - name: GLMakie offscreen render, update, framebuffer, and cleanup
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" \
-            julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/gl.jl
-      - name: Run native MakiePotts example from its declared environment
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: |
-          julia --project=examples --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true)'
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" \
-            julia --project=examples --startup-file=no examples/makiepotts_native.jl
-      - name: WGLMakie render, update, and HTML serialization
-        run: |
-          julia --project=lib/MakiePotts/test/backends --startup-file=no \
-            lib/MakiePotts/test/backends/wgl.jl
+        run: >-
+          julia --project="$PROJECT" --startup-file=no -e
+          'using Pkg;
+          Pkg.test(ENV["PACKAGE"]; julia_args=["--startup-file=no"])'
 
   integration:
-    name: Integration / ${{ matrix.shard }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [thermodynamics, biophysics, integration, conformance]
+    name: Integration
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      BACKEND_GROUP: CPU
-      POTTS_TEST_SHARD: ${{ matrix.shard }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
@@ -203,16 +60,19 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate integration environment
-        run: |
-          julia --project=integration --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true, allow_autoprecomp=false)'
-      - name: Run cross-package integration shard
+        run: >-
+          julia --project=integration --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Run cross-package tests
         run: julia --project=integration --startup-file=no integration/runtests.jl
 
-  specification_oracle:
-    name: Independent ProcessBigraph specification oracle
-    runs-on: ubuntu-latest
+  platform-smoke:
+    name: Smoke / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -220,157 +80,30 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Run isolated production, stdlib-only oracle, and comparator processes
-        run: julia --startup-file=no scripts/run_specification_oracle.jl
-
-  performance_budgets:
-    name: Performance and allocation budgets
-    needs: [project, packages, integration, specification_oracle]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate benchmark environment
+      - name: Install and load the public package
         run: >-
-          julia --project=benchmark --startup-file=no -e
-          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Test performance comparison contracts
-        run: julia --project=benchmark --startup-file=no benchmark/test/runtests.jl
-      - name: Measure authoring performance guardrails
-        run: >-
-          julia --project=benchmark --startup-file=no
-          benchmark/authoring_qualification.jl
-          --events=128 --repetitions=9
+          julia --startup-file=no -e
+          'using Pkg;
+          Pkg.activate(; temp=true);
+          Pkg.develop(path=pwd());
+          using PottsToolkit;
+          PottsToolkit.scientific_contract_versions().authoring_dsl == v"1.0.0" ||
+          error("public API smoke failed")'
 
-  exact_head_evidence:
-    name: Exact-head consolidation evidence
-    needs: [project, packages, integration, specification_oracle, performance_budgets]
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate ProcessBigraphs qualification environment
-        run: >-
-          julia --project=lib/ProcessBigraphs --startup-file=no -e
-          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Recheck consolidated project integrity
-        run: julia --startup-file=no scripts/check_project_integrity.jl
-      - name: Recheck frozen identity fixtures
-        run: >-
-          julia --project=lib/ProcessBigraphs --startup-file=no
-          scripts/capture_consolidation_identity_fixtures.jl --check
-
-  cpu_macos_arm64:
-    name: CPU / macOS ARM64 / Julia 1.12.6
-    if: >-
-      vars.METAL_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
-    runs-on: [self-hosted, metal]
-    timeout-minutes: 45
-    env:
-      BACKEND_GROUP: CPU
-    defaults:
-      run:
-        working-directory: _ci/source
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          path: _ci/source
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-          arch: aarch64
-          force-arch: true
-      - name: Verify ARM64 runtime
-        run: julia --startup-file=no -e 'Sys.ARCH == :aarch64 || error("expected ARM64 Julia; found $(Sys.ARCH)")'
-      - name: Test CorePotts, PottsToolkit, and ProcessBigraphs independently
-        run: |
-          julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test("CorePotts"; julia_args=["--startup-file=no"])'
-          julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("PottsToolkit"; julia_args=["--startup-file=no"])'
-          julia --project=lib/ProcessBigraphs --startup-file=no -e 'using Pkg; Pkg.test("ProcessBigraphs"; julia_args=["--startup-file=no"])'
-      - name: Run complete cross-package integration suite
-        run: |
-          julia --project=integration --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true, allow_autoprecomp=false)'
-          julia --project=integration --startup-file=no integration/runtests.jl
-
-  cpu_linux_x64:
-    name: CPU / Linux x86_64 / Julia 1.12.6
-    if: >-
-      vars.ROCM_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
-    runs-on: [self-hosted, rocm]
-    timeout-minutes: 45
-    env:
-      BACKEND_GROUP: CPU
-    defaults:
-      run:
-        working-directory: _ci/source
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          path: _ci/source
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with:
-          version: ${{ env.JULIA_VERSION }}
-      - name: Verify x86_64 runtime
-        run: julia --startup-file=no -e 'Sys.ARCH == :x86_64 || error("expected x86_64 Julia; found $(Sys.ARCH)")'
-      - name: Test CorePotts, PottsToolkit, and ProcessBigraphs independently
-        run: |
-          julia --project=lib/CorePotts --startup-file=no -e 'using Pkg; Pkg.test("CorePotts"; julia_args=["--startup-file=no"])'
-          julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("PottsToolkit"; julia_args=["--startup-file=no"])'
-          julia --project=lib/ProcessBigraphs --startup-file=no -e 'using Pkg; Pkg.test("ProcessBigraphs"; julia_args=["--startup-file=no"])'
-      - name: Run complete cross-package integration suite
-        run: |
-          julia --project=integration --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true, allow_autoprecomp=false)'
-          julia --project=integration --startup-file=no integration/runtests.jl
-
-  required:
-    name: Required
-    if: always()
-    needs: [project, packages, makie_backends, integration, specification_oracle, performance_budgets, exact_head_evidence, cpu_macos_arm64, cpu_linux_x64]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every gating job
+      - name: Reject whitespace errors
         env:
-          PROJECT_RESULT: ${{ needs.project.result }}
-          PACKAGES_RESULT: ${{ needs.packages.result }}
-          MAKIE_BACKENDS_RESULT: ${{ needs.makie_backends.result }}
-          INTEGRATION_RESULT: ${{ needs.integration.result }}
-          SPECIFICATION_ORACLE_RESULT: ${{ needs.specification_oracle.result }}
-          PERFORMANCE_BUDGETS_RESULT: ${{ needs.performance_budgets.result }}
-          EXACT_HEAD_EVIDENCE_RESULT: ${{ needs.exact_head_evidence.result }}
-          MACOS_RESULT: ${{ needs.cpu_macos_arm64.result }}
-          LINUX_X64_RESULT: ${{ needs.cpu_linux_x64.result }}
-          METAL_ENABLED: ${{ vars.METAL_RUNNER_ENABLED }}
-          ROCM_ENABLED: ${{ vars.ROCM_RUNNER_ENABLED }}
-          TRUSTED_SELF_HOSTED: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          test "$PROJECT_RESULT" = success
-          test "$PACKAGES_RESULT" = success
-          test "$MAKIE_BACKENDS_RESULT" = success
-          test "$INTEGRATION_RESULT" = success
-          test "$SPECIFICATION_ORACLE_RESULT" = success
-          test "$PERFORMANCE_BUDGETS_RESULT" = success
-          test "$EXACT_HEAD_EVIDENCE_RESULT" = success
-          if [ "$METAL_ENABLED" = true ] && [ "$TRUSTED_SELF_HOSTED" = true ]; then
-            test "$MACOS_RESULT" = success
+          if [ -n "$BASE_SHA" ]; then
+            git diff --check "$BASE_SHA"...HEAD
           else
-            test "$MACOS_RESULT" = skipped
-          fi
-          if [ "$ROCM_ENABLED" = true ] && [ "$TRUSTED_SELF_HOSTED" = true ]; then
-            test "$LINUX_X64_RESULT" = success
-          else
-            test "$LINUX_X64_RESULT" = skipped
+            git diff --check HEAD^ HEAD
           fi

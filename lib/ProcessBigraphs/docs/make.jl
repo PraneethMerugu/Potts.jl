@@ -23,6 +23,8 @@ makedocs(
         ],
     ),
     doctest = true,
+    linkcheck =
+        get(ENV, "PROCESS_BIGRAPHS_DOCS_LINKCHECK", "false") == "true",
     warnonly = false,
     pagesonly = true,
     checkdocs = :none,

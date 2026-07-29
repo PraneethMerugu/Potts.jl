@@ -118,7 +118,7 @@ They are indexed by the repository
 [historical artifact index](../../design/evidence/consolidation-naming/historical-artifact-index-v1.toml);
 primary documentation does not use those milestones as the current architecture.
 
-Run the package suite with Julia 1.12.6:
+Run the package suite with Julia 1.12 or a later Julia 1.x release:
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.test()'
