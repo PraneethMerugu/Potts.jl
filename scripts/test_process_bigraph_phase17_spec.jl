@@ -16,11 +16,18 @@ const REQUIRED_FILES = [
     "spec/phase-17-process-bigraph-model-and-documentation-productization.md",
     "spec/process-bigraph-phase17-entry-v1.toml",
     "spec/process-bigraph-phase17-api-v1.toml",
+    "spec/process-bigraph-phase17-api-inventory-v1.toml",
     "spec/process-bigraph-phase17-documentation-quality-v1.toml",
     "spec/process-bigraph-phase17-browser-qa-v1.toml",
     "spec/process-bigraph-phase17-qualification-v1.toml",
     "scripts/check_process_bigraph_phase17_spec.jl",
     "scripts/test_process_bigraph_phase17_spec.jl",
+    "scripts/check_process_bigraph_phase17_api.jl",
+    "scripts/test_process_bigraph_phase17_api.jl",
+    "scripts/check_process_bigraph_phase17_docs.jl",
+    "scripts/check_process_bigraph_phase17_browser_contract.jl",
+    "scripts/check_process_bigraph_phase17_internal_use.jl",
+    "scripts/check_process_bigraph_phase17_closure.jl",
 ]
 
 function copy_packet(destination)

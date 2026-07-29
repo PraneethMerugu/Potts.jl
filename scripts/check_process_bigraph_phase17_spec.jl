@@ -57,8 +57,16 @@ check(get(entry, "schema_version", "") == "1.0.0" &&
       get(entry, "contract_id", "") == "process-bigraph-phase17-entry-v1" &&
       get(entry, "phase", "") == "17",
     "Phase 17 entry identity changed")
+const active_implementation_statuses = Set([
+    "17.A-contract-freeze",
+    "17.B-public-boundary-closure",
+    "17.C-model-migration",
+    "17.D-independent-manual",
+    "17.E-scientific-case-studies",
+    "17.F-reconciliation-and-attestation",
+])
 const active = get(entry, "status", "") == "in_progress" &&
-    get(entry, "implementation_status", "") == "17.A-contract-freeze" &&
+    get(entry, "implementation_status", "") in active_implementation_statuses &&
     get(entry, "implementation_authorized", false) == true &&
     entry["prerequisites"]["owner_sendoff_received"] == true
 check(active, "entry must record the received owner send-off and active 17.A state")
@@ -250,10 +258,9 @@ check(length(rows) == ledger["required_row_count"] == 44,
 check(Set(row["subgate"] for row in rows) ==
       Set(["17.A", "17.B", "17.C", "17.D", "17.E", "17.F"]),
     "qualification ledger does not cover every subgate")
-check(Set(row["id"] for row in rows if row["status"] == "qualified") ==
-      Set(["P17-A01", "P17-A02", "P17-A03", "P17-A04"]) &&
-      only(filter(row -> row["id"] == "P17-A05", rows))["status"] == "implemented",
-    "active 17.A ledger progression changed")
+check(all(row -> row["status"] == "qualified",
+        filter(row -> row["subgate"] == "17.A", rows)),
+    "qualified 17.A contract-freeze rows changed")
 check(all(row -> row["status"] in ledger["allowed_statuses"], rows),
     "qualification ledger contains an invalid status")
 

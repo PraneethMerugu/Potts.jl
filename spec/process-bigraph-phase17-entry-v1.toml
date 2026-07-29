@@ -28,6 +28,13 @@ implementation_plan = "../design/audits/process-bigraph-phase17-implementation-p
 specification_audit = "../design/audits/process-bigraph-phase17-specification-audit.md"
 specification_checker = "../scripts/check_process_bigraph_phase17_spec.jl"
 specification_checker_tests = "../scripts/test_process_bigraph_phase17_spec.jl"
+api_inventory = "process-bigraph-phase17-api-inventory-v1.toml"
+api_checker = "../scripts/check_process_bigraph_phase17_api.jl"
+api_checker_tests = "../scripts/test_process_bigraph_phase17_api.jl"
+documentation_checker = "../scripts/check_process_bigraph_phase17_docs.jl"
+browser_contract_checker = "../scripts/check_process_bigraph_phase17_browser_contract.jl"
+internal_use_checker = "../scripts/check_process_bigraph_phase17_internal_use.jl"
+closure_checker = "../scripts/check_process_bigraph_phase17_closure.jl"
 
 [prerequisites]
 phase16_qualified = true
