@@ -1,0 +1,108 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16h-cnv-2026-07-27"
+phase = "16.H"
+status = "qualified"
+implementation_commit = "66f6f147f34a24e96ba4be2c36751b1ebafd5abd"
+implementation_tree = "6d19d235a64fe58ca6db0b583148de29aa50086d"
+rebased_from_implementation_commit = "eb007dee16d6e4eba22c518eed06424a72d5cb29"
+rebased_from_implementation_tree = "ac452d879cf122b75118d36582e6dbe288be14cb"
+branch = "codex/phase-16"
+internal_beta = false
+public_release = false
+quantitative_reproduction = false
+full_analysis = false
+qualified_rows = ["P16-H01", "P16-H02", "P16-H03"]
+
+[authority]
+primary = "Shirinifard et al., PLOS Computational Biology 8(5), e1002440 (2012)"
+doi = "10.1371/journal.pcbi.1002440"
+text_s3_doi = "10.1371/journal.pcbi.1002440.s013"
+text_s6_doi = "10.1371/journal.pcbi.1002440.s016"
+source_closure = "closed-with-named-bounded-ambiguities"
+claim = "runnable source-bounded reimplementation"
+source_assets_vendored = false
+ordinary_ci_fetches_source_assets = false
+
+[architecture]
+scheduler = "ProcessBigraphs"
+field_computation = "four injected ManagedFieldAdvanceProcess declarations"
+cpm_computation = "CorePotts CNV2012CPMStep"
+biology_computation = "CorePotts CNV2012BiologyStep"
+exchange_computation = "CorePotts CNV2012ExchangeStep"
+reference_split = "fields_then_cpm_then_biology_then_exchange_v1"
+seconds_per_mcs = 216
+attempts_per_mcs = 143360
+model_owned_time_loop = false
+process_bigraph_owned_solver = false
+
+[canonical_startup]
+shape = [40, 40, 35]
+source_identity_ceiling = 5151
+active_identities = 4978
+occupied_voxels = 41152
+vascular_cells = 36
+rpe_cells = 100
+pos_units = 16
+pis_units = 25
+tip_cells = 1
+brm_structures = 3200
+nonstick_structures = 1600
+plastic_relationships = 1138
+seed = 498377
+
+[full_domain_one_mcs]
+initial_occupied_voxels = 41152
+final_occupied_voxels = 40700
+active_identities = 4978
+ec_vegf_sum = 11.520000000000001
+rpe_vegf_sum = 401.3485828700192
+mmp_sum = 18.0
+oxygen_min = 18.036154636972732
+oxygen_max = 80.318286880083
+all_fields_finite = true
+
+[tests]
+startup_and_source_trace_assertions = 17
+lifecycle_and_degradation_assertions = 10
+managed_four_field_assertions = 10
+phase16h_total_assertions = 37
+canonical_encoder_parity_assertions = 5
+process_bigraphs_functional_assertions = 1146
+process_bigraphs_aqua_assertions = 9
+process_bigraphs_total_assertions = 1155
+process_bigraphs_full_package_suite = "passed"
+corepotts_total_assertions = 3863
+corepotts_full_package_suite = "passed"
+julia = "1.12.6"
+
+[source_assets]
+text_s6_archive_sha256 = "fc4884fa62b40a8c999b33663dd8a3eccdae5f3fc11dc579892e7e64e747da4d"
+xml_sha256 = "74ae7bdfca67956fe3c019838226a566d653d0d26123205331308e134a3d92d4"
+main_python_sha256 = "601faaaf133913118032469de54aaccc990b864f2a50c05f999153ac524e8b0c"
+plugin_python_sha256 = "70f304bcae513d1ae2acb42decaf39fc0d5c18d45545b3e8babd23aa6b1bbef6"
+steppable_python_sha256 = "08225d55def23a99ca68e080a596b6e5209f977071898a09d3aacd49fbf8e392"
+oxygen_cpp_sha256 = "e1c8923e1f7c99aec2b2f6c163fcd54129b230039fcf1f171775df52c7d78030"
+pif_sha256 = "cc4b3fccdf8ceb898d59eef5eeb04db9a323d860cf0f14ca8faa53a3d4308a17"
+
+[artifacts]
+trace = "spec/process-bigraph-phase16-cnv-trace-v1.toml"
+trace_sha256 = "db574d2dac16ea4c76b6b4d2df845a1fa0c7d74d0e8d90b781bece8a2eb7f7f2"
+audit = "design/audits/process-bigraph-phase16h-cnv-audit.md"
+audit_sha256 = "8f71e1b57a72305730d33acad7e31f88b10138808e433fe6901c4929b6168959"
+assembly = "lib/CorePotts/src/coupled/shirinifard2012.jl"
+assembly_sha256 = "ee8b0e3a482537d566c97a26173e4638ab4cb864b8f01190aa8b66d56571150c"
+tests = "lib/CorePotts/test/test_phase16_shirinifard2012.jl"
+tests_sha256 = "0857934e34cfca9f1661a8fd86b3b4044cfd60617d3ba0e6ec3e94d077563d4c"
+canonical_encoder = "lib/ProcessBigraphs/src/canonical.jl"
+canonical_encoder_sha256 = "64b0a1566f4eae7771f635b38ff0f468ae02fa0a0021e69d3d2f4f63514ead41"
+canonical_encoder_tests = "lib/ProcessBigraphs/test/test_paths_time_canonical.jl"
+canonical_encoder_tests_sha256 = "7b0ebef7aa8a86f0324aae30c665963970438e438ba1d67aafe5cc34938cf7b8"
+managed_field_process = "lib/ProcessBigraphs/src/managed_field_process.jl"
+managed_field_process_sha256 = "e9aa484fd9d730dff04afab34bce9680871d55d3bcb73f92686f8e1378eb1f5f"
+
+[open]
+phase16c_trusted_metal = true
+phase16c_trusted_rocm = true
+phase16_internal_beta = true
+full_cnv_analysis = false
+quantitative_reproduction = false

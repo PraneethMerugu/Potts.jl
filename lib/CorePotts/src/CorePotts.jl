@@ -10,6 +10,7 @@ using SciMLBase
 using LinearAlgebra: issymmetric, eigen, Symmetric
 using SHA
 import Atomix
+import ProcessBigraphs
 import SciMLBase: solve, savevalues!
 
 export solve, savevalues!
@@ -36,10 +37,12 @@ include("lifecycle/reference.jl")
 include("components/scientific_trackers.jl")
 include("components/scientific_fields.jl")
 include("components/scientific_queries.jl")
+include("components/merks_local_connectivity.jl")
 include("components/scientific_focal_points.jl")
 include("components/scientific_elongation.jl")
 include("components/scientific_inner_loop.jl")
 include("coupled/semantic_kernel.jl")
+include("contracts/compatibility.jl")
 include("components/scientific_mechanics.jl")
 include("lifecycle/compiled.jl")
 include("algorithms/sequential.jl")
@@ -50,6 +53,10 @@ include("algorithms/lottery.jl")
 include("coupled/activity.jl")
 include("coupled/execution.jl")
 include("coupled/continuous.jl")
+include("coupled/native_fields.jl")
+include("coupled/process_bigraph_adapter.jl")
+include("coupled/merks2006.jl")
+include("coupled/shirinifard2012.jl")
 include("coupled/relationships.jl")
 include("coupled/polarity.jl")
 include("coupled/history.jl")
@@ -58,6 +65,7 @@ include("coupled/multirate.jl")
 include("coupled/observations.jl")
 include("persistence/scientific.jl")
 include("coupled/persistence.jl")
+include("persistence/process_bigraph_conversion.jl")
 include("coupled/preflight.jl")
 include("reference/engine.jl")
 
@@ -74,12 +82,15 @@ export ScientificContractVersions, scientific_contract_versions,
        SCIENTIFIC_CONTRACT_VERSIONS, RNG_CONTRACT_VERSION,
        AUTHORING_DSL_CONTRACT_VERSION, NORMALIZED_IR_CONTRACT_VERSION,
        CHECKPOINT_SCHEMA_VERSION, SEMANTIC_FINGERPRINT_VERSION,
-       EXECUTION_FINGERPRINT_VERSION, PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+       EXECUTION_FINGERPRINT_VERSION, RESULT_EVIDENCE_SCHEMA_VERSION,
+       PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
        SEQUENTIAL_ALGORITHM_CONTRACT_VERSION,
        CHECKERBOARD_SCHEDULER_CONTRACT_VERSION,
        LOTTERY_ALGORITHM_CONTRACT_VERSION,
        TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION
-export Phase14ContractVersions, phase14_contract_versions,
+export CoupledContractVersions, coupled_contract_versions,
+       COUPLED_CONTRACT_VERSIONS, COUPLED_CONTRACT_SET_VERSION,
+       Phase14ContractVersions, phase14_contract_versions,
        PHASE14_CONTRACT_VERSIONS, PHASE14_CONTRACT_SET_VERSION
 export AbstractTopology, VonNeumannTopology, MooreTopology, NoFluxVonNeumannTopology,
        NoFluxMooreTopology, ExtendedVonNeumannTopology, ExtendedMooreTopology,
@@ -256,7 +267,8 @@ export OwnershipVolumeTracker, BoundaryMeasureTracker, NoMomentStorage, NoMoment
        stage_copy_transaction, commit_staged!, launch_staged_commit!,
        tracker_conformance_errors
 export AbstractFieldBoundary, PeriodicFieldBoundary, ZeroNeumannFieldBoundary,
-       DirichletFieldBoundary, AxisFieldBoundary, AbstractFieldInterpolation,
+       DirichletFieldBoundary, MixedFieldBoundary, AxisFieldBoundary,
+       AbstractFieldInterpolation,
        NearestFieldInterpolation, MultilinearFieldInterpolation, CellCenteredField,
        sample_field,
        AbstractFieldResponse, LinearResponse, MichaelisMentenResponse,
@@ -348,7 +360,7 @@ export AbstractInitialOverlapPolicy, RejectInitialOverlap, StableInitialPriority
        initialization_report,
        finalize_initial_state, CellCapacityError
 export AbstractTracker
-export PHASE14_SEMANTIC_KERNEL_VERSION,
+export COUPLED_SEMANTIC_KERNEL_VERSION, PHASE14_SEMANTIC_KERNEL_VERSION,
        StateSpec, ProcessSpec, PlanEntrySpec, PlanSpec,
        LifecycleSpec, ObservationSpec, SemanticModel,
        canonical_coupled_model, semantic_model_fingerprint,

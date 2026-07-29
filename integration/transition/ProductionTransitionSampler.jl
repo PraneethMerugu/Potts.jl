@@ -4,7 +4,7 @@ using CorePotts
 using KernelAbstractions
 using ..TransitionKernelOracle
 using ..CheckerboardOracle
-using ..Phase13Fixtures
+using ..TransitionFixtures
 using ..TransitionEmpirical
 
 export ProductionRowSample, algorithm_symbol, oracle_probability_row,
@@ -29,7 +29,7 @@ function algorithm_symbol(value)
     text = lowercase(String(value))
     text in ("sequential", "sequentialcpm") && return :sequential
     text in ("checkerboard", "checkerboardsweepcpm") && return :checkerboard
-    throw(ArgumentError("unknown Phase 13 production algorithm: $value"))
+    throw(ArgumentError("unknown transition-kernel production algorithm: $value"))
 end
 
 _algorithm(::Val{:sequential}, temperature) = SequentialCPM(temperature = temperature)
@@ -75,7 +75,7 @@ function _observed_state(integrator)
         for index in eachindex(ids)))
 end
 
-function _prepared_integrator(fixture::Phase13Fixture, algorithm::Symbol, backend;
+function _prepared_integrator(fixture::TransitionFixture, algorithm::Symbol, backend;
         block_size::Integer)
     fixture.production_supported || throw(ArgumentError(
         "fixture $(fixture.id) is outside the production relation domain: " *
@@ -93,7 +93,7 @@ function _prepared_integrator(fixture::Phase13Fixture, algorithm::Symbol, backen
     return (; integrator, pristine)
 end
 
-function sample_production_row(fixture::Phase13Fixture, algorithm_value;
+function sample_production_row(fixture::TransitionFixture, algorithm_value;
         replicas::Integer,
         seed_base::Integer = UInt64(0x1300000000000000),
         backend = KernelAbstractions.CPU(), block_size::Integer = 128)
@@ -124,12 +124,12 @@ function sample_production_row(fixture::Phase13Fixture, algorithm_value;
         metrics.launches, metrics.host_synchronizations)
 end
 
-function oracle_probability_row(fixture::Phase13Fixture, algorithm_value)
+function oracle_probability_row(fixture::TransitionFixture, algorithm_value)
     kernel = oracle_kernel(fixture, algorithm_symbol(algorithm_value))
     return vec(Float64.(Array(transition_row(kernel, fixture.oracle_state))))
 end
 
-function evaluate_production_sample(fixture::Phase13Fixture,
+function evaluate_production_sample(fixture::TransitionFixture,
         sample::ProductionRowSample; plan::TransitionSamplingPlan =
             TransitionSamplingPlan(replicas = sample.replicas))
     plan.replicas == sample.replicas || throw(ArgumentError(

@@ -1,9 +1,8 @@
 """
     ScientificContractVersions
 
-Inspectable identities for the scientific contracts frozen at Phase 13. The versions are
-independent of package versions. `freeze_status == :phase13_frozen` records explicit project-owner
-approval of these exact paper-release identities.
+Inspectable identities for the frozen scientific contracts. The versions are independent of
+package versions. The legacy `:phase13_frozen` status is retained as a serialized protocol value.
 """
 struct ScientificContractVersions
     freeze_status::Symbol
@@ -26,23 +25,24 @@ const NORMALIZED_IR_CONTRACT_VERSION = v"1.0.0"
 const CHECKPOINT_SCHEMA_VERSION = v"1.0.0"
 const SEMANTIC_FINGERPRINT_VERSION = v"1.0.0"
 const EXECUTION_FINGERPRINT_VERSION = v"1.0.0"
-const PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION = v"1.0.0"
+const RESULT_EVIDENCE_SCHEMA_VERSION = v"1.0.0"
 const SEQUENTIAL_ALGORITHM_CONTRACT_VERSION = v"1.0.0"
 const CHECKERBOARD_SCHEDULER_CONTRACT_VERSION = v"1.0.0"
 const LOTTERY_ALGORITHM_CONTRACT_VERSION = v"1.0.0"
 const TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION = v"1.0.0"
 
-# Phase 14 additions are intentionally versioned outside `ScientificContractVersions`: that
-# Phase 13 value is a frozen public artifact and must remain byte-for-byte constructible.
-const PHASE14_CONTRACT_SET_VERSION = v"2.0.0"
+# Coupled-dynamics additions are intentionally versioned outside
+# `ScientificContractVersions`; the original value is a frozen public artifact and must remain
+# byte-for-byte constructible.
+const COUPLED_CONTRACT_SET_VERSION = v"2.0.0"
 const COUPLED_EXECUTION_CONTRACT_VERSION = v"1.0.0"
 const DYNAMIC_STATE_CONTRACT_VERSION = v"1.0.0"
 const CONTINUOUS_SYSTEM_CONTRACT_VERSION = v"1.0.0"
 const COUPLED_CHECKPOINT_SCHEMA_VERSION = v"1.0.0"
 const BUDGETED_SEQUENTIAL_ALGORITHM_CONTRACT_VERSION = v"1.0.0"
 
-"""Inspectable versions for the seven additive Phase 14 semantic-kernel contracts."""
-struct Phase14ContractVersions
+"""Inspectable versions for the seven additive coupled semantic-kernel contracts."""
+struct CoupledContractVersions
     status::Symbol
     contract_set::VersionNumber
     state::VersionNumber
@@ -54,9 +54,9 @@ struct Phase14ContractVersions
     potts_algorithm_identities::VersionNumber
 end
 
-const PHASE14_CONTRACT_VERSIONS = Phase14ContractVersions(
+const COUPLED_CONTRACT_VERSIONS = CoupledContractVersions(
     :wortel_cpu_reference_proven,
-    PHASE14_CONTRACT_SET_VERSION,
+    COUPLED_CONTRACT_SET_VERSION,
     v"0.2.0",
     v"0.2.0",
     v"0.2.0",
@@ -66,8 +66,8 @@ const PHASE14_CONTRACT_VERSIONS = Phase14ContractVersions(
     v"0.2.0",
 )
 
-"""Return the additive Phase 14 contract-version report without altering the Phase 13 report."""
-phase14_contract_versions() = PHASE14_CONTRACT_VERSIONS
+"""Return the additive coupled-dynamics contract-version report."""
+coupled_contract_versions() = COUPLED_CONTRACT_VERSIONS
 
 const SCIENTIFIC_CONTRACT_VERSIONS = ScientificContractVersions(
     :phase13_frozen,
@@ -77,14 +77,14 @@ const SCIENTIFIC_CONTRACT_VERSIONS = ScientificContractVersions(
     CHECKPOINT_SCHEMA_VERSION,
     SEMANTIC_FINGERPRINT_VERSION,
     EXECUTION_FINGERPRINT_VERSION,
-    PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+    RESULT_EVIDENCE_SCHEMA_VERSION,
     SEQUENTIAL_ALGORITHM_CONTRACT_VERSION,
     CHECKERBOARD_SCHEDULER_CONTRACT_VERSION,
     LOTTERY_ALGORITHM_CONTRACT_VERSION,
     TILED_CHECKERBOARD_EXPERIMENTAL_CONTRACT_VERSION,
 )
 
-"""Return the immutable Phase 13 frozen scientific-contract version report."""
+"""Return the immutable frozen scientific-contract version report."""
 scientific_contract_versions() = SCIENTIFIC_CONTRACT_VERSIONS
 
 function Base.show(io::IO, versions::ScientificContractVersions)

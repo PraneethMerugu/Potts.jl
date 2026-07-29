@@ -218,9 +218,10 @@ including the complete 11-process assembly, all-process failure/allocation matri
 regression/API evidence. KernelAbstractions CPU execution proves portable shape only; it does not
 create an assembled Wang GPU claim.
 
-G4 opens after the passed G3-B reference and Decision 0035 disposition. The generic primitives do
-not inherit a GPU claim from CPU correctness; each stable G4 law/storage pair still requires real
-Metal and ROCm evidence without host fallback.
+G4 opened after the passed G3-B reference and Decision 0035 disposition. Decision 0039 subsequently
+reassigned this still-open work intact to Phase 16.C. The generic primitives do not inherit a GPU
+claim from CPU correctness; each stable G4 law/storage pair still requires real Metal and ROCm
+evidence without host fallback.
 
 ### G4 — General field-model CPU/Metal/ROCm closure
 

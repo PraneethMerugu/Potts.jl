@@ -1,6 +1,7 @@
 module ProcessBigraphs
 
 import ACSets
+import AlgebraicRewriting
 import Catlab
 using SHA
 using ACSets: BasicSchema, @acset_type
@@ -9,25 +10,34 @@ include("errors.jl")
 include("paths.jl")
 include("time.jl")
 include("canonical.jl")
-include("logical_codec.jl")
 include("scheduling.jl")
 include("schemas.jl")
 include("store.jl")
 include("effects.jl")
 include("capabilities.jl")
+include("logical_codec.jl")
+include("engine_protocol.jl")
+include("managed_engine.jl")
+include("fields.jl")
+include("bounded_cartesian_field_problem.jl")
 include("semantic_rng.jl")
 include("declarations.jl")
+include("managed_field_process.jl")
 include("continuations.jl")
 include("observation.jl")
 include("transactions.jl")
 include("algebraic_structure.jl")
+include("structural_transactions.jl")
 include("composites.jl")
 include("lowering.jl")
 include("composition.jl")
+include("authoring.jl")
 include("executor.jl")
 include("runtime.jl")
 include("checkpoint.jl")
 include("checkpoint_codec.jl")
+include("coupled_checkpoint.jl")
+include("compatibility.jl")
 
 export ProcessBigraphError
 export AbstractPathSegment, NameSegment, IndexSegment, Path,
@@ -45,8 +55,8 @@ export AbstractUpdateLaw, AdditiveUpdate, MultiplicativeUpdate, ReplaceUpdate,
        SetPatch, Delta, delta, law_identity, UpdateLawContract,
        update_law_contract, reconcile
 export CapabilitySet, TransferDeclaration, PreflightReport
-export PortSpec, InputPort, OutputPort, PortBinding
-export AbstractProcess, AbstractStep, ProcessDeclaration, StepDeclaration,
+export PortSpec, InputPort, OutputPort
+export AbstractProcess, AbstractStep,
        AbstractSchedule, FixedSchedule, AdaptiveSchedule, IterationRegion,
        AbstractHorizonPolicy, ExactHorizon, StopPrior, EventIdentity,
        InvocationContext, InvocationResult, PortView,
@@ -79,8 +89,16 @@ export ProcessBigraphACSet, CanonicalModel, canonical_model, canonical_structure
        structural_fingerprint, StructuralEpoch, StructuralProvenance,
        ExecutionPlan, structural_epoch, structural_provenance,
        iteration_regions, execution_plan_fingerprint
-export StaticComposite, CompiledComposite, compile_composite, preflight,
-       model_fingerprint, step_layers
+export CompiledComposite, preflight, model_fingerprint, step_layers
+export CompositeModel, LoweredModel, SimulationProblem, StateIntervention,
+       ValidationReport, ModelValidationError,
+       Every, At, On, After,
+       compose, store!, mount!, connect!, attach!, expose!, schedule!,
+       iteration!, parameter!, observable!, allow_instances!,
+       lower, compile, validate, describe, diagram, explain, remake,
+       semantic_fingerprint, ir_fingerprint, plan_fingerprint,
+       problem_fingerprint, origin_map, parameter_names, with_parameters,
+       spawn, divide, remove, move
 export BoundaryEndpoint, OpenComposite, CompositeMount, EndpointRef,
        JunctionSpec, CompositeExport, MountGroup, mount_group, CompositionSpec,
        open_composite, compose_open, structured_cospan,
@@ -91,5 +109,21 @@ export SerialRuntime, initialize_runtime, run_until!, current_snapshot,
 export SettledCheckpoint, checkpoint, restore, checkpoint_fingerprint
 export LogicalCheckpointV2, logical_checkpoint, encode_checkpoint,
        decode_checkpoint
+export COUPLED_CHECKPOINT_FORMAT_VERSION, COUPLED_CHECKPOINT_SCHEMA,
+       CoupledLogicalCheckpoint, RestoredLogicalCheckpoint,
+       capture_logical_checkpoint, decode_logical_checkpoint,
+       restore_logical_checkpoint
+export AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
+       AbstractCompletionHandle, EngineCapabilities, EngineDeclaration,
+       IntervalAdvance, BoundarySolve, DiscreteBatch, EngineInputProjection,
+       EngineInvocation, EngineCandidate, EngineEarlyReturn,
+       EngineEventRequest, EngineFailure, projection_value,
+       prepare_engine, stage_operation!,
+       complete_operation!, validate_candidate, publish_candidate!,
+       discard_candidate!
+export FieldGeometry, FieldBoundary, FieldDescriptor, FieldState,
+       FieldSampler, FieldDeposition, FieldExchange
+export BoundedCartesianFieldProblem, field_engine_snapshot,
+       sciml_field_adapter, sciml_field_declaration
 
 end

@@ -25,41 +25,27 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Enforce repository and package structure
-        run: julia --startup-file=no scripts/check_structure.jl
-      - name: Enforce MakiePotts stable API and accessor boundary
-        run: julia --startup-file=no scripts/check_makiepotts_contract.jl
-      - name: Enforce MakiePotts release metadata and artifact hygiene
-        run: julia --startup-file=no scripts/check_makiepotts_release.jl
-      - name: Enforce Phase 13 legacy closure
-        run: julia --startup-file=no scripts/check_legacy_containment.jl
-      - name: Enforce Phase 14 corpus and simplified architecture closure
-        run: julia --project=. --startup-file=no scripts/check_phase14_0.jl
-      - name: Enforce ProcessBigraphs platform specification
-        run: julia --startup-file=no scripts/check_process_bigraph_platform.jl
-      - name: Enforce ProcessBigraphs PB0 bounded foundation
-        run: julia --startup-file=no scripts/process-bigraph-pb0-check.jl
-      - name: Enforce ProcessBigraphs Phase 15.A canonical structure
-        run: julia --startup-file=no scripts/process-bigraph-phase15a-check.jl
-      - name: Enforce ProcessBigraphs Phase 15.B open composition
-        run: julia --startup-file=no scripts/process-bigraph-phase15b-check.jl
-      - name: Enforce ProcessBigraphs Phase 15.C implementation and closure
-        run: julia --startup-file=no scripts/process-bigraph-phase15c-entry-check.jl
-      - name: Enforce Phase 14 Wang sequential CPU disposition
-        run: julia --project=. --startup-file=no scripts/check_phase14_wang_disposition.jl
+      - name: Run consolidated project integrity checker
+        run: julia --startup-file=no scripts/check_project_integrity.jl
+      - name: Instantiate ProcessBigraphs qualification environment
+        run: >-
+          julia --project=benchmark --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Check ProcessBigraphs authoring performance guardrails
+        run: julia --project=benchmark --startup-file=no benchmark/authoring_qualification.jl --events=128 --repetitions=5
+      - name: Check ProcessBigraphs high-level authoring documentation
+        run: julia --project=benchmark --startup-file=no lib/ProcessBigraphs/test/examples/high_level_authoring.jl
       - name: Resolve the package workspace without mutation
         run: |
           julia --project=. --startup-file=no -e '
             using Pkg
             Pkg.instantiate(; workspace=true, julia_version_strict=true,
                 allow_autoprecomp=false)'
-      - name: Enforce exhaustive Phase 13 API inventory
-        run: julia --project=. --startup-file=no scripts/check_phase13_api_inventory.jl
       - name: Reject whitespace errors
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -69,6 +55,8 @@ jobs:
           # whitespace normalization would invalidate admitted evidence.
           EVIDENCE_EXCLUSIONS=(
             ':(exclude,glob)design/evidence/phase-14/g3b-closure/**'
+            ':(exclude,glob)design/evidence/consolidation-baseline/**'
+            ':(exclude,glob)scripts/archive/**'
           )
           if [ -n "$BASE_SHA" ]; then
             git diff --check "$BASE_SHA"...HEAD -- . "${EVIDENCE_EXCLUSIONS[@]}"
@@ -166,8 +154,8 @@ jobs:
       - name: Run cross-package integration shard
         run: julia --project=integration --startup-file=no integration/runtests.jl
 
-  phase15c_oracle:
-    name: Phase 15.C independent oracle
+  specification_oracle:
+    name: Independent ProcessBigraph specification oracle
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -177,37 +165,54 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Run isolated production, stdlib-only oracle, and comparator processes
-        run: julia --startup-file=no scripts/process-bigraph-phase15c-oracle.jl
+        run: julia --startup-file=no scripts/run_specification_oracle.jl
 
-  phase15c_candidate:
-    name: Phase 15.C candidate evidence
-    needs: [project, packages, integration, phase15c_oracle]
+  performance_budgets:
+    name: Performance and allocation budgets
+    needs: [project, packages, integration, specification_oracle]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Recheck Phase 15.C qualification ledger
-        run: julia --startup-file=no scripts/process-bigraph-phase15c-entry-check.jl
-      - name: Measure Phase 15.C performance guardrails
-        run: |
-          julia --project=lib/ProcessBigraphs --startup-file=no -e '
-            using Pkg
-            Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=lib/ProcessBigraphs --startup-file=no scripts/process-bigraph-phase15c-guardrails.jl phase15c-guardrails.toml
-      - name: Generate exact-head candidate evidence
-        run: julia --startup-file=no scripts/process-bigraph-phase15c-candidate.jl phase15c-candidate.toml phase15c-guardrails.toml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - name: Instantiate benchmark environment
+        run: >-
+          julia --project=benchmark --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Test performance comparison contracts
+        run: julia --project=benchmark --startup-file=no benchmark/test/runtests.jl
+      - name: Measure authoring performance guardrails
+        run: >-
+          julia --project=benchmark --startup-file=no
+          benchmark/authoring_qualification.jl
+          --events=128 --repetitions=9
+
+  exact_head_evidence:
+    name: Exact-head consolidation evidence
+    needs: [project, packages, integration, specification_oracle, performance_budgets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          name: process-bigraphs-phase15c-candidate
-          path: |
-            phase15c-candidate.toml
-            phase15c-guardrails.toml
-          if-no-files-found: error
-          retention-days: 30
+          fetch-depth: 0
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate ProcessBigraphs qualification environment
+        run: >-
+          julia --project=lib/ProcessBigraphs --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Recheck consolidated project integrity
+        run: julia --startup-file=no scripts/check_project_integrity.jl
+      - name: Recheck frozen identity fixtures
+        run: >-
+          julia --project=lib/ProcessBigraphs --startup-file=no
+          scripts/capture_consolidation_identity_fixtures.jl --check
 
   cpu_macos_arm64:
     name: CPU / macOS ARM64 / Julia 1.12.6
@@ -278,7 +283,7 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [project, packages, integration, phase15c_oracle, phase15c_candidate, cpu_macos_arm64, cpu_linux_x64]
+    needs: [project, packages, integration, specification_oracle, performance_budgets, exact_head_evidence, cpu_macos_arm64, cpu_linux_x64]
     runs-on: ubuntu-latest
     steps:
       - name: Require every gating job
@@ -286,8 +291,9 @@ jobs:
           PROJECT_RESULT: ${{ needs.project.result }}
           PACKAGES_RESULT: ${{ needs.packages.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
-          PHASE15C_ORACLE_RESULT: ${{ needs.phase15c_oracle.result }}
-          PHASE15C_CANDIDATE_RESULT: ${{ needs.phase15c_candidate.result }}
+          SPECIFICATION_ORACLE_RESULT: ${{ needs.specification_oracle.result }}
+          PERFORMANCE_BUDGETS_RESULT: ${{ needs.performance_budgets.result }}
+          EXACT_HEAD_EVIDENCE_RESULT: ${{ needs.exact_head_evidence.result }}
           MACOS_RESULT: ${{ needs.cpu_macos_arm64.result }}
           LINUX_X64_RESULT: ${{ needs.cpu_linux_x64.result }}
           METAL_ENABLED: ${{ vars.METAL_RUNNER_ENABLED }}
@@ -297,8 +303,9 @@ jobs:
           test "$PROJECT_RESULT" = success
           test "$PACKAGES_RESULT" = success
           test "$INTEGRATION_RESULT" = success
-          test "$PHASE15C_ORACLE_RESULT" = success
-          test "$PHASE15C_CANDIDATE_RESULT" = success
+          test "$SPECIFICATION_ORACLE_RESULT" = success
+          test "$PERFORMANCE_BUDGETS_RESULT" = success
+          test "$EXACT_HEAD_EVIDENCE_RESULT" = success
           if [ "$METAL_ENABLED" = true ] && [ "$TRUSTED_SELF_HOSTED" = true ]; then
             test "$MACOS_RESULT" = success
           else

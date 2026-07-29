@@ -1,7 +1,7 @@
 struct ProcessClock
     id::String
     last_committed::LogicalTime
-    next_due::LogicalTime
+    next_due::Union{Nothing,LogicalTime}
     continuation::Any
 end
 
@@ -504,6 +504,24 @@ function _next_deadline(
     deadline
 end
 
+function _next_deadline(
+    ::OneShotSchedule,
+    clock::ProcessClock,
+    result::InvocationResult,
+    time::LogicalTime,
+    partial::Bool,
+)
+    partial &&
+        _fail(:one_shot_partial_invocation,
+            "one-shot processes run only at their authored exact boundary";
+            process=clock.id)
+    isnothing(result.next_deadline) ||
+        _fail(:one_shot_deadline_proposal,
+            "one-shot processes cannot propose another deadline";
+            process=clock.id)
+    nothing
+end
+
 function _observer_due(
     spec::ObserverSpec,
     clock::ObserverClock,
@@ -906,6 +924,12 @@ function _requires_partial(
     clock.last_committed.tick < target.tick < clock.next_due.tick
 end
 
+_requires_partial(
+    ::ProcessClock,
+    ::OneShotSchedule,
+    ::LogicalTime,
+) = false
+
 function _preflight_horizon(
     runtime::SerialRuntime,
     target::LogicalTime,
@@ -927,7 +951,7 @@ end
 
 function _next_process_tick(runtime::SerialRuntime, target::LogicalTime)
     eligible = Int64[clock.next_due.tick for clock in runtime.process_clocks
-        if clock.next_due.tick <= target.tick]
+        if !isnothing(clock.next_due) && clock.next_due.tick <= target.tick]
     isempty(eligible) ? nothing : minimum(eligible)
 end
 
@@ -974,7 +998,8 @@ function run_until!(
             if !isnothing(process_tick) && process_tick == next_tick
                 due = [position for (position, clock) in
                     enumerate(runtime.process_clocks)
-                    if clock.next_due.tick == next_tick]
+                    if !isnothing(clock.next_due) &&
+                        clock.next_due.tick == next_tick]
                 _run_process_batch!(runtime, due, time; partial=false)
             else
                 _publish_empty_boundary!(runtime, time)
@@ -982,9 +1007,12 @@ function run_until!(
         end
 
         if policy === :exact
-            partial_due = [position for (position, clock) in
-                enumerate(runtime.process_clocks)
-                if clock.last_committed.tick < target.tick]
+            partial_due = [position for (position, (clock, entry)) in
+                enumerate(zip(
+                    runtime.process_clocks,
+                    runtime.composite.plan.processes))
+                if _requires_partial(
+                    clock, entry.declaration.schedule, target)]
             if !isempty(partial_due)
                 _run_process_batch!(runtime, partial_due, target; partial=true)
             elseif runtime.snapshot.time.tick < target.tick

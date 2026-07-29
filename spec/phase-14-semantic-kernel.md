@@ -14,7 +14,9 @@ attested complete at implementation commit `a82b0c4`; its
 [G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) govern that evidence.
 This proves the bounded Wortel slice and Wang sequential CPU model. Decision 0035 retires the
 assembled Wang Metal/ROCm promotion because the paper-faithful sequential algorithm is not an
-appropriate GPU target; G4 is current. Contracts outside the proven slices remain Provisional.
+appropriate GPU target. Decision 0039 preserves the former G4 obligations and reassigns them as
+mandatory Phase 16.C work; they are not complete. Contracts outside the proven slices remain
+Provisional.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
@@ -22,7 +24,9 @@ Governing decisions:
 boundary in
 [Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md)
 and the Wang algorithm-suitability boundary in
-[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md)
+[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md), plus the G4 scheduling
+disposition in
+[Decision 0039](decisions/0039-phase-16-compute-ownership-and-scope.md)
 
 Registry:
 [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
@@ -760,7 +764,8 @@ histories, relationships, intracellular dynamics, and exact accepted-copy order 
 reference and cannot be substituted by a checkerboard algorithm while retaining the paper claim.
 Decision 0035 deliberately makes the assembled Wang backend profile unsupported. Reusable state
 and law families introduced by the slice remain subject to focused CPU/Metal/ROCm promotion when
-they stabilize, beginning with the algorithm-suitable G4 field-model gate.
+they stabilize, beginning with the algorithm-suitable former G4 field-model gate now scheduled as
+Phase 16.C by Decision 0039.
 
 Each sketch MUST become an executable lowering fixture before its vertical slice is considered
 complete.
@@ -841,8 +846,9 @@ evidence closed the second half on 2026-07-25 by proving:
 ### Expansion gates
 
 Wortel has passed both its CPU reference and Metal/ROCm closure, and Wang G3-B has passed its
-sequential CPU gate. Decision 0035 retires G3-C assembled-model GPU qualification and opens G4 as
-the current gate for broader boundary, solver, and exchange work on CPU, Metal, and ROCm. Every
+sequential CPU gate. Decision 0035 retires G3-C assembled-model GPU qualification. Decision 0039
+absorbs G4 into Phase 16.C as the still-open gate for broader boundary, solver, and exchange work
+on CPU, Metal, and ROCm. This changes scheduling, not semantics or evidence requirements. Every
 later stable execution capability follows the same reference-then-device promotion rule, using an
 algorithm-suitable fixture rather than requiring every paper reference assembly to be a GPU
 workload.

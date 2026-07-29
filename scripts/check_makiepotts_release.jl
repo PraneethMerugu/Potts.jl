@@ -37,7 +37,7 @@ compatibility["julia"] == "1.12.6" ||
 for required in (
         joinpath(ROOT, "LICENSE"),
         joinpath(PACKAGE_ROOT, "README.md"),
-        joinpath(ROOT, "docs", "src", "makiepotts.md"),
+        joinpath(ROOT, "docs", "src", "api", "makiepotts.md"),
         joinpath(ROOT, "examples", "makiepotts_native.jl"),
         joinpath(ROOT, "design", "makiepotts", "public-api-v0.2.toml"),
         joinpath(ROOT, "design", "makiepotts",

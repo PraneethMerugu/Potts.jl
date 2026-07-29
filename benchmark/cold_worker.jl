@@ -10,9 +10,9 @@ end
 backend_name = option("backend", "cpu")
 algorithm_name = option("algorithm", "SequentialCPM")
 backend_name in ("cpu", "metal", "amdgpu") || error(
-    "Phase 12 cold measurement requires cpu, metal, or amdgpu")
+    "performance comparison cold measurement requires cpu, metal, or amdgpu")
 algorithm_name in ("SequentialCPM", "SequentialEquilibrium", "CheckerboardSweepCPM",
-    "LotteryCPM") || error("unknown Phase 12 cold algorithm `$algorithm_name`")
+    "LotteryCPM") || error("unknown performance comparison cold algorithm `$algorithm_name`")
 
 backend_import = @timed begin
     backend_name == "metal" && (@eval using Metal)
@@ -83,11 +83,11 @@ process_id = get(ENV, "POTTS_BENCHMARK_PROCESS_ID",
     string(Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS.sss"), "-", getpid()))
 
 record = Dict(
-    "schema_version" => PottsBenchmarks.Phase12Comparison.PHASE12_SCHEMA_VERSION,
+    "schema_version" => PottsBenchmarks.PerformanceComparison.PERFORMANCE_SCHEMA_VERSION,
     "record_kind" => "phase12-cold-run",
     "recorded_at_utc" => string(now(UTC)),
     "comparison_identity" => Dict(
-        "contract_version" => PottsBenchmarks.Phase12Comparison.PHASE12_CONTRACT_VERSION,
+        "contract_version" => PottsBenchmarks.PerformanceComparison.PERFORMANCE_CONTRACT_VERSION,
         "cold_workload_version" => "differential-adhesion-1.0.0",
         "cold_harness_tree_sha256" => cold_harness_checksum,
         "backend" => backend_name,
@@ -120,15 +120,15 @@ record = Dict(
     ),
 )
 
-issues = PottsBenchmarks.Phase12Comparison.validate_cold_record(record)
-isempty(issues) || error("refusing to write invalid Phase 12 cold result:\n- " *
+issues = PottsBenchmarks.PerformanceComparison.validate_cold_record(record)
+isempty(issues) || error("refusing to write invalid performance comparison cold result:\n- " *
                          join(issues, "\n- "))
 directory = joinpath(PottsBenchmarks.RESULTS_ROOT, provenance["subject_id"], "cold",
     backend_name, algorithm_name)
 mkpath(directory)
 timestamp = Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS")
-path = joinpath(directory, "$(timestamp)-phase12-cold-$process_id.toml")
+path = joinpath(directory, "$(timestamp)-cold-run-$process_id.toml")
 open(path, "w") do io
     TOML.print(io, record; sorted = true)
 end
-println("PHASE12_COLD_RESULT=", path)
+println("PERFORMANCE_COLD_RESULT=", path)

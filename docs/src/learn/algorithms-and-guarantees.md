@@ -1,0 +1,67 @@
+# [Algorithms and guarantees](@id algorithms-and-guarantees)
+
+The algorithm is part of the scientific run definition. Algorithms that share energies do not
+therefore share proposal distributions, transaction semantics, kinetics, or evidence.
+
+## Inspect before running
+
+```@example algorithms-and-guarantees
+using PottsToolkit
+import CorePotts
+
+# Hold the model fixed while comparing two different proposal processes.
+medium = Medium(:Medium)
+cell = CellType(:Cell)
+model = PottsModel(medium, cell, Volume(cell => (target = 12, strength = 2)))
+mask = falses(10, 10)
+mask[4:6, 4:7] .= true
+problem = PottsProblem(
+    model,
+    CartesianDomain(size(mask)),
+    Layout(Place(cell, mask; identity = 1));
+    capacity = 2,
+    tspan = (0, 1),
+    seed = 17,
+)
+algorithms = (
+    SequentialCPM(temperature = 2.0f0),
+    CheckerboardSweepCPM(temperature = 2.0f0),
+)
+profiles = map(CorePotts.algorithm_guarantees, algorithms)
+reports = map(algorithm -> backend_report(problem, algorithm), algorithms)
+
+@assert all(report -> report.qualified, reports)
+@assert profiles[1].proposal_process != profiles[2].proposal_process
+result = (; algorithms, profiles,
+    guarantee_labels = map(profile -> profile.guarantee_label, profiles))
+
+result.guarantee_labels
+```
+
+The canonical source compares `SequentialCPM` with `CheckerboardSweepCPM` and asserts that their
+proposal processes differ. Both can pass compatibility preflight while retaining different
+scientific interpretations.
+
+## Current algorithm families
+
+| Algorithm | Intended interpretation | Status |
+|:--|:--|:--|
+| `SequentialCPM` | Conventional ``N`` ordered attempts per MCS | Stable |
+| `BudgetedSequentialCPM` | Explicit integer attempts-per-site budget | Stable source-budgeted path |
+| `CheckerboardSweepCPM` | Graph-colored snapshot/commit schedule | Stable, distinct semantics |
+| `LotteryCPM` | Topology-calibrated parallel lottery | Limited |
+| `SequentialEquilibrium` | Metropolis-Hastings equilibrium path | Experimental |
+| `TiledCheckerboardCPM` | Tiled device scheduler | Experimental |
+
+Consult `algorithm_guarantees(algorithm)` for the machine-readable profile. `api_status` describes
+support; `guarantee_label`, `qualified_domain`, `tested_backends`, and `evidence_version` describe
+scientific evidence.
+
+## Compatibility is narrower than qualification
+
+`backend_report(problem, algorithm)` answers whether the declared combination can execute under
+the backend contract. It does not establish equilibrium, kinetics, physical-time calibration, or
+cross-backend agreement.
+
+Never replace an algorithm, precision, boundary, or unsupported component solely to make preflight
+pass. Change the run definition deliberately and record it.

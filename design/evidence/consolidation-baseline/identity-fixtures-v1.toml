@@ -1,0 +1,57 @@
+architecture = "aarch64"
+evidence_id = "semantic-preserving-consolidation-baseline-identity-fixtures-v1"
+julia_version = "1.12.6"
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+schema_version = "1.0.0"
+status = "frozen"
+
+[[adopted_fixtures]]
+authority = "design/evidence/process-bigraph-phase15c-evidence-v1.toml"
+covers = ["model fingerprints", "eight runtime fixtures", "33 restart cuts", "failure-stage traces"]
+name = "serial-runtime-qualified-matrix"
+[[adopted_fixtures]]
+authority = "lib/ProcessBigraphs/test/phase15c/test_checkpoint_v2.jl"
+canonical_length = 4609
+canonical_sha256 = "8b28675481d06fa7ffa6389ec63e0dbb9f43408e3a71d190a040bea67bb2b929"
+name = "logical-checkpoint-v2-canonical-bytes"
+[[adopted_fixtures]]
+authority = "lib/ProcessBigraphs/test/phase16/test_phase16e_checkpoint.jl"
+covers = ["canonical bytes roundtrip", "checkpoint fingerprint", "exact restore", "legacy conversion", "corruption rejection"]
+name = "managed-engine-checkpoint-v3"
+[[adopted_fixtures]]
+authority = "design/evidence/process-bigraph-phase16g-evidence-v1.toml"
+covers = ["native, SciML, and independent-adapter observations", "restart", "rollback"]
+name = "bounded-merks-observations"
+[[adopted_fixtures]]
+authority = "design/evidence/process-bigraph-phase16h-evidence-v1.toml"
+covers = ["occupied voxels", "identity count", "four field summaries", "finite-field envelope"]
+name = "bounded-cnv-full-domain-one-mcs"
+
+[canonical_bytes]
+checkpoint_format = "2.0.0"
+checkpoint_length = 5362
+checkpoint_roundtrip_equal = true
+checkpoint_sha256 = "df46755e210d46142b473f2fe140ffc61ec8b71f8591a5b8545c97f0d179f5c2"
+semantic_model_length = 2505
+semantic_model_sha256 = "600cd62183b776a8629470b8cbb1dc4822e77839027f0b085554324dc34a03d9"
+
+[fingerprints]
+canonical_ir = "681bdd691feaccb0187c54c38ddf3c482c84962c1a32bf9ef6466adb55cde3c4"
+canonical_structure = "681bdd691feaccb0187c54c38ddf3c482c84962c1a32bf9ef6466adb55cde3c4"
+checkpoint = "0a564d6d302a05288856930f5371302c01c063f7a9d8f08b1856f78ba3a8f987"
+event_trace = "fc7d8fe36f2043208c8a715475f0d36855fa9917d4ee1125d1317ff0e87d593a"
+execution_plan = "8219b7c739f12ba63f74783506b7d1eb07e43437bd187a30caa58e8dd625161d"
+final_snapshot = "4fcdee092f2d7771b640d9cccc7ff7f41bb7c19159340804852bd49054de2fc1"
+model = "5ab2c90ecac2ce3f34206e580f740c91fd0ee8733436f67e416e796c33cc6817"
+plan = "8219b7c739f12ba63f74783506b7d1eb07e43437bd187a30caa58e8dd625161d"
+problem = "e37a374f6bdbbe64a6bddc7c737a1659d8b1d585ae4e79f45faf0f1ea54cbee3"
+runtime = "4f99bda8504c64d30e97b6fb47ced9b0bfd55a4fd85bf7d737d6a64143fb7410"
+semantic_model = "2c8b58fa17855c1f606fca3388b0a099080c2f3d5fbaee81b05332c9470944ab"
+
+[fixture]
+events = 4
+final_state = 8
+name = "ConsolidationBaselineIdentity"
+observation_count = 0
+root_seed = "NormalizedRootSeed((0x4f4c4944, 0x434f4e53, 0x00000000, 0x00000000))"
+

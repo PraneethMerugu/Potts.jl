@@ -19,7 +19,7 @@ load_realistic_manifest(path::AbstractString = DEFAULT_MANIFEST) = TOML.parsefil
 function realistic_workload(id::AbstractString,
         manifest::AbstractDict = load_realistic_manifest())
     index = findfirst(workload -> workload["id"] == id, manifest["workloads"])
-    index === nothing && throw(ArgumentError("unknown Phase 13 realistic workload: $id"))
+    index === nothing && throw(ArgumentError("unknown transition-kernel realistic workload: $id"))
     return manifest["workloads"][index]
 end
 
@@ -156,7 +156,7 @@ function build_realistic_problem(workload::AbstractDict, replica_seed::Integer;
     elseif id == "single_cell_migration"
         return _migration_problem(workload, seeds.dynamics, manifest)
     end
-    throw(ArgumentError("unsupported Phase 13 realistic workload: $id"))
+    throw(ArgumentError("unsupported transition-kernel realistic workload: $id"))
 end
 
 function _algorithm(value, temperature)

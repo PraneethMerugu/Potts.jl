@@ -1,8 +1,8 @@
 VERSION == v"1.12.6" ||
     error("The refactor benchmark target is Julia 1.12.6; found $VERSION")
 
-include(joinpath(@__DIR__, "src", "Phase12Comparison.jl"))
-using .Phase12Comparison
+include(joinpath(@__DIR__, "src", "PerformanceComparison.jl"))
+using .PerformanceComparison
 using TOML
 
 function options(arguments)

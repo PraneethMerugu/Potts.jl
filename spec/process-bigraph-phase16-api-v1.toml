@@ -1,0 +1,285 @@
+schema_version = "1.0.0"
+api_id = "process-bigraphs-phase16-api-v1"
+phase = "16"
+status = "phase16_internal_beta_qualified"
+current_package_version = "0.5.0"
+target_package_version = "0.5.0"
+public_release = false
+
+current_new_exports = [
+    "AbstractEngineAdapter",
+    "AbstractEngineInstance",
+    "AbstractEngineOperation",
+    "AbstractCompletionHandle",
+    "EngineCapabilities",
+    "EngineDeclaration",
+    "IntervalAdvance",
+    "BoundarySolve",
+    "DiscreteBatch",
+    "EngineInputProjection",
+    "EngineInvocation",
+    "EngineCandidate",
+    "EngineEarlyReturn",
+    "EngineEventRequest",
+    "EngineFailure",
+    "projection_value",
+    "prepare_engine",
+    "stage_operation!",
+    "complete_operation!",
+    "validate_candidate",
+    "publish_candidate!",
+    "discard_candidate!",
+    "FieldGeometry",
+    "FieldBoundary",
+    "FieldDescriptor",
+    "FieldState",
+    "FieldSampler",
+    "FieldDeposition",
+    "FieldExchange",
+    "BoundedCartesianFieldProblem",
+    "field_engine_snapshot",
+    "sciml_field_adapter",
+    "sciml_field_declaration",
+    "CompositeModel",
+    "LoweredModel",
+    "SimulationProblem",
+    "StateIntervention",
+    "ValidationReport",
+    "ModelValidationError",
+    "Every",
+    "At",
+    "On",
+    "After",
+    "compose",
+    "store!",
+    "mount!",
+    "connect!",
+    "attach!",
+    "expose!",
+    "schedule!",
+    "iteration!",
+    "parameter!",
+    "observable!",
+    "allow_instances!",
+    "lower",
+    "compile",
+    "validate",
+    "describe",
+    "diagram",
+    "explain",
+    "remake",
+    "semantic_fingerprint",
+    "ir_fingerprint",
+    "plan_fingerprint",
+    "problem_fingerprint",
+    "origin_map",
+    "parameter_names",
+    "with_parameters",
+    "spawn",
+    "divide",
+    "remove",
+    "move",
+]
+
+planned_internal_beta_exports = [
+    "AbstractEngineAdapter",
+    "AbstractEngineInstance",
+    "AbstractEngineOperation",
+    "AbstractCompletionHandle",
+    "EngineCapabilities",
+    "EngineDeclaration",
+    "IntervalAdvance",
+    "BoundarySolve",
+    "DiscreteBatch",
+    "EngineInputProjection",
+    "EngineInvocation",
+    "EngineCandidate",
+    "EngineEarlyReturn",
+    "EngineEventRequest",
+    "EngineFailure",
+    "projection_value",
+    "prepare_engine",
+    "stage_operation!",
+    "complete_operation!",
+    "validate_candidate",
+    "publish_candidate!",
+    "discard_candidate!",
+    "FieldGeometry",
+    "FieldBoundary",
+    "FieldDescriptor",
+    "FieldState",
+    "FieldSampler",
+    "FieldDeposition",
+    "FieldExchange",
+    "BoundedCartesianFieldProblem",
+    "field_engine_snapshot",
+    "sciml_field_adapter",
+    "sciml_field_declaration",
+    "CompositeModel",
+    "LoweredModel",
+    "SimulationProblem",
+    "StateIntervention",
+    "ValidationReport",
+    "ModelValidationError",
+    "Every",
+    "At",
+    "On",
+    "After",
+    "compose",
+    "store!",
+    "mount!",
+    "connect!",
+    "attach!",
+    "expose!",
+    "schedule!",
+    "iteration!",
+    "parameter!",
+    "observable!",
+    "allow_instances!",
+    "lower",
+    "compile",
+    "validate",
+    "describe",
+    "diagram",
+    "explain",
+    "remake",
+    "semantic_fingerprint",
+    "ir_fingerprint",
+    "plan_fingerprint",
+    "problem_fingerprint",
+    "origin_map",
+    "parameter_names",
+    "with_parameters",
+    "spawn",
+    "divide",
+    "remove",
+    "move",
+]
+
+planned_public_unexported = [
+    "StoreHandle",
+    "ComponentHandle",
+    "PortHandle",
+    "ParameterHandle",
+    "ObservableHandle",
+    "MountedCompositeHandle",
+    "MountedEndpointHandle",
+    "TemplateHandle",
+    "ValidationDiagnostic",
+    "AttachmentReport",
+    "encode_semantic_model",
+    "decode_semantic_model",
+]
+
+internal_only = [
+    "engine-owned arrays, buffers, workspaces, caches, streams, and tasks",
+    "AlgebraicRewriting matches and raw rule application",
+    "SciML integrator objects and cache layouts",
+    "CorePotts domain-topology representations",
+    "candidate publication internals",
+    "StaticComposite, ProcessDeclaration, StepDeclaration, and PortBinding lowering IR",
+    "PortTarget, actor-spec, iteration-spec, and endpoint-spec representation types",
+]
+
+excluded_api_claims = [
+    "universal solver compatibility",
+    "universal solver GPU support",
+    "raw unrestricted rewrite API",
+    "per-cell or per-voxel orchestration ACSet",
+    "Dagger or distributed executor",
+    "public stable 1.x API",
+    "mandatory full @compose macro language",
+    "graphical authoring",
+    "arbitrary closure serialization",
+]
+
+[cross_package_additive_exports]
+authority = "Phase 16 reviewed cross-package API additions excluded from the immutable Phase 13 inventory"
+stability = "internal_beta"
+CorePotts = ["MixedFieldBoundary"]
+PottsToolkit = []
+
+[policy]
+core_is_solver_neutral = true
+sciml_via_extension = true
+qualified_exports_only = true
+constructor_spelling_stable_at_internal_beta = false
+semantic_identity_stable_at_internal_beta = true
+unqualified_names_may_not_be_exported = true
+process_bigraph_owned_sciml_solve = false
+explicit_real_sciml_algorithm = true
+automatic_algorithm_selection_qualified = false
+concrete_solver_is_core_dependency = false
+concrete_instances_candidates_and_caches_are_internal = true
+custom_conformance_adapter_is_core_api = false
+prototype_exports_are_admitted = false
+ordinary_julia_api_required = true
+full_compose_macro_required = false
+raw_ir_required_for_scientific_models = false
+semantic_model_distinct_from_lowered_ir = true
+sciml_hard_dependency = false
+
+[phase16f_consolidation]
+status = "qualified"
+prototype_commit = "e0fd0b3f51fd681923e7ac8b62963e9713430322"
+qualified_implementation_commit = "6cd20d9c0533b174a76bf0fd5f10d11b4157775f"
+restore_current_new_exports_to = []
+minimal_admission_rule = "Only the smallest declaration-authoring surface may be admitted after P16-F01 through P16-F03 qualify."
+forbidden_public_details = [
+    "home-grown SciML algorithm or solution wrappers",
+    "solver integrators and caches",
+    "adapter instances, completion handles, and candidates",
+    "independent custom conformance fixture internals",
+]
+
+[[families]]
+id = "engine"
+subgate = "16.B"
+status = "qualified"
+export_rule = "Admit the smallest declaration-authoring surface only after Phase 16.F cross-adapter qualification; concrete runtime machinery remains internal."
+
+[[families]]
+id = "field"
+subgate = "16.B"
+status = "qualified"
+export_rule = "Export only the logical descriptor and operation contracts; realizations remain opaque."
+
+[[families]]
+id = "structure"
+subgate = "16.D"
+status = "qualified"
+export_rule = "Export typed structural requests/results only; raw AlgebraicRewriting rules remain internal."
+
+[[families]]
+id = "sciml"
+subgate = "16.F"
+status = "qualified"
+export_rule = "Expose only qualified declaration construction with an explicit real algorithm and canonical options through the SciML extension."
+
+[[families]]
+id = "corepotts"
+subgate = "16.E"
+status = "qualified"
+export_rule = "CorePotts owns adapter-facing methods; ProcessBigraphs must not import CorePotts."
+
+[[families]]
+id = "authoring"
+subgate = "16.HC"
+status = "qualified"
+export_rule = "Ordinary authors use the complete compose do-block and typed-handle builder API; macros are optional transparent sugar and raw lowering IR is not required."
+
+[phase16hc]
+status = "qualified"
+authority = [
+    "Decision 0040",
+    "spec/process-bigraph-high-level-authoring-semantics.md",
+    "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
+]
+current_uncommitted_spike = "removed_before_qualified_implementation"
+primary_entry = "compose(:Name) do builder"
+semantic_source = "immutable CompositeModel"
+lowered_structure = "canonical ProcessBigraph ACSet plus origin map"
+runtime_structure = "immutable ExecutionPlan"
+raw_ir_target = "internal lowering, conformance, migration, oracle, and explicit expert tooling only"
+macro_policy = "optional mechanically transparent sugar after the programmatic API is complete"
+compatibility_action = "audit every previously admitted Phase 15 composition name before demotion, preservation, or pre-1.0 migration"

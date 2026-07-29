@@ -4,7 +4,7 @@ using SHA
 using TOML
 using ..TransitionEvidenceArchive
 using ..TransitionEmpirical
-using ..Phase13Fixtures
+using ..TransitionFixtures
 using ..ProductionTransitionSampler
 
 export build_production_evidence, build_limited_domain_evidence,
@@ -15,7 +15,7 @@ const SUPPORTED_PRODUCTION_EVIDENCE_SCHEMA_VERSIONS = ("1.0.0", "1.1.0")
 
 _number_strings(values) = string.(values)
 
-function _base_record(fixture::Phase13Fixture, row, algorithm, backend,
+function _base_record(fixture::TransitionFixture, row, algorithm, backend,
         manifest, source_revision, reproduction_command)
     fixture_data = row.fixture
     contracts = manifest["contract_versions"]
@@ -64,8 +64,8 @@ function _base_record(fixture::Phase13Fixture, row, algorithm, backend,
     )
 end
 
-function build_limited_domain_evidence(fixture::Phase13Fixture, row, algorithm;
-        backend::AbstractString, manifest::AbstractDict = load_phase13_manifest(),
+function build_limited_domain_evidence(fixture::TransitionFixture, row, algorithm;
+        backend::AbstractString, manifest::AbstractDict = load_transition_manifest(),
         source_revision::AbstractString, reproduction_command::AbstractString,
         limitation = fixture.production_limitation)
     limitation === nothing && throw(ArgumentError(
@@ -81,9 +81,9 @@ function build_limited_domain_evidence(fixture::Phase13Fixture, row, algorithm;
     return record
 end
 
-function build_production_evidence(fixture::Phase13Fixture, row,
+function build_production_evidence(fixture::TransitionFixture, row,
         sample::ProductionRowSample; profile::Symbol,
-        manifest::AbstractDict = load_phase13_manifest(),
+        manifest::AbstractDict = load_transition_manifest(),
         source_revision::AbstractString, reproduction_command::AbstractString)
     fixture.production_supported || throw(ArgumentError(
         "unsupported fixtures require build_limited_domain_evidence"))

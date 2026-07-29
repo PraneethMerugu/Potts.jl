@@ -7,6 +7,8 @@ decisions = [
     "decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "decisions/0037-process-bigraph-open-composition.md",
     "decisions/0038-process-bigraph-serial-alpha.md",
+    "decisions/0039-phase-16-compute-ownership-and-scope.md",
+    "decisions/0040-process-bigraph-high-level-authoring.md",
 ]
 specification = "process-bigraph-runtime-semantics.md"
 audit = "../design/audits/process-bigraph-runtime-parity-and-parallel-development-audit.md"
@@ -15,6 +17,8 @@ owner_interviews = [
     "../design/audits/process-bigraph-algebraicjulia-owner-interview.md",
     "../design/audits/process-bigraph-phase15b-open-composition-owner-interview.md",
     "../design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md",
+    "../design/audits/process-bigraph-phase16-owner-interview.md",
+    "../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md",
 ]
 package_name = "ProcessBigraphs.jl"
 incubation_path = "lib/ProcessBigraphs"
@@ -92,6 +96,64 @@ retained_direct_feature_count = 4
 internal_alpha = true
 public_release = false
 remaining_claim = "The immutable-topology serial runtime is qualified as ProcessBigraphs 0.4.0 internal alpha. Dynamic structure, alternate executors, devices, scientific adapters, Potts cutover, whole-cell qualification, complete pinned parity, and public release remain open."
+
+[phase16_entry]
+status = "closed_internal_beta"
+implementation_status = "phase16_internal_beta_qualified"
+decision = "decisions/0039-phase-16-compute-ownership-and-scope.md"
+high_level_authoring_decision = "decisions/0040-process-bigraph-high-level-authoring.md"
+interview = "../design/audits/process-bigraph-phase16-owner-interview.md"
+high_level_authoring_interview = "../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md"
+specification = "phase-16-engine-field-structural-and-adapter-semantics.md"
+high_level_authoring_specification = "process-bigraph-high-level-authoring-semantics.md"
+implementation_plan = "../design/audits/process-bigraph-phase16-implementation-plan.md"
+entry_contract = "process-bigraph-phase16-entry-v1.toml"
+qualification_ledger = "process-bigraph-phase16-qualification-v1.toml"
+backend_matrix = "process-bigraph-phase16-backend-matrix-v1.toml"
+migration_registry = "process-bigraph-phase16-migration-registry-v1.toml"
+model_scope = "process-bigraph-phase16-model-scope-v1.toml"
+api_contract = "process-bigraph-phase16-api-v1.toml"
+entry_audit = "../design/audits/process-bigraph-phase16-entry-audit.md"
+checker = "../scripts/process-bigraph-phase16-entry-check.jl"
+phase16a_evidence = "../design/evidence/process-bigraph-phase16a-evidence-v1.toml"
+phase16b_audit = "../design/audits/process-bigraph-phase16b-engine-field-audit.md"
+phase16b_checker = "../scripts/process-bigraph-phase16b-check.jl"
+phase16b_evidence = "../design/evidence/process-bigraph-phase16b-evidence-v1.toml"
+phase16c_audit = "../design/audits/process-bigraph-phase16c-native-field-audit.md"
+phase16c_checker = "../scripts/process-bigraph-phase16c-check.jl"
+phase16c_candidate_evidence = "../design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"
+phase16c_evidence = "../design/evidence/process-bigraph-phase16c-evidence-v1.toml"
+phase16d_audit = "../design/audits/process-bigraph-phase16d-structural-transaction-audit.md"
+phase16d_checker = "../scripts/process-bigraph-phase16d-check.jl"
+phase16d_evidence = "../design/evidence/process-bigraph-phase16d-evidence-v1.toml"
+phase16e_audit = "../design/audits/process-bigraph-phase16e-corepotts-cutover-audit.md"
+phase16e_checker = "../scripts/process-bigraph-phase16e-check.jl"
+phase16e_evidence = "../design/evidence/process-bigraph-phase16e-evidence-v1.toml"
+phase16f_consolidation_research = "../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
+phase16f_consolidation_checker = "../scripts/process-bigraph-phase16f-consolidation-spec-check.jl"
+phase16f_audit = "../design/audits/process-bigraph-phase16f-solver-plurality-audit.md"
+phase16f_checker = "../scripts/process-bigraph-phase16f-check.jl"
+phase16f_evidence = "../design/evidence/process-bigraph-phase16f-evidence-v1.toml"
+phase16g_trace = "process-bigraph-phase16-merks-trace-v1.toml"
+phase16g_audit = "../design/audits/process-bigraph-phase16g-merks-audit.md"
+phase16g_checker = "../scripts/process-bigraph-phase16g-check.jl"
+phase16g_evidence = "../design/evidence/process-bigraph-phase16g-evidence-v1.toml"
+phase16h_trace = "process-bigraph-phase16-cnv-trace-v1.toml"
+phase16h_audit = "../design/audits/process-bigraph-phase16h-cnv-audit.md"
+phase16h_checker = "../scripts/process-bigraph-phase16h-check.jl"
+phase16h_evidence = "../design/evidence/process-bigraph-phase16h-evidence-v1.toml"
+phase16i_audit = "../design/audits/process-bigraph-phase16i-reconciliation-audit.md"
+phase16i_checker = "../scripts/process-bigraph-phase16i-check.jl"
+phase16i_candidate_generator = "../scripts/process-bigraph-phase16i-candidate.jl"
+phase16i_candidate = "../design/evidence/phase-16/phase16i-candidate.toml"
+phase16i_performance = "../design/evidence/phase-16/phase16i-authoring-performance.toml"
+phase16i_evidence = "../design/evidence/process-bigraph-phase16i-evidence-v1.toml"
+phase16_closure_audit = "../design/audits/process-bigraph-phase16-closure-audit.md"
+phase16f_prototype_status = "replaced_by_qualified_real_solver_implementation"
+g4_disposition = "mandatory Phase 16.C"
+internal_beta = true
+public_release = false
+remaining_claim = "Phase 16 is qualified as ProcessBigraphs 0.5.0 internal beta. Complete pinned parity, post-Phase-16 consolidation, full Merks/CNV publication analyses, whole-cell qualification, and public release remain open."
 
 [status_vocabulary]
 allowed = [

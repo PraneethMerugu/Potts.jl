@@ -1,0 +1,262 @@
+schema_version = "1.0.0"
+status = "qualified"
+authority = "semantic-preserving-consolidation-contract.md"
+
+[vocabulary]
+project_milestones_forbidden_in_living_names = true
+scientific_phase_term_allowed = true
+runtime_phase_term_allowed = true
+canonical_checkpoint = "logical checkpoint"
+canonical_contract_family = "coupled contract"
+canonical_semantic_kernel = "coupled semantic kernel"
+canonical_transition_evidence = "transition-kernel evidence"
+canonical_model_evidence = "realistic model evidence"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "constant"
+legacy = "PHASE16_CHECKPOINT_VERSION"
+canonical = "COUPLED_CHECKPOINT_FORMAT_VERSION"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "constant"
+legacy = "PHASE16_CHECKPOINT_SCHEMA"
+canonical = "COUPLED_CHECKPOINT_SCHEMA"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "type"
+legacy = "LogicalCheckpointV3"
+canonical = "CoupledLogicalCheckpoint"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "type"
+legacy = "RestoredPhase16Checkpoint"
+canonical = "RestoredLogicalCheckpoint"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "function"
+legacy = "phase16_checkpoint"
+canonical = "capture_logical_checkpoint"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "function"
+legacy = "decode_phase16_checkpoint"
+canonical = "decode_logical_checkpoint"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "ProcessBigraphs"
+kind = "function"
+legacy = "restore_phase16_checkpoint"
+canonical = "restore_logical_checkpoint"
+disposition = "qualified_only_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "constant"
+legacy = "PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION"
+canonical = "RESULT_EVIDENCE_SCHEMA_VERSION"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "type"
+legacy = "Phase14ContractVersions"
+canonical = "CoupledContractVersions"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "function"
+legacy = "phase14_contract_versions"
+canonical = "coupled_contract_versions"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "constant"
+legacy = "PHASE14_CONTRACT_VERSIONS"
+canonical = "COUPLED_CONTRACT_VERSIONS"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "constant"
+legacy = "PHASE14_CONTRACT_SET_VERSION"
+canonical = "COUPLED_CONTRACT_SET_VERSION"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "CorePotts"
+kind = "constant"
+legacy = "PHASE14_SEMANTIC_KERNEL_VERSION"
+canonical = "COUPLED_SEMANTIC_KERNEL_VERSION"
+disposition = "exported_compatibility_alias"
+
+[[public_names]]
+package = "PottsToolkit"
+kind = "constant"
+legacy = "PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION"
+canonical = "RESULT_EVIDENCE_SCHEMA_VERSION"
+disposition = "exported_compatibility_alias"
+
+[[path_rules]]
+legacy = "lib/ProcessBigraphs/test/phase15c/"
+canonical = "lib/ProcessBigraphs/test/{authoring,fixtures,persistence,runtime}/"
+scope = "tests"
+
+[[path_rules]]
+legacy = "lib/ProcessBigraphs/test/phase16/"
+canonical = "lib/ProcessBigraphs/test/{contracts,engine,persistence,structure}/"
+scope = "tests"
+
+[[path_rules]]
+legacy = "test/test_phase*.jl"
+canonical = "test/test_<domain>.jl"
+scope = "tests"
+
+[[path_rules]]
+legacy = "lib/CorePotts/test/test_phase*.jl"
+canonical = "lib/CorePotts/test/test_<domain>.jl"
+scope = "tests"
+
+[[path_rules]]
+legacy = "integration/conformance/test_phase*.jl"
+canonical = "integration/conformance/test_<contract-domain>.jl"
+scope = "tests"
+
+[[path_rules]]
+legacy = "integration/transition/*phase*.jl"
+canonical = "integration/transition/<transition-domain>.jl"
+scope = "tooling"
+
+[[path_rules]]
+legacy = "benchmark/*phase*.jl"
+canonical = "benchmark/<qualification-domain>.jl"
+scope = "tooling"
+
+[[path_rules]]
+legacy = ".github/workflows/phase*.yml"
+canonical = ".github/workflows/<durable-obligation>.yml"
+scope = "ci"
+
+[[path_rules]]
+legacy = "scripts/*phase*.jl"
+canonical = "scripts/archive/<historical-family>/*phase*.jl"
+scope = "historical_archive"
+
+[compatibility]
+process_bigraphs_file = "lib/ProcessBigraphs/src/compatibility.jl"
+corepotts_file = "lib/CorePotts/src/contracts/compatibility.jl"
+pottstoolkit_file = "src/compatibility.jl"
+removal_requires_versioned_decision = true
+primary_documentation_may_use_legacy_names = false
+
+[historical]
+baseline_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+baseline_ci_run = "30399756947"
+index = "../design/evidence/consolidation-naming/historical-artifact-index-v1.toml"
+reproduction_policy = "checkout_baseline_commit_for_exact_historical_checker_paths"
+living_consumers = [
+    ".github/workflows/ci.yml",
+    "integration/conformance/test_cpu_realistic_archive.jl",
+    "integration/conformance/test_cpu_transition_archive.jl",
+    "integration/conformance/test_metal_realistic_archive.jl",
+    "integration/conformance/test_metal_transition_archive.jl",
+    "integration/conformance/test_realistic_scale.jl",
+    "integration/conformance/test_rocm_device_code_archive.jl",
+    "integration/conformance/test_rocm_realistic_archive.jl",
+    "integration/conformance/test_rocm_transition_archive.jl",
+    "integration/conformance/test_transition_evidence_archive.jl",
+    "integration/conformance/test_transition_production_evidence.jl",
+    "integration/conformance/test_wang_execution_order.jl",
+    "integration/conformance/test_wang_sequential_disposition.jl",
+    "integration/transition/RealisticScaleRunner.jl",
+    "integration/transition/TransitionFixtures.jl",
+    "integration/transition/generate_transition_eligibility.jl",
+    "integration/transition/generate_transition_evidence.jl",
+    "integration/transition/generate_transition_figures.jl",
+    "integration/transition/run_realistic_evidence.jl",
+    "integration/transition/run_transition_empirical.jl",
+    "scripts/check_legacy_containment.jl",
+    "test/test_component_inventory.jl",
+]
+living_consumer_policy = "These paths read, verify, reproduce, or write frozen historical artifacts and may name only their retained milestone-coded artifact identities."
+
+[[legacy_protocol_tokens]]
+token = "phase13_frozen"
+category = "serialized_legacy_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase13_core"
+category = "serialized_legacy_identity"
+
+[[legacy_protocol_tokens]]
+token = "frozen_phase13_lifecycle"
+category = "serialized_legacy_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase13_transition_evidence_v2"
+category = "frozen_evidence_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase13_realistic_qualification_v4"
+category = "frozen_evidence_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase14-cpu-reference-conformance-v1"
+category = "frozen_evidence_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase14-wortel-gpu-native-qualification-v1"
+category = "frozen_evidence_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase15c-independent-julia-specification-v1"
+category = "frozen_oracle_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase15c-neutral-oracle-v1"
+category = "frozen_oracle_fixture_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase10-reference-suite"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase12-performance-run"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase12-cpu-scaling-summary"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase12-cold-run"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase12-precompile-run"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "phase12-backend-profile"
+category = "frozen_benchmark_record_identity"
+
+[[legacy_protocol_tokens]]
+token = "process-bigraph-phase16-native-field-v1"
+category = "frozen_evidence_identity"
+
+[[legacy_protocol_tokens]]
+token = "process-bigraph-phase16hc-authoring-performance-v1"
+category = "frozen_evidence_identity"

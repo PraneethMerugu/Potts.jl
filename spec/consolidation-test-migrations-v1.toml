@@ -1,0 +1,270 @@
+schema_version = "1.0.0"
+status = "qualified"
+baseline_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+policy = "Every renamed baseline test or support file has exactly one domain-oriented successor. Unlisted baseline paths must remain at their original path."
+direct_entrypoints = [
+    "integration/transition/analyze_realistic_evidence.jl",
+    "integration/transition/run_transition_empirical.jl",
+    "integration/transition/run_realistic_evidence.jl",
+    "lib/MakiePotts/test/clean_install_smoke.jl",
+    "lib/MakiePotts/test/backends/cairo.jl",
+    "lib/MakiePotts/test/backends/gl.jl",
+    "lib/MakiePotts/test/backends/wgl.jl",
+    "lib/MakiePotts/test/visual_regression.jl",
+]
+
+[[renames]]
+old = "test/test_phase11_equivalence.jl"
+new = "test/test_authoring_equivalence.jl"
+[[renames]]
+old = "test/test_phase11_fragments.jl"
+new = "test/test_model_fragments.jl"
+[[renames]]
+old = "test/test_phase11_inspection.jl"
+new = "test/test_model_inspection.jl"
+[[renames]]
+old = "test/test_phase11_inventory.jl"
+new = "test/test_component_inventory.jl"
+[[renames]]
+old = "test/test_phase11_macro_contract.jl"
+new = "test/test_authoring_macro_contract.jl"
+[[renames]]
+old = "test/test_phase12_5_tiled.jl"
+new = "test/test_tiled_authoring.jl"
+[[renames]]
+old = "test/test_phase13_contract_versions.jl"
+new = "test/test_contract_versions.jl"
+[[renames]]
+old = "test/test_phase13_quality_gates.jl"
+new = "test/test_package_quality.jl"
+[[renames]]
+old = "test/test_phase14_generic_fragments.jl"
+new = "test/test_generic_model_fragments.jl"
+
+[[renames]]
+old = "lib/CorePotts/test/test_phase8_lifecycle.jl"
+new = "lib/CorePotts/test/test_lifecycle_events.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase8_persistence.jl"
+new = "lib/CorePotts/test/test_persistence.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase8_protocols.jl"
+new = "lib/CorePotts/test/test_open_protocols.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase9_sciml_interface.jl"
+new = "lib/CorePotts/test/test_sciml_interface.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase10_extension_protocol.jl"
+new = "lib/CorePotts/test/test_extension_protocol.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase13_contract_versions.jl"
+new = "lib/CorePotts/test/test_contract_versions.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase13_quality_gates.jl"
+new = "lib/CorePotts/test/test_package_quality.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_bounded_observations.jl"
+new = "lib/CorePotts/test/test_bounded_observations.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_cell_history.jl"
+new = "lib/CorePotts/test/test_cell_history.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_contact_relationships.jl"
+new = "lib/CorePotts/test/test_contact_relationships.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_dynamic_state.jl"
+new = "lib/CorePotts/test/test_dynamic_state.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_history_polarity.jl"
+new = "lib/CorePotts/test/test_history_polarity.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_polarity_force.jl"
+new = "lib/CorePotts/test/test_polarity_force.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_relationship_processes.jl"
+new = "lib/CorePotts/test/test_relationship_processes.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase14_vector_boundary_potential.jl"
+new = "lib/CorePotts/test/test_vector_boundary_potential.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase16_merks2006.jl"
+new = "lib/CorePotts/test/test_merks2006_model.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase16_native_fields.jl"
+new = "lib/CorePotts/test/test_native_fields.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase16_process_bigraph_adapter.jl"
+new = "lib/CorePotts/test/test_process_bigraph_adapter.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase16_shirinifard2012.jl"
+new = "lib/CorePotts/test/test_shirinifard2012_model.jl"
+[[renames]]
+old = "lib/CorePotts/test/test_phase16_solver_plurality.jl"
+new = "lib/CorePotts/test/test_solver_adapter_contract.jl"
+
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_paths_time_canonical.jl"
+new = "lib/ProcessBigraphs/test/primitives/test_paths_time_canonical.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_schema_store_effects.jl"
+new = "lib/ProcessBigraphs/test/primitives/test_schema_store_effects.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_serial_microfixtures.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_serial_microfixtures.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_high_level_authoring.jl"
+new = "lib/ProcessBigraphs/test/authoring/test_high_level_authoring.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_composite_preflight.jl"
+new = "lib/ProcessBigraphs/test/structure/test_composite_preflight.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_phase15a_algebraic_structure.jl"
+new = "lib/ProcessBigraphs/test/structure/test_algebraic_structure.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/test_phase15b_open_composition.jl"
+new = "lib/ProcessBigraphs/test/structure/test_open_composition.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/fixtures.jl"
+new = "lib/ProcessBigraphs/test/fixtures/serial_runtime.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_adaptive_and_iteration.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_adaptive_and_iteration.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_authoring_equivalence.jl"
+new = "lib/ProcessBigraphs/test/authoring/test_authoring_equivalence.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_checkpoint_v2.jl"
+new = "lib/ProcessBigraphs/test/persistence/test_checkpoint_v2.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_failure_checkpoint.jl"
+new = "lib/ProcessBigraphs/test/persistence/test_failure_checkpoint.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_observation.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_observation.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_observation_continuation.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_observation_continuation.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_properties_metamorphic.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_properties_metamorphic.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_restart_matrix.jl"
+new = "lib/ProcessBigraphs/test/persistence/test_restart_matrix.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_semantic_rng.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_semantic_rng.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase15c/test_serial_scheduler.jl"
+new = "lib/ProcessBigraphs/test/runtime/test_serial_scheduler.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase16/test_phase16a_entry.jl"
+new = "lib/ProcessBigraphs/test/contracts/test_internal_beta_contract.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase16/test_phase16b_engine_field.jl"
+new = "lib/ProcessBigraphs/test/engine/test_engine_field_protocol.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase16/test_phase16d_structural_transactions.jl"
+new = "lib/ProcessBigraphs/test/structure/test_structural_transactions.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase16/test_phase16e_checkpoint.jl"
+new = "lib/ProcessBigraphs/test/persistence/test_logical_checkpoint.jl"
+[[renames]]
+old = "lib/ProcessBigraphs/test/phase16/test_phase16f_solver_plurality.jl"
+new = "lib/ProcessBigraphs/test/engine/test_solver_adapter_contract.jl"
+
+[[renames]]
+old = "integration/conformance/phase14_wang_fixture.jl"
+new = "integration/conformance/wang_model_fixture.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_analysis.jl"
+new = "integration/conformance/test_transition_analysis.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_checkerboard_analysis.jl"
+new = "integration/conformance/test_checkerboard_analysis.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_checkerboard_oracle.jl"
+new = "integration/conformance/test_checkerboard_oracle.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_cpu_qualification_archive.jl"
+new = "integration/conformance/test_cpu_transition_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_empirical.jl"
+new = "integration/conformance/test_transition_empirical.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_evidence_archive.jl"
+new = "integration/conformance/test_transition_evidence_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_fixtures.jl"
+new = "integration/conformance/test_transition_fixtures.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_metal_qualification_archive.jl"
+new = "integration/conformance/test_metal_transition_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_metal_realistic_qualification_archive.jl"
+new = "integration/conformance/test_metal_realistic_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_oracle.jl"
+new = "integration/conformance/test_transition_oracle.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_production_adapter.jl"
+new = "integration/conformance/test_transition_production_adapter.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_production_evidence.jl"
+new = "integration/conformance/test_transition_production_evidence.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_production_sampler.jl"
+new = "integration/conformance/test_transition_production_sampler.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_realistic_qualification_archive.jl"
+new = "integration/conformance/test_cpu_realistic_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_realistic_scale.jl"
+new = "integration/conformance/test_realistic_scale.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_rocm_device_code_archive.jl"
+new = "integration/conformance/test_rocm_device_code_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_rocm_qualification_archive.jl"
+new = "integration/conformance/test_rocm_transition_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_rocm_realistic_qualification_archive.jl"
+new = "integration/conformance/test_rocm_realistic_archive.jl"
+[[renames]]
+old = "integration/conformance/test_phase13_sequential.jl"
+new = "integration/conformance/test_sequential_transition.jl"
+[[renames]]
+old = "integration/conformance/test_phase14_wang_authoring.jl"
+new = "integration/conformance/test_wang_model_authoring.jl"
+[[renames]]
+old = "integration/conformance/test_phase14_wang_cpu_disposition.jl"
+new = "integration/conformance/test_wang_sequential_disposition.jl"
+[[renames]]
+old = "integration/conformance/test_phase14_wang_order.jl"
+new = "integration/conformance/test_wang_execution_order.jl"
+[[renames]]
+old = "integration/conformance/test_phase14_wang_runtime.jl"
+new = "integration/conformance/test_wang_model_runtime.jl"
+[[renames]]
+old = "integration/conformance/test_phase9_distributed.jl"
+new = "integration/conformance/test_distributed_ensemble.jl"
+[[renames]]
+old = "integration/transition/Phase13Fixtures.jl"
+new = "integration/transition/TransitionFixtures.jl"
+[[renames]]
+old = "integration/transition/analyze_phase13_realistic.jl"
+new = "integration/transition/analyze_realistic_evidence.jl"
+[[renames]]
+old = "integration/transition/generate_phase13_eligibility.jl"
+new = "integration/transition/generate_transition_eligibility.jl"
+[[renames]]
+old = "integration/transition/generate_phase13_evidence.jl"
+new = "integration/transition/generate_transition_evidence.jl"
+[[renames]]
+old = "integration/transition/generate_phase13_figures.jl"
+new = "integration/transition/generate_transition_figures.jl"
+[[renames]]
+old = "integration/transition/run_phase13_empirical.jl"
+new = "integration/transition/run_transition_empirical.jl"
+[[renames]]
+old = "integration/transition/run_phase13_realistic.jl"
+new = "integration/transition/run_realistic_evidence.jl"

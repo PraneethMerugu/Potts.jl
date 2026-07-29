@@ -152,7 +152,7 @@ algorithm_guarantees(::SequentialCPM) = AlgorithmGuaranteeProfile(
     ),
     maximum_observed_discrepancy = 0.0,
     tested_backends = (:cpu, :metal, :amdgpu),
-    evidence_version = PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+    evidence_version = RESULT_EVIDENCE_SCHEMA_VERSION,
     api_status = :stable,
     paper_scope = :phase13_core,
 )
@@ -192,7 +192,7 @@ algorithm_guarantees(algorithm::BudgetedSequentialCPM) = AlgorithmGuaranteeProfi
     ),
     maximum_observed_discrepancy = 0.0,
     tested_backends = (:cpu, :metal, :amdgpu),
-    evidence_version = PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+    evidence_version = RESULT_EVIDENCE_SCHEMA_VERSION,
     api_status = :stable,
     paper_scope = :later_protocol_consumer,
 )
@@ -266,7 +266,7 @@ algorithm_guarantees(::CheckerboardSweepCPM) = AlgorithmGuaranteeProfile(
     ),
     maximum_observed_discrepancy = 0.5625,
     tested_backends = (:cpu, :metal, :amdgpu),
-    evidence_version = PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION,
+    evidence_version = RESULT_EVIDENCE_SCHEMA_VERSION,
     api_status = :stable,
     paper_scope = :phase13_core,
 )
@@ -597,7 +597,7 @@ end
 """
     init_scientific(state, proposal_relation, components, algorithm; seed, plan, ...)
 
-Construct the Phase 7 scientific integrator over already compiled, backend-resident state. The seed
+Construct the scientific integrator over already compiled, backend-resident state. The seed
 is execution state rather than algorithm configuration. No simulation work or observation sync is
 performed during construction.
 """

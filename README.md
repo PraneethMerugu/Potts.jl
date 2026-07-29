@@ -2,24 +2,29 @@
 
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://praneethmerugu.github.io/Potts.jl/dev/)
 
-Potts.jl is a Cellular Potts modeling system for Julia. The Phase 13 paper-core release contains
-two independently testable packages:
+Potts.jl is a Cellular Potts modeling system for Julia. The repository contains three independently
+testable user-facing packages:
 
 - **PottsToolkit**: the repository-root biological authoring interface.
 - **CorePotts**: the scientific execution engine and advanced extension interface.
+- **MakiePotts**: native Makie recipes over explicit, host-owned render frames.
 
-The historical `Potts` umbrella package and pre-freeze engine have been removed. MakiePotts remains
-deferred source for its Phase 14.4 migration and is not part of the Phase 13 workspace or
-compatibility guarantee. The obsolete NeuralPotts implementation was removed; a redesigned
-experimental satellite may return only through the Phase 14.4-or-later scope and conformance gate.
+The historical `Potts` umbrella package and pre-freeze engine have been removed. ProcessBigraphs
+is developed separately as an internal runtime foundation; its incubation status is not a public
+Potts runtime or parity claim.
 
 ## Installation
 
 Until the package family is registered, install PottsToolkit directly from the repository root:
 
 ```julia
-pkg> add https://github.com/PraneethMerugu/Potts.jl
+using Pkg
+Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", subdir = "lib/CorePotts")
+Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl")
 ```
+
+CorePotts is installed explicitly because user scripts import it directly for execution. Add the
+`lib/MakiePotts` subdirectory as a direct dependency when using visualization.
 
 For development:
 
@@ -38,5 +43,6 @@ julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_ve
 julia --project=docs --startup-file=no docs/make.jl
 ```
 
-Phase 13 documentation is strict and executable. The final API compatibility boundary is the
-curated owner-approved freeze inventory, not the set of names that happen to be exported.
+The manual is organized as Learn, Examples, Published Models, Concepts and Guarantees, and API.
+Documentation builds are strict and executable. API compatibility is assigned by curated
+inventories and guarantee metadata, not merely by whether a name is exported.

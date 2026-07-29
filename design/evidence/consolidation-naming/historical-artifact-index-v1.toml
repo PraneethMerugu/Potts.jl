@@ -1,0 +1,2063 @@
+artifact_count = 343
+baseline_ci_run = "30399756947"
+baseline_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+schema_version = "1.0.0"
+
+[[artifacts]]
+bytes = 34002
+category = "historical_audit"
+path = "design/audits/phase-0-current-code-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "20c4e441c7c1764050bb74e5d324fac0297d38e11732ece23d1f61ffd7582aaf"
+[[artifacts]]
+bytes = 9753
+category = "historical_audit"
+path = "design/audits/phase-0-paper-scope-map.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "881ed3d472112360e33c993293e131898c77b8c1a0deb999db75937d8f389b4d"
+[[artifacts]]
+bytes = 13274
+category = "historical_audit"
+path = "design/audits/phase-1-baseline-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0836ff55a70ad3eb88ca4a26684b06260880a7b60b9902607ae688da79f03b91"
+[[artifacts]]
+bytes = 13664
+category = "historical_audit"
+path = "design/audits/phase-10-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "393fb286e39e1411bd49932f0d35029dd0c97cd0f778e7e68f88697ee4166d50"
+[[artifacts]]
+bytes = 9259
+category = "historical_audit"
+path = "design/audits/phase-10-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f040d112d99ce83f15ba32e42e1fb90d05542001ada78370f47fe41162cbfac9"
+[[artifacts]]
+bytes = 13106
+category = "historical_audit"
+path = "design/audits/phase-10-current-code-and-gap-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "36230b4a18b12b9385e6fa93e00171523acd3d3068dccfccbdc42d6a89b3ac76"
+[[artifacts]]
+bytes = 3165
+category = "historical_audit"
+path = "design/audits/phase-10-replacement-slice-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9f92ccc638c975487cec37183c2eff925f38d93f3165662d3a64479fdd737882"
+[[artifacts]]
+bytes = 7498
+category = "historical_audit"
+path = "design/audits/phase-11-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "580bc80505b2ec929536ad64317a37771ea16bd0356461aa18a65468fb532f19"
+[[artifacts]]
+bytes = 13517
+category = "historical_audit"
+path = "design/audits/phase-11-implementation-matrix.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "28ce55f9b3816e7d5e834d26dc337f96f34228be5aa28f0815cf4502e6c2c672"
+[[artifacts]]
+bytes = 1473
+category = "historical_audit"
+path = "design/audits/phase-11-stable-component-coverage.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c160748b3bcf4febb3897fda7bc97ec06b5aa6a168d24ad068945eb8018141b2"
+[[artifacts]]
+bytes = 10494
+category = "historical_audit"
+path = "design/audits/phase-11-stable-component-inventory.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "083e3f1b1f3dd3c22b75c13ca20c3a8276522908b383f9c807483f8019556501"
+[[artifacts]]
+bytes = 4690
+category = "historical_audit"
+path = "design/audits/phase-11-usability-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0072c61b88dd858870ac660d9cbfccf570830f0a78fbce5476acdf8753bc56d9"
+[[artifacts]]
+bytes = 6513
+category = "historical_audit"
+path = "design/audits/phase-12-5-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "270a6425aecafaba212de3deae2e190496098c4149078f160fd3776400b2113a"
+[[artifacts]]
+bytes = 9779
+category = "historical_audit"
+path = "design/audits/phase-12-5-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7d764257f1e2b4acb03e1a104be8b7af85584832657fac2ad043ae14ff00396a"
+[[artifacts]]
+bytes = 3589
+category = "historical_audit"
+path = "design/audits/phase-12-5-statistical-registration.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "afde810d33d7a00ef09b7436626fda1bbccc93d424a83bf0dc23fd1097882d05"
+[[artifacts]]
+bytes = 5353
+category = "historical_audit"
+path = "design/audits/phase-12-5-sultan-assumption-ledger.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b0fd7c69b5c88f040b918fafe2c0675790190a0a38fb63a93552e52d75492556"
+[[artifacts]]
+bytes = 12835
+category = "historical_audit"
+path = "design/audits/phase-12-5-tiled-checkerboard-contract.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7bbc51451a6c1bfff4e0a2258ba5e1aa4e171915a9e2c49db55143764516e018"
+[[artifacts]]
+bytes = 5341
+category = "historical_audit"
+path = "design/audits/phase-12-accepted-regressions.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4996b587bd7a47aabb3c88e53d7e1d78c9f6fa21497c951fceafe8505451a819"
+[[artifacts]]
+bytes = 6873
+category = "historical_audit"
+path = "design/audits/phase-12-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9fdbb725d770888448a42f07d71811c68e798c996b17ca47c8a579293ebf9830"
+[[artifacts]]
+bytes = 9566
+category = "historical_audit"
+path = "design/audits/phase-12-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8f3429dbe150a8610ff765771a9dd977d93bc2b271a2a5efe199f0718170cd98"
+[[artifacts]]
+bytes = 14720
+category = "historical_audit"
+path = "design/audits/phase-12-cpu-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4b2f7ed000cdc3d8e3d48a9392ee719ec254006e50c230c125cfc4017dd4b686"
+[[artifacts]]
+bytes = 6853
+category = "historical_audit"
+path = "design/audits/phase-12-entry-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "90ce66c16a55df9f4602b48214ad7a680a1b621193a32fe8462b13d8dfcc4315"
+[[artifacts]]
+bytes = 6973
+category = "historical_audit"
+path = "design/audits/phase-12-external-comparison-crosswalk.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9f5d23c4fc61a0676f5bf546b9cf988c2de0d46c07d05b39d986d15bfe7c1271"
+[[artifacts]]
+bytes = 11840
+category = "historical_audit"
+path = "design/audits/phase-12-performance-contract.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e05fb1885f307fc0082843e951d793ad4a19d0141d46c4456100baa2cfd1f1b3"
+[[artifacts]]
+bytes = 3641
+category = "historical_audit"
+path = "design/audits/phase-13-api-freeze-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5fafd34ec1dc892746953e504945ca1e3eccaede8161c957ae925950a2003675"
+[[artifacts]]
+bytes = 5189
+category = "historical_audit"
+path = "design/audits/phase-13-api-freeze-policy.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e411a9da0c43a5ba13535890dfb513d28e557ccebde79d7cd028b32836b88aef"
+[[artifacts]]
+bytes = 135042
+category = "historical_audit"
+path = "design/audits/phase-13-api-inventory.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "96a4f694cb8e1e47843fa396159a27db826b0c1867ae786a649f507f522ee863"
+[[artifacts]]
+bytes = 7056
+category = "historical_audit"
+path = "design/audits/phase-13-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8786ab4f596345bdd97e4f813b8ee07d592ad27a9c4a71d8e633e03551d37148"
+[[artifacts]]
+bytes = 4795
+category = "historical_audit"
+path = "design/audits/phase-13-fixture-manifest-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "cb684af22daa7a1996ed509fff9ef89b8f0ddd2f895183e031ebbd692cbafe22"
+[[artifacts]]
+bytes = 5196
+category = "historical_audit"
+path = "design/audits/phase-13-fixture-manifest.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b2959351908294d28c087843c8f61f1053ea2e195296ccc60301b8a13076b600"
+[[artifacts]]
+bytes = 2281
+category = "historical_audit"
+path = "design/audits/phase-13-hand-derived-kernel.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "36a7331202acd0d719f7749d602518de5284436ac31723e80dc883e13aa6a7e4"
+[[artifacts]]
+bytes = 614
+category = "historical_audit"
+path = "design/audits/phase-13-hand-derived-kernel.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "21e6d332900cf5c4c96a24b52bed4cca2c64126d95ee1d8a39302adb17a1ed89"
+[[artifacts]]
+bytes = 3242
+category = "historical_audit"
+path = "design/audits/phase-13-legacy-closure.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ff30e5cbca85e61de7ff02b7bf809046607aad9a625516475619daaf47751b35"
+[[artifacts]]
+bytes = 11952
+category = "historical_audit"
+path = "design/audits/phase-13-owner-freeze-packet.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3b1a3faf3833015db64f34281557805307fcd9c9dc52d7b6caa2b9fab9fce269"
+[[artifacts]]
+bytes = 3560
+category = "historical_audit"
+path = "design/audits/phase-13-realistic-workload-manifest-v3.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2f1f81a45a355aed92ca8dd428842bb482fc2fc599fa087bbba41f542f836797"
+[[artifacts]]
+bytes = 4236
+category = "historical_audit"
+path = "design/audits/phase-13-realistic-workload-manifest.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "bbc713f45a6cd8c82920d1006589967787be43e30e22eae70b461872f3a10473"
+[[artifacts]]
+bytes = 8121
+category = "historical_audit"
+path = "design/audits/phase-13-statistical-registration-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9ebe4f7e6dfe453010d04d77fe73a85b1126e8d05ba2f995fd83ba932904fdeb"
+[[artifacts]]
+bytes = 14423
+category = "historical_audit"
+path = "design/audits/phase-13-statistical-registration.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dc9987918f0589a7878258be04b0adaec18caf5569a045f32521397f4eb0c97e"
+[[artifacts]]
+bytes = 9244
+category = "historical_audit"
+path = "design/audits/phase-13-statistical-registration.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "05e9c3e2f82d69488744ca33dedeaebbb0cc362de15524c8a97ee5c5c1a4941e"
+[[artifacts]]
+bytes = 6664
+category = "historical_audit"
+path = "design/audits/phase-13-transition-kernel-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6fb89bbb7a5db9db0167dd31ce9b9ad7bc961ddec4796195d46a9a66ae8232c5"
+[[artifacts]]
+bytes = 15522
+category = "historical_audit"
+path = "design/audits/phase-14-0-corpus-and-requirements-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b95e10f5e53083ba00bd5d272d8db3250f9cd09e43b4201e0679234a0a282d61"
+[[artifacts]]
+bytes = 13460
+category = "historical_audit"
+path = "design/audits/phase-14-d9-work-items-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "693ed82741bd06ee89b1ea85fa1c37f4158902f3ab55281fa8ed68fb2fcf1e9f"
+[[artifacts]]
+bytes = 5068
+category = "historical_audit"
+path = "design/audits/phase-14-g3a-generic-authoring-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d7db90d7e7961f915c602d35c10d1f40a3fb3931c8127de3dae556471b5716b5"
+[[artifacts]]
+bytes = 9453
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-closure-ledger-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5a2681be7202dd2efc633a05a2705cf0a4a3bb45b7a3c15cbf3ee79ac4798450"
+[[artifacts]]
+bytes = 17512
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-closure-spec-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1d7c9a4dad4a0a8f2406e5b7640b7aaf0c92547d2e919e767d8679f3dbf73d3b"
+[[artifacts]]
+bytes = 63433
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-entry-contract-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8fb030269eef4b632e703247bb8069a45cbd4be6de1eb407ed9970d4fbeba2fd"
+[[artifacts]]
+bytes = 21766
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-entry-packet.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a492924bae27484e45fbc87c0e76fdbd6d5a1726f95f394a150f3b0bb2460f1a"
+[[artifacts]]
+bytes = 3945
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-exchange-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2a9845fdacf504d89c6db40718bf69d92a29cfe01ffebfaa28196ee0ec323e66"
+[[artifacts]]
+bytes = 3359
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-field-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2d1536b508b352bead1823660b2410371edb82b8ec735a911e90148a1a9e86f9"
+[[artifacts]]
+bytes = 4558
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-field-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6245ba25d240ab39a313d368014e89827874ff618d2925edbfa9780254c7ecf4"
+[[artifacts]]
+bytes = 3930
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-focal-topology-source-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "384a304e2049825d984cd3989b4d1a23bf6e04e973a9412ab2f3a98ba6b144ec"
+[[artifacts]]
+bytes = 10271
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-generality-implementation-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9c02e0c2fdafd9e033d1aec142d0c34405f2f1ea428ba4d3e5ed4b6a165ed375"
+[[artifacts]]
+bytes = 5828
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-history-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d8893250a386e24442d3619b6d4611806b24fad48754cb6f27bdfc105e26da46"
+[[artifacts]]
+bytes = 3367
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-intracellular-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9859b6b5a8706222bd07d222a38419f1cbb4f1f3cabaf05be71456df6db2b8c0"
+[[artifacts]]
+bytes = 2955
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-observation-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0a29b8a08e38db051429fd45e60238e70697c8a3a732c477cf6773976bd30561"
+[[artifacts]]
+bytes = 2222
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-observation-source-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "19011dcabf02a2a845221af6bec4d6bede0139bd1271c8705f93612fbdd7a269"
+[[artifacts]]
+bytes = 4443
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-polarity-force-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b9e4edd144f01648b2e446885c149bd55d8a49ef03fbdeb3a3c28827b68a2fe8"
+[[artifacts]]
+bytes = 5073
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-polarity-force-source-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "29bc86b319c588b91be6ec04ce1f8ce27351fb8ece01903eeabf695340672840"
+[[artifacts]]
+bytes = 5408
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-potts-fpp-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c6ffcdb5bad65b96a0e19ff44a1795b4ade55c06c1bcc3fb3db0fba88fc9f88d"
+[[artifacts]]
+bytes = 5937
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-relationship-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e9acc32b52ed8258b3d34570478ca35a30f214f13c7cf16264e8de15ef762bc1"
+[[artifacts]]
+bytes = 3766
+category = "historical_audit"
+path = "design/audits/phase-14-g3b-roadrunner-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6a5c8620ec49f56d718b48f0568c436270137d61ce71533661eea36c95e6e882"
+[[artifacts]]
+bytes = 12626
+category = "historical_audit"
+path = "design/audits/phase-14-generic-authoring-simplification-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1ee459ba4c10b54464583e86551961fa510660f73d96d8409505e23e2988ef24"
+[[artifacts]]
+bytes = 15766
+category = "historical_audit"
+path = "design/audits/phase-14-gpu-native-implementation-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7fa90aa6a5d2322f4e4f601c46003192894920929ac53b67e3789e713bc1d9f2"
+[[artifacts]]
+bytes = 30749
+category = "historical_audit"
+path = "design/audits/phase-14-model-capability-matrix-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "114d094f7bb7b7ed4f244056be35fe552917bc58b6194128a0280764dbec6b23"
+[[artifacts]]
+bytes = 40389
+category = "historical_audit"
+path = "design/audits/phase-14-model-source-records-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f5f37e6f13d2e8b16a8ad3bd141ed70e30f476eaa37a17a526bc8705024192d6"
+[[artifacts]]
+bytes = 12974
+category = "historical_audit"
+path = "design/audits/phase-14-morpheus-continuous-semantics-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "fff19d2dbb58d7dad8c70fb36a259db7ddc6427cec0fb4ebcd9b69dcaf8cdeb6"
+[[artifacts]]
+bytes = 2223
+category = "historical_audit"
+path = "design/audits/phase-14-public-api-v2.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0c27215592ef373baffa4d26530a853c11cf83cac8f51cf67d06dffbfd9730e1"
+[[artifacts]]
+bytes = 9020
+category = "historical_audit"
+path = "design/audits/phase-14-semantics-focused-interview.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "52a5d47f111532ede7671d189f54f160a41446b54fa2ac30f46a8578723392c5"
+[[artifacts]]
+bytes = 25182
+category = "historical_audit"
+path = "design/audits/phase-14-semantics-simplification-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0aa341dfd947ebdff5e684c7656656e22ebc8ba5b345699f2cfa6ddae42b8640"
+[[artifacts]]
+bytes = 17816
+category = "historical_audit"
+path = "design/audits/phase-14-source-closure-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6b65143d7f26cbb569753c29eb790be1dc0e9bc31c933a959c42aea052d89e03"
+[[artifacts]]
+bytes = 7074
+category = "historical_audit"
+path = "design/audits/phase-14-wang-order-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "79941e448e07f83b0de78e241e9a7bf9f8a71206f5672bc48b74a1938b0b3df0"
+[[artifacts]]
+bytes = 5961
+category = "historical_audit"
+path = "design/audits/phase-14-wang-order-oracle-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "51147643efe2c93c8073e7d8d9d23918b8d48f852b7f697f1da8f0af09427d36"
+[[artifacts]]
+bytes = 6784
+category = "historical_audit"
+path = "design/audits/phase-14-wortel-vertical-slice-evidence.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2905a3efe0fc5ecd88cc245d06dcf00ce7b075ffa53ce9de948ac7a3ed7fc21e"
+[[artifacts]]
+bytes = 4234
+category = "historical_audit"
+path = "design/audits/phase-2-structural-migration.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4a84a8eb39d370752e9e3bfe03a068070a175b197fa644180a0430434ff46f7f"
+[[artifacts]]
+bytes = 9296
+category = "historical_audit"
+path = "design/audits/phase-3-conformance-foundation-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7ef747bb1804eb421f5b4768a95590ad81679c0d79cc47d072d04330a07f153c"
+[[artifacts]]
+bytes = 8459
+category = "historical_audit"
+path = "design/audits/phase-4-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "545868f7b96c01e2752127ab13748dd77b46e858d3ef360720b9f2b20f18436a"
+[[artifacts]]
+bytes = 2290
+category = "historical_audit"
+path = "design/audits/phase-4-runtime-migration-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "879e7b53970bb07946afab3f52d7345dcc46c18e04da7c9c23ee517da8873fa7"
+[[artifacts]]
+bytes = 2371
+category = "historical_audit"
+path = "design/audits/phase-5-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f5782cf79b18f2b6edab8046ff0d211b957027c1e398bb6a861037e28a88bef7"
+[[artifacts]]
+bytes = 4586
+category = "historical_audit"
+path = "design/audits/phase-5-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "60f89708cab49ccf898bf8878cad55b2280220d19d085b9dbf1874255b678201"
+[[artifacts]]
+bytes = 8396
+category = "historical_audit"
+path = "design/audits/phase-5-execution-and-atomic-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "17d4c487d3a7c05947b5dd0e527f08a3406db60e691ddb29b34f7916e8bdbec9"
+[[artifacts]]
+bytes = 3577
+category = "historical_audit"
+path = "design/audits/phase-5-rng-evaluation.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "22d11648650ce2fc5408ed2eed02a86815692f5730d58058aeadf6f2eaff51a5"
+[[artifacts]]
+bytes = 3898
+category = "historical_audit"
+path = "design/audits/phase-6-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8f94f5d9e0ac7158b065b99e2cb75bce23b5758fc080070b6c74a7490ef9c42b"
+[[artifacts]]
+bytes = 5911
+category = "historical_audit"
+path = "design/audits/phase-6-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ca644029c4acd246b72238b549201cf976059e6c84cdcc1d304a68440027a3bc"
+[[artifacts]]
+bytes = 3424
+category = "historical_audit"
+path = "design/audits/phase-6-legacy-quarantine.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b47bca24b74829fb46b30d6281986a1a41269e616fa53f74dd5cdaa0bd9268e4"
+[[artifacts]]
+bytes = 7956
+category = "historical_audit"
+path = "design/audits/phase-7-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b0158340d6a0030afe5be8c7ce61a3bb1df2a1211357ecaceca001fe82ed2e6f"
+[[artifacts]]
+bytes = 717
+category = "historical_audit"
+path = "design/audits/phase-7-legacy-freeze.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f74659dbed3355bced50f92e6fffbc74a4093b8cd154692ceda70ca4a0d3da67"
+[[artifacts]]
+bytes = 7076
+category = "historical_audit"
+path = "design/audits/phase-8-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a3e83e2fa36d1a796e8aeb36a9930b296ff750e18b18f2979f06d4446d3e5650"
+[[artifacts]]
+bytes = 8767
+category = "historical_audit"
+path = "design/audits/phase-8-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "15ef3bbebe832e6b656de077448b6fdcbe89cbc4de8f3ddaa315471d98981bd7"
+[[artifacts]]
+bytes = 7840
+category = "historical_audit"
+path = "design/audits/phase-8-mechanical-lifecycle-research.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ef51a7400e43cd8eaae019889d2851d9a40a583bd26487aa97cee059bfd91055"
+[[artifacts]]
+bytes = 11519
+category = "historical_audit"
+path = "design/audits/phase-8-minimality-pass.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f2df66b458141190ccbc7fe94b3ba8887089d6b362365118e9e9db8f0665cf46"
+[[artifacts]]
+bytes = 6905
+category = "historical_audit"
+path = "design/audits/phase-9-chunk-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "76059a0ab0c584f2b6096e10af1ced7c663177afdd5d9ea333ad73ef2c7e6d47"
+[[artifacts]]
+bytes = 9430
+category = "historical_audit"
+path = "design/audits/phase-9-completion-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3f5cc04e7ed228a260dd3252b138d11dbd4d7dcee22546cd6292216e448c9e45"
+[[artifacts]]
+bytes = 20323
+category = "historical_audit"
+path = "design/audits/phase-9-current-code-and-gap-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "39981cc929097f007cf99bdf6d5e6e489263fab31bacfb2ba8afbbe039bb72ee"
+[[artifacts]]
+bytes = 2707
+category = "historical_audit"
+path = "design/audits/phase-9-legacy-evacuation.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ea78be67b8fa214b3cee80b001c313b358c0f271f42dbe832b15c48e8f26238c"
+[[artifacts]]
+bytes = 22202
+category = "historical_audit"
+path = "design/audits/phase-9-sciml-and-gpu-research.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "50d27f6ed25ec6fc1cdb731a428549dc6dbcf81d9c1c68dd8e3bb308bb504f7c"
+[[artifacts]]
+bytes = 5809
+category = "historical_audit"
+path = "design/audits/process-bigraph-pb0-implementation-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "19728a6b6fb0a16590162d66b0bb23bc3575effea906c7eb48ffc6c37e54dcc1"
+[[artifacts]]
+bytes = 6591
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15a-canonical-structure-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "147eccb9de7aba6230d67e0bfda277a3a55f3af49801d20005049d3069fe1332"
+[[artifacts]]
+bytes = 6925
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15b-open-composition-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dac5079f773ebe914e0b34b511c6892c88aef1a24b0be51c1f6c367c9146ba42"
+[[artifacts]]
+bytes = 6903
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15b-open-composition-owner-interview.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "31b43946d835a8e3aea8390cfbb137038cb26117c3524969f2fcf64b309442ea"
+[[artifacts]]
+bytes = 8412
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15b-open-composition-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "69c07cba8fb6259e857b4a13d3cd1fba122f85a72174bb209e7fda66a7807909"
+[[artifacts]]
+bytes = 3156
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15c-closure-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f530216d8cc6c9dd89cd7215fa1c528f158929cd780e851f4febc704f2c8f7fb"
+[[artifacts]]
+bytes = 2893
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15c-documentation-consistency-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "69a088d4b32b303e631ec3848dbdca0b0dad376886649f7a68c5a9a7490c8332"
+[[artifacts]]
+bytes = 10180
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15c-entry-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5d579d2c831f5990e016b57d8a0bb23d999cf6c0ae082b53a51436c1814f6384"
+[[artifacts]]
+bytes = 15135
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15c-serial-alpha-owner-interview.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dbc9f5252d5853ed5e3a59da8cbf55db03fa39fe81fd9732507cb57733967fe3"
+[[artifacts]]
+bytes = 23095
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase15c-serial-alpha-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4ad689ff2ec2af6b8e079928d6e371aab7646999046dc6a15ab307ef04085a1f"
+[[artifacts]]
+bytes = 4587
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16-closure-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c889ccabc66ff22ebbef80fc7cc92075f327e0dac091ab58276b0d13faf3ae53"
+[[artifacts]]
+bytes = 3369
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16-entry-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3835be11e8ce421299aec951d428942d05c17ff157e082b1135920c402d1f156"
+[[artifacts]]
+bytes = 7628
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16-implementation-plan.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e5f93a0d48a93a4100ffce8b85437a6bb0b488545e06cabf88b4de5b5858b151"
+[[artifacts]]
+bytes = 10771
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16-owner-interview.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a74a3ba0f23ea20db6a4f0f693117073ead8b86757aeb88639d28e11b4ef7e0c"
+[[artifacts]]
+bytes = 3254
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16b-engine-field-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7204e33ebf5cec0d0df4f9ef3a756ba4d8e9a43b0bf836130e8c08f846e0e55b"
+[[artifacts]]
+bytes = 3904
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16c-native-field-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "560463ba36de10359887657514461bb5df4b2a06d5abe3b8fc05b13daa95ea36"
+[[artifacts]]
+bytes = 3301
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16d-structural-transaction-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "21b6ecabf662c0ca2303470b82640c089d8b6818b14b83913fa489db744a4020"
+[[artifacts]]
+bytes = 3410
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16e-corepotts-cutover-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8c9d96d39438c6a3dd8479ef88a50d31db0536c7b156a0e6b2da2b40227118d9"
+[[artifacts]]
+bytes = 9067
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b74912f30bc2a0ded16378e1898533574d4109533227c8f7d1a6b1abf4cf23e9"
+[[artifacts]]
+bytes = 4258
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16f-solver-plurality-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "73e4e741dd8f13b8c5e7c19e9a6968e9990795e323d1ead3b10bd8db1ac15c9b"
+[[artifacts]]
+bytes = 3665
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16g-merks-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0b42c7fe9804b3ea2c92ea90271ba77a70166f4e1be37164ae723271b441e479"
+[[artifacts]]
+bytes = 5393
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16h-cnv-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8f71e1b57a72305730d33acad7e31f88b10138808e433fe6901c4929b6168959"
+[[artifacts]]
+bytes = 6611
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16hc-high-level-authoring-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4457681977a0477f08674b2750e4fe7be520c1e86d7aa67f06fb2f42ec7785bb"
+[[artifacts]]
+bytes = 11613
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2450609441c4fd74a2bd68e141b1d19718af9d82ff3cd5b9508a5b9dff1aabf1"
+[[artifacts]]
+bytes = 4089
+category = "historical_audit"
+path = "design/audits/process-bigraph-phase16i-reconciliation-audit.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c1874cb05fb440bd0f916cdf9a918e6a2b5c6cb833fe99bf8b19f12a423926f8"
+[[artifacts]]
+bytes = 1052041
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/CheckerboardSweepCPM/captured-kernels.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e294c685f2346f8b3e29437f7e074a2001f51cbe1bf9f75890f82488867157e0"
+[[artifacts]]
+bytes = 470765
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/CheckerboardSweepCPM/metal-profile.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "bf2b9d3d05a2a533d5386736d34be3a9684d79859b4e6dd392c2a87affe6afd7"
+[[artifacts]]
+bytes = 671691
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/SequentialCPM/captured-kernels.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "118d033c2b138b484616a00f9ea5743068b375a37eeefafc99c0d1225ffcef6f"
+[[artifacts]]
+bytes = 42869
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/SequentialCPM/metal-profile.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "eba7e29e87e72d10bc616edf3fca779666bb427125cffd8c74899a520a78e2f2"
+[[artifacts]]
+bytes = 1526
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2fde802b886963a58a1954b56b6f181434041f87fc5e89ea10ec9c6ae7ecd2c4"
+[[artifacts]]
+bytes = 4672
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/metal/phase12-backend-profile.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3f3105e77ecd416fb6e081a6de28d9de43006779bc8a1ad348d981b6d52b30c5"
+[[artifacts]]
+bytes = 541858
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_candidates!_5.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "07b3dfb10cea2b05bfa3bfa484f9cedaa050b05f25efe8ce779cedc57df0c05e"
+[[artifacts]]
+bytes = 205623
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_claim_priorities!_6.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "73aaf6f5491c5372580f6cad37fffcfbb95fac5e3d70c5549881a541103ca6da"
+[[artifacts]]
+bytes = 216947
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_claim_ties!_7.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "99baa81861a38e274b674c50d71d00b8f9e392e00bc5be3a4b3b68b59abd98ff"
+[[artifacts]]
+bytes = 123270
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_clear_claims!_4.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d45624d2ae0eea2f7c039f7472b17195f5813433755b126d22886baf45d93c72"
+[[artifacts]]
+bytes = 229796
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_commit!_10.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3f8ddefaae56726c39ce820daf6484072463c5a68df1bd0c417df6988e840c59"
+[[artifacts]]
+bytes = 860156
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_evaluate!_9.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1342b6c0fbd64b6176dc3e522cab57f8929213c8c13442b9c050094955ecc057"
+[[artifacts]]
+bytes = 230183
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_order_kernel!_3.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6826efd5853e5421545ccd16db6115393270009853ae5052c03a01c46488c300"
+[[artifacts]]
+bytes = 160218
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/checkerboard/gpu__checkerboard_select_conflicts!_8.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e158d53e3ad991bc054d6e25bae5bf26a43e5676ef455bddccb11d2aff37fabd"
+[[artifacts]]
+bytes = 3510
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "476256d283dd4217233afc074776b799bf78f68f670e87dc264d2d7da9943585"
+[[artifacts]]
+bytes = 11230
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/profile.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3d3fe0bc6483b606ff990a9e5b3572937ecfb2a9086abef4f7a18d63dbf93a51"
+[[artifacts]]
+bytes = 1291112
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/sequential/gpu__sequential_mcs_kernel!_1.asm"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7f7d2eafc64d137277f011eeaa8943d64015d512b0aa94a22eb9200e64e7c838"
+[[artifacts]]
+bytes = 18797
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/trace/rocprofv3-auxiliary.pftrace"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "20ad702b6dfa08db54fd7e42206ef853821ef292f1f5d0a9c802c6daad6b60d5"
+[[artifacts]]
+bytes = 3259883
+category = "qualified_evidence"
+path = "design/evidence/phase-13/device-code/rocm/trace/rocprofv3-main.pftrace"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "83953f60100dbd0187f39c2686bb2ba12716353f090559e2b0b438b846288de6"
+[[artifacts]]
+bytes = 1603
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c28e42577c06746f8e6d31610655996e86ba684d42cadc0339ec3b441ec3cfe3"
+[[artifacts]]
+bytes = 2434
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row10-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "146c6e9c3dc2f8a2275fe014a8f17437ab0bed0ce60e11d260e969f943fc9a3f"
+[[artifacts]]
+bytes = 2413
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row10-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "bf5a16c307997f855fc68f72550f1d2a1e869280a2ccac2304d289d5b03fc65d"
+[[artifacts]]
+bytes = 5318
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row3-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "75cd60ddbf2e8f063d080eae5f267d7d8c0b17346f3b01c6942d88c0f977ccf8"
+[[artifacts]]
+bytes = 6297
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row3-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0668516bd3288fc5282e1994b6450846d8b2acef68d0f0ac7852a02f9db9ac62"
+[[artifacts]]
+bytes = 5307
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row4-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6f092ee6faa4ba98f6cdbb84c8a019810e1aab74a2e884c3ffefcbb16abcc2b2"
+[[artifacts]]
+bytes = 6292
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row4-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "72d62091311890f9c7cb2d6eebfcee663f8e9028329454da0dab5f382c234dfa"
+[[artifacts]]
+bytes = 2432
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row9-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2a3be62b41937c036b2d14c5a4b583b55788ec281702091d5f341136dbb521bb"
+[[artifacts]]
+bytes = 2411
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/row9-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f0f5bd6cd9446b7ff14097b6a3c442f6f44b1c7cf5d173b4ca371fa5c62d6a07"
+[[artifacts]]
+bytes = 1569
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c5b433ea27f7a329c7b8adba28f3e5cd213ac84df6e120d18e2ef69d0a123200"
+[[artifacts]]
+bytes = 2392
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row10-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8a8ae1d36a9fc93e4f0ddc7cbfea1598e38faac5617df68937660c1b855c6baf"
+[[artifacts]]
+bytes = 2366
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row10-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "34c05bedaa8440898b61d754596615fb873f97659455fdb493d1c1d778e3e091"
+[[artifacts]]
+bytes = 5276
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row3-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "fe6ef8f525b8f1f45d996acf2d89beeef77082c7264c8c94244849d21d63512a"
+[[artifacts]]
+bytes = 6247
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row3-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d649eee34aa176cfd058c5f961adc5f9dc1c140dff1b73afa66e9469488f261f"
+[[artifacts]]
+bytes = 5265
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row4-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b15a1eb134a627e4e1079d8328d1ac08d5fa693dfa620f3657d0db6ebc0e3fb0"
+[[artifacts]]
+bytes = 6245
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row4-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "cee3f47df5d0c18bb15e5a36da336246118b954cdf2e85bb75647b68b2fbbc1a"
+[[artifacts]]
+bytes = 2390
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row9-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d3bfda73390e852a732610edb5918e9dd632655a5b31fe0c5987464319a5a70a"
+[[artifacts]]
+bytes = 2364
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/cpu/v1/row9-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e6f0a4c5cb74cc05f76a70304ebcbe47a4450609f3b167b8f692249803e1e32b"
+[[artifacts]]
+bytes = 7529
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/eligibility.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "24100c723bb660bf82098a29d7a9042db01da0cbac0c94b7913781660f9151b1"
+[[artifacts]]
+bytes = 1116
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/diagnostic/v1-float64-adaptation-failure.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b32414278cc324143cb359345279d4c44237fc10c19d566651cd1c07bced0fe8"
+[[artifacts]]
+bytes = 1699
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6d6e2187d39f28d1142eee99c13ea5712f8afb8d65ef795fd64264cb6b46b0ae"
+[[artifacts]]
+bytes = 2438
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row10-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7af33d923e5253f4eff37791fc0baea9df8886dab58693217bacdc4617c7a49d"
+[[artifacts]]
+bytes = 2417
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row10-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c97bc2608e67d5c5b9fe129ed508acb12322c7824d347586b030a1675c182136"
+[[artifacts]]
+bytes = 5322
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row3-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a654e437b05b8935ab3152cb75e86ce0de8131f7b80ddbe5d0d66d3d9909b16a"
+[[artifacts]]
+bytes = 6301
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row3-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b6b8c9e4a3b4b6346f2bdcd065c2032e7571d319b83166bb494e0cedcee1eec5"
+[[artifacts]]
+bytes = 5311
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row4-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9b78e7476b0163bb642b559441d11a9af2292cc6c455d6ec5eca742e4fc431e0"
+[[artifacts]]
+bytes = 6296
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row4-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ec865b9f161e4043bf9033552c32b41039f90a63e264d23e8010227815321a2d"
+[[artifacts]]
+bytes = 2436
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row9-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c683f92f5915393fee0b9f6ef9e12e9c8e8a75141cc870fbfbf28450d8e01837"
+[[artifacts]]
+bytes = 2415
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/metal/row9-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3a81c2b36b603e58821ba048dd23bf79c0a3e2f99243b425ac24ce22c6b19573"
+[[artifacts]]
+bytes = 2117
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9eca93840e2bf251ab0124bd1c600c07d31bcfc6fa9ce03087ee14c14b8b88b8"
+[[artifacts]]
+bytes = 2410
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row10-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ebce96675d3390228be5fac27ccc3220fc2b4d9951d2d043407705f549bff7e9"
+[[artifacts]]
+bytes = 2384
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row10-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e1872cfddce9b77afdaedca676fe1c1f4d727a0291f02f81a83942e99add7da3"
+[[artifacts]]
+bytes = 5294
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row3-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c8a0c57e511ddb206f3a611860dfa675ca8b75a0fe6148fef5c8e7a3bbc3240b"
+[[artifacts]]
+bytes = 6267
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row3-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ddc00d097e8e26e361062dc9687eb60c4e0e5315b6db2ab245c2d8fe706b0cdb"
+[[artifacts]]
+bytes = 5283
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row4-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e7d8a5f8093783071b2e9ae7a58dc48d8f4333dc30ee90b0490ab215b18b97a2"
+[[artifacts]]
+bytes = 6263
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row4-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3aa4176a86e540507405c85020dd8c725c707245af4cbf3ec7492b35a9450c9d"
+[[artifacts]]
+bytes = 2408
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row9-checkerboard-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9c19532ca39116deeb7db7ae4427bfc515a20eeb32c4c6db26f2e9a9e259c94b"
+[[artifacts]]
+bytes = 2382
+category = "qualified_evidence"
+path = "design/evidence/phase-13/empirical/rocm/row9-sequential-qualification.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "66434c290319914ab7a6790be89cca8020910605f5f56ac401eb76df0b7b2900"
+[[artifacts]]
+bytes = 13549
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-moore-noflux-zero-mixed-checkerboard-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "354ad69c0aa45bdd9955d3c7292715f1afdc39aa28a1fee8359265f7a25b5787"
+[[artifacts]]
+bytes = 14520
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-moore-noflux-zero-mixed-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9b5079ea1bfabe4e77795ba826f697dc0113fcd0fddfa2a9e342027627c3930e"
+[[artifacts]]
+bytes = 11786
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-moore-noflux-zero-mixed-primitive.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9763ef566e0e74ae67965c88cf6e26120709e352e25c5c780571d440a107f027"
+[[artifacts]]
+bytes = 20379
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-vn-periodic-zero-sparse-checkerboard-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "61d84150aef3345c1c7eaa0449963cc507b574c23582bd0b52d3fa0e7753148b"
+[[artifacts]]
+bytes = 26066
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-vn-periodic-zero-sparse-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dca64972a4713f2ebc0fcd74a5d90c6496dd57e4b8ae3fd30a056235adb107e7"
+[[artifacts]]
+bytes = 12311
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/2d-vn-periodic-zero-sparse-primitive.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6371ca70366a702cf21c0ad77a143823e79635f2cbb06656d7d06422e2a91a13"
+[[artifacts]]
+bytes = 4550
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/3d-vn-noflux-zero-lowering-checkerboard-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "82ed8c63bfbbc691f4f98937eedcf1317c727d649a2fccadbaeffd228812619e"
+[[artifacts]]
+bytes = 4510
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/3d-vn-noflux-zero-lowering-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "87e9d568ba3f9375f14bfdb7573c9314e7437343fdef75f0e328e42305c78239"
+[[artifacts]]
+bytes = 4208
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/3d-vn-noflux-zero-lowering-primitive.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a297bbfd18327eeff3e972bcf96a669e93b00f17c8089812e1a4749d78e6e0bc"
+[[artifacts]]
+bytes = 4459
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/hand-derived-1d-noflux-zero-checkerboard-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9b3fe6e28f814c4db5ce8b1e1798edcfc476a515b6a78d23cf849fb571351794"
+[[artifacts]]
+bytes = 4415
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/hand-derived-1d-noflux-zero-normalized-mcs.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "98fba211fda1bb775c57c870819367f211e55aa71971dcbbc5722c73beeaa35c"
+[[artifacts]]
+bytes = 4134
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/hand-derived-1d-noflux-zero-primitive.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3fb9204013360aa9f1eca2d3b9f845fcf4e55cd22caa639bea33c19721436235"
+[[artifacts]]
+bytes = 2053
+category = "qualified_evidence"
+path = "design/evidence/phase-13/exact/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c0f4fb8be30a169b961817c1564cac6903ce1fd7773a66c19d9d79ca82eb5764"
+[[artifacts]]
+bytes = 2778
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9bfa29577441e79bbecae938fb5dc87bb35b8b146f206044ee4765044745ee42"
+[[artifacts]]
+bytes = 3235
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/observable-drift.svg"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a0e4aafa239bffbe1dc3779be146eb45745d1664fd81979e60a0a1bfeaf11928"
+[[artifacts]]
+bytes = 2508
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/probability-current.svg"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4ceb23f43b6de6b86e0a461dcb75146ab2fcb28772b5ccdb9fdd2ade3cd19826"
+[[artifacts]]
+bytes = 3402
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/relaxation-gap.svg"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "796bd34befabdcfba47e168a84ed9e6677c58eecd9b603ff097f10b53589031c"
+[[artifacts]]
+bytes = 3096
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/speed-fidelity.svg"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b06a40f747954f21599828244c10618f76e644ede06af0718c8552d930bfe41c"
+[[artifacts]]
+bytes = 2584
+category = "qualified_evidence"
+path = "design/evidence/phase-13/figures/transition-difference.svg"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c912238dde4444376f7d109bb2a8190856f9eeb2687593bdcb3d1d0d48618af2"
+[[artifacts]]
+bytes = 567565
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/adhesion_volume_relaxation-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1f7caf873c945ce72ef367795cdf1f733f76cc9720f6c27012d65f178713074f"
+[[artifacts]]
+bytes = 559187
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/adhesion_volume_relaxation-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b669f3d98af6545766bf76a846f4ade75cf59b856aeb2e1c7195c03368c3f8fb"
+[[artifacts]]
+bytes = 19091
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/algorithm-family-analysis.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "98f323622c600c1f2a01b538cd38ba2d3dd4bca5e095ebbf542c2526b19b0fad"
+[[artifacts]]
+bytes = 740002
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/differential_adhesion_sorting-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d1b4fbe4f550466519a39b64bcadf2c47856d0c75994094484a835a80317c1bc"
+[[artifacts]]
+bytes = 734846
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/differential_adhesion_sorting-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3bc23f6b7d77d18207627befa2ea9da6c6821f99657aaa5026c56ad3001b4a35"
+[[artifacts]]
+bytes = 2371
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "af760c48d8a50202a538e68ac90f3c8b25efc4fdd0a70d2f97850de711a8d25f"
+[[artifacts]]
+bytes = 675381
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/single_cell_migration-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "50ade4158c5ae10f8b7129697992c039128278ecff224cc0813aa9acb6c72aa6"
+[[artifacts]]
+bytes = 670133
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/single_cell_migration-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "374f8da8622afcf0d097a61147c1eacba823633dca6b59b17991e11e91dfb208"
+[[artifacts]]
+bytes = 567574
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/adhesion_volume_relaxation-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2fb93cdfe595d5b7ce1f8b559453132e1b093311f1bcb2faafd61da1e4fc8c92"
+[[artifacts]]
+bytes = 559150
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/adhesion_volume_relaxation-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d9287937370beaa8f1ef5bd6707336c3f7d05e6e860b8d78f1adb046920f5342"
+[[artifacts]]
+bytes = 19091
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/algorithm-family-analysis.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "98f323622c600c1f2a01b538cd38ba2d3dd4bca5e095ebbf542c2526b19b0fad"
+[[artifacts]]
+bytes = 740090
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/differential_adhesion_sorting-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9c900f80a5c4fa95dec251e89c4252aa3fe54a9d7b9cea044bafc9f990dbed3a"
+[[artifacts]]
+bytes = 735020
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/differential_adhesion_sorting-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b6208d4e1ab56124cd6fb9dc7629432a66b9f3ba40dac8ded0916ca22e1703ce"
+[[artifacts]]
+bytes = 2331
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a989e095cb26d392fcb9785ae802f479a25d78cd67e9aec4698fd53d9ae6edd1"
+[[artifacts]]
+bytes = 675331
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/single_cell_migration-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f6be25805be73bf822e8ed63f36e6c14e896c26e1e9d5ef9e7ddf3b8929ff702"
+[[artifacts]]
+bytes = 670173
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/cpu/v3/single_cell_migration-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6890a4eb85093b7d6195e6ce08d2958c5c39c837de14c48ab5489ab2d788c5eb"
+[[artifacts]]
+bytes = 11399
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/adhesion_volume_relaxation-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5e903f3db01e65e8a3ed0ad38b35080fced1d7ebab9567f08c071615c408548d"
+[[artifacts]]
+bytes = 11225
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/adhesion_volume_relaxation-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1f44f8ede802febc81edd517bdadc52a222b3579d807bb5f79d62426a1d0ad64"
+[[artifacts]]
+bytes = 14132
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/differential_adhesion_sorting-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "95f6d89d17a02b98b6af621e61122437d2cb8464768309817518605b10081cad"
+[[artifacts]]
+bytes = 14033
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/differential_adhesion_sorting-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "576b58fed6ac33f45cb79ce8a19169a821beb63c4dd64a749f3f445345ca7f27"
+[[artifacts]]
+bytes = 1967
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d719326ec7d5f0c15ed0d66b743f905162fdd09ba98e44ba7e40b9c0db639cbc"
+[[artifacts]]
+bytes = 13064
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/single_cell_migration-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "edade9d327ffad01cd2157eaaecf7fb0d887507e39ea1fbe859c54479846d970"
+[[artifacts]]
+bytes = 12959
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/cpu-speed/single_cell_migration-SequentialCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "05dcd78059837c28f97b090c1ece86cc2246eb70b29dcc7ee82253e5b6573a66"
+[[artifacts]]
+bytes = 1637
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/v1-extinction-preflight.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "98476905b44ea9d21059363e972c4b4434581056d85b45d4ed9f543beba42e60"
+[[artifacts]]
+bytes = 2856
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/diagnostic/v3-metal-infrastructure-preflight.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3767844c30d2ddbfd230e6e97029d2e012b293d22b14db5ce9b706d82c570bf8"
+[[artifacts]]
+bytes = 623
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0c1c803999b58a250703f9e58baaeaf59b3714c2719a62b88598dbe6bfd235be"
+[[artifacts]]
+bytes = 19812
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/metal/CheckerboardSweepCPM-portability-family.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dd7826fad4b2e7f2e1732cc312a2856b73a2c58d698f29c3697ecfa106a4667a"
+[[artifacts]]
+bytes = 573155
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/metal/adhesion_volume_relaxation-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e03f3bbb8e6a3d5f00cf3af7cbd2b0abcbd8a6b3a20e5bdb484acb709a1e3901"
+[[artifacts]]
+bytes = 745884
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/metal/differential_adhesion_sorting-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9f492807a10a5e2a8b2b956701cbe083380d1a5393d8b21477ee554d8f1ca726"
+[[artifacts]]
+bytes = 1727
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/metal/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "feaee9eadb6d3c0443345f1d9f38f7bf1ebd32cc165fe49ce91476ca03ffa3b4"
+[[artifacts]]
+bytes = 681798
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/metal/single_cell_migration-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e78a3d37e25b14b5052cc7dd94fcbcd711d77cc6d208daab81ccd003f1151494"
+[[artifacts]]
+bytes = 20174
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/rocm/CheckerboardSweepCPM-portability-family.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3087ff4ddc1e13c673e094862cc9acb38843f496224bd3e63619c0baa4e682e0"
+[[artifacts]]
+bytes = 572398
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/rocm/adhesion_volume_relaxation-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "23e8968e31069b4f11e8e0c37d0324d4c6093ff70abb4768427f62d483d36a55"
+[[artifacts]]
+bytes = 745285
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/rocm/differential_adhesion_sorting-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "05420c2acc919a88b05bca28176f59be80adccaad9342d2dd11ab691bb70d97e"
+[[artifacts]]
+bytes = 1854
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/rocm/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2562c778c08331188c1276e5a1af33a831235b60aa29e28e6ec64af20ec9e75d"
+[[artifacts]]
+bytes = 680505
+category = "qualified_evidence"
+path = "design/evidence/phase-13/realistic/rocm/single_cell_migration-CheckerboardSweepCPM.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "97156b6ed8ebcfe51f1d507f5f365492c1f98d3e489351d643ffe9a0c5f79714"
+[[artifacts]]
+bytes = 5773
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-corepotts-full.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ed1d136589662c639253499dc8e9b60c76c256e24d865bd7c12e9b2f4ab44083"
+[[artifacts]]
+bytes = 457
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3a-generic-authoring.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "19525431ae94648710093d12c20775f88ab010527365225c9d4d1a0c706509f3"
+[[artifacts]]
+bytes = 194
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-assembled-conformance.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c34aa4e0acc9d566583c2778d8113a634ccb5fa1a4e0b2ed3228c7e182bc9b11"
+[[artifacts]]
+bytes = 52
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-entry-contract.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ae926adc228105eb8b407f5287efd452ccc55c95df3d07a86433d0d501af660c"
+[[artifacts]]
+bytes = 174
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-failure-matrix.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ffc948a98a21170fdf01f649d9c26e83903a0880a45dafcf7d6490957924668d"
+[[artifacts]]
+bytes = 181
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-observation-matrix.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0475931ee4b878ad79ad1b703520109985ae2b0caff806259e2fd54ca8b55cad"
+[[artifacts]]
+bytes = 177
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-portable-abi.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4f91b41c8af4cacf2658393810087623ce2b1deddd9bef1131559030db46e361"
+[[artifacts]]
+bytes = 168
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-resource-matrix.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ef3e72babfd600c723b86cf30d20fc83a9e0e863c2bb6b4cd981ac2397571c36"
+[[artifacts]]
+bytes = 152
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-g3b-restart-matrix.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0b0485c0564245feadaf502d1d2b68004048db49760ee64b070fdee64d715440"
+[[artifacts]]
+bytes = 140
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-legacy-containment.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "a249c8467ce5a58ec5795824aeb5b2531244ab7c9447d2d7337abd7e84bb5fdd"
+[[artifacts]]
+bytes = 103
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-phase13-api-inventory.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2c73b631311e477e0bc1dc8a01b6e1b9bbeaabdb2ed7c7e8affcdd6eacaa1e60"
+[[artifacts]]
+bytes = 3751
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-pottstoolkit-full.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4b4dff1f07962dc0730ae9b0b7d2cbf687a285fe7557fcc96aadf9e0b55737bf"
+[[artifacts]]
+bytes = 129
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-repository-structure.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "ba3223e176c114f758038ca001da8d71d985bdc9b90f04adb147116c72a47fba"
+[[artifacts]]
+bytes = 34
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/command-wang-order-oracle.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c30e12fa27b00c1352fc481735104cd37133d66a6395705e87b298cdfb7bf847"
+[[artifacts]]
+bytes = 5447
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/environment.txt"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "34afe565c1f62cf15386a5ad2cf4ad814341b12cd564bec726b93decd390c5f2"
+[[artifacts]]
+bytes = 19443
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/manifest-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e3762959d067fe0972af2e8e863f1663c4c112aa4552284b71d248294885f4f5"
+[[artifacts]]
+bytes = 4558
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-field-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6245ba25d240ab39a313d368014e89827874ff618d2925edbfa9780254c7ecf4"
+[[artifacts]]
+bytes = 5408
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-potts-fpp-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c6ffcdb5bad65b96a0e19ff44a1795b4ade55c06c1bcc3fb3db0fba88fc9f88d"
+[[artifacts]]
+bytes = 3766
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/phase-14-g3b-roadrunner-source-study.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "6a5c8620ec49f56d718b48f0568c436270137d61ce71533661eea36c95e6e882"
+[[artifacts]]
+bytes = 3352
+category = "qualified_evidence"
+path = "design/evidence/phase-14/g3b-closure/source-index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "07f94018be7e41691e29e05d56806892c5c5dc84f1208cbe4da45a119c566f59"
+[[artifacts]]
+bytes = 154
+category = "qualified_evidence"
+path = "design/evidence/phase-14/wang-order/cc3d-4.2.5-trace.csv"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "f304a82a5dca8c81b64cbdb2b444502d140f877954902e4bfff2f3fb191beabe"
+[[artifacts]]
+bytes = 3290
+category = "qualified_evidence"
+path = "design/evidence/phase-14/wang-order/index.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dd72874a8294fb71c28e2508f457ef7724de9b357c3f811b5268eb8e711a1581"
+[[artifacts]]
+bytes = 1238
+category = "qualified_evidence"
+path = "design/evidence/phase-16/native-field/cpu-exact-head.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c6526ad59d01f58e73ad1bcfe98839511372653015716f85da0e940cf41ed8de"
+[[artifacts]]
+bytes = 1237
+category = "qualified_evidence"
+path = "design/evidence/phase-16/native-field/cpu-qualified-exact-head.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7a12f51cc7c6f9da0354e0c9ec17ae1042f2334579c4cd1d8d682c5f75939de3"
+[[artifacts]]
+bytes = 1249
+category = "qualified_evidence"
+path = "design/evidence/phase-16/native-field/metal-local-exact-head.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2f024e68638efd697ba0dd439aafca5f9241e020f29cb3b9120a43d26c1ada73"
+[[artifacts]]
+bytes = 1240
+category = "qualified_evidence"
+path = "design/evidence/phase-16/native-field/metal-trusted-exact-head.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "cf0e8f9ae00e08599ad4172c90196d4292a2610110e559fc2250bfd6959a5367"
+[[artifacts]]
+bytes = 1237
+category = "qualified_evidence"
+path = "design/evidence/phase-16/native-field/rocm-trusted-exact-head.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4ff45308978cb55a5d2e6fc70def872c978d7604fd0957a4f0d0d685dd76ae7b"
+[[artifacts]]
+bytes = 1651
+category = "qualified_evidence"
+path = "design/evidence/phase-16/phase16i-authoring-performance.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "050dc8965785e7a190909d62fd6222b766f5abc4221257501d0a6a6dd69dc0f0"
+[[artifacts]]
+bytes = 7923
+category = "qualified_evidence"
+path = "design/evidence/phase-16/phase16i-candidate.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7028751add514adb5613d53d115fe2125e26dc5fbe21932e5ee0675c454f02a7"
+[[artifacts]]
+bytes = 3083
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-pb0-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "152b2a0d206020f4186e2b6ca38c6d152f494d10dce2aa420fdbdb546f3647ba"
+[[artifacts]]
+bytes = 3199
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase15a-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "fea5dfe0d3bdef8a983b7be1bccd3e75e2c8ba92ac734b70f4a42457c15b9f01"
+[[artifacts]]
+bytes = 5399
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase15b-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1351204bf17de98af4a9ba0032a1c3dc4e4d173869f0e6cb0a958d0d1456edfe"
+[[artifacts]]
+bytes = 6933
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase15c-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b6f834d7578325f45725712a068f3c0459dc00e8ca741adb69ba68ff0685761b"
+[[artifacts]]
+bytes = 2271
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16a-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "8a0bdbb65945a8b4a5bcd435f117538e7eab426531608608f3a99103f9833989"
+[[artifacts]]
+bytes = 2982
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16b-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "1376abc96f0cc0bb7209bc6e9a7bc74cda6355bd8a5f36dc524984ce9e9b8e57"
+[[artifacts]]
+bytes = 1697
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16c-candidate-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "0e1b7fd716f80b40f7e844427623f8783cadeab97002c3068940365c3925283d"
+[[artifacts]]
+bytes = 2964
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16c-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "997ebbea2db8d1ccde1e1179136a887bd902ac2e119f7f82a4abe509f5db142f"
+[[artifacts]]
+bytes = 2501
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16d-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c6b7b1383bee136f55d87de37537fad824f3a07d92db012abc34ac968a38883c"
+[[artifacts]]
+bytes = 4540
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16e-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b33d32b730890caa5b3ffa0a89c7592454c9b3f5dda02fe7dde5689ce1318364"
+[[artifacts]]
+bytes = 4153
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16f-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "4e4c19b4359ab33a0a6cfa4d96856205590a697a73640bb5e58a391d6f10eb40"
+[[artifacts]]
+bytes = 3096
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16g-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "aeef33f775983bec317bf88a7820bcf5296c879387d2d881b02b92ac2b999ab8"
+[[artifacts]]
+bytes = 4357
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16h-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "08d3a072a299bd1b8fa7e6877fead1ba63876c4fdfb02c2760b2be0f0be5f894"
+[[artifacts]]
+bytes = 1645
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16hc-authoring-performance-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d156c92a6a3584cefc2d1e157fe4b1aade04c61ede08c93d0201b4e488ebc942"
+[[artifacts]]
+bytes = 6606
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16hc-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "fb91a032f9334d948fbbda34b271699ef4bf7e106e8345dc6cead83787aa805e"
+[[artifacts]]
+bytes = 4119
+category = "qualified_evidence"
+path = "design/evidence/process-bigraph-phase16i-evidence-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e48e5dcd9cc78231ec5ab7121067e8bb8b89a07e618caed693f13073d16968c2"
+[[artifacts]]
+bytes = 21922
+category = "checker_source_record"
+path = "scripts/archive/potts-history/attest_phase14_g3b.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e14cf878bc485c2034907b9bbc76f8d44911c71b3a833a16dab5959e3375c98c"
+[[artifacts]]
+bytes = 2620
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase13_api_inventory.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e923bf64c477191a82404d9255bd329edbdfbbeaa562bd5c5dd8a02d2ced1520"
+[[artifacts]]
+bytes = 29755
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase14_0.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "8c41f1afb6faea738cd0d9560a2e02c327c693d1b47d7d00df59fc4ba108a41a"
+[[artifacts]]
+bytes = 326
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase14_g3a.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "790e439cbc4c3baeddd8ecd0dae72ff3f46a74f281068e44625bed9f50875c02"
+[[artifacts]]
+bytes = 13988
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase14_g3b_closure.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "7611d69af19eb57a402d97c59184d6457b483d1e13cb8de9cdb4028ad14565cf"
+[[artifacts]]
+bytes = 29859
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase14_g3b_entry.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "b1f66abe4ff6972f6a1a310f39620eb4d4c701aac630fef88b0bd36e4479deed"
+[[artifacts]]
+bytes = 2473
+category = "checker_source_record"
+path = "scripts/archive/potts-history/check_phase14_wang_disposition.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "b41d28636e86fedf78c205a6597d70a9efc22f39975103968dbabd7d9df00b15"
+[[artifacts]]
+bytes = 9560
+category = "checker_source_record"
+path = "scripts/archive/potts-history/generate_phase13_api_inventory.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e72fc5dcbbc48b3c343594c6d8f9d092c052bcd9751480b2fd0b887d1b4fb0d7"
+[[artifacts]]
+bytes = 16204
+category = "checker_source_record"
+path = "scripts/archive/potts-history/run_phase14_g3b_conformance.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "2d7e7bb9c135b975898b890386ef6bb1af41552a02a9dca8e4f915f894d8d608"
+[[artifacts]]
+bytes = 30218
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/check_process_bigraph_platform.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "93af3ff6315494b5fc91cd33fd2d56d5165f7adfb1bd8aa42797e077bc3a5884"
+[[artifacts]]
+bytes = 6379
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-pb0-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e76cc5b05d3a11be5055357bccf774f123456623205161bfb4eb03ad746506c1"
+[[artifacts]]
+bytes = 8108
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15a-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "6fa07641998ea5a3ab79f7cc59a50f4f19ca482204b226d0fabf09cbb747eb37"
+[[artifacts]]
+bytes = 13259
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15b-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "b82953b862d26ae157509de8af7b61f3a59baa824423ed2d253b8499df44bf4d"
+[[artifacts]]
+bytes = 5518
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15c-candidate.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "ec61f1f5a678832761aa34b75148c5464f37e4bdf893cdbbe64295807bc8c9e3"
+[[artifacts]]
+bytes = 12804
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15c-entry-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "d95a9bbf757709de0b16259c6bcb9b8b76ab94bd97ea1a116d06b74aaef5e13a"
+[[artifacts]]
+bytes = 6636
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15c-guardrails.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "9a4abb9b25f917bbdb03b0ffd60f3499b4f82c46a432f365b6842df8465bfdb4"
+[[artifacts]]
+bytes = 1453
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase15c-oracle.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "686ddf048d2922a1cc15febdc72c560cd75b6b86f9bdab9326778eb3a65e6682"
+[[artifacts]]
+bytes = 1115
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16-closure-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e2d083f030a62b99baf200bb6f2bc1ce6d14ce31c8a691ac722158b74473b131"
+[[artifacts]]
+bytes = 4810
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16-docs.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "09feb8b2de3cd0330ae2f405b4e4506dbabdedd1bff08d5c48784b140b4f503b"
+[[artifacts]]
+bytes = 25078
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16-entry-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "d0759096abe7475ec76b49a42de3e792aa905d11369c368199702bb994148baf"
+[[artifacts]]
+bytes = 6903
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16b-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "e2c2dfb7cc21d935513ba22e448792922c90c51a36cba0ab164c2b9f11117243"
+[[artifacts]]
+bytes = 10565
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16c-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "42c96c6f67cb6240bd3b627f45b71354f1a1b20a9f161191160c44f072842d31"
+[[artifacts]]
+bytes = 7697
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16d-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "2f1cee36dfc63323c6a4fae69b088a5b91369af04ef73f554ab0e950546c268d"
+[[artifacts]]
+bytes = 11336
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16e-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "84d74ec1d36e72002c24358c1535bc6960342e38d62a4ac060584a33b28b0313"
+[[artifacts]]
+bytes = 11130
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16f-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "5f8a51b6cecac9afa564ec06a3aa76610a20a15c1eb431c30bcb98a58ae3b077"
+[[artifacts]]
+bytes = 8022
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16f-consolidation-spec-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "00c576131c29f0360a5398051a894dcea7d2ac79c84be84c054938addd50764a"
+[[artifacts]]
+bytes = 8820
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16g-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "7ce52c264094df8082104090b7936d42aec6f4aa482f7b2005e80297b4458fd5"
+[[artifacts]]
+bytes = 10948
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16h-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "83cdd9c2a0048e3e8bebb50029e404d41dabf5dc80ee766a237bf42a167ef9d0"
+[[artifacts]]
+bytes = 14298
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16hc-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "9516a84478c63b7e5e926ed048888ae44c1aa9bbf915a34103c6423989eb142b"
+[[artifacts]]
+bytes = 2103
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16hc-ir-guard.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "cb1849ed4787c4c40ed3d32e136764941631e2eeba0bb6d9f18ea56b26676ca6"
+[[artifacts]]
+bytes = 9517
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16i-candidate.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "19f490cdfbba54c24f8cd65472c5a89d016f4652b10144f07fea0581f949c9f8"
+[[artifacts]]
+bytes = 12666
+category = "checker_source_record"
+path = "scripts/archive/process-bigraphs/process-bigraph-phase16i-check.jl"
+reproduction = "checkout_baseline_commit_for_original_path"
+sha256 = "6e7eec342373b7b96b7c87cf267b7ebb2b7561c65ece7b96186e02fe35085bab"
+[[artifacts]]
+bytes = 6532
+category = "historical_specification"
+path = "spec/decisions/0016-phase-7-algorithms-and-auxiliary-state.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "96882a4bb8b047e836bb5215f1197c2b3aa5c237cdc087f3eeaacf9b8d4be6fa"
+[[artifacts]]
+bytes = 3532
+category = "historical_specification"
+path = "spec/decisions/0020-phase-8-minimality-boundary.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "63dfe9206d241cd71ae83c3e13c93c133cda2b76480c2d26671cf97e31714c40"
+[[artifacts]]
+bytes = 8816
+category = "historical_specification"
+path = "spec/decisions/0025-phase-9-sciml-and-gpu-interface.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "00c987bc4ad21786bdc6520df7e30c489f8c504fea311b3f1460ce0128239483"
+[[artifacts]]
+bytes = 17466
+category = "historical_specification"
+path = "spec/decisions/0026-phase-10-typed-api-and-compiler.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "5db4c5ef396521a98e1a51b33687434d8256eb046715e0999e7896aee0dd513d"
+[[artifacts]]
+bytes = 3474
+category = "historical_specification"
+path = "spec/decisions/0027-phase-13-transition-kernel-verification.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "9c8bcfc2456e84806e3bf43c30e5093b1d94f611766b6ea1c7bf0aedadfadd80"
+[[artifacts]]
+bytes = 5913
+category = "historical_specification"
+path = "spec/decisions/0028-phase-13-entry-and-freeze-policy.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "240b660bed8e5009147ad5107cb1cbfb7dca47d79fbbbfeccebfac12b68b9592"
+[[artifacts]]
+bytes = 9664
+category = "historical_specification"
+path = "spec/decisions/0029-phase-14-model-driven-capability-and-documentation-policy.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "66f4216b1e5f6d322a5a9be422ec60cd859b2bc2211a262caac115eecc24a534"
+[[artifacts]]
+bytes = 7940
+category = "historical_specification"
+path = "spec/decisions/0030-phase-14-coupled-dynamics-and-freeze-impact.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "c34cc2117769cccb59e24e752d3bebf02348540b1b3480149d0e4c1d1e5d82b6"
+[[artifacts]]
+bytes = 10506
+category = "historical_specification"
+path = "spec/decisions/0031-phase-14-single-semantic-kernel.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d8fd8f1a986f9036b71e1b6167ea50989e94af6e80842aa4bf585333d5531777"
+[[artifacts]]
+bytes = 5683
+category = "historical_specification"
+path = "spec/decisions/0032-phase-14-gpu-native-promotion.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "007578b880a2c5c396a92ebde491468a4870a339a4c16640377625bf461dafe2"
+[[artifacts]]
+bytes = 6593
+category = "historical_specification"
+path = "spec/decisions/0033-phase-14-generic-hierarchical-authoring.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "d75de6cfa691fb58cfd0d734beb1b314b5db973ad774458ff9bb1cf5105b6df2"
+[[artifacts]]
+bytes = 12115
+category = "historical_specification"
+path = "spec/decisions/0039-phase-16-compute-ownership-and-scope.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "92c25a46a8408946e0c05eb84368e5224abca03fe4fcd93cbeec06d58801721b"
+[[artifacts]]
+bytes = 18075
+category = "historical_specification"
+path = "spec/phase-14-cell-and-field-dynamics-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "34cee8ba4775e04a355d75a641381fd0f7a86e90d8638dc13658da01fd4e61d4"
+[[artifacts]]
+bytes = 33464
+category = "historical_specification"
+path = "spec/phase-14-continuous-systems-and-morpheus-compatibility.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7aa4265bc88f7f1dcca0fd74f33df64ba4c3a35621fc7b3f679e06b0453210bf"
+[[artifacts]]
+bytes = 31486
+category = "historical_specification"
+path = "spec/phase-14-contract-registry-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b195762c79a225e9cc21bc3240f4ed6187ed9d5a8408ec014e85df51c28c8acb"
+[[artifacts]]
+bytes = 22413
+category = "historical_specification"
+path = "spec/phase-14-contract-registry-v2.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "e5e09108e38ff113ef9374f3d432eab4146a9c5606b794ecd99a0f5f68ce464d"
+[[artifacts]]
+bytes = 46739
+category = "historical_specification"
+path = "spec/phase-14-coupled-dynamics-api.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2f4552b5b4b35a5d41e3c1ef339b7e46d054d85d1540762294b8257b0eb5372c"
+[[artifacts]]
+bytes = 25234
+category = "historical_specification"
+path = "spec/phase-14-coupled-execution-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "df6b52bd60b3588c560f2607ad0ffd5929326c260734a850872e2f8c99a2e956"
+[[artifacts]]
+bytes = 18368
+category = "historical_specification"
+path = "spec/phase-14-coupled-persistence-and-observation-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "86ae4ba4a9802f0b73af2e7d2974669bcc3303bd4c7143332c558c8f3df766ed"
+[[artifacts]]
+bytes = 21909
+category = "historical_specification"
+path = "spec/phase-14-dynamic-state-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "599cbbe1238f2d8c5dee76ffb7324be4d9bc67120a2a08894347e97fc1f36df8"
+[[artifacts]]
+bytes = 17218
+category = "historical_specification"
+path = "spec/phase-14-relationship-and-lifecycle-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "453c4651559e3b2f0fbecf3932d3cf174518c23b3f8308bb4d1220b7cc672014"
+[[artifacts]]
+bytes = 37363
+category = "historical_specification"
+path = "spec/phase-14-semantic-kernel.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "2e0931b494b9c492a104d52a82d81018190bea460c3346f110b268a68ce53179"
+[[artifacts]]
+bytes = 10983
+category = "historical_specification"
+path = "spec/phase-14-spatial-and-attempt-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "fa79b82261f0ae4b34ecd60fc7e67424199a3140a7861c95c63cfeaf2dabac37"
+[[artifacts]]
+bytes = 29922
+category = "historical_specification"
+path = "spec/phase-16-engine-field-structural-and-adapter-semantics.md"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "813236eadba3b6b30d59b8307862901dfb54c122b17b0a8ff258a77b70c02e00"
+[[artifacts]]
+bytes = 12946
+category = "historical_specification"
+path = "spec/process-bigraph-phase15c-entry-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "72a3195fd19e76e028d0d7286339bfe1f5e4886386c591e271266bfb4174a625"
+[[artifacts]]
+bytes = 4631
+category = "historical_specification"
+path = "spec/process-bigraph-phase15c-qualification-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "13628c58cc6a516f061173ea0fc98b59f9c7f25744ee9ba089c9c80a7a93d4e7"
+[[artifacts]]
+bytes = 8089
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-api-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "30149d752d61fdc34a7b512b404a248e64075d5363385316adc5cdffc2b42dea"
+[[artifacts]]
+bytes = 2770
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-backend-matrix-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "b7daccdf912428897fa2814396acd389d6d267e7f997cb6104264cf31d0a7cd0"
+[[artifacts]]
+bytes = 6775
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-cnv-trace-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "db574d2dac16ea4c76b6b4d2df845a1fa0c7d74d0e8d90b781bece8a2eb7f7f2"
+[[artifacts]]
+bytes = 12770
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-entry-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "7cf05a13d0b81f36bc78676f784ff798ad0ebba79198a5d6679d153b97ca7f22"
+[[artifacts]]
+bytes = 6672
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-merks-trace-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "dbe5013f43be43203fd5d8da6636dae25cd2aca077119c67eb9248d8e836ea9b"
+[[artifacts]]
+bytes = 3662
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-migration-registry-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "de4660e919479b820a5cc8735775b60d2cbab609471b8e840e2128078c32c10b"
+[[artifacts]]
+bytes = 2502
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-model-scope-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "36708770a122407012ca2eae4408c23ab37b15e7479683a828165db871a49c22"
+[[artifacts]]
+bytes = 13358
+category = "historical_specification"
+path = "spec/process-bigraph-phase16-qualification-v1.toml"
+reproduction = "immutable_current_tree_artifact"
+sha256 = "3ff59574ddb8c82d493c072562032ba73d0b51ff22133ea5ca84ed37d8b58eba"

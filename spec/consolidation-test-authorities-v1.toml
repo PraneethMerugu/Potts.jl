@@ -1,0 +1,111 @@
+schema_version = "1.0.0"
+status = "qualified"
+policy = "Reusable fixtures live only in test or integration trees. Production code is never a fixture authority. Independent evidence implementations remain separate from production."
+
+[[fixtures]]
+scenario = "process_bigraph_micro_runtime"
+authority = "lib/ProcessBigraphs/test/runtime/test_serial_microfixtures.jl"
+consumers = [
+    "lib/ProcessBigraphs/test/authoring/test_high_level_authoring.jl",
+    "lib/ProcessBigraphs/test/structure/test_algebraic_structure.jl",
+    "lib/ProcessBigraphs/test/structure/test_open_composition.jl",
+]
+independent_oracle = false
+
+[[fixtures]]
+scenario = "process_bigraph_serial_runtime"
+authority = "lib/ProcessBigraphs/test/fixtures/serial_runtime.jl"
+consumers = [
+    "lib/ProcessBigraphs/test/authoring/test_authoring_equivalence.jl",
+    "lib/ProcessBigraphs/test/runtime/test_serial_scheduler.jl",
+    "lib/ProcessBigraphs/test/persistence/test_restart_matrix.jl",
+    "lib/ProcessBigraphs/test/persistence/test_checkpoint_v2.jl",
+]
+independent_oracle = false
+
+[[fixtures]]
+scenario = "process_bigraph_specification_oracle"
+authority = "lib/ProcessBigraphs/test/specification_oracle/fixtures.toml"
+consumers = [
+    "lib/ProcessBigraphs/test/specification_oracle/oracle_driver.jl",
+    "lib/ProcessBigraphs/test/specification_oracle/production_driver.jl",
+    "lib/ProcessBigraphs/test/specification_oracle/compare.jl",
+]
+independent_oracle = true
+
+[[fixtures]]
+scenario = "transition_kernel_registered_cases"
+authority = "integration/transition/TransitionFixtures.jl"
+consumers = [
+    "integration/conformance/test_transition_fixtures.jl",
+    "integration/transition/ProductionTransitionSampler.jl",
+    "integration/transition/TransitionKernelOracle.jl",
+]
+independent_oracle = true
+
+[[fixtures]]
+scenario = "wang_model_execution"
+authority = "integration/conformance/wang_model_fixture.jl"
+consumers = [
+    "integration/conformance/test_wang_execution_order.jl",
+    "integration/conformance/test_wang_model_authoring.jl",
+    "integration/conformance/test_wang_model_runtime.jl",
+    "integration/conformance/test_wang_sequential_disposition.jl",
+]
+independent_oracle = false
+
+[[fixtures]]
+scenario = "makie_backend_contract"
+authority = "lib/MakiePotts/test/backends/common.jl"
+consumers = [
+    "lib/MakiePotts/test/backends/cairo.jl",
+    "lib/MakiePotts/test/backends/gl.jl",
+    "lib/MakiePotts/test/backends/wgl.jl",
+]
+independent_oracle = false
+
+[[fixtures]]
+scenario = "makie_visual_regression"
+authority = "lib/MakiePotts/test/visual_reference_scene.jl"
+consumers = ["lib/MakiePotts/test/visual_regression.jl"]
+independent_oracle = true
+
+[[contract_suites]]
+id = "managed_engine_adapters"
+authority = "lib/ProcessBigraphs/test/engine/test_engine_field_protocol.jl"
+implementations = ["fixture_adapter", "CorePottsNativeFieldEngine"]
+
+[[contract_suites]]
+id = "solver_adapter_protocol"
+authority = "lib/ProcessBigraphs/test/engine/test_solver_adapter_contract.jl"
+implementations = ["fixed_step_fixture", "SciML"]
+
+[[contract_suites]]
+id = "cross_adapter_field_behavior"
+authority = "lib/CorePotts/test/test_solver_adapter_contract.jl"
+implementations = ["native", "SciML", "independent_custom"]
+
+[[contract_suites]]
+id = "native_field_backends"
+authority = "lib/CorePotts/test/test_native_fields.jl"
+implementations = ["CPU", "Metal", "ROCm"]
+
+[[contract_suites]]
+id = "checkpoint_codecs_and_restore"
+authority = "lib/ProcessBigraphs/test/persistence/test_logical_checkpoint.jl"
+implementations = ["current_logical", "legacy_v2_conversion", "managed_engine"]
+
+[[contract_suites]]
+id = "authoring_lowering_equivalence"
+authority = "lib/ProcessBigraphs/test/authoring/test_authoring_equivalence.jl"
+implementations = ["compose_builder", "canonical_structure"]
+
+[[contract_suites]]
+id = "backend_conformance"
+authority = "integration/conformance/test_harness.jl"
+implementations = ["CPU", "CUDA", "Metal", "ROCm"]
+
+[[contract_suites]]
+id = "parallel_algorithm_replay"
+authority = "lib/CorePotts/test/support/algorithm_contracts.jl"
+implementations = ["CheckerboardSweepCPM", "LotteryCPM"]

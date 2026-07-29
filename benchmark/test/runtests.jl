@@ -1,12 +1,12 @@
 using Test
 using TOML
 
-include(joinpath(@__DIR__, "..", "src", "Phase12Comparison.jl"))
-using .Phase12Comparison
-include(joinpath(@__DIR__, "..", "src", "Phase12PairedRunner.jl"))
-using .Phase12PairedRunner
+include(joinpath(@__DIR__, "..", "src", "PerformanceComparison.jl"))
+using .PerformanceComparison
+include(joinpath(@__DIR__, "..", "src", "PairedPerformanceRunner.jl"))
+using .PairedPerformanceRunner
 
-@testset "Phase 12 shared paired worker" begin
+@testset "performance comparison shared paired worker" begin
     worker = joinpath("relative", "harness", "performance_worker.jl")
     subject = joinpath("relative", "subject")
     command = paired_worker_command(worker, subject;
@@ -25,10 +25,10 @@ function synthetic_record(process_id; steady = 1.0, first_mcs = 2.0,
         fingerprint = "model-fingerprint", device_allocations = 0,
         julia_threads = 1)
     return Dict(
-        "schema_version" => PHASE12_SCHEMA_VERSION,
+        "schema_version" => PERFORMANCE_SCHEMA_VERSION,
         "record_kind" => "phase12-performance-run",
         "comparison_identity" => Dict(
-            "contract_version" => PHASE12_CONTRACT_VERSION,
+            "contract_version" => PERFORMANCE_CONTRACT_VERSION,
             "workload_set_version" => "paper-core-1.0.0",
             "harness_tree_sha256" => "harness-tree",
             "backend" => backend,
@@ -87,7 +87,7 @@ function synthetic_record(process_id; steady = 1.0, first_mcs = 2.0,
     )
 end
 
-@testset "Phase 12 CPU scaling summary" begin
+@testset "performance CPU scaling summary" begin
     groups = Dict{Int, Vector{Any}}()
     for threads in (1, 2, 4)
         groups[threads] = Any[synthetic_record(
@@ -132,10 +132,10 @@ function synthetic_cold_record(process_id; scale = 1.0, hardware_id = "cpu-arm64
         "normalization_seconds", "lowering_seconds", "problem_construction_seconds",
         "initialization_seconds", "first_mcs_seconds")))
     return Dict(
-        "schema_version" => PHASE12_SCHEMA_VERSION,
+        "schema_version" => PERFORMANCE_SCHEMA_VERSION,
         "record_kind" => "phase12-cold-run",
         "comparison_identity" => Dict(
-            "contract_version" => PHASE12_CONTRACT_VERSION,
+            "contract_version" => PERFORMANCE_CONTRACT_VERSION,
             "cold_workload_version" => "differential-adhesion-1.0.0",
             "cold_harness_tree_sha256" => "cold-harness",
             "backend" => "cpu",
@@ -160,10 +160,10 @@ end
 
 function synthetic_precompile_record(process_id)
     return Dict(
-        "schema_version" => PHASE12_SCHEMA_VERSION,
+        "schema_version" => PERFORMANCE_SCHEMA_VERSION,
         "record_kind" => "phase12-precompile-run",
         "comparison_identity" => Dict(
-            "contract_version" => PHASE12_CONTRACT_VERSION,
+            "contract_version" => PERFORMANCE_CONTRACT_VERSION,
             "precompile_workload_version" => "isolated-environment-1.0.0",
             "precompile_harness_tree_sha256" => "precompile-harness",
             "backend" => "cpu",
@@ -192,7 +192,7 @@ function synthetic_precompile_record(process_id)
     )
 end
 
-@testset "Phase 12 comparison contract" begin
+@testset "performance record comparison contract" begin
     baseline = [synthetic_record("baseline-$index"; steady = 1 + 0.01index)
                 for index in 1:3]
     faster = [synthetic_record("faster-$index"; steady = 0.9 + 0.01index,
@@ -311,7 +311,7 @@ end
     @test_throws ArgumentError aggregate_records(baseline[1:2])
 end
 
-@testset "Phase 12 cold comparison contract" begin
+@testset "cold-start performance comparison contract" begin
     baseline = [synthetic_cold_record("baseline-cold-$index") for index in 1:3]
     faster = [synthetic_cold_record("faster-cold-$index"; scale = 0.9) for index in 1:3]
     result = compare_cold_record_groups(baseline, faster)
@@ -335,7 +335,7 @@ end
     @test any(contains("at least 3"), result["issues"])
 end
 
-@testset "Phase 12 precompile record contract" begin
+@testset "precompile performance record contract" begin
     record = synthetic_precompile_record("precompile-1")
     @test isempty(validate_precompile_record(record))
 

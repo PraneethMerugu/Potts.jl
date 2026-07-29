@@ -47,14 +47,22 @@ jobs:
         run: |
           julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
           julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Qualify Phase 12.5 Metal tiled path
+      - name: Qualify Metal tiled-checkerboard path
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=metal
       - name: Qualify Metal device execution and invariants
         run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=metal --profile=smoke
-      - name: Qualify Phase 14 Wortel Metal GPU-native slice
-        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=metal --profile=paper
-      - name: Capture Phase 14 Wortel Metal device code
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_phase14_wortel_metal.jl
+      - name: Qualify Wortel model Metal GPU-native slice
+        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/wortel_model_qualification.jl --backend=metal --profile=paper
+      - name: Capture Wortel model Metal device code
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_wortel_metal.jl
+      - name: Qualify native field on real Metal hardware
+        env:
+          POTTS_BENCHMARK_HARDWARE_ID: metal-runner-gpu-v1
+        run: >-
+          julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes
+          benchmark/native_field_qualification.jl
+          --backend=metal
+          --output=benchmark/results/native-field-metal.toml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-metal-${{ github.sha }}
@@ -88,14 +96,22 @@ jobs:
         run: |
           julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
           julia --project=benchmark/backends/amdgpu --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Qualify Phase 12.5 ROCm tiled path
+      - name: Qualify ROCm tiled-checkerboard path
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=amdgpu
       - name: Qualify ROCm device execution and invariants
         run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=amdgpu --profile=smoke
-      - name: Qualify Phase 14 Wortel ROCm GPU-native slice
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/phase14_wortel_qualification.jl --backend=amdgpu --profile=paper
-      - name: Capture Phase 14 Wortel ROCm device code
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_phase14_wortel_amdgpu.jl
+      - name: Qualify Wortel model ROCm GPU-native slice
+        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/wortel_model_qualification.jl --backend=amdgpu --profile=paper
+      - name: Capture Wortel model ROCm device code
+        run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_wortel_amdgpu.jl
+      - name: Qualify native field on real ROCm hardware
+        env:
+          POTTS_BENCHMARK_HARDWARE_ID: rocm-runner-gpu-v1
+        run: >-
+          julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes
+          benchmark/native_field_qualification.jl
+          --backend=amdgpu
+          --output=benchmark/results/native-field-rocm.toml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpu-smoke-rocm-${{ github.sha }}

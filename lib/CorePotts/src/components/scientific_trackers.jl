@@ -338,8 +338,34 @@ end
     return _commit_staged!(scientific_execution(state), transaction)
 end
 
-@inline function _commit_staged!(state::ScientificExecutionState,
-        transaction::StagedCopyTransaction)
+@inline function _decrement_medium!(trackers, index, ::Val{false})
+    @inbounds trackers.medium_volumes[index] -= Int32(1)
+    return nothing
+end
+
+@inline function _decrement_medium!(trackers, index, ::Val{true})
+    Atomix.@atomic trackers.medium_volumes[index] -= Int32(1)
+    return nothing
+end
+
+@inline function _increment_medium!(trackers, index, ::Val{false})
+    @inbounds trackers.medium_volumes[index] += Int32(1)
+    return nothing
+end
+
+@inline function _increment_medium!(trackers, index, ::Val{true})
+    Atomix.@atomic trackers.medium_volumes[index] += Int32(1)
+    return nothing
+end
+
+@inline _apply_staged_moments!(trackers, delta, ::Val{false}) = nothing
+@inline function _apply_staged_moments!(trackers, delta, ::Val{true})
+    apply_derived_observable_delta!(trackers.moments, delta.moments, delta)
+    return nothing
+end
+
+@inline function _commit_staged_core!(state::ScientificExecutionState,
+        transaction::StagedCopyTransaction, atomic_medium, apply_moments)
     proposal = transaction.proposal
     delta = transaction.trackers
     core = state.core
@@ -358,18 +384,23 @@ end
                 _reset_columns!(Tuple(core.properties), Tuple(state.retirement_defaults), losing)
             end
         else
-            trackers.medium_volumes[Int(delta.losing_medium)] -= Int32(1)
+            _decrement_medium!(trackers, Int(delta.losing_medium), atomic_medium)
         end
         if delta.gaining_cell != 0
             gaining = Int(delta.gaining_cell)
             trackers.finite_volumes[gaining] += Int32(1)
             trackers.boundary_measures[gaining] += delta.gaining_boundary
         else
-            trackers.medium_volumes[Int(delta.gaining_medium)] += Int32(1)
+            _increment_medium!(trackers, Int(delta.gaining_medium), atomic_medium)
         end
-        apply_derived_observable_delta!(trackers.moments, delta.moments, delta)
+        _apply_staged_moments!(trackers, delta, apply_moments)
     end
     return nothing
+end
+
+@inline function _commit_staged!(state::ScientificExecutionState,
+        transaction::StagedCopyTransaction)
+    return _commit_staged_core!(state, transaction, Val(false), Val(true))
 end
 
 """Commit exactly once when accepted; rejection is a guaranteed no-write operation."""

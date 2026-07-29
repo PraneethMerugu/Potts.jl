@@ -1,0 +1,11 @@
+architecture = "x86_64"
+completed_utc = "2026-07-29T04:14:23.853"
+julia_version = "1.12.6"
+kernel = "NT"
+lattice = [4, 4]
+platform = "windows"
+schema_version = "1.0.0"
+smoke_source = "docs/models/tutorials/install_and_verify.jl"
+source_digest = "532d4ebdf39e2f2c9361307ce35dc2f60ba4ad4d2e1d4658d272f49e3f04dbd7"
+started_utc = "2026-07-29T04:09:47.240"
+status = "passed"

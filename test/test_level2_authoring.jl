@@ -1,7 +1,7 @@
 using SciMLBase
 using KernelAbstractions
 
-@testset "Phase 10 immutable Level 2 authoring foundation" begin
+@testset "immutable authoring immutable Level 2 authoring foundation" begin
     L2 = PottsToolkit.Authoring
 
     medium = L2.Medium(:Medium)
@@ -22,6 +22,8 @@ using KernelAbstractions
     normalized_volume = only(component for component in normalized.components
         if component isa L2.VolumeConstraint)
     @test normalized_volume.bindings[cell].target === 12.0f0
+    @test get(normalized_volume.bindings, cell, nothing).target === 12.0f0
+    @test get(normalized_volume.bindings, L2.CellType(:Other), nothing) === nothing
     @test report.fingerprint == L2.semantic_fingerprint(normalized)
     @test length(report.declarations) == 2
     volume_report = only(declaration for declaration in report.declarations
@@ -417,7 +419,7 @@ end
         L2.validate(L2.PottsModel(medium, cell, bad)))
 end
 
-@testset "Phase 10 Level 2 public lowering vertical slice" begin
+@testset "immutable authoring Level 2 public lowering vertical slice" begin
     L2 = PottsToolkit.Authoring
 
     medium = L2.Medium(:Medium)

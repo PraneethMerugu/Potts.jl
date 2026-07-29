@@ -36,13 +36,13 @@ const ALGORITHM_GUARANTEE_TAXONOMY = (
     :unqualified,
 )
 
-"""Return the closed Phase 13 public guarantee-label taxonomy."""
+"""Return the closed public scientific-guarantee label taxonomy."""
 algorithm_guarantee_taxonomy() = ALGORITHM_GUARANTEE_TAXONOMY
 
 """
 Programmatically inspectable scientific contract for one named algorithm process.
 
-The Phase 13 evidence fields default conservatively for downstream algorithms: an extension that
+Evidence fields default conservatively for downstream algorithms: an extension that
 does not opt into the new metadata is unqualified, provisional, outside the paper scope, and has no
 claimed tested backend or evidence record.
 """

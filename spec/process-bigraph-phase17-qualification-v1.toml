@@ -1,0 +1,334 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraph-phase17-qualification-v1"
+phase = "17"
+status = "specified"
+closure_status = "open"
+required_row_count = 44
+allowed_statuses = ["specified", "implemented", "oracle_passing", "qualified"]
+completion_status = "qualified_unpublished_internal_beta"
+public_release = false
+
+[[requirements]]
+id = "P17-A01"
+subgate = "17.A"
+title = "Accepted three-round owner interview"
+status = "qualified"
+evidence = [
+    "design/audits/process-bigraph-phase17-owner-interview-round-1.md",
+    "design/audits/process-bigraph-phase17-owner-interview-round-2.md",
+    "design/audits/process-bigraph-phase17-owner-interview-round-3.md",
+]
+
+[[requirements]]
+id = "P17-A02"
+subgate = "17.A"
+title = "Decision and normative specification"
+status = "qualified"
+evidence = [
+    "spec/decisions/0042-process-bigraph-model-and-documentation-productization.md",
+    "spec/phase-17-process-bigraph-model-and-documentation-productization.md",
+]
+
+[[requirements]]
+id = "P17-A03"
+subgate = "17.A"
+title = "Machine-readable entry, API, documentation, browser, and qualification contracts"
+status = "qualified"
+evidence = [
+    "spec/process-bigraph-phase17-entry-v1.toml",
+    "spec/process-bigraph-phase17-api-v1.toml",
+    "spec/process-bigraph-phase17-documentation-quality-v1.toml",
+    "spec/process-bigraph-phase17-browser-qa-v1.toml",
+    "spec/process-bigraph-phase17-qualification-v1.toml",
+]
+
+[[requirements]]
+id = "P17-A04"
+subgate = "17.A"
+title = "Autonomous implementation plan and specification checker"
+status = "qualified"
+evidence = [
+    "design/audits/process-bigraph-phase17-implementation-plan.md",
+    "scripts/check_process_bigraph_phase17_spec.jl",
+    "scripts/test_process_bigraph_phase17_spec.jl",
+]
+
+[[requirements]]
+id = "P17-A05"
+subgate = "17.A"
+title = "Origin-main baseline merge and dependency resolution"
+status = "implemented"
+evidence = []
+
+[[requirements]]
+id = "P17-B01"
+subgate = "17.B"
+title = "Complete ProcessBigraphs binding inventory"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B02"
+subgate = "17.B"
+title = "Admitted API docstring and owning-page coverage"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B03"
+subgate = "17.B"
+title = "Qualified public engine extension protocol"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B04"
+subgate = "17.B"
+title = "Managed field process user constructor"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B05"
+subgate = "17.B"
+title = "Public schema access with no downstream BranchSchema representation access"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B06"
+subgate = "17.B"
+title = "ActivityPottsProblem SciML lifecycle"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B07"
+subgate = "17.B"
+title = "Supported activity state, value, observation, report, capture, and restore access"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B08"
+subgate = "17.B"
+title = "Topology-based relation construction and Act admission"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-B09"
+subgate = "17.B"
+title = "Internal coupled representation remains unadmitted"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C01"
+subgate = "17.C"
+title = "ReferenceModels split into model-family ownership"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C02"
+subgate = "17.C"
+title = "Reusable Wortel 2021 semantic model v1"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C03"
+subgate = "17.C"
+title = "Wortel facade-to-frozen-oracle equivalence"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C04"
+subgate = "17.C"
+title = "Reusable Merks 2006 semantic model v2"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C05"
+subgate = "17.C"
+title = "Merks v1-to-v2 differential and canonical 500x500 preservation"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C06"
+subgate = "17.C"
+title = "Model lifecycle build, run, observe, checkpoint, and restore"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C07"
+subgate = "17.C"
+title = "Compatibility shims and explicit persistence migration"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-C08"
+subgate = "17.C"
+title = "Zero internal API references in canonical models"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D01"
+subgate = "17.D"
+title = "Independent pinned strict Documenter environment"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D02"
+subgate = "17.D"
+title = "Complete 35-page registered information architecture"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D03"
+subgate = "17.D"
+title = "Ten-page progressive learning sequence"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D04"
+subgate = "17.D"
+title = "Six complete executable examples"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D05"
+subgate = "17.D"
+title = "Visible executed canonical programs with no reader include"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D06"
+subgate = "17.D"
+title = "Concept, guarantee, API, status, migration, and troubleshooting reference"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D07"
+subgate = "17.D"
+title = "Reproducible visual and media portfolio"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D08"
+subgate = "17.D"
+title = "Documentation runtime and asset budgets"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-D09"
+subgate = "17.D"
+title = "Root Potts documentation nonregression and cross-linking"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-E01"
+subgate = "17.E"
+title = "Complete inline Wortel qualified source-bounded case study"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-E02"
+subgate = "17.E"
+title = "Complete inline Merks qualified source-bounded case study"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-E03"
+subgate = "17.E"
+title = "Packaged-to-displayed semantic and bounded-behavior equivalence"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-E04"
+subgate = "17.E"
+title = "Case-study claim boundary, source trace, profiles, and nonclaims"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F01"
+subgate = "17.F"
+title = "Complete package, integration, oracle, compatibility, and internal-use gates"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F02"
+subgate = "17.F"
+title = "Linux, macOS, and Windows clean-install documentation smokes"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F03"
+subgate = "17.F"
+title = "Playwright Chromium, Firefox, and WebKit rendered-site qualification"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F04"
+subgate = "17.F"
+title = "WCAG 2.2 A/AA automated and agent accessibility assessment"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F05"
+subgate = "17.F"
+title = "Lighthouse thresholds and pinned visual regression"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F06"
+subgate = "17.F"
+title = "Three auditor-led persona task reviews"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F07"
+subgate = "17.F"
+title = "Documentation rubric at least 92 with no category below 8"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F08"
+subgate = "17.F"
+title = "Terminal browser-agent gate after all deterministic qualification"
+status = "specified"
+evidence = []
+
+[[requirements]]
+id = "P17-F09"
+subgate = "17.F"
+title = "Exact qualifying-content-tree digest and evidence-only closure"
+status = "specified"
+evidence = []

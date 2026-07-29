@@ -1,0 +1,1152 @@
+comparison_rule = "adding, removing, moving, or changing any listed path invalidates the claim; environment or workflow changes also invalidate exact-head evidence"
+conservatism = "Metal and ROCm include the complete CorePotts source and ProcessBigraphs transitive runtime source, not only the directly hashed native_fields.jl file"
+cuda_required = false
+evidence_id = "semantic-preserving-consolidation-baseline-hardware-impact-v1"
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+schema_version = "1.0.0"
+status = "frozen"
+
+[[claims]]
+architectures = ["x86_64-linux", "aarch64-darwin"]
+authority = "design/evidence/process-bigraph-phase16i-evidence-v1.toml"
+backends = ["CPU"]
+id = "cpu-package-family"
+path_count = 171
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+source_identity_mode = "exact_commit_and_tree"
+workflow_run_id = 30399756947
+
+    [[claims.paths]]
+    path = ".github/workflows/benchmarks.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/ci.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/docs-links.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/docs.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/gpu-validation.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/phase12-paired-benchmarks.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/phase13-realistic-evidence.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = ".github/workflows/phase13-transition-evidence.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/Manifest.toml"
+    sha256 = "ad61d0c5ac73798f2de939f5a978aeb1428d063405bd810cd1271622d9dc546e"
+    [[claims.paths]]
+    path = "benchmark/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/backends/amdgpu/Manifest.toml"
+    sha256 = "e21b74745cf72d299ab6e673c073217b64a40dcd2d723411ae922f0fa1f1deb4"
+    [[claims.paths]]
+    path = "benchmark/backends/amdgpu/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/backends/cuda/Manifest.toml"
+    sha256 = "09bd5fb65642bab77c482d37e72c493decde9ef8fdc2c4e7d32a4c8e767d672a"
+    [[claims.paths]]
+    path = "benchmark/backends/cuda/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/backends/metal/Manifest.toml"
+    sha256 = "b721ebdecf66c4fb2d99b1b22ae6ad74fdc7eda819437cb78738597ec93b9af7"
+    [[claims.paths]]
+    path = "benchmark/backends/metal/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "docs/Manifest.toml"
+    sha256 = "1cc51cbab31e4c2930ebe5503705a6a234fec16217f8e743e02cb6459b4ca71e"
+    [[claims.paths]]
+    path = "docs/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "examples/Manifest.toml"
+    sha256 = "4a2e272c3d8c064dcc0ceb8523841f415af38ba759f8ab3e8caec08957c8e5ae"
+    [[claims.paths]]
+    path = "examples/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "examples/dashboards/Manifest.toml"
+    sha256 = "75409aa3c2eb8ee2a8cf3712410fac6cb355d75d3376d6f7499de0ed6ca62ac5"
+    [[claims.paths]]
+    path = "examples/dashboards/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "examples/notebooks/Manifest.toml"
+    sha256 = "c63a21df8c74420cd3091682001ba620463832acaf16868531fbcfa1556c6f9d"
+    [[claims.paths]]
+    path = "examples/notebooks/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "ext/PottsToolkitUnitfulExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "integration/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsAMDGPUExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsCUDAExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsHDF5Ext.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsMetalExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsZarrExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/CorePotts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/lottery.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/sequential.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard_device.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/merks_local_connectivity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_components.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_elongation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_focal_points.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_inner_loop.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_mechanics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_queries.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_trackers.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/public_api_docs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/versions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/activity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/continuous.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/dynamic_state.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/events.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/execution.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/history.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/merks2006.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/multirate.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/native_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/observations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/persistence.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/polarity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/preflight.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/process_bigraph_adapter.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/relationships.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/semantic_kernel.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/contracts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/dispatch.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/initialization/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/compiled.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/reference.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/process_bigraph_conversion.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/protocols/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/reference/engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/rng/semantic.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/sciml/interface.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/cartesian.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/roles.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/lifecycle.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/semantics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/types.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/topology/topology.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/benchmark/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/MakiePotts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/adapters.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/encodings.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/errors.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/explorer.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/frames.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/inspection.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/precompile.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/public_api_docs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/recipes.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/recording.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/src/requests.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/MakiePotts/test/backends/Manifest.toml"
+    sha256 = "bcbe66e6ce460f24dde56369d2e2a58f5ecfd641c6649afb76375c34290379e2"
+    [[claims.paths]]
+    path = "lib/MakiePotts/test/backends/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/ext/ProcessBigraphsSciMLExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/ProcessBigraphs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/algebraic_structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/builder.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/inspection.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/model.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/serialization.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/validation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/bounded_cartesian_field_problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/canonical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/capabilities.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_v3.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composites.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composition.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/continuations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/declarations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/effects.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/engine_protocol.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/errors.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/executor.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/logical_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_field_process.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/observation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/paths.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/runtime.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/scheduling.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/schemas.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/semantic_rng.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/store.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/structural_transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/time.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "paper/Manifest.toml"
+    sha256 = "93c35ae9a5eb97a33b0e6c9888c914644fb94b673e8565d31b069fa05c7a474f"
+    [[claims.paths]]
+    path = "paper/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/PottsToolkit.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/Authoring.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/bindings.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/components.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/identities.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_activity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_core_api.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_observables.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_queries.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_rules.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_runtime.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/level1_units.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/lifecycle.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/models.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/normalization.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/procedural_layouts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/properties.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/authoring/reports.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/precompile.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/public_api_docs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "src/reference_models.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+[[claims]]
+architectures = ["aarch64-darwin"]
+authority = "design/evidence/process-bigraph-phase16c-evidence-v1.toml"
+backends = ["CPU", "Metal"]
+id = "native-cartesian-field-metal"
+path_count = 100
+qualified_source_sha256 = "46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25"
+source_identity_mode = "native-field exact source plus conservative transitive package closure"
+workflow_run_id = 30360086075
+
+    [[claims.paths]]
+    path = ".github/workflows/gpu-validation.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/Manifest.toml"
+    sha256 = "ad61d0c5ac73798f2de939f5a978aeb1428d063405bd810cd1271622d9dc546e"
+    [[claims.paths]]
+    path = "benchmark/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/backends/metal/Manifest.toml"
+    sha256 = "b721ebdecf66c4fb2d99b1b22ae6ad74fdc7eda819437cb78738597ec93b9af7"
+    [[claims.paths]]
+    path = "benchmark/backends/metal/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/phase16_native_field_qualification.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsMetalExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/CorePotts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/lottery.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/sequential.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard_device.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/merks_local_connectivity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_components.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_elongation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_focal_points.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_inner_loop.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_mechanics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_queries.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_trackers.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/public_api_docs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/versions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/activity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/continuous.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/dynamic_state.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/events.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/execution.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/history.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/merks2006.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/multirate.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/native_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/observations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/persistence.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/polarity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/preflight.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/process_bigraph_adapter.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/relationships.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/semantic_kernel.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/contracts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/dispatch.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/initialization/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/compiled.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/reference.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/process_bigraph_conversion.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/protocols/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/reference/engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/rng/semantic.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/sciml/interface.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/cartesian.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/roles.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/lifecycle.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/semantics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/types.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/topology/topology.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/ProcessBigraphs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/algebraic_structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/builder.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/inspection.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/model.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/serialization.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/validation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/bounded_cartesian_field_problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/canonical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/capabilities.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_v3.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composites.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composition.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/continuations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/declarations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/effects.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/engine_protocol.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/errors.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/executor.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/logical_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_field_process.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/observation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/paths.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/runtime.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/scheduling.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/schemas.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/semantic_rng.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/store.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/structural_transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/time.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+[[claims]]
+architectures = ["x86_64-linux"]
+authority = "design/evidence/process-bigraph-phase16c-evidence-v1.toml"
+backends = ["CPU", "ROCm"]
+id = "native-cartesian-field-rocm"
+path_count = 100
+qualified_source_sha256 = "46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25"
+source_identity_mode = "native-field exact source plus conservative transitive package closure"
+workflow_run_id = 30360086075
+
+    [[claims.paths]]
+    path = ".github/workflows/gpu-validation.yml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/Manifest.toml"
+    sha256 = "ad61d0c5ac73798f2de939f5a978aeb1428d063405bd810cd1271622d9dc546e"
+    [[claims.paths]]
+    path = "benchmark/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/backends/amdgpu/Manifest.toml"
+    sha256 = "e21b74745cf72d299ab6e673c073217b64a40dcd2d723411ae922f0fa1f1deb4"
+    [[claims.paths]]
+    path = "benchmark/backends/amdgpu/Project.toml"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "benchmark/phase16_native_field_qualification.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/ext/CorePottsAMDGPUExt.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/CorePotts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/lottery.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/sequential.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/algorithms/tiled_checkerboard_device.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/merks_local_connectivity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_components.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_elongation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_focal_points.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_inner_loop.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_mechanics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_queries.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/components/scientific_trackers.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/public_api_docs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/contracts/versions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/activity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/continuous.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/dynamic_state.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/events.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/execution.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/history.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/merks2006.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/multirate.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/native_fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/observations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/persistence.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/polarity.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/preflight.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/process_bigraph_adapter.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/relationships.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/semantic_kernel.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/contracts.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/execution/dispatch.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/initialization/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/compiled.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/reference.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/lifecycle/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/process_bigraph_conversion.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/persistence/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/protocols/scientific.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/reference/engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/rng/semantic.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/sciml/interface.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/cartesian.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/spatial/roles.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/lifecycle.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/logical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/semantics.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/state/types.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/CorePotts/src/topology/topology.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/ProcessBigraphs.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/algebraic_structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/builder.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/inspection.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/model.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/serialization.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/structure.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/authoring/validation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/bounded_cartesian_field_problem.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/canonical.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/capabilities.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/checkpoint_v3.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composites.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/composition.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/continuations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/declarations.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/effects.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/engine_protocol.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/errors.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/executor.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/fields.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/logical_codec.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/lowering.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_engine.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/managed_field_process.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/observation.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/paths.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/runtime.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/scheduling.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/schemas.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/semantic_rng.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/store.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/structural_transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/time.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    [[claims.paths]]
+    path = "lib/ProcessBigraphs/src/transactions.jl"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+

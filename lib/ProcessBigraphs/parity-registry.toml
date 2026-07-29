@@ -1,16 +1,20 @@
-schema_version = "1.3.0"
-registry_id = "process-bigraphs-pb0-local-v1"
-package_version = "0.4.0"
-maturity = "phase_15c_serial_internal_alpha"
+schema_version = "2.0.0"
+registry_id = "process-bigraphs-current-capabilities-v1"
+package_version = "0.5.1"
+maturity = "internal_beta"
 public_release = false
 internal_alpha = true
-evidence = "../../design/evidence/process-bigraph-pb0-evidence-v1.toml"
+qualification = "../../spec/process-bigraph-phase16-qualification-v1.toml"
+historical_index = "../../design/evidence/consolidation-naming/historical-artifact-index-v1.toml"
 specification = "../../spec/process-bigraph-runtime-semantics.md"
 decisions = [
     "../../spec/decisions/0034-process-bigraph-runtime-platform.md",
     "../../spec/decisions/0036-algebraicjulia-process-bigraph-foundation.md",
     "../../spec/decisions/0037-process-bigraph-open-composition.md",
     "../../spec/decisions/0038-process-bigraph-serial-alpha.md",
+    "../../spec/decisions/0039-phase-16-compute-ownership-and-scope.md",
+    "../../spec/decisions/0040-process-bigraph-high-level-authoring.md",
+    "../../spec/decisions/0041-semantic-preserving-repository-consolidation.md",
 ]
 
 [pins]
@@ -25,234 +29,229 @@ oracle_status = ["direct_passing", "direct_partial"]
 qualification_status = "qualified_serial_internal_alpha"
 independent_julia_specification_oracle = "qualified"
 upstream_runtime_execution = "forbidden"
-device_evidence = "not_started"
+device_evidence = "qualified_source_addressed"
 
-[accepted_next_architecture]
-phase15_direct_dependencies = ["ACSets.jl", "Catlab.jl"]
-phase16_direct_dependency = "AlgebraicRewriting.jl"
-phase17_weak_dependency = "AlgebraicDynamics.jl"
+[architecture]
+structural_dependencies = ["ACSets.jl", "Catlab.jl", "AlgebraicRewriting.jl"]
+excluded_weak_dependency = "AlgebraicDynamics.jl"
 canonical_structure = "one versioned ProcessBigraph ACSet"
-phase15a_status = "passed_canonical_structure"
-phase15b_status = "passed_open_composition"
-phase15b_decision = "../../spec/decisions/0037-process-bigraph-open-composition.md"
-phase15b_plan = "../../design/audits/process-bigraph-phase15b-open-composition-plan.md"
-phase15c_status = "qualified_serial_internal_alpha"
-phase15c_decision = "../../spec/decisions/0038-process-bigraph-serial-alpha.md"
-phase15c_plan = "../../design/audits/process-bigraph-phase15c-serial-alpha-plan.md"
-phase15c_entry_contract = "../../spec/process-bigraph-phase15c-entry-v1.toml"
-phase15c_target_feature_count = 15
-phase15c_supporting_oracle_feature_count = 7
-phase15c_retained_direct_feature_count = 4
-phase16_status = "not_started"
+static_structure = "qualified"
+open_composition = "qualified"
+serial_runtime = "qualified"
+dynamic_structure = "qualified"
+engine_and_field_protocol = "qualified"
+solver_adapters = ["native", "SciML", "independent_custom"]
+bounded_models = ["Merks2006", "Shirinifard2012"]
+sciml_extension = "ProcessBigraphsSciMLExt"
 
 [[features]]
 id = "canonical-process-bigraph-acset"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_phase15a_algebraic_structure.jl"
-limitation = "Canonical authority covers arbitrary-depth immutable open composites and is retained as direct Phase 15.A/B evidence; Phase 15.C independently qualifies its admitted runtime use, while dynamic structural epochs remain Phase 16."
+test = "test/structure/test_algebraic_structure.jl"
+limitation = "Canonical authority covers arbitrary-depth immutable open composites and is retained as direct canonical-structure and open-composition evidence; serial runtime independently qualifies its admitted runtime use, while dynamic structural epochs remain dynamic and coupled runtime."
 
 [[features]]
 id = "compiled-structural-epoch"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_phase15a_algebraic_structure.jl"
-limitation = "Immutable static epoch and indexed serial plan; dynamic AlgebraicRewriting transactions remain Phase 16 work."
+test = "test/structure/test_algebraic_structure.jl"
+limitation = "Immutable static epoch and indexed serial plan; dynamic AlgebraicRewriting transactions remain dynamic and coupled runtime work."
 
 [[features]]
 id = "structured-cospan-open-composition"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_phase15b_open_composition.jl"
-limitation = "Immutable same-schema open composition only; Phase 15.C independently qualifies its admitted runtime use, while dynamic structural rewriting remains Phase 16."
+test = "test/structure/test_open_composition.jl"
+limitation = "Immutable same-schema open composition only; serial runtime independently qualifies its admitted runtime use, while dynamic structural rewriting remains dynamic and coupled runtime."
 
 [[features]]
 id = "derived-directed-wiring-view"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_phase15b_open_composition.jl"
+test = "test/structure/test_open_composition.jl"
 limitation = "Only the versioned annotated ProcessBigraph profile is lossless and compilable; generic Catlab wiring diagrams are inspection-only."
 
 [[features]]
 id = "stable-typed-paths"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_paths_time_canonical.jl"
-limitation = "No wildcard path syntax in PB0."
+test = "test/primitives/test_paths_time_canonical.jl"
+limitation = "No wildcard path syntax in foundation."
 
 [[features]]
 id = "typed-hierarchical-store"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_schema_store_effects.jl"
+test = "test/primitives/test_schema_store_effects.jl"
 limitation = "Flat canonical leaf table under a structural hierarchy; no dynamic topology."
 
 [[features]]
 id = "structural-schema-realization"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_schema_store_effects.jl"
+test = "test/primitives/test_schema_store_effects.jl"
 limitation = "No schema migration or dynamic structural rewrite."
 
 [[features]]
 id = "canonical-state-serialization"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_checkpoint_v2.jl"
+test = "test/persistence/test_checkpoint_v2.jl"
 limitation = "Canonical logical codec and v2 checkpoint envelope cover the admitted value set; filesystem storage remains an extension concern."
 
 [[features]]
 id = "typed-input-output-ports"
 implementation_status = "implemented"
 oracle_status = "direct_passing"
-test = "test/test_composite_preflight.jl"
+test = "test/structure/test_composite_preflight.jl"
 limitation = "Static one-path bindings only; wildcard, bridge computation, and nested interfaces are deferred."
 
 [[features]]
 id = "temporal-process-protocol"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Qualified for immutable-topology serial execution with fixed or admitted adaptive schedules."
 
 [[features]]
 id = "ordered-reactive-step-protocol"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_adaptive_and_iteration.jl"
+test = "test/runtime/test_adaptive_and_iteration.jl"
 limitation = "Changed-input acyclic layers run to deterministic quiescence; dynamic workflow structure remains excluded."
 
 [[features]]
 id = "workflow-cycle-rejection"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_adaptive_and_iteration.jl"
+test = "test/runtime/test_adaptive_and_iteration.jl"
 limitation = "Undeclared cycles fail; cycles are admitted only inside explicit bounded iteration regions."
 
 [[features]]
 id = "exact-integer-logical-time"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Checked Int64 fast path; promotion beyond Int64 is not implemented."
 
 [[features]]
 id = "imminent-event-scheduler"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Qualified internal alpha covers the immutable-topology SerialExecutor only."
 
 [[features]]
 id = "actual-elapsed-partial-interval"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Exact partial intervals require declared support and remain within one compiled time scale."
 
 [[features]]
 id = "same-time-common-snapshot"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Qualified internal alpha covers serial immutable-topology batches."
 
 [[features]]
 id = "typed-process-deltas"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_properties_metamorphic.jl"
+test = "test/runtime/test_properties_metamorphic.jl"
 limitation = "Engine-owned transaction buffers and structural requests are deferred."
 
 [[features]]
 id = "versioned-update-algebra"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_properties_metamorphic.jl"
+test = "test/runtime/test_properties_metamorphic.jl"
 limitation = "Seven built-in version-1 laws; open extension declarations and device laws are deferred."
 
 [[features]]
 id = "deterministic-conflict-reconciliation"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_properties_metamorphic.jl"
+test = "test/runtime/test_properties_metamorphic.jl"
 limitation = "CPU scalar/collection laws only."
 
 [[features]]
 id = "atomic-event-commit"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_failure_checkpoint.jl"
+test = "test/persistence/test_failure_checkpoint.jl"
 limitation = "Atomicity covers in-memory serial state, clocks, continuations, observers, and records; external effects are excluded."
 
 [[features]]
 id = "settled-boundary-checkpoint"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_checkpoint_v2.jl"
+test = "test/persistence/test_checkpoint_v2.jl"
 limitation = "Canonical portable logical envelope qualifies exact-compatible serial restore at settled boundaries only."
 
 [[features]]
 id = "transactional-failure"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_failure_checkpoint.jl"
+test = "test/persistence/test_failure_checkpoint.jl"
 limitation = "All eight in-memory publication stages are atomic; external side effects and structural failures remain deferred."
 
 [[features]]
 id = "capability-placement-residency"
 implementation_status = "partial"
 oracle_status = "direct_passing"
-test = "test/test_composite_preflight.jl"
+test = "test/structure/test_composite_preflight.jl"
 limitation = "Declaration and hidden-transfer preflight only; no device execution."
 
 [[features]]
 id = "serial-semantic-executor"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Qualified immutable-topology serial internal alpha; dynamic structure and alternate executors remain excluded."
 
 [[features]]
 id = "explicit-iterative-constructs"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_adaptive_and_iteration.jl"
+test = "test/runtime/test_adaptive_and_iteration.jl"
 limitation = "Named bounded and convergent fixed-structure regions only."
 
 [[features]]
 id = "adaptive-deadlines"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Proposals must be exact, representable, and strictly future."
 
 [[features]]
 id = "versioned-process-continuation"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_observation_continuation.jl"
+test = "test/runtime/test_observation_continuation.jl"
 limitation = "Alpha paths require typed canonical codecs and explicit registered migration."
 
 [[features]]
 id = "semantic-lineage-rng"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_semantic_rng.jl"
+test = "test/runtime/test_semantic_rng.jl"
 limitation = "Philox core bits, unbiased integers, and uniforms; stateful solver RNG belongs in typed continuation."
 
 [[features]]
 id = "readonly-observer-protocol"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_observation_continuation.jl"
+test = "test/runtime/test_observation_continuation.jl"
 limitation = "Required in-memory records are atomic; external emitters are non-atomic extensions."
 
 [[features]]
 id = "multirate-input-semantics"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
-test = "test/phase15c/test_serial_scheduler.jl"
+test = "test/runtime/test_serial_scheduler.jl"
 limitation = "Frozen, exact-linear interpolation, event-updated, and continuously-callable timeline modes."
 
 [[features]]
@@ -260,4 +259,4 @@ id = "independent-julia-specification-oracle"
 implementation_status = "implemented"
 oracle_status = "independent_qualified"
 test = "test/specification_oracle/runtests.jl"
-limitation = "Exactly the 22 Phase 15.C target and supporting rows; broader oracles remain independently required."
+limitation = "Exactly the 22 serial runtime target and supporting rows; broader oracles remain independently required."

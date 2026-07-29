@@ -91,6 +91,16 @@ behavior.
 - [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
 - [Process-Bigraph Runtime Semantics](process-bigraph-runtime-semantics.md)
 - [Process-Bigraph Parity Registry v1](process-bigraph-parity-registry-v1.toml)
+- [Phase 16 Engine, Field, Structural, and Adapter Semantics](phase-16-engine-field-structural-and-adapter-semantics.md)
+- [ProcessBigraphs High-Level Authoring Semantics](process-bigraph-high-level-authoring-semantics.md)
+- [Phase 16 Entry Contract](process-bigraph-phase16-entry-v1.toml)
+- [Phase 16 Qualification Ledger](process-bigraph-phase16-qualification-v1.toml)
+- [Phase 16 Backend Matrix](process-bigraph-phase16-backend-matrix-v1.toml)
+- [Phase 16 Migration Registry](process-bigraph-phase16-migration-registry-v1.toml)
+- [Phase 16 Model Scope](process-bigraph-phase16-model-scope-v1.toml)
+- [Phase 16 API Contract](process-bigraph-phase16-api-v1.toml)
+- [Semantic-Preserving Repository Consolidation Contract](semantic-preserving-consolidation-contract.md)
+- [Semantic-Preserving Consolidation Qualification Ledger](semantic-preserving-consolidation-qualification-v1.toml)
 - [Unresolved Questions](unresolved.md)
 - [Specification-to-Conformance Evidence Index](conformance-evidence.md)
 - [Decision Records](decisions/README.md)
@@ -119,6 +129,17 @@ Engineering realization is described separately in:
 
 Refactor execution evidence:
 
+- [ProcessBigraphs Phase 16 Owner Interview](../design/audits/process-bigraph-phase16-owner-interview.md)
+- [Decision 0039: Phase 16 Compute Ownership and Scope](decisions/0039-phase-16-compute-ownership-and-scope.md)
+- [ProcessBigraphs Phase 16.HC High-Level Authoring Owner Interview](../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md)
+- [Decision 0040: ProcessBigraphs High-Level Authoring and Phase 16.HC](decisions/0040-process-bigraph-high-level-authoring.md)
+- [Semantic-Preserving Consolidation Owner Interview](../design/audits/semantic-preserving-consolidation-owner-interview.md)
+- [Decision 0041: Semantic-Preserving Repository Consolidation](decisions/0041-semantic-preserving-repository-consolidation.md)
+- [Semantic-Preserving Consolidation Baseline Freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md)
+- [ProcessBigraphs Phase 16.HC Qualification Audit](../design/audits/process-bigraph-phase16hc-high-level-authoring-audit.md)
+- [ProcessBigraphs Phase 16.HC Evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml)
+- [ProcessBigraphs Phase 16 Implementation Plan](../design/audits/process-bigraph-phase16-implementation-plan.md)
+- [ProcessBigraphs Phase 16 Entry Audit](../design/audits/process-bigraph-phase16-entry-audit.md)
 - [Open-Protocol Audit](../design/audits/open-protocol-audit.md)
 - [Phase 9 Current-Code and Gap Audit](../design/audits/phase-9-current-code-and-gap-audit.md)
 - [Phase 9 SciML and JuliaGPU Research](../design/audits/phase-9-sciml-and-gpu-research.md)
@@ -215,8 +236,54 @@ the [closure audit](../design/audits/process-bigraph-phase15c-closure-audit.md) 
 [evidence manifest](../design/evidence/process-bigraph-phase15c-evidence-v1.toml).
 
 Decision 0035 retires assembled Wang GPU qualification because the paper-faithful sequential
-algorithm is not an appropriate GPU promotion target. G4 is the current Potts gate and retains
-CPU/Metal/ROCm qualification for the reusable field substrate.
+algorithm is not an appropriate GPU promotion target. Decision 0039 absorbs the still-open G4
+CPU/Metal/ROCm reusable-field obligation into Phase 16.C. The accepted 481-choice Phase 16
+interview additionally freezes the solver-neutral field protocol, dynamic hierarchy, CorePotts
+strangler adapter, CPU SciML/custom proof adapters, and bounded runnable Merks/CNV scope.
+ProcessBigraphs owns when and why computation occurs; optimized solver and CPM kernels own how the
+heavy computation occurs. Phase 16 is qualified as unpublished ProcessBigraphs `0.5.0` internal
+beta. All 38 rows pass, including the engine/field boundary, dynamic orchestration transactions,
+CorePotts native-field cutover, typed domain requests, V3 logical checkpoint, non-destructive
+legacy conversions, bounded runnable Merks/CNV assemblies, ordinary Julia authoring,
+deterministic lowering, complete origin mapping, controlled raw-IR migration, and stage-separated
+performance guardrails. Phase 16.C retains trusted exact-source CPU, Metal, and ROCm artifacts;
+Phase 16.I retains the admitted candidate, complete performance report, evidence manifest, and
+closure audit. The Phase 16.HC obligations and claim boundary are normative in the
+[high-level authoring specification](process-bigraph-high-level-authoring-semantics.md) and
+content-addressed in its [qualification evidence](../design/evidence/process-bigraph-phase16hc-evidence-v1.toml). The
+[16.F solver-integration consolidation](../design/audits/process-bigraph-phase16f-solver-integration-consolidation-research.md)
+classified rebased commit `e0fd0b3` as an unqualified prototype. The resulting
+[qualified solver-plurality audit](../design/audits/process-bigraph-phase16f-solver-plurality-audit.md)
+records rebased commit `6cd20d9`: a real injected SciML algorithm, standard solver interfaces, an
+external-style independent custom fixture, numerical replay by default, analytic/convergence
+evidence, and a bounded adapter-author API. The
+[qualified Merks audit](../design/audits/process-bigraph-phase16g-merks-audit.md) records commit
+`e9ce80b`: one ProcessBigraphs-owned schedule around native, real-SciML, and independent field
+adapters plus the CorePotts CPM kernel, without claiming the paper's full Figure 5 analysis.
+The [qualified CNV audit](../design/audits/process-bigraph-phase16h-cnv-audit.md) records the
+source-bounded scenario-38/simulation-902 assembly: a generated 40×40×35 startup, four
+solver-injectable fields, a CorePotts CPM phase, lifecycle and degradation fixtures, and
+restart/rollback evidence without a publication-analysis claim.
+
+The active engineering contract is the accepted
+[semantic-preserving repository consolidation contract](semantic-preserving-consolidation-contract.md),
+governed by the completed
+[owner interview](../design/audits/semantic-preserving-consolidation-owner-interview.md) and
+[Decision 0041](decisions/0041-semantic-preserving-repository-consolidation.md).
+It freezes the qualified ProcessBigraphs 0.5.0 internal-beta head as the behavioral baseline,
+requires one production authority per concept, replaces living milestone terminology with domain
+vocabulary, consolidates tests and quality tooling without weakening independent oracles,
+preserves API/identity/persistence/backend claims, and forbids new functionality. The
+[37-row qualification ledger](semantic-preserving-consolidation-qualification-v1.toml) separates
+baseline, naming, architecture, deduplication, test/tooling, package, and exact-head reconciliation
+evidence. All 37 rows are now qualified. The
+[baseline freeze](../design/audits/semantic-preserving-consolidation-baseline-freeze.md) remains
+the behavioral authority, while the
+[closure audit](../design/audits/semantic-preserving-consolidation-closure.md) and
+[exact-head evidence](../design/evidence/consolidation-qualified/exact-head-v1.toml) record the
+qualified `0.5.1` internal-beta candidate, exact CPU and trusted-hardware runs, platform
+installation smokes, performance results, API disposition, and zero-functional-delta attestation.
+Repository consolidation is closed; later roadmap redesign remains a separate decision.
 
 ## Conformance Principle
 

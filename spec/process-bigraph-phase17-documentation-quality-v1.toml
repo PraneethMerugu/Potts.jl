@@ -1,0 +1,585 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraph-phase17-documentation-quality-v1"
+phase = "17"
+status = "specified"
+site_name = "ProcessBigraphs.jl"
+support_label = "qualified unpublished internal beta"
+minimum_curated_pages = 35
+minimum_score = 92
+minimum_category_score = 8
+required_page_count = 35
+required_learn_count = 10
+required_example_program_count = 6
+required_case_study_count = 2
+required_concept_count = 9
+required_api_count = 5
+
+top_level_sections = [
+    "Home",
+    "Learn",
+    "Examples",
+    "Scientific Case Studies",
+    "Concepts and Guarantees",
+    "API",
+]
+
+[build]
+project = "lib/ProcessBigraphs/docs/Project.toml"
+manifest = "lib/ProcessBigraphs/docs/Manifest.toml"
+make = "lib/ProcessBigraphs/docs/make.jl"
+source_root = "lib/ProcessBigraphs/docs/src"
+models_root = "lib/ProcessBigraphs/docs/models"
+browser_root = "lib/ProcessBigraphs/docs/browser"
+doctest = true
+warnonly = false
+strict_cross_references = true
+curated_pages = true
+dirname = "ProcessBigraphs"
+tag_prefix = "ProcessBigraphs-"
+development_route = "/Potts.jl/ProcessBigraphs/dev/"
+pull_request_deploy = false
+persistent_beta_banner = true
+
+[visibility]
+complete_program_visible = true
+complete_program_executed = true
+reader_include_forbidden = true
+hidden_scientific_setup_forbidden = true
+prebuilt_case_study_model_forbidden = true
+canonical_source_drift_allowed = false
+allowed_hidden_setup = [
+    "rendering-backend-activation",
+    "documentation-display-configuration",
+]
+
+[page_contract]
+required_fields = [
+    "outcome",
+    "prerequisites",
+    "support-level",
+    "complete-executed-source",
+    "material-defaults",
+    "expected-result",
+    "establishes",
+    "does-not-establish",
+    "backend-runtime-seed",
+    "reproduction-command",
+    "next-step",
+]
+
+[runtime_budgets_seconds]
+first_tutorial_warm_max = 10
+ordinary_example_warm_max = 15
+wortel_case_study_warm_max = 30
+merks_case_study_warm_max = 60
+all_required_programs_warm_max = 240
+strict_docs_build_warm_max = 480
+hosted_job_timeout_max = 1800
+
+[asset_budgets_bytes]
+video_each_max = 3145728
+new_generated_media_total_max = 15728640
+raster_each_max = 524288
+
+[api]
+inventory = "spec/process-bigraph-phase17-api-v1.toml"
+admitted_docstring_percent = 100
+admitted_owning_page_percent = 100
+unclassified_allowed = 0
+internal_references_in_required_pages_allowed = 0
+
+[media]
+home_visual_required = true
+architecture_diagram_required = true
+scheduling_timeline_required = true
+transaction_diagram_required = true
+every_complete_example_has_result_visual = true
+each_case_study_has_state_figure = true
+each_case_study_has_quantitative_trace = true
+each_case_study_has_animation = true
+animation_static_fallback_required = true
+animation_text_summary_required = true
+meaningful_alt_text_required = true
+decorative_explicitly_hidden = true
+source_command_hash_required = true
+generated_from_displayed_program = true
+
+[rubric]
+categories = [
+    "information-architecture",
+    "progressive-pedagogy",
+    "visible-executable-source",
+    "api-and-extension-reference",
+    "scientific-accuracy-and-nonclaims",
+    "reproducibility-and-provenance",
+    "visual-explanation",
+    "accessibility-and-responsive-design",
+    "operations-and-maintenance",
+    "browser-task-success",
+]
+points_each = 10
+minimum_total = 92
+minimum_each = 8
+required_nine_or_better = [
+    "visible-executable-source",
+    "api-and-extension-reference",
+    "scientific-accuracy-and-nonclaims",
+    "accessibility-and-responsive-design",
+    "browser-task-success",
+]
+
+[[pages]]
+id = "home"
+title = "ProcessBigraphs"
+section = "Home"
+kind = "home"
+path = "lib/ProcessBigraphs/docs/src/index.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "hero"
+required = true
+
+[[pages]]
+id = "install-and-verify"
+title = "Install and verify the internal beta"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/install-and-verify.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/install_and_verify.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "first-tutorial"
+visual = "none"
+required = true
+
+[[pages]]
+id = "mental-model"
+title = "The process-bigraph mental model"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/mental-model.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/mental_model.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "first-multirate-composite"
+title = "Your first multirate composite"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/first-multirate-composite.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/first_multirate_composite.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "first-tutorial"
+visual = "figure"
+required = true
+
+[[pages]]
+id = "stores-ports-updates"
+title = "Stores, ports, schemas, and updates"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/stores-ports-updates.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/stores_ports_updates.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "compose-and-inspect"
+title = "Compose and inspect a system"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/compose-and-inspect.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/compose_and_inspect.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "time-scheduling-publication"
+title = "Logical time, scheduling, and publication"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/time-scheduling-publication.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/time_scheduling_publication.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "timeline"
+required = true
+
+[[pages]]
+id = "write-components"
+title = "Write processes, steps, and observers"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/write-components.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/write_components.jl"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "adapters-and-solvers"
+title = "Integrate adapters and solvers"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/adapters-and-solvers.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/adapters_and_solvers.jl"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "dynamic-structure"
+title = "Change structure transactionally"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/dynamic-structure.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/dynamic_structure.jl"
+audience = "runtime-contributor"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "checkpoint-failure-replay"
+title = "Checkpoint, fail, restore, and replay"
+section = "Learn"
+kind = "learn"
+path = "lib/ProcessBigraphs/docs/src/learn/checkpoint-failure-replay.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/learn/checkpoint_failure_replay.jl"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "timeline"
+required = true
+
+[[pages]]
+id = "examples"
+title = "Example gallery"
+section = "Examples"
+kind = "example-index"
+path = "lib/ProcessBigraphs/docs/src/examples/index.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "gallery"
+required = true
+
+[[pages]]
+id = "pulse-and-decay"
+title = "Pulse and decay"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/pulse-and-decay.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/pulse_and_decay.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "figure"
+required = true
+
+[[pages]]
+id = "nested-composites"
+title = "Reusable nested composites"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/nested-composites.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/nested_composites.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "n-way-junctions"
+title = "N-way junctions"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/n-way-junctions.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/n_way_junctions.jl"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "sciml-field-adapter"
+title = "SciML field adapter"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/sciml-field-adapter.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/sciml_field_adapter.jl"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "figure"
+required = true
+
+[[pages]]
+id = "custom-engine-adapter"
+title = "Independent custom engine adapter"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/custom-engine-adapter.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/custom_engine_adapter.jl"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "figure"
+required = true
+
+[[pages]]
+id = "divide-fail-recover"
+title = "Divide, fail, and recover"
+section = "Examples"
+kind = "example"
+path = "lib/ProcessBigraphs/docs/src/examples/divide-fail-recover.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/examples/divide_fail_recover.jl"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "ordinary-example"
+visual = "timeline"
+required = true
+
+[[pages]]
+id = "case-studies"
+title = "Scientific case-study boundary"
+section = "Scientific Case Studies"
+kind = "case-study-index"
+path = "lib/ProcessBigraphs/docs/src/case-studies/index.md"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[pages]]
+id = "wortel-2021"
+title = "Wortel 2021"
+section = "Scientific Case Studies"
+kind = "qualified-source-bounded-case-study"
+path = "lib/ProcessBigraphs/docs/src/case-studies/wortel-2021.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/case_studies/wortel_2021.jl"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "wortel-case-study"
+visual = "case-study-media-set"
+required = true
+
+[[pages]]
+id = "merks-2006"
+title = "Merks 2006"
+section = "Scientific Case Studies"
+kind = "qualified-source-bounded-case-study"
+path = "lib/ProcessBigraphs/docs/src/case-studies/merks-2006.md"
+canonical_source = "lib/ProcessBigraphs/docs/models/case_studies/merks_2006.jl"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "merks-case-study"
+visual = "case-study-media-set"
+required = true
+
+[[pages]]
+id = "architecture"
+title = "Architecture and compute ownership"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/architecture.md"
+audience = "runtime-contributor"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "canonical-identity"
+title = "Canonical structure and semantic identity"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/canonical-identity.md"
+audience = "runtime-contributor"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "state-effects-reconciliation"
+title = "Logical state, effects, and reconciliation"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/state-effects-reconciliation.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "time-schedules-visibility"
+title = "Time, schedules, and visibility"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/time-schedules-visibility.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "timeline"
+required = true
+
+[[pages]]
+id = "hierarchy-open-composition"
+title = "Hierarchy and open composition"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/hierarchy-open-composition.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "structural-transactions"
+title = "Dynamic structural transactions"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/structural-transactions.md"
+audience = "runtime-contributor"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "engines-and-compute"
+title = "Engines, adapters, and heavy computation"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/engines-and-compute.md"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "none"
+visual = "diagram"
+required = true
+
+[[pages]]
+id = "rng-observation-persistence"
+title = "RNG, observation, checkpoints, and replay"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/rng-observation-persistence.md"
+audience = "reproducibility-researcher"
+support = "internal-beta"
+runtime = "none"
+visual = "timeline"
+required = true
+
+[[pages]]
+id = "capability-migration-troubleshooting"
+title = "Capability status, migration, and troubleshooting"
+section = "Concepts and Guarantees"
+kind = "concept"
+path = "lib/ProcessBigraphs/docs/src/concepts/capability-migration-troubleshooting.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "matrix"
+required = true
+
+[[pages]]
+id = "user-authoring-api"
+title = "User authoring API"
+section = "API"
+kind = "api"
+path = "lib/ProcessBigraphs/docs/src/api/user-authoring.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[pages]]
+id = "semantic-values-api"
+title = "Semantic values, schemas, schedules, and effects"
+section = "API"
+kind = "api"
+path = "lib/ProcessBigraphs/docs/src/api/semantic-values.md"
+audience = "model-composer"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[pages]]
+id = "runtime-checkpoint-api"
+title = "Process, step, observer, runtime, and checkpoint API"
+section = "API"
+kind = "api"
+path = "lib/ProcessBigraphs/docs/src/api/runtime-checkpoint.md"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[pages]]
+id = "composition-structure-api"
+title = "Composition and structure API"
+section = "API"
+kind = "api"
+path = "lib/ProcessBigraphs/docs/src/api/composition-structure.md"
+audience = "runtime-contributor"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[pages]]
+id = "extension-experimental-api"
+title = "Extension protocols, experimental surface, and compatibility"
+section = "API"
+kind = "api"
+path = "lib/ProcessBigraphs/docs/src/api/extension-experimental.md"
+audience = "adapter-author"
+support = "internal-beta"
+runtime = "none"
+visual = "none"
+required = true
+
+[[task_reviews]]
+id = "model-composer"
+persona = "scientific model composer"
+required = true
+browser_journeys = ["first-model", "nested-composite", "claim-boundary"]
+
+[[task_reviews]]
+id = "adapter-author"
+persona = "adapter and solver author"
+required = true
+browser_journeys = ["extension-discovery", "minimal-adapter"]
+
+[[task_reviews]]
+id = "reproducibility-researcher"
+persona = "reproducibility researcher"
+required = true
+browser_journeys = ["checkpoint-restart", "wortel-case", "merks-case"]

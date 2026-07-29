@@ -4,6 +4,20 @@ struct ZeroNeumannFieldBoundary <: AbstractFieldBoundary end
 struct DirichletFieldBoundary{T <: AbstractFloat} <: AbstractFieldBoundary
     value::T
 end
+struct MixedFieldBoundary{T <: AbstractFloat} <: AbstractFieldBoundary
+    alpha::T
+    beta::T
+    value::T
+    function MixedFieldBoundary(alpha::T, beta::T, value::T) where {
+            T<:AbstractFloat}
+        all(isfinite, (alpha, beta, value)) ||
+            throw(ArgumentError("mixed field boundary parameters must be finite"))
+        !(iszero(alpha) && iszero(beta)) ||
+            throw(ArgumentError(
+                "mixed field boundary requires nonzero alpha or beta"))
+        new{T}(alpha, beta, value)
+    end
+end
 struct AxisFieldBoundary{L <: AbstractFieldBoundary, U <: AbstractFieldBoundary}
     negative::L
     positive::U
@@ -92,6 +106,12 @@ end
     value = T(face.value)
     invalid = state.invalid | (state.fixed & (state.value != value))
     return FieldIndexResolution(state.indices, true, invalid, value)
+end
+
+@inline function _resolve_field_face(
+        ::MixedFieldBoundary, index, extent, state, ::Val{D}) where {D}
+    throw(ArgumentError(
+        "mixed field boundaries require an evolution discretization and are not sampleable"))
 end
 
 @inline _resolve_field_indices(::Tuple{}, indices::NTuple{N, Int32}, dims::NTuple{N, Int},
@@ -353,6 +373,10 @@ _field_boundary_semantics(::PeriodicFieldBoundary) = (kind = :periodic,)
 _field_boundary_semantics(::ZeroNeumannFieldBoundary) = (kind = :zero_neumann,)
 function _field_boundary_semantics(boundary::DirichletFieldBoundary)
     return (kind = :dirichlet, value = boundary.value)
+end
+function _field_boundary_semantics(boundary::MixedFieldBoundary)
+    return (kind = :mixed, alpha = boundary.alpha,
+        beta = boundary.beta, value = boundary.value)
 end
 
 function _coupling_semantics(coupling::OwnerScalarCoupling)

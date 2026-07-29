@@ -2,7 +2,7 @@ using ProcessBigraphs
 using TOML
 
 length(ARGS) == 2 || error("usage: production_driver.jl FIXTURE OUTPUT")
-include(joinpath(@__DIR__, "..", "phase15c", "fixtures.jl"))
+include(joinpath(@__DIR__, "..", "fixtures", "serial_runtime.jl"))
 
 fixture = TOML.parsefile(ARGS[1])
 scale = TimeScale(1)
@@ -15,18 +15,22 @@ runtime = initialize_runtime(compiled, SerialExecutor(
     root_seed=Int(fixture["root_seed"])))
 run_until!(runtime, LogicalTime(Int(fixture["horizon"]), scale))
 
-adaptive_decl = ProcessDeclaration(
-    "adaptive",
-    C15Adaptive(1, Int(fixture["adaptive"]["offset"])),
-    AdaptiveSchedule(Duration(
-        Int(fixture["adaptive"]["first_due"]), scale)),
-)
-adaptive_model = compile_composite(StaticComposite(
-    BranchSchema(state=LeafSchema(Int; default=0, update_law=:add)),
-    Dict(), scale;
-    processes=(adaptive_decl,),
-    bindings=(PortBinding("adaptive", :out, path("state")),),
-))
+adaptive_schema =
+    BranchSchema(state=LeafSchema(Int; default=0, update_law=:add))
+adaptive_source = compose(
+    :OracleAdaptive, adaptive_schema; scale) do builder, stores
+    adaptive = mount!(
+        builder, :adaptive,
+        C15Adaptive(1, Int(fixture["adaptive"]["offset"])))
+    schedule!(
+        builder,
+        adaptive,
+        AdaptiveSchedule(Duration(
+            Int(fixture["adaptive"]["first_due"]), scale)),
+    )
+    attach!(builder, adaptive, (out=stores.state,))
+end
+adaptive_model = compile(adaptive_source)
 adaptive_runtime = initialize_runtime(adaptive_model, SerialExecutor())
 run_until!(adaptive_runtime,
     LogicalTime(Int(fixture["adaptive"]["horizon"]), scale))
@@ -39,14 +43,15 @@ run_until!(observation_runtime, LogicalTime(3, scale))
 
 counter_schema = BranchSchema(
     state=LeafSchema(Int; default=0, update_law=:add))
-counter_decl = ProcessDeclaration(
-    "counter", C15Counter(), FixedSchedule(Duration(1, scale));
-    continuation=(count=0,))
-counter_model = compile_composite(StaticComposite(
-    counter_schema, Dict(), scale;
-    processes=(counter_decl,),
-    bindings=(PortBinding("counter", :out, path("state")),),
-))
+counter_source = compose(
+    :OracleCounter, counter_schema; scale) do builder, stores
+    counter = mount!(
+        builder, :counter, C15Counter();
+        continuation=(count=0,))
+    schedule!(builder, counter, Every(Duration(1, scale)))
+    attach!(builder, counter, (out=stores.state,))
+end
+counter_model = compile(counter_source)
 counter_runtime = initialize_runtime(counter_model, SerialExecutor())
 run_until!(counter_runtime, LogicalTime(4, scale))
 checkpoint_value = logical_checkpoint(counter_runtime)
@@ -60,56 +65,59 @@ reactive_schema = BranchSchema(
     converged=LeafSchema(Int; default=0, update_law=:replace),
     bounded=LeafSchema(Int; default=0, update_law=:add),
 )
-trigger = ProcessDeclaration(
-    "trigger", C15Producer(), FixedSchedule(Duration(1, scale)))
-reactive_model = compile_composite(StaticComposite(
-    reactive_schema, Dict(), scale;
-    processes=(trigger,),
-    steps=(
-        StepDeclaration("copy", C15ReactiveCopy()),
-        StepDeclaration("converge", C15Converge();
-            dependencies=("converge",)),
-        StepDeclaration("bounded", C15Bounded()),
-    ),
-    bindings=(
-        PortBinding("trigger", :out, path("trigger")),
-        PortBinding("copy", :input, path("trigger")),
-        PortBinding("copy", :out, path("copied")),
-        PortBinding("converge", :state, path("converged")),
-        PortBinding("converge", :out, path("converged")),
-        PortBinding("bounded", :out, path("bounded")),
-    ),
-    iteration_regions=(
-        IterationRegion("convergence", ("converge",);
-            mode=:convergent, max_iterations=4,
-            watch_paths=(path("converged"),)),
-        IterationRegion("bounded-region", ("bounded",);
-            mode=:bounded, max_iterations=3),
-    ),
-))
+reactive_source = compose(
+    :OracleReactive, reactive_schema; scale) do builder, stores
+    trigger = mount!(builder, :trigger, C15Producer())
+    schedule!(builder, trigger, Every(Duration(1, scale)))
+    attach!(builder, trigger, (out=stores.trigger,))
+    copy_step = mount!(builder, :copy, C15ReactiveCopy())
+    attach!(builder, copy_step, (
+        input=stores.trigger,
+        out=stores.copied,
+    ))
+    converge = mount!(builder, :converge, C15Converge())
+    schedule!(builder, converge, After(converge))
+    attach!(builder, converge, (
+        state=stores.converged,
+        out=stores.converged,
+    ))
+    bounded = mount!(builder, :bounded, C15Bounded())
+    attach!(builder, bounded, (out=stores.bounded,))
+    iteration!(
+        builder, :convergence, (converge,);
+        mode=:convergent, max_iterations=4,
+        watch=(stores.converged,))
+    iteration!(
+        builder, Symbol("bounded-region"), (bounded,);
+        mode=:bounded, max_iterations=3)
+end
+reactive_model = compile(reactive_source)
 reactive_runtime = initialize_runtime(reactive_model, SerialExecutor())
 run_until!(reactive_runtime, LogicalTime(1, scale))
 
 multirate_values = Dict{Symbol,Int}()
 for behavior in (:frozen, :interpolated, :event_updated, :continuously_callable)
-    model = compile_composite(StaticComposite(
-        BranchSchema(
-            source=LeafSchema(Int; default=0, update_law=:add),
-            observed=LeafSchema(Int; default=0, update_law=:replace),
-        ),
-        Dict(), scale;
-        processes=(
-            ProcessDeclaration("producer", C15Producer(),
-                FixedSchedule(Duration(1, scale))),
-            ProcessDeclaration("probe", C15IntervalProbe(behavior),
-                FixedSchedule(Duration(3, scale))),
-        ),
-        bindings=(
-            PortBinding("producer", :out, path("source")),
-            PortBinding("probe", :input, path("source")),
-            PortBinding("probe", :observed, path("observed")),
-        ),
-    ))
+    multirate_schema = BranchSchema(
+        source=LeafSchema(Int; default=0, update_law=:add),
+        observed=LeafSchema(Int; default=0, update_law=:replace),
+    )
+    source = compose(
+        Symbol(:OracleMultirate_, behavior),
+        multirate_schema;
+        scale,
+    ) do builder, stores
+        producer = mount!(builder, :producer, C15Producer())
+        schedule!(builder, producer, Every(Duration(1, scale)))
+        attach!(builder, producer, (out=stores.source,))
+        probe = mount!(
+            builder, :probe, C15IntervalProbe(behavior))
+        schedule!(builder, probe, Every(Duration(3, scale)))
+        attach!(builder, probe, (
+            input=stores.source,
+            observed=stores.observed,
+        ))
+    end
+    model = compile(source)
     candidate = initialize_runtime(model, SerialExecutor())
     run_until!(candidate, LogicalTime(3, scale))
     multirate_values[behavior] = current_snapshot(candidate)[path("observed")]
@@ -124,18 +132,16 @@ catch
 end
 
 cycle_rejected = try
-    compile_composite(StaticComposite(
-        BranchSchema(state=LeafSchema(Int; default=0, update_law=:add)),
-        Dict(), scale;
-        steps=(
-            StepDeclaration("a", C15Bounded(); dependencies=("b",)),
-            StepDeclaration("b", C15Bounded(); dependencies=("a",)),
-        ),
-        bindings=(
-            PortBinding("a", :out, path("state")),
-            PortBinding("b", :out, path("state")),
-        ),
-    ))
+    cycle_schema =
+        BranchSchema(state=LeafSchema(Int; default=0, update_law=:add))
+    compose(:OracleCycle, cycle_schema; scale) do builder, stores
+        a = mount!(builder, :a, C15Bounded())
+        b = mount!(builder, :b, C15Bounded())
+        schedule!(builder, a, After(b))
+        schedule!(builder, b, After(a))
+        attach!(builder, a, (out=stores.state,))
+        attach!(builder, b, (out=stores.state,))
+    end
     false
 catch
     true

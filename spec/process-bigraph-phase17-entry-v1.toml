@@ -1,0 +1,222 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraph-phase17-entry-v1"
+phase = "17"
+title = "ProcessBigraphs model and documentation productization entry contract"
+status = "in_progress"
+implementation_status = "17.A-contract-freeze"
+internal_beta = true
+public_release = false
+baseline_commit = "04f39dc05f847b7dd84f24f12cce24d1ed0229a6"
+baseline_process_bigraphs_version = "0.5.1"
+permitted_process_bigraphs_version = "0.6.0"
+permitted_corepotts_version = "0.2.0"
+permitted_pottstoolkit_version = "0.2.0"
+julia = "1.12.6"
+implementation_authorized = true
+
+[authority]
+round_1 = "../design/audits/process-bigraph-phase17-owner-interview-round-1.md"
+round_2 = "../design/audits/process-bigraph-phase17-owner-interview-round-2.md"
+round_3 = "../design/audits/process-bigraph-phase17-owner-interview-round-3.md"
+decision = "decisions/0042-process-bigraph-model-and-documentation-productization.md"
+normative_specification = "phase-17-process-bigraph-model-and-documentation-productization.md"
+api_contract = "process-bigraph-phase17-api-v1.toml"
+documentation_contract = "process-bigraph-phase17-documentation-quality-v1.toml"
+browser_contract = "process-bigraph-phase17-browser-qa-v1.toml"
+qualification_ledger = "process-bigraph-phase17-qualification-v1.toml"
+implementation_plan = "../design/audits/process-bigraph-phase17-implementation-plan.md"
+specification_audit = "../design/audits/process-bigraph-phase17-specification-audit.md"
+specification_checker = "../scripts/check_process_bigraph_phase17_spec.jl"
+specification_checker_tests = "../scripts/test_process_bigraph_phase17_spec.jl"
+
+[prerequisites]
+phase16_qualified = true
+consolidation_qualified = true
+round_1_accepted = true
+round_2_accepted = true
+round_3_accepted = true
+specification_packet_required_before_sendoff = true
+implementation_waits_for_explicit_sendoff = true
+owner_sendoff_received = true
+
+[ordering]
+subgates = [
+    "17.A-contract-freeze",
+    "17.B-public-boundary-closure",
+    "17.C-model-migration",
+    "17.D-independent-manual",
+    "17.E-scientific-case-studies",
+    "17.F-reconciliation-and-attestation",
+]
+strictly_ordered = true
+compensation_allowed = false
+one_branch = true
+branch = "codex/ProcessBigraphs-Docs"
+baseline_merge_after_sendoff = true
+baseline_merge_strategy = "normal merge; no reset, rebase, or destructive checkout"
+
+[scope]
+required = [
+    "complete-process-bigraph-api-classification",
+    "qualified-public-engine-extension-protocol",
+    "managed-field-process-user-constructor",
+    "activity-potts-problem-facade",
+    "public-topology-relation-construction",
+    "wortel-2021-reference-model-family-v1",
+    "merks-2006-reference-model-family-v2",
+    "zero-internal-canonical-models-and-docs",
+    "independent-process-bigraph-documenter-site",
+    "minimum-35-curated-pages",
+    "complete-visible-inline-model-case-studies",
+    "reproducible-figures-traces-and-animations",
+    "cross-platform-clean-smokes",
+    "playwright-cross-browser-gate",
+    "wcag-2.2-aa-automated-and-agent-assessment",
+    "lighthouse-and-visual-regression",
+    "terminal-browser-agent-gate",
+    "content-addressed-exact-tree-attestation",
+]
+excluded = [
+    "public-release",
+    "registry-publication",
+    "stable-1x-api",
+    "complete-pinned-parity",
+    "dagger-or-distributed-execution",
+    "alternate-executor-qualification",
+    "broad-fba-sbml-biochemical-integration",
+    "cnv-case-study-polish",
+    "wortel-figure-2-reproduction",
+    "merks-figure-5-reproduction",
+    "whole-cell-qualification",
+    "source-author-endorsement",
+    "external-user-study",
+    "human-wcag-certification",
+    "automatic-merge-to-main",
+]
+
+[dependency_policy]
+process_bigraphs_depends_on_corepotts = false
+process_bigraphs_depends_on_pottstoolkit = false
+corepotts_depends_on_process_bigraphs = true
+pottstoolkit_depends_on_corepotts = true
+pottstoolkit_depends_on_process_bigraphs = true
+process_bigraphs_docs_may_depend_on_pottstoolkit = true
+production_dependency_cycle_forbidden = true
+upstream_python_runtime_execution = "forbidden"
+
+[ownership]
+process_bigraphs = "domain-neutral orchestration, composition, publication, failure, observation, replay, and extension contracts"
+corepotts = "generic CPM mechanisms, activity execution facade, and numerical adapters"
+pottstoolkit = "canonical Wortel and Merks scientific model families"
+wortel_module = "PottsToolkit.ReferenceModels.Wortel2021"
+merks_module = "PottsToolkit.ReferenceModels.Merks2006"
+
+[authoring]
+primary_entry = "compose(:Name) do system"
+explicit_operations = [
+    "store!",
+    "mount!",
+    "attach!",
+    "connect!",
+    "schedule!",
+    "observable!",
+    "parameter!",
+    "compile",
+]
+silent_autowiring = false
+all_in_one_mount_wire_schedule_in_canonical_docs = false
+anonymous_semantic_closures = false
+transparent_convenience_requires_inspection = true
+
+[models]
+content_class = "qualified_source_bounded_case_study"
+canonical_models = ["wortel-2021", "merks-2006"]
+canonical_model_owner = "PottsToolkit.ReferenceModels"
+internal_api_references_allowed = 0
+tutorial_imports_prebuilt_model = false
+quantitative_reproduction_claim = false
+source_author_endorsement_claim = false
+
+[documentation]
+independent_site = true
+dirname = "ProcessBigraphs"
+development_route = "/Potts.jl/ProcessBigraphs/dev/"
+top_level_sections = [
+    "Home",
+    "Learn",
+    "Examples",
+    "Scientific Case Studies",
+    "Concepts and Guarantees",
+    "API",
+]
+minimum_curated_pages = 35
+minimum_quality_score = 92
+minimum_category_score = 8
+strict_documenter = true
+visible_executable_programs = true
+reader_include_forbidden = true
+persistent_internal_beta_banner = true
+
+[browser]
+terminal_functional_gate = true
+waivers_allowed = false
+viewports = ["1440x900", "1024x768", "390x844"]
+themes = ["light", "dark"]
+engines = ["chromium", "firefox", "webkit"]
+wcag_target = "2.2-AA"
+qualifying_content_digest_required = true
+
+[autonomy]
+implementation_requires_owner_sendoff = true
+normal_merge_origin_main_after_sendoff = true
+commit_allowed_after_sendoff = true
+push_branch_allowed_after_sendoff = true
+draft_pr_allowed_after_sendoff = true
+merge_main_allowed = false
+registry_release_allowed = false
+branch_protection_changes_allowed = false
+preserve_user_paper_pdf_deletion = true
+stop_conditions = [
+    "missing-credentials-or-authority",
+    "sustained-external-service-failure",
+    "newly-required-unavailable-hardware",
+    "destructive-ambiguity-involving-user-work",
+    "specification-contradiction-requiring-scope-or-claim-change",
+]
+non_stop_conditions = [
+    "test-failure",
+    "documentation-defect",
+    "performance-budget-miss",
+    "browser-finding",
+    "implementation-difficulty",
+]
+
+[closure]
+required_state_before_sendoff = "specified_awaiting_owner_sendoff"
+required_state_after_implementation = "qualified_unpublished_internal_beta"
+all_ledger_rows_qualified = true
+exact_qualifying_content_digest = true
+browser_gate_last_functional_gate = true
+evidence_only_metadata_may_follow = true
+merge_to_main = false
+publish_package = false
+
+qualifying_path_prefixes = [
+    "Project.toml",
+    "Manifest.toml",
+    "src/",
+    "ext/",
+    "lib/ProcessBigraphs/",
+    "lib/CorePotts/",
+    "lib/MakiePotts/",
+    "integration/",
+    "benchmark/",
+    "docs/",
+    "spec/",
+    "scripts/",
+    ".github/workflows/",
+]
+
+evidence_only_prefixes = [
+    "design/evidence/phase-17/",
+]

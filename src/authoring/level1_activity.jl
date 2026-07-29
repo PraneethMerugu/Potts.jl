@@ -1,7 +1,7 @@
 """
     Act(; maximum_activity, strength, neighborhood, algorithm, observation_every=1)
 
-Level-1 Act-CPM declaration. It lowers completely to the Phase 14 semantic kernel and the
+Level-1 Act-CPM declaration. It lowers completely to the coupled semantic kernel and the
 ordered CPU/Metal/ROCm realization; it owns no separate runtime or checkpoint semantics.
 """
 struct Act{T <: AbstractFloat, R, A} <: AbstractLevel1Declaration

@@ -1,0 +1,379 @@
+schema_version = "1.0.0"
+qualification_id = "semantic-preserving-repository-consolidation-v1"
+status = "consolidation_qualified"
+contract = "semantic-preserving-consolidation-contract.md"
+required_row_count = 37
+qualified_row_count = 37
+open_row_count = 0
+allowed_statuses = ["specified", "implemented", "oracle_passing", "qualified", "blocked", "excluded"]
+closure_status = "closed"
+public_release = false
+new_functionality_allowed = false
+removed_functionality_allowed = false
+
+[candidate]
+status = "qualified"
+version = "0.5.1"
+audit = "../design/audits/semantic-preserving-consolidation-closure.md"
+evidence = "../design/evidence/consolidation-qualified/exact-head-v1.toml"
+audit_sha256 = "5465968597b60666e1186c4b42455829705e9a6eaf206ef46d8c6f9af20612fb"
+evidence_sha256 = "99ebd4bd300b60be62a474b1b12a43114dba63df529d723973d58a1875a74da6"
+qualified_date = "2026-07-29"
+qualified_commit = "3e4946d9aac8ed4b1fadd1455a148b27620fdad6"
+qualified_tree = "6a74b82ffbdfb92a501323d377c976a495e40904"
+tested_pull_request_merge_commit = "55449c6c8d12de5dc7c7963c0d7e947019dcb92a"
+tested_pull_request_merge_tree = "6a74b82ffbdfb92a501323d377c976a495e40904"
+exact_head_qualified = true
+pending = []
+
+[baseline_freeze]
+status = "qualified"
+qualified_date = "2026-07-28"
+qualified_requirement_count = 6
+required_requirement_count = 6
+production_consolidation_started = false
+audit = "../design/audits/semantic-preserving-consolidation-baseline-freeze.md"
+audit_sha256 = "3e166c14677c68abbee74654d7004037c500b97d695311c9b284bf26a664e19a"
+evidence = "../design/evidence/consolidation-baseline/baseline-freeze-v1.toml"
+evidence_sha256 = "33fcfcbb375e695445564cfcd487e484226c453693491dbb1fbb3191bfdab120"
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+qualified_tree = "c33dc3909ef043e0c9df9cc44d1ab63fe2a99475"
+next_gate = "naming_and_archive"
+
+[baseline]
+qualified_commit = "d2f4d40e78fb68ee20da483d9784b55d25bf6147"
+process_bigraphs_version = "0.5.0"
+process_bigraphs_internal_beta = true
+process_bigraphs_public_release = false
+tracked_julia_files = 388
+phase_named_julia_files = 87
+process_bigraph_quality_scripts = 22
+process_bigraph_quality_script_lines = 4692
+process_bigraph_phase_test_files = 18
+corepotts_phase_named_test_files = 20
+root_and_integration_phase_named_test_files = 40
+
+[owner_decisions]
+scope = "accepted_repository_wide_dependency_first"
+public_milestone_names = "accepted_domain_names_plus_internal_beta_compatibility_aliases"
+historical_artifacts = "accepted_immutable_and_indexed"
+quality_entrypoint_maximum = "accepted_six"
+large_file_waiver_threshold = "accepted_1000_nonblank_noncomment_lines"
+independent_evidence_duplication = "accepted_retained_when_decisive"
+invalidated_hardware_evidence = "accepted_rerun"
+api_delta = "accepted_enumerated_spelling_only"
+final_version = "accepted_0.5.1_if_compatible_otherwise_stop_for_0.6.0_decision"
+roadmap_boundary = "accepted_redesign_after_qualification"
+
+[dimensions]
+required = [
+    "baseline",
+    "naming",
+    "architecture",
+    "dryness",
+    "tests",
+    "quality_tooling",
+    "api",
+    "identity",
+    "persistence",
+    "performance",
+    "backend",
+    "documentation",
+    "evidence",
+]
+
+[[requirements]]
+id = "CON-B01"
+gate = "baseline_freeze"
+dimension = "baseline"
+title = "Exact-head package, environment, and dependency baseline"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/identity-v1.toml", "design/evidence/consolidation-baseline/baseline-freeze-v1.toml", "design/audits/semantic-preserving-consolidation-baseline-freeze.md"]
+
+[[requirements]]
+id = "CON-B02"
+gate = "baseline_freeze"
+dimension = "api"
+title = "Public, qualified-only, extension, and compatibility API inventories"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/api-v1.toml", "design/audits/phase-13-api-inventory.toml", "spec/process-bigraph-phase16-api-v1.toml"]
+
+[[requirements]]
+id = "CON-B03"
+gate = "baseline_freeze"
+dimension = "tests"
+title = "Complete behavioral coverage reconciliation matrix"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/coverage-v1.toml", "design/evidence/consolidation-baseline/performance-v1.toml", "design/audits/semantic-preserving-consolidation-baseline-freeze.md"]
+
+[[requirements]]
+id = "CON-B04"
+gate = "baseline_freeze"
+dimension = "identity"
+title = "Fingerprint, serialization, trace, and model-output fixtures"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/identity-fixtures-v1.toml", "design/evidence/process-bigraph-phase15c-evidence-v1.toml", "design/evidence/process-bigraph-phase16g-evidence-v1.toml", "design/evidence/process-bigraph-phase16h-evidence-v1.toml"]
+
+[[requirements]]
+id = "CON-B05"
+gate = "baseline_freeze"
+dimension = "performance"
+title = "Runtime, authoring, allocation, and test-time baseline"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/performance-v1.toml", "design/evidence/phase-16/phase16i-authoring-performance.toml", "design/evidence/process-bigraph-phase16b-evidence-v1.toml", "design/evidence/process-bigraph-phase16c-evidence-v1.toml"]
+
+[[requirements]]
+id = "CON-B06"
+gate = "baseline_freeze"
+dimension = "backend"
+title = "Exact-source hardware evidence impact map"
+status = "qualified"
+evidence = ["design/evidence/consolidation-baseline/hardware-impact-v1.toml", "design/evidence/process-bigraph-phase16c-evidence-v1.toml", "design/evidence/process-bigraph-phase16i-evidence-v1.toml"]
+
+[[requirements]]
+id = "CON-N01"
+gate = "naming_and_archive"
+dimension = "naming"
+title = "Canonical domain vocabulary and old-to-new naming map"
+status = "qualified"
+evidence = ["types", "functions", "constants", "files", "testsets", "CI jobs", "documentation"]
+
+[[requirements]]
+id = "CON-N02"
+gate = "naming_and_archive"
+dimension = "naming"
+title = "Zero unallowlisted milestone names in living source"
+status = "qualified"
+evidence = ["source scan", "message scan", "identifier scan", "historical/compatibility allowlist"]
+
+[[requirements]]
+id = "CON-N03"
+gate = "naming_and_archive"
+dimension = "tests"
+title = "Domain-oriented active test paths, fixtures, and testsets"
+status = "qualified"
+evidence = ["ProcessBigraphs", "CorePotts", "PottsToolkit", "MakiePotts", "integration"]
+
+[[requirements]]
+id = "CON-N04"
+gate = "naming_and_archive"
+dimension = "evidence"
+title = "Immutable historical evidence and protocol identity index"
+status = "qualified"
+evidence = ["hashes", "paths", "run IDs", "frozen identifiers", "reproduction disposition"]
+
+[[requirements]]
+id = "CON-N05"
+gate = "naming_and_archive"
+dimension = "api"
+title = "Enumerated public-name compatibility policy"
+status = "qualified"
+evidence = ["canonical names", "deprecated aliases", "export delta", "removal disposition"]
+
+[[requirements]]
+id = "CON-A01"
+gate = "architecture"
+dimension = "architecture"
+title = "Checked one-way responsibility-layer dependency graph"
+status = "qualified"
+evidence = ["ProcessBigraphs graph", "CorePotts graph", "frontend graph", "extension boundaries"]
+
+[[requirements]]
+id = "CON-A02"
+gate = "architecture"
+dimension = "architecture"
+title = "One production authority for every accepted concept"
+status = "qualified"
+evidence = ["authority inventory", "consumer map", "parallel-path disposition"]
+
+[[requirements]]
+id = "CON-A03"
+gate = "architecture"
+dimension = "architecture"
+title = "Domain-oriented file ownership and large-file waiver audit"
+status = "qualified"
+evidence = ["responsibility map", "file metrics", "waivers", "entry-module audit"]
+
+[[requirements]]
+id = "CON-A04"
+gate = "architecture"
+dimension = "architecture"
+title = "Package and optional-extension dependency boundaries unchanged"
+status = "qualified"
+evidence = ["Projects", "Manifests", "weak dependencies", "extension triggers", "forbidden edges"]
+
+[[requirements]]
+id = "CON-D01"
+gate = "production_deduplication"
+dimension = "dryness"
+title = "All nontrivial code duplication classified"
+status = "qualified"
+evidence = ["clone report", "production duplicates", "oracles", "kernels", "compatibility", "specializations"]
+
+[[requirements]]
+id = "CON-D02"
+gate = "production_deduplication"
+dimension = "dryness"
+title = "Accidental production duplication eliminated"
+status = "qualified"
+evidence = ["canonical mechanisms", "removed paths", "consumer migration", "equivalence tests"]
+
+[[requirements]]
+id = "CON-D03"
+gate = "production_deduplication"
+dimension = "dryness"
+title = "Independent evidence implementations remain independent"
+status = "qualified"
+evidence = ["oracle boundary", "custom adapter boundary", "reference/production boundary", "backend boundary"]
+
+[[requirements]]
+id = "CON-T01"
+gate = "test_and_quality_harness"
+dimension = "tests"
+title = "One reusable fixture authority per test scenario"
+status = "qualified"
+evidence = ["fixture inventory", "ownership", "consumer list", "production exclusion"]
+
+[[requirements]]
+id = "CON-T02"
+gate = "test_and_quality_harness"
+dimension = "tests"
+title = "Shared protocol contract suites across implementations"
+status = "qualified"
+evidence = ["engine adapters", "fields", "codecs", "checkpoint stores", "backends", "authoring equivalence"]
+
+[[requirements]]
+id = "CON-T03"
+gate = "test_and_quality_harness"
+dimension = "tests"
+title = "Every baseline test obligation maps to surviving evidence"
+status = "qualified"
+evidence = ["coverage reconciliation", "deleted-test disposition", "negative paths", "restart", "models"]
+
+[[requirements]]
+id = "CON-Q01"
+gate = "test_and_quality_harness"
+dimension = "quality_tooling"
+title = "Stable reusable current-state quality checker"
+status = "qualified"
+evidence = ["architecture", "contracts", "evidence", "docs", "performance", "root runner"]
+
+[[requirements]]
+id = "CON-Q02"
+gate = "test_and_quality_harness"
+dimension = "quality_tooling"
+title = "Historical phase checkers removed from active lifecycle authority"
+status = "qualified"
+evidence = ["CI inventory", "archive index", "current obligation map", "hash preservation"]
+
+[[requirements]]
+id = "CON-Q03"
+gate = "test_and_quality_harness"
+dimension = "quality_tooling"
+title = "Durable domain-named CI gate topology"
+status = "qualified"
+evidence = ["job names", "required dependencies", "platform coverage", "required aggregate"]
+
+[[requirements]]
+id = "CON-P01"
+gate = "process_bigraphs"
+dimension = "architecture"
+title = "ProcessBigraphs primitives, structure, lowering, and provenance consolidated"
+status = "qualified"
+evidence = ["one canonical structure", "one lowering path", "identity equivalence", "origin map"]
+
+[[requirements]]
+id = "CON-P02"
+gate = "process_bigraphs"
+dimension = "architecture"
+title = "ProcessBigraphs runtime, engine, and field transactions consolidated"
+status = "qualified"
+evidence = ["scheduling", "transaction state machine", "publication", "failure", "adapter contracts"]
+
+[[requirements]]
+id = "CON-P03"
+gate = "process_bigraphs"
+dimension = "persistence"
+title = "ProcessBigraphs checkpoint front door and versioned codecs consolidated"
+status = "qualified"
+evidence = ["current format", "legacy formats", "bytes", "restore", "conversion", "replay"]
+
+[[requirements]]
+id = "CON-P04"
+gate = "process_bigraphs"
+dimension = "api"
+title = "ProcessBigraphs authoring, validation, inspection, and serialization consolidated"
+status = "qualified"
+evidence = ["semantic model", "builder", "diagnostics", "lowering", "serialization", "raw-IR boundary"]
+
+[[requirements]]
+id = "CON-C01"
+gate = "core_and_frontends"
+dimension = "architecture"
+title = "CorePotts state, components, algorithms, and coupled execution consolidated"
+status = "qualified"
+evidence = ["authority map", "host/portable dispatch", "continuous fields", "relationships", "persistence"]
+
+[[requirements]]
+id = "CON-C02"
+gate = "core_and_frontends"
+dimension = "api"
+title = "ProcessBigraphs adapters and bounded model assemblies preserve behavior"
+status = "qualified"
+evidence = ["native", "SciML", "custom", "Merks", "CNV", "claim boundary"]
+
+[[requirements]]
+id = "CON-C03"
+gate = "core_and_frontends"
+dimension = "api"
+title = "PottsToolkit and MakiePotts preserve public behavior"
+status = "qualified"
+evidence = ["authoring", "lowering", "reports", "requests", "rendering", "extensions"]
+
+[[requirements]]
+id = "CON-R01"
+gate = "reconciliation"
+dimension = "identity"
+title = "Baseline fingerprints, canonical bytes, traces, and observations reconcile"
+status = "qualified"
+evidence = ["exact comparisons", "approved compatibility exceptions", "model outputs"]
+
+[[requirements]]
+id = "CON-R02"
+gate = "reconciliation"
+dimension = "persistence"
+title = "Current and retained legacy checkpoint matrices pass"
+status = "qualified"
+evidence = ["encode", "decode", "restore", "restart cuts", "replay classes", "non-destructive conversion"]
+
+[[requirements]]
+id = "CON-R03"
+gate = "reconciliation"
+dimension = "performance"
+title = "All frozen runtime, authoring, allocation, and device budgets pass"
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/native-field-metal.toml", "design/evidence/consolidation-qualified/native-field-rocm.toml"]
+
+[[requirements]]
+id = "CON-R04"
+gate = "reconciliation"
+dimension = "backend"
+title = "CPU and every invalidated trusted hardware claim requalified"
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/native-field-metal.toml", "design/evidence/consolidation-qualified/native-field-rocm.toml"]
+
+[[requirements]]
+id = "CON-R05"
+gate = "reconciliation"
+dimension = "documentation"
+title = "Domain-oriented docs, examples, generated pages, and limitations reconcile"
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/evidence/consolidation-qualified/linux-install-smoke.toml", "design/evidence/consolidation-qualified/macos-install-smoke.toml", "design/evidence/consolidation-qualified/windows-install-smoke.toml", "design/audits/semantic-preserving-consolidation-closure.md"]
+
+[[requirements]]
+id = "CON-R06"
+gate = "reconciliation"
+dimension = "evidence"
+title = "Exact-head evidence and zero-functional-delta attestation"
+status = "qualified"
+evidence = ["design/evidence/consolidation-qualified/exact-head-v1.toml", "design/audits/semantic-preserving-consolidation-closure.md"]

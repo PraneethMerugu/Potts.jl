@@ -1,6 +1,6 @@
 module PottsBenchmarks
 
-include("Phase12Comparison.jl")
+include("PerformanceComparison.jl")
 
 using Adapt
 using BenchmarkTools
@@ -14,26 +14,26 @@ using Statistics
 using TOML
 import PottsToolkit
 
-struct Phase10QualificationEnergy{T <: AbstractFloat} <: AbstractEnergy
+struct AuthoringQualificationEnergy{T <: AbstractFloat} <: AbstractEnergy
     value::T
 end
-CorePotts.component_identity(::Phase10QualificationEnergy) =
-    ComponentIdentity(:phase10_qualification_energy, v"1.0.0", :energy)
-CorePotts.energy_change(component::Phase10QualificationEnergy,
+CorePotts.component_identity(::AuthoringQualificationEnergy) =
+    ComponentIdentity(:authoring_qualification_energy, v"1.0.0", :energy)
+CorePotts.energy_change(component::AuthoringQualificationEnergy,
     proposal::CopyProposal, state::LogicalPottsState) = component.value
-CorePotts.proposal_energy_change(component::Phase10QualificationEnergy,
+CorePotts.proposal_energy_change(component::AuthoringQualificationEnergy,
     proposal::CopyProposal, context::ScientificProposalContext) = component.value
-CorePotts.scientific_access(::Phase10QualificationEnergy) = SnapshotScientificAccess()
-CorePotts.component_semantic_data(component::Phase10QualificationEnergy) =
+CorePotts.scientific_access(::AuthoringQualificationEnergy) = SnapshotScientificAccess()
+CorePotts.component_semantic_data(component::AuthoringQualificationEnergy) =
     (value = component.value,)
 
 # A downstream package's polished Level 1 constructor is ordinary Julia. The returned component
 # enters PottsToolkit through CorePotts's public scientific protocol and needs no central registry.
-Phase11ExtensionEnergy(value::Real) = Phase10QualificationEnergy(Float32(value))
+ExtensionQualificationEnergy(value::Real) = AuthoringQualificationEnergy(Float32(value))
 
 const SCHEMA_VERSION = "1.0.0"
-const PHASE10_SCHEMA_VERSION = "2.1.0"
-const PHASE12_WORKLOAD_SET_VERSION = "paper-core-1.0.0"
+const SINGLE_RUN_SCHEMA_VERSION = "2.1.0"
+const PERFORMANCE_WORKLOAD_SET_VERSION = "paper-core-1.0.0"
 const HARNESS_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
 const REPOSITORY_ROOT = normpath(get(
     ENV, "POTTS_BENCHMARK_SUBJECT_ROOT", HARNESS_ROOT))
@@ -236,7 +236,7 @@ end
     @inbounds output[index] = input[index] * UInt32(2)
 end
 
-@kernel function _scientific_phase6_probe!(output, metadata, state, proposal_relation,
+@kernel function _scientific_component_probe!(output, metadata, state, proposal_relation,
         components, transaction, recipient, direction)
     index = @index(Global, Linear)
     if index == 1
@@ -329,7 +329,7 @@ function _backend_array(name::String, values)
     return Base.invokelatest(_backend_adaptor(name), values)
 end
 
-"""Execute the Phase 5 raw-word probe and require exact CPU/backend identity."""
+"""Execute the raw-word device probe and require exact CPU/backend identity."""
 function qualify_rng_backend(name::String)
     contract = Philox4x32x10V1()
     seed = UInt64(0x706f7474732d7631)
@@ -523,7 +523,7 @@ function qualify_execution_backend(name::String)
     )
 end
 
-function _phase6_fixture(::Val{N}) where {N}
+function _device_component_fixture(::Val{N}) where {N}
     dims = ntuple(_ -> 4, Val(N))
     volume = QuadraticVolumeHamiltonian(number_type = Float32)
     spacing = ntuple(_ -> 1.0f0, Val(N))
@@ -584,7 +584,7 @@ function _phase6_fixture(::Val{N}) where {N}
         selected === nothing || break
     end
     selected === nothing &&
-        error("internal Phase 6 qualification has no extension proposal")
+        error("internal device-component qualification has no extension proposal")
     attempt, recipient, direction = selected
     proposal = actionable_proposal(attempt)
     transaction = stage_copy_transaction(
@@ -606,7 +606,7 @@ function _phase6_fixture(::Val{N}) where {N}
         neighbor_workspace = DistinctNeighborWorkspace(nslots(capacity(logical))))
 end
 
-function _phase6_normalized_surface_fixture(::Val{N}) where {N}
+function _normalized_surface_fixture(::Val{N}) where {N}
     dims = ntuple(_ -> 6, Val(N))
     spacing = ntuple(_ -> 1.0f0, Val(N))
     domain = CartesianDomain(dims; spacing)
@@ -640,21 +640,21 @@ function _phase6_normalized_surface_fixture(::Val{N}) where {N}
         proposal === nothing || break
     end
     proposal === nothing && error(
-        "internal Phase 6 normalized-surface qualification has no proposal")
+        "internal device-component normalized-surface qualification has no proposal")
     tracker = BoundaryMeasureTracker(metric, relation)
     compiled = compile_scientific_state(logical, domain, tracker)
     transaction = stage_copy_transaction(compiled, tracker, proposal)
     return (; logical, domain, component, tracker, compiled, proposal, transaction)
 end
 
-"""Qualify the Phase 6 proposal, component, field, and staged-commit device path."""
+"""Qualify the device-component proposal, component, field, and staged-commit device path."""
 function qualify_scientific_backend(name::String)
     adaptor = _backend_adaptor(name)
     compiled_bytes = Dict{String, Int}()
     workspace_byte_counts = Dict{String, Int}()
     for N in (2, 3)
-        fixture = _phase6_fixture(Val(N))
-        normalized = _phase6_normalized_surface_fixture(Val(N))
+        fixture = _device_component_fixture(Val(N))
+        normalized = _normalized_surface_fixture(Val(N))
         runtime = scientific_execution(fixture.compiled)
         oracle_neighbor_workspace = DistinctNeighborWorkspace(
             nslots(capacity(fixture.logical)))
@@ -734,7 +734,7 @@ function qualify_scientific_backend(name::String)
         query_metadata = _backend_array(
             name, zeros(UInt32, length(expected_query_metadata)))
         backend = KernelAbstractions.get_backend(component_output)
-        probe = _scientific_phase6_probe!(backend, 1)
+        probe = _scientific_component_probe!(backend, 1)
         probe(component_output, proposal_metadata, scientific_execution(adapted),
             fixture.proposal_relation, components, fixture.transaction,
             fixture.recipient, fixture.direction;
@@ -754,19 +754,19 @@ function qualify_scientific_backend(name::String)
         observed_queries = Array(query_output)
         all(isapprox.(observed_components, expected_components;
             rtol = 16eps(Float32), atol = 16eps(Float32))) || error(
-            "$name Phase 6 $N-D component outputs differ from the CPU oracle")
+            "$name device-component $N-D component outputs differ from the CPU oracle")
         all(isapprox.(observed_evaluation, expected_evaluation;
             rtol = 16eps(Float32), atol = 16eps(Float32))) || error(
-            "$name Phase 6 $N-D generic evaluation differs from the CPU oracle")
+            "$name device-component $N-D generic evaluation differs from the CPU oracle")
         all(isapprox.(observed_queries, expected_queries;
             rtol = 16eps(Float32), atol = 16eps(Float32))) || error(
-            "$name Phase 6 $N-D query outputs differ from the CPU oracle")
+            "$name device-component $N-D query outputs differ from the CPU oracle")
         Array(proposal_metadata) == expected_proposal_metadata || error(
-            "$name Phase 6 $N-D proposal metadata differs from the CPU oracle")
+            "$name device-component $N-D proposal metadata differs from the CPU oracle")
         Array(evaluation_metadata) == expected_evaluation_metadata || error(
-            "$name Phase 6 $N-D evaluation metadata differs from the CPU oracle")
+            "$name device-component $N-D evaluation metadata differs from the CPU oracle")
         Array(query_metadata) == expected_query_metadata || error(
-            "$name Phase 6 $N-D query metadata differs from the CPU oracle")
+            "$name device-component $N-D query metadata differs from the CPU oracle")
 
         normalized_expected = energy_change(normalized.component, normalized.proposal,
             normalized.logical, normalized.domain)
@@ -784,24 +784,24 @@ function qualify_scientific_backend(name::String)
         launch_staged_commit!(normalized_plan, adapted_normalized,
             normalized.transaction; accepted = true)
         normalized_metrics.host_synchronizations == 0 || error(
-            "$name Phase 6 normalized-surface path introduced a host synchronization")
+            "$name device-component normalized-surface path introduced a host synchronization")
         KernelAbstractions.synchronize(normalized_backend)
         isapprox(Array(normalized_output)[1], normalized_expected;
             rtol = 16eps(Float32), atol = 16eps(Float32)) || error(
-            "$name Phase 6 $N-D normalized-surface delta differs from the CPU oracle")
+            "$name device-component $N-D normalized-surface delta differs from the CPU oracle")
         normalized_oracle = compile_scientific_state(
             normalized.logical, normalized.domain, normalized.tracker)
         commit_staged!(normalized_oracle, normalized.transaction; accepted = true)
         all(isapprox.(Array(adapted_normalized.trackers.boundary_measures),
             normalized_oracle.trackers.boundary_measures;
             rtol = 16eps(Float32), atol = 16eps(Float32))) || error(
-            "$name Phase 6 $N-D normalized-surface commit differs from recomputation")
+            "$name device-component $N-D normalized-surface commit differs from recomputation")
 
         metrics = ExecutionMetrics()
         plan = ExecutionPlan(backend; block_size = 1, metrics)
         launch_staged_commit!(plan, adapted, fixture.transaction; accepted = true)
         metrics.host_synchronizations == 0 || error(
-            "$name Phase 6 staged commit introduced an internal host synchronization")
+            "$name device-component staged commit introduced an internal host synchronization")
         KernelAbstractions.synchronize(backend)
         expected_compiled = compile_scientific_state(fixture.logical, fixture.domain,
             fixture.boundary_tracker; moment_tracker = fixture.moment_tracker)
@@ -844,7 +844,7 @@ function qualify_scientific_backend(name::String)
     )
 end
 
-function _phase7_components(fixture)
+function _algorithm_components(fixture)
     return ScientificComponentSet(
         energies = (fixture.volume, fixture.contact, fixture.boundary),
         constraints = (fixture.connectivity,),
@@ -852,12 +852,12 @@ function _phase7_components(fixture)
     )
 end
 
-function _phase7_sequential_run(name::String, fixture, seed::UInt64)
+function _sequential_run(name::String, fixture, seed::UInt64)
     adaptor = _backend_adaptor(name)
     compiled = compile_scientific_state(
         fixture.logical, fixture.domain, fixture.boundary_tracker)
     state = Adapt.adapt(adaptor, compiled)
-    components = Adapt.adapt(adaptor, _phase7_components(fixture))
+    components = Adapt.adapt(adaptor, _algorithm_components(fixture))
     backend = KernelAbstractions.get_backend(state.potts.storage.active)
     metrics = ExecutionMetrics()
     plan = ExecutionPlan(backend; block_size = 128, metrics)
@@ -894,10 +894,10 @@ end
 function qualify_sequential_backend(name::String)
     dimensions = Int[]
     for N in (2, 3)
-        fixture = _phase6_fixture(Val(N))
-        first_run = _phase7_sequential_run(
+        fixture = _device_component_fixture(Val(N))
+        first_run = _sequential_run(
             name, fixture, UInt64(0x7068617365370000) + UInt64(N))
-        second_run = _phase7_sequential_run(
+        second_run = _sequential_run(
             name, fixture, UInt64(0x7068617365370000) + UInt64(N))
         first_run.report == second_run.report || error(
             "$name SequentialCPM $N-D report replay differs for the same seed")
@@ -925,19 +925,19 @@ function qualify_sequential_backend(name::String)
     )
 end
 
-function _phase7_checkerboard_components(fixture)
+function _checkerboard_components(fixture)
     return ScientificComponentSet(
         energies = (fixture.volume, fixture.contact, fixture.boundary),
         kinetic_modifiers = (PositiveYield(0.75f0),)
     )
 end
 
-function _phase7_checkerboard_run(name::String, fixture, seed::UInt64)
+function _checkerboard_run(name::String, fixture, seed::UInt64)
     adaptor = _backend_adaptor(name)
     compiled = compile_scientific_state(
         fixture.logical, fixture.domain, fixture.boundary_tracker)
     state = Adapt.adapt(adaptor, compiled)
-    components = Adapt.adapt(adaptor, _phase7_checkerboard_components(fixture))
+    components = Adapt.adapt(adaptor, _checkerboard_components(fixture))
     backend = KernelAbstractions.get_backend(state.potts.storage.active)
     metrics = ExecutionMetrics()
     plan = ExecutionPlan(backend; block_size = 128, metrics)
@@ -978,10 +978,10 @@ function qualify_checkerboard_backend(name::String)
     dimensions = Int[]
     initialization_synchronizations = Int[]
     for N in (2, 3)
-        fixture = _phase6_fixture(Val(N))
+        fixture = _device_component_fixture(Val(N))
         seed = UInt64(0x7068617365371000) + UInt64(N)
-        first_run = _phase7_checkerboard_run(name, fixture, seed)
-        second_run = _phase7_checkerboard_run(name, fixture, seed)
+        first_run = _checkerboard_run(name, fixture, seed)
+        second_run = _checkerboard_run(name, fixture, seed)
         first_run.report == second_run.report || error(
             "$name CheckerboardSweepCPM $N-D report replay differs for the same seed")
         lattice_storage(first_run.snapshot) == lattice_storage(second_run.snapshot) || error(
@@ -1011,12 +1011,12 @@ function qualify_checkerboard_backend(name::String)
     )
 end
 
-function _phase7_lottery_run(name::String, fixture, seed::UInt64)
+function _lottery_run(name::String, fixture, seed::UInt64)
     adaptor = _backend_adaptor(name)
     compiled = compile_scientific_state(
         fixture.logical, fixture.domain, fixture.boundary_tracker)
     state = Adapt.adapt(adaptor, compiled)
-    components = Adapt.adapt(adaptor, _phase7_checkerboard_components(fixture))
+    components = Adapt.adapt(adaptor, _checkerboard_components(fixture))
     backend = KernelAbstractions.get_backend(state.potts.storage.active)
     metrics = ExecutionMetrics()
     plan = ExecutionPlan(backend; block_size = 128, metrics)
@@ -1055,10 +1055,10 @@ function qualify_lottery_backend(name::String)
     dimensions = Int[]
     initialization_synchronizations = Int[]
     for N in (2, 3)
-        fixture = _phase6_fixture(Val(N))
+        fixture = _device_component_fixture(Val(N))
         seed = UInt64(0x7068617365372000) + UInt64(N)
-        first_run = _phase7_lottery_run(name, fixture, seed)
-        second_run = _phase7_lottery_run(name, fixture, seed)
+        first_run = _lottery_run(name, fixture, seed)
+        second_run = _lottery_run(name, fixture, seed)
         first_run.report == second_run.report || error(
             "$name LotteryCPM $N-D report replay differs for the same seed")
         lattice_storage(first_run.snapshot) == lattice_storage(second_run.snapshot) || error(
@@ -1087,7 +1087,7 @@ function qualify_lottery_backend(name::String)
     )
 end
 
-function _phase7_mechanical_clock_fixture(::Val{N}) where {N}
+function _mechanical_clock_fixture(::Val{N}) where {N}
     dims = N == 2 ? (4, 4) : (3, 3, 3)
     spacing = ntuple(_ -> 1.0f0, N)
     surface_relation = first_shell_relation(SurfaceRole(), Val(N); spacing)
@@ -1115,9 +1115,9 @@ function _phase7_mechanical_clock_fixture(::Val{N}) where {N}
     return (; logical, domain, tracker, proposal_relation, components)
 end
 
-function _phase7_mechanical_clock_run(name::String, ::Val{N}, algorithm,
+function _mechanical_clock_run(name::String, ::Val{N}, algorithm,
         seed::UInt64) where {N}
-    fixture = _phase7_mechanical_clock_fixture(Val(N))
+    fixture = _mechanical_clock_fixture(Val(N))
     adaptor = _backend_adaptor(name)
     state = Adapt.adapt(adaptor, compile_scientific_state(
         fixture.logical, fixture.domain, fixture.tracker))
@@ -1143,7 +1143,7 @@ function _phase7_mechanical_clock_run(name::String, ::Val{N}, algorithm,
     return (; pressure, tension, initialization_synchronizations)
 end
 
-function _phase7_stationary_pressure_sample(name::String)
+function _stationary_pressure_sample(name::String)
     dims = (64, 64)
     slot_count = prod(dims)
     component = FluctuatingVolumePressure(; eta = 1.0f0,
@@ -1227,9 +1227,9 @@ function qualify_mechanics_backend(name::String)
         for N in (2, 3)
             seed = UInt64(0x7068617365373000) + UInt64(16N) +
                    UInt64(length(synchronization_counts))
-            first_run = _phase7_mechanical_clock_run(
+            first_run = _mechanical_clock_run(
                 name, Val(N), algorithm, seed)
-            second_run = _phase7_mechanical_clock_run(
+            second_run = _mechanical_clock_run(
                 name, Val(N), algorithm, seed)
             first_run.pressure == second_run.pressure || error(
                 "$name $label $N-D volume-pressure replay differs")
@@ -1239,7 +1239,7 @@ function qualify_mechanics_backend(name::String)
                 first_run.initialization_synchronizations)
         end
     end
-    stationary = _phase7_stationary_pressure_sample(name)
+    stationary = _stationary_pressure_sample(name)
     return Dict(
         "backend" => name,
         "families" => ["FluctuatingVolumePressure", "FluctuatingSurfaceTension"],
@@ -1257,9 +1257,9 @@ function qualify_mechanics_backend(name::String)
     )
 end
 
-function _phase8_lifecycle_fixture(::Val{N}; geometry = nothing) where {N}
+function _lifecycle_fixture(::Val{N}; geometry = nothing) where {N}
     dims = ntuple(_ -> 4, Val(N))
-    provenance = ComponentIdentity(:phase8_lifecycle_qualification, v"1.0.0", :benchmark)
+    provenance = ComponentIdentity(:lifecycle_qualification, v"1.0.0", :benchmark)
     schema = PropertySchema(
         PropertyDescriptor(:target, Int32, ConstantInitializer(Int32(0));
             requester = provenance, division = SplitOnDivision(),
@@ -1292,9 +1292,9 @@ function _phase8_lifecycle_fixture(::Val{N}; geometry = nothing) where {N}
         events = (division, growth, custom))
 end
 
-function _phase8_lifecycle_run(name::String, ::Val{N}, algorithm, seed::UInt64;
+function _lifecycle_run(name::String, ::Val{N}, algorithm, seed::UInt64;
         reverse_declaration::Bool = false, geometry = nothing) where {N}
-    fixture = _phase8_lifecycle_fixture(Val(N); geometry)
+    fixture = _lifecycle_fixture(Val(N); geometry)
     adaptor = _backend_adaptor(name)
     state = Adapt.adapt(adaptor, compile_scientific_state(
         fixture.logical, fixture.domain, fixture.tracker))
@@ -1330,8 +1330,8 @@ function _phase8_lifecycle_run(name::String, ::Val{N}, algorithm, seed::UInt64;
         workspace_bytes = compiled_lifecycle_bytes(lifecycle))
 end
 
-function _phase8_lifecycle_failure_qualification(name::String)
-    fixture = _phase8_lifecycle_fixture(Val(2))
+function _lifecycle_failure_qualification(name::String)
+    fixture = _lifecycle_fixture(Val(2))
     adaptor = _backend_adaptor(name)
     function build(events; logical = fixture.logical,
             resolver = RejectLifecycleConflicts())
@@ -1404,11 +1404,11 @@ function _phase8_lifecycle_failure_qualification(name::String)
     )
 end
 
-function _phase8_moment_lifecycle_qualification(name::String)
+function _moment_lifecycle_qualification(name::String)
     adaptor = _backend_adaptor(name)
     for N in (2, 3)
         dims = ntuple(_ -> 6, Val(N))
-        provenance = ComponentIdentity(:phase8_moment_qualification, v"1.0.0", :benchmark)
+        provenance = ComponentIdentity(:moment_qualification, v"1.0.0", :benchmark)
         schema = PropertySchema(PropertyDescriptor(:age, Int32,
             ConstantInitializer(Int32(0)); requester = provenance,
             division = CloneOnDivision(), transition = PreserveOnTransition()))
@@ -1451,7 +1451,7 @@ function _phase8_moment_lifecycle_qualification(name::String)
         "independent_reconstruction" => true, "child_tracking" => "explicit_only")
 end
 
-function _phase8_mechanical_lifecycle_run(name::String, ::Val{N}, division,
+function _mechanical_lifecycle_run(name::String, ::Val{N}, division,
         seed::UInt64) where {N}
     dims = ntuple(_ -> 4, Val(N))
     domain = CartesianDomain(dims; spacing = ntuple(_ -> 1.0f0, Val(N)))
@@ -1497,7 +1497,7 @@ function _phase8_mechanical_lifecycle_run(name::String, ::Val{N}, division,
     return (; snapshot, host_state, boundary_tracker)
 end
 
-function _phase8_mechanical_lifecycle_qualification(name::String)
+function _mechanical_lifecycle_qualification(name::String)
     policies = (
         ConstitutiveResetAfterDivision(),
         PreserveMechanicalOnDivision(),
@@ -1509,8 +1509,8 @@ function _phase8_mechanical_lifecycle_qualification(name::String)
         push!(labels, label)
         for N in (2, 3)
             seed = UInt64(0x7068617365384000) + UInt64(16N) + UInt64(length(label))
-            first_run = _phase8_mechanical_lifecycle_run(name, Val(N), policy, seed)
-            replay = _phase8_mechanical_lifecycle_run(name, Val(N), policy, seed)
+            first_run = _mechanical_lifecycle_run(name, Val(N), policy, seed)
+            replay = _mechanical_lifecycle_run(name, Val(N), policy, seed)
             first_pressure = property_values(first_run.snapshot, :volume_pressure)[1:2]
             first_tension = property_values(first_run.snapshot, :surface_tension)[1:2]
             first_pressure == property_values(replay.snapshot, :volume_pressure)[1:2] ||
@@ -1544,11 +1544,11 @@ function _phase8_mechanical_lifecycle_qualification(name::String)
         "policies" => labels, "same_backend_replay" => true)
 end
 
-function _phase8_initialization_qualification(name::String)
+function _initialization_qualification(name::String)
     adaptor = _backend_adaptor(name)
     for N in (2, 3)
         dims = ntuple(_ -> 8, Val(N))
-        provenance = ComponentIdentity(:phase8_initialization_qualification,
+        provenance = ComponentIdentity(:initialization_qualification,
             v"1.0.0", :benchmark)
         schema = PropertySchema(PropertyDescriptor(:age, Int32,
             ConstantInitializer(Int32(0)); requester = provenance,
@@ -1598,10 +1598,10 @@ function _phase8_initialization_qualification(name::String)
         "declaration_permutation_invariant" => true, "hidden_host_fallback" => false)
 end
 
-function _phase8_downstream_protocol_run(name::String, ::Val{N}, seed::UInt64;
+function _downstream_protocol_run(name::String, ::Val{N}, seed::UInt64;
         reverse_declaration::Bool = false) where {N}
     dims = ntuple(_ -> 4, Val(N))
-    provenance = ComponentIdentity(:phase8_downstream_protocol_qualification,
+    provenance = ComponentIdentity(:downstream_protocol_qualification,
         v"1.0.0", :benchmark)
     schema = PropertySchema(
         PropertyDescriptor(:target, Int32, ConstantInitializer(Int32(0));
@@ -1673,12 +1673,12 @@ function _phase8_downstream_protocol_run(name::String, ::Val{N}, seed::UInt64;
         workspace_bytes = compiled_lifecycle_bytes(lifecycle))
 end
 
-function _phase8_downstream_protocol_qualification(name::String)
+function _downstream_protocol_qualification(name::String)
     workspaces = Int[]
     for N in (2, 3)
         seed = UInt64(0x7068617365385500) + UInt64(N)
-        first_run = _phase8_downstream_protocol_run(name, Val(N), seed)
-        permuted = _phase8_downstream_protocol_run(name, Val(N), seed;
+        first_run = _downstream_protocol_run(name, Val(N), seed)
+        permuted = _downstream_protocol_run(name, Val(N), seed;
             reverse_declaration = true)
         lattice_storage(first_run.snapshot) == lattice_storage(permuted.snapshot) ||
             error("$name $N-D downstream declaration permutation differs")
@@ -1720,9 +1720,9 @@ function qualify_lifecycle_backend(name::String)
         for N in (2, 3)
             seed = UInt64(0x7068617365380000) + UInt64(16N) +
                    UInt64(length(workspace_bytes))
-            first_run = _phase8_lifecycle_run(name, Val(N), algorithm, seed)
-            replay = _phase8_lifecycle_run(name, Val(N), algorithm, seed)
-            permuted = _phase8_lifecycle_run(name, Val(N), algorithm, seed;
+            first_run = _lifecycle_run(name, Val(N), algorithm, seed)
+            replay = _lifecycle_run(name, Val(N), algorithm, seed)
+            permuted = _lifecycle_run(name, Val(N), algorithm, seed;
                 reverse_declaration = true)
             lattice_storage(first_run.snapshot) == lattice_storage(replay.snapshot) || error(
                 "$name $label $N-D lifecycle replay differs")
@@ -1736,20 +1736,20 @@ function qualify_lifecycle_backend(name::String)
         label = string(nameof(typeof(geometry)))
         for N in (2, 3)
             seed = UInt64(0x7068617365381000) + UInt64(16N) + UInt64(length(label))
-            first_run = _phase8_lifecycle_run(name, Val(N),
+            first_run = _lifecycle_run(name, Val(N),
                 SequentialCPM(temperature = 0.0f0), seed; geometry)
-            replay = _phase8_lifecycle_run(name, Val(N),
+            replay = _lifecycle_run(name, Val(N),
                 SequentialCPM(temperature = 0.0f0), seed; geometry)
             lattice_storage(first_run.snapshot) == lattice_storage(replay.snapshot) || error(
                 "$name $label $N-D division geometry replay differs")
         end
         push!(qualified_geometries, label)
     end
-    failure_qualification = _phase8_lifecycle_failure_qualification(name)
-    moment_qualification = _phase8_moment_lifecycle_qualification(name)
-    mechanical_qualification = _phase8_mechanical_lifecycle_qualification(name)
-    initialization_qualification = _phase8_initialization_qualification(name)
-    downstream_qualification = _phase8_downstream_protocol_qualification(name)
+    failure_qualification = _lifecycle_failure_qualification(name)
+    moment_qualification = _moment_lifecycle_qualification(name)
+    mechanical_qualification = _mechanical_lifecycle_qualification(name)
+    initialization_qualification = _initialization_qualification(name)
+    downstream_qualification = _downstream_protocol_qualification(name)
     return Dict(
         "backend" => name,
         "algorithms" => collect(keys(workspace_bytes)),
@@ -1770,7 +1770,7 @@ function qualify_lifecycle_backend(name::String)
     )
 end
 
-function _phase8_persistence_integrator(name::String, ::Val{N}, algorithm,
+function _persistence_integrator(name::String, ::Val{N}, algorithm,
         seed::UInt64; with_lifecycle::Bool = true) where {N}
     dims = ntuple(_ -> 6, Val(N))
     spacing = ntuple(_ -> 1.0f0, Val(N))
@@ -1783,7 +1783,7 @@ function _phase8_persistence_integrator(name::String, ::Val{N}, algorithm,
         noise = FixedMechanicalNoise(0.25f0),
         initialization = PreserveMechanicalInitialization,
         number_type = Float32, instance_id = 71)
-    provenance = ComponentIdentity(:phase8_persistence_qualification,
+    provenance = ComponentIdentity(:persistence_qualification,
         v"1.0.0", :benchmark)
     age_schema = PropertySchema(PropertyDescriptor(:age, Int32,
         ConstantInitializer(Int32(0)); requester = provenance,
@@ -1821,10 +1821,10 @@ function _phase8_persistence_integrator(name::String, ::Val{N}, algorithm,
         seed, plan, lifecycle)
 end
 
-function _phase8_persistence_run(name::String, ::Val{N}, algorithm,
+function _persistence_run(name::String, ::Val{N}, algorithm,
         seed::UInt64) where {N}
     adaptor = _backend_adaptor(name)
-    uninterrupted = _phase8_persistence_integrator(name, Val(N), algorithm, seed)
+    uninterrupted = _persistence_integrator(name, Val(N), algorithm, seed)
     backend = KernelAbstractions.get_backend(
         uninterrupted.state.potts.storage.active)
     root = capture_checkpoint(uninterrupted)
@@ -1891,7 +1891,7 @@ function qualify_persistence_backend(name::String)
         for N in (2, 3)
             seed = UInt64(0x7068617365386000) + UInt64(16N) +
                    UInt64(length(profiles))
-            result = _phase8_persistence_run(name, Val(N), algorithm, seed)
+            result = _persistence_run(name, Val(N), algorithm, seed)
             profiles[label]["$(N)d"] = Dict(
                 "capture_observation_synchronizations" =>
                     result.capture_synchronizations,
@@ -1916,32 +1916,32 @@ function qualify_persistence_backend(name::String)
     )
 end
 
-struct Phase9QualificationCounter{A} <: AbstractPottsDeviceCallback
+struct SolverInterfaceQualificationCounter{A} <: AbstractPottsDeviceCallback
     values::A
 end
-CorePotts.device_callback_requirements(::Phase9QualificationCounter) = ()
-CorePotts.device_callback_effects(::Phase9QualificationCounter) =
+CorePotts.device_callback_requirements(::SolverInterfaceQualificationCounter) = ()
+CorePotts.device_callback_effects(::SolverInterfaceQualificationCounter) =
     (DeviceObservationEffect(),)
-CorePotts.device_callback_priority(::Phase9QualificationCounter) = 0
+CorePotts.device_callback_priority(::SolverInterfaceQualificationCounter) = 0
 
-struct Phase9QualificationParameterization{V}
+struct SolverInterfaceQualificationParameterization{V}
     volume::V
 end
-(parameterization::Phase9QualificationParameterization)(parameters) =
+(parameterization::SolverInterfaceQualificationParameterization)(parameters) =
     ScientificComponentSet(energies = (parameterization.volume,),
         kinetic_modifiers = (PositiveYield(parameters.yield),))
-CorePotts.device_callback_due(::Phase9QualificationCounter, mcs::Integer) = isodd(mcs)
-@kernel function _phase9_counter_kernel!(values)
+CorePotts.device_callback_due(::SolverInterfaceQualificationCounter, mcs::Integer) = isodd(mcs)
+@kernel function _integrator_counter_kernel!(values)
     index = @index(Global, Linear)
     index == 1 && (@inbounds values[1] += UInt32(1))
 end
-function CorePotts.execute_device_callback!(callback::Phase9QualificationCounter, integrator)
-    kernel = _phase9_counter_kernel!(integrator.inner.plan.backend, 1)
+function CorePotts.execute_device_callback!(callback::SolverInterfaceQualificationCounter, integrator)
+    kernel = _integrator_counter_kernel!(integrator.inner.plan.backend, 1)
     launch!(integrator.inner.plan, kernel, callback.values; ndrange = 1)
     return integrator
 end
 
-function _phase9_problem(::Val{N}; tspan = (0, 3), seed::UInt64 = 0x7068617365390001) where {N}
+function _solver_interface_problem(::Val{N}; tspan = (0, 3), seed::UInt64 = 0x7068617365390001) where {N}
     dims = ntuple(_ -> 6, Val(N))
     spacing = ntuple(_ -> 1.0f0, Val(N))
     domain = CartesianDomain(dims; spacing)
@@ -1963,7 +1963,7 @@ function _phase9_problem(::Val{N}; tspan = (0, 3), seed::UInt64 = 0x706861736539
     return (; problem, logical, domain, proposal, tracker, components)
 end
 
-function _phase9_direct_integrator(name::String, fixture, algorithm)
+function _direct_solver_integrator(name::String, fixture, algorithm)
     adaptor = _backend_adaptor(name)
     state = Adapt.adapt(adaptor, compile_scientific_state(
         deepcopy(fixture.problem.u0), fixture.domain, fixture.tracker))
@@ -1975,10 +1975,10 @@ function _phase9_direct_integrator(name::String, fixture, algorithm)
     return integrator, backend, adaptor
 end
 
-function _phase9_interface_run(name::String, ::Val{N}, algorithm,
+function _solver_interface_run(name::String, ::Val{N}, algorithm,
         seed::UInt64) where {N}
-    fixture = _phase9_problem(Val(N); seed)
-    direct, backend, adaptor = _phase9_direct_integrator(name, fixture, algorithm)
+    fixture = _solver_interface_problem(Val(N); seed)
+    direct, backend, adaptor = _direct_solver_integrator(name, fixture, algorithm)
     wrapped = init(fixture.problem, algorithm; backend, adaptor, verbose = false,
         save_start = false, save_end = false)
     report = compatibility_report(fixture.problem, algorithm, backend)
@@ -2034,7 +2034,7 @@ function _phase9_interface_run(name::String, ::Val{N}, algorithm,
 end
 
 """Qualify the final SciML wrapper on the same CPU/Metal/ROCm semantic matrix."""
-function qualify_phase9_backend(name::String)
+function qualify_solver_interface_backend(name::String)
     algorithms = (SequentialCPM(temperature = 2.0f0),
         CheckerboardSweepCPM(temperature = 2.0f0), LotteryCPM(temperature = 2.0f0))
     profiles = Dict{String, Any}()
@@ -2043,16 +2043,16 @@ function qualify_phase9_backend(name::String)
         dimensions = Dict{String, Any}()
         for N in (2, 3)
             seed = UInt64(0x7068617365391000) + UInt64(16algorithm_index + N)
-            dimensions["$(N)d"] = _phase9_interface_run(name, Val(N), algorithm, seed)
+            dimensions["$(N)d"] = _solver_interface_run(name, Val(N), algorithm, seed)
         end
         profiles[label] = dimensions
     end
 
-    fixture = _phase9_problem(Val(2); tspan = (0, 2))
-    _, backend, adaptor = _phase9_direct_integrator(name, fixture, SequentialCPM())
+    fixture = _solver_interface_problem(Val(2); tspan = (0, 2))
+    _, backend, adaptor = _direct_solver_integrator(name, fixture, SequentialCPM())
     counter = _backend_array(name, zeros(UInt32, 1))
     callback_solution = solve(fixture.problem, SequentialCPM(temperature = 2.0f0);
-        backend, adaptor, verbose = false, callback = Phase9QualificationCounter(counter),
+        backend, adaptor, verbose = false, callback = SolverInterfaceQualificationCounter(counter),
         save_start = false, save_end = false)
     Array(counter)[1] == 1 || error("$name device callback did not remain executable")
     callback_solution.stats.host_callback_boundaries == 0 || error(
@@ -2067,7 +2067,7 @@ function qualify_phase9_backend(name::String)
 
     parameter_model = PottsModel(fixture.proposal, fixture.tracker;
         parameters = (yield = 1.0f0,),
-        parameterization = Phase9QualificationParameterization(
+        parameterization = SolverInterfaceQualificationParameterization(
             first(fixture.components.energies)))
     parameter_problem = PottsProblem(parameter_model, fixture.logical,
         fixture.domain, (0, 2); seed = fixture.problem.seed)
@@ -2110,7 +2110,7 @@ function qualify_phase9_backend(name::String)
     )
 end
 
-function _phase10_problem(::Val{N}; tspan = (0, 2), seed = 0x7068617365310001) where {N}
+function _authoring_problem(::Val{N}; tspan = (0, 2), seed = 0x7068617365310001) where {N}
     L2 = PottsToolkit.Authoring
     medium = L2.Medium(:Medium)
     cell = L2.CellType(:Cell)
@@ -2129,7 +2129,7 @@ function _phase10_problem(::Val{N}; tspan = (0, 2), seed = 0x7068617365310001) w
         amount = 0.5, probability = 1.0)
     aging = L2.StochasticPropertyUpdate(age, cell; name = :aging,
         role = :value, amount = 1.0, probability = 1.0)
-    downstream = Phase10QualificationEnergy(0.125f0)
+    downstream = AuthoringQualificationEnergy(0.125f0)
     model = L2.PottsModel(
         medium, cell, volume, fluctuating, adhesion, age, growth, aging, downstream)
     dims = ntuple(_ -> 6, Val(N))
@@ -2141,12 +2141,12 @@ function _phase10_problem(::Val{N}; tspan = (0, 2), seed = 0x7068617365310001) w
     return (; model, problem, cell, initial_target = 8.0f0)
 end
 
-function _phase10_direct_problem(problem::PottsProblem)
+function _direct_authoring_problem(problem::PottsProblem)
     return PottsProblem(problem.model, problem.u0, problem.geometry, problem.tspan;
         p = problem.p, capacity = problem.capacity, seed = problem.seed)
 end
 
-function _phase10_elongation_division_problem(::Val{N}; seed) where {N}
+function _elongation_division_problem(::Val{N}; seed) where {N}
     L2 = PottsToolkit.Authoring
     medium = L2.Medium(:Medium)
     cell = L2.CellType(:DividingElongatedCell)
@@ -2168,7 +2168,7 @@ function _phase10_elongation_division_problem(::Val{N}; seed) where {N}
         capacity = 4, tspan = (0, 1), seed)
 end
 
-function _phase10_reference_workloads()
+function _reference_workloads()
     references = PottsToolkit.ReferenceModels
     return (
         ("biased_migration", references.single_cell_biased_migration_problem(
@@ -2197,17 +2197,17 @@ function _phase10_reference_workloads()
             (8, 8, 8); cells = 2, capacity = 4, target_volume = 16,
             target_elongation = 1.5, tspan = (0, 1),
             seed = 0x7068617365312108), false, 2, 2),
-        ("elongation_division_2d", _phase10_elongation_division_problem(
+        ("elongation_division_2d", _elongation_division_problem(
             Val(2); seed = 0x7068617365312109), true, 1, 2),
-        ("elongation_division_3d", _phase10_elongation_division_problem(
+        ("elongation_division_3d", _elongation_division_problem(
             Val(3); seed = 0x7068617365312110), true, 1, 2),
     )
 end
 
-function _qualify_phase10_reference_workloads(name, backend, adaptor)
+function _qualify_reference_workloads(name, backend, adaptor)
     results = Dict{String, Any}()
     for (label, problem, requires_failure_observation,
-            initial_active_cells, expected_active_cells) in _phase10_reference_workloads()
+            initial_active_cells, expected_active_cells) in _reference_workloads()
         parentmodule(typeof(problem)) === CorePotts || error(
             "$name $label introduced a PottsToolkit runtime problem wrapper")
         n_cells(problem.u0) == initial_active_cells || error(
@@ -2256,21 +2256,21 @@ function _qualify_phase10_reference_workloads(name, backend, adaptor)
 end
 
 """Qualify Level 2 lowering plus resident scientific, mechanical, and lifecycle execution."""
-function qualify_phase10_backend(name::String)
+function qualify_authoring_backend(name::String)
     adaptor = _backend_adaptor(name)
     probe = _backend_array(name, zeros(UInt8, 1))
     backend = KernelAbstractions.get_backend(probe)
     profiles = Dict{String, Any}()
     for N in (2, 3)
-        fixture = _phase10_problem(Val(N); seed = 0x7068617365310000 + N)
+        fixture = _authoring_problem(Val(N); seed = 0x7068617365310000 + N)
         construction = @elapsed lowered = PottsToolkit.Authoring.lower(
             fixture.model; dimensions = N)
         normalization = @elapsed PottsToolkit.Authoring.normalize(fixture.model)
-        direct_problem = _phase10_direct_problem(fixture.problem)
+        direct_problem = _direct_authoring_problem(fixture.problem)
         typeof(fixture.problem) === typeof(direct_problem) || error(
-            "$name Phase 10 $N-D authoring changed the concrete CorePotts problem type")
+            "$name authoring $N-D authoring changed the concrete CorePotts problem type")
         parentmodule(typeof(fixture.problem)) === CorePotts || error(
-            "$name Phase 10 $N-D introduced a PottsToolkit runtime problem wrapper")
+            "$name authoring $N-D introduced a PottsToolkit runtime problem wrapper")
         algorithm = LotteryCPM(temperature = 2.0f0)
         integrator = init(fixture.problem, algorithm;
             backend, adaptor, verbose = false, save_start = false, save_end = false)
@@ -2299,33 +2299,33 @@ function qualify_phase10_backend(name::String)
         direct_allocation_delta = direct_metrics.device_allocations - direct_before_allocations
         direct_launch_delta = direct_metrics.launches - direct_before_launches
         synchronization_delta == 0 || error(
-            "$name Phase 10 $N-D warm MCS introduced host synchronization")
+            "$name authoring $N-D warm MCS introduced host synchronization")
         transfer_delta == 0 || error(
-            "$name Phase 10 $N-D warm MCS introduced device-to-host transfer")
+            "$name authoring $N-D warm MCS introduced device-to-host transfer")
         allocation_delta == 0 || error(
-            "$name Phase 10 $N-D warm MCS introduced device allocation")
+            "$name authoring $N-D warm MCS introduced device allocation")
         direct_synchronization_delta == synchronization_delta || error(
-            "$name Phase 10 $N-D authoring changed warm-MCS synchronization")
+            "$name authoring $N-D authoring changed warm-MCS synchronization")
         direct_transfer_delta == transfer_delta || error(
-            "$name Phase 10 $N-D authoring changed warm-MCS transfer behavior")
+            "$name authoring $N-D authoring changed warm-MCS transfer behavior")
         direct_allocation_delta == allocation_delta || error(
-            "$name Phase 10 $N-D authoring changed warm-MCS device allocation")
+            "$name authoring $N-D authoring changed warm-MCS device allocation")
         direct_launch_delta == launch_delta || error(
-            "$name Phase 10 $N-D authoring changed the warm-MCS launch graph")
+            "$name authoring $N-D authoring changed the warm-MCS launch graph")
         KernelAbstractions.synchronize(backend)
         snapshot = logical_state(integrator)
         direct_snapshot = logical_state(direct)
         lattice_storage(snapshot) == lattice_storage(direct_snapshot) || error(
-            "$name Phase 10 $N-D authoring trajectory differs from direct CorePotts")
+            "$name authoring $N-D authoring trajectory differs from direct CorePotts")
         property_values(snapshot, :volume__target) ==
             property_values(direct_snapshot, :volume__target) || error(
-            "$name Phase 10 $N-D authoring property transaction differs from direct CorePotts")
+            "$name authoring $N-D authoring property transaction differs from direct CorePotts")
         property_values(snapshot, :age) == property_values(direct_snapshot, :age) || error(
-            "$name Phase 10 $N-D custom property differs from direct CorePotts")
+            "$name authoring $N-D custom property differs from direct CorePotts")
         property_value(snapshot, :volume__target, CellID(1)) == 8.5f0 || error(
-            "$name Phase 10 $N-D stochastic lifecycle property update differs")
+            "$name authoring $N-D stochastic lifecycle property update differs")
         property_value(snapshot, :age, CellID(1)) == 1.0f0 || error(
-            "$name Phase 10 $N-D custom-property transaction differs")
+            "$name authoring $N-D custom-property transaction differs")
         profiles["$(N)d"] = Dict(
             "semantic_fingerprint" => lowered.normalized.fingerprint.digest,
             "normalization_seconds" => normalization,
@@ -2343,7 +2343,7 @@ function qualify_phase10_backend(name::String)
             "custom_property" => true,
         )
     end
-    reference_workloads = _qualify_phase10_reference_workloads(name, backend, adaptor)
+    reference_workloads = _qualify_reference_workloads(name, backend, adaptor)
     return Dict(
         "backend" => name,
         "dimensions" => [2, 3],
@@ -2358,121 +2358,121 @@ function qualify_phase10_backend(name::String)
 end
 
 """Qualify ordered, simultaneous, addressed Level 1 rules on the selected real backend."""
-function qualify_phase11_backend(name::String)
+function qualify_extended_authoring_backend(name::String)
     adaptor = _backend_adaptor(name)
     probe = _backend_array(name, zeros(UInt8, 1))
     backend = KernelAbstractions.get_backend(probe)
     profiles = Dict{String, Any}()
     for N in (2, 3)
-        medium = PottsToolkit.Medium(Symbol(:phase11_medium_, N))
-        cell = PottsToolkit.CellType(Symbol(:phase11_cell_, N))
-        phase11_age = PottsToolkit.CellProperty(:phase11_age, cell;
+        medium = PottsToolkit.Medium(Symbol(:authoring_medium_, N))
+        cell = PottsToolkit.CellType(Symbol(:authoring_cell_, N))
+        authoring_age = PottsToolkit.CellProperty(:authoring_age, cell;
             initial = 0.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_target = PottsToolkit.CellProperty(:phase11_target, cell;
+        authoring_target = PottsToolkit.CellProperty(:authoring_target, cell;
             initial = 2.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_uniform = PottsToolkit.CellProperty(:phase11_uniform, cell;
+        authoring_uniform = PottsToolkit.CellProperty(:authoring_uniform, cell;
             initial = 0.5f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_normal = PottsToolkit.CellProperty(:phase11_normal, cell;
+        authoring_normal = PottsToolkit.CellProperty(:authoring_normal, cell;
             initial = 0.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_direction = PottsToolkit.CellProperty(:phase11_direction, cell;
+        authoring_direction = PottsToolkit.CellProperty(:authoring_direction, cell;
             initial = zero(SVector{N, Float32}), division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_edges = PottsToolkit.CellProperty(:phase11_edges, cell;
+        authoring_edges = PottsToolkit.CellProperty(:authoring_edges, cell;
             initial = Int64(0), division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_boundary_sites = PottsToolkit.CellProperty(:phase11_boundary_sites, cell;
+        authoring_boundary_sites = PottsToolkit.CellProperty(:authoring_boundary_sites, cell;
             initial = Int64(0), division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_contact_measure = PottsToolkit.CellProperty(
-            :phase11_contact_measure, cell;
+        authoring_contact_measure = PottsToolkit.CellProperty(
+            :authoring_contact_measure, cell;
             initial = 0.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_exact_widen = PottsToolkit.CellProperty(:phase11_exact_widen, cell;
+        authoring_exact_widen = PottsToolkit.CellProperty(:authoring_exact_widen, cell;
             initial = Int64(0), division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_neighbor_count = PottsToolkit.CellProperty(:phase11_neighbor_count, cell;
+        authoring_neighbor_count = PottsToolkit.CellProperty(:authoring_neighbor_count, cell;
             initial = Int64(0), division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_neighbor_signal = PottsToolkit.CellProperty(:phase11_neighbor_signal, cell;
+        authoring_neighbor_signal = PottsToolkit.CellProperty(:authoring_neighbor_signal, cell;
             initial = 5.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_neighbor_sum = PottsToolkit.CellProperty(:phase11_neighbor_sum, cell;
+        authoring_neighbor_sum = PottsToolkit.CellProperty(:authoring_neighbor_sum, cell;
             initial = 0.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_neighbor_mean = PottsToolkit.CellProperty(:phase11_neighbor_mean, cell;
+        authoring_neighbor_mean = PottsToolkit.CellProperty(:authoring_neighbor_mean, cell;
             initial = 0.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_scalar_inventory = PottsToolkit.CellProperty(
-            :phase11_scalar_inventory, cell;
+        authoring_scalar_inventory = PottsToolkit.CellProperty(
+            :authoring_scalar_inventory, cell;
             initial = 2.0f0, division = CloneOnDivision(),
             transition = PreserveOnTransition())
-        phase11_field = PottsToolkit.Field(:phase11_field;
+        authoring_field = PottsToolkit.Field(:authoring_field;
             boundary = PottsToolkit.FixedValue(0.0f0),
             interpolation = PottsToolkit.Nearest())
-        phase11_cell_role = PottsToolkit.CellRole(:phase11_cells)
-        phase11_field_role = PottsToolkit.FieldRole(:phase11_signal)
-        phase11_role_chemotaxis = PottsToolkit.Chemotaxis(
-            phase11_field_role, phase11_cell_role => 0.0f0;
+        authoring_cell_role = PottsToolkit.CellRole(:authoring_cells)
+        authoring_field_role = PottsToolkit.FieldRole(:authoring_signal)
+        authoring_role_chemotaxis = PottsToolkit.Chemotaxis(
+            authoring_field_role, authoring_cell_role => 0.0f0;
             response = PottsToolkit.MichaelisMentenResponse(1.0f0),
             mode = PottsToolkit.RetractionChemotaxis())
-        phase11_coupling = PottsToolkit.bind(PottsToolkit.ModelFragment(
-                :phase11_coupling, phase11_role_chemotaxis;
-                requires = (phase11_cell_role, phase11_field_role),
-                exports = (phase11_role_chemotaxis,)),
-            phase11_cell_role => cell, phase11_field_role => phase11_field)
-        phase11_rate = PottsToolkit.CellParameter(:phase11_rate, cell => 0.5f0)
-        phase11_extension = Phase11ExtensionEnergy(0.0f0)
-        first_phase = PottsToolkit.Phase(:phase11_first)
-        second_phase = PottsToolkit.Phase(:phase11_second; after = first_phase)
-        aging = PottsToolkit.@rule phase = first_phase phase11_age(owner) =
-            phase11_age(owner) + phase11_rate(owner) +
+        authoring_coupling = PottsToolkit.bind(PottsToolkit.ModelFragment(
+                :authoring_coupling, authoring_role_chemotaxis;
+                requires = (authoring_cell_role, authoring_field_role),
+                exports = (authoring_role_chemotaxis,)),
+            authoring_cell_role => cell, authoring_field_role => authoring_field)
+        authoring_rate = PottsToolkit.CellParameter(:authoring_rate, cell => 0.5f0)
+        authoring_extension = ExtensionQualificationEnergy(0.0f0)
+        first_phase = PottsToolkit.Phase(:authoring_first)
+        second_phase = PottsToolkit.Phase(:authoring_second; after = first_phase)
+        aging = PottsToolkit.@rule phase = first_phase authoring_age(owner) =
+            authoring_age(owner) + authoring_rate(owner) +
             draw(Bernoulli(1.0f0); label = :aging)
-        uniform_rule = PottsToolkit.@rule phase = first_phase phase11_uniform(owner) =
+        uniform_rule = PottsToolkit.@rule phase = first_phase authoring_uniform(owner) =
             draw(Uniform(0.0f0, 1.0f0); label = :uniform)
-        normal_rule = PottsToolkit.@rule phase = first_phase phase11_normal(owner) =
+        normal_rule = PottsToolkit.@rule phase = first_phase authoring_normal(owner) =
             draw(Normal(0.0f0, 1.0f0); label = :normal)
-        direction_rule = PottsToolkit.@rule phase = first_phase phase11_direction(owner) =
+        direction_rule = PottsToolkit.@rule phase = first_phase authoring_direction(owner) =
             draw(UnitVector($N); label = :direction)
-        edge_rule = PottsToolkit.@rule phase = first_phase phase11_edges(owner) =
+        edge_rule = PottsToolkit.@rule phase = first_phase authoring_edges(owner) =
             contact_edge_count(owner, Contacting(), AnyFiniteCell())
-        boundary_site_rule = PottsToolkit.@rule phase = first_phase phase11_boundary_sites(owner) =
+        boundary_site_rule = PottsToolkit.@rule phase = first_phase authoring_boundary_sites(owner) =
             boundary_site_count(owner, Contacting(), AnyFiniteCell())
-        contact_measure_rule = PottsToolkit.@rule phase = first_phase phase11_contact_measure(owner) =
+        contact_measure_rule = PottsToolkit.@rule phase = first_phase authoring_contact_measure(owner) =
             contact_measure(owner, Contacting(), CellTypeFilter(cell))
         exact_widen_rule = PottsToolkit.Rule(
-            phase11_exact_widen, :owner, PottsToolkit.RuleLiteral(Int32(7));
+            authoring_exact_widen, :owner, PottsToolkit.RuleLiteral(Int32(7));
             phase = first_phase)
-        neighbor_count_rule = PottsToolkit.@rule phase = first_phase phase11_neighbor_count(owner) =
+        neighbor_count_rule = PottsToolkit.@rule phase = first_phase authoring_neighbor_count(owner) =
             neighbor_cell_count(owner, Contacting(), AnyFiniteCell())
-        neighbor_sum_rule = PottsToolkit.@rule phase = first_phase phase11_neighbor_sum(owner) =
+        neighbor_sum_rule = PottsToolkit.@rule phase = first_phase authoring_neighbor_sum(owner) =
             neighbor_property_sum(
-                phase11_neighbor_signal, owner, Contacting(), AnyFiniteCell())
-        neighbor_mean_rule = PottsToolkit.@rule phase = first_phase phase11_neighbor_mean(owner) =
-            neighbor_property_mean(phase11_neighbor_signal, owner,
+                authoring_neighbor_signal, owner, Contacting(), AnyFiniteCell())
+        neighbor_mean_rule = PottsToolkit.@rule phase = first_phase authoring_neighbor_mean(owner) =
+            neighbor_property_mean(authoring_neighbor_signal, owner,
                 Contacting(), AnyFiniteCell(); empty = 0.0f0)
-        scalar_inventory_rule = PottsToolkit.@rule phase = first_phase phase11_scalar_inventory(owner) =
-            if phase11_scalar_inventory(owner) >= 2.0f0 &&
-                    !(phase11_scalar_inventory(owner) == 3.0f0)
-                clamp(max(abs(-phase11_scalar_inventory(owner)), sqrt(4.0f0)),
+        scalar_inventory_rule = PottsToolkit.@rule phase = first_phase authoring_scalar_inventory(owner) =
+            if authoring_scalar_inventory(owner) >= 2.0f0 &&
+                    !(authoring_scalar_inventory(owner) == 3.0f0)
+                clamp(max(abs(-authoring_scalar_inventory(owner)), sqrt(4.0f0)),
                     0.0f0, 10.0f0) + exp(0.0f0) + log(1.0f0) + sin(0.0f0) +
                     cos(0.0f0) + tan(0.0f0)
             else
-                ifelse(phase11_scalar_inventory(owner) != 0.0f0,
-                    min(phase11_scalar_inventory(owner)^2 / 2.0f0, 5.0f0), 0.0f0)
+                ifelse(authoring_scalar_inventory(owner) != 0.0f0,
+                    min(authoring_scalar_inventory(owner)^2 / 2.0f0, 5.0f0), 0.0f0)
             end
-        dependent = PottsToolkit.@rule phase = second_phase phase11_target(owner) =
-            clamp(phase11_age(owner) + 2, 0, 100)
+        dependent = PottsToolkit.@rule phase = second_phase authoring_target(owner) =
+            clamp(authoring_age(owner) + 2, 0, 100)
         model = PottsToolkit.PottsModel(
-            medium, cell, phase11_age, phase11_target, phase11_uniform,
-            phase11_normal, phase11_direction, phase11_edges,
-            phase11_boundary_sites, phase11_contact_measure, phase11_exact_widen,
-            phase11_neighbor_count, phase11_neighbor_signal, phase11_neighbor_sum,
-            phase11_neighbor_mean, phase11_scalar_inventory, phase11_field,
-            phase11_coupling, phase11_rate, phase11_extension,
+            medium, cell, authoring_age, authoring_target, authoring_uniform,
+            authoring_normal, authoring_direction, authoring_edges,
+            authoring_boundary_sites, authoring_contact_measure, authoring_exact_widen,
+            authoring_neighbor_count, authoring_neighbor_signal, authoring_neighbor_sum,
+            authoring_neighbor_mean, authoring_scalar_inventory, authoring_field,
+            authoring_coupling, authoring_rate, authoring_extension,
             aging, uniform_rule, normal_rule, direction_rule, edge_rule,
             boundary_site_rule, contact_measure_rule, exact_widen_rule,
             neighbor_count_rule, neighbor_sum_rule, neighbor_mean_rule,
@@ -2487,7 +2487,7 @@ function qualify_phase11_backend(name::String)
             model, domain,
             PottsToolkit.Layout(PottsToolkit.LabelledCells(
                 labels, (1 => cell, 2 => cell)));
-            fields = (phase11_field => fill(1.0f0, shape),),
+            fields = (authoring_field => fill(1.0f0, shape),),
             capacity = 2, tspan = (0, 2), seed = 0x7068617365311000 + N)
         algorithm = CheckerboardSweepCPM(temperature = 1.0f0)
         integrator = init(problem, algorithm;
@@ -2504,36 +2504,36 @@ function qualify_phase11_backend(name::String)
         allocation_delta = metrics.device_allocations - before_allocations
         launch_delta = metrics.launches - before_launches
         synchronization_delta == 0 || error(
-            "$name Phase 11 $N-D rule execution introduced host synchronization")
+            "$name extended authoring $N-D rule execution introduced host synchronization")
         transfer_delta == 0 || error(
-            "$name Phase 11 $N-D rule execution introduced device-to-host transfer")
+            "$name extended authoring $N-D rule execution introduced device-to-host transfer")
         allocation_delta == 0 || error(
-            "$name Phase 11 $N-D rule execution introduced device allocation")
+            "$name extended authoring $N-D rule execution introduced device allocation")
         KernelAbstractions.synchronize(backend)
         snapshot = logical_state(integrator)
-        property_value(snapshot, :phase11_age, CellID(1)) == 1.5f0 || error(
-            "$name Phase 11 $N-D parameter/Bernoulli rule produced the wrong value")
-        property_value(snapshot, :phase11_target, CellID(1)) == 3.5f0 || error(
-            "$name Phase 11 $N-D ordered phase did not observe the prior phase commit")
-        property_value(snapshot, :phase11_exact_widen, CellID(1)) == Int64(7) || error(
-            "$name Phase 11 $N-D exact integer widening produced the wrong value")
-        property_value(snapshot, :phase11_neighbor_count, CellID(1)) == Int64(1) || error(
-            "$name Phase 11 $N-D distinct-neighbor count produced the wrong value")
-        property_value(snapshot, :phase11_neighbor_sum, CellID(1)) == 5.0f0 || error(
-            "$name Phase 11 $N-D distinct-neighbor property sum produced the wrong value")
-        property_value(snapshot, :phase11_neighbor_mean, CellID(1)) == 5.0f0 || error(
-            "$name Phase 11 $N-D distinct-neighbor property mean produced the wrong value")
-        property_value(snapshot, :phase11_scalar_inventory, CellID(1)) == 4.0f0 || error(
-            "$name Phase 11 $N-D closed scalar inventory produced the wrong value")
-        uniform_value = property_value(snapshot, :phase11_uniform, CellID(1))
+        property_value(snapshot, :authoring_age, CellID(1)) == 1.5f0 || error(
+            "$name extended authoring $N-D parameter/Bernoulli rule produced the wrong value")
+        property_value(snapshot, :authoring_target, CellID(1)) == 3.5f0 || error(
+            "$name extended authoring $N-D ordered phase did not observe the prior phase commit")
+        property_value(snapshot, :authoring_exact_widen, CellID(1)) == Int64(7) || error(
+            "$name extended authoring $N-D exact integer widening produced the wrong value")
+        property_value(snapshot, :authoring_neighbor_count, CellID(1)) == Int64(1) || error(
+            "$name extended authoring $N-D distinct-neighbor count produced the wrong value")
+        property_value(snapshot, :authoring_neighbor_sum, CellID(1)) == 5.0f0 || error(
+            "$name extended authoring $N-D distinct-neighbor property sum produced the wrong value")
+        property_value(snapshot, :authoring_neighbor_mean, CellID(1)) == 5.0f0 || error(
+            "$name extended authoring $N-D distinct-neighbor property mean produced the wrong value")
+        property_value(snapshot, :authoring_scalar_inventory, CellID(1)) == 4.0f0 || error(
+            "$name extended authoring $N-D closed scalar inventory produced the wrong value")
+        uniform_value = property_value(snapshot, :authoring_uniform, CellID(1))
         0.0f0 < uniform_value < 1.0f0 || error(
-            "$name Phase 11 $N-D Uniform rule violated its open interval")
-        normal_value = property_value(snapshot, :phase11_normal, CellID(1))
+            "$name extended authoring $N-D Uniform rule violated its open interval")
+        normal_value = property_value(snapshot, :authoring_normal, CellID(1))
         isfinite(normal_value) || error(
-            "$name Phase 11 $N-D Normal rule produced a non-finite value")
-        direction_value = property_value(snapshot, :phase11_direction, CellID(1))
+            "$name extended authoring $N-D Normal rule produced a non-finite value")
+        direction_value = property_value(snapshot, :authoring_direction, CellID(1))
         isapprox(sum(abs2, direction_value), 1.0f0; atol = 8eps(Float32)) || error(
-            "$name Phase 11 $N-D unit-vector rule produced a non-unit vector")
+            "$name extended authoring $N-D unit-vector rule produced a non-unit vector")
         query_relation = first_shell_relation(
             SpatialQueryRole(), Val(N); spacing = domain.spacing)
         medium_types = MediumTypeTable(MediumID(1) => CellTypeID(2))
@@ -2545,14 +2545,14 @@ function qualify_phase11_backend(name::String)
                 query_relation, owner, CorePotts.AnyFiniteCell(), medium_types)
             expected_measure = contact_measure(snapshot, domain, query_relation,
                 owner, CorePotts.CellTypeFilter(CellTypeID(1)), medium_types)
-            property_value(snapshot, :phase11_edges, id) == expected_edges || error(
-                "$name Phase 11 $N-D contact-edge query differs from the oracle")
-            property_value(snapshot, :phase11_boundary_sites, id) ==
+            property_value(snapshot, :authoring_edges, id) == expected_edges || error(
+                "$name extended authoring $N-D contact-edge query differs from the oracle")
+            property_value(snapshot, :authoring_boundary_sites, id) ==
                 expected_boundary_sites || error(
-                "$name Phase 11 $N-D boundary-site query differs from the oracle")
-            property_value(snapshot, :phase11_contact_measure, id) ==
+                "$name extended authoring $N-D boundary-site query differs from the oracle")
+            property_value(snapshot, :authoring_contact_measure, id) ==
                 expected_measure || error(
-                "$name Phase 11 $N-D contact-measure query differs from the oracle")
+                "$name extended authoring $N-D contact-measure query differs from the oracle")
         end
         profiles["$(N)d"] = Dict(
             "ordered_phase_value" => 3.5,
@@ -2587,15 +2587,15 @@ function qualify_phase11_backend(name::String)
 end
 
 """Measure Level 2 host work separately from identical CorePotts warm execution."""
-function measure_phase10_backend(name::String; steps::Int = 5)
-    steps > 0 || throw(ArgumentError("Phase 10 steady-state sample size must be positive"))
+function measure_authoring_backend(name::String; steps::Int = 5)
+    steps > 0 || throw(ArgumentError("authoring steady-state sample size must be positive"))
     adaptor = _backend_adaptor(name)
-    construction_seconds = @elapsed fixture = _phase10_problem(Val(2);
+    construction_seconds = @elapsed fixture = _authoring_problem(Val(2);
         tspan = (0, 2 * steps + 4), seed = 0x7068617365311000)
     normalization_seconds = @elapsed normalized = PottsToolkit.Authoring.normalize(fixture.model)
     lowering_seconds = @elapsed lowered = PottsToolkit.Authoring.lower(
         fixture.model; dimensions = 2)
-    direct_problem = _phase10_direct_problem(fixture.problem)
+    direct_problem = _direct_authoring_problem(fixture.problem)
     prototype = _backend_array(name, zeros(UInt8, 1))
     backend = KernelAbstractions.get_backend(prototype)
     algorithm = LotteryCPM(temperature = 2.0f0)
@@ -2603,8 +2603,8 @@ function measure_phase10_backend(name::String; steps::Int = 5)
         backend, adaptor, verbose = false, save_start = false, save_end = false)
     direct_initialization_seconds = @elapsed direct = init(direct_problem, algorithm;
         backend, adaptor, verbose = false, save_start = false, save_end = false)
-    _timed_phase9_steps!(level2, 1)
-    _timed_phase9_steps!(direct, 1)
+    _timed_integrator_steps!(level2, 1)
+    _timed_integrator_steps!(direct, 1)
     level2_metrics = level2.inner.plan.metrics
     direct_metrics = direct.inner.plan.metrics
     level2_launches_before = level2_metrics.launches
@@ -2612,18 +2612,18 @@ function measure_phase10_backend(name::String; steps::Int = 5)
     level2_transfers_before = level2_metrics.device_to_host_transfers
     level2_allocations_before = level2_metrics.device_allocations
     direct_launches_before = direct_metrics.launches
-    level2_steady_seconds = _timed_phase9_steps!(level2, steps)
-    direct_steady_seconds = _timed_phase9_steps!(direct, steps)
+    level2_steady_seconds = _timed_integrator_steps!(level2, steps)
+    direct_steady_seconds = _timed_integrator_steps!(direct, steps)
     KernelAbstractions.synchronize(backend)
     level2_metrics.launches - level2_launches_before ==
         direct_metrics.launches - direct_launches_before || error(
-        "$name Phase 10 benchmark detected an authoring-dependent warm launch graph")
+        "$name authoring benchmark detected an authoring-dependent warm launch graph")
     level2_metrics.host_synchronizations == level2_syncs_before || error(
-        "$name Phase 10 benchmark detected a warm host synchronization")
+        "$name authoring benchmark detected a warm host synchronization")
     level2_metrics.device_to_host_transfers == level2_transfers_before || error(
-        "$name Phase 10 benchmark detected a warm device-to-host transfer")
+        "$name authoring benchmark detected a warm device-to-host transfer")
     level2_metrics.device_allocations == level2_allocations_before || error(
-        "$name Phase 10 benchmark detected a warm device allocation")
+        "$name authoring benchmark detected a warm device allocation")
     return Dict(
         "backend" => name,
         "dimension" => 2,
@@ -2658,7 +2658,7 @@ function measure_phase10_backend(name::String; steps::Int = 5)
     )
 end
 
-function _phase10_reference_measurement_specs(profile::String, horizon::Int)
+function _reference_measurement_specs(profile::String, horizon::Int)
     references = PottsToolkit.ReferenceModels
     if profile == "smoke"
         migration_shape = (24, 24)
@@ -2703,7 +2703,7 @@ function _phase10_reference_measurement_specs(profile::String, horizon::Int)
         angiogenesis_2d_capacity = 64
         angiogenesis_3d_capacity = 32
     else
-        throw(ArgumentError("Phase 12 profile must be smoke, full, or throughput"))
+        throw(ArgumentError("performance comparison profile must be smoke, full, or throughput"))
     end
 
     measurement_spec(; label, family, dimensions, requires_lifecycle_observation,
@@ -2844,7 +2844,7 @@ function _metric_delta(after, before)
         for key in keys(after))
 end
 
-function _timed_phase10_sample!(integrator::PottsIntegrator, steps::Int)
+function _timed_reference_sample!(integrator::PottsIntegrator, steps::Int)
     KernelAbstractions.synchronize(integrator.inner.plan.backend)
     sample = @timed begin
         SciMLBase.step!(integrator, steps)
@@ -2867,7 +2867,7 @@ function _component_array_bytes(value)
         1:fieldcount(type); init = 0)
 end
 
-function _phase10_residency(inner::ScientificPottsIntegrator)
+function _reference_residency(inner::ScientificPottsIntegrator)
     metrics = inner.plan.metrics
     state_bytes = scientific_state_bytes(inner.state)
     component_bytes = _component_array_bytes(inner.components)
@@ -2884,7 +2884,7 @@ function _phase10_residency(inner::ScientificPottsIntegrator)
     )
 end
 
-function _phase10_kernel_resource_evidence(name::String)
+function _kernel_resource_evidence(name::String)
     return Dict(
         "kernel_compilation_qualified" => true,
         "dynamic_device_invocation_rejected_by_ci" => true,
@@ -2892,7 +2892,7 @@ function _phase10_kernel_resource_evidence(name::String)
         "measurement_boundary" => name == "cpu" ? "not applicable to the CPU backend" :
             "KernelAbstractions exposes no portable per-kernel register-count interface",
         "full_resource_capture" =>
-            "Phase 12 backend-native profiling; never infer register counts from occupancy",
+            "performance comparison backend-native profiling; never infer register counts from occupancy",
     )
 end
 
@@ -2908,7 +2908,7 @@ function _validate_reference_mcs_report(name, label, algorithm, report, sites)
         report.scheduler_candidates == expected_sites * report.internal_rounds || error(
             "$name $label LotteryCPM scheduler accounting differs from sites times rounds")
     else
-        error("Phase 12 reference accounting is undefined for $(typeof(algorithm))")
+        error("performance comparison reference accounting is undefined for $(typeof(algorithm))")
     end
     report.realized_proposals == report.dynamic_conflicts +
         report.constraint_rejections + report.acceptance_rejections +
@@ -2923,7 +2923,7 @@ function _validate_reference_mcs_report(name, label, algorithm, report, sites)
 end
 
 """Measure compatible mandatory reference families for one scientific algorithm."""
-function measure_phase10_reference_backend(name::String; profile::String = "smoke",
+function measure_reference_backend(name::String; profile::String = "smoke",
         algorithm::AbstractPottsAlgorithm = SequentialCPM(temperature = 2.0f0),
         skip_incompatible::Bool = false,
         real_type::Type{<:AbstractFloat} = Float32)
@@ -2937,7 +2937,7 @@ function measure_phase10_reference_backend(name::String; profile::String = "smok
     workloads = Dict{String, Any}()
     exclusions = Dict{String, Any}()
 
-    for spec in _phase10_reference_measurement_specs(profile, horizon)
+    for spec in _reference_measurement_specs(profile, horizon)
         algorithm_name = nameof(typeof(algorithm))
         if algorithm_name ∉ spec.compatible_algorithms
             skip_incompatible || error(
@@ -2976,11 +2976,11 @@ function measure_phase10_reference_backend(name::String; profile::String = "smok
         initialization_timing = @timed init(problem, algorithm;
             backend, adaptor, verbose = false, save_start = false, save_end = false)
         integrator = initialization_timing.value
-        first_mcs = _timed_phase10_sample!(integrator, 1)
-        _timed_phase10_sample!(integrator, warmup_steps)
+        first_mcs = _timed_reference_sample!(integrator, 1)
+        _timed_reference_sample!(integrator, warmup_steps)
         metrics = integrator.inner.plan.metrics
         warm_before = _metric_snapshot(metrics)
-        steady_samples = [_timed_phase10_sample!(integrator, steps) for _ in 1:samples]
+        steady_samples = [_timed_reference_sample!(integrator, steps) for _ in 1:samples]
         warm_after = _metric_snapshot(metrics)
         seconds = getproperty.(steady_samples, :seconds_per_mcs)
         host_bytes = getproperty.(steady_samples, :host_allocated_bytes_per_mcs)
@@ -3096,7 +3096,7 @@ function measure_phase10_reference_backend(name::String; profile::String = "smok
                 report.accepted_copies / report.realized_proposals,
             "warm_execution_metrics" => warm_delta,
             "explicit_observation_metrics" => observation_delta,
-            "residency" => _phase10_residency(integrator.inner),
+            "residency" => _reference_residency(integrator.inner),
             "runtime_problem_wrapper" => false,
             "declared_lifecycle_observation_per_mcs" =>
                 spec.requires_lifecycle_observation,
@@ -3135,11 +3135,11 @@ function measure_phase10_reference_backend(name::String; profile::String = "smok
             "single_cell_migration", "prescribed_gradient_chemotaxis",
             "monolayer_growth", "differential_adhesion_sorting",
             "elongation_driven_angiogenesis"],
-        "kernel_resource_evidence" => _phase10_kernel_resource_evidence(name),
+        "kernel_resource_evidence" => _kernel_resource_evidence(name),
     )
 end
 
-function measure_phase12_reference_backend(name::String; profile::String = "smoke",
+function measure_balanced_reference_backend(name::String; profile::String = "smoke",
         sequential_reference = nothing,
         real_type::Type{<:AbstractFloat} = Float32)
     algorithms = (
@@ -3155,10 +3155,10 @@ function measure_phase12_reference_backend(name::String; profile::String = "smok
     for algorithm in algorithms
         algorithm_name = string(nameof(typeof(algorithm)))
         measurement = algorithm isa SequentialCPM && sequential_reference !== nothing ?
-                      sequential_reference : measure_phase10_reference_backend(
+                      sequential_reference : measure_reference_backend(
             name; profile, algorithm, skip_incompatible = true, real_type)
         isempty(measurement["workloads"]) && error(
-            "$name Phase 12 algorithm $algorithm_name has no compatible reference workload")
+            "$name performance comparison algorithm $algorithm_name has no compatible reference workload")
         measurements[algorithm_name] = measurement
         exclusions[algorithm_name] = measurement["incompatible_workloads"]
         for (label, workload) in measurement["workloads"]
@@ -3180,10 +3180,10 @@ function measure_phase12_reference_backend(name::String; profile::String = "smok
     )
 end
 
-function phase10_result(name::String, profile::String, device::String;
+function single_run_result(name::String, profile::String, device::String;
         qualification, direct_comparison, reference_performance, checkpoint_performance)
     return Dict(
-        "schema_version" => PHASE10_SCHEMA_VERSION,
+        "schema_version" => SINGLE_RUN_SCHEMA_VERSION,
         "recorded_at_utc" => string(now(UTC)),
         "provenance" => provenance(name, device),
         "profile" => profile,
@@ -3203,21 +3203,21 @@ function phase10_result(name::String, profile::String, device::String;
     )
 end
 
-function write_phase10_result(result)
+function write_single_run_result(result)
     provenance_data = result["provenance"]
     backend = provenance_data["backend"]
     profile = result["profile"]
     timestamp = Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS")
     directory = joinpath(RESULTS_ROOT, provenance_data["baseline_id"], backend)
     mkpath(directory)
-    path = joinpath(directory, "$(timestamp)-phase10-reference-suite-$(profile).toml")
+    path = joinpath(directory, "$(timestamp)-reference-suite-$(profile).toml")
     open(path, "w") do io
         TOML.print(io, result; sorted = true)
     end
     return path
 end
 
-function _phase12_workloads(reference_performance)
+function _balanced_workloads(reference_performance)
     workloads = deepcopy(reference_performance["workloads"])
     timed_mcs = reference_performance["samples"] * reference_performance["steps_per_sample"]
     for workload in values(workloads)
@@ -3228,29 +3228,29 @@ function _phase12_workloads(reference_performance)
     return workloads
 end
 
-function _phase12_process_id()
+function _benchmark_process_id()
     return get(ENV, "POTTS_BENCHMARK_PROCESS_ID",
         string(Dates.format(now(UTC), dateformat"yyyymmddTHHMMSS.sss"), "-", getpid()))
 end
 
-function _phase12_tuning_policy()
+function _benchmark_tuning_policy()
     policy = get(ENV, "POTTS_BENCHMARK_TUNING_POLICY", "conservative")
     policy in ("conservative", "tuned") || throw(ArgumentError(
         "POTTS_BENCHMARK_TUNING_POLICY must be conservative or tuned"))
     return policy
 end
 
-"""Build one fresh-process Phase 12 performance record from qualified measurements."""
-function phase12_result(name::String, profile::String, device::String;
+"""Build one fresh-process performance comparison performance record from qualified measurements."""
+function balanced_result(name::String, profile::String, device::String;
         qualification, direct_comparison, reference_performance, checkpoint_performance)
     provenance_data = provenance(name, device)
     return Dict(
-        "schema_version" => Phase12Comparison.PHASE12_SCHEMA_VERSION,
+        "schema_version" => PerformanceComparison.PERFORMANCE_SCHEMA_VERSION,
         "record_kind" => "phase12-performance-run",
         "recorded_at_utc" => string(now(UTC)),
         "comparison_identity" => Dict(
-            "contract_version" => Phase12Comparison.PHASE12_CONTRACT_VERSION,
-            "workload_set_version" => PHASE12_WORKLOAD_SET_VERSION,
+            "contract_version" => PerformanceComparison.PERFORMANCE_CONTRACT_VERSION,
+            "workload_set_version" => PERFORMANCE_WORKLOAD_SET_VERSION,
             "harness_tree_sha256" => provenance_data["harness_tree_sha256"],
             "backend" => name,
             "hardware_id" => provenance_data["hardware_id"],
@@ -3260,17 +3260,17 @@ function phase12_result(name::String, profile::String, device::String;
             "julia_threads" => Threads.nthreads(),
             "precision" => reference_performance["precision"],
             "profile" => profile,
-            "tuning_policy" => _phase12_tuning_policy(),
+            "tuning_policy" => _benchmark_tuning_policy(),
         ),
         "run" => Dict(
-            "process_id" => _phase12_process_id(),
+            "process_id" => _benchmark_process_id(),
             "independence_unit" => "fresh Julia process",
             "samples_per_workload" => reference_performance["samples"],
             "steps_per_sample" => reference_performance["steps_per_sample"],
             "warmup_steps" => reference_performance["warmup_steps"],
         ),
         "provenance" => provenance_data,
-        "workloads" => _phase12_workloads(reference_performance),
+        "workloads" => _balanced_workloads(reference_performance),
         "qualification" => qualification,
         "direct_corepotts_comparison" => direct_comparison,
         "checkpoint_performance" => checkpoint_performance,
@@ -3291,9 +3291,9 @@ function phase12_result(name::String, profile::String, device::String;
     )
 end
 
-function write_phase12_result(result)
-    issues = Phase12Comparison.validate_record(result)
-    isempty(issues) || error("refusing to write invalid Phase 12 result:\n- " *
+function write_balanced_result(result)
+    issues = PerformanceComparison.validate_record(result)
+    isempty(issues) || error("refusing to write invalid performance comparison result:\n- " *
                              join(issues, "\n- "))
     provenance_data = result["provenance"]
     backend = result["comparison_identity"]["backend"]
@@ -3302,7 +3302,7 @@ function write_phase12_result(result)
     directory = joinpath(RESULTS_ROOT, provenance_data["subject_id"], backend)
     mkpath(directory)
     path = joinpath(directory,
-        "$(timestamp)-phase12-performance-$(profile)-$(result["run"]["process_id"]).toml")
+        "$(timestamp)-balanced-performance-$(profile)-$(result["run"]["process_id"]).toml")
     open(path, "w") do io
         TOML.print(io, result; sorted = true)
     end
@@ -3318,7 +3318,7 @@ function _timed_scientific_steps!(integrator, steps::Int)
     return elapsed / steps
 end
 
-function _timed_phase9_steps!(integrator::PottsIntegrator, steps::Int)
+function _timed_integrator_steps!(integrator::PottsIntegrator, steps::Int)
     KernelAbstractions.synchronize(integrator.inner.plan.backend)
     elapsed = @elapsed begin
         SciMLBase.step!(integrator, steps)
@@ -3328,21 +3328,21 @@ function _timed_phase9_steps!(integrator::PottsIntegrator, steps::Int)
 end
 
 """Measure direct-versus-SciML steady execution and construction overhead."""
-function measure_phase9_backend(name::String)
+function measure_solver_interface_backend(name::String)
     algorithms = (SequentialCPM(temperature = 2.0f0),
         CheckerboardSweepCPM(temperature = 2.0f0), LotteryCPM(temperature = 2.0f0))
     results = Dict{String, Any}()
     for (index, algorithm) in enumerate(algorithms)
-        fixture = _phase9_problem(Val(2); tspan = (0, 20),
+        fixture = _solver_interface_problem(Val(2); tspan = (0, 20),
             seed = UInt64(0x7068617365392000) + UInt64(index))
         direct_construction = @elapsed direct, backend, adaptor =
-            _phase9_direct_integrator(name, fixture, algorithm)
+            _direct_solver_integrator(name, fixture, algorithm)
         wrapper_construction = @elapsed wrapped = init(fixture.problem, algorithm;
             backend, adaptor, verbose = false, save_start = false, save_end = false)
         _timed_scientific_steps!(direct, 1)
-        _timed_phase9_steps!(wrapped, 1)
+        _timed_integrator_steps!(wrapped, 1)
         direct_seconds = _timed_scientific_steps!(direct, 5)
-        wrapper_seconds = _timed_phase9_steps!(wrapped, 5)
+        wrapper_seconds = _timed_integrator_steps!(wrapped, 5)
         results[string(nameof(typeof(algorithm)))] = Dict(
             "direct_construction_seconds" => direct_construction,
             "wrapper_construction_seconds" => wrapper_construction,
@@ -3380,8 +3380,8 @@ function _checkpoint_material_bytes(checkpoint::CanonicalCheckpoint)
     return sum(array -> sizeof(eltype(array)) * length(array), arrays)
 end
 
-"""Measure the Phase 8 lifecycle and checkpoint boundaries on a qualified backend."""
-function measure_phase8_backend(name::String)
+"""Measure the lifecycle lifecycle and checkpoint boundaries on a qualified backend."""
+function measure_lifecycle_backend(name::String)
     algorithms = (
         SequentialCPM(temperature = 2.0f0),
         CheckerboardSweepCPM(temperature = 2.0f0),
@@ -3392,9 +3392,9 @@ function measure_phase8_backend(name::String)
     for (index, algorithm) in enumerate(algorithms)
         label = string(nameof(typeof(algorithm)))
         seed = UInt64(0x7068617365387000) + UInt64(index)
-        baseline_construction = @elapsed baseline = _phase8_persistence_integrator(
+        baseline_construction = @elapsed baseline = _persistence_integrator(
             name, Val(2), algorithm, seed; with_lifecycle = false)
-        lifecycle_construction = @elapsed lifecycle = _phase8_persistence_integrator(
+        lifecycle_construction = @elapsed lifecycle = _persistence_integrator(
             name, Val(2), algorithm, seed; with_lifecycle = true)
         KernelAbstractions.synchronize(baseline.plan.backend)
         KernelAbstractions.synchronize(lifecycle.plan.backend)
@@ -3618,6 +3618,6 @@ function provenance(backend::String, device::String)
     )
 end
 
-include("Phase14WortelQualification.jl")
+include("WortelModelQualification.jl")
 
 end

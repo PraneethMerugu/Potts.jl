@@ -85,12 +85,16 @@ function _canonical(io::IO, value::Duration)
 end
 
 function _canonical(io::IO, value::Tuple)
+    Base.@nospecialize value
     write(io, 'T')
     _write_length(io, length(value))
-    foreach(element -> _canonical(io, element), value)
+    for element in value
+        _canonical(io, element)
+    end
 end
 
 function _canonical(io::IO, value::NamedTuple)
+    Base.@nospecialize value
     write(io, "NT")
     _canonical(io, keys(value))
     _canonical(io, Tuple(value))
@@ -108,6 +112,87 @@ function _canonical(io::IO, value::AbstractArray)
     _canonical(io, size(value))
     for element in value
         _canonical(io, element)
+    end
+end
+
+function _canonical_integer_with_type!(
+    io::IO,
+    value::Unsigned,
+    type_encoding,
+)
+    write(io, 'U')
+    write(io, type_encoding)
+    write(io, 'S')
+    _write_length(io, ndigits(value))
+    print(io, value)
+end
+
+function _canonical_integer_with_type!(
+    io::IO,
+    value::Signed,
+    type_encoding,
+)
+    write(io, 'I')
+    write(io, type_encoding)
+    write(io, 'S')
+    digits = ndigits(value) + (value < 0 ? 1 : 0)
+    _write_length(io, digits)
+    print(io, value)
+end
+
+function _canonical(io::IO, value::AbstractArray{T}) where {T<:Unsigned}
+    write(io, 'A')
+    _canonical(io, string(T))
+    _canonical(io, size(value))
+    type_encoding = canonical_bytes(string(T))
+    for element in value
+        _canonical_integer_with_type!(io, element, type_encoding)
+    end
+end
+
+function _canonical(io::IO, value::AbstractArray{T}) where {T<:Signed}
+    write(io, 'A')
+    _canonical(io, string(T))
+    _canonical(io, size(value))
+    type_encoding = canonical_bytes(string(T))
+    for element in value
+        _canonical_integer_with_type!(io, element, type_encoding)
+    end
+end
+
+function _canonical(io::IO, value::AbstractArray{Float16})
+    write(io, 'A')
+    _canonical(io, "Float16")
+    _canonical(io, size(value))
+    type_encoding = canonical_bytes("UInt16")
+    for element in value
+        write(io, "F16")
+        _canonical_integer_with_type!(
+            io, reinterpret(UInt16, element), type_encoding)
+    end
+end
+
+function _canonical(io::IO, value::AbstractArray{Float32})
+    write(io, 'A')
+    _canonical(io, "Float32")
+    _canonical(io, size(value))
+    type_encoding = canonical_bytes("UInt32")
+    for element in value
+        write(io, "F32")
+        _canonical_integer_with_type!(
+            io, reinterpret(UInt32, element), type_encoding)
+    end
+end
+
+function _canonical(io::IO, value::AbstractArray{Float64})
+    write(io, 'A')
+    _canonical(io, "Float64")
+    _canonical(io, size(value))
+    type_encoding = canonical_bytes("UInt64")
+    for element in value
+        write(io, "F64")
+        _canonical_integer_with_type!(
+            io, reinterpret(UInt64, element), type_encoding)
     end
 end
 

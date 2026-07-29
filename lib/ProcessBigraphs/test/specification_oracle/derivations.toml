@@ -166,7 +166,7 @@ julia_decision = "stdlib-only separate-process oracle"
 truth_table = "production import absent and exact 22-row comparison"
 fixture = "phase15c-neutral-oracle-v1"
 assertion = "oracle-boundary"
-limitation = "frozen Phase 15.C scope"
+limitation = "frozen serial-runtime oracle scope"
 
 [[rules]]
 id = "workflow-cycle-rejection"

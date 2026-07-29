@@ -1,0 +1,206 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraph-phase17-api-v1"
+phase = "17"
+status = "specified"
+public_release = false
+inventory_required = true
+unclassified_bindings_allowed = 0
+canonical_model_internal_references_allowed = 0
+documentation_internal_references_allowed = 0
+
+classes = [
+    "exported_user",
+    "public_extension",
+    "experimental_beta",
+    "deprecated_compat",
+    "internal",
+]
+
+[classification_policy]
+every_binding_exactly_once = true
+exported_user_must_be_exported = true
+public_extension_must_use_julia_public = true
+public_extension_exported_by_default = false
+experimental_requires_visible_label = true
+deprecated_requires_replacement_and_removal_policy = true
+internal_must_not_appear_in_required_docs = true
+admitted_docstring_coverage_percent = 100
+admitted_owning_page_coverage_percent = 100
+
+[process_bigraphs.user_additions]
+exported = ["managed_field_process"]
+
+[process_bigraphs.user_existing_required]
+exported = [
+    "CompositeModel",
+    "SimulationProblem",
+    "Every",
+    "At",
+    "On",
+    "After",
+    "compose",
+    "store!",
+    "mount!",
+    "connect!",
+    "attach!",
+    "expose!",
+    "schedule!",
+    "iteration!",
+    "parameter!",
+    "observable!",
+    "allow_instances!",
+    "lower",
+    "compile",
+    "validate",
+    "describe",
+    "diagram",
+    "explain",
+    "remake",
+    "semantic_fingerprint",
+    "problem_fingerprint",
+    "origin_map",
+    "parameter_names",
+    "with_parameters",
+    "spawn",
+    "divide",
+    "remove",
+    "move",
+    "schema_at",
+    "schema_leaves",
+    "observation_records",
+    "checkpoint",
+    "restore",
+]
+
+[process_bigraphs.extension_required]
+public_unexported_functions = [
+    "ports",
+    "capabilities",
+    "semantic_version",
+    "semantic_parameters",
+    "invoke",
+    "observe",
+    "observer_semantic_version",
+    "observer_semantic_parameters",
+    "observer_continuation_schema",
+    "prepare_engine",
+    "stage_operation!",
+    "complete_operation!",
+    "validate_candidate",
+    "publish_candidate!",
+    "discard_candidate!",
+    "projection_value",
+]
+public_unexported_types = [
+    "AbstractProcess",
+    "AbstractStep",
+    "AbstractObserver",
+    "AbstractEngineAdapter",
+    "AbstractEngineInstance",
+    "AbstractEngineOperation",
+    "AbstractCompletionHandle",
+    "EngineCapabilities",
+    "EngineDeclaration",
+    "IntervalAdvance",
+    "BoundarySolve",
+    "DiscreteBatch",
+    "EngineInputProjection",
+    "EngineInvocation",
+    "EngineCandidate",
+    "EngineEarlyReturn",
+    "EngineEventRequest",
+    "EngineFailure",
+]
+
+[process_bigraphs.internal_required]
+bindings = [
+    "ManagedFieldAdvanceProcess",
+    "StaticComposite",
+    "ProcessDeclaration",
+    "StepDeclaration",
+    "PortBinding",
+]
+representation_categories = [
+    "concrete-engine-sessions",
+    "completion-handles",
+    "candidates",
+    "solver-integrators",
+    "workspaces",
+    "caches",
+    "buffers",
+    "streams",
+    "tasks",
+    "device-allocations",
+    "raw-algebraic-rewriting-matches",
+    "candidate-publication-internals",
+]
+
+[corepotts.user_additions]
+exported_types = ["ActivityPottsProblem"]
+exported_functions = ["static_relation", "site_property_value"]
+
+[corepotts.reused_supported_functions]
+exported = [
+    "logical_state",
+    "current_mcs_report",
+    "capture_checkpoint",
+    "restore_checkpoint",
+]
+extended_from_process_bigraphs = ["observation_records"]
+extended_from_scimlbase = ["init", "step!"]
+
+[corepotts.internal_required]
+bindings = [
+    "CoupledIntegrator",
+    "CoupledState",
+    "MCSPlan",
+    "init_coupled",
+]
+representation_categories = [
+    "coupled-process-records",
+    "registry-v1-workspaces",
+    "concrete-observation-storage",
+    "execution-plan-metric-fields",
+    "scientific-integrator-mcs-field",
+    "scientific-integrator-algorithm-field",
+    "private-topology-offset-tables",
+]
+
+[pottstoolkit.model_api]
+module = "PottsToolkit.ReferenceModels"
+families = ["Wortel2021", "Merks2006"]
+required_constructor_kinds = [
+    "model",
+    "problem",
+    "composite",
+    "observation_plan",
+    "profile",
+]
+preserve_merks_call_shapes = true
+prebuilt_constructors_allowed_in_case_study_tutorials = false
+
+[topology]
+required_signature = "static_relation(role, topology; spacing, weights)"
+act_accepts = ["supported-topology", "supported-relation"]
+private_offsets_in_models = false
+
+[compatibility]
+merks_semantic_version = 2
+wortel_semantic_version = 1
+retain_merks_v1_checkpoint_reader = true
+silent_merks_v1_as_v2_restore = false
+corepotts_forwarding_shims_through_next_minor = true
+migration_guide_required = true
+
+[scanner]
+required_roots = [
+    "src/reference_models",
+    "test",
+    "docs",
+    "lib/ProcessBigraphs/docs",
+    "integration",
+]
+benchmark_allowlist_required = true
+allowlist_scope = "exact binding and exact file"
+allowlist_reason_required = true
+allowlist_expiry_required = true

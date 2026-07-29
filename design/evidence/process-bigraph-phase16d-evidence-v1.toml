@@ -1,0 +1,73 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase16d-structural-transactions-2026-07-27"
+phase = "16.D"
+status = "qualified"
+implementation_commit = "58e9f3426b7dad2c249e715d3f609db1775f1d47"
+implementation_tree = "1e70da9df6ef333a36e50449a4b00703daeb20fa"
+rebased_from_implementation_commit = "d17f9c32d31fb5fd048010abf83d4641a6054be4"
+rebased_from_implementation_tree = "e2f622861f3b630f9b08b3d4d7b985ef75e37c0b"
+branch = "codex/phase-16"
+internal_beta = false
+public_release = false
+qualified_rows = ["P16-D01", "P16-D02", "P16-D03", "P16-D04"]
+
+[dependencies]
+algebraic_rewriting = "0.5.0"
+rewrite_semantics = "DPO"
+implicit_spo_cascade = false
+raw_rewrite_exported = false
+
+[artifacts]
+source = "lib/ProcessBigraphs/src/structural_transactions.jl"
+source_sha256 = "12c38087809062d9b9834fa91530e583774c41f1b943eb0ce7f803acabf7a89b"
+tests = "lib/ProcessBigraphs/test/phase16/test_phase16d_structural_transactions.jl"
+tests_sha256 = "88538f25cdcf9b6ec177b7747f642c97833aa7d9ce1049011a28c8bfbe15db52"
+audit = "design/audits/process-bigraph-phase16d-structural-transaction-audit.md"
+checker = "scripts/process-bigraph-phase16d-check.jl"
+
+[semantics]
+stable_operations = ["add", "remove", "binary_divide", "move", "rewire"]
+immutable_epochs = true
+deterministic_semantic_identity = true
+stable_generation = true
+explicit_owned_closure = true
+lineage = true
+priority_conflict_selection = true
+equal_priority_conflict_aborts = true
+bounded_capacity = true
+candidate_order_invariant = true
+numeric_and_structural_atomic = true
+checksummed_settled_restart = true
+
+[oracle]
+independent_reference_transition = true
+dpo_reference_differential_per_operation = true
+bounded_order_permutations = 6
+bounded_conflict_cases = 81
+minimal_conflict_shrinker = true
+failure_stages = ["selection", "reference", "rewrite", "validation", "publication", "numeric-validation"]
+
+[tests]
+phase16d_assertions = 173
+phase16_assertions = 261
+pb0_assertions = 309
+phase15c_assertions = 440
+aqua_assertions = 9
+full_package_assertions = 1019
+full_package_suite = "passed"
+julia = "1.12.6"
+
+[timing]
+cold_structural_group_seconds = 90.3
+warm_conflict_group_seconds = 6.6
+warm_rewire_group_seconds = 3.4
+warm_restart_group_seconds = 2.4
+warm_order_oracle_group_seconds = 4.0
+bounded_fuzz_group_seconds = 0.5
+classification = "cold attributed-ACSet DPO specialization; subsequent bounded groups warm"
+
+[open]
+phase16c_trusted_metal = true
+phase16c_trusted_rocm = true
+corepotts_cutover = true
+phase16_internal_beta = true

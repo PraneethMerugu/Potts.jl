@@ -1,0 +1,42 @@
+architecture = "aarch64"
+backend = "cpu"
+backend_type = "CPU"
+driver = "runtime-reported"
+evidence_id = "process-bigraph-phase16-native-field-v1"
+github_sha = "83f7aea20a85bb3855a5976ee64e738be15b1866"
+hardware_id = "local-cpu-arm64-exact-head"
+julia_version = "1.12.6"
+kernel = "reaction-diffusion-explicit-euler-v1"
+native_field_source_sha256 = "46b5f430b8774080a2b8f3fd8437795c9cbad6e9699e8c5b2833c4f4715a7c25"
+precision = "Float32"
+real_hardware_required = false
+schema_version = "1.0.0"
+
+[[cases]]
+completion_and_observation_device_to_host_transfers = 0
+dimensions = [64, 48]
+host_synchronizations = 2
+initial_host_to_device_transfers = 0
+launches = 5
+maximum_absolute_error = 0.0
+name = "periodic-2d"
+publication_epoch = 1
+publication_host_allocated_bytes = 0
+published_exact_tick = 2
+rank = 2
+staging_host_to_device_transfers = 0
+warm_device_allocations = 0
+[[cases]]
+completion_and_observation_device_to_host_transfers = 0
+dimensions = [16, 12, 8]
+host_synchronizations = 2
+initial_host_to_device_transfers = 0
+launches = 5
+maximum_absolute_error = 0.0
+name = "mixed-3d"
+publication_epoch = 1
+publication_host_allocated_bytes = 0
+published_exact_tick = 2
+rank = 3
+staging_host_to_device_transfers = 0
+warm_device_allocations = 0

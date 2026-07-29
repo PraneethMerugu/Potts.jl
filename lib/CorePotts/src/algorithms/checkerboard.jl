@@ -408,35 +408,7 @@ end
 end
 
 @inline function _commit_checkerboard!(state, transaction)
-    proposal = transaction.proposal
-    delta = transaction.trackers
-    core = state.core
-    trackers = state.trackers
-    recipient = proposal.recipient
-    @inbounds begin
-        core.ownership.tags[recipient] = proposal.gaining.tag
-        core.ownership.ids[recipient] = proposal.gaining.value
-        if delta.losing_cell != 0
-            losing = Int(delta.losing_cell)
-            trackers.finite_volumes[losing] -= Int32(1)
-            trackers.boundary_measures[losing] += delta.losing_boundary
-            if trackers.finite_volumes[losing] == 0
-                core.active[losing] = UInt8(0)
-                core.cell_types[losing] = UInt32(0)
-                _reset_columns!(Tuple(core.properties), Tuple(state.retirement_defaults), losing)
-            end
-        else
-            Atomix.@atomic trackers.medium_volumes[Int(delta.losing_medium)] -= Int32(1)
-        end
-        if delta.gaining_cell != 0
-            gaining = Int(delta.gaining_cell)
-            trackers.finite_volumes[gaining] += Int32(1)
-            trackers.boundary_measures[gaining] += delta.gaining_boundary
-        else
-            Atomix.@atomic trackers.medium_volumes[Int(delta.gaining_medium)] += Int32(1)
-        end
-    end
-    return nothing
+    return _commit_staged_core!(state, transaction, Val(true), Val(false))
 end
 
 @kernel function _checkerboard_commit!(color_order, color_offsets, transactions,

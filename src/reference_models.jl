@@ -8,6 +8,33 @@ export differential_adhesion_model, differential_adhesion_problem
 export monolayer_growth_model, monolayer_growth_problem
 export elongation_driven_angiogenesis_model, elongation_driven_angiogenesis_problem
 export single_cell_fluctuation_problem, droplet_problem
+export merks2006_initial_labels, merks2006_composite,
+       merks2006_native_composite, merks2006_ambiguity_profile,
+       merks2006_observation_plan
+export cnv2012_initial_state, cnv2012_composite,
+       cnv2012_native_composite, cnv2012_ambiguity_profile,
+       cnv2012_observation_plan
+
+merks2006_ambiguity_profile(; kwargs...) =
+    CorePotts.Merks2006AmbiguityProfile(; kwargs...)
+merks2006_initial_labels(; kwargs...) =
+    CorePotts.merks2006_initial_labels(; kwargs...)
+merks2006_composite(args...; kwargs...) =
+    CorePotts.merks2006_composite(args...; kwargs...)
+merks2006_native_composite(args...; kwargs...) =
+    CorePotts.merks2006_native_composite(args...; kwargs...)
+merks2006_observation_plan(args...; kwargs...) =
+    CorePotts.merks2006_observation_plan(args...; kwargs...)
+cnv2012_ambiguity_profile(; kwargs...) =
+    CorePotts.CNV2012AmbiguityProfile(; kwargs...)
+cnv2012_initial_state(; kwargs...) =
+    CorePotts.cnv2012_initial_state(; kwargs...)
+cnv2012_composite(args...; kwargs...) =
+    CorePotts.cnv2012_composite(args...; kwargs...)
+cnv2012_native_composite(args...; kwargs...) =
+    CorePotts.cnv2012_native_composite(args...; kwargs...)
+cnv2012_observation_plan(args...; kwargs...) =
+    CorePotts.cnv2012_observation_plan(args...; kwargs...)
 
 function _ball_mask(shape::NTuple{N, <:Integer}, target_volume::Real) where {N}
     center = ntuple(axis -> (Int(shape[axis]) + 1) / 2, Val(N))

@@ -1,0 +1,34 @@
+schema_version = "1.0.0"
+status = "passed"
+audience = "beginner"
+review_date = "2026-07-28"
+reviewer = "Codex documentation auditor"
+method = "rendered_site_task_walkthrough"
+start = "Home"
+goal = "Find installation, verify the CPU path, and interpret the first simulation without reading package source."
+limitation = "Auditor-led persona review; future external-user observation remains useful but is not represented as completed here."
+
+[[checks]]
+step = "Choose the beginner path from Home."
+passed = true
+evidence = "The outcome-first Home hero links Install and verify and First simulation before any package-internal detail."
+
+[[checks]]
+step = "Identify direct package installation requirements."
+passed = true
+evidence = "Rendered install page shows direct CorePotts and PottsToolkit Pkg.add commands and optional MakiePotts."
+
+[[checks]]
+step = "Verify the CPU authoring path."
+passed = true
+evidence = "Rendered executable output is (true, true, (4, 4))."
+
+[[checks]]
+step = "Run and interpret the first simulation."
+passed = true
+evidence = "The first simulation declares Medium, CellType, Volume, Adhesion, Model, and PottsProblem directly; its checked volume trace is [16, 35, 34, 34, 35, 37, 36], showing relaxation toward the target."
+
+[[checks]]
+step = "Confirm visual output remains accessible."
+passed = true
+evidence = "The page imports MakiePotts and displays native before/after lattice views beside a quantitative volume trace, with comments explaining what to read."

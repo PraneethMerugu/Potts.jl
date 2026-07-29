@@ -10,6 +10,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
 Mermaid = "922b6a97-db6b-4881-a67b-b45fb8a31c4c"
 PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -27,6 +28,7 @@ KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl
 MakiePotts = {path = "../lib/MakiePotts"}
 Mermaid = {url = "https://github.com/eebio/Mermaid.jl.git", rev = "d4c89d0ea09af8d96bcdc42ef6bd5dd967fc7a0d"}
 PottsToolkit = {path = ".."}
+ProcessBigraphs = {path = "../lib/ProcessBigraphs"}
 
 [compat]
 CommonSolve = "0.2"
@@ -35,6 +37,7 @@ HDF5 = "0.17"
 Images = "0.26"
 KernelAbstractions = "0.9.42"
 Mermaid = "0.1"
+ProcessBigraphs = "0.4, 0.5"
 SciMLBase = "3"
 StaticArrays = "1"
 StructArrays = "0.7"

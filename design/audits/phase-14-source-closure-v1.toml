@@ -77,18 +77,17 @@ authority_order = ["paper equations and methods", "original requested source if 
 license_disposition = "citation-only manuscript and figures unless a specific reuse license is confirmed; commit clean-room Potts.jl code, independently implemented analysis, derived numerical tables with citation, and generated outputs only"
 sensitivity_plan_id = "merks2006-source-envelope-v1"
 sensitivity_axes = [
-    "proposal, contact, chemotaxis-query, and finite-difference field relations",
-    "periodic versus no-flux CPM and morphogen boundaries",
-    "field timestep, diffusion/decay discretization, secretion law, chemotactic response, and CPM-field split order",
+    "term-specific use of the paper-stated eight-neighbor CPM relation and chemotaxis-query relation",
+    "paper-stated frozen CPM border versus unresolved morphogen face behavior",
+    "finite-difference discretization details, chemotactic response detail, and CPM-field split order; the stated 15 steps by 2 seconds is fixed",
     "current Potts.jl elongation law versus a separately versioned source-equivalent law",
-    "temperature and MCS attempt budget",
     "random placement algorithm and seed ensemble for 282 cells",
     "lacuna and branch-point segmentation, pruning, and boundary handling",
 ]
 failure_rule = "A network-looking morphology cannot substitute for the two registered Figure 5 time courses; analysis-definition uncertainty and simulation uncertainty are reported separately."
 clarification_questions = [
     "Can the original simulator and Figure 5 image-analysis programs or numerical data be recovered?",
-    "What neighborhoods, boundaries, temperature, attempt budget, field step, and split order were used?",
+    "What morphogen face boundary, exact term-specific neighborhoods, finite-difference detail, and CPM-field split order were used?",
     "What exact elongation energy and initialization algorithm generated the n=10 ensemble?",
 ]
 
