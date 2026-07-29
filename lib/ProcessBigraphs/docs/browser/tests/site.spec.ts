@@ -41,10 +41,17 @@ test.describe("all curated routes", () => {
       page,
     }) => {
       const consoleDefects: string[] = [];
-      const requestDefects: string[] = [];
+      const requestFailures: {
+        url: string;
+        method: string;
+        resourceType: string;
+        errorText: string;
+      }[] = [];
+      const responseDefects: string[] = [];
+      const successfulResponses = new Set<string>();
       page.on("request", (request) => {
         if (new URL(request.url()).origin !== "http://127.0.0.1:4173") {
-          requestDefects.push(
+          responseDefects.push(
             `external runtime request: ${request.method()} ${request.url()}`,
           );
         }
@@ -56,23 +63,25 @@ test.describe("all curated routes", () => {
       });
       page.on("requestfailed", (request) => {
         if (new URL(request.url()).origin === "http://127.0.0.1:4173") {
-          requestDefects.push(
-            `${request.method()} ${request.url()}: ${
-              request.failure()?.errorText ?? "unknown failure"
-            }`,
-          );
+          requestFailures.push({
+            url: request.url(),
+            method: request.method(),
+            resourceType: request.resourceType(),
+            errorText: request.failure()?.errorText ?? "unknown failure",
+          });
         }
       });
       page.on("response", (response) => {
-        if (
-          new URL(response.url()).origin === "http://127.0.0.1:4173" &&
-          response.status() >= 400
-        ) {
-          requestDefects.push(
-            `${response.request().method()} ${response.url()}: ${
-              response.status()
-            }`,
-          );
+        if (new URL(response.url()).origin === "http://127.0.0.1:4173") {
+          if (response.ok()) {
+            successfulResponses.add(response.url());
+          } else {
+            responseDefects.push(
+              `${response.request().method()} ${response.url()}: ${
+                response.status()
+              }`,
+            );
+          }
         }
       });
 
@@ -87,8 +96,31 @@ test.describe("all curated routes", () => {
         .analyze();
       expect(accessibility.violations).toEqual([]);
 
+      const mediaErrors = await page.locator("video").evaluateAll((videos) =>
+        videos.flatMap((element) => {
+          const video = element as HTMLVideoElement;
+          return video.error === null
+            ? []
+            : [`${video.currentSrc || "unknown media"}: ${video.error.message}`];
+        })
+      );
+      const actionableRequestDefects = requestFailures
+        .filter((failure) =>
+          !(
+            failure.resourceType === "media" &&
+            failure.errorText === "Load request cancelled" &&
+            successfulResponses.has(failure.url) &&
+            mediaErrors.length === 0
+          )
+        )
+        .map((failure) =>
+          `${failure.method} ${failure.url}: ${failure.errorText}`
+        );
+
       expect(consoleDefects).toEqual([]);
-      expect(requestDefects).toEqual([]);
+      expect(mediaErrors).toEqual([]);
+      expect(responseDefects).toEqual([]);
+      expect(actionableRequestDefects).toEqual([]);
     });
   }
 });
