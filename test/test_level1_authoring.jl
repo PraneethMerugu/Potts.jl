@@ -100,7 +100,7 @@ end
 @testset "Level 1 Act façade canonical equivalence" begin
     neighborhood = CorePotts.static_relation(
         CorePotts.SpatialQueryRole(),
-        CorePotts.offsets(CorePotts.MooreTopology{2}()))
+        CorePotts.MooreTopology{2}())
     algorithm = CorePotts.BudgetedSequentialCPM(
         CorePotts.AttemptsPerSite(16); temperature = 20.0f0)
     façade = PottsToolkit.Act(
@@ -127,8 +127,16 @@ end
     integer_parameters = PottsToolkit.Act(
         maximum_activity = 40,
         strength = 120,
-        neighborhood = neighborhood)
+        neighborhood = CorePotts.MooreTopology{2}())
     @test PottsToolkit.lower(integer_parameters).hamiltonian.maximum == 40.0
+    @test PottsToolkit.lower(integer_parameters).hamiltonian.relation ==
+          CorePotts.static_relation(
+              CorePotts.SpatialQueryRole(), CorePotts.MooreTopology{2}())
+    @test_throws ArgumentError PottsToolkit.Act(
+        maximum_activity = 40,
+        strength = 120,
+        neighborhood = CorePotts.MooreTopology{2}(),
+        spacing = (1.0,))
     @test_throws ArgumentError PottsToolkit.Act(
         maximum_activity = 40.0,
         strength = 120.0,

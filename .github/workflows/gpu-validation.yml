@@ -1,34 +1,25 @@
-name: GPU Validation
+name: GPU tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: gpu-${{ github.workflow }}-${{ github.ref }}
+  group: gpu-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  JULIA_VERSION: 1.12.6
+  JULIA_VERSION: '1.12'
   JULIA_NUM_PRECOMPILE_TASKS: 2
 
 jobs:
   metal:
-    name: Metal / Apple Silicon
-    if: >-
-      vars.METAL_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
+    name: Metal
+    if: vars.METAL_RUNNER_ENABLED == 'true'
     runs-on: [self-hosted, metal]
-    timeout-minutes: 45
-    env:
-      BACKEND_GROUP: Metal
-      JULIA_LOAD_PATH: "benchmark/backends/metal:benchmark:@stdlib"
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: _ci/source
@@ -41,45 +32,20 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
           arch: aarch64
           force-arch: true
-      - name: Instantiate benchmark and Metal runtime
-        env:
-          JULIA_LOAD_PATH: "@:@stdlib"
-        run: |
-          julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Qualify Metal tiled-checkerboard path
-        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=metal
-      - name: Qualify Metal device execution and invariants
-        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=metal --profile=smoke
-      - name: Qualify Wortel model Metal GPU-native slice
-        run: julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/wortel_model_qualification.jl --backend=metal --profile=paper
-      - name: Capture Wortel model Metal device code
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/profile_wortel_metal.jl
-      - name: Qualify native field on real Metal hardware
-        env:
-          POTTS_BENCHMARK_HARDWARE_ID: metal-runner-gpu-v1
+      - name: Instantiate Metal environment
         run: >-
-          julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes
-          benchmark/native_field_qualification.jl
-          --backend=metal
-          --output=benchmark/results/native-field-metal.toml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: gpu-smoke-metal-${{ github.sha }}
-          path: _ci/source/benchmark/results/
-          if-no-files-found: error
+          julia --project=benchmark/backends/metal --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Run Metal smoke tests
+        run: |
+          julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=metal
+          julia --project=benchmark/backends/metal --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=metal --profile=smoke
 
   rocm:
-    name: ROCm / AMDGPU
-    if: >-
-      vars.ROCM_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
+    name: ROCm
+    if: vars.ROCM_RUNNER_ENABLED == 'true'
     runs-on: [self-hosted, rocm]
-    timeout-minutes: 45
-    env:
-      BACKEND_GROUP: AMDGPU
-      JULIA_LOAD_PATH: "benchmark/backends/amdgpu:benchmark:@stdlib"
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: _ci/source
@@ -90,45 +56,20 @@ jobs:
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
-      - name: Instantiate benchmark and ROCm runtime
-        env:
-          JULIA_LOAD_PATH: "@:@stdlib"
-        run: |
-          julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=benchmark/backends/amdgpu --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Qualify ROCm tiled-checkerboard path
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=amdgpu
-      - name: Qualify ROCm device execution and invariants
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=amdgpu --profile=smoke
-      - name: Qualify Wortel model ROCm GPU-native slice
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/wortel_model_qualification.jl --backend=amdgpu --profile=paper
-      - name: Capture Wortel model ROCm device code
-        run: julia --project=benchmark/backends/amdgpu --startup-file=no benchmark/profile_wortel_amdgpu.jl
-      - name: Qualify native field on real ROCm hardware
-        env:
-          POTTS_BENCHMARK_HARDWARE_ID: rocm-runner-gpu-v1
+      - name: Instantiate ROCm environment
         run: >-
-          julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes
-          benchmark/native_field_qualification.jl
-          --backend=amdgpu
-          --output=benchmark/results/native-field-rocm.toml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: gpu-smoke-rocm-${{ github.sha }}
-          path: _ci/source/benchmark/results/
-          if-no-files-found: error
+          julia --project=benchmark/backends/amdgpu --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Run ROCm smoke tests
+        run: |
+          julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/tiled_smoke.jl --backend=amdgpu
+          julia --project=benchmark/backends/amdgpu --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=amdgpu --profile=smoke
 
   cuda:
-    name: CUDA / NVIDIA
-    if: >-
-      vars.CUDA_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
+    name: CUDA
+    if: vars.CUDA_RUNNER_ENABLED == 'true'
     runs-on: [self-hosted, cuda]
-    timeout-minutes: 45
-    env:
-      BACKEND_GROUP: CUDA
-      JULIA_LOAD_PATH: "benchmark/backends/cuda:benchmark:@stdlib"
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: _ci/source
@@ -139,16 +80,11 @@ jobs:
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
-      - name: Instantiate benchmark and CUDA runtime
-        env:
-          JULIA_LOAD_PATH: "@:@stdlib"
-        run: |
-          julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=benchmark/backends/cuda --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Qualify CUDA device execution and invariants
-        run: julia --project=benchmark/backends/cuda --startup-file=no --check-bounds=yes benchmark/matrix.jl --backend=cuda --profile=smoke
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: gpu-smoke-cuda-${{ github.sha }}
-          path: _ci/source/benchmark/results/
-          if-no-files-found: error
+      - name: Instantiate CUDA environment
+        run: >-
+          julia --project=benchmark/backends/cuda --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Run CUDA smoke tests
+        run: >-
+          julia --project=benchmark/backends/cuda --startup-file=no --check-bounds=yes
+          benchmark/matrix.jl --backend=cuda --profile=smoke

@@ -1,3 +1,8 @@
+# Phase 17 retains this semantic-v1 implementation as compatibility and
+# historical checkpoint authority. The canonical semantic-v2 scientific model
+# is owned downstream by `PottsToolkit.ReferenceModels.Merks2006`; CorePotts
+# continues to own only the generic mechanisms used by both generations.
+
 const MERKS_2006_ASSEMBLY_VERSION =
     "merks-vasculogenesis-reference-assembly-v1"
 
@@ -640,7 +645,7 @@ function merks2006_composite(
             owner=:shared,
         ),
     )
-    field_process = ProcessBigraphs.ManagedFieldAdvanceProcess(
+    field_process = ProcessBigraphs.managed_field_process(
         field_declaration;
         resource_authorization,
         subcycles_per_mcs,
@@ -651,9 +656,13 @@ function merks2006_composite(
         profile=:reproducible,
     ) do builder
         stores = Dict{Symbol,Any}()
-        for (name, leaf) in schema.children
-            stores[Symbol(name)] =
-                ProcessBigraphs.store!(builder, Symbol(name), leaf)
+        for (store_path, leaf) in ProcessBigraphs.schema_leaves(schema)
+            segment = only(ProcessBigraphs.segments(store_path))
+            segment isa ProcessBigraphs.NameSegment ||
+                error("Merks store schema must remain flat and named")
+            name = Symbol(segment.value)
+            stores[name] =
+                ProcessBigraphs.store!(builder, name, leaf)
         end
 
         field = ProcessBigraphs.mount!(

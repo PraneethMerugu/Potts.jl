@@ -31,6 +31,7 @@ using CorePotts
     include("test_scientific_mechanics.jl")
     include("test_sequential_algorithms.jl")
     include("test_dynamic_state.jl")
+    include("test_activity_problem.jl")
     include("test_relationship_processes.jl")
     include("test_contact_relationships.jl")
     include("test_polarity_force.jl")

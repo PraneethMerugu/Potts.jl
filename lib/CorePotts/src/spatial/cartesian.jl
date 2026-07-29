@@ -352,6 +352,33 @@ function static_relation(role::R, offsets;
         symmetric, version)
 end
 
+"""
+    static_relation(role, topology; spacing=nothing, weights=nothing)
+
+Construct a canonical spatial relation from a supported Cartesian topology
+without exposing its offset representation. `spacing` must match the topology
+dimension; `weights`, when supplied, must contain one finite non-negative value
+per direction.
+"""
+function static_relation(
+        role::R,
+        topology::AbstractTopology{N};
+        spacing=nothing,
+        weights=nothing,
+) where {R<:AbstractSpatialRole,N}
+    N in (2, 3) || throw(ArgumentError(
+        "Cartesian topology relations support two or three dimensions"))
+    resolved_spacing =
+        spacing === nothing ? ntuple(_ -> 1.0, Val(N)) : spacing
+    return static_relation(
+        role,
+        offsets(topology);
+        spacing=resolved_spacing,
+        weights,
+        symmetric=_requires_symmetry(role),
+    )
+end
+
 function first_shell_relation(
         role::AbstractSpatialRole, ::Val{N}; spacing = ntuple(_ -> 1.0, Val(N)),
         weights = nothing, symmetric::Bool = _requires_symmetry(role)) where {N}

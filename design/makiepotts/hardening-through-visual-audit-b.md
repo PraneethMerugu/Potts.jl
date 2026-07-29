@@ -29,8 +29,9 @@ Comparison is performed on decoded RGBA pixels:
 - mean absolute channel error must not exceed 0.006; and
 - failures retain expected, actual, and amplified-difference PNGs.
 
-The deliberately small single-reference set avoids a brittle gallery. CI
-uploads failure evidence and never updates the accepted reference.
+The deliberately small single-reference set avoids a brittle gallery. Explicit
+pre-release qualification retains failure evidence and never updates the
+accepted reference.
 
 Gate:
 

@@ -1,6 +1,6 @@
 name = "ProcessBigraphs"
 uuid = "efcc6515-205e-41e3-b553-f38f05ad529c"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
@@ -26,7 +26,7 @@ OrdinaryDiffEqTsit5 = "2"
 SHA = "0.7"
 SciMLBase = "3"
 Test = "1"
-julia = "1.12.6"
+julia = "1.12"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

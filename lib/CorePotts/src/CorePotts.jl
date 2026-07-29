@@ -71,6 +71,7 @@ include("reference/engine.jl")
 
 include("initialization/logical.jl")
 include("sciml/interface.jl")
+include("coupled/activity_problem.jl")
 include("contracts/public_api_docs.jl")
 
 # ==============================================================================
@@ -364,7 +365,8 @@ export COUPLED_SEMANTIC_KERNEL_VERSION, PHASE14_SEMANTIC_KERNEL_VERSION,
        StateSpec, ProcessSpec, PlanEntrySpec, PlanSpec,
        LifecycleSpec, ObservationSpec, SemanticModel,
        canonical_coupled_model, semantic_model_fingerprint,
-       ActivityHamiltonian, ActivityProgram, realize_activity
+       ActivityHamiltonian, ActivityProgram, ActivityPottsProblem,
+       realize_activity, site_property_value
 # Derived tooling is public and inspectable, but is not an authoring language.
 export CoupledCheckpoint, CoupledMemoryCheckpointStore,
        CoupledSemanticManifest, CoupledInspectionReport,

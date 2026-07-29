@@ -1,6 +1,6 @@
 name = "CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["PraneethMerugu <merugufam@gmail.com>"]
 
 [deps]
@@ -47,7 +47,7 @@ KernelAbstractions = "0.9.42"
 LinearAlgebra = "1"
 Metal = "1.10"
 OrdinaryDiffEqTsit5 = "2"
-ProcessBigraphs = "0.4, 0.5"
+ProcessBigraphs = "0.6"
 Random = "1"
 SHA = "0.7"
 SciMLBase = "3"
@@ -56,7 +56,7 @@ StaticArrays = "1.9"
 Statistics = "1"
 Test = "1"
 Zarr = "0.10"
-julia = "1.12.6"
+julia = "1.12"
 
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"

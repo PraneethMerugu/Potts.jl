@@ -17,14 +17,14 @@ KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl
 [compat]
 Aqua = "0.8"
 CairoMakie = "0.15"
-CorePotts = "0.1"
+CorePotts = "0.2"
 Makie = "0.24"
-PottsToolkit = "0.1"
+PottsToolkit = "0.2"
 PrecompileTools = "1"
 KernelIntrinsics = "0.1"
 Random = "1"
 Test = "1"
-julia = "1.12.6"
+julia = "1.12"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

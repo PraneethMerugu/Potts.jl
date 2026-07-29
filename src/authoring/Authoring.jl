@@ -41,7 +41,7 @@ export CellParameter, ModelParameter
 export VolumeParameters, VolumeConstraint, FluctuatingVolumeConstraint
 export ElongationParameters, Elongation
 export BoundaryParameters, BoundaryConstraint, FluctuatingBoundaryConstraint, Adhesion
-export PreserveConnectivity
+export PreserveConnectivity, LocalConnectivity
 export PrescribedField, Chemotaxis
 export PropertyUpdate, StochasticPropertyUpdate
 export Growth, Transition, Division, ShrinkDeath, ImmediateDeath

@@ -129,7 +129,7 @@ window_sha256 = "f8d4ab32e8cae577ad3f9c7f6cec3b4ed7126e2a4e31c65ef5f38795145da99
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:198", "src/authoring/Authoring.jl:81"]
+occurrences = ["src/PottsToolkit.jl:199", "src/authoring/Authoring.jl:81"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement"]
@@ -137,7 +137,7 @@ window_sha256 = "04671eab812e67737ce72aeb73211b91f01f51af1ff3655382618cc93b8d856
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:191", "src/authoring/Authoring.jl:74"]
+occurrences = ["src/PottsToolkit.jl:192", "src/authoring/Authoring.jl:74"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast"]
@@ -145,7 +145,7 @@ window_sha256 = "1f032b2554169ba69f20ffea8feac56a0c0f7377a02b1bac7e137405641add6
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:194", "src/authoring/Authoring.jl:77"]
+occurrences = ["src/PottsToolkit.jl:195", "src/authoring/Authoring.jl:77"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision"]
@@ -153,7 +153,7 @@ window_sha256 = "239e7e227e40d63464111b4170f0740d429ef41ce64acfba652a0b51f57f851
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:187", "src/authoring/Authoring.jl:70"]
+occurrences = ["src/PottsToolkit.jl:188", "src/authoring/Authoring.jl:70"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue"]
@@ -161,7 +161,7 @@ window_sha256 = "30a7a49e8d0d82ae5f929fa55f32516afac7a5a51c6f216348b0967d159e8a0
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:200", "src/authoring/Authoring.jl:83"]
+occurrences = ["src/PottsToolkit.jl:201", "src/authoring/Authoring.jl:83"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement", "export ConstitutiveMeanInitialization, StationaryMechanicalInitialization", "export PreserveMechanicalInitialization"]
@@ -169,7 +169,7 @@ window_sha256 = "49f4969c39b158d7fa4baa0123eb64fdd71bf31b26fc0b73237b659072517e5
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:190", "src/authoring/Authoring.jl:73"]
+occurrences = ["src/PottsToolkit.jl:191", "src/authoring/Authoring.jl:73"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis"]
@@ -177,7 +177,7 @@ window_sha256 = "4ce4448c0bca60b413c667031befd324b7384a86d44ddb9e44f012aa47c47e3
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:192", "src/authoring/Authoring.jl:75"]
+occurrences = ["src/PottsToolkit.jl:193", "src/authoring/Authoring.jl:75"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty"]
@@ -185,7 +185,7 @@ window_sha256 = "504978f4cfe6a4eaa97afd53896799073cbabd9123991be3890cc1e82435758
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:195", "src/authoring/Authoring.jl:78"]
+occurrences = ["src/PottsToolkit.jl:196", "src/authoring/Authoring.jl:78"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision"]
@@ -193,7 +193,7 @@ window_sha256 = "51935b00612adc00645fc3640ed8d2ec9c99d80fe1756e4377bd12fab554eb7
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:189", "src/authoring/Authoring.jl:72"]
+occurrences = ["src/PottsToolkit.jl:190", "src/authoring/Authoring.jl:72"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse"]
@@ -201,7 +201,7 @@ window_sha256 = "58c2ca7d9cb10c512fde85419f1eff15b666fd8e33e4e183aaf477c8a704cb3
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:179", "src/authoring/Authoring.jl:62"]
+occurrences = ["src/PottsToolkit.jl:180", "src/authoring/Authoring.jl:62"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export AbstractLevel1Declaration, Volume, Surface", "export Act", "export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector"]
@@ -209,7 +209,7 @@ window_sha256 = "5d27b3c3fd57605ed728a28296ec1585905033326f616f9ea0a8ce8c15e64f9
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:184", "src/authoring/Authoring.jl:67"]
+occurrences = ["src/PottsToolkit.jl:185", "src/authoring/Authoring.jl:67"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate"]
@@ -217,7 +217,7 @@ window_sha256 = "7fe77ae1156471e8fbf0c0410280637197193ddac25b77248d9c0ca6229ddab
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:182", "src/authoring/Authoring.jl:65"]
+occurrences = ["src/PottsToolkit.jl:183", "src/authoring/Authoring.jl:65"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count"]
@@ -225,7 +225,7 @@ window_sha256 = "943abc59b89921a3762af71a33d32c5f206c97ba834048b3c20980c6971552b
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:188", "src/authoring/Authoring.jl:71"]
+occurrences = ["src/PottsToolkit.jl:189", "src/authoring/Authoring.jl:71"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field"]
@@ -233,7 +233,7 @@ window_sha256 = "9b792ee943ef4474fad4ee5c2843b1536bfd78b29d470bb1aec9a3e01c7a7b1
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:186", "src/authoring/Authoring.jl:69"]
+occurrences = ["src/PottsToolkit.jl:187", "src/authoring/Authoring.jl:69"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered"]
@@ -241,7 +241,7 @@ window_sha256 = "a67d159daebecacf5acdc8cafccd1a5c6510b224ff3677221a39112a4ec58e6
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:183", "src/authoring/Authoring.jl:66"]
+occurrences = ["src/PottsToolkit.jl:184", "src/authoring/Authoring.jl:66"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean"]
@@ -249,7 +249,7 @@ window_sha256 = "cdf0dbccd4018bb0a7cc0e8df5c37da83d84860c951adbc988016916ce6cb4c
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:185", "src/authoring/Authoring.jl:68"]
+occurrences = ["src/PottsToolkit.jl:186", "src/authoring/Authoring.jl:68"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger"]
@@ -257,7 +257,7 @@ window_sha256 = "d16e80266ab959c5e46ba782986151791fd1df201b875f75b80160361567e09
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:197", "src/authoring/Authoring.jl:80"]
+occurrences = ["src/PottsToolkit.jl:198", "src/authoring/Authoring.jl:80"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition"]
@@ -265,7 +265,7 @@ window_sha256 = "d49e3f2284d7c3458d38039a7216476088ae442ec94aea5c687195990fe41e5
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:199", "src/authoring/Authoring.jl:82"]
+occurrences = ["src/PottsToolkit.jl:200", "src/authoring/Authoring.jl:82"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision", "export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition", "export UnsupportedTransition, ResetOnRetirement", "export ConstitutiveMeanInitialization, StationaryMechanicalInitialization"]
@@ -273,7 +273,7 @@ window_sha256 = "d7ae16bda1c55de6b20ef38a9fb71336295fab67c69e4d6e179b898585f2ae3
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:181", "src/authoring/Authoring.jl:64"]
+occurrences = ["src/PottsToolkit.jl:182", "src/authoring/Authoring.jl:64"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter"]
@@ -281,7 +281,7 @@ window_sha256 = "d86dc8300ab464663278beb3b4ed8dd9deb34bdba9a5e3ab2b8eb0cf6959d25
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:196", "src/authoring/Authoring.jl:79"]
+occurrences = ["src/PottsToolkit.jl:197", "src/authoring/Authoring.jl:79"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision", "export AsymmetricResetOnDivision, UnsupportedDivision", "export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision", "export StationaryRedrawAfterDivision"]
@@ -289,7 +289,7 @@ window_sha256 = "e69f9624231eefa98bb37a1ee44c9d5bd12147a1f5eb2636ed0e93ebc182d46
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:193", "src/authoring/Authoring.jl:76"]
+occurrences = ["src/PottsToolkit.jl:194", "src/authoring/Authoring.jl:76"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw", "export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter", "export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count", "export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean", "export EveryMCS, AtMCS, BetweenMCS, evaluate", "export @rule, @rules, @trigger", "export AbstractFieldPlacement, CellCentered", "export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue", "export AbstractFieldInterpolation, Multilinear, Nearest, Field", "export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse", "export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis", "export PositiveYield, PropertyAtLeast", "export ReadOnlyProperty, MutableProperty", "export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision"]
@@ -297,7 +297,7 @@ window_sha256 = "ebe738786758a749ef0762e316dd7fe29c93c112492fd187b74a1aa5bcf8079
 [[exact_clone_clusters]]
 classification = "public_facade_reexport"
 normalized_line_count = 16
-occurrences = ["src/PottsToolkit.jl:180", "src/authoring/Authoring.jl:63"]
+occurrences = ["src/PottsToolkit.jl:181", "src/authoring/Authoring.jl:63"]
 paths = ["src/PottsToolkit.jl", "src/authoring/Authoring.jl"]
 requires_resolution = false
 sample = ["export Act", "export FluctuatingVolumePressure, FluctuatingSurfaceTension", "export AcceptanceTemperature, IndependentNoise", "export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit", "export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue", "export Layout, Place, LabelledCells", "export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout", "export UniformSiteSeeds, SequentialRejectionPlacement", "export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary", "export LatticeBall, LatticeBox", "export PottsProblem", "export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead", "export CellParameterRead, ModelParameterRead", "export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule", "export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector", "export RandomDraw, draw"]

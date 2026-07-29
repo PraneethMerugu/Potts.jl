@@ -20,6 +20,9 @@ struct EngineProtocolMockAdapter <: AbstractEngineAdapter
 end
 
 engine_semantic_parameters(adapter::EngineProtocolMockAdapter) = (mode=adapter.mode,)
+ProcessBigraphs.field_engine_array_type(
+    ::EngineProtocolMockAdapter,
+) = Vector{Float64}
 
 mutable struct EngineProtocolMockInstance <: AbstractEngineInstance
     mode::Symbol
@@ -142,6 +145,44 @@ function engine_protocol_declaration(mode::Symbol=:success)
         diagnostics=true,
     )
     EngineDeclaration("engine_protocol-mock", EngineProtocolMockAdapter(mode); capabilities)
+end
+
+@testset "managed field process supported constructor" begin
+    declaration = engine_protocol_declaration()
+    authorization = (
+        backend=:cpu,
+        precision=:float64,
+        residency=:host,
+    )
+    process = managed_field_process(
+        declaration;
+        resource_authorization=authorization,
+        subcycles_per_mcs=2,
+    )
+    @test process isa AbstractProcess
+    @test nameof(typeof(process)) === :ManagedFieldAdvanceProcess
+    @test :ManagedFieldAdvanceProcess ∉ names(ProcessBigraphs)
+    @test semantic_parameters(process).resource_authorization ==
+          authorization
+    @test semantic_parameters(process).subcycles_per_mcs == 2
+    @test_throws UndefKeywordError managed_field_process(declaration)
+    @test_throws ProcessBigraphError managed_field_process(
+        declaration; resource_authorization=NamedTuple())
+    @test_throws ProcessBigraphError managed_field_process(
+        declaration;
+        resource_authorization=(backend=:cpu,))
+    @test_throws ProcessBigraphError managed_field_process(
+        declaration;
+        resource_authorization=(
+            backend=:metal,
+            precision=:float64,
+            residency=:host,
+        ))
+    @test_throws ProcessBigraphError managed_field_process(
+        declaration;
+        resource_authorization=authorization,
+        subcycles_per_mcs=0,
+    )
 end
 
 function engine_protocol_invocation(

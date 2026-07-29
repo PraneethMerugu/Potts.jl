@@ -4,7 +4,7 @@ Start from the boundary that failed. Avoid changing several model or execution c
 
 | Symptom | First checks | Do not do |
 |:--|:--|:--|
-| Package cannot install | `versioninfo()`, `Pkg.status()`, network/proxy, Julia 1.12.6 | Delete manifests blindly |
+| Package cannot install | `versioninfo()`, `Pkg.status()`, network/proxy, Julia 1.12+ | Delete manifests blindly |
 | Model validation fails | Read every diagnostic from `validate(model)` | Add hidden defaults |
 | Problem construction fails | Domain, layout identities, obstacles, fields, capacity | Resize or relabel silently |
 | Backend preflight is red | Full `backend_report`, algorithm, dimension, scalar policy | Substitute backend or algorithm silently |
@@ -37,16 +37,9 @@ The docs build does not silence errors:
 julia --project=docs --startup-file=no docs/make.jl
 ```
 
-Doctests, executable examples, cross-references, and document checks are required. The
-stability-aware quality checker additionally rejects unregistered pages, missing canonical
-sources, provenance gaps, and API-registry drift:
-
-```bash
-julia --project=. --startup-file=no scripts/check_documentation_quality.jl
-```
-
-`checkdocs = :none` disables Documenter's indiscriminate all-export rule; the curated inventories
-replace it so internal exports do not become accidental stability promises.
+Doctests, executable examples, and cross-references are required.
+`checkdocs = :none` disables Documenter's indiscriminate all-export rule; the curated API pages
+and inventories keep internal exports from becoming accidental stability promises.
 
 ## Report a defect
 

@@ -56,13 +56,12 @@ export AbstractUpdateLaw, AdditiveUpdate, MultiplicativeUpdate, ReplaceUpdate,
        update_law_contract, reconcile
 export CapabilitySet, TransferDeclaration, PreflightReport
 export PortSpec, InputPort, OutputPort
-export AbstractProcess, AbstractStep,
-       AbstractSchedule, FixedSchedule, AdaptiveSchedule, IterationRegion,
+export AbstractSchedule, FixedSchedule, AdaptiveSchedule, IterationRegion,
        AbstractHorizonPolicy, ExactHorizon, StopPrior, EventIdentity,
        InvocationContext, InvocationResult, PortView,
        AbstractIntervalInput, FrozenInput, InterpolatedInput, EventUpdatedInput,
        ContinuouslyCallableInput, interval_input, value_at,
-       ports, capabilities, semantic_version, semantic_parameters, invoke, emit
+       emit
 export NormalizedRootSeed, RNGAddress, SemanticRNGContext,
        AbstractSemanticRNGContext, ModelRNGContext, ObserverRNGContext,
        semantic_words, semantic_bits, semantic_integer, semantic_uniform,
@@ -75,13 +74,12 @@ export AbstractContinuationCodec, NoContinuationCodec,
        validate_continuation, alpha_eligible, continuation_fingerprint,
        encode_continuation, decode_continuation, restore_compatible,
        migrate_continuation
-export AbstractObserver, AbstractObservationSchedule,
+export AbstractObservationSchedule,
        EventObservationSchedule, PeriodicObservationSchedule,
        AtTimesObservationSchedule, ObservationSchedule,
        RecordSchema, validate_record, ObserverSpec, ObservationPlan,
-       ObserverContext, ObservationResult, ObservationRecord, observe,
-       observer_semantic_version, observer_semantic_parameters,
-       observer_continuation_schema, observation_fingerprint
+       ObserverContext, ObservationResult, ObservationRecord,
+       observation_fingerprint
 export ActivationRecord, IterationOutcome, EventRecord,
        RuntimeDiagnostic, FailureInjection
 export AbstractExecutor, SerialExecutor, runtime_fingerprint
@@ -113,17 +111,24 @@ export COUPLED_CHECKPOINT_FORMAT_VERSION, COUPLED_CHECKPOINT_SCHEMA,
        CoupledLogicalCheckpoint, RestoredLogicalCheckpoint,
        capture_logical_checkpoint, decode_logical_checkpoint,
        restore_logical_checkpoint
-export AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
+export FieldGeometry, FieldBoundary, FieldDescriptor, FieldState,
+       FieldSampler, FieldDeposition, FieldExchange
+export BoundedCartesianFieldProblem, field_engine_snapshot,
+       sciml_field_adapter, sciml_field_declaration,
+       managed_field_process
+
+public AbstractProcess, AbstractStep, AbstractObserver,
+       ports, capabilities, semantic_version, semantic_parameters, invoke,
+       observe, observer_semantic_version, observer_semantic_parameters,
+       observer_continuation_schema
+public AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
        AbstractCompletionHandle, EngineCapabilities, EngineDeclaration,
        IntervalAdvance, BoundarySolve, DiscreteBatch, EngineInputProjection,
        EngineInvocation, EngineCandidate, EngineEarlyReturn,
        EngineEventRequest, EngineFailure, projection_value,
-       prepare_engine, stage_operation!,
-       complete_operation!, validate_candidate, publish_candidate!,
-       discard_candidate!
-export FieldGeometry, FieldBoundary, FieldDescriptor, FieldState,
-       FieldSampler, FieldDeposition, FieldExchange
-export BoundedCartesianFieldProblem, field_engine_snapshot,
-       sciml_field_adapter, sciml_field_declaration
+       prepare_engine, stage_operation!, complete_operation!,
+       validate_candidate, publish_candidate!, discard_candidate!
+
+include("api_docstrings.jl")
 
 end

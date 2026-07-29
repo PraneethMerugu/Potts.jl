@@ -1,7 +1,7 @@
 using ProcessBigraphs
 using Test
 
-import ProcessBigraphs: ports, invoke
+import ProcessBigraphs: AbstractProcess, ports, invoke
 
 struct DocumentedIncrement <: AbstractProcess
     amount::Int

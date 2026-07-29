@@ -53,7 +53,7 @@ end
 function _activity_program(
         algorithm::BudgetedSequentialCPM; observation_cadence::Int)
     relation = static_relation(
-        SpatialQueryRole(), CorePotts.offsets(CorePotts.MooreTopology{2}());
+        SpatialQueryRole(), CorePotts.MooreTopology{2}();
         spacing = (1.0f0, 1.0f0))
     return ActivityProgram(
         maximum = 10.0f0,

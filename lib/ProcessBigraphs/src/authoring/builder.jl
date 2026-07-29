@@ -450,7 +450,6 @@ function _semantic_actor_identity(actor::SemanticActor)
     (
         actor.name,
         actor.kind,
-        string(typeof(actor.law)),
         semantic_version(actor.law),
         semantic_parameters(actor.law),
         ports(actor.law),

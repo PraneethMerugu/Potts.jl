@@ -121,6 +121,7 @@ _validate_declaration(component::BoundaryConstraint, context::_ValidationContext
 _validate_declaration(component::FluctuatingBoundaryConstraint,
     context::_ValidationContext) = _validate_boundary(component, context)
 _validate_declaration(::PreserveConnectivity, context::_ValidationContext) = ()
+_validate_declaration(::LocalConnectivity, context::_ValidationContext) = ()
 
 _validate_declaration(component::NamedCoreComponent, context::_ValidationContext) =
     _validate_declaration(component.component, context)

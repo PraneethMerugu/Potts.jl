@@ -64,10 +64,10 @@ The authoring lifecycle is `CompositeModel` → `LoweredModel` → `ExecutionPla
 session. ProcessBigraphs owns when and why computation occurs; solver and CPM kernels retain
 control of how their authorized heavy computation occurs.
 
-ProcessBigraphs `0.5.1` is the semantic-preserving consolidation candidate for the unpublished
-internal beta. The retained source-addressed CPU, real Metal, and real ROCm claims require
-exact-head requalification before this candidate is qualified. `internal_beta = true`;
-`public_release = false` remains mandatory.
+ProcessBigraphs `0.6.0` is the Phase 17 candidate for the unpublished internal
+beta. The retained source-addressed CPU, real Metal, and real ROCm claims
+require exact-head requalification before this candidate is qualified.
+`internal_beta = true`; `public_release = false` remains mandatory.
 
 Ordinary models use a small Julia API rather than canonical IR:
 
@@ -118,7 +118,7 @@ They are indexed by the repository
 [historical artifact index](../../design/evidence/consolidation-naming/historical-artifact-index-v1.toml);
 primary documentation does not use those milestones as the current architecture.
 
-Run the package suite with Julia 1.12.6:
+Run the package suite with Julia 1.12 or a later Julia 1.x release:
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.test()'

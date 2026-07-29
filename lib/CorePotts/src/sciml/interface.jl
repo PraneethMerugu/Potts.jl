@@ -796,7 +796,8 @@ function _finalize_solution!(integrator::PottsIntegrator)
     return solution
 end
 
-function SciMLBase.__init(prob::PottsProblem, alg::AbstractPottsAlgorithm, args...;
+function _init_potts(prob::PottsProblem, alg::AbstractPottsAlgorithm, args...;
+        algorithm_workspace=nothing,
         backend::KernelAbstractions.Backend = KernelAbstractions.CPU(), adaptor = nothing,
         cache::Union{Nothing, PottsCompilationCache} = nothing,
         reproducibility::AbstractReproducibilityProfile = StrictReproducibility(),
@@ -842,8 +843,24 @@ function SciMLBase.__init(prob::PottsProblem, alg::AbstractPottsAlgorithm, args.
     lifecycle = isempty(events) ? NoCompiledLifecycle() :
                 compile_lifecycle(events, state, plan;
                     resolver = lifecycle_resolver(prob.model))
-    inner = init_scientific(state, proposal_relation(prob.model), adapted_components, alg;
-        seed = prob.seed, plan, moment_tracker = moment_tracker(prob.model), lifecycle)
+    inner = if algorithm_workspace === nothing
+        init_scientific(
+            state, proposal_relation(prob.model), adapted_components, alg;
+            seed=prob.seed,
+            plan,
+            moment_tracker=moment_tracker(prob.model),
+            lifecycle,
+        )
+    else
+        init_scientific(
+            state, proposal_relation(prob.model), adapted_components, alg;
+            seed=prob.seed,
+            plan,
+            moment_tracker=moment_tracker(prob.model),
+            lifecycle,
+            algorithm_workspace,
+        )
+    end
     inner.mcs = UInt64(prob.tspan[1])
     if checkpoint !== nothing
         restored = CorePotts.restore_checkpoint(checkpoint, inner; adaptor = resolved_adaptor)
@@ -877,6 +894,14 @@ function SciMLBase.__init(prob::PottsProblem, alg::AbstractPottsAlgorithm, args.
             end
         end
     end
+end
+
+function SciMLBase.__init(
+        prob::PottsProblem,
+        alg::AbstractPottsAlgorithm,
+        args...;
+        kwargs...)
+    return _init_potts(prob, alg, args...; kwargs...)
 end
 
 function SciMLBase.__init(prob::PottsProblem, args...; kwargs...)

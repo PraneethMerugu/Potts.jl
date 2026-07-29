@@ -1,0 +1,33 @@
+schema_version = "1.0.0"
+evidence_id = "process-bigraph-phase17a-baseline-v1"
+phase = "17.A"
+status = "qualified"
+recorded_at = "2026-07-29"
+
+[git]
+branch = "codex/ProcessBigraphs-Docs"
+merge_commit = "9fe40fbfa2bf8c9f01d180f0ba29368815bb87be"
+first_parent = "4bca00a73ec41fbbb1dbcd4f4ad1a4ccd8c4dba3"
+origin_main_parent = "04f39dc05f847b7dd84f24f12cce24d1ed0229a6"
+tree = "504b57f3d20fcfb65ad27e87933de2991562514a"
+strategy = "ordinary non-destructive merge"
+
+[reconciliation]
+origin_main_production_and_evidence_retained = true
+branch_ci_trim_retained = true
+owner_paper_pdf_deletion_retained = true
+conflict_markers_remaining = 0
+
+[contracts]
+accepted_interview_decisions = 60
+required_documentation_pages = 35
+required_browser_journeys = 8
+qualification_rows = 44
+specification_checker_passed = true
+specification_mutation_tests_passed = 6
+
+[versions]
+process_bigraphs = "0.5.1"
+corepotts = "0.1.0"
+pottstoolkit = "0.1.0"
+julia = "1.12.6"

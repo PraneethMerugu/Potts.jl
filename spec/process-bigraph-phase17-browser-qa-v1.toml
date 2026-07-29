@@ -1,0 +1,280 @@
+schema_version = "1.0.0"
+contract_id = "process-bigraph-phase17-browser-qa-v1"
+phase = "17"
+status = "specified"
+terminal_functional_gate = true
+waivers_allowed = false
+auditor_led = true
+external_user_study = false
+human_accessibility_audit = false
+
+[environment]
+root = "lib/ProcessBigraphs/docs/browser"
+package_manifest_required = true
+static_local_server = true
+production_style_build = true
+network_dependency_during_tests = false
+animations_disabled_for_visual_regression = true
+fonts_ready_required = true
+timezone = "UTC"
+locale = "en-US"
+color_schemes = ["light", "dark"]
+browsers = ["chromium", "firefox", "webkit"]
+
+[[viewports]]
+id = "desktop"
+width = 1440
+height = 900
+
+[[viewports]]
+id = "tablet"
+width = 1024
+height = 768
+
+[[viewports]]
+id = "mobile"
+width = 390
+height = 844
+
+[routes]
+all_curated_routes_playwright = true
+all_curated_routes_axe = true
+deep_link_direct_load = true
+required_terminal_routes = [
+    "home",
+    "first-multirate-composite",
+    "wortel-2021",
+    "merks-2006",
+    "extension-experimental-api",
+]
+lighthouse_routes = [
+    "home",
+    "first-multirate-composite",
+    "wortel-2021",
+    "merks-2006",
+    "extension-experimental-api",
+]
+visual_regression_routes = [
+    "home",
+    "first-multirate-composite",
+    "examples",
+    "wortel-2021",
+    "merks-2006",
+    "extension-experimental-api",
+]
+
+[playwright]
+navigation = true
+next_previous = true
+search = true
+deep_links = true
+beta_banner = true
+complete_source_visible = true
+copy_buttons = true
+page_overflow_allowed = false
+code_block_overflow = "horizontal-scroll-only"
+meaningful_media_loaded = true
+accessible_media_names = true
+heading_landmarks = true
+control_names = true
+unexpected_console_errors_allowed = 0
+unexpected_console_warnings_allowed = 0
+failed_same_origin_requests_allowed = 0
+theme_switch = true
+aria_snapshots = true
+
+[accessibility]
+standard = "WCAG-2.2-AA"
+axe_tags = [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa",
+]
+violations_allowed = 0
+disabled_rules_allowed = 0
+broad_exclusions_allowed = 0
+accepted_violation_snapshots_allowed = 0
+agent_checks = [
+    "keyboard-reachability",
+    "focus-order",
+    "no-keyboard-trap",
+    "focus-visible",
+    "focus-not-obscured",
+    "bypass-blocks",
+    "page-title",
+    "heading-and-label-clarity",
+    "link-purpose",
+    "target-usability",
+    "reflow",
+    "text-spacing",
+    "non-text-alternatives",
+    "contrast-judgment",
+    "reduced-motion",
+    "search-modal-dismissal",
+]
+
+[lighthouse]
+runs_per_route = 3
+score_authority = "median"
+accessibility_min = 1.0
+best_practices_min = 1.0
+seo_min = 0.93
+mobile_performance_min = 0.90
+cls_max = 0.1
+individual_score_shortfall_max_points = 5
+reports_retained = true
+
+[visual_regression]
+environment = "pinned-linux-chromium"
+baseline_update_automatic = false
+actual_expected_diff_artifacts = true
+content_digest_required = true
+browser_agent_disposition_required = true
+missing_content_never_tolerated = true
+page_overflow_never_tolerated = true
+structural_layout_change_requires_disposition = true
+
+[terminal_agent]
+runs_after_all_deterministic_gates = true
+uses_rendered_dom = true
+uses_accessibility_tree = true
+uses_real_interactions = true
+uses_console_and_network_state = true
+uses_screenshots = true
+static_source_only_forbidden = true
+all_viewports_required = true
+light_and_dark_required_on_terminal_routes = true
+complete_rerun_after_repair = true
+
+[[journeys]]
+id = "first-model"
+persona = "scientific model composer"
+start_route = "home"
+task = "Find, copy, and execute the complete multirate pulse-and-decay model."
+success = [
+    "find-first-tutorial-through-navigation",
+    "complete-source-visible",
+    "no-hidden-model-setup",
+    "copy-control-works",
+    "diagram-and-trace-visible",
+    "checkpoint-restart-result-visible",
+]
+
+[[journeys]]
+id = "nested-composite"
+persona = "scientific model composer"
+start_route = "home"
+task = "Build and inspect a reusable nested composite with explicit stores, mounts, connections, and schedules."
+success = [
+    "find-composition-guidance",
+    "explicit-wiring-visible",
+    "explicit-schedules-visible",
+    "diagram-matches-program",
+    "inspection-output-explains-lowering",
+]
+
+[[journeys]]
+id = "extension-discovery"
+persona = "adapter and solver author"
+start_route = "home"
+task = "Locate the qualified extension protocol and distinguish it from internal runtime representation."
+success = [
+    "find-extension-page-by-navigation-or-search",
+    "support-level-visible",
+    "required-hooks-locatable",
+    "internal-types-distinguished",
+    "conformance-command-visible",
+]
+
+[[journeys]]
+id = "minimal-adapter"
+persona = "adapter and solver author"
+start_route = "extension-experimental-api"
+task = "Follow the independent custom-engine adapter example from declaration through publication and failure cleanup."
+success = [
+    "complete-adapter-source-visible",
+    "call-order-explained",
+    "publication-ownership-explained",
+    "failure-atomicity-demonstrated",
+    "conformance-result-visible",
+]
+
+[[journeys]]
+id = "checkpoint-restart"
+persona = "reproducibility researcher"
+start_route = "home"
+task = "Find the persistence workflow, capture a checkpoint, restore, and confirm exact continuation."
+success = [
+    "find-by-navigation-and-search",
+    "complete-capture-and-restore-source-visible",
+    "exact-result-visible",
+    "compatibility-boundary-visible",
+]
+
+[[journeys]]
+id = "wortel-case"
+persona = "reproducibility researcher"
+start_route = "case-studies"
+task = "Run the reduced Wortel profile and identify the admitted evidence and excluded Figure 2 claim."
+success = [
+    "complete-model-assembly-visible",
+    "reduced-profile-label-visible",
+    "state-trace-animation-visible",
+    "source-trace-visible",
+    "nonclaim-correctly-locatable",
+    "full-qualification-command-visible",
+]
+
+[[journeys]]
+id = "merks-case"
+persona = "reproducibility researcher"
+start_route = "case-studies"
+task = "Run the reduced Merks profile and distinguish it from the canonical 500x500 qualification."
+success = [
+    "complete-model-assembly-visible",
+    "reduced-profile-label-visible",
+    "canonical-500x500-profile-visible",
+    "state-trace-animation-visible",
+    "source-trace-visible",
+    "nonclaim-correctly-locatable",
+    "full-qualification-command-visible",
+]
+
+[[journeys]]
+id = "status-and-migration"
+persona = "runtime contributor"
+start_route = "home"
+task = "Locate internal-beta status, API classes, compatibility shims, and Merks v1-to-v2 migration."
+success = [
+    "beta-status-visible",
+    "api-classes-locatable",
+    "migration-page-locatable",
+    "v1-reader-and-v2-rejection-explained",
+    "public-release-nonclaim-visible",
+]
+
+[evidence]
+path = "design/evidence/phase-17/phase17-qualification-v1.toml"
+qualifying_content_digest = true
+route = true
+viewport = true
+theme = true
+task_transcript = true
+screenshots = true
+console_state = true
+network_state = true
+findings = true
+repairs = true
+final_disposition = true
+reviewer_identity = "browser-capable Codex agent"
+
+[invalidation]
+qualifying_source_change = true
+test_change = true
+configuration_change = true
+documentation_change = true
+browser_dependency_change = true
+evidence_only_metadata_change = false
+recompute_digest_after_attestation = true

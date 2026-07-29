@@ -1,6 +1,6 @@
 # [Version and migration guide](@id version-and-migration)
 
-This manual targets PottsToolkit 0.1, CorePotts 0.1, MakiePotts 0.2, and Julia 1.12.6 on the current
+This manual targets PottsToolkit 0.2, CorePotts 0.2, MakiePotts 0.2, and Julia 1.12+ on the current
 development branch. Pin the package family together: a compatible solver does not imply that an
 independently upgraded toolkit, visualization package, checkpoint, or experimental extension is
 compatible.
