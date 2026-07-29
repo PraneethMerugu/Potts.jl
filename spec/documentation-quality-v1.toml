@@ -80,9 +80,9 @@ api_usability = 9
 showcase_quality = 9
 
 [current_evidence.platform_evidence]
-macos = "design/evidence/consolidation-candidate/macos-install-smoke-local.toml"
-linux = "design/evidence/documentation/linux-install-smoke.toml"
-windows = "design/evidence/documentation/windows-install-smoke.toml"
+macos = "design/evidence/consolidation-qualified/macos-install-smoke.toml"
+linux = "design/evidence/consolidation-qualified/linux-install-smoke.toml"
+windows = "design/evidence/consolidation-qualified/windows-install-smoke.toml"
 
 [current_evidence.task_review_evidence]
 beginner = "design/evidence/documentation/beginner-task-review.toml"

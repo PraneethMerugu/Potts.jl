@@ -1,5 +1,5 @@
 schema_version = "1.0.0"
-status = "architecture-candidate"
+status = "qualified"
 large_file_threshold = 1000
 line_metric = "nonblank_noncomment"
 policy = "One production authority per accepted concept; dependencies point from general mechanisms toward domain consumers; independent oracles and backend realizations remain separate."

@@ -1,6 +1,6 @@
 # Decision 0041: Semantic-Preserving Repository Consolidation
 
-Status: Accepted architecture and qualification policy; local reconciliation candidate implemented, exact-head platform qualification pending
+Status: Accepted and qualified; repository consolidation closed
 
 Date: 2026-07-28
 
@@ -95,9 +95,12 @@ The `baseline_freeze` gate qualified on 2026-07-28. Its authority is
 and the machine-readable
 [`baseline-freeze-v1.toml`](../../design/evidence/consolidation-baseline/baseline-freeze-v1.toml).
 
-Naming, archive, test-harness, ProcessBigraphs, CorePotts, and frontend gates pass locally. The
-candidate is in final reconciliation; exact-head CPU-platform, trusted-device, documentation-smoke,
-and aggregate CI evidence remain required before closure.
+Naming, archive, test-harness, ProcessBigraphs, CorePotts, frontend, and reconciliation gates
+qualified on 2026-07-29. The closure authority is
+[`semantic-preserving-consolidation-closure.md`](../../design/audits/semantic-preserving-consolidation-closure.md);
+the content-addressed exact-head record is
+[`exact-head-v1.toml`](../../design/evidence/consolidation-qualified/exact-head-v1.toml). All 37
+contract rows pass without an approved or observed functional delta.
 
 ## Alternatives considered
 

@@ -1,5 +1,5 @@
 schema_version = "1.0.0"
-status = "naming_and_archive_candidate"
+status = "qualified"
 authority = "semantic-preserving-consolidation-contract.md"
 
 [vocabulary]
