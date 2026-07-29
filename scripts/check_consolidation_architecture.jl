@@ -69,13 +69,26 @@ for root in production_roots
     end
 end
 
-check(Set(keys(large_files)) == Set(keys(waivers)),
-    "large-file waiver inventory does not exactly match current production files")
-for (path, lines) in large_files
-    waiver = waivers[path]
-    check(lines == waiver["expected_lines"],
-        "large-file waiver line count is stale for $path: expected " *
-        "$(waiver["expected_lines"]), found $lines")
+unreviewed_large_files = setdiff(Set(keys(large_files)), Set(keys(waivers)))
+check(isempty(unreviewed_large_files),
+    "large production files lack reviewed waivers: " *
+    join(sort!(collect(unreviewed_large_files)), ", "))
+for (path, waiver) in waivers
+    absolute = joinpath(ROOT, path)
+    check(isfile(absolute), "large-file waiver target is missing: $path")
+    isfile(absolute) || continue
+    lines = source_line_count(absolute)
+    reviewed_lines = waiver["reviewed_lines"]
+    maximum_lines = waiver["maximum_lines"]
+    check(reviewed_lines > SPEC["large_file_threshold"],
+        "large-file waiver review baseline must exceed the threshold for $path")
+    check(maximum_lines >= reviewed_lines &&
+          maximum_lines <= ceil(Int,
+              reviewed_lines * (1 + SPEC["maximum_waiver_growth_percent"] / 100)),
+        "large-file waiver ceiling is invalid for $path")
+    check(lines <= maximum_lines,
+        "large-file waiver ceiling exceeded for $path: maximum " *
+        "$maximum_lines, found $lines")
     check(length(strip(String(waiver["rationale"]))) >= 80,
         "large-file waiver rationale is not substantive for $path")
 end

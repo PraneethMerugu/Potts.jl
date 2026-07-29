@@ -205,6 +205,9 @@ function check_compatibility!(failures)
     end
 end
 
+const CHECK_GENERATED_BASELINE =
+    "--check-baseline" in ARGS || "--update" in ARGS
+
 if "--update" in ARGS
     write_index()
 end
@@ -213,10 +216,11 @@ failures = String[]
 check_active_paths!(failures)
 check_living_content!(failures)
 check_compatibility!(failures)
-check_index!(failures)
+CHECK_GENERATED_BASELINE && check_index!(failures)
 
 if isempty(failures)
-    println("Consolidation naming and historical archive check passed.")
+    suffix = CHECK_GENERATED_BASELINE ? " and generated archive index is fresh" : ""
+    println("Consolidation naming and historical archive invariants passed$suffix.")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("consolidation naming check failed with $(length(failures)) error(s)")

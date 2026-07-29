@@ -64,6 +64,7 @@ end
 
 quality_entrypoints = filter(readdir(joinpath(ROOT, "scripts"); join=true)) do path
     isfile(path) && endswith(path, ".jl") &&
+        basename(path) != "check_process_bigraphs.jl" &&
         occursin("process_bigraph", replace(basename(path), '-' => '_'))
 end
 check(length(quality_entrypoints) <= 12,

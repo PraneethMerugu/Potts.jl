@@ -256,7 +256,7 @@ success = [
 ]
 
 [evidence]
-path = "design/evidence/phase-17/browser-qa-v1.toml"
+path = "design/evidence/phase-17/phase17-qualification-v1.toml"
 qualifying_content_digest = true
 route = true
 viewport = true

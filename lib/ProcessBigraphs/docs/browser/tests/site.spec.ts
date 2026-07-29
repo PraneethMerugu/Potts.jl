@@ -230,28 +230,29 @@ test("keyboard focus, skip link, and search dismissal", async ({
 });
 
 const journeys = [
-  ["first-model", "/learn/first-multirate-composite/", ["Complete executed source", "Expected result"]],
-  ["nested-composite", "/examples/nested-composites/", ["mount", "schedule"]],
-  ["extension-discovery", "/api/extension-experimental/", ["Experimental", "internal"]],
-  ["minimal-adapter", "/examples/custom-engine-adapter/", ["stage_operation!", "discard_candidate!"]],
-  ["checkpoint-restart", "/learn/checkpoint-failure-replay/", ["checkpoint", "restore"]],
-  ["wortel-case", "/case-studies/wortel-2021/", ["reduced", "What this does not establish"]],
-  ["merks-case", "/case-studies/merks-2006/", ["500×500", "What this does not establish"]],
-  ["status-and-migration", "/concepts/capability-migration-troubleshooting/", ["internal beta", "migration"]],
+  ["first-model", "/", "/learn/first-multirate-composite/", "multirate", ["Complete executed source", "Expected result"]],
+  ["nested-composite", "/", "/examples/nested-composites/", "nested composite", ["mount", "schedule"]],
+  ["extension-discovery", "/", "/api/extension-experimental/", "extension protocol", ["Experimental", "internal"]],
+  ["minimal-adapter", "/api/extension-experimental/", "/examples/custom-engine-adapter/", "custom engine", ["stage_operation!", "discard_candidate!"]],
+  ["checkpoint-restart", "/", "/learn/checkpoint-failure-replay/", "checkpoint restore", ["checkpoint", "restore"]],
+  ["wortel-case", "/case-studies/", "/case-studies/wortel-2021/", "Wortel", ["reduced", "What this does not establish"]],
+  ["merks-case", "/case-studies/", "/case-studies/merks-2006/", "Merks", ["500×500", "What this does not establish"]],
+  ["status-and-migration", "/", "/concepts/capability-migration-troubleshooting/", "migration", ["internal beta", "migration"]],
 ] as const;
 
 test.describe("registered persona journeys", () => {
-  for (const [id, route, evidence] of journeys) {
+  for (const [id, start, route, query, evidence] of journeys) {
     test(`journey:${id}`, async ({ page }) => {
-      await page.goto("/", { waitUntil: "networkidle" });
+      await page.goto(start, { waitUntil: "networkidle" });
       const searchTrigger = page.locator("#documenter-search-query");
       await searchTrigger.click();
       const search = page.locator("#pb-search-input");
-      await search.fill(id.split("-")[0]);
-      await page.keyboard.press("Escape");
-
-      const response = await page.goto(route, { waitUntil: "networkidle" });
-      expect(response?.ok()).toBeTruthy();
+      await search.fill(query);
+      const result = page.locator(`#pb-search-results a[href*="${route}"]`).first();
+      await expect(result).toBeVisible();
+      await result.click();
+      await page.waitForLoadState("networkidle");
+      await expect(page).toHaveURL(new RegExp(route.replaceAll("/", "\\/")));
       const article = page.locator("#documenter-page");
       await expect(article).toBeVisible();
       for (const phrase of evidence) {
@@ -259,5 +260,36 @@ test.describe("registered persona journeys", () => {
       }
       await expect(page.locator(".docs-footer")).toBeVisible();
     });
+  }
+});
+
+test("theme selection, persisted settings, next/previous navigation, and ARIA snapshots", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/", { waitUntil: "networkidle" });
+
+  await page.locator("#documenter-settings-button").click();
+  await page.locator("#documenter-themepicker").selectOption("documenter-dark");
+  await expect(page.locator("html")).toHaveClass(/theme--documenter-dark/);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator("html")).toHaveClass(/theme--documenter-dark/);
+
+  const next = page.locator(".docs-footer-nextpage");
+  await expect(next).toHaveAttribute("href", /install-and-verify/);
+  await next.click();
+  await expect(page).toHaveURL(/install-and-verify/);
+  const previous = page.locator(".docs-footer-prevpage");
+  await expect(previous).toHaveAttribute("href", /(\.\.\/|\/)$/);
+
+  for (const route of terminalRoutes) {
+    await page.goto(route, { waitUntil: "networkidle" });
+    const snapshot = await page.locator("#documenter").ariaSnapshot();
+    expect(snapshot).toContain("heading");
+    expect(snapshot).toContain("navigation");
+    await testInfo.attach(
+      `aria-${route === "/" ? "home" : route.replaceAll("/", "-")}.txt`,
+      { body: snapshot, contentType: "text/plain" },
+    );
   }
 });

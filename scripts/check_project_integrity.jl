@@ -13,10 +13,19 @@ const CHECKERS = (
     "check_process_bigraphs.jl",
 )
 
+failures = String[]
 for checker in CHECKERS
     command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(ROOT, "scripts", checker))`
     println("Running ", checker)
-    run(command)
+    try
+        run(command)
+    catch exception
+        exception isa ProcessFailedException || rethrow()
+        push!(failures, checker)
+    end
 end
 
+isempty(failures) || error(
+    "Project integrity failed in $(length(failures)) checker(s): " *
+    join(failures, ", "))
 println("Project integrity checks passed.")

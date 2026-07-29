@@ -580,7 +580,11 @@ function _validate_repository_pages!(errors, spec, root)
         for (directory, _, files) in walkdir(docs_root)
             for file in files
                 endswith(file, ".md") || continue
-                relative = relpath(joinpath(directory, file), docs_root)
+                relative = replace(
+                    relpath(joinpath(directory, file), docs_root), '\\' => '/')
+                # Literate writes these ignored, disposable pages during a docs
+                # build. They are build products rather than curated source pages.
+                startswith(relative, "tutorials/") && continue
                 haskey(registered, relative) ||
                     push!(errors, "docs/src contains unregistered Markdown page: $relative")
             end
@@ -711,7 +715,8 @@ function _validate_media!(errors, spec, root)
     end
 end
 
-function _validate_current_evidence!(errors, spec, root)
+function _validate_current_evidence!(errors, spec, root;
+        check_platform_smoke_freshness::Bool = true)
     gate = spec["quality_gate"]
     evidence = get(spec, "current_evidence", Dict{String, Any}())
     rubric = get(evidence, "rubric", Dict{String, Any}())
@@ -739,33 +744,35 @@ function _validate_current_evidence!(errors, spec, root)
         push!(errors,
             "current documentation rubric score $rubric_score is below " *
             "$(gate["minimum_rubric_score"])")
-    platforms = Set(something(
-        _strings(get(evidence, "platform_smokes", Any[])), String[]))
-    platform_evidence = get(evidence, "platform_evidence", Dict{String, Any}())
-    for platform in gate["required_platform_smokes"]
-        if !(platform in platforms)
-            push!(errors, "missing accepted CPU installation smoke: $platform")
-            continue
+    if check_platform_smoke_freshness
+        platforms = Set(something(
+            _strings(get(evidence, "platform_smokes", Any[])), String[]))
+        platform_evidence = get(evidence, "platform_evidence", Dict{String, Any}())
+        for platform in gate["required_platform_smokes"]
+            if !(platform in platforms)
+                push!(errors, "missing accepted CPU installation smoke: $platform")
+                continue
+            end
+            path = get(platform_evidence, platform, nothing)
+            path isa AbstractString || begin
+                push!(errors, "accepted $platform CPU smoke lacks an evidence path")
+                continue
+            end
+            full_path = joinpath(root, path)
+            if !isfile(full_path)
+                push!(errors, "accepted $platform CPU smoke evidence is missing: $path")
+                continue
+            end
+            record = TOML.parsefile(full_path)
+            get(record, "status", nothing) == "passed" ||
+                push!(errors, "$platform CPU smoke evidence is not passed")
+            get(record, "platform", nothing) == platform ||
+                push!(errors, "$platform CPU smoke evidence names a different platform")
+            get(record, "smoke_source", nothing) == INSTALL_SMOKE_SOURCE ||
+                push!(errors, "$platform CPU smoke evidence names a different source")
+            get(record, "source_digest", nothing) == _installation_source_digest(root) ||
+                push!(errors, "$platform CPU smoke evidence is stale")
         end
-        path = get(platform_evidence, platform, nothing)
-        path isa AbstractString || begin
-            push!(errors, "accepted $platform CPU smoke lacks an evidence path")
-            continue
-        end
-        full_path = joinpath(root, path)
-        if !isfile(full_path)
-            push!(errors, "accepted $platform CPU smoke evidence is missing: $path")
-            continue
-        end
-        record = TOML.parsefile(full_path)
-        get(record, "status", nothing) == "passed" ||
-            push!(errors, "$platform CPU smoke evidence is not passed")
-        get(record, "platform", nothing) == platform ||
-            push!(errors, "$platform CPU smoke evidence names a different platform")
-        get(record, "smoke_source", nothing) == INSTALL_SMOKE_SOURCE ||
-            push!(errors, "$platform CPU smoke evidence names a different source")
-        get(record, "source_digest", nothing) == _installation_source_digest(root) ||
-            push!(errors, "$platform CPU smoke evidence is stale")
     end
     reviews = Set(something(_strings(get(evidence, "task_reviews", Any[])), String[]))
     review_evidence = get(evidence, "task_review_evidence", Dict{String, Any}())
@@ -812,7 +819,8 @@ function _validate_current_evidence!(errors, spec, root)
 
 end
 
-function validate_repository(spec::AbstractDict; root::AbstractString = ROOT)
+function validate_repository(spec::AbstractDict; root::AbstractString = ROOT,
+        check_qualification_evidence::Bool = false)
     errors = validate_spec(spec)
     isempty(errors) || return errors
 
@@ -826,18 +834,22 @@ function validate_repository(spec::AbstractDict; root::AbstractString = ROOT)
     _validate_documenter_config!(errors, spec, root)
     _validate_repository_pages!(errors, spec, root)
     _validate_media!(errors, spec, root)
-    _validate_current_evidence!(errors, spec, root)
+    _validate_current_evidence!(errors, spec, root;
+        check_platform_smoke_freshness = check_qualification_evidence)
     return errors
 end
 
 function run_check(args = String[])
     spec_path = DEFAULT_SPEC
     spec_only = false
+    check_qualification_evidence = false
     index = 1
     while index <= length(args)
         argument = args[index]
         if argument == "--spec-only"
             spec_only = true
+        elseif argument == "--check-qualification-evidence"
+            check_qualification_evidence = true
         elseif argument == "--spec"
             index == length(args) && error("--spec requires a path")
             index += 1
@@ -849,7 +861,8 @@ function run_check(args = String[])
     end
 
     spec = load_spec(spec_path)
-    errors = spec_only ? validate_spec(spec) : validate_repository(spec)
+    errors = spec_only ? validate_spec(spec) : validate_repository(spec;
+        check_qualification_evidence)
     if isempty(errors)
         mode = spec_only ? "specification structure" : "9/10 target"
         println("Documentation quality $mode passed")

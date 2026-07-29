@@ -27,6 +27,7 @@ const REQUIRED_FILES = [
     "scripts/check_process_bigraph_phase17_docs.jl",
     "scripts/check_process_bigraph_phase17_browser_contract.jl",
     "scripts/check_process_bigraph_phase17_internal_use.jl",
+    "scripts/check_process_bigraph_phase17_digest.jl",
     "scripts/check_process_bigraph_phase17_closure.jl",
 ]
 

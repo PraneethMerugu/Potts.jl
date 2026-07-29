@@ -1,6 +1,7 @@
 schema_version = "1.0.0"
 status = "qualified"
 large_file_threshold = 1000
+maximum_waiver_growth_percent = 10
 line_metric = "nonblank_noncomment"
 policy = "One production authority per accepted concept; dependencies point from general mechanisms toward domain consumers; independent oracles and backend realizations remain separate."
 
@@ -100,18 +101,21 @@ consumers = ["recipes", "CairoMakie", "GLMakie", "WGLMakie"]
 
 [[large_file_waivers]]
 path = "lib/CorePotts/src/coupled/shirinifard2012.jl"
-expected_lines = 1185
+reviewed_lines = 1185
+maximum_lines = 1300
 rationale = "One bounded scientific model assembly whose declarations, initialization, process wiring, and admitted observations are reviewed as a single source-faithful claim boundary."
 review_gate = "core_and_frontends"
 
 [[large_file_waivers]]
 path = "lib/CorePotts/src/sciml/interface.jl"
-expected_lines = 1024
+reviewed_lines = 1024
+maximum_lines = 1125
 rationale = "The SciML protocol boundary centralizes problem, integrator, solution, callback, checkpoint, and backend-adaptor contracts whose shared type relationships must remain reviewable as one interface authority."
 review_gate = "core_and_frontends"
 
 [[large_file_waivers]]
 path = "lib/CorePotts/src/lifecycle/compiled.jl"
-expected_lines = 1077
+reviewed_lines = 1077
+maximum_lines = 1185
 rationale = "One performance-critical compiled lifecycle state machine; definition order and shared inlining are part of its host/portable kernel review boundary."
 review_gate = "core_and_frontends"

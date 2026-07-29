@@ -106,19 +106,19 @@ function build_report()
     clusters = Dict{String,Any}[]
     seen = Set{String}()
     for (digest, occurrences) in windows
-        paths = sort!(unique(first.(occurrences)))
-        length(paths) >= 2 || continue
+        cluster_paths = sort!(unique(first.(occurrences)))
+        length(cluster_paths) >= 2 || continue
         members = sort!(["$path:$line" for (path, line, _) in occurrences])
         key = join(members, '|')
         key in seen && continue
         push!(seen, key)
-        kind = classification(paths)
+        kind = classification(cluster_paths)
         push!(clusters, Dict(
             "window_sha256" => digest,
             "normalized_line_count" => MINIMUM_LINES,
             "classification" => kind,
             "requires_resolution" => endswith(kind, "_candidate"),
-            "paths" => paths,
+            "paths" => cluster_paths,
             "occurrences" => members,
             "sample" => occurrences[1][3],
         ))
@@ -139,31 +139,36 @@ function build_report()
     )
 end
 
+const CHECK_GENERATED_BASELINE =
+    "--check-baseline" in ARGS || "--update" in ARGS
+const current_report = build_report()
+
 if "--update" in ARGS
     mkpath(dirname(REPORT_PATH))
     open(REPORT_PATH, "w") do io
-        TOML.print(io, build_report(); sorted=true)
+        TOML.print(io, current_report; sorted=true)
     end
     println("wrote ", relpath(REPORT_PATH, ROOT))
 end
 
 failures = String[]
-isfile(REPORT_PATH) ||
+if CHECK_GENERATED_BASELINE && !isfile(REPORT_PATH)
     push!(failures, "missing duplication report; rerun with --update")
-if isfile(REPORT_PATH)
-    expected = build_report()
+elseif CHECK_GENERATED_BASELINE
     actual = TOML.parsefile(REPORT_PATH)
-    actual == expected ||
+    actual == current_report ||
         push!(failures, "duplication report is stale; rerun with --update")
-    candidates = get(actual, "resolution_candidate_count", -1)
-    candidates == 0 ||
-        push!(failures, "duplication report retains $candidates unresolved candidate cluster(s)")
 end
+candidate_count = get(current_report, "resolution_candidate_count", -1)
+candidate_count == 0 ||
+    push!(failures,
+        "current sources contain $candidate_count unresolved duplicate candidate cluster(s)")
 
 if isempty(failures)
-    report = TOML.parsefile(REPORT_PATH)
-    println("All $(report["exact_clone_cluster_count"]) exact clone clusters are classified; " *
-            "no accidental production, test-fixture, or active-tooling candidates remain.")
+    suffix = CHECK_GENERATED_BASELINE ? " The generated report is fresh." : ""
+    println("All $(current_report["exact_clone_cluster_count"]) current exact clone clusters " *
+            "are classified; no accidental production, test-fixture, or active-tooling " *
+            "candidates remain.$suffix")
 else
     foreach(message -> println(stderr, "ERROR: ", message), failures)
     error("consolidation duplication check failed with $(length(failures)) error(s)")

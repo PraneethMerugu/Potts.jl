@@ -69,7 +69,13 @@ const active = get(entry, "status", "") == "in_progress" &&
     get(entry, "implementation_status", "") in active_implementation_statuses &&
     get(entry, "implementation_authorized", false) == true &&
     entry["prerequisites"]["owner_sendoff_received"] == true
-check(active, "entry must record the received owner send-off and active 17.A state")
+const complete =
+    get(entry, "status", "") == "qualified_unpublished_internal_beta" &&
+    get(entry, "implementation_status", "") == "complete" &&
+    get(entry, "implementation_authorized", false) == true &&
+    entry["prerequisites"]["owner_sendoff_received"] == true
+check(active || complete,
+    "entry must record either active implementation or qualified internal-beta completion")
 check(get(entry, "internal_beta", false) == true &&
       get(entry, "public_release", true) == false,
     "Phase 17 must remain an unpublished internal beta")
@@ -246,11 +252,12 @@ check(browser["terminal_agent"]["complete_rerun_after_repair"] == true &&
       browser["terminal_agent"]["static_source_only_forbidden"] == true,
     "browser repair or rendered-site requirement changed")
 
+const ledger_state =
+    (ledger["status"] == "specified" && ledger["closure_status"] == "open") ||
+    (ledger["status"] == "qualified" && ledger["closure_status"] == "qualified")
 check(get(ledger, "contract_id", "") ==
-      "process-bigraph-phase17-qualification-v1" &&
-      ledger["status"] == "specified" &&
-      ledger["closure_status"] == "open",
-    "qualification ledger identity or preimplementation status changed")
+      "process-bigraph-phase17-qualification-v1" && ledger_state,
+    "qualification ledger identity or lifecycle status changed")
 const rows = ledger["requirements"]
 const row_ids = unique_strings([row["id"] for row in rows], "qualification ledger")
 check(length(rows) == ledger["required_row_count"] == 44,

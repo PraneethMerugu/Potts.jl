@@ -4,7 +4,7 @@
   <defs><style>
     .box{fill:#eef8fa;stroke:#176b87;stroke-width:2}.heavy{fill:#fff3e6;stroke:#b85c00;stroke-width:2}
     .text{font:15px system-ui,sans-serif;fill:#18323a}.small{font:12px system-ui,sans-serif;fill:#18323a}
-    .arrow{stroke:#176b87;stroke-width:2;marker-end:url(#m)}
+    .arrow{fill:none;stroke:#176b87;stroke-width:2;marker-end:url(#m)}
   </style><marker id="m" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#176b87"/></marker></defs>
   <rect class="box" x="20" y="35" width="150" height="60" rx="8"/><text class="text" x="95" y="62" text-anchor="middle">Explicit authoring</text><text class="small" x="95" y="82" text-anchor="middle">stores · ports · schedules</text>
   <rect class="box" x="225" y="35" width="150" height="60" rx="8"/><text class="text" x="300" y="62" text-anchor="middle">Canonical model</text><text class="small" x="300" y="82" text-anchor="middle">one structural authority</text>
