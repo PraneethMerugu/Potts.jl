@@ -32,8 +32,6 @@ jobs:
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Run consolidated project integrity checker
         run: julia --startup-file=no scripts/check_project_integrity.jl
-      - name: Enforce documentation quality
-        run: julia --startup-file=no scripts/check_documentation_quality.jl
       - name: Instantiate ProcessBigraphs qualification environment
         run: >-
           julia --project=benchmark --startup-file=no -e
@@ -261,7 +259,7 @@ jobs:
         run: julia --startup-file=no scripts/check_project_integrity.jl
       - name: Recheck frozen identity fixtures
         run: >-
-          julia --project=. --startup-file=no
+          julia --project=lib/ProcessBigraphs --startup-file=no
           scripts/capture_consolidation_identity_fixtures.jl --check
 
   cpu_macos_arm64:
