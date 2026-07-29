@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 contract_id = "process-bigraph-phase17-qualification-v1"
 phase = "17"
-status = "specified"
-closure_status = "open"
+status = "qualified"
+closure_status = "qualified"
 required_row_count = 44
 allowed_statuses = ["specified", "implemented", "oracle_passing", "qualified"]
 completion_status = "qualified_unpublished_internal_beta"
@@ -185,152 +185,152 @@ evidence = ["design/evidence/phase-17/phase17c-model-migration-v1.toml"]
 id = "P17-D01"
 subgate = "17.D"
 title = "Independent pinned strict Documenter environment"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D02"
 subgate = "17.D"
 title = "Complete 35-page registered information architecture"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D03"
 subgate = "17.D"
 title = "Ten-page progressive learning sequence"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D04"
 subgate = "17.D"
 title = "Six complete executable examples"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D05"
 subgate = "17.D"
 title = "Visible executed canonical programs with no reader include"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D06"
 subgate = "17.D"
 title = "Concept, guarantee, API, status, migration, and troubleshooting reference"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D07"
 subgate = "17.D"
 title = "Reproducible visual and media portfolio"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D08"
 subgate = "17.D"
 title = "Documentation runtime and asset budgets"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-D09"
 subgate = "17.D"
 title = "Root Potts documentation nonregression and cross-linking"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-E01"
 subgate = "17.E"
 title = "Complete inline Wortel qualified source-bounded case study"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-E02"
 subgate = "17.E"
 title = "Complete inline Merks qualified source-bounded case study"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-E03"
 subgate = "17.E"
 title = "Packaged-to-displayed semantic and bounded-behavior equivalence"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-E04"
 subgate = "17.E"
 title = "Case-study claim boundary, source trace, profiles, and nonclaims"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F01"
 subgate = "17.F"
 title = "Complete package, integration, oracle, compatibility, and internal-use gates"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F02"
 subgate = "17.F"
 title = "Linux, macOS, and Windows clean-install documentation smokes"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F03"
 subgate = "17.F"
 title = "Playwright Chromium, Firefox, and WebKit rendered-site qualification"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F04"
 subgate = "17.F"
 title = "WCAG 2.2 A/AA automated and agent accessibility assessment"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F05"
 subgate = "17.F"
 title = "Lighthouse thresholds and pinned visual regression"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F06"
 subgate = "17.F"
 title = "Three auditor-led persona task reviews"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F07"
 subgate = "17.F"
 title = "Documentation rubric at least 92 with no category below 8"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F08"
 subgate = "17.F"
 title = "Terminal browser-agent gate after all deterministic qualification"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
 
 [[requirements]]
 id = "P17-F09"
 subgate = "17.F"
 title = "Exact qualifying-content-tree digest and evidence-only closure"
-status = "specified"
-evidence = []
+status = "qualified"
+evidence = ["design/evidence/phase-17/phase17-qualification-v1.toml"]
