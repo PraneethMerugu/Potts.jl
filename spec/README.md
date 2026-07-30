@@ -81,6 +81,8 @@ behavior.
 - [Cartesian Surface, Queries, and Fields](cartesian-surface-queries-and-fields.md)
 - [PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md)
 - [PottsToolkit Authoring, Composition, and API Semantics](pottstoolkit-authoring-composition-and-api-semantics.md)
+- [Symbolic Potts V1](symbolic-potts-v1.md)
+- [Symbolic Potts V1 Autonomous Consolidation Contract](symbolic-potts-v1-consolidation.md)
 - [CorePotts Public Scientific and Execution Interfaces](corepotts-public-interface-semantics.md)
 - [Sequential Reference Engine](reference-engine-semantics.md)
 - [SciML Problem, Integrator, Solution, and Ensemble Semantics](sciml-interface-semantics.md)
@@ -129,6 +131,12 @@ Engineering realization is described separately in:
 
 Refactor execution evidence:
 
+- [Symbolic Potts V1 Round 3 Research](../design/audits/symbolic-potts-v1-round-3-research.md)
+- [Symbolic Potts V1 Round 4 Research](../design/audits/symbolic-potts-v1-round-4-research.md)
+- [Symbolic Potts V1 Consolidation Research](../design/audits/symbolic-potts-v1-consolidation-research.md)
+- [Symbolic Potts V1 MTK and ProcessBigraphs Integration Research](../design/audits/symbolic-potts-v1-mtk-processbigraph-integration-research.md)
+- [Symbolic Potts V1 Consolidation Owner Interview](../design/audits/symbolic-potts-v1-consolidation-owner-interview.md)
+- [Symbolic Potts V1 Consolidation Readiness Audit](../design/audits/symbolic-potts-v1-consolidation-audit.md)
 - [ProcessBigraphs Phase 16 Owner Interview](../design/audits/process-bigraph-phase16-owner-interview.md)
 - [Decision 0039: Phase 16 Compute Ownership and Scope](decisions/0039-phase-16-compute-ownership-and-scope.md)
 - [ProcessBigraphs Phase 16.HC High-Level Authoring Owner Interview](../design/audits/process-bigraph-phase16hc-high-level-authoring-owner-interview.md)
@@ -265,8 +273,13 @@ source-bounded scenario-38/simulation-902 assembly: a generated 40×40×35 start
 solver-injectable fields, a CorePotts CPM phase, lifecycle and degradation fixtures, and
 restart/rollback evidence without a publication-analysis claim.
 
-The active engineering contract is the accepted
-[semantic-preserving repository consolidation contract](semantic-preserving-consolidation-contract.md),
+The accepted
+[semantic-preserving repository consolidation contract](semantic-preserving-consolidation-contract.md)
+remains the historical main-branch baseline. On `codex/symbolic-potts-v1`, conflicting
+authoring/compiler/API requirements are superseded by
+[Symbolic Potts V1](symbolic-potts-v1.md) and its
+[autonomous consolidation contract](symbolic-potts-v1-consolidation.md). The historical
+consolidation contract is
 governed by the completed
 [owner interview](../design/audits/semantic-preserving-consolidation-owner-interview.md) and
 [Decision 0041](decisions/0041-semantic-preserving-repository-consolidation.md).
