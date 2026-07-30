@@ -7,6 +7,7 @@ import SciMLBase
 import SHA
 import SymbolicIndexingInterface
 import Symbolics
+import SciMLBase: init, solve, solve!, step!, remake, terminate!
 
 include("statements/statements.jl")
 include("symbolics/bindings.jl")
@@ -19,6 +20,18 @@ include("systems.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/completion.jl")
+include("compiler/executable.jl")
+include("compiler/parameters.jl")
+include("compiler/storage.jl")
+include("compiler/lowering.jl")
+include("compiler/compiler.jl")
+include("runtime/initial_state.jl")
+include("runtime/problem.jl")
+include("runtime/saved_state.jl")
+include("runtime/integrator.jl")
+include("runtime/solution.jl")
+include("runtime/checkpoint.jl")
+include("runtime/symbolic_indexing.jl")
 include("inspection.jl")
 
 export PottsSystem, StatementSet, StatementID, SourceLocation, UnknownSource
@@ -32,6 +45,12 @@ export EquationProcess, Observation, Protocol, RegisteredStatement
 export StatementRegistry, default_statement_registry, register_statement
 export statements, statement_id, statement_source, @statements
 export compose, extend, flatten, complete, iscomplete
+export compile, PottsExecutable, SequentialEngine, CheckerboardEngine, CPUBackend
+export PottsParameters
+export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
+export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
+export PottsStats, init, solve, solve!, step!, remake, terminate!
+export PottsCheckpoint, checkpoint
 export DeclaredReferenceUnits, ReferenceUnits
 export ProposalContext, RelationshipBinding
 export source_site, target_site, source_cell, target_cell, source_kind, target_kind
@@ -64,9 +83,11 @@ public map_symbolics, statement_kind, with_source
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError
+public RuntimeParameter, ParameterManifest, executable_fingerprint
 public to_dynamic_quantity, to_unitful_quantity
 
 function EquationComponent end
+function compile end
 function to_unitful_quantity end
 to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value
 

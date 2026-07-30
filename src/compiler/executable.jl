@@ -1,0 +1,84 @@
+abstract type AbstractPottsEngine end
+
+"""
+    SequentialEngine()
+
+The V1 stochastic reference engine. Proposal attempts are committed one at a time
+in their semantic RNG order.
+"""
+struct SequentialEngine <: AbstractPottsEngine end
+
+"""
+    CheckerboardEngine()
+
+The V1 deterministic checkerboard engine. A compilation error is reported when
+the completed model has effects whose touched set cannot be proven.
+"""
+struct CheckerboardEngine <: AbstractPottsEngine end
+
+abstract type AbstractPottsBackend end
+
+"""The qualified V1 host backend."""
+struct CPUBackend <: AbstractPottsBackend end
+
+struct RuntimeParameter{V, D, U}
+    variable::V
+    name::Symbol
+    default::D
+    required::Bool
+    unit::U
+    index::Int
+end
+
+struct ParameterManifest{T <: Tuple}
+    entries::T
+end
+
+Base.length(manifest::ParameterManifest) = length(manifest.entries)
+Base.iterate(manifest::ParameterManifest, state...) =
+    iterate(manifest.entries, state...)
+Base.getindex(manifest::ParameterManifest, index::Integer) =
+    manifest.entries[index]
+
+"""
+    PottsParameters
+
+An immutable, normalized runtime-parameter buffer. Construct it through
+`PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
+"""
+struct PottsParameters{T <: AbstractFloat, N <: NamedTuple}
+    values::Vector{T}
+    named::N
+end
+
+Base.getindex(parameters::PottsParameters, name::Symbol) =
+    getproperty(parameters.named, name)
+Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
+
+struct PottsExecutable{S, P, M, R, O}
+    completed_system::S
+    core_program::P
+    parameter_manifest::M
+    reports::R
+    observations::O
+    fingerprint::ExecutableFingerprint
+end
+
+function Base.show(io::IO, executable::PottsExecutable)
+    report = executable.reports.execution
+    print(
+        io,
+        "PottsExecutable(",
+        report.engine,
+        ", ",
+        report.backend,
+        ", ",
+        report.scalar_type,
+        "; ",
+        join(report.shape, "×"),
+        ")",
+    )
+end
+
+executable_fingerprint(executable::PottsExecutable) = executable.fingerprint
+

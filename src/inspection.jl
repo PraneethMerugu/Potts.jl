@@ -22,3 +22,28 @@ semantic_fingerprint(system::PottsSystem) = inspect(system, Fingerprints()).sema
 completed_system_fingerprint(system::PottsSystem) =
     inspect(system, Fingerprints()).completed
 
+inspect(executable::PottsExecutable, ::Statements) =
+    inspect(executable.completed_system, Statements())
+inspect(executable::PottsExecutable, ::Variables) =
+    inspect(executable.completed_system, Variables())
+inspect(executable::PottsExecutable, ::Effects) =
+    inspect(executable.completed_system, Effects())
+inspect(executable::PottsExecutable, ::RandomOperations) =
+    inspect(executable.completed_system, RandomOperations())
+inspect(executable::PottsExecutable, ::Schedule) =
+    executable.reports.schedule
+inspect(executable::PottsExecutable, ::Capabilities) =
+    executable.reports.capability
+inspect(executable::PottsExecutable, ::Fingerprints) = (
+    semantic = semantic_fingerprint(executable.completed_system),
+    completed = completed_system_fingerprint(executable.completed_system),
+    executable = executable.fingerprint,
+)
+inspect(executable::PottsExecutable, ::StoragePlan) =
+    executable.reports.storage
+inspect(executable::PottsExecutable, ::Kernels) = (
+    engine = executable.reports.execution.engine,
+    backend = executable.reports.execution.backend,
+    phases = (:proposal, :commit, :after_mcs),
+    live_state_allocated = false,
+)

@@ -14,6 +14,14 @@ import SciMLBase: solve, savevalues!
 
 export solve, savevalues!
 
+public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
+public CPUProgramBackend, CompiledScalar, compiled_scalar_value
+public CompiledActivityPlan, CompiledFieldPlan, CompiledPottsProgram
+public ProgramInitialState, ProgramSnapshot, ProgramRuntime
+public initialize_program, program_snapshot, advance_mcs!, update_program_parameters!
+public program_execution_report, program_capability_report
+public ProgramCheckpoint, program_checkpoint, restore_program_checkpoint
+
 const DEFAULT_BLOCK_SIZE = 256
 
 include("contracts/versions.jl")
@@ -27,6 +35,7 @@ include("state/lifecycle.jl")
 include("lifecycle/scientific.jl")
 include("execution/dispatch.jl")
 include("rng/semantic.jl")
+include("program/v1.jl")
 include("execution/contracts.jl")
 include("coupled/dynamic_state.jl")
 
