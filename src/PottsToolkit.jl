@@ -1,281 +1,79 @@
 module PottsToolkit
 
 import CorePotts
+import DynamicQuantities
+import ModelingToolkitBase
+import SciMLBase
+import SHA
+import SymbolicIndexingInterface
+import Symbolics
 
-const ScientificContractVersions = CorePotts.ScientificContractVersions
-const scientific_contract_versions = CorePotts.scientific_contract_versions
-const AUTHORING_DSL_CONTRACT_VERSION = CorePotts.AUTHORING_DSL_CONTRACT_VERSION
-const NORMALIZED_IR_CONTRACT_VERSION = CorePotts.NORMALIZED_IR_CONTRACT_VERSION
-const SEMANTIC_FINGERPRINT_VERSION = CorePotts.SEMANTIC_FINGERPRINT_VERSION
-const EXECUTION_FINGERPRINT_VERSION = CorePotts.EXECUTION_FINGERPRINT_VERSION
-const RESULT_EVIDENCE_SCHEMA_VERSION =
-    CorePotts.RESULT_EVIDENCE_SCHEMA_VERSION
+include("statements/statements.jl")
+include("symbolics/bindings.jl")
+include("symbolics/operations.jl")
+include("symbolics/distributions.jl")
+include("statements/semantics.jl")
+include("completion/qualified_ir.jl")
+include("completion/diagnostics.jl")
+include("systems.jl")
+include("completion/inference.jl")
+include("completion/fingerprints.jl")
+include("completion/completion.jl")
+include("inspection.jl")
 
-include("compatibility.jl")
-include("authoring/Authoring.jl")
-include("reference_models/ReferenceModels.jl")
+export PottsSystem, StatementSet, StatementID, SourceLocation, UnknownSource
+export AbstractPottsStatement, AbstractPottsEffect, AbstractPottsPhase
+export CellKind, MediumKind, LatticeDomain, SpatialRelation
+export SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
+export RelationshipState
+export ProposalEnergy, ProposalDrive, ProposalConstraint, ProposalModifier
+export SynchronousProcess, AcceptedCopyProcess, RelationshipProcess, LifecycleProcess
+export EquationProcess, Observation, Protocol, RegisteredStatement
+export StatementRegistry, default_statement_registry, register_statement
+export statements, statement_id, statement_source, @statements
+export compose, extend, flatten, complete, iscomplete
+export DeclaredReferenceUnits, ReferenceUnits
+export ProposalContext, RelationshipBinding
+export source_site, target_site, source_cell, target_cell, source_kind, target_kind
+export is_extension, is_retraction, new_contact, lost_contact
+export cell_volume, cell_surface, cell_center, unwrapped_center, distance
+export contact_measure, boundary_measure, neighbor_count, neighbor_sum, neighbor_mean
+export neighbor_geomean, field_value, field_gradient, laplacian, occupancy
+export linked, degree, endpoint_a, endpoint_b, edge_payload, lag, history_value
+export AbstractPottsDistribution, Bernoulli, Uniform, Normal, UnitVector, DrawKey, draw
+export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
+export Proposal, AcceptedCopy, AfterMCS, RelationshipCommit, Lifecycle, EquationStep, Observe
+export Before, After, EveryMCS, AtMCS, Every
+export sites, cells, contacts, edges, incident_edges
+export Assign, Create, Remove, Retune, Transition, Divide, Retire
+export Periodic, Closed, FrozenBorder, VonNeumann, Moore
+export ClearOnOwnershipChange, PreserveOnOwnershipChange
+export Undirected, Directed, RemoveWithEndpoint, RejectEndpointRetirement
+export ExplicitDiffusion, ExplicitEuler, Heun, RK4
+export ExtensionsOnly, RetractionsOnly, ExtensionsAndRetractions
+export Nearest, Multilinear, CellCentered, AttemptsPerSite
+export Lattice, Volume, ContactEnergy, Elongation, Chemotaxis, LocalConnectivity
+export ActEnergy, Synchronous, Sweep, SweepStage, ObserveStage
+export RelationshipEnergy, RelationshipConstraint, ↔
+export inspect, Statements, Variables, Effects, RandomOperations, Schedule
+export Capabilities, Fingerprints, StoragePlan, Kernels
+export semantic_fingerprint, completed_system_fingerprint
+export EquationComponent
 
-using .Authoring: Namespace, SemanticName, AbstractBiologicalType, CellType, Medium,
-                  AbstractFragmentRole, CellRole, FieldRole,
-                  FragmentPortContract, FragmentRequirement, FragmentExport,
-                  fragment_port_contract, required_backends,
-                  Binding, BindingTable, PairIdentity, PairwiseLaw,
-                  AbstractPropertyInvariant, UnboundedProperty, ClosedPropertyInterval,
-                  PropertyVisibility, PublicProperty, PrivateProperty,
-                  PropertyPersistence, CheckpointedProperty, EphemeralProperty,
-                  PropertyOptionality, RequiredProperty, OptionalProperty, CellProperty,
-                  CellParameter, ModelParameter,
-                  VolumeParameters, VolumeConstraint, FluctuatingVolumeConstraint,
-                  ElongationParameters, Elongation,
-                  BoundaryParameters, BoundaryConstraint, FluctuatingBoundaryConstraint,
-                  Adhesion, PreserveConnectivity, LocalConnectivity,
-                  PrescribedField, Chemotaxis,
-                  PropertyUpdate, StochasticPropertyUpdate, Growth, Transition,
-                  Division, ShrinkDeath, ImmediateDeath, NamedCoreComponent,
-                  ModelFragment, bind, PottsModel, NormalizedModel, add, remove, replace,
-                  compose, normalize, validate, explain, provenance, dependencies,
-                  capabilities,
-                  CellLayout, CellLabelLayout, MediumLayout, LoweredModel, lower, problem,
-                  validate_problem, backend_report, semantic_identity,
-                  semantic_fingerprint, execution_fingerprint, semantic_manifest,
-                  SourceLocation, Diagnostic, ValidationReport, ModelValidationError,
-                  ProblemValidationError, ModelReport, DeclarationReport, DependencyEdge,
-                  DependencyReport, ModelCapabilityReport, ProvenanceEntry,
-                  SemanticFingerprint,
-                  ExecutionFingerprint, SemanticManifest,
-                  AbstractLevel1Declaration, Volume, Surface,
-                  Act,
-                  FluctuatingVolumePressure, FluctuatingSurfaceTension,
-                  AcceptanceTemperature, IndependentNoise,
-                  RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit,
-                  AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue,
-                  Layout, Place, LabelledCells, AbstractProceduralLayout,
-                  UniformSiteSeedLayout, SequentialRejectionLayout,
-                  UniformSiteSeeds, SequentialRejectionPlacement,
-                  CartesianDomain, PeriodicBoundary,
-                  ClosedBoundary, FixedExterior, AxisBoundary, LatticeBall, LatticeBox,
-                  PottsProblem,
-                  Phase, AbstractRuleExpression, RuleLiteral, OwnerReference,
-                  PropertyRead, CellParameterRead, ModelParameterRead,
-                  ScalarCall, ConditionalExpression, NoChange,
-                  AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector,
-                  RandomDraw, draw,
-                  Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter,
-                  SpatialQueryExpression, contact_edge_count, contact_measure,
-                  boundary_site_count, neighbor_cell_count, neighbor_property_sum,
-                  neighbor_property_mean,
-                  Rule, RuleGroup, TriggerRule, EveryMCS, AtMCS, BetweenMCS,
-                  evaluate, @rule, @rules, @trigger,
-                  AbstractFieldPlacement, CellCentered, AbstractFieldBoundary,
-                  NoFlux, PeriodicField, FixedValue, AbstractFieldInterpolation,
-                  Multilinear, Nearest, Field,
-                  LinearResponse, MichaelisMentenResponse, SaturationLinearResponse,
-                  ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis,
-                  PositiveYield, PropertyAtLeast,
-                  ReadOnlyProperty, MutableProperty,
-                  CloneOnDivision, SplitOnDivision, ResetChildOnDivision,
-                  ResetBothOnDivision, AsymmetricResetOnDivision, UnsupportedDivision,
-                  ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision,
-                  StationaryRedrawAfterDivision, PreserveOnTransition, ResetOnTransition,
-                  RecomputeOnTransition, UnsupportedTransition, ResetOnRetirement,
-                  ConstitutiveMeanInitialization, StationaryMechanicalInitialization,
-                  PreserveMechanicalInitialization,
-                  SequentialCPM, AttemptsPerSite, BudgetedSequentialCPM,
-                  SequentialEquilibrium, CheckerboardSweepCPM,
-                  TiledCheckerboardCPM, LotteryCPM,
-                  SpatialRoles, OmittedSpatialRole, spatial_roles, relation_for,
-                  FillSites, SiteValues, InitializeFromOwnership,
-                  PreserveAtSite, ResetChangedSites, AcceptedCopyManaged, SiteProperty,
-                  SetTo, PreserveSiteValue, AcceptedCopyUpdate,
-                  SaturatingSubtract, SetSiteValue, SiteDynamics,
-                  Lag, RepeatInitialSample, MissingUntilFull, ExplicitInitialHistory,
-                  ResetChildHistory, CopyParentHistory, PreserveHistory, ResetHistory,
-                  CellHistory, HistorySample, RelationshipCapacity,
-                  RemoveIncidentEdges, RejectEndpointRetirement, RelationshipSet,
-                  MCSPlan, PottsAttempts, LifecyclePhase, ObservationPhase,
-                  Advance, Exchange, Sample, Update,
-                  MCSRange, During, ProtocolStage, StagedProtocol,
-                  ScheduledParameter, ContinuousClock, ContinuousInterval,
-                  OneMCS, HalfMCS, GlobalClock, MCSDuration,
-                  AtMCSStart, AtMCSEnd, AtMCSOffset,
-                  ScheduledSystem, ScheduledEvent, ScheduledProcess,
-                  ScheduledPotts, TimedLifecyclePhase, ScheduledLifecycle,
-                  MultirateSchedule,
-                  GlobalDomain, CellDomain, FieldDomain, MembraneDomain,
-                  GlobalProperty, MembraneProperty,
-                  AngularMembrane, FillMembrane,
-                  ConservativeMembraneRemap, PartitionMembraneByGeometry,
-                  PreserveMembrane, ResetMembrane,
-                  StateVariable, InputVariable, Constant, IntermediateVariable,
-                  ObservableVariable, TimeVariable, DirectLaw,
-                  DifferentialEquation, SynchronousRule, AlgebraicAssignment,
-                  FunctionDefinition, AlgebraicConstraint,
-                  StochasticDifferentialEquation, ReactionStatement,
-                  DeterministicReaction, DiscreteJumpProcess, HybridReaction,
-                  ExplicitEuler, Heun, RK4, SystemStep, FixedStep, AdaptiveStep,
-                  SystemClock, ContinuousSystem, CellDynamics,
-                  ReactionDiffusion, FieldDynamics, ByCellVolume,
-                  ConstantConcentration, Uptake, FieldExchange,
-                  SteadyStateAdvance,
-                  StableRelationshipPriority, CreateRelationship,
-                  RemoveRelationship, RetuneRelationship,
-                  RelationshipDynamics,
-                  ExactSample, PiecewiseConstantDelay,
-                  LinearDelayInterpolation, RepeatInitialDelay, EveryGlobal,
-                  DelayState, WhileTrue, OnRising, OnceWhenTrue,
-                  PersistentTrigger, SampledTrigger, RootTrigger,
-                  EventAssignment, FromTriggerSnapshot,
-                  FromExecutionSnapshot, NoImmediateCascade,
-                  CascadeUntilStable, LifecycleRequest, ContinuousEvent,
-                  SymbolIdentity, SymbolRef, InputRef, IdentityMap, SymbolMap,
-                  ExactSemanticMapping, QualifiedNumericalMapping,
-                  ExplicitApproximation, PartialMapping, RejectedMapping,
-                  CompatibilityItem, MorpheusSemanticProfile,
-                  SBMLSemanticProfile, ContinuousModelAdapter,
-                  CompletedMCS, NamedPhaseSnapshot, RequiredObservation,
-                  BestEffortTelemetry, RecordSchema, PhaseObservation,
-                  ObservationTransform,
-                  AbstractScientificObservable, CellVolume, CellTypeObservable,
-                  LatticeOwnership,
-                  CellBoundaryMeasure, CellPropertyValues, ObservationSet,
-                  CellValue, CellValues, CellFrame, CellSeries,
-                  ObservedCell, OwnershipValues, SpatialFrame, SpatialSeries,
-                  observed_cell_id, observed_cell_generation, observed_cell_type,
-                  ownership_size, ownership_owner_at, ownership_cells,
-                  spatial_mcs, spatial_values,
-                  observe, observation_policy, observation_table,
-                  PhysicalScale, UnitfulSolutionView, with_units, mcs
+public map_symbolics, statement_kind, with_source
+public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
+public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
+public ExecutableFingerprint, PottsDiagnostic, PottsValidationError
+public to_dynamic_quantity, to_unitful_quantity
 
-export Authoring, ReferenceModels
-export ScientificContractVersions, scientific_contract_versions,
-       AUTHORING_DSL_CONTRACT_VERSION, NORMALIZED_IR_CONTRACT_VERSION,
-       SEMANTIC_FINGERPRINT_VERSION, EXECUTION_FINGERPRINT_VERSION,
-       RESULT_EVIDENCE_SCHEMA_VERSION, PHASE13_RESULT_EVIDENCE_SCHEMA_VERSION
-export Namespace, SemanticName, AbstractBiologicalType, CellType, Medium
-export AbstractFragmentRole, CellRole, FieldRole
-export FragmentPortContract, FragmentRequirement, FragmentExport
-export fragment_port_contract, required_backends
-export Binding, BindingTable, PairIdentity, PairwiseLaw
-export AbstractPropertyInvariant, UnboundedProperty, ClosedPropertyInterval
-export PropertyVisibility, PublicProperty, PrivateProperty
-export PropertyPersistence, CheckpointedProperty, EphemeralProperty
-export PropertyOptionality, RequiredProperty, OptionalProperty, CellProperty
-export CellParameter, ModelParameter
-export VolumeParameters, VolumeConstraint, FluctuatingVolumeConstraint
-export ElongationParameters, Elongation
-export BoundaryParameters, BoundaryConstraint, FluctuatingBoundaryConstraint
-export Adhesion, PreserveConnectivity, LocalConnectivity, PrescribedField, Chemotaxis
-export PropertyUpdate, StochasticPropertyUpdate, Growth, Transition
-export Division, ShrinkDeath, ImmediateDeath, NamedCoreComponent
-export ModelFragment, bind, PottsModel, NormalizedModel
-export add, remove, replace, compose, normalize, validate, explain, provenance, dependencies
-export capabilities
-export CellLayout, CellLabelLayout, MediumLayout, LoweredModel
-export lower, problem, validate_problem, backend_report
-export semantic_identity, semantic_fingerprint, execution_fingerprint, semantic_manifest
-export SourceLocation, Diagnostic, ValidationReport, ModelValidationError, ProblemValidationError
-export ModelReport, DeclarationReport, DependencyEdge, DependencyReport
-export ModelCapabilityReport, ProvenanceEntry
-export SemanticFingerprint, ExecutionFingerprint, SemanticManifest
-export AbstractLevel1Declaration, Volume, Surface
-export Act
-export FluctuatingVolumePressure, FluctuatingSurfaceTension
-export AcceptanceTemperature, IndependentNoise
-export RandomOrientationSplit, MinorAxisSplit, MajorAxisSplit, VectorSplit
-export AbstractMissingPairPolicy, RejectMissingPairs, DefaultPairValue
-export Layout, Place, LabelledCells
-export AbstractProceduralLayout, UniformSiteSeedLayout, SequentialRejectionLayout
-export UniformSiteSeeds, SequentialRejectionPlacement
-export CartesianDomain, PeriodicBoundary, ClosedBoundary, FixedExterior, AxisBoundary
-export LatticeBall, LatticeBox
-export PottsProblem
-export Phase, AbstractRuleExpression, RuleLiteral, OwnerReference, PropertyRead
-export CellParameterRead, ModelParameterRead
-export ScalarCall, ConditionalExpression, NoChange, Rule, RuleGroup, TriggerRule
-export AbstractDrawDistribution, Bernoulli, Uniform, Normal, UnitVector
-export RandomDraw, draw
-export Contacting, AbstractQueryOwnerFilter, AnyFiniteCell, CellTypeFilter
-export SpatialQueryExpression, contact_edge_count, contact_measure, boundary_site_count
-export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean
-export EveryMCS, AtMCS, BetweenMCS, evaluate
-export @rule, @rules, @trigger
-export AbstractFieldPlacement, CellCentered
-export AbstractFieldBoundary, NoFlux, PeriodicField, FixedValue
-export AbstractFieldInterpolation, Multilinear, Nearest, Field
-export LinearResponse, MichaelisMentenResponse, SaturationLinearResponse
-export ExtensionChemotaxis, RetractionChemotaxis, ReciprocalChemotaxis
-export PositiveYield, PropertyAtLeast
-export ReadOnlyProperty, MutableProperty
-export CloneOnDivision, SplitOnDivision, ResetChildOnDivision, ResetBothOnDivision
-export AsymmetricResetOnDivision, UnsupportedDivision
-export ConstitutiveResetAfterDivision, PreserveMechanicalOnDivision
-export StationaryRedrawAfterDivision
-export PreserveOnTransition, ResetOnTransition, RecomputeOnTransition
-export UnsupportedTransition, ResetOnRetirement
-export ConstitutiveMeanInitialization, StationaryMechanicalInitialization
-export PreserveMechanicalInitialization
-export SequentialCPM, SequentialEquilibrium, CheckerboardSweepCPM,
-       TiledCheckerboardCPM, LotteryCPM
-export AttemptsPerSite, BudgetedSequentialCPM
-export SpatialRoles
-# Registry-v1 coupled façades remain implementation details during kernel migration.
-#=
-export FillSites, SiteValues, InitializeFromOwnership,
-       PreserveAtSite, ResetChangedSites, AcceptedCopyManaged, SiteProperty,
-       SetTo, PreserveSiteValue, AcceptedCopyUpdate,
-       SaturatingSubtract, SetSiteValue, SiteDynamics,
-       Lag, RepeatInitialSample, MissingUntilFull, ExplicitInitialHistory,
-       ResetChildHistory, CopyParentHistory, PreserveHistory, ResetHistory,
-       CellHistory, HistorySample, RelationshipCapacity,
-       RemoveIncidentEdges, RejectEndpointRetirement, RelationshipSet
-export MCSPlan, PottsAttempts, LifecyclePhase, ObservationPhase,
-       Advance, Exchange, Sample, Update,
-       MCSRange, During, ProtocolStage, StagedProtocol,
-       ScheduledParameter, ContinuousClock, ContinuousInterval, OneMCS, HalfMCS,
-       GlobalClock, MCSDuration, AtMCSStart, AtMCSEnd, AtMCSOffset,
-       ScheduledSystem, ScheduledEvent, ScheduledProcess, ScheduledPotts,
-       TimedLifecyclePhase, ScheduledLifecycle, MultirateSchedule
-export GlobalDomain, CellDomain, FieldDomain, MembraneDomain,
-       GlobalProperty, MembraneProperty,
-       AngularMembrane, FillMembrane, ConservativeMembraneRemap,
-       PartitionMembraneByGeometry, PreserveMembrane, ResetMembrane,
-       StateVariable, InputVariable, Constant, IntermediateVariable,
-       ObservableVariable, TimeVariable, DirectLaw,
-       DifferentialEquation, SynchronousRule, AlgebraicAssignment,
-       FunctionDefinition, AlgebraicConstraint, StochasticDifferentialEquation,
-       ReactionStatement, DeterministicReaction, DiscreteJumpProcess,
-       HybridReaction, ExplicitEuler, Heun, RK4, SystemStep, FixedStep,
-       AdaptiveStep, SystemClock, ContinuousSystem, CellDynamics,
-       ReactionDiffusion, FieldDynamics, ByCellVolume, ConstantConcentration,
-       Uptake, FieldExchange, SteadyStateAdvance
-export StableRelationshipPriority, CreateRelationship, RemoveRelationship,
-       RetuneRelationship, RelationshipDynamics
-export ExactSample, PiecewiseConstantDelay, LinearDelayInterpolation,
-       RepeatInitialDelay, EveryGlobal, DelayState,
-       WhileTrue, OnRising, OnceWhenTrue, PersistentTrigger,
-       SampledTrigger, RootTrigger, EventAssignment,
-       FromTriggerSnapshot, FromExecutionSnapshot,
-       NoImmediateCascade, CascadeUntilStable, LifecycleRequest,
-       ContinuousEvent, SymbolIdentity, SymbolRef, InputRef, IdentityMap,
-       SymbolMap, ExactSemanticMapping, QualifiedNumericalMapping,
-       ExplicitApproximation, PartialMapping, RejectedMapping,
-       CompatibilityItem, MorpheusSemanticProfile, SBMLSemanticProfile,
-       ContinuousModelAdapter
-export CompletedMCS, NamedPhaseSnapshot, RequiredObservation,
-       BestEffortTelemetry, RecordSchema, PhaseObservation,
-       ObservationTransform
-=#
-export AbstractScientificObservable, CellVolume, CellTypeObservable, LatticeOwnership
-export CellBoundaryMeasure, CellPropertyValues, ObservationSet
-export CellValue, CellValues, CellFrame, CellSeries
-export ObservedCell, OwnershipValues, SpatialFrame, SpatialSeries
-export observed_cell_id, observed_cell_generation, observed_cell_type
-export ownership_size, ownership_owner_at, ownership_cells
-export spatial_mcs, spatial_values
-export observe, observation_policy, observation_table
-export PhysicalScale, UnitfulSolutionView, with_units, mcs
+function EquationComponent end
+function to_unitful_quantity end
+to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value
 
-include("public_api_docs.jl")
-include("precompile.jl")
+const compose = ModelingToolkitBase.compose
+const extend = ModelingToolkitBase.extend
+const flatten = ModelingToolkitBase.flatten
+const complete = ModelingToolkitBase.complete
+const iscomplete = ModelingToolkitBase.iscomplete
 
 end
