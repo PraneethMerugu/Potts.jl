@@ -124,7 +124,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
 | G1 host compiler facts | `passed` | conservative Hamiltonian taxonomy, closed domains, compiler-proven finite affected anchors, adversarial rejection suite | `eb8a37a` | included in fresh R1 scope |
-| G2 descriptor/group/evaluator/state/workspace | `candidate_pending_R1` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | pending | fresh R1 required |
+| G2 descriptor/group/evaluator/state/workspace | `passed` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | `3e131d97e352` | R1 passed with no findings |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `reopened` | `5b708bc` parameter-access P1 repaired; exact-tree rereview pending | `5b708bc` include-order P2 repaired |
+| R1 compiler | `passed` | none | none |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -739,7 +739,39 @@ The next R1 brief also includes the owner's 177-line candidate critique as untru
 The reviewer is required to challenge its claims rather than adopt them, including claims about
 the singular production path, extension authority, payload specialization, generated-code growth,
 backend legality, host/device separation, legacy quarantine, diagnostics, and external-module
-openness. Fresh exact-checkpoint R1 clearance remains required. G3 remains stopped.
+openness. At this repair checkpoint, fresh exact-tree R1 clearance was still required and G3
+remained stopped; the verdict is recorded below.
+
+## Repaired G2 R1 clearance
+
+Independent R1 returned `PASS` on clean exact checkpoint
+`3e131d97e352a9bc8080aa3f6d582299c9281fb5` with zero P0, P1, or P2 findings. It answered the
+owner's defining question affirmatively: there is exactly one supported production route from
+symbolic source through frozen and normalized compiler facts, registered operation transfer,
+concrete static expression, `StaticEvaluator`, compiler-owned `ProposalDescriptor`, homogeneous
+`DescriptorLaunch`, and the private compiled evaluator walker.
+
+The reviewer challenged rather than adopted the supplied candidate critique. It found no supported
+adjacent evaluator bypass, confirmed canonical representation-derived storage banks, accepted the
+current stage/ownership split, verified bounded specialization growth, and found the external
+registered fixture crosses the same concrete, inferred, launch, and Metal boundary. It classified
+additional GPU vendors as a later backend-agnostic release-matrix concern, final checkerboard GPU
+simulation as G4, and legacy runtime removal as G8 rather than G2 blockers.
+
+Independent evidence on the exact checkpoint:
+
+- ordinary root suite: 572/572 in 6m26s;
+- complete CorePotts suite: passed, including Aqua;
+- full specialization-growth qualification: 5/5 in 2m44s;
+- production Metal launch: 32 descriptors over real `MtlArray` parameter, state, and workspace
+  buffers returned exact `17.5f0`;
+- adversarial exact public overrides altered their public probes but not production delta energy or
+  parameter validation; and
+- clean worktree and `git diff --check`, with no reviewer edits.
+
+G2 is cleared. G3 may begin without redesigning the cleared evaluator, descriptor, grouping,
+storage, capability, adaptation, diagnostic, or backend boundary. Any G3 need to redesign those
+facts returns work to G2.
 
 ## Prohibited record contents
 
