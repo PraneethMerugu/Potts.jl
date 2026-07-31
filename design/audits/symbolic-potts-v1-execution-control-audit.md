@@ -15,7 +15,7 @@ Acceptance means:
 
 - the two neutral downstream fixtures are required;
 - G0 through G9 are the sole authoritative execution order;
-- progressive GPU qualification and the four independent review boundaries are required;
+- progressive GPU qualification and the five independent review boundaries are required;
 - gate failure, architecture invalidation, owner blockers, and recovery checkpoints have distinct
   meanings;
 - the older SPV1, ACV1, and ARV1 implementation lists are superseded only for ordering; and
@@ -374,7 +374,8 @@ Required outcome:
   access-count, inference, and allocation gates pass; and
 - the minimal SciML/public lifecycle spine works.
 
-Reviewer: none.
+Reviewer: R1.5 sequential-authority review. G4 must not begin until its blocking findings are
+cleared.
 
 Failure routing: distinguish compiler-plan defects from runtime defects and return to G1/G2 when
 the plan is wrong.
@@ -648,7 +649,7 @@ With the four focused amendments above, the phase would have:
 - one authoritative gate graph;
 - two neutral downstream extensibility proofs;
 - early device-risk discovery;
-- four independent read-only reviews;
+- five independent read-only reviews;
 - explicit autonomous failure routing;
 - recoverable checkpoints;
 - one living control record rather than an evidence system; and

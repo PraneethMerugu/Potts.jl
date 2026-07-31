@@ -816,6 +816,12 @@ Runtime and proof-model work MUST NOT begin while G1 or G2 has a blocking failur
 - Pass finite transition-matrix, local/global delta, rejection atomicity, tracker rebuild, RNG,
   access-count, inference, and allocation gates.
 - Establish the minimal public SciML lifecycle spine.
+- Complete the independent R1.5 sequential-authority review on the exact G3 implementation
+  checkpoint and checkpoint the cleared sequential boundary.
+
+G4 MUST NOT begin while R1.5 has a P0 or P1 finding. A finding that invalidates a cleared compiler
+fact returns work to G1 or G2; an acceptance, RNG, atomicity, tracker, lifecycle, or sequential
+execution finding returns work to G3.
 
 ### G4 — Checkerboard and first functional GPU witness
 
@@ -921,16 +927,19 @@ an optional GPU vendor is not a stopping condition after one functional witness 
 
 ### Independent review boundaries
 
-Four fresh-context, read-only reviews are required:
+Five fresh-context, read-only reviews are required:
 
-1. `R1Compiler` after G2 reviews host/device separation, inference, specialization, diagnostics,
-   grouping, evaluator selection, and external lowering;
-2. `R2Execution` after G5 reviews footprints, deterministic checkerboard commit, relationship
-   transactions, adaptation, GPU legality, and no fallback;
-3. `R3Science` after G7 reviews paper/source-qualified equations, stage order, exact
-   microfixtures, and statistical calibration; and
-4. `R4Terminal` after G9 reviews the public black-box flow, stale/private APIs, package loading,
-   scope, and phase-exit completeness.
+- `R1Compiler` after G2 reviews host/device separation, inference, specialization, diagnostics,
+  grouping, evaluator selection, and external lowering;
+- `R1.5Sequential` after G3 reviews descriptor-only proposal execution, role and acceptance
+  semantics, finite transition authority, RNG addressing, rejection atomicity, tracker invariants,
+  checkpoint continuation, warm-path inference/allocation, and the external public fixture;
+- `R2Execution` after G5 reviews footprints, deterministic checkerboard commit, relationship
+  transactions, adaptation, GPU legality, and no fallback;
+- `R3Science` after G7 reviews paper/source-qualified equations, stage order, exact
+  microfixtures, and statistical calibration; and
+- `R4Terminal` after G9 reviews the public black-box flow, stale/private APIs, package loading,
+  scope, and phase-exit completeness.
 
 A reviewer MUST:
 
@@ -958,10 +967,10 @@ uses the existing owner-blocker rule.
 
 ### Recovery and implementation-control record
 
-Intentional, semantically coherent Git checkpoint commits are required after cleared R1, R2, and R3,
-before broad legacy deletion, after the clean break, and after cleared R4. Ordinary failure
-recovery MUST repair or revert a bounded coherent slice and MUST NOT use destructive reset as the
-default response.
+Intentional, semantically coherent Git checkpoint commits are required after cleared R1, R1.5, R2,
+and R3, before broad legacy deletion, after the clean break, and after cleared R4. Ordinary
+failure recovery MUST repair or revert a bounded coherent slice and MUST NOT use destructive reset
+as the default response.
 
 After explicit implementation send-off, one living
 `design/audits/symbolic-potts-v1-implementation-control.md` MUST record:

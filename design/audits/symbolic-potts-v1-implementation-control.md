@@ -125,8 +125,8 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
 | G1 host compiler facts | `passed` | conservative Hamiltonian taxonomy, closed domains, compiler-proven finite affected anchors, adversarial rejection suite | `eb8a37a` | included in fresh R1 scope |
 | G2 descriptor/group/evaluator/state/workspace | `passed` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | `3e131d97e352` | R1 passed with no findings |
-| G3 sequential reference/finite transitions | `passed` | descriptor-driven sequential execution, finite transition authority, public external lifecycle, exact RNG/locality/inference/allocation gates | `d8f00c352230` | none |
-| G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
+| G3 sequential reference/finite transitions | `in_progress` | locally qualified candidate: descriptor-driven sequential execution, finite transition authority, public external lifecycle, exact RNG/locality/inference/allocation gates | `d8f00c352230` | R1.5 in progress |
+| G4 checkerboard/first GPU witness | `pending` | blocked until R1.5 clears G3 | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
 | G6 public integration spine | `pending` | pending | pending | none |
 | G7 proof-model reconstruction | `pending` | pending | pending | R3 |
@@ -138,6 +138,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
 | R1 compiler | `passed` | none | none |
+| R1.5 sequential authority | `in_progress` | pending | pending |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -773,9 +774,9 @@ G2 is cleared. G3 may begin without redesigning the cleared evaluator, descripto
 storage, capability, adaptation, diagnostic, or backend boundary. Any G3 need to redesign those
 facts returns work to G2.
 
-## G3 sequential reference clearance
+## G3 sequential reference candidate
 
-G3 passed at exact implementation checkpoint
+The G3 implementation candidate passed local qualification at exact implementation checkpoint
 `d8f00c352230a3ce3a208312eee82444a93eef55`. The sequential proposal loop now consumes the
 compiler-owned descriptor plan: every group writes a structured, source-indexed
 `ProposalEvaluation` into caller-owned scratch storage, and the runtime folds Hamiltonian energy,
@@ -820,9 +821,21 @@ Qualification on the exact checkpoint:
 - preserved G2 specialization growth: 5/5 in 2m56.9s.
 
 The named legacy helper definitions remain quarantined until their scheduled G8 clean-break
-removal; they are not reachable from the production proposal loop. G4 may begin. Any need to alter
-the cleared G2 evaluator/descriptor representation returns work to G2, and any finite-transition,
-acceptance, tracker, or RNG failure returns work to G3.
+removal; they are not reachable from the production proposal loop.
+
+## R1.5 sequential-authority review gate
+
+R1.5 is a fresh-context, read-only review of the exact G3 implementation checkpoint above. It
+must challenge the descriptor-only production path, separation of Hamiltonian/drive/modifier/
+constraint roles, acceptance seams, finite transition oracle, RNG identities and address
+consumption, null/rejection atomicity, tracker invariants, checkpoint continuation and scratch
+exclusion, warm inference/allocation, and the public external fixture. It must also determine
+whether G3 changed any cleared G2 compiler boundary without returning that boundary to review.
+
+G4 remains stopped until R1.5 reports zero P0 and zero P1 findings. A compiler-boundary finding
+returns work to G1 or G2; an acceptance, RNG, atomicity, tracker, lifecycle, or sequential-runtime
+finding returns work to G3. P2 findings remain nonblocking under the existing autonomous repair
+rule.
 
 ## Prohibited record contents
 

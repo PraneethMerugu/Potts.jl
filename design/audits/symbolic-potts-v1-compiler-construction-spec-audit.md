@@ -31,8 +31,9 @@ three clauses. It adds exact finite-state, compiler-algebra, access-complexity, 
 adaptation, fresh-process, and proof-model microfixtures while retaining one primary statistical
 endpoint per proof model.
 The owner's acceptance of the execution-control audit further tightens CCV1-021 through CCV1-023:
-two neutral downstream fixtures, one G0–G9 order, progressive GPU qualification, four independent
-review boundaries, explicit failure routing, and recoverable checkpoints.
+two neutral downstream fixtures, one G0–G9 order, progressive GPU qualification, five independent
+review boundaries (including the blocking R1.5 sequential-authority review between G3 and G4),
+explicit failure routing, and recoverable checkpoints.
 
 It is sufficiently concrete for one autonomous architecture-first implementation after explicit
 owner send-off.
