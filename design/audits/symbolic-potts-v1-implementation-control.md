@@ -125,7 +125,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
 | G1 host compiler facts | `passed` | conservative Hamiltonian taxonomy, closed domains, compiler-proven finite affected anchors, adversarial rejection suite | `eb8a37a` | included in fresh R1 scope |
 | G2 descriptor/group/evaluator/state/workspace | `passed` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | `3e131d97e352` | R1 passed with no findings |
-| G3 sequential reference/finite transitions | `pending` | pending | pending | none |
+| G3 sequential reference/finite transitions | `passed` | descriptor-driven sequential execution, finite transition authority, public external lifecycle, exact RNG/locality/inference/allocation gates | `d8f00c352230` | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
 | G6 public integration spine | `pending` | pending | pending | none |
@@ -772,6 +772,57 @@ Independent evidence on the exact checkpoint:
 G2 is cleared. G3 may begin without redesigning the cleared evaluator, descriptor, grouping,
 storage, capability, adaptation, diagnostic, or backend boundary. Any G3 need to redesign those
 facts returns work to G2.
+
+## G3 sequential reference clearance
+
+G3 passed at exact implementation checkpoint
+`d8f00c352230a3ce3a208312eee82444a93eef55`. The sequential proposal loop now consumes the
+compiler-owned descriptor plan: every group writes a structured, source-indexed
+`ProposalEvaluation` into caller-owned scratch storage, and the runtime folds Hamiltonian energy,
+drive log bias, kinetic modification, and hard constraints in frozen source order. Hamiltonian
+values still use the cleared local before/after machinery. Drives, modifiers, and constraints use
+the same private compiled evaluator walker. The proposal loop no longer calls named volume,
+contact, activity, chemotaxis, relationship, or elongation delta helpers.
+
+The conventional V1 acceptance law is one pure production function shared by runtime and tests. It
+rejects nonfinite inputs, treats constraints as hard vetoes, handles favorable, neutral,
+unfavorable, underflow, strict-threshold, and zero-temperature seams explicitly, and keeps
+Hamiltonian, drive, and modifier roles semantically distinct. Runtime proposal scratch is
+nonlogical and reconstructed from the executable rather than checkpointed.
+
+Permanent G3 evidence includes:
+
+- complete finite one-attempt transition matrices over all eight configurations of a periodic
+  three-site fixture, every ordered proposal choice, null mass, constraints, source/target
+  multiplicities, and independently enumerated two-step composition;
+- compiled scripted attempts immediately below, at, and above the acceptance threshold;
+- translation symmetry plus Gibbs stationarity and pairwise flux equality on an explicitly closed,
+  proven-reversible subspace;
+- exact rejection atomicity and incremental-volume comparison with recomputation after every
+  admitted compiled attempt;
+- fixed raw Philox known-answer vectors, evaluation-order invariance, and a small exhaustive
+  semantic-address isolation check;
+- a counting-array sentinel proving the neutral external Hamiltonian performs exactly two state
+  reads on both 4×4 and 64×64 lattices;
+- inferred `ProposalEvaluation{Float64}` and `Bool` return types with zero warmed proposal
+  evaluation and scripted-rejection allocation;
+- the neutral external registered term through public `PottsProblem`, `init`, `step!`, `solve!`,
+  symbolic state indexing, checkpoint, and exact continuation; and
+- scale/temperature invariance, energy and temperature monotonicity, finite-input rejection, and
+  drive/modifier/constraint acceptance semantics.
+
+Qualification on the exact checkpoint:
+
+- focused G3 suite: 305/305;
+- complete CorePotts package suite: passed, including Aqua;
+- ordinary root `Pkg.test()`: 877/877 in 6m49.0s, including Wortel, Merks, focal, SciML/SII,
+  checkpoint, Aqua, and ExplicitImports; and
+- preserved G2 specialization growth: 5/5 in 2m56.9s.
+
+The named legacy helper definitions remain quarantined until their scheduled G8 clean-break
+removal; they are not reachable from the production proposal loop. G4 may begin. Any need to alter
+the cleared G2 evaluator/descriptor representation returns work to G2, and any finite-transition,
+acceptance, tracker, or RNG failure returns work to G3.
 
 ## Prohibited record contents
 
