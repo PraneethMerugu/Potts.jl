@@ -112,6 +112,7 @@
             reason = "",
         ),
         reference_semantics = :dimensionless,
+        descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
         serialization_identity = "example-schema-v1",
         lowering_identity = :lower_example,
     )
@@ -140,10 +141,33 @@
         x;
         callback = identity,
     )
+    @test_throws ArgumentError ProposalEnergy(
+        :forged_public_origin,
+        x;
+        __registered_origin = (
+            schema = :example,
+            version = v"1.0.0",
+            serialization_identity = "example-schema-v1",
+            lowering_identity = :lower_example,
+            descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
+        ),
+    )
     @test_throws ArgumentError register_statement(
         default_statement_registry(),
         :host_contract,
         v"1.0.0",
         merge(contract, (unit_constraints = identity,)),
+    )
+    @test_throws ArgumentError register_statement(
+        default_statement_registry(),
+        :abstract_payload_contract,
+        v"1.0.0",
+        merge(contract, (descriptor_payload_type = AbstractString,)),
+    )
+    @test_throws ArgumentError register_statement(
+        default_statement_registry(),
+        :mutable_payload_contract,
+        v"1.0.0",
+        merge(contract, (descriptor_payload_type = Vector{Int},)),
     )
 end

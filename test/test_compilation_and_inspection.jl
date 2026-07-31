@@ -70,7 +70,10 @@
         value isa Union{
             Number, Symbol, String, Bool, Type, VersionNumber,
         } && return false
-        value isa Function && return true
+        value isa Function && return !(
+            Base.issingletontype(typeof(value)) &&
+            !startswith(String(nameof(value)), "#")
+        )
         value isa AbstractPottsStatement && return true
         value isa ModelingToolkitBase.AbstractSystem && return true
         value isa DynamicQuantities.UnionAbstractQuantity && return true
@@ -137,10 +140,18 @@
         scalar_type = Float64,
     )
     symbolic_program = getfield(symbolic_executable, :core_program)
-    @test length(symbolic_program.proposal_energies) == 1
-    @test length(symbolic_program.proposal_drives) == 1
-    @test length(symbolic_program.proposal_constraints) == 1
-    @test length(symbolic_program.proposal_modifiers) == 1
+    symbolic_groups = symbolic_program.descriptor_plan.groups
+    @test length(symbolic_groups) == 4
+    symbolic_roles = Tuple(
+        CorePotts.descriptor_role(
+            first(group.launch.instances)
+        ) |> typeof
+        for group in symbolic_groups
+    )
+    @test count(==(CorePotts.ProposalEnergyRole), symbolic_roles) == 1
+    @test count(==(CorePotts.ProposalDriveRole), symbolic_roles) == 1
+    @test count(==(CorePotts.ProposalConstraintRole), symbolic_roles) == 1
+    @test count(==(CorePotts.ProposalModifierRole), symbolic_roles) == 1
     @test !forbidden(symbolic_program)
 
     proposal_labels = zeros(Int, 4, 4)

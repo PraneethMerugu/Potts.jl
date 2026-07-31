@@ -103,7 +103,7 @@ CCV1-001 through CCV1-013 define:
 - concrete open descriptors;
 - grouping by structural strategy rather than occurrence;
 - bounded evaluator selection;
-- device-valid operation tags;
+- device-valid operation callables;
 - typed state and reusable workspace; and
 - no runtime interpreter or named-mechanism central program.
 

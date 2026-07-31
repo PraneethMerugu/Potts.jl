@@ -15,6 +15,7 @@ import CorePotts
     include("test_statements_and_traversal.jl")
     include("test_completion_and_diagnostics.jl")
     include("test_host_compiler_facts.jl")
+    include("test_descriptor_compiler.jl")
     include("test_units_and_parameters.jl")
     include("test_compilation_and_inspection.jl")
     include("test_initial_problem_remake.jl")

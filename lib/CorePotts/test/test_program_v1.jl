@@ -1,3 +1,13 @@
+empty_descriptor_plan() = CorePotts.DescriptorExecutionPlan(
+    (),
+    CorePotts.StateLayout(CorePotts.StateBlockSchema[]),
+    CorePotts.WorkspaceLayout(CorePotts.WorkspaceSchema[]),
+    (),
+    Any[],
+    Int32(0),
+    "empty-descriptor-plan-v1",
+)
+
 function test_program(
         engine;
         activity = nothing,
@@ -35,6 +45,7 @@ function test_program(
         nothing,
         relationships,
         observations,
+        empty_descriptor_plan(),
         engine,
         CorePotts.CPUProgramBackend(),
         "core-program-v1-test";
@@ -283,4 +294,54 @@ end
     @test 1 <= first_draw <= 17
     @test first_draw == repeated_draw
     @test 1 <= next_draw <= 17
+end
+
+struct ExternalSquareOperation <: CorePotts.AbstractContextualOperation end
+
+(::ExternalSquareOperation)(arguments, context) = only(arguments)^2
+
+@testset "external descriptor operation stays open" begin
+    expression = CorePotts.OperationExpression(
+        CorePotts.operation_callable(Val(:add), v"1.0.0"),
+        CorePotts.OperationExpression(
+            ExternalSquareOperation(),
+            CorePotts.ParameterExpression(2.0f0, 1),
+        ),
+        CorePotts.LiteralExpression(1.0f0),
+    )
+    evaluator = CorePotts.StaticEvaluator(expression)
+    context = CorePotts.EvaluatorProbeContext(
+        Float32[3],
+        (
+            source_site = Int32(1),
+            target_site = Int32(1),
+            source_cell = Int32(1),
+            target_cell = Int32(1),
+            source_kind = Int16(1),
+            target_kind = Int16(1),
+            is_extension = false,
+            is_retraction = false,
+        ),
+    )
+    descriptor = CorePotts.ProposalDescriptor(
+        evaluator,
+        CorePotts.ResourceAccess(
+            (), (), CorePotts.EmptyFootprint()
+        ),
+        CorePotts.DescriptorSupport(true, true, true, true),
+        1,
+    )
+    @test CorePotts.descriptor_evaluate_proposal(
+        descriptor, context
+    ) == 10.0f0
+    @test Core.Compiler.return_type(
+        CorePotts.descriptor_evaluate_proposal,
+        Tuple{typeof(descriptor), typeof(context)},
+    ) === Float32
+    output = zeros(Float32, 4)
+    backend = CorePotts.KernelAbstractions.CPU()
+    kernel = CorePotts.descriptor_probe_kernel!(backend)
+    kernel(output, descriptor, context; ndrange = length(output))
+    CorePotts.KernelAbstractions.synchronize(backend)
+    @test output == fill(10.0f0, 4)
 end

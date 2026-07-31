@@ -484,6 +484,43 @@ function _with_registered_origin(statement, origin, source)
     ))
 end
 
+const _REGISTERED_ORIGIN_FIELDS = (
+    :schema,
+    :version,
+    :serialization_identity,
+    :lowering_identity,
+    :descriptor_payload_type,
+)
+
+function _registered_origin_for(definition::StatementDefinition)
+    return (
+        schema = definition.schema,
+        version = definition.version,
+        serialization_identity =
+            String(definition.contract.serialization_identity),
+        lowering_identity = definition.contract.lowering_identity,
+        descriptor_payload_type =
+            definition.contract.descriptor_payload_type,
+    )
+end
+
+function _authenticated_registered_origin(
+        registry::StatementRegistry,
+        origin,
+    )
+    origin isa NamedTuple && keys(origin) == _REGISTERED_ORIGIN_FIELDS ||
+        return nothing
+    index = findfirst(
+        definition -> definition.schema === origin.schema &&
+                      definition.version == origin.version,
+        registry.definitions,
+    )
+    index === nothing && return nothing
+    definition = registry.definitions[index]
+    return isequal(origin, _registered_origin_for(definition)) ?
+           definition : nothing
+end
+
 function _registered_lowering_result(value)
     value isa AbstractPottsStatement && return (value,)
     value isa StatementSet && return statements(value)
@@ -719,13 +756,7 @@ function _expand_registered_system(
         _validate_registered_lowering!(
             diagnostics, statement, lowered, definition, identity, path
         ) || continue
-        origin = (
-            schema = definition.schema,
-            version = definition.version,
-            serialization_identity =
-                String(definition.contract.serialization_identity),
-            lowering_identity = definition.contract.lowering_identity,
-        )
+        origin = _registered_origin_for(definition)
         append!(
             expanded,
             (_with_registered_origin(item, origin, statement_source(statement))
@@ -866,6 +897,23 @@ function _qualify_records!(
         seen[id] = originating_statement
         statement = _namespace_statement(originating_statement, current_path)
         identity = QualifiedStatementID(current_path, id)
+        options = _statement_options(statement)
+        origin = haskey(options, :__registered_origin) ?
+                 options.__registered_origin : nothing
+        if origin !== nothing &&
+                _authenticated_registered_origin(registry, origin) === nothing
+            push!(diagnostics, PottsDiagnostic(
+                :unauthenticated_registered_origin,
+                identity,
+                _statement_expression(originating_statement),
+                current_path,
+                "internal provenance exactly matching one frozen registry definition",
+                repr(origin),
+                (),
+                statement_source(originating_statement),
+            ))
+            continue
+        end
         registered = statement isa RegisteredStatement ?
                      _registered_definition(registry, statement) : nothing
         if statement isa RegisteredStatement && registered === nothing
@@ -963,10 +1011,6 @@ function _qualify_records!(
             current_path,
         ))
         mutating = !(effect isa PureRead)
-        origin = let options = _statement_options(statement)
-            haskey(options, :__registered_origin) ?
-            options.__registered_origin : nothing
-        end
         record = QualifiedStatement(
             identity,
             statement_kind(statement),
@@ -983,6 +1027,8 @@ function _qualify_records!(
                 registered_version = origin.version,
                 serialization_identity = origin.serialization_identity,
                 registered_lowering_identity = origin.lowering_identity,
+                registered_descriptor_payload_type =
+                    origin.descriptor_payload_type,
             ),
             (_statement_arguments(statement), _statement_options(statement)),
             registered === nothing ?
@@ -1211,6 +1257,11 @@ function _complete_potts(
     source_graph = _freeze_source_graph(
         system, qualified_records, registry
     )
+    # Completion freezes the complete versioned operation schema, including
+    # transfer semantics, serialization identity, and the concrete device tag.
+    # Compilation may re-run normalization deterministically, but it may not
+    # discover a missing downstream operation implementation for the first time.
+    _normalize_source_graph(source_graph, system)
     return CompletedPottsData(
         registry,
         reference_units,

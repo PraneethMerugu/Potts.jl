@@ -55,6 +55,7 @@ inspect(executable::PottsExecutable, ::Kernels) = (
     phases = (:proposal, :commit, :after_mcs),
     time = executable.reports.time,
     live_state_allocated = false,
+    descriptors = executable.reports.descriptors,
 )
 inspect(executable::PottsExecutable, ::ParameterSchema) =
     executable.parameter_manifest

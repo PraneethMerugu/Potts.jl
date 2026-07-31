@@ -136,6 +136,11 @@ Normalization MUST NOT:
 Every structural rewrite MUST preserve source traceability. Structural choices that can change
 execution or replay MUST enter the completed or executable fingerprint as appropriate.
 
+Canonical fingerprints MUST encode every structural type fact completely. For a concrete
+parameterized Julia type this includes its defining module, type name, and recursively encoded type
+parameters. Two payload, handle, evaluator, descriptor, or policy types that can produce different
+executable structure MUST NOT collide because their outer type names match.
+
 ## CCV1-003 — Complete analyzed term IR
 
 The compiler MUST compute explicit facts for every relevant expression node and scientific record:
@@ -164,6 +169,11 @@ against the expression, declared resources, stage, effect bound, engine, and bac
 extension assertion MUST NOT override failed purity, totality, units, boundedness, footprint,
 stochastic, or device-legality analysis.
 
+Engine and backend admission are compositional expression facts. A node is admitted only when its
+own versioned transfer and every operand node are admitted. A rejected descendant MUST propagate a
+qualified rejection reason to every enclosing expression and descriptor; an admitted root
+operation MUST NOT hide an unsupported nested operation.
+
 Safe independent diagnostic failures SHOULD be aggregated.
 
 ## CCV1-004 — Stable semantic extension surface, private compiler machinery
@@ -175,7 +185,7 @@ The qualified public extension surface MUST include only what downstream semanti
 - qualified identity, provenance, diagnostic, and read-only inspection records;
 - typed state, workspace, resource, footprint, stage, effect, RNG, adaptation, and checkpoint
   schemas;
-- descriptor/group construction hooks; and
+- inert descriptor-payload and declared-resource construction hooks; and
 - CorePotts's qualified runtime descriptor protocol.
 
 Concrete host graph nodes, mutable graph builders, analysis caches, fact-table storage, grouping
@@ -232,8 +242,27 @@ CorePotts MUST NOT contain:
 - a mechanism-name switch; or
 - a callback fallback for unknown descriptors.
 
-CorePotts MAY define descriptors for universal execution semantics. PottsToolkit and downstream
-extensions MAY define scientific descriptors conforming to the same protocol.
+CorePotts MUST own the universal descriptor and evaluation method for symbolically defined
+proposal terms. Downstream extensions MAY contribute only versioned operations, inert isbits
+occurrence/payload metadata, resource declarations, and qualified inspection metadata to that
+descriptor. They MUST NOT replace or ignore the compiler-supplied evaluator.
+
+Every registered statement contract that may contribute descriptor metadata MUST declare one
+concrete isbits `descriptor_payload_type` for that schema version. Every occurrence payload MUST
+have exactly that type. The declared type is a structural schema fact; payload field values are
+occurrence data. A payload constructor MUST NOT derive a new concrete type from a statement ID,
+resource name, runtime parameter value, declaration position, or other occurrence identity.
+
+Registered provenance MUST originate only from successful lowering against the supplied frozen
+registry. Public statement constructors MUST reject reserved internal provenance option names.
+Completion MUST authenticate every internal origin against the exact registry definition for its
+schema/version, including serialization identity, lowering identity, and descriptor payload type,
+before the origin can affect qualified records, fingerprints, or compilation. Presence of an
+internal-looking metadata key is never authority by itself.
+
+Non-proposal stages MAY admit downstream scientific descriptors conforming to the same protocol
+only when their accepted stage specification requires distinct execution semantics. Such a
+descriptor MUST NOT create an alternate symbolic proposal-evaluator path.
 
 ## CCV1-007 — Descriptor grouping and specialization boundary
 
@@ -251,6 +280,22 @@ Numerical coefficients, runtime parameter indices, kind identities, targets, sta
 relation handles, and other occurrence values MUST remain fields in homogeneous
 backend-compatible instance buffers. They MUST NOT become type parameters merely because their
 values differ.
+
+The concrete type of inert extension metadata MUST be frozen by its registered schema version.
+The compiler MUST reject a payload whose concrete type differs from that declaration before
+descriptor grouping, even when both the declared and observed types are otherwise isbits and
+contain no executable value.
+
+State/workspace bank type identities MUST derive canonically from storage representation. Resource
+names, declaration count, first encounter, and semantically irrelevant declaration order MUST NOT
+change bank types or kernel specialization.
+
+The representation marker in a handle type MUST be a function of that representation alone. A
+model-relative ordinal is insufficient even when its input representations are sorted, because
+adding or removing a different representation could renumber an existing handle type. Physical
+bank ordinals and resource slots MUST remain value-level fields. Runtime storage lookup MAY
+specialize on the representation marker, but adding another bank MUST NOT change an existing
+representation's evaluator, descriptor, or kernel-strategy type.
 
 Let `N` be descriptor occurrences and `G` distinct structural execution strategies. The executable
 MAY use a heterogeneous tuple or equivalent concrete structure of `G` groups. It MUST NOT use a
@@ -279,8 +324,9 @@ The experiment MUST compare:
 2. balanced or bounded n-ary typed trees; and
 3. a compile-time-unrolled static instruction or SSA representation.
 
-All candidates MUST use identical operation tags, occurrence data, evaluation context, and
-semantic test vectors.
+All candidates MUST use the same host semantic fixture, occurrence data, evaluation context,
+semantic RNG addresses, and ordered test vectors. If operation execution itself is under
+comparison, every representation MUST receive semantically identical concrete operations.
 
 The experiment MUST vary at least:
 
@@ -321,7 +367,7 @@ The selection and evidence MUST be recorded in a short design decision before me
 continues. RuntimeGeneratedFunctions and Symbolics `build_function` are host-codegen controls only
 unless separately proven device-valid across the claimed backends.
 
-## CCV1-009 — Versioned operation tags
+## CCV1-009 — Versioned operation schemas and concrete callables
 
 Every ordinary expression operation MUST define:
 
@@ -332,15 +378,23 @@ Every ordinary expression operation MUST define:
 - resource and locality transfer;
 - backend capability;
 - canonical serialization; and
-- concrete device-valid operation tag lowering.
+- concrete device-valid callable lowering.
 
-Built-in tags use ordinary methods. A registered operation MUST supply its frozen host schema and
-concrete tag implementation before completion. Lowering MUST resolve operation identity to a
-concrete tag.
+Ordinary scalar mathematics MUST lower to Julia's named singleton functions. Flattened associative
+arithmetic MUST use the compiler-owned bounded `OrderedFold` callable so source-order
+floating-point semantics remain explicit. Context, resource, and downstream CPM operations MUST
+lower to concrete isbits callable structs. A registered operation MUST supply its frozen host
+schema and concrete callable implementation before completion.
 
 An executable MUST NOT contain an operation symbol switch, dictionary, registry lookup, callback,
-or unresolved operation identity. Unsupported backend operations MUST fail compilation without
-host fallback.
+closure, or unresolved operation identity. CorePotts MUST NOT reimplement the meaning of ordinary
+Julia arithmetic. Unsupported backend operations MUST fail compilation without host fallback.
+
+The versioned operation schema and `operation_callable` lowering MUST be the sole supported route
+by which executable callable behavior enters a symbolic evaluator. Descriptor payload hooks are
+inert metadata: they MUST reject functions, evaluator/expression objects, contextual operations,
+and any attempt to replace proposal evaluation. Recursive concrete-boundary checks are
+defense-in-depth and MUST NOT be treated as callable or backend certification.
 
 ## CCV1-010 — Group kernel baseline and measured fusion
 

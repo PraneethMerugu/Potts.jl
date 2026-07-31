@@ -245,7 +245,7 @@ unit-free concrete data admitted by CorePotts.
 | Expression typing | Infer exact result type, scalar/array shape, and context legality | per-node type/shape facts | concrete evaluator result type | invalid mixed shapes fail at source expression |
 | Units | Preserve declared units and exact reference conversion | unit constraints and conversion plan | unit-free scalar/buffer data | dimensional errors fail before descriptor construction |
 | Parameters | Prove structural versus runtime role | parameter-role manifest | dense runtime parameter buffers and structural constants | runtime update cannot change schedule/layout/code |
-| Purity | Reject mutation, hidden effects, exceptions, dynamic calls, and unbounded work | operation schema and purity facts | device-valid operation tags only | external operation cannot bypass schema |
+| Purity | Reject mutation, hidden effects, exceptions, dynamic calls, and unbounded work | operation schema and purity facts | device-valid operation callables only | external operation cannot bypass schema |
 | State | Merge universal and open auxiliary state requirements | state schema with ownership/persistence | typed state blocks/grouped slots | external state adds no central runtime field |
 | Workspace | Derive bounded reusable workspace and lifetime | workspace schema and liveness | preallocated adapted workspace blocks | warmed stages allocate zero host heap |
 | Resources | Infer reads, writes, snapshots, ownership, and atomic/reduction policy | resource graph | compact resource handles and policies | checkerboard admission derives from facts |
@@ -272,7 +272,7 @@ unit-free concrete data admitted by CorePotts.
 | Adaptation | Recursively adapt program/state/workspace through public protocols | adaptation plan | backend-native arrays and values | round-trip state meaning survives adaptation |
 | Inspection | Preserve source-to-descriptor trace and explain every choice/rejection | qualified reports | compact runtime report IDs | errors identify source statement/expression |
 | Serialization | Canonicalize semantic, completed, and executable identities | canonical host encoding | executable fingerprint | dictionary or traversal order cannot alter identity |
-| Extensibility | Admit registered host semantics and external concrete descriptors | frozen versioned schema | grouped external descriptor type | independent module passes with zero Core edits |
+| Extensibility | Admit registered host semantics and external inert descriptor payloads | frozen versioned schema | compiler-owned descriptor grouped by payload/evaluator structure | independent module passes with zero Core edits |
 | Specialization | Bound compiler work by occurrences `N` and execution structures `G` | group keys and specialization report | one evaluator/kernel family per group | fixed-`G` growth does not deepen tuple types |
 | Performance | Plan trackers, layouts, workspaces, and kernels explicitly | cost/storage/kernel reports | KA/AK kernels and persistent buffers | hot cost follows declared local footprint |
 | Failure model | Aggregate independent host errors; avoid device exceptions | structured diagnostic set | status/request buffers where runtime failure is possible | invalid runtime parameter fails before launch |
@@ -417,7 +417,7 @@ interpreter.
 The safe V1 construction is:
 
 - normalize an expression into the host DAG;
-- lower supported operation nodes to concrete operation-tag types;
+- lower supported operation nodes to concrete callable types;
 - separate structural expression shape from instance values;
 - construct one concrete evaluator type per distinct lowered structural shape;
 - group instances sharing that shape;
@@ -432,7 +432,7 @@ The compiler should balance associative expression trees or use a bounded n-ary 
 one long sum does not produce pathological recursive depth. A specialization report must show the
 number of structural evaluator groups and their node counts.
 
-External scalar operations require a versioned host schema and a device-valid operation tag with
+External scalar operations require a versioned host schema and a device-valid operation callable with
 methods for:
 
 - type/shape/unit inference;

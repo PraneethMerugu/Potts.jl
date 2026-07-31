@@ -1,4 +1,4 @@
-# Host-only compiler representation.
+# Host-only compiler representation and analysis pipeline.
 #
 # These tables deliberately erase the concrete type topology of the source
 # PottsSystem.  They are compiler data, not an authoring API and never cross
@@ -194,6 +194,7 @@ end
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
+    serialization_identity::String
     arity::UnitRange{Int}
     result_rule::Symbol
     unit_rule::Symbol
@@ -204,9 +205,36 @@ struct OperationTransfer
     gpu::Bool
 end
 
+OperationTransfer(
+    identity::Symbol,
+    schema_version::VersionNumber,
+    arity::UnitRange{Int},
+    result_rule::Symbol,
+    unit_rule::Symbol,
+    purity::Symbol,
+    totality::Symbol,
+    locality::Symbol,
+    cpu::Bool,
+    gpu::Bool,
+) = OperationTransfer(
+    identity,
+    schema_version,
+    "potts-operation:" * String(identity) * ":" * string(schema_version),
+    arity,
+    result_rule,
+    unit_rule,
+    purity,
+    totality,
+    locality,
+    cpu,
+    gpu,
+)
+
 function operation_transfer end
 
 _transfer(identity, arity, result_rule, unit_rule;
+        version = v"1.0.0",
+        serialization_identity = "potts-operation:" * String(identity) * ":v1",
         purity = :pure,
         totality = :total,
         locality = :scalar,
@@ -214,7 +242,8 @@ _transfer(identity, arity, result_rule, unit_rule;
         gpu = true,
     ) = OperationTransfer(
         identity,
-        v"1.0.0",
+        version,
+        String(serialization_identity),
         arity isa Integer ? (Int(arity):Int(arity)) : arity,
         result_rule,
         unit_rule,
@@ -353,6 +382,7 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
     _transfer(
         :draw, 4, :real, :distribution;
         purity = :semantic_rng,
+        totality = :requires_prelaunch_validation,
         locality = :proposal_context,
     )
 
@@ -390,6 +420,19 @@ end
 function _compiler_leaf_kind(value, completed::PottsSystem)
     parameters = ModelingToolkitBase.parameters(completed)
     any(candidate -> isequal(candidate, value), parameters) && return :parameter
+    for statement in _all_system_statements(completed)
+        statement isa Union{
+            SiteState,
+            CellState,
+            MediumState,
+            ModelState,
+            FieldState,
+            HistoryState,
+        } || continue
+        arguments = _statement_arguments(statement)
+        haskey(arguments, :variable) || continue
+        isequal(arguments.variable, value) && return :state
+    end
     unknowns = ModelingToolkitBase.unknowns(completed)
     any(candidate -> isequal(candidate, value), unknowns) && return :variable
     name = _try_symbolic_name(value)
@@ -616,6 +659,8 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         return "operation identity must be nonempty"
     transfer.schema_version > v"0.0.0" ||
         return "operation schema version must be positive"
+    isempty(transfer.serialization_identity) &&
+        return "operation serialization identity must be nonempty"
     arity in transfer.arity ||
         return "arity $arity is outside $(transfer.arity)"
     transfer.result_rule in _RESULT_TRANSFER_RULES ||
@@ -718,6 +763,39 @@ function _verify_normalized_graph!(
                 node.source.path,
                 string(node.schema_version),
                 string(transfer.schema_version),
+                (),
+                UnknownSource(),
+            ),
+        )
+        operation = try
+            CorePotts.operation_callable(
+                Val(transfer.identity), transfer.schema_version
+            )
+        catch error
+            push!(
+                diagnostics,
+                PottsDiagnostic(
+                    :missing_concrete_operation_callable,
+                    node.source,
+                    string(node.operation),
+                    node.source.path,
+                    "a concrete public CorePotts operation callable",
+                    sprint(showerror, error),
+                    (),
+                    UnknownSource(),
+                ),
+            )
+            nothing
+        end
+        operation === nothing || isbits(operation) || push!(
+            diagnostics,
+            PottsDiagnostic(
+                :device_illegal_operation_callable,
+                node.source,
+                string(node.operation),
+                node.source.path,
+                "an isbits concrete operation callable",
+                string(typeof(operation)),
                 (),
                 UnknownSource(),
             ),
@@ -975,11 +1053,35 @@ function _analyze_term_graph(
             state_participation[index] || workspace_participation[index]
         checkpoint_participation[index] = record.persistence === :logical
         engine_admission[index] = record.engine_admission
+        operand_backend_admission = (
+            backend_admission[item] for item in operand_indices
+        )
+        own_cpu = transfer === nothing ? true : transfer.cpu
+        own_gpu = transfer === nothing ? true : transfer.gpu
+        operand_cpu = all(admission.cpu for admission in operand_backend_admission)
+        operand_gpu = all(admission.gpu for admission in operand_backend_admission)
+        rejection_reasons = String[]
+        if transfer !== nothing && !own_cpu
+            push!(
+                rejection_reasons,
+                "operation $(transfer.identity) rejects CPU execution",
+            )
+        end
+        if transfer !== nothing && !own_gpu
+            push!(
+                rejection_reasons,
+                "operation $(transfer.identity) rejects GPU execution",
+            )
+        end
+        for operand in operand_indices
+            reason = backend_admission[operand].reason
+            isempty(reason) || reason in rejection_reasons ||
+                push!(rejection_reasons, reason)
+        end
         backend_admission[index] = (
-            cpu = transfer === nothing ? true : transfer.cpu,
-            gpu = transfer === nothing ? true : transfer.gpu,
-            reason = transfer !== nothing && !transfer.gpu ?
-                     "operation $(transfer.identity) rejects GPU execution" : "",
+            cpu = own_cpu && operand_cpu,
+            gpu = own_gpu && operand_gpu,
+            reason = join(rejection_reasons, "; "),
         )
         source_chain[index] = (
             identity = record.identity,
@@ -1083,8 +1185,9 @@ function _compiler_analysis_report(ir::AnalyzedTermIR)
         analyzed = (
             candidates = length(ir.candidates),
             structural_key = ir.structural_key,
-            candidate_keys =
-                Tuple(candidate.structural_key for candidate in ir.candidates),
+            candidate_keys = String[
+                candidate.structural_key for candidate in ir.candidates
+            ],
         ),
     )
 end

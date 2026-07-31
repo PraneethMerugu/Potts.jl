@@ -1,8 +1,13 @@
 include("fixtures/NeutralExternalTerms.jl")
 using .NeutralExternalTerms
+import CorePotts
 
 function invalid_transfer_operation end
 Symbolics.@register_symbolic invalid_transfer_operation(x)::Real
+struct InvalidTransferCallable <: CorePotts.AbstractContextualOperation end
+CorePotts.operation_callable(
+    ::Val{:invalid_transfer_operation}, ::VersionNumber
+) = InvalidTransferCallable()
 
 function PottsToolkit.operation_transfer(
         ::typeof(invalid_transfer_operation), ::Int
@@ -22,6 +27,7 @@ function PottsToolkit.operation_transfer(
 end
 
 @testset "G1 host compiler facts" begin
+    @variables external_site_state
     @parameters site_weight = 2.0 pair_weight = 3.0
     endothelial = CellKind(:endothelial)
     extracellular = MediumKind(:extracellular)
@@ -38,9 +44,17 @@ end
         ),
         endothelial,
         extracellular,
+        SiteState(
+            external_site_state;
+            name = :external_site_state,
+            initial = 1.0,
+            owner = endothelial,
+            lifecycle = ClearOnOwnershipChange(),
+        ),
         NeutralExternalTerms.ExternalWeightedSiteTerm(
             :external_weighted_site,
             site_weight,
+            external_site_state,
             proposal,
         ),
         NeutralExternalTerms.bounded_pair_fixture(
@@ -52,6 +66,7 @@ end
     ))
     @named neutral_extensions = PottsSystem(
         statements = external_terms,
+        unknowns = [external_site_state],
         parameters = [site_weight, pair_weight],
     )
     completed = complete(neutral_extensions; registry = fixture_registry)
@@ -116,9 +131,8 @@ end
             unsupported_host_operation(site_weight),
         ),
     )), parameters = [site_weight])
-    invalid_completed = complete(invalid_transfer)
     error = try
-        PottsToolkit._analyze_completed_system(invalid_completed)
+        complete(invalid_transfer)
         nothing
     catch caught
         caught
@@ -133,9 +147,8 @@ end
             invalid_transfer_operation(site_weight),
         ),
     )), parameters = [site_weight])
-    malformed_completed = complete(malformed_transfer)
     malformed_error = try
-        PottsToolkit._analyze_completed_system(malformed_completed)
+        complete(malformed_transfer)
         nothing
     catch caught
         caught

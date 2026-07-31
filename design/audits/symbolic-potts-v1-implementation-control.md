@@ -123,8 +123,8 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
-| G1 host compiler facts | `passed` | 33 focused compiler tests; 313-test full suite; two neutral candidates | pending | none |
-| G2 descriptor/group/evaluator/state/workspace | `in_progress` | pending | pending | R1 |
+| G1 host compiler facts | `passed` | 33 focused compiler tests; 313-test full suite; two neutral candidates | `64ab5a2` | none |
+| G2 descriptor/group/evaluator/state/workspace | `passed` | provenance/fingerprint repair: focused 73/73 and 124/124; standalone 124/124; full growth 5/5; root 448/448; Metal exact | `b56491d` | R1 passed: 0 P0, 0 P1 |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
@@ -137,10 +137,72 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `pending` | none | none |
+| R1 compiler | `passed` | none | mechanical stage-file decomposition before substantial G3 growth |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
+
+## Resolved R1 decision questions
+
+R1 must resolve the operation-execution boundary recorded in
+[`symbolic-potts-v1-operation-execution-decision.md`](symbolic-potts-v1-operation-execution-decision.md).
+The corrected evaluator experiment compared the strongest concrete-callable design against the
+CorePotts-owned ordinary-operation-tag alternative. The restrained callable hybrid was selected:
+ordinary Julia mathematics remains ordinary Julia callables, ordered folds are explicit, and
+context/resource-sensitive CPM operations are concrete callable structs. Independent R1
+confirmation remains checkpoint-blocking.
+
+## R1 handoff questions
+
+R1 must answer these owner-raised questions explicitly:
+
+1. Is there exactly one production path from a symbolic expression to a concrete callable
+   evaluator?
+2. Can any alternate evaluator constructor, legacy interpreter, descriptor shortcut, or runtime
+   path bypass the frozen host IR, normalized term DAG, versioned `OperationTransfer`,
+   `operation_callable`, bounded lowering, and `StaticEvaluator` boundary?
+3. Does the current folder organization clearly encode the compiler stages and the CorePotts
+   execution boundary?
+4. Which folder/file moves are required before G2 can be considered maintainable, given the
+   combined responsibilities in the host IR, descriptor lowering, CorePotts descriptor runtime,
+   and legacy `program/v1.jl`?
+5. Is registered, versioned operation-schema lowering the sole authority by which a function or
+   callable can enter an evaluator? The `Base.issingletontype`/`nameof` closure check in
+   `storage.jl` may remain only as defense-in-depth; R1 must not treat compiler-generated name
+   spelling as certification of device legality.
+6. Do the final callable, context, descriptor, state, workspace, and launch arguments compile on
+   each claimed backend, with backend capability declared before lowering and no host fallback?
+7. Are `StateHandle{Bank}` and `WorkspaceHandle{Bank}` type parameters bounded by a small set of
+   true storage representations, rather than resource identity, declaration count, or declaration
+   order?
+8. Do permanent tests prove that 1, 32, and 1,024 resources sharing a storage class reuse the same
+   handle type; resource names never enter handle types; declaration reordering does not create
+   kernel specializations; and a new shape changes a type only when its storage representation
+   truly differs?
+
+R1 should affirm the intended specialization policy explicitly:
+
+- named singleton Julia functions for ordinary mathematics are appropriate;
+- empty singleton structs for finite contextual/resource CPM semantics are appropriate;
+- `OrderedFold(+)` and `OrderedFold(*)` are justified by explicit ordered arithmetic;
+- arbitrary functions and capturing closures cannot enter through model data;
+- operation schema, concrete/isbits lowering, declared backend capability, and real backend
+  compilation together establish legality; and
+- structural facts may control specialization, while user/model names must not.
+
+Folder organization is a review deliverable, not a request to perform speculative moves before
+verification. R1 should distinguish:
+
+- G2 files that must be split or moved now to make the single production path obvious;
+- legacy `program/v1.jl` organization that is intentionally removed or replaced at G8; and
+- cosmetic moves that can wait without weakening compiler ownership.
+
+The first organization repair now groups compiler sources under `host/`, `lowering/`, and
+`execution/`, leaves only orchestration in `compiler/compile.jl`, and moves the mechanism-free
+CorePotts boundary to `execution/descriptor_runtime.jl`. Package-local READMEs record stage
+ownership and the single lowering path. Further decomposition of the large private stage files is
+allowed after G2 but must not create alternate entry points; legacy `program/v1.jl` removal remains
+G8 work.
 
 ## G0 checks
 
@@ -170,11 +232,246 @@ git log -5 --oneline --decorate
 
 ## Reopen history
 
-None.
+R1 first review returned G2 on 2026-07-30 with six P1 findings:
 
-## Unresolved P2 findings
+1. dual proposal authority caused executable specialization to grow with occurrence count;
+2. external operation and descriptor construction did not work end to end;
+3. state and workspace were metadata shells;
+4. adaptation tested a descriptor rather than the production group-launch boundary;
+5. evaluator qualification omitted required depth, occurrence, group, generated-code, and
+   stochastic dimensions; and
+6. analyzed totality facts were not enforced before launch.
 
-None at G0.
+The same review reported one P2 concerning lowering diagnostics and inspection detail. G3 remained
+stopped. The repair:
+
+- made `core_program.descriptor_plan` the sole proposal descriptor authority and removed the four
+  occurrence-shaped proposal tuples from `CompiledPottsProgram`;
+- added public, versioned external operation, descriptor, and workspace construction protocols and
+  made the neutral site fixture use all three;
+- resolved qualified state/workspace identities to compact handles, attached those requirements to
+  group launches, and demonstrated shared workspace reuse;
+- separated host schemas from the adaptable `DescriptorLaunch`, tested a transforming synthetic
+  adaptor, and executed a 32-instance production descriptor buffer on Metal;
+- ran and recorded the complete recursive-tree/bounded-n-ary/static-SSA matrix across independent
+  shape depth, 8/32/64 nodes, 1/32/1,024 occurrences, and 1/4/8 distinct groups on CPU and Metal;
+- lowered `log`, `sqrt`, Bernoulli, Uniform, and Normal domains into init/remake parameter
+  constraints and rejected runtime-state-dependent partial domains; and
+- added qualified typed diagnostics plus group splits, kernel families, state/workspace counts,
+  validation groups, and evaluator-node counts to inspection.
+
+Repair qualification:
+
+- G1/G2 focused tests: 33 and 64 passes respectively;
+- ordinary root `Pkg.test()`: 378 passes in a fresh resolved environment, including Aqua and
+  ExplicitImports;
+- CorePotts `Pkg.test()`: all 56 assertions passed, including package quality;
+- evaluator experiment: complete CPU and functional Metal matrices passed with exact fixed
+  stochastic vectors and zero warmed evaluator allocation;
+- production Metal witness: 32 adapted external descriptors executed from a concrete homogeneous
+  `MtlVector` with compact state/workspace handles and returned 32 correct `17.5f0` values; and
+- `git diff --check`: clean.
+
+The second R1 review confirmed that the six first-review findings were materially repaired, including
+independent direct built-in `N=1/32/1,024` and parameter-only fixed-`G` reproduction. It nevertheless
+returned G2 with four narrower P1 findings:
+
+1. central reporting still accessed a descriptor's undocumented `evaluator` field instead of a
+   complete opaque descriptor protocol;
+2. state/workspace schemas and handles lacked real typed runtime storage, allocation, adaptation,
+   settled export, and logical codec behavior;
+3. the evaluator experiment did not use identical tags/context/occurrence data or genuine semantic
+   RNG vectors and did not compile real `G=1/4/8` aggregates; and
+4. the production proposal loop began generic sequential descriptor execution before R1 cleared.
+
+It also retained a P2 for downstream-qualified inspection and permanent direct built-in
+`N=1/32/1,024` plus parameter-only coverage. This is a bounded G2 gate failure, not an architecture
+invalidation. G3 remains stopped and no R1 checkpoint exists.
+
+## Second-review repair
+
+The four second-review findings and its P2 were repaired without advancing G3:
+
+- central planning/reporting now uses a complete opaque descriptor protocol, including adaptation,
+  evaluator node count, source handle, inspection, checkpoint policy, codec, and reconstruction;
+- state and workspace layouts now contain typed bank/slot handles, schema-owned allocation,
+  validation, adaptation, reset, settled export, inspection, and logical checkpoint codecs;
+  workspaces are structurally absent from checkpoint state;
+- the evaluator experiment now starts from one shared semantic IR, uses identical concrete
+  occurrence/context data, genuine semantic RNG addresses and Philox words, real homogeneous
+  buffers at `N=1/32/1,024`, and real heterogeneous launch tuples at `G=1/4/8`;
+- the premature generic descriptor execution path was removed from the production proposal loop,
+  keeping all G3 runtime integration stopped;
+- downstream-qualified inspection works through an opaque descriptor that has no `evaluator`
+  field; and
+- direct built-in `N=1/32/1,024` and parameter-only fixed-specialization tests are permanent
+  ordinary tests.
+
+The newly raised operation-execution question was resolved from the corrected experiment. The
+production evaluator now stores named singleton Julia functions or concrete contextual callable
+structs, plus `OrderedFold` for explicit ordered variadic evaluation. The boundary rejects closures.
+
+Repair qualification:
+
+- G2 focused compiler boundary: 87/87 passed;
+- ordinary root `Pkg.test()`: 401/401 passed in 8 minutes 48.2 seconds;
+- CorePotts package suite: passed, including the external callable extension and package-quality
+  checks;
+- corrected evaluator CPU matrix: exact semantic RNG words and no candidate failures;
+- corrected evaluator Metal matrix: exact semantic RNG words; recursive and bounded-nary tag and
+  callable candidates passed, while the recorded wide static-SSA failures support its rejection;
+- production Metal boundary: 32 descriptors plus adapted descriptor/state/workspace/parameter
+  buffers returned 32 exact `17.5f0` values; and
+- `git diff --check`: clean.
+
+G3 remains stopped until independent R1 rereview passes.
+
+## Final R1 return and repair
+
+The final R1 audit answered the owner's single-path question with “no” and returned two P1s:
+
+1. `registered_descriptor` could ignore the compiler-supplied evaluator and define arbitrary
+   proposal execution; and
+2. state/workspace bank numbers were assigned by first encounter, allowing resource renaming or
+   reordering across storage classes to alter handle types.
+
+The repair:
+
+- replaces downstream descriptor construction with `registered_descriptor_payload`;
+- makes `CorePotts.ProposalDescriptor` the universal symbolic proposal descriptor and sole owner of
+  `evaluate_static`;
+- supplies registered hooks no evaluator and accepts only inert isbits payload metadata;
+- rejects functions, static expressions/evaluators, and contextual operations in payloads with a
+  qualified diagnostic;
+- adds an adversarial registered extension that attempts evaluator injection and must fail;
+- derives bank numbers from a stable sort of storage-class representations before assigning
+  value-level slots;
+- adds 1,024-state and 1,024-workspace same-class growth checks plus mixed-class rename/reorder and
+  public compile checks; and
+- replaces the repeated 1,024-term full symbolic compile in ordinary tests with real 32/1,024
+  descriptor grouping/launch-plan checks, leaving the full CPU/Metal evaluator matrix as explicit
+  qualification.
+
+The focused G2 suite passed 99/99 after this repair. A subsequent independent rereview confirmed
+that the symbolic-to-evaluator path is singular and unbypassable through the supported descriptor
+extension contract, but returned two further adversarial P1s:
+
+1. a nested operation with `gpu = false` was hidden by an admitted `+` root because backend
+   admission was not propagated through the expression DAG; and
+2. sorted ordinal bank numbers were stable only for a fixed representation set, so adding a class
+   that sorted earlier changed an existing representation's handle type.
+
+The bounded follow-up repair:
+
+- folds CPU/GPU admission transitively from every operand and preserves descendant rejection
+  reasons at enclosing nodes and descriptors;
+- adds a registered external CPU-only operation nested below an admitted root and proves the
+  compiled descriptor rejects GPU execution;
+- replaces ordinal handle type parameters with canonical `StateStorageRepresentation` and
+  `WorkspaceStorageRepresentation` marker types;
+- stores the physical bank ordinal and slot as values, and uses a generated representation lookup
+  to retain inferred, allocation-free access to heterogeneous bank tuples;
+- preserves representation markers explicitly through `Adapt`, after the first Metal attempt
+  exposed and localized a generic reconstruction failure;
+- proves exact 1/32/1,024 same-representation handle and kernel-strategy stability, rename/reorder
+  stability, same-representation shape stability, and add/remove-class stability;
+- moves the full 1/32/1,024 symbolic compilation matrix to
+  `scripts/qualify_g2_specialization_growth.jl`, while ordinary tests retain cheap structural
+  fixed-`G` coverage; and
+- keeps the backend contract shared and vendor-neutral, using Metal only as the selected witness.
+
+Requalification evidence:
+
+- focused G2: 120/120 in 37.0 seconds;
+- explicit full specialization-growth qualification: 5/5 in 2m41.6s;
+- CorePotts package suite: passed, including package quality;
+- Metal shared boundary: 32 device descriptors with device state/workspace buffers and exact
+  `17.5f0` output; and
+- root `Pkg.test`: 434/434 in 5m52.7s.
+
+The large private stage files remain a nonblocking organization P2. Directory ownership and the
+single entry path are already explicit; the files will be mechanically decomposed before
+substantial G3 growth without adding another compiler entry point. G3 remains stopped pending the
+next independent R1 verdict.
+
+## Payload specialization return and repair
+
+The next independent R1 challenge confirmed the prior backend and bank repairs, the singular
+symbolic-to-evaluator path, device legality, test tiering, and legacy quarantine. It found one new
+supported-path P1: `registered_descriptor_payload` could return an isbits type parameterized by
+`context.source.identity.local_id`. Because the universal proposal descriptor contains the payload
+type and grouping includes descriptor type, two otherwise identical occurrences could become two
+kernel groups.
+
+The repair freezes `descriptor_payload_type` in every registered statement schema version,
+requires it to be one concrete isbits type, propagates it through registered provenance, and
+requires exact equality with `typeof(payload)` before constructing or grouping the descriptor.
+Occurrence metadata remains in fields. The neutral fixture now attempts a
+`NameParameterizedPayload{term_name}` and receives the qualified
+`descriptor_payload_type_mismatch` diagnostic.
+
+Focused evidence after this repair:
+
+- descriptor/compiler boundary: 124/124 in 42.9 seconds; and
+- statement-registry plus completion/provenance: 66/66 in 22.5 seconds.
+
+Exact-tree requalification after the payload repair:
+
+- root `Pkg.test`: 441/441 in 4m32.3s;
+- explicit full specialization-growth qualification: 5/5 in 2m45.8s; and
+- shared Metal boundary: 32 device descriptors with device state/workspace buffers and exact
+  `17.5f0` output.
+
+CorePotts had no source change after its passing package suite. G3 remains stopped pending the
+independent rereview verdict.
+
+The final payload-contract rereview confirmed the documented registration path was closed, then
+found two adjacent authority defects:
+
+1. ordinary public statement kwargs could inject `__registered_origin`, and completion trusted the
+   marker without authenticating it against the supplied registry; and
+2. canonical `DataType` encoding retained only module and outer name, so structurally different
+   parameterized payload types could collide in completed fingerprints.
+
+The bounded repair rejects all double-underscore internal option names in public statement
+constructors, authenticates every internal origin against the exact frozen registry definition,
+and rejects missing or field-mismatched origins with `unauthenticated_registered_origin`.
+Canonical concrete-type encoding now recursively includes type parameters. Permanent tests cover
+public origin injection, a private-marker/empty-registry attempt, a matching-schema but mismatched
+payload-type attempt, direct canonical inequality, and distinct end-to-end completed fingerprints.
+
+Focused evidence currently passes:
+
+- statement/registry/completion provenance and fingerprint checks: 71/71; and
+- G2 descriptor authority: 124/124.
+
+Exact-tree requalification after these repairs:
+
+- statement/registry/completion provenance and fingerprint checks: 73/73;
+- G2 descriptor authority: 124/124;
+- root `Pkg.test`: 448/448 in 4m35.2s;
+- explicit full specialization-growth qualification: 5/5 in 2m39.5s; and
+- shared Metal boundary: 32 device descriptors with device state/workspace buffers and exact
+  `17.5f0` output.
+
+G3 remained stopped pending the independent rereview verdict.
+
+## R1 pass and isolated-suite repair
+
+Independent R1 returned `PASS` with zero P0 and zero P1 findings. It confirmed exactly one
+supported production path from a frozen symbolic source graph through the normalized/analyzed DAG,
+versioned operation resolution, bounded immutable expression, `StaticEvaluator`, universal
+`ProposalDescriptor`, and descriptor launch. It also confirmed that no supported extension hook,
+legacy interpreter, alternate evaluator constructor, or runtime shortcut bypasses that path.
+
+The review retained two P2 findings. First, the G2 test selected the first operand of a
+commutative multiplication when replacing a parameter default. That was a positional test bug,
+not a production evaluator defect. The test now locates and replaces `ParameterExpression` nodes
+structurally, and the truly standalone G2 suite passes 124/124 in 42.1 seconds. Second, the large
+private stage files must be mechanically split by ownership before substantial G3 growth, without
+adding an entry point. That organization repair is the first post-checkpoint task.
+
+R1 cleared the G2 checkpoint and authorized G3 to begin after the recorded P2 organization repair.
 
 ## Prohibited record contents
 

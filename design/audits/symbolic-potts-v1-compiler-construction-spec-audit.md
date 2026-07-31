@@ -59,7 +59,7 @@ No implementation is authorized by this audit.
 | CCI-006 open descriptor protocol | CCV1-006 | complete |
 | CCI-007 homogeneous grouping | CCV1-007 | complete |
 | CCI-008 evaluator qualification | CCV1-008 | complete |
-| CCI-009 operation tags | CCV1-009 | complete |
+| CCI-009 operation schemas/callables | CCV1-009 | complete |
 | CCI-010 group kernels/fusion | CCV1-010 | complete |
 | CCI-011 device totality | CCV1-011 | complete |
 | CCI-012 auxiliary state | CCV1-012 | complete |
@@ -87,7 +87,7 @@ No implementation is authorized by this audit.
 | SPV1-014 says Symbolics is the sole expression IR | Symbolics remains the sole public/completed-system expression tree; CCV1-001 defines a private execution-lowering DAG, not a competing authoring algebra |
 | SPV1-021 initially limited accepted-copy relationship mutation under checkerboard | ARV1-014 and CCV1-018 supersede this through immutable batch snapshots and ordered typed transactions |
 | ACV1 and the prototype use named fields/plans for activity, field, history, elongation, and relationships | ARV1-008 and CCV1-006/012/017/018 require generic descriptor, block, tracker, and transaction protocols |
-| ARV1-004 called the ordinary device operation vocabulary closed | CCV1-009 retains a versioned analyzable operation contract while allowing frozen registered concrete operation tags; the executable still has no registry, switch, or arbitrary call |
+| ARV1-004 called the ordinary device operation vocabulary closed | CCV1-009 retains a versioned analyzable operation contract while allowing frozen registered concrete callables; the executable still has no registry, switch, closure, or arbitrary call |
 | ARV1-007 left exact descriptor protocol names open | CCV1-006 freezes required generic capabilities while keeping private names replaceable |
 | ARV1-009 named broad compiler steps but not their storage/invariants | CCV1-001 through CCV1-019 define graph, facts, grouping, layout, evaluator, schedule, transaction, and checkpoint invariants |
 | ARV1-013 required compiler-selected coloring but not the baseline algorithm | CCV1-015/016 define the footprint algebra, realized-domain deterministic baseline, verifier, complexity, and legal optimization |
@@ -119,7 +119,7 @@ There is no layer required to be both open dynamic host storage and concrete dev
 
 ### Extensibility/specialization boundary
 
-The contract permits external statement families, operation tags, descriptors, state, workspace,
+The contract permits external statement families, operation callables, descriptors, state, workspace,
 trackers, and checkpoint behavior without a central Core edit. It simultaneously bounds
 specialization by `G`, not occurrence count `N`.
 

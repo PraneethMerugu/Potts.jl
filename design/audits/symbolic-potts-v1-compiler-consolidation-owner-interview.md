@@ -292,7 +292,7 @@ Before biological mechanisms are rebuilt, an implementation slice compares:
 2. balanced or bounded n-ary typed trees; and
 3. a compile-time-unrolled static instruction/SSA representation.
 
-The comparison uses the same operation tags, instance data, evaluation context, and semantic test
+The comparison uses the same operation semantics, instance data, evaluation context, and semantic test
 vectors. It measures:
 
 - host construction and compilation growth versus expression nodes and group count;
@@ -326,7 +326,7 @@ Alternative: choose the current recursive tree immediately. Rejected because the
 has not measured its specialization growth or device behavior, which is precisely the
 half-finished-IR risk this interview exists to remove.
 
-### CCI-009 — Versioned operation tags, with no runtime registry
+### CCI-009 — Versioned operation schemas and callables, with no runtime registry
 
 Accepted.
 
@@ -341,7 +341,7 @@ Every ordinary expression operation has:
 - state/resource/locality inference;
 - backend capability;
 - canonical serialization; and
-- one or more concrete device-valid operation tags.
+- one or more concrete device-valid operation callables.
 
 Built-in tags use ordinary methods. A registered symbolic operation supplies its host schema and
 concrete tag implementation before completion freezes the registry snapshot.
@@ -349,7 +349,7 @@ concrete tag implementation before completion freezes the registry snapshot.
 Lowering resolves operation identity to a concrete tag. The executable contains tags and data, not
 symbols, dictionaries, callbacks, or registry lookups.
 
-External operation tags must satisfy the same evaluator qualification tests as built-ins. A tag
+External operation callables must satisfy the same evaluator qualification tests as built-ins. A callable
 may declare a backend unsupported, but no unsupported operation may silently fall back to host
 execution.
 

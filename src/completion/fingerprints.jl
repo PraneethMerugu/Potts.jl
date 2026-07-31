@@ -40,7 +40,15 @@ function _canonical_value(value)
     value isa AbstractArray && return string(
         "[", join((_canonical_value(item) for item in value), ","), "]"
     )
-    value isa DataType && return string(parentmodule(value), ".", nameof(value))
+    value isa DataType && return string(
+        "DataType(",
+        parentmodule(value),
+        ".",
+        nameof(value),
+        "{",
+        join((_canonical_value(parameter) for parameter in value.parameters), ","),
+        "})",
+    )
     if !(SymbolicIndexingInterface.symbolic_type(value) isa
             SymbolicIndexingInterface.NotSymbolic)
         return string(value)

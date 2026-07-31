@@ -2,10 +2,14 @@ module CorePotts
 
 using LinearAlgebra: Symmetric, eigen
 using SHA
+using AcceleratedKernels
+using Adapt
+using KernelAbstractions
 
 const RNG_CONTRACT_VERSION = v"1.0.0"
 
 include("rng/semantic.jl")
+include("execution/descriptor_runtime.jl")
 include("program/v1.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
@@ -27,5 +31,56 @@ public initialization_bounded
 public update_program_parameters!, program_observations
 public program_execution_report, program_capability_report
 public ProgramCheckpoint, program_checkpoint, restore_program_checkpoint
+public AbstractStaticExpression, AbstractContextualOperation
+public LiteralExpression, ParameterExpression, ContextExpression, StateExpression
+public OperationExpression
+public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
+public execute_operation, context_value
+public apply_resource_operation, operation_callable
+public state_value, workspace_value, evaluator_parameters
+public evaluate_expression, evaluate_static
+public evaluator_node_count
+public EvaluatorProbeContext
+public evaluator_probe_kernel!, descriptor_probe_kernel!, descriptor_group_probe_kernel!
+public AbstractStorageRepresentation
+public StateStorageRepresentation, WorkspaceStorageRepresentation
+public StateHandle, WorkspaceHandle, handle_bank, handle_slot
+public handle_representation
+public StateBlockSchema, WorkspaceSchema, StateEntry, WorkspaceEntry
+public QualifiedResourceIdentity, StateLayout, WorkspaceLayout
+public DenseStateBlock, DenseWorkspaceBlock, BlockBank
+public AuxiliaryState, RuntimeWorkspaces, StateCheckpointEntry
+public AuxiliaryStateCheckpoint, state_block, workspace_block
+public state_schema_metadata, state_storage_class, allocate_state_block
+public validate_state_block, adapt_state_block, settled_state_export
+public encode_state_checkpoint, reconstruct_state_block, inspect_state_block
+public workspace_schema_metadata, workspace_storage_class
+public allocate_workspace_block, reset_workspace!, adapt_workspace_block
+public inspect_workspace_block, allocate_auxiliary_state
+public allocate_runtime_workspaces, adapt_auxiliary_state
+public adapt_runtime_workspaces, encode_auxiliary_state_checkpoint
+public reconstruct_auxiliary_state, inspect_auxiliary_state
+public inspect_runtime_workspaces, reset_runtime_workspaces!
+public AbstractFootprint, EmptyFootprint, ProposalContextFootprint
+public OwnerFootprint, FiniteSpatialFootprint, IncidentRelationshipFootprint
+public FootprintUnion, ResourceAccess, DescriptorSupport
+public descriptor_state_requirements, descriptor_workspace_requirements
+public descriptor_resource_access, descriptor_stage, descriptor_role
+public descriptor_dependencies
+public descriptor_support, descriptor_evaluate_proposal
+public descriptor_emit_requests!, descriptor_apply_stage!
+public descriptor_adapt, descriptor_evaluator_node_count
+public descriptor_source_handle, descriptor_checkpoint_policy
+public descriptor_checkpoint_encode, descriptor_checkpoint_reconstruct
+public descriptor_checkpoint, descriptor_inspection
+public descriptor_payload_adapt, descriptor_payload_checkpoint_encode
+public descriptor_payload_checkpoint_reconstruct
+public descriptor_payload_inspection, EmptyDescriptorPayload
+public AbstractProposalRole, ProposalEnergyRole, ProposalDriveRole
+public ProposalConstraintRole, ProposalModifierRole
+public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
+public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
+public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan
+public validate_parameters, descriptor_plan_report
 
 end

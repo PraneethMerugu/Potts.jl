@@ -1,3 +1,5 @@
+# Runtime-parameter lowering and reference-unit conversion.
+
 function _symbolic_name(value; context = "symbolic value")
     value isa Symbol && return value
     return try
@@ -291,6 +293,9 @@ function _normalize_parameters(
     ))
     names = Tuple(entry.name for entry in manifest)
     named = NamedTuple{names}(Tuple(buffer))
+    CorePotts.validate_parameters(
+        executable.core_program.descriptor_plan, buffer
+    )
     return PottsParameters(buffer, named)
 end
 

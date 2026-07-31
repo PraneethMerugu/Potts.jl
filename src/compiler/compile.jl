@@ -1,3 +1,5 @@
+# Top-level compiler orchestration.
+
 function _validate_compilation_choices(
         completed::PottsSystem,
         engine,
@@ -316,7 +318,7 @@ function _manifest_symbol(value)
 end
 
 function _compiled_statement_manifest(completed::PottsSystem)
-    return Tuple(
+    return NamedTuple[
         (
             identity = _manifest_identity(record.identity),
             kind = record.kind,
@@ -367,7 +369,7 @@ function _compiled_statement_manifest(completed::PottsSystem)
             lowering_identity = record.lowering_identity,
         )
         for record in inspect(completed, Statements())
-    )
+    ]
 end
 
 function _compiled_external_io(
@@ -636,6 +638,12 @@ function compile(
     _validate_equation_and_event_coverage!(diagnostics, completed)
     _throw_diagnostics(:compilation, diagnostics)
     manifest = _build_parameter_manifest(completed, scalar_type)
+    descriptor_plan = _lower_descriptor_plan(
+        analyzed_ir, manifest, scalar_type
+    )
+    _assert_concrete_core_boundary(
+        descriptor_plan; path = "descriptor_plan"
+    )
     completion_fingerprint = completed_system_fingerprint(completed)
     seed = _sha256_hex(
         "potts-executable-seed-v1",
@@ -647,7 +655,13 @@ function compile(
             for entry in manifest),
     )
     core_program, kinds, observation_manifest = _lower_core_program(
-        completed, engine, backend, scalar_type, manifest, seed
+        completed,
+        engine,
+        backend,
+        scalar_type,
+        manifest,
+        descriptor_plan,
+        seed,
     )
     _assert_concrete_core_boundary(core_program)
     execution = CorePotts.program_execution_report(core_program)
@@ -656,13 +670,13 @@ function compile(
     workspace = _workspace_report(core_program)
     statement_manifest = _compiled_statement_manifest(completed)
     completion_fingerprints = inspect(completed, Fingerprints())
-    compiled_schedule = Tuple(
+    compiled_schedule = NamedTuple[
         (
             identity = _manifest_identity(record.identity),
             phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
         )
         for record in inspect(completed, Schedule())
-    )
+    ]
     all_statements = _all_system_statements(completed)
     activity_reference = let index = findfirst(statement ->
             statement isa ProposalEnergy &&
@@ -731,6 +745,7 @@ function compile(
         execution,
         capability,
         compiler = _compiler_analysis_report(analyzed_ir),
+        descriptors = CorePotts.descriptor_plan_report(descriptor_plan),
         storage,
         workspace,
         statements = statement_manifest,
@@ -774,7 +789,11 @@ function compile(
         fingerprint_reports,
     ))
     executable = PottsExecutable(
-        core_program, manifest, reports, observations, fingerprint
+        core_program,
+        manifest,
+        reports,
+        observations,
+        fingerprint,
     )
     _assert_concrete_core_boundary(executable; path = "executable")
     return executable

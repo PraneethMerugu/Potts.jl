@@ -42,6 +42,12 @@ end
 function _statement_core(id, arguments, options, source)
     source isa AbstractStatementSource ||
         throw(ArgumentError("source must be UnknownSource() or SourceLocation(...)"))
+    for name in keys(options)
+        startswith(String(name), "__") || continue
+        throw(ArgumentError(
+            "statement option `$name` is reserved for internal compiler provenance"
+        ))
+    end
     return StatementCore(StatementID(id), arguments, options, source)
 end
 
@@ -374,6 +380,7 @@ const _REGISTERED_CONTRACT_FIELDS = (
     :phase,
     :capabilities,
     :reference_semantics,
+    :descriptor_payload_type,
     :serialization_identity,
     :lowering_identity,
 )
@@ -483,6 +490,12 @@ function _validate_registered_contract(contract)
         ))
     contract.reference_semantics isa Symbol ||
         throw(ArgumentError("registered reference_semantics must be a Symbol"))
+    contract.descriptor_payload_type isa Type &&
+        isconcretetype(contract.descriptor_payload_type) &&
+        isbitstype(contract.descriptor_payload_type) ||
+        throw(ArgumentError(
+            "registered descriptor_payload_type must be one concrete isbits type"
+        ))
     contract.serialization_identity isa AbstractString &&
         !isempty(contract.serialization_identity) ||
         throw(ArgumentError(
@@ -513,8 +526,8 @@ function register_statement(
             "conflicting RegisteredStatement definition for $(schema) version $(version)"
         ))
     end
-    definitions = sort(
-        (registry.definitions..., definition);
+    definitions = sort!(
+        collect((registry.definitions..., definition));
         by = item -> (String(item.schema), item.version),
     )
     return StatementRegistry(Tuple(definitions))

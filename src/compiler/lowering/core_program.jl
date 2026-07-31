@@ -1,3 +1,5 @@
+# Lower analyzed facts into the mechanism-free CorePotts program.
+
 _statement_option(statement, name::Symbol, default = nothing) =
     haskey(_statement_options(statement), name) ?
     getproperty(_statement_options(statement), name) : default
@@ -593,25 +595,33 @@ function _lower_proposal_expressions(
             draw_operations,
         )
     )
+    # Registered extensions are owned by the generic descriptor plan. Keeping
+    # them out of the prototype program tuple prevents occurrence count from
+    # leaking back into the executable type while G3 replaces proposal
+    # execution with descriptor groups.
+    legacy(statement) =
+        !haskey(_statement_options(statement), :__registered_origin)
     energies = Tuple(
         lower(statement)
         for statement in statements
         if statement isa ProposalEnergy &&
-           _statement_option(statement, :mechanism) in (nothing, :symbolic)
+           _statement_option(statement, :mechanism) in (nothing, :symbolic) &&
+           legacy(statement)
     )
     drives = Tuple(
         lower(statement) for statement in statements
-        if statement isa ProposalDrive
+        if statement isa ProposalDrive && legacy(statement)
     )
     constraints = Tuple(
         lower(statement)
         for statement in statements
         if statement isa ProposalConstraint &&
-           _statement_option(statement, :mechanism) !== :local_connectivity
+           _statement_option(statement, :mechanism) !== :local_connectivity &&
+           legacy(statement)
     )
     modifiers = Tuple(
         lower(statement) for statement in statements
-        if statement isa ProposalModifier
+        if statement isa ProposalModifier && legacy(statement)
     )
     return (; energies, drives, constraints, modifiers)
 end
@@ -622,6 +632,7 @@ function _lower_core_program(
         backend::AbstractPottsBackend,
         ::Type{T},
         manifest::ParameterManifest,
+        descriptor_plan::CorePotts.DescriptorExecutionPlan,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
     all_statements = _all_system_statements(completed)
@@ -723,9 +734,6 @@ function _lower_core_program(
     relationships = _lower_relationships(all_statements, kinds, manifest, T)
     observations, observation_manifest =
         _lower_observations(all_statements, kinds)
-    proposal_expressions = _lower_proposal_expressions(
-        completed, all_statements, manifest, T
-    )
     cell_state_fields = Tuple(
         Symbol(statement_id(statement))
         for statement in all_statements
@@ -768,14 +776,11 @@ function _lower_core_program(
         elongation,
         relationships,
         observations,
+        descriptor_plan,
         core_engine,
         core_backend,
         program_fingerprint;
         medium_kinds,
-        proposal_energies = proposal_expressions.energies,
-        proposal_drives = proposal_expressions.drives,
-        proposal_constraints = proposal_expressions.constraints,
-        proposal_modifiers = proposal_expressions.modifiers,
         cell_state_fields,
     ), Tuple(_kind_name(declaration) for declaration in sorted_declarations),
        observation_manifest

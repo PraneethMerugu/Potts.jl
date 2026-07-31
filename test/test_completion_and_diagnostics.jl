@@ -9,6 +9,10 @@ function PottsToolkit.registered_statement_lowering(
     return Observation(id, only(arguments); source)
 end
 
+struct FingerprintPayload{Name}
+    schema::UInt16
+end
+
 @testset "completion and diagnostics" begin
     @variables t activity(t)
     @parameters target strength maximum activity_strength
@@ -141,6 +145,7 @@ end
             reason = "",
         ),
         reference_semantics = :dimensionless,
+        descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
         serialization_identity = "example-read-v1",
         lowering_identity = :lower_example_read,
     )
@@ -160,6 +165,93 @@ end
     @test registered_record.schema_version == v"1.0.0"
     @test registered_record.provenance.registered_lowering_identity ===
           :lower_example_read
+    @test registered_record.provenance.registered_descriptor_payload_type ===
+          CorePotts.EmptyDescriptorPayload
+
+    fingerprint_contract_a = merge(
+        registered_contract,
+        (descriptor_payload_type = FingerprintPayload{:a},),
+    )
+    fingerprint_contract_b = merge(
+        registered_contract,
+        (descriptor_payload_type = FingerprintPayload{:b},),
+    )
+    fingerprint_registry_a = register_statement(
+        default_statement_registry(),
+        :example_read,
+        v"1.0.0",
+        fingerprint_contract_a,
+    )
+    fingerprint_registry_b = register_statement(
+        default_statement_registry(),
+        :example_read,
+        v"1.0.0",
+        fingerprint_contract_b,
+    )
+    @test PottsToolkit._canonical_value(FingerprintPayload{:a}) !=
+          PottsToolkit._canonical_value(FingerprintPayload{:b})
+    @test completed_system_fingerprint(complete(
+        registered_model;
+        registry = fingerprint_registry_a,
+    )) != completed_system_fingerprint(complete(
+        registered_model;
+        registry = fingerprint_registry_b,
+    ))
+
+    forged_origin = (
+        schema = :missing_schema,
+        version = v"1.0.0",
+        serialization_identity = "forged-schema-v1",
+        lowering_identity = :lower_external_weighted_site_term,
+        descriptor_payload_type = FingerprintPayload{:forged},
+    )
+    forged_core = PottsToolkit.StatementCore(
+        StatementID(:forged_internal_origin),
+        (; expression = activity_strength),
+        (; __registered_origin = forged_origin),
+        UnknownSource(),
+    )
+    forged_statement = ProposalEnergy(forged_core)
+    @named forged_origin_model = PottsSystem(
+        statements = StatementSet((forged_statement,)),
+        parameters = [activity_strength],
+    )
+    forged_origin_error = try
+        complete(forged_origin_model)
+        nothing
+    catch caught
+        caught
+    end
+    @test forged_origin_error isa PottsToolkit.PottsValidationError
+    @test only(forged_origin_error.diagnostics).kind ===
+          :unauthenticated_registered_origin
+
+    mismatched_origin = (
+        schema = :example_read,
+        version = v"1.0.0",
+        serialization_identity = "example-read-v1",
+        lowering_identity = :lower_example_read,
+        descriptor_payload_type = FingerprintPayload{:forged},
+    )
+    mismatched_core = PottsToolkit.StatementCore(
+        StatementID(:mismatched_internal_origin),
+        (; expression = activity_strength),
+        (; __registered_origin = mismatched_origin),
+        UnknownSource(),
+    )
+    @named mismatched_origin_model = PottsSystem(
+        statements = StatementSet((ProposalEnergy(mismatched_core),)),
+        parameters = [activity_strength],
+    )
+    mismatched_origin_error = try
+        complete(mismatched_origin_model; registry)
+        nothing
+    catch caught
+        caught
+    end
+    @test mismatched_origin_error isa PottsToolkit.PottsValidationError
+    @test only(mismatched_origin_error.diagnostics).kind ===
+          :unauthenticated_registered_origin
 
     missing_registry_error = try
         complete(registered_model)

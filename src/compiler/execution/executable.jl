@@ -1,3 +1,5 @@
+# Public executable and engine/backend selections.
+
 abstract type AbstractPottsEngine end
 
 """

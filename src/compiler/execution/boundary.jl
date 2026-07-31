@@ -1,3 +1,5 @@
+# Final executable storage reports and CorePotts boundary validation.
+
 function _storage_report(program::CorePotts.CompiledPottsProgram)
     site_count = prod(program.shape)
     return (
@@ -38,6 +40,11 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
     )
 end
 
+function _is_named_singleton_callable(value::Function)
+    Base.issingletontype(typeof(value)) || return false
+    return !startswith(String(nameof(value)), "#")
+end
+
 function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     value === nothing && return nothing
     value isa Union{
@@ -45,9 +52,11 @@ function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     } && return nothing
     value in seen && return nothing
     push!(seen, value)
-    value isa Function && throw(ArgumentError(
-        "host closure crossed the CorePotts boundary at $path"
-    ))
+    value isa Function &&
+        !_is_named_singleton_callable(value) &&
+        throw(ArgumentError(
+            "host closure crossed the CorePotts boundary at $path"
+        ))
     value isa AbstractPottsStatement && throw(ArgumentError(
         "symbolic statement crossed the CorePotts boundary at $path"
     ))

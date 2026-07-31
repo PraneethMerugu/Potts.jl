@@ -171,10 +171,7 @@ struct CompiledPottsProgram{
         G,
         R,
         O,
-        PE,
-        PD,
-        PC,
-        PM,
+        D,
         CS,
     }
     shape::NTuple{N, Int}
@@ -197,10 +194,7 @@ struct CompiledPottsProgram{
     elongation::G
     relationships::R
     observations::O
-    proposal_energies::PE
-    proposal_drives::PD
-    proposal_constraints::PC
-    proposal_modifiers::PM
+    descriptor_plan::D
     cell_state_fields::CS
     engine::E
     backend::B
@@ -227,16 +221,13 @@ function CompiledPottsProgram(
         elongation,
         relationships,
         observations,
+        descriptor_plan::D,
         engine::E,
         backend::B,
         fingerprint::AbstractString;
         medium_kinds = nothing,
-        proposal_energies = (),
-        proposal_drives = (),
-        proposal_constraints = (),
-        proposal_modifiers = (),
         cell_state_fields = (),
-    ) where {T <: AbstractFloat, N, E <: AbstractProgramEngine, B}
+    ) where {T <: AbstractFloat, N, D, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
         throw(ArgumentError("proposal offsets have the wrong dimensionality"))
@@ -268,8 +259,7 @@ function CompiledPottsProgram(
         T, N, E, B, typeof(activity), typeof(field), typeof(history),
         typeof(elongation),
         typeof(relationships), typeof(observations),
-        typeof(proposal_energies), typeof(proposal_drives),
-        typeof(proposal_constraints), typeof(proposal_modifiers),
+        D,
         typeof(cell_state_fields),
     }(
         shape,
@@ -292,10 +282,7 @@ function CompiledPottsProgram(
         elongation,
         relationships,
         observations,
-        proposal_energies,
-        proposal_drives,
-        proposal_constraints,
-        proposal_modifiers,
+        descriptor_plan,
         Tuple(Symbol.(cell_state_fields)),
         engine,
         backend,
@@ -1543,6 +1530,117 @@ struct _ProposalEvaluationContext{R, I}
     subround::Int
 end
 
+@inline evaluator_parameters(context::_ProposalEvaluationContext) =
+    context.runtime.parameters
+
+@inline context_value(
+    ::ContextOperation{:source_site},
+    context::_ProposalEvaluationContext,
+) = context.source
+@inline context_value(
+    ::ContextOperation{:target_site},
+    context::_ProposalEvaluationContext,
+) = context.target
+@inline context_value(
+    ::ContextOperation{:source_cell},
+    context::_ProposalEvaluationContext,
+) = context.new_owner
+@inline context_value(
+    ::ContextOperation{:target_cell},
+    context::_ProposalEvaluationContext,
+) = context.old_owner
+@inline context_value(
+    ::ContextOperation{:source_kind},
+    context::_ProposalEvaluationContext,
+) = _owner_kind(context.runtime, context.new_owner)
+@inline context_value(
+    ::ContextOperation{:target_kind},
+    context::_ProposalEvaluationContext,
+) = _owner_kind(context.runtime, context.old_owner)
+@inline context_value(
+    ::ContextOperation{:is_extension},
+    context::_ProposalEvaluationContext,
+) = context.old_owner <= 0 && context.new_owner > 0
+@inline context_value(
+    ::ContextOperation{:is_retraction},
+    context::_ProposalEvaluationContext,
+) = context.old_owner > 0 && context.new_owner <= 0
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:cell_volume},
+        arguments,
+        context::_ProposalEvaluationContext,
+    )
+    owner = Int(only(arguments))
+    owner <= 0 && return 0
+    return @inbounds context.runtime.volumes[owner]
+end
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:field_value},
+        arguments,
+        context::_ProposalEvaluationContext,
+    )
+    context.runtime.field === nothing &&
+        return zero(eltype(context.runtime.parameters))
+    site = last(arguments)
+    return @inbounds context.runtime.field[site]
+end
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:draw},
+        arguments,
+        context::_ProposalEvaluationContext,
+    )
+    T = eltype(context.runtime.parameters)
+    family = Int(arguments[1])
+    first_parameter = T(arguments[2])
+    second_parameter = T(arguments[3])
+    operation = UInt16(arguments[4])
+    first_uniform = _program_uniform(
+        T,
+        context.runtime,
+        ExplicitProposalDrawStream,
+        operation,
+        context.attempt;
+        subround = context.subround,
+        draw = 0,
+    )
+    if family == 1
+        return first_uniform < first_parameter
+    elseif family == 2
+        return muladd(
+            first_uniform,
+            second_parameter - first_parameter,
+            first_parameter,
+        )
+    elseif family == 3
+        iszero(second_parameter) && return first_parameter
+        second_uniform = _program_uniform(
+            T,
+            context.runtime,
+            ExplicitProposalDrawStream,
+            operation,
+            context.attempt;
+            subround = context.subround,
+            draw = 1,
+        )
+        normal = sqrt(-T(2) * log(first_uniform)) *
+                 cos(T(2pi) * second_uniform)
+        return muladd(second_parameter, normal, first_parameter)
+    end
+    return T(NaN)
+end
+
+@inline function state_value(
+        context::_ProposalEvaluationContext,
+        handle::StateHandle,
+        site,
+    )
+    states = values(context.runtime.stored_states)
+    return @inbounds states[Int(handle.index)][site]
+end
+
 @inline _evaluate_program_expression(
     expression::ProgramLiteral, context::_ProposalEvaluationContext
 ) = expression.value
@@ -1769,46 +1867,20 @@ function _attempt!(
     _relationship_allows_extinction(runtime, old_owner) ||
         (runtime.rejected += 1; return false)
 
-    expression_context = _ProposalEvaluationContext(
-        runtime,
-        source,
-        target,
-        old_owner,
-        new_owner,
-        attempt_identity,
-        subround,
-    )
-    _proposal_all(program.proposal_constraints, expression_context) ||
-        (runtime.rejected += 1; return false)
     delta = _volume_delta(runtime, old_owner, new_owner)
     delta += _contact_delta(runtime, target, old_owner, new_owner)
     delta += _activity_delta(runtime, source, target, old_owner, new_owner)
     delta += _chemotaxis_delta(runtime, source, target, new_owner)
     delta += _relationship_delta(runtime, target, old_owner, new_owner)
     delta += _elongation_delta(runtime, target, old_owner, new_owner)
-    delta = _proposal_sum(
-        program.proposal_energies, expression_context, delta
-    )
     temperature = compiled_scalar_value(program.temperature, runtime.parameters)
     temperature >= zero(T) ||
         throw(ArgumentError("temperature must remain nonnegative"))
-    has_bias = !isempty(program.proposal_drives) ||
-               !isempty(program.proposal_modifiers)
-    has_bias && iszero(temperature) && throw(ArgumentError(
-        "ProposalDrive and ProposalModifier require positive temperature; " *
-        "no zero-temperature rule was declared"
-    ))
     log_ratio = if iszero(temperature)
         delta <= zero(T) ? zero(T) : -T(Inf)
     else
         -delta / temperature
     end
-    log_ratio = _proposal_sum(
-        program.proposal_drives, expression_context, log_ratio
-    )
-    log_ratio = _proposal_sum(
-        program.proposal_modifiers, expression_context, log_ratio
-    )
     accepted = log_ratio >= zero(T)
     if !accepted && isfinite(log_ratio)
         draw = _program_uniform(

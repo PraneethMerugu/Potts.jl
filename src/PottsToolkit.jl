@@ -20,12 +20,13 @@ include("systems.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/completion.jl")
-include("compiler/host_ir.jl")
-include("compiler/executable.jl")
-include("compiler/parameters.jl")
-include("compiler/storage.jl")
-include("compiler/lowering.jl")
-include("compiler/compiler.jl")
+include("compiler/host/ir.jl")
+include("compiler/execution/executable.jl")
+include("compiler/lowering/parameters.jl")
+include("compiler/lowering/descriptors.jl")
+include("compiler/execution/boundary.jl")
+include("compiler/lowering/core_program.jl")
+include("compiler/compile.jl")
 include("runtime/initial_state.jl")
 include("runtime/problem.jl")
 include("runtime/saved_state.jl")
@@ -84,6 +85,8 @@ export EquationComponent, process_component
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
 public OperationTransfer, operation_transfer
+public DescriptorSource, DescriptorConstructionContext
+public registered_descriptor_payload, registered_workspace_schemas
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError
