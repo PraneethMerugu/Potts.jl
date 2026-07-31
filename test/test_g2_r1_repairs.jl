@@ -24,6 +24,18 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
     ::R1StaticOverrideOperation, arguments::Tuple, context
 ) = _r1_override_value(context, 34567.0)
 
+@inline function CorePotts.evaluator_parameters(
+        context::CorePotts.HamiltonianEvaluationContext{V, A, P, Nothing},
+    ) where {V, A, P}
+    parameters = context.view.runtime.parameters
+    return context.view isa CorePotts.AfterProposalView ?
+           fill(12345.0, length(parameters)) : parameters
+end
+
+@inline CorePotts.evaluator_parameters(
+    context::CorePotts.EvaluatorProbeContext{Vector{Float64}, V, S, W}
+) where {V, S, W} = fill(-1.0, length(context.parameters))
+
 function CorePotts.descriptor_adapt(
         to,
         ::CorePotts.ProposalDescriptor{
@@ -329,6 +341,97 @@ end
             proposal,
             executable.core_program.descriptor_plan.domain_resources,
         ) == 0.0
+    end
+
+    @testset "public parameter access cannot replace production" begin
+        @parameters closed_weight = 5.0 positive_scale = 2.0
+        cell = CellKind(:closed_parameter_cell)
+        medium = MediumKind(:closed_parameter_medium)
+        anchor = SiteBinding(:closed_parameter_site)
+        @named closed_parameter_model = PottsSystem(
+            statements = StatementSet((
+                Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                HamiltonianTerm(
+                    :closed_parameter_energy;
+                    domain = sites(:lattice),
+                    anchor,
+                    expression = closed_weight * occupancy(cell, anchor),
+                ),
+                HamiltonianTerm(
+                    :closed_parameter_constraint;
+                    domain = sites(:lattice),
+                    anchor,
+                    expression = log(positive_scale),
+                ),
+                Protocol(Sweep(); name = :main),
+            )),
+            parameters = [closed_weight, positive_scale],
+        )
+        executable = compile(
+            complete(closed_parameter_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        plan = executable.core_program.descriptor_plan
+        function has_parameter(expression, index)
+            expression isa CorePotts.ParameterExpression &&
+                return expression.index == index
+            expression isa CorePotts.OperationExpression || return false
+            return any(
+                argument -> has_parameter(argument, index),
+                expression.arguments,
+            )
+        end
+        descriptor = only([
+            descriptor
+            for group in plan.groups
+            for descriptor in group.launch.instances
+            if has_parameter(descriptor.evaluator.expression, 1)
+        ])
+        ownership = zeros(Int32, 3, 3)
+        ownership[2, 2] = 1
+        runtime = _r1_runtime(executable, ownership, Int16[2])
+        proposal = _r1_proposal_context(
+            runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
+        )
+        before = CorePotts.BeforeProposalView(
+            runtime,
+            proposal.target,
+            proposal.old_owner,
+            proposal.new_owner,
+        )
+        after = CorePotts.AfterProposalView(
+            runtime,
+            proposal.target,
+            proposal.old_owner,
+            proposal.new_owner,
+        )
+        before_context = CorePotts.HamiltonianEvaluationContext(
+            before, proposal.target, proposal
+        )
+        after_context = CorePotts.HamiltonianEvaluationContext(
+            after, proposal.target, proposal
+        )
+        @test CorePotts.evaluate_static(
+            descriptor.evaluator, after_context
+        ) - CorePotts.evaluate_static(
+            descriptor.evaluator, before_context
+        ) == 12345.0
+        @test _r1_descriptor_delta(descriptor, proposal) == 5.0
+
+        constraint = only(only(plan.constraints).instances)
+        public_probe = CorePotts.EvaluatorProbeContext(
+            Float64[5.0, 2.0], NamedTuple()
+        )
+        @test CorePotts.evaluate_static(
+            constraint.evaluator, public_probe
+        ) == -1.0
+        @test CorePotts.validate_parameters(
+            plan, Float64[5.0, 2.0]
+        ) === nothing
     end
 
     @testset "cell domains exclude extinct after-view anchors" begin

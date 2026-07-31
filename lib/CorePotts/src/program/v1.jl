@@ -1681,6 +1681,8 @@ end
 
 @inline evaluator_parameters(context::_ProposalEvaluationContext) =
     context.runtime.parameters
+@inline _compiled_evaluator_parameters(context::_ProposalEvaluationContext) =
+    context.runtime.parameters
 
 @inline context_value(
     ::ContextOperation{:source_site},

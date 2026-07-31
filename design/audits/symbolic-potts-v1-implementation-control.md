@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `reopened` | `d9ffab1` evaluator-dispatch P1 repaired; exact-tree rereview pending | all three `d9ffab1` P2 findings repaired |
+| R1 compiler | `reopened` | `5b708bc` parameter-access P1 repaired; exact-tree rereview pending | `5b708bc` include-order P2 repaired |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -707,6 +707,39 @@ Qualification currently completed on this repair:
   expression shapes, semantic RNG words, 1/32/1,024 occurrences, and 1/4/8 groups.
 
 Exact-checkpoint R1 rereview remains required. G3 remains stopped.
+
+## Parameter-access R1 return and repair
+
+Fresh independent R1 review of exact checkpoint `5b708bc` reproduced the preceding public
+evaluator attacks as sealed, then returned G2 for one adjacent P1: the private production
+expression walker still obtained `ParameterExpression` storage through the public
+`evaluator_parameters` generic. An external module could therefore specialize that public method
+for an exact Hamiltonian evaluation context and forge production delta energy without replacing
+the evaluator itself.
+
+The bounded repair leaves the evaluator, normalized DAG, descriptor, grouping, storage, payload,
+capability, adaptation, diagnostic, and backend designs intact. Production parameter reads now use
+a CorePotts-owned accessor whose built-in contexts read their concrete parameter fields directly;
+the public accessor remains a probe convenience only. Permanent adversarial tests override the
+public parameter accessor for an exact Hamiltonian context and for the parameter-validation probe.
+They demonstrate forged public results while proving that production descriptor delta energy and
+production constraint validation remain unchanged. The review's include-order P2 was corrected in
+the compiler ownership README without moving code.
+
+Exact-tree qualification after this repair:
+
+- repaired R1 adversarial boundary: 28/28;
+- complete CorePotts suite: passed, including Aqua;
+- ordinary root `Pkg.test()`: 572/572 in 6m18.1s, including Aqua and ExplicitImports;
+- full specialization growth: 5/5 in 2m55.9s; and
+- the shared Metal boundary executed 32 adapted production descriptors with device parameter,
+  state, and workspace buffers and returned exact `17.5f0`.
+
+The next R1 brief also includes the owner's 177-line candidate critique as untrusted review input.
+The reviewer is required to challenge its claims rather than adopt them, including claims about
+the singular production path, extension authority, payload specialization, generated-code growth,
+backend legality, host/device separation, legacy quarantine, diagnostics, and external-module
+openness. Fresh exact-checkpoint R1 clearance remains required. G3 remains stopped.
 
 ## Prohibited record contents
 

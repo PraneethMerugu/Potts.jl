@@ -143,6 +143,7 @@ function operation_callable end
 function state_value end
 function workspace_value end
 function evaluator_parameters end
+function _compiled_evaluator_parameters end
 function _compiled_context_value end
 function _compiled_resource_operation end
 
@@ -284,7 +285,7 @@ end
     )
     index = expression.index
     return index == 0 ? expression.default :
-           @inbounds evaluator_parameters(context)[index]
+           @inbounds _compiled_evaluator_parameters(context)[index]
 end
 
 @inline _compiled_evaluate_expression(
@@ -368,6 +369,8 @@ EvaluatorProbeContext(parameters, values, states) =
     EvaluatorProbeContext(parameters, values, states, ())
 
 @inline evaluator_parameters(context::EvaluatorProbeContext) =
+    context.parameters
+@inline _compiled_evaluator_parameters(context::EvaluatorProbeContext) =
     context.parameters
 
 for identity in (

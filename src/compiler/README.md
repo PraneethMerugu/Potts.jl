@@ -18,11 +18,11 @@ host/energy_domains.jl
 host/analysis.jl
     infer and verify semantic facts over the normalized DAG
 
-host/coverage.jl
-    validate compiler choices and complete statement/equation lowering coverage
-
 execution/executable.jl
     define public engine/backend selections and the executable wrapper
+
+host/coverage.jl
+    validate compiler choices and complete statement/equation lowering coverage
 
 lowering/parameters.jl
     lower units, defaults, and runtime parameter indices

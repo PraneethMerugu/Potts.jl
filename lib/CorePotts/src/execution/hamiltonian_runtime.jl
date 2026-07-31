@@ -33,6 +33,9 @@ HamiltonianEvaluationContext(view, anchor, proposal) =
 
 @inline evaluator_parameters(context::HamiltonianEvaluationContext) =
     context.view.runtime.parameters
+@inline _compiled_evaluator_parameters(
+    context::HamiltonianEvaluationContext
+) = context.view.runtime.parameters
 
 for (identity, kind) in (
         :energy_anchor_site => :site,
