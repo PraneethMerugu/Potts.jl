@@ -96,5 +96,9 @@ public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
 public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan
 public validate_parameters, descriptor_plan_report
 public evaluate_hamiltonian_contributions!, fold_hamiltonian_contributions
+public ProposalEvaluation, evaluate_proposal_contributions!
+public fold_proposal_contributions
+public proposal_log_acceptance_ratio, proposal_acceptance_probability
+public proposal_acceptance_decision
 
 end

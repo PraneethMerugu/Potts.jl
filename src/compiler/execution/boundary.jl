@@ -33,7 +33,7 @@ end
 function _workspace_report(program::CorePotts.CompiledPottsProgram)
     return (
         field_scratch = program.field === nothing ? 0 : prod(program.shape),
-        proposal_scratch = 0,
+        proposal_scratch = length(program.descriptor_plan.source_table),
         relationship_requests = program.relationships === nothing ? 0 :
                                 program.relationships.capacity,
         live_state_allocated = false,

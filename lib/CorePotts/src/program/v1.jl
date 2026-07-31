@@ -898,6 +898,7 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R, D}
     stored_states::S
     relationships::R
     descriptor_state::D
+    proposal_contributions::Vector{ProposalEvaluation{T}}
     parameters::Vector{T}
     seed::UInt64
     replica::UInt32
@@ -1026,6 +1027,10 @@ function initialize_program(
         stored_states,
         relationships,
         descriptor_state,
+        fill(
+            _neutral_proposal_evaluation(T),
+            length(program.descriptor_plan.source_table),
+        ),
         T.(parameters),
         seed,
         replica,
@@ -1684,6 +1689,32 @@ end
 @inline _compiled_evaluator_parameters(context::_ProposalEvaluationContext) =
     context.runtime.parameters
 
+@inline function _compiled_context_value(
+        operation::ContextOperation{Identity},
+        context::_ProposalEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        context_value,
+        Tuple{ContextOperation{Identity}, _ProposalEvaluationContext},
+        operation,
+        context,
+    )
+end
+
+@inline function _compiled_resource_operation(
+        operation::ResourceOperation{Identity},
+        arguments::Tuple,
+        context::_ProposalEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        apply_resource_operation,
+        Tuple{ResourceOperation{Identity}, Tuple, _ProposalEvaluationContext},
+        operation,
+        arguments,
+        context,
+    )
+end
+
 @inline context_value(
     ::ContextOperation{:source_site},
     context::_ProposalEvaluationContext,
@@ -1793,6 +1824,145 @@ end
     ).values[site]
 end
 
+"""Log acceptance ratio for the conventional descriptor-driven V1 law."""
+@inline function proposal_log_acceptance_ratio(
+        evaluation::ProposalEvaluation{T},
+        temperature::Real,
+    ) where {T <: AbstractFloat}
+    converted_temperature = T(temperature)
+    isfinite(converted_temperature) && converted_temperature >= zero(T) ||
+        throw(ArgumentError(
+            "acceptance temperature must be finite and nonnegative"
+        ))
+    all(isfinite, (
+        evaluation.delta_h,
+        evaluation.drive_log_bias,
+        evaluation.kinetic_modifier,
+    )) || throw(ArgumentError(
+        "proposal acceptance inputs must be finite"
+    ))
+    evaluation.constraints_allowed || return -T(Inf)
+    if iszero(converted_temperature)
+        iszero(evaluation.drive_log_bias) &&
+            iszero(evaluation.kinetic_modifier) || throw(ArgumentError(
+                "nonconservative drives and proposal modifiers require positive temperature"
+            ))
+        return evaluation.delta_h <= zero(T) ? zero(T) : -T(Inf)
+    end
+    return -evaluation.delta_h / converted_temperature +
+           evaluation.drive_log_bias + evaluation.kinetic_modifier
+end
+
+"""Exact conventional acceptance probability for a structured proposal evaluation."""
+@inline function proposal_acceptance_probability(
+        evaluation::ProposalEvaluation{T}, temperature::Real
+    ) where {T <: AbstractFloat}
+    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
+    return log_ratio >= zero(T) ? one(T) :
+           isfinite(log_ratio) ? exp(log_ratio) : zero(T)
+end
+
+"""Apply the V1 strict-threshold decision to one pre-addressed uniform draw."""
+@inline function proposal_acceptance_decision(
+        evaluation::ProposalEvaluation{T},
+        temperature::Real,
+        draw::Real,
+    ) where {T <: AbstractFloat}
+    converted_draw = T(draw)
+    zero(T) < converted_draw < one(T) || throw(ArgumentError(
+        "acceptance draws must lie strictly inside (0, 1)"
+    ))
+    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
+    return log_ratio >= zero(T) ||
+           (isfinite(log_ratio) && log(converted_draw) < log_ratio)
+end
+
+@inline function _proposal_acceptance_draw(
+        runtime::ProgramRuntime{T},
+        attempt_identity::Int,
+        subround::Int,
+        ::Val{:addressed},
+        scripted::T,
+    ) where {T}
+    return _program_uniform(
+        T,
+        runtime,
+        AcceptanceStream,
+        3,
+        attempt_identity;
+        subround,
+    )
+end
+
+@inline _proposal_acceptance_draw(
+    runtime::ProgramRuntime{T},
+    attempt_identity::Int,
+    subround::Int,
+    ::Val{:scripted},
+    scripted::T,
+) where {T} = scripted
+
+function _attempt_selected!(
+        runtime::ProgramRuntime{T, N},
+        source::CartesianIndex{N},
+        target::CartesianIndex{N},
+        attempt_identity::Int,
+        subround::Int,
+        draw_mode::Val,
+        scripted_draw::T,
+    ) where {T, N}
+    program = runtime.program
+    old_owner = @inbounds runtime.ownership[target]
+    new_owner = @inbounds runtime.ownership[source]
+    old_owner == new_owner && (runtime.null_attempts += 1; return false)
+    _connected_after_removal(runtime, target, old_owner) ||
+        (runtime.rejected += 1; return false)
+    _relationship_allows_extinction(runtime, old_owner) ||
+        (runtime.rejected += 1; return false)
+
+    context = _ProposalEvaluationContext(
+        runtime,
+        source,
+        target,
+        old_owner,
+        new_owner,
+        attempt_identity,
+        subround,
+    )
+    evaluate_proposal_contributions!(
+        runtime.proposal_contributions,
+        program.descriptor_plan,
+        context,
+    )
+    evaluation = fold_proposal_contributions(
+        program.descriptor_plan, runtime.proposal_contributions
+    )
+    evaluation.constraints_allowed ||
+        (runtime.rejected += 1; return false)
+    temperature = compiled_scalar_value(program.temperature, runtime.parameters)
+    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
+    accepted = log_ratio >= zero(T)
+    if !accepted && isfinite(log_ratio)
+        draw = _proposal_acceptance_draw(
+            runtime,
+            attempt_identity,
+            subround,
+            draw_mode,
+            scripted_draw,
+        )
+        accepted = proposal_acceptance_decision(
+            evaluation, temperature, draw
+        )
+    end
+    if accepted
+        _commit_copy!(runtime, target, old_owner, new_owner, attempt_identity)
+        runtime.accepted += 1
+        return true
+    end
+    runtime.rejected += 1
+    return false
+end
+
 function _attempt!(
         runtime::ProgramRuntime{T, N},
         target::CartesianIndex{N},
@@ -1810,47 +1980,15 @@ function _attempt!(
     )
     source = _neighbor_index(program, target, program.proposal_offsets, direction)
     source === nothing && (runtime.null_attempts += 1; return false)
-    old_owner = @inbounds runtime.ownership[target]
-    new_owner = @inbounds runtime.ownership[source]
-    old_owner == new_owner && (runtime.null_attempts += 1; return false)
-    _connected_after_removal(runtime, target, old_owner) ||
-        (runtime.rejected += 1; return false)
-    _relationship_allows_extinction(runtime, old_owner) ||
-        (runtime.rejected += 1; return false)
-
-    delta = _volume_delta(runtime, old_owner, new_owner)
-    delta += _contact_delta(runtime, target, old_owner, new_owner)
-    delta += _activity_delta(runtime, source, target, old_owner, new_owner)
-    delta += _chemotaxis_delta(runtime, source, target, new_owner)
-    delta += _relationship_delta(runtime, target, old_owner, new_owner)
-    delta += _elongation_delta(runtime, target, old_owner, new_owner)
-    temperature = compiled_scalar_value(program.temperature, runtime.parameters)
-    temperature >= zero(T) ||
-        throw(ArgumentError("temperature must remain nonnegative"))
-    log_ratio = if iszero(temperature)
-        delta <= zero(T) ? zero(T) : -T(Inf)
-    else
-        -delta / temperature
-    end
-    accepted = log_ratio >= zero(T)
-    if !accepted && isfinite(log_ratio)
-        draw = _program_uniform(
-            T,
-            runtime,
-            AcceptanceStream,
-            3,
-            attempt_identity;
-            subround,
-        )
-        accepted = log(draw) < log_ratio
-    end
-    if accepted
-        _commit_copy!(runtime, target, old_owner, new_owner, attempt_identity)
-        runtime.accepted += 1
-        return true
-    end
-    runtime.rejected += 1
-    return false
+    return _attempt_selected!(
+        runtime,
+        source,
+        target,
+        attempt_identity,
+        subround,
+        Val(:addressed),
+        zero(T),
+    )
 end
 
 function _advance_sequential!(runtime::ProgramRuntime)

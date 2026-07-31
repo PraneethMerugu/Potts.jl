@@ -268,6 +268,159 @@ end
     return total
 end
 
+"""One source-indexed proposal contribution with scientific roles kept distinct."""
+struct ProposalEvaluation{T <: AbstractFloat}
+    delta_h::T
+    drive_log_bias::T
+    kinetic_modifier::T
+    constraints_allowed::Bool
+end
+
+@inline _neutral_proposal_evaluation(::Type{T}) where {T <: AbstractFloat} =
+    ProposalEvaluation(zero(T), zero(T), zero(T), true)
+
+@inline function _checked_proposal_scalar(value, ::Type{T}) where {
+        T <: AbstractFloat,
+    }
+    converted = T(value)
+    isfinite(converted) || throw(DomainError(
+        converted, "proposal descriptor returned a nonfinite scalar"
+    ))
+    return converted
+end
+
+@inline function _compiled_proposal_evaluation(
+        evaluator::StaticEvaluator,
+        role::HamiltonianRole,
+        context,
+        resources,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    value = _checked_proposal_scalar(
+        _compiled_hamiltonian_delta(evaluator, role, context, resources), T
+    )
+    return ProposalEvaluation(value, zero(T), zero(T), true)
+end
+
+@inline function _compiled_proposal_evaluation(
+        evaluator::StaticEvaluator,
+        ::ProposalDriveRole,
+        context,
+        resources,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    value = _checked_proposal_scalar(
+        _compiled_evaluate_static(evaluator, context), T
+    )
+    return ProposalEvaluation(zero(T), value, zero(T), true)
+end
+
+@inline function _compiled_proposal_evaluation(
+        evaluator::StaticEvaluator,
+        ::ProposalModifierRole,
+        context,
+        resources,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    value = _checked_proposal_scalar(
+        _compiled_evaluate_static(evaluator, context), T
+    )
+    return ProposalEvaluation(zero(T), zero(T), value, true)
+end
+
+@inline function _compiled_proposal_evaluation(
+        evaluator::StaticEvaluator,
+        ::ProposalConstraintRole,
+        context,
+        resources,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    value = _compiled_evaluate_static(evaluator, context)
+    value isa Bool || throw(ArgumentError(
+        "proposal constraint descriptor must return Bool"
+    ))
+    return ProposalEvaluation(zero(T), zero(T), zero(T), value)
+end
+
+@inline function _evaluate_proposal_instances!(
+        contributions::AbstractVector{ProposalEvaluation{T}},
+        instances::AbstractVector{D},
+        context,
+        resources,
+    ) where {T <: AbstractFloat, D}
+    for descriptor in instances
+        descriptor isa ProposalDescriptor || throw(ArgumentError(
+            "production proposal plans require compiler-owned ProposalDescriptor values"
+        ))
+        source = Int(getfield(descriptor, :source_handle))
+        @inbounds contributions[source] = _compiled_proposal_evaluation(
+            getfield(descriptor, :evaluator),
+            getfield(descriptor, :role),
+            context,
+            resources,
+            T,
+        )
+    end
+    return contributions
+end
+
+@inline _evaluate_proposal_groups!(
+    contributions, ::Tuple{}, context, resources
+) = contributions
+@inline function _evaluate_proposal_groups!(
+        contributions,
+        groups::Tuple,
+        context,
+        resources,
+    )
+    group = first(groups)
+    _evaluate_proposal_instances!(
+        contributions, group.launch.instances, context, resources
+    )
+    return _evaluate_proposal_groups!(
+        contributions, Base.tail(groups), context, resources
+    )
+end
+
+"""Evaluate every proposal descriptor into caller-owned, source-indexed storage."""
+@inline function evaluate_proposal_contributions!(
+        contributions::AbstractVector{ProposalEvaluation{T}},
+        plan::DescriptorExecutionPlan,
+        context,
+    ) where {T <: AbstractFloat}
+    length(contributions) >= length(plan.source_table) || throw(
+        ArgumentError("proposal contribution storage is too small"),
+    )
+    fill!(contributions, _neutral_proposal_evaluation(T))
+    return _evaluate_proposal_groups!(
+        contributions, plan.groups, context, plan.domain_resources
+    )
+end
+
+"""Fold proposal roles in canonical frozen source order."""
+@inline function fold_proposal_contributions(
+        plan::DescriptorExecutionPlan,
+        contributions::AbstractVector{ProposalEvaluation{T}},
+    ) where {T <: AbstractFloat}
+    length(contributions) >= length(plan.source_table) || throw(
+        ArgumentError("proposal contribution storage is too small"),
+    )
+    delta_h = zero(T)
+    drive_log_bias = zero(T)
+    kinetic_modifier = zero(T)
+    constraints_allowed = true
+    for source in eachindex(plan.source_table)
+        contribution = @inbounds contributions[source]
+        delta_h += contribution.delta_h
+        drive_log_bias += contribution.drive_log_bias
+        kinetic_modifier += contribution.kinetic_modifier
+        constraints_allowed &= contribution.constraints_allowed
+    end
+    return ProposalEvaluation(
+        delta_h, drive_log_bias, kinetic_modifier, constraints_allowed
+    )
+end
+
 function descriptor_plan_report(plan::DescriptorExecutionPlan)
     return (
         occurrences = Int(plan.occurrence_count),
