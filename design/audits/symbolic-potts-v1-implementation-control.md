@@ -123,8 +123,8 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
-| G1 host compiler facts | `passed` | 33 focused compiler tests; 313-test full suite; two neutral candidates | `64ab5a2` | none |
-| G2 descriptor/group/evaluator/state/workspace | `passed` | provenance/fingerprint repair: focused 73/73 and 124/124; standalone 124/124; full growth 5/5; root 448/448; Metal exact | `b269164` | R1 passed: 0 P0, 0 P1 |
+| G1 host compiler facts | `repair_in_progress` | prior structural tests passed; Hamiltonian taxonomy/affected-region P0 found at G3 preflight | `64ab5a2` (superseded as gate evidence) | scientific-classification rereview required |
+| G2 descriptor/group/evaluator/state/workspace | `blocked_by_G1` | evaluator/storage checkpoint remains useful; no typed before/after Hamiltonian plan | `b269164` (partial boundary only) | R1 must be rerun after repair |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `passed` | none | none; both P2 findings repaired after checkpoint |
+| R1 compiler | `reopened` | Hamiltonian/affected-region P0 escaped the earlier evaluator-boundary review | none |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -484,6 +484,26 @@ Post-split qualification passed:
 - root `Pkg.test`: 448/448 in 4m37.9s.
 
 R1 cleared the G2 checkpoint, both R1 P2 findings are repaired, and G3 may begin.
+
+## G3 preflight return to G1/G2
+
+Before runtime integration, an independent read-only G3 preflight challenged the scientific meaning
+of the descriptor evaluator against controlling ARV1-003 and CCV1-003/021/024. It found a P0 that
+the earlier R1 evaluator-boundary review did not cover:
+
+- the stored and analyzed taxonomy still uses proposal-delta-first `ProposalEnergy` rather than
+  conservative `HamiltonianTerm`;
+- high-level constructors currently author local deltas directly;
+- `affected_region` is only a generic locality record, not a compiler-proven energy-region plan;
+  and
+- the universal descriptor contains one evaluator and no typed before/after Hamiltonian evaluation
+  policy.
+
+The sequential proposal loop must not consume those evaluator values as Hamiltonian deltas. G3 is
+therefore stopped, G1 and G2 are reopened, and R1 must be repeated after the taxonomy,
+affected-region analysis, typed Hamiltonian plan, neutral external delta, algebra, and backend
+evidence are repaired. The earlier checkpoints remain recovery points for the valid expression,
+storage, grouping, provenance, and device-boundary work; they are not complete gate evidence.
 
 ## Prohibited record contents
 
