@@ -2,11 +2,24 @@ _statement_option(statement, name::Symbol, default = nothing) =
     haskey(_statement_options(statement), name) ?
     getproperty(_statement_options(statement), name) : default
 
-function _all_system_statements(system::PottsSystem)
+function _all_system_statements(
+        system::PottsSystem, namespace::Tuple = ()
+    )
     result = AbstractPottsStatement[]
-    append!(result, statements(system))
+    append!(
+        result,
+        (
+            _namespace_statement_for_lowering(statement, namespace)
+            for statement in statements(system)
+        ),
+    )
     for child in getfield(system, :systems)
-        append!(result, _all_system_statements(child))
+        append!(
+            result,
+            _all_system_statements(
+                child, (namespace..., nameof(child))
+            ),
+        )
     end
     return result
 end
@@ -95,28 +108,43 @@ function _lower_activity(statements, kinds, manifest, ::Type{T}, dimensions) whe
     )
 end
 
-function _lower_field(statements, kinds, manifest, ::Type{T}) where {
+function _lower_field(
+        statements, kinds, manifest, ::Type{T}, dimensions
+    ) where {
         T <: AbstractFloat,
     }
+    field_states = filter(statement -> statement isa FieldState, statements)
+    isempty(field_states) && return nothing
+    length(field_states) == 1 || throw(ArgumentError(
+        "the V1 runtime currently supports one FieldState per executable"
+    ))
+    field_state = only(field_states)
     chemotaxis_index = findfirst(statement ->
         statement isa ProposalEnergy &&
         _statement_option(statement, :mechanism) === :chemotaxis, statements)
-    chemotaxis_index === nothing && return nothing
-    chemotaxis = statements[chemotaxis_index]
-    field_ref = _statement_option(chemotaxis, :field)
-    field_state_index = findfirst(statement ->
-        statement isa FieldState && (
-            isequal(statement, field_ref) ||
-            Symbol(statement_id(statement)) ===
-                (field_ref isa Symbol ? field_ref :
-                 field_ref isa AbstractPottsStatement ?
-                 Symbol(statement_id(field_ref)) : Symbol(""))
-        ), statements)
-    field_state_index === nothing && throw(ArgumentError(
-        "chemotaxis references an undeclared FieldState"
-    ))
-    field_state = statements[field_state_index]
-    kind = kinds[_kind_name(_statement_option(chemotaxis, :kind))]
+    chemotaxis = chemotaxis_index === nothing ?
+                  nothing : statements[chemotaxis_index]
+    if chemotaxis !== nothing
+        field_ref = _statement_option(chemotaxis, :field)
+        isequal(field_state, field_ref) ||
+            Symbol(statement_id(field_state)) ===
+            (field_ref isa Symbol ? field_ref :
+             field_ref isa AbstractPottsStatement ?
+             Symbol(statement_id(field_ref)) : Symbol("")) ||
+            throw(ArgumentError(
+                "chemotaxis references an undeclared FieldState"
+            ))
+    end
+    source_kind_ref = _statement_option(
+        field_state,
+        :source_kind,
+        chemotaxis === nothing ? nothing :
+        _statement_option(chemotaxis, :kind),
+    )
+    source_kind = source_kind_ref === nothing ? 0 :
+                  kinds[_kind_name(source_kind_ref)]
+    chemotaxis_kind = chemotaxis === nothing ? 0 :
+                       kinds[_kind_name(_statement_option(chemotaxis, :kind))]
     diffusion = _compiled_scalar(
         _statement_option(field_state, :diffusion, 0.0), manifest, T
     )
@@ -126,24 +154,211 @@ function _lower_field(statements, kinds, manifest, ::Type{T}) where {
     secretion = _compiled_scalar(
         _statement_option(field_state, :secretion, 0.0), manifest, T
     )
-    strength = _compiled_scalar(
-        _statement_option(chemotaxis, :strength), manifest, T
-    )
+    strength = chemotaxis === nothing ?
+               CorePotts.CompiledScalar(zero(T)) :
+               _compiled_scalar(
+                   _statement_option(chemotaxis, :strength), manifest, T
+               )
     substeps = Int(_statement_option(field_state, :substeps, 1))
     substeps > 0 || throw(ArgumentError("field substeps must be positive"))
+    duration_value = _statement_option(
+        field_state, :duration_per_mcs, 1.0
+    )
     duration = T(_numeric_value(
-        _statement_option(field_state, :duration_per_mcs, 1.0)
+        duration_value,
+        _reference_for(manifest.reference_units, duration_value),
     ))
+    stencil_offsets = _relation_offsets(
+        statements, :field_stencil, dimensions, VonNeumann()
+    )
     return CorePotts.CompiledFieldPlan(
         true,
         diffusion,
         decay,
         secretion,
-        Int16(kind),
+        Int16(source_kind),
+        Int16(chemotaxis_kind),
         strength,
+        stencil_offsets,
         Int32(substeps),
         duration,
     )
+end
+
+function _lower_history(statements)
+    histories = filter(statement -> statement isa HistoryState, statements)
+    isempty(histories) && return nothing
+    length(histories) == 1 || throw(ArgumentError(
+        "the V1 runtime currently supports one HistoryState per executable"
+    ))
+    statement = only(histories)
+    source = _statement_option(statement, :of, nothing)
+    source === nothing && throw(ArgumentError(
+        "HistoryState requires an explicit `of` source in V1"
+    ))
+    activity_states = filter(candidate ->
+        candidate isa SiteState &&
+        isequal(_statement_arguments(candidate).variable, source), statements)
+    length(activity_states) == 1 || throw(ArgumentError(
+        "V1 history source must identify one declared SiteState"
+    ))
+    depth = _numeric_value(_statement_option(statement, :depth, 1))
+    depth isa Real && isinteger(depth) ||
+        throw(ArgumentError("history depth must be structurally resolved"))
+    return CorePotts.CompiledHistoryPlan(Int(depth), :activity)
+end
+
+function _lower_relationships(statements, kinds, manifest, ::Type{T}) where {
+        T <: AbstractFloat,
+    }
+    resources = filter(statement -> statement isa RelationshipState, statements)
+    isempty(resources) && return nothing
+    length(resources) == 1 || throw(ArgumentError(
+        "the V1 runtime currently supports one RelationshipState per executable"
+    ))
+    relationship = only(resources)
+    endpoints = _statement_option(relationship, :endpoints)
+    endpoints isa Undirected || throw(ArgumentError(
+        "V1 relationship lowering currently requires Undirected endpoints"
+    ))
+    kind_a = kinds[_kind_name(endpoints.kind_a)]
+    kind_b = kinds[_kind_name(endpoints.kind_b)]
+    capacity = _numeric_value(_statement_option(relationship, :capacity))
+    maximum_degree =
+        _numeric_value(_statement_option(relationship, :maximum_degree))
+    capacity isa Real && isinteger(capacity) ||
+        throw(ArgumentError("relationship capacity must be structurally resolved"))
+    maximum_degree isa Real && isinteger(maximum_degree) || throw(ArgumentError(
+        "relationship maximum_degree must be structurally resolved"
+    ))
+    payload = _statement_option(relationship, :payload, NamedTuple())
+    all(name -> haskey(payload, name), (:strength, :target, :maximum)) ||
+        throw(ArgumentError(
+            "relationship payload requires strength, target, and maximum"
+        ))
+    strength = _compiled_scalar(payload.strength, manifest, T)
+    target = _compiled_scalar(payload.target, manifest, T)
+    maximum = _compiled_scalar(payload.maximum, manifest, T)
+    create_on_copy = any(statements) do candidate
+        candidate isa AcceptedCopyProcess || return false
+        any(_statement_arguments(candidate).effects) do effect
+            effect isa Create && isequal(effect.relationship, relationship)
+        end
+    end
+    break_after_mcs = any(statements) do candidate
+        candidate isa Union{RelationshipProcess, LifecycleProcess} || return false
+        any(_statement_arguments(candidate).effects) do effect
+            effect isa Remove && isequal(effect.relationship, relationship)
+        end
+    end
+    lifecycle = _statement_option(
+        relationship, :lifecycle, RejectEndpointRetirement()
+    )
+    lifecycle isa Union{RemoveWithEndpoint, RejectEndpointRetirement} ||
+        throw(ArgumentError("unsupported relationship lifecycle policy"))
+    remove_with_endpoint = lifecycle isa RemoveWithEndpoint
+    return CorePotts.CompiledRelationshipPlan(
+        Int(capacity),
+        Int(maximum_degree),
+        kind_a,
+        kind_b,
+        strength,
+        target,
+        maximum;
+        create_on_accepted_copy = create_on_copy,
+        break_after_mcs,
+        remove_with_endpoint,
+    )
+end
+
+function _lower_elongation(statements, kinds, manifest, ::Type{T}) where {
+        T <: AbstractFloat,
+    }
+    terms = filter(statement ->
+        statement isa ProposalEnergy &&
+        _statement_option(statement, :mechanism) === :elongation, statements)
+    isempty(terms) && return nothing
+    length(terms) == 1 || throw(ArgumentError(
+        "the V1 runtime currently supports one elongation term"
+    ))
+    term = only(terms)
+    kind = kinds[_kind_name(_statement_option(term, :kind))]
+    return CorePotts.CompiledElongationPlan(
+        Int16(kind),
+        _compiled_scalar(_statement_option(term, :target), manifest, T),
+        _compiled_scalar(_statement_option(term, :strength), manifest, T),
+    )
+end
+
+function _token_suffix(value, prefix::AbstractString)
+    name = String(Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(value))))
+    startswith(name, prefix) || return nothing
+    return Symbol(name[(lastindex(prefix) + 1):end])
+end
+
+function _lower_observations(statements, kinds)
+    plans = CorePotts.AbstractProgramObservation[]
+    manifest = NamedTuple[]
+    field_variables = Dict{Any, Symbol}()
+    for statement in statements
+        statement isa FieldState || continue
+        arguments = _statement_arguments(statement)
+        haskey(arguments, :variable) || continue
+        field_variables[arguments.variable] = Symbol(statement_id(statement))
+    end
+    for statement in statements
+        statement isa Observation || continue
+        expression = _statement_arguments(statement).expression
+        name = Symbol(statement_id(statement))
+        if any(variable -> isequal(expression, variable), keys(field_variables))
+            push!(plans, CorePotts.FieldStateObservation())
+            push!(manifest, (name, kind = :field_state))
+            continue
+        end
+        unwrapped = Symbolics.unwrap(expression)
+        operation = try
+            Symbolics.operation(unwrapped)
+        catch
+            nothing
+        end
+        arguments = try
+            Symbolics.arguments(unwrapped)
+        catch
+            Any[]
+        end
+        if operation === occupancy && length(arguments) == 2
+            kind_name = _token_suffix(first(arguments), "__potts_kind__")
+            kind_name === nothing && throw(ArgumentError(
+                "observation `$name` has an invalid occupancy kind"
+            ))
+            push!(plans, CorePotts.OccupiedSitesObservation(
+                Int16(kinds[kind_name])
+            ))
+            push!(manifest, (name, kind = :occupied_sites))
+        elseif operation === neighbor_count && length(arguments) == 2
+            relationship_name = _token_suffix(
+                first(arguments), "__potts_relationship_set__"
+            )
+            relationship_name === nothing && throw(ArgumentError(
+                "observation `$name` has an unsupported neighbor-count source"
+            ))
+            endpoint = _numeric_value(last(arguments))
+            endpoint isa Integer || isinteger(endpoint) ||
+                throw(ArgumentError("relationship degree endpoint must be integral"))
+            push!(plans, CorePotts.RelationshipDegreeObservation(
+                Int32(endpoint)
+            ))
+            push!(manifest, (
+                name, kind = :relationship_degree, relationship_name
+            ))
+        else
+            throw(ArgumentError(
+                "no concrete V1 observation lowering exists for `$name`: " *
+                "$(repr(expression))"
+            ))
+        end
+    end
+    return Tuple(plans), Tuple(manifest)
 end
 
 function _protocol_settings(statements, manifest, ::Type{T}) where {
@@ -162,6 +377,243 @@ function _protocol_settings(statements, manifest, ::Type{T}) where {
         end
     end
     return attempts, _compiled_scalar(temperature_value, manifest, T)
+end
+
+const _PROGRAM_BINARY_OPERATIONS = (
+    (+) => :add,
+    (-) => :subtract,
+    (*) => :multiply,
+    (/) => :divide,
+    (^) => :power,
+    max => :maximum,
+    min => :minimum,
+    (<) => :less,
+    (<=) => :less_equal,
+    (>) => :greater,
+    (>=) => :greater_equal,
+    (==) => :equal,
+    (!=) => :not_equal,
+    (&) => :and,
+    (|) => :or,
+)
+
+const _PROGRAM_UNARY_OPERATIONS = (
+    (!) => :not,
+    abs => :absolute,
+    exp => :exponential,
+    log => :logarithm,
+    sqrt => :square_root,
+)
+
+function _program_operation_name(operation, arity::Int)
+    if operation === (-) && arity == 1
+        return :negate
+    end
+    for (candidate, name) in _PROGRAM_BINARY_OPERATIONS
+        operation === candidate && return name
+    end
+    for (candidate, name) in _PROGRAM_UNARY_OPERATIONS
+        operation === candidate && return name
+    end
+    operation === ifelse && return :ifelse
+    return nothing
+end
+
+function _fold_program_call(name::Symbol, arguments::Tuple)
+    isempty(arguments) &&
+        throw(ArgumentError("symbolic operation `$name` has no arguments"))
+    length(arguments) == 1 &&
+        return CorePotts.ProgramCall(Val(name), only(arguments))
+    result = CorePotts.ProgramCall(Val(name), arguments[1], arguments[2])
+    for index in 3:length(arguments)
+        result = CorePotts.ProgramCall(Val(name), result, arguments[index])
+    end
+    return result
+end
+
+function _explicit_draw_operations(completed::PottsSystem)
+    identities = Symbol[]
+    for (_, operations) in inspect(completed, RandomOperations())
+        for operation in operations
+            operation.reserved && continue
+            operation.identity in identities || push!(identities, operation.identity)
+        end
+    end
+    sort!(identities; by = String)
+    length(identities) <= 4095 - 15 ||
+        throw(ArgumentError("too many explicit stochastic operations"))
+    return Dict(identity => UInt16(index + 15)
+                for (index, identity) in enumerate(identities))
+end
+
+function _lower_program_expression(
+        value,
+        manifest::ParameterManifest,
+        ::Type{T},
+        draw_operations,
+    ) where {T <: AbstractFloat}
+    if value isa Bool
+        return CorePotts.ProgramLiteral(value)
+    elseif value isa Number &&
+            SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic
+        return CorePotts.ProgramLiteral(T(_numeric_value(
+            value, _reference_for(manifest.reference_units, value)
+        )))
+    end
+
+    unwrapped = Symbolics.unwrap(value)
+    if !Symbolics.iscall(unwrapped)
+        literal = try
+            Symbolics.value(unwrapped)
+        catch
+            nothing
+        end
+        if literal isa Bool
+            return CorePotts.ProgramLiteral(literal)
+        elseif literal isa Number
+            return CorePotts.ProgramLiteral(T(_numeric_value(
+                literal, _reference_for(manifest.reference_units, literal)
+            )))
+        end
+        index = _parameter_index(manifest, value)
+        index === nothing && throw(ArgumentError(
+            "proposal expression contains an unresolved symbolic leaf " *
+            "$(repr(value)); only runtime parameters and registered Potts " *
+            "operations may reach execution"
+        ))
+        return CorePotts.ProgramScalar(_compiled_scalar(value, manifest, T))
+    end
+
+    operation = Symbolics.operation(unwrapped)
+    arguments = Tuple(Symbolics.arguments(unwrapped))
+    if operation === _potts_draw
+        family = _draw_family(arguments)
+        family === :unit_vector && throw(ArgumentError(
+            "UnitVector draws require a vector-valued state/effect target and " *
+            "cannot be used as a scalar proposal contribution"
+        ))
+        key = _draw_key(arguments)
+        haskey(draw_operations, key) ||
+            throw(ArgumentError("draw `$key` has no compiled RNG operation"))
+        first_parameter = _lower_program_expression(
+            arguments[2], manifest, T, draw_operations
+        )
+        second_parameter = _lower_program_expression(
+            arguments[3], manifest, T, draw_operations
+        )
+        return CorePotts.ProgramDraw(
+            Val(family),
+            first_parameter,
+            second_parameter,
+            draw_operations[key],
+        )
+    end
+
+    context_operation = if operation === source_site
+        :source_site
+    elseif operation === target_site
+        :target_site
+    elseif operation === source_cell
+        :source_cell
+    elseif operation === target_cell
+        :target_cell
+    elseif operation === source_kind
+        :source_kind
+    elseif operation === target_kind
+        :target_kind
+    elseif operation === is_extension
+        :is_extension
+    elseif operation === is_retraction
+        :is_retraction
+    else
+        nothing
+    end
+    context_operation === nothing || return CorePotts.ProgramCall(
+        Val(context_operation)
+    )
+
+    if operation === cell_volume
+        length(arguments) == 1 ||
+            throw(ArgumentError("cell_volume requires one proposal expression"))
+        return CorePotts.ProgramCall(
+            Val(:cell_volume),
+            _lower_program_expression(
+                only(arguments), manifest, T, draw_operations
+            ),
+        )
+    elseif operation === field_value
+        length(arguments) == 2 ||
+            throw(ArgumentError("field_value requires a field and site"))
+        return CorePotts.ProgramCall(
+            Val(:field_value),
+            CorePotts.ProgramLiteral(:compiled_field),
+            _lower_program_expression(
+                last(arguments), manifest, T, draw_operations
+            ),
+        )
+    end
+
+    name = _program_operation_name(operation, length(arguments))
+    name === nothing && throw(ArgumentError(
+        "no concrete V1 proposal-expression lowering exists for operation " *
+        "$(repr(operation)) in $(repr(value))"
+    ))
+    lowered = Tuple(
+        _lower_program_expression(argument, manifest, T, draw_operations)
+        for argument in arguments
+    )
+    if name === :ifelse
+        length(lowered) == 3 ||
+            throw(ArgumentError("ifelse requires three arguments"))
+        return CorePotts.ProgramCall(Val(:ifelse), lowered...)
+    elseif name in (:negate, :not, :absolute, :exponential, :logarithm,
+                    :square_root)
+        length(lowered) == 1 ||
+            throw(ArgumentError("unary operation `$name` requires one argument"))
+        return CorePotts.ProgramCall(Val(name), only(lowered))
+    end
+    length(lowered) >= 2 ||
+        throw(ArgumentError("binary operation `$name` requires two arguments"))
+    return _fold_program_call(name, lowered)
+end
+
+function _lower_proposal_expressions(
+        completed::PottsSystem,
+        statements,
+        manifest::ParameterManifest,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    draw_operations = _explicit_draw_operations(completed)
+    lower(statement) = CorePotts.CompiledProposalTerm(
+        _lower_program_expression(
+            _statement_arguments(statement).expression,
+            manifest,
+            T,
+            draw_operations,
+        )
+    )
+    energies = Tuple(
+        lower(statement)
+        for statement in statements
+        if statement isa ProposalEnergy &&
+           _statement_option(statement, :mechanism) in (nothing, :symbolic)
+    )
+    drives = Tuple(
+        lower(statement) for statement in statements
+        if statement isa ProposalDrive
+    )
+    constraints = Tuple(
+        lower(statement)
+        for statement in statements
+        if statement isa ProposalConstraint &&
+           _statement_option(statement, :mechanism) !== :local_connectivity
+    )
+    modifiers = Tuple(
+        lower(statement) for statement in statements
+        if statement isa ProposalModifier
+    )
+    return (; energies, drives, constraints, modifiers)
 end
 
 function _lower_core_program(
@@ -206,9 +658,13 @@ function _lower_core_program(
         kinds[name] = index
     end
     media = filter(statement -> statement isa MediumKind, sorted_declarations)
-    length(media) == 1 ||
-        throw(ArgumentError("V1 compilation requires exactly one MediumKind"))
-    medium_kind = kinds[_kind_name(only(media))]
+    isempty(media) &&
+        throw(ArgumentError("V1 compilation requires at least one MediumKind"))
+    medium_kind = kinds[_kind_name(first(media))]
+    medium_kinds = falses(length(kinds))
+    for declaration in media
+        medium_kinds[kinds[_kind_name(declaration)]] = true
+    end
     count = length(kinds)
     defaults = _default_parameter_buffer(manifest, T)
     zero_scalar = CorePotts.CompiledScalar(zero(T))
@@ -241,7 +697,11 @@ function _lower_core_program(
             kind = kinds[_kind_name(_statement_option(statement, :kind))]
             connectivity_kinds[kind] = true
         elseif statement isa ProposalEnergy &&
-                !(mechanism in (:volume, :contact, :activity, :chemotaxis))
+                !(mechanism in (
+                    nothing, :symbolic,
+                    :volume, :contact, :activity, :chemotaxis, :relationship,
+                    :elongation,
+                ))
             throw(ArgumentError(
                 "no V1 lowering is registered for ProposalEnergy mechanism " *
                 "$(repr(mechanism))"
@@ -257,7 +717,21 @@ function _lower_core_program(
     )
     attempts, temperature = _protocol_settings(all_statements, manifest, T)
     activity = _lower_activity(all_statements, kinds, manifest, T, dimensions)
-    field = _lower_field(all_statements, kinds, manifest, T)
+    field = _lower_field(all_statements, kinds, manifest, T, dimensions)
+    history = _lower_history(all_statements)
+    elongation = _lower_elongation(all_statements, kinds, manifest, T)
+    relationships = _lower_relationships(all_statements, kinds, manifest, T)
+    observations, observation_manifest =
+        _lower_observations(all_statements, kinds)
+    proposal_expressions = _lower_proposal_expressions(
+        completed, all_statements, manifest, T
+    )
+    cell_state_fields = Tuple(
+        Symbol(statement_id(statement))
+        for statement in all_statements
+        if statement isa CellState &&
+           haskey(_statement_arguments(statement), :variable)
+    )
     core_engine = engine isa SequentialEngine ?
                   CorePotts.SequentialProgramEngine() :
                   CorePotts.CheckerboardProgramEngine()
@@ -290,8 +764,19 @@ function _lower_core_program(
         defaults,
         activity,
         field,
+        history,
+        elongation,
+        relationships,
+        observations,
         core_engine,
         core_backend,
-        program_fingerprint,
-    ), Tuple(sorted_declarations)
+        program_fingerprint;
+        medium_kinds,
+        proposal_energies = proposal_expressions.energies,
+        proposal_drives = proposal_expressions.drives,
+        proposal_constraints = proposal_expressions.constraints,
+        proposal_modifiers = proposal_expressions.modifiers,
+        cell_state_fields,
+    ), Tuple(_kind_name(declaration) for declaration in sorted_declarations),
+       observation_manifest
 end

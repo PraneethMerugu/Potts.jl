@@ -4,8 +4,9 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: Implementation-grade and audit-passed; implementation prohibited until explicit owner
-send-off
+Status: superseded in part by the
+[Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md);
+implementation prohibited until explicit owner send-off
 
 ## Authority and purpose
 
@@ -21,6 +22,12 @@ document governs. If it exposes a new product or scientific choice not settled h
 parent specification, implementation MUST stop and ask the owner.
 
 This specification is not a migration guide. The branch provides no compatibility period.
+
+The Architecture Redirection Contract governs conflicts involving compiler openness, typed
+descriptors, CorePotts state and workspace, stage taxonomy, checkerboard concurrency, relationship
+admission, the JuliaGPU portability stack, test authority, implementation order, and phase exit.
+In particular, the former closed-to-built-ins lowering, mechanism-shaped program boundary,
+sequential-only focal fixture, and mechanism-first internal slices are no longer authoritative.
 
 ## Phase result
 
@@ -590,6 +597,10 @@ policy until a later documentation phase is paired with it or the owner explicit
 merge plan.
 
 ## ACV1-021 — Autonomous internal slices
+
+For implementation ordering only, this clause is superseded by G0 through G9 in CCV1-022 of the
+[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md). Its package,
+integration, proof-model, clean-break, and ordinary-QA requirements survive.
 
 After explicit owner send-off, one autonomous phase proceeds through these internal slices:
 

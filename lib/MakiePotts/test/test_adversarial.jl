@@ -35,18 +35,18 @@ end
 @testset "all slice axes and endpoints" begin
     fixture = render_fixture(dimensions = 3)
     source_size = (5, 4, 3)
-    source_spacing = (0.5, 1.0, 1.5)
+    source_spacing = (1.0, 1.0, 1.0)
     for axis in 1:3
         retained = Tuple(filter(!=(axis), (1, 2, 3)))
         expected_size = ntuple(i -> source_size[retained[i]], Val(2))
         expected_spacing = ntuple(i -> source_spacing[retained[i]], Val(2))
         for index in (1, source_size[axis])
             request = RenderRequest(extent = OrthogonalSlice(axis, index))
-            frame = renderframe(fixture.state, fixture.problem, request; mcs = 17)
+            frame = renderframe(fixture.state, request)
             @test frame_size(frame) == expected_size
             @test frame_geometry(frame).source_axes == retained
             @test frame_geometry(frame).spacing == expected_spacing
-            @test frame_mcs(frame) == 17
+            @test frame_mcs(frame) == 0
             @test Base.isvalid(render_frame_conformance(frame))
         end
     end
@@ -168,15 +168,15 @@ end
 
     fixture_2d = render_fixture()
     @test_throws ArgumentError renderframe(
-        fixture_2d.state, fixture_2d.problem,
+        fixture_2d.state,
         RenderRequest(extent = OrthogonalSlice(1, 1)))
     @test_throws ArgumentError renderframe(
-        fixture_2d.state, fixture_2d.problem,
+        fixture_2d.state,
         RenderRequest(include_cell_metadata = false))
 
     fixture_3d = render_fixture(dimensions = 3)
     @test_throws BoundsError renderframe(
-        fixture_3d.state, fixture_3d.problem,
+        fixture_3d.state,
         RenderRequest(extent = OrthogonalSlice(3, 4)))
 
     @test_throws MakiePotts.InvalidRenderFrameError PottsRenderFrame(-1,

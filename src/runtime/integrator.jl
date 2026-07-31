@@ -42,8 +42,14 @@ end
 
 function _normalize_observables(executable, observables)
     requested = Tuple(_state_name(value) for value in observables)
-    declared = Set{Symbol}((:ownership, :cell_kinds, :volumes, :activity, :field))
-    union!(declared, Symbol(statement_id(value)) for value in executable.observations)
+    declared = Set{Symbol}(
+        (
+            :ownership, :cell_kinds, :cell_generations, :volumes,
+            :activity, :field, :history, :relationships,
+        )
+    )
+    union!(declared, entry.name for entry in executable.reports.relationship_states)
+    union!(declared, value.name for value in executable.observations)
     unknown = setdiff(Set(requested), declared)
     isempty(unknown) ||
         throw(ArgumentError("unknown executable observation$(length(unknown) == 1 ? "" : "s"): " *
@@ -83,23 +89,30 @@ function _save_policy(
     )
 end
 
-function _runtime_observations(runtime, requested)
-    values = Dict{Symbol, Any}()
-    for name in requested
-        name in (:ownership, :cell_kinds, :volumes, :activity, :field) && continue
-        # Derived observation lowering is intentionally closed. Built-in observations
-        # are added as concrete kernels by the compiler; none are currently implicit.
-        values[name] = missing
+function _named_runtime_observations(runtime, executable, requested_names)
+    available = CorePotts.program_observations(runtime)
+    requested = Set(requested_names)
+    pairs = Pair{Symbol, Any}[]
+    for (index, entry) in enumerate(executable.observations)
+        entry.name in requested || continue
+        push!(pairs, entry.name => available[index])
     end
-    return NamedTuple{Tuple(keys(values))}(Tuple(values[key] for key in keys(values)))
+    names = Tuple(first(pair) for pair in pairs)
+    return NamedTuple{names}(Tuple(last(pair) for pair in pairs))
 end
 
 function _current_saved_state(integrator::PottsIntegrator)
     snapshot = CorePotts.program_snapshot(integrator.runtime)
-    observations = _runtime_observations(
-        integrator.runtime, integrator.policy.observables
+    observations = _named_runtime_observations(
+        integrator.runtime,
+        integrator.prob.executable,
+        integrator.policy.observables,
     )
-    return _saved_state(snapshot, observations)
+    return _saved_state(
+        snapshot,
+        observations,
+        (entry.name for entry in integrator.prob.executable.observations),
+    )
 end
 
 function _save_current!(integrator::PottsIntegrator)
@@ -126,17 +139,26 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
     policy = _save_policy(problem; kwargs...)
     checkpoint === nothing ||
         return _init_from_checkpoint(problem, checkpoint, policy)
-    core_initial = _core_initial_state(problem.executable, problem.initial)
+    core_initial = _core_initial_state(
+        problem.executable, problem.initial, problem.seed, problem.replica
+    )
     runtime = CorePotts.initialize_program(
         problem.executable.core_program,
         core_initial,
-        problem.parameters.values,
+        collect(problem.parameters.values),
         problem.seed,
         problem.replica;
+        repeat = problem.ensemble_repeat,
         initial_mcs = problem.tspan[1],
     )
     initial_snapshot = CorePotts.program_snapshot(runtime)
-    initial_state = _saved_state(initial_snapshot, NamedTuple())
+    initial_state = _saved_state(
+        initial_snapshot,
+        _named_runtime_observations(
+            runtime, problem.executable, policy.observables
+        ),
+        (entry.name for entry in problem.executable.observations),
+    )
     integrator = PottsIntegrator(
         problem,
         runtime,
@@ -187,13 +209,145 @@ function _integrator_stats(integrator::PottsIntegrator)
     )
 end
 
+runtime_statistics(integrator::PottsIntegrator) =
+    _integrator_stats(integrator)
+
 function _set_runtime_parameters!(integrator::PottsIntegrator, values)
     integrator.runtime.settled ||
         throw(ArgumentError("parameter updates require a settled MCS boundary"))
     parameters = _normalize_parameters(integrator.prob.executable, values)
     CorePotts.update_program_parameters!(
-        integrator.runtime, parameters.values
+        integrator.runtime, collect(parameters.values)
     )
     push!(integrator.parameter_history, integrator.t => parameters)
     return parameters
+end
+
+function _external_input_pairs(values)
+    values isa NamedTuple && return Pair[
+        key => getproperty(values, key) for key in keys(values)
+    ]
+    values isa AbstractDict && return collect(pairs(values))
+    values isa Tuple && all(value -> value isa Pair, values) &&
+        return Pair[values...]
+    values isa AbstractVector{<:Pair} && return collect(values)
+    values isa Pair && return Pair[values]
+    isempty(values) && return Pair[]
+    throw(ArgumentError("external inputs must be pairs, a dictionary, or a named tuple"))
+end
+
+"""
+    stage_external_inputs!(integrator, values)
+
+Validate and atomically publish one frozen set of compiled external inputs at a
+settled MCS boundary. This qualified hook exists for runtime adapters.
+"""
+function stage_external_inputs!(integrator::PottsIntegrator, values)
+    integrator.runtime.settled ||
+        throw(ArgumentError("external inputs require a settled MCS boundary"))
+    manifest = inspect(integrator.prob.executable, ExternalIO())
+    supplied = _external_input_pairs(values)
+    isempty(supplied) && return integrator
+    resolved = Pair{Any, Any}[]
+    seen = Set{Symbol}()
+    for (key, value) in supplied
+        key_name = _state_name(key)
+        index = findfirst(manifest) do entry
+            entry.direction === :input &&
+                (entry.identity === key_name || entry.endpoint === key_name)
+        end
+        index === nothing &&
+            throw(ArgumentError("unknown compiled external input `$key_name`"))
+        entry = manifest[index]
+        entry.endpoint in seen &&
+            throw(ArgumentError("duplicate compiled external input `$key_name`"))
+        push!(seen, entry.endpoint)
+        push!(resolved, entry => value)
+    end
+
+    T = eltype(integrator.runtime.parameters)
+    parameters = copy(integrator.runtime.parameters)
+    activity = integrator.runtime.activity === nothing ? nothing :
+               copy(integrator.runtime.activity)
+    field = integrator.runtime.field === nothing ? nothing :
+            copy(integrator.runtime.field)
+    stored_states = _copy_saved_value(integrator.runtime.stored_states)
+    parameter_changed = false
+    for (entry, value) in resolved
+        if entry.parameter_index !== nothing
+            parameter = integrator.prob.executable.parameter_manifest[
+                entry.parameter_index
+            ]
+            parameters[entry.parameter_index] =
+                _convert_parameter_value(parameter, value, T)
+            parameter_changed = true
+        else
+            state = integrator.prob.executable.reports.states[entry.state_index]
+            if state.role === :activity
+                value isa AbstractArray ||
+                    throw(ArgumentError(
+                        "external activity state `$(entry.identity)` requires an array"
+                    ))
+                size(value) == entry.shape || throw(ArgumentError(
+                    "external state `$(entry.identity)` has shape $(size(value)); " *
+                    "expected $(entry.shape)"
+                ))
+                converted = map(
+                    item -> _convert_initial_scalar(state, item, T), value
+                )
+                activity === nothing && throw(ArgumentError(
+                    "external activity state is not allocated"
+                ))
+                activity = converted
+            elseif state.role === :field
+                value isa AbstractArray ||
+                    throw(ArgumentError(
+                        "external field state `$(entry.identity)` requires an array"
+                    ))
+                size(value) == entry.shape || throw(ArgumentError(
+                    "external state `$(entry.identity)` has shape $(size(value)); " *
+                    "expected $(entry.shape)"
+                ))
+                converted = map(
+                    item -> _convert_initial_scalar(state, item, T), value
+                )
+                field === nothing && throw(ArgumentError(
+                    "external field state is not allocated"
+                ))
+                field = converted
+            else
+                converted = _normalize_initial_state_entry(
+                    state,
+                    Dict(state.name => value),
+                    integrator.prob.executable.core_program.shape,
+                    length(integrator.runtime.cell_kinds),
+                    T,
+                )
+                stored_states = merge(
+                    stored_states,
+                    NamedTuple{(state.name,)}((converted,)),
+                )
+            end
+        end
+    end
+
+    parameter_changed &&
+        CorePotts.update_program_parameters!(integrator.runtime, parameters)
+    activity === nothing ||
+        copyto!(integrator.runtime.activity, activity)
+    field === nothing ||
+        copyto!(integrator.runtime.field, field)
+    integrator.runtime.stored_states = stored_states
+    if parameter_changed
+        names = Tuple(
+            entry.name
+            for entry in integrator.prob.executable.parameter_manifest
+        )
+        normalized = PottsParameters(
+            copy(parameters), NamedTuple{names}(Tuple(parameters))
+        )
+        push!(integrator.parameter_history, integrator.t => normalized)
+    end
+    integrator.u = _current_saved_state(integrator)
+    return integrator
 end

@@ -1,7 +1,6 @@
 module DownstreamFixture
 
 using MakiePotts
-import CorePotts
 import MakiePotts: available_channels, cell_metadata, channel, encode
 import MakiePotts: encoding_kind, encoding_label, frame_geometry, frame_mcs
 import MakiePotts: frame_provenance, frame_size, materialize_channel
@@ -81,17 +80,6 @@ struct CheckerboardRequest <: AbstractChannelRequest
     key::typeof(SIGNAL_KEY)
 end
 CheckerboardRequest() = CheckerboardRequest(SIGNAL_KEY)
-
-function materialize_channel(state::CorePotts.LogicalPottsState, cells,
-        request::CheckerboardRequest)
-    dims = CorePotts.lattice_size(state)
-    values = Array{Float64}(undef, dims)
-    for site in CartesianIndices(values)
-        values[site] = isodd(sum(Tuple(site))) ? 0.25 : 0.75
-    end
-    return RenderChannel(request.key, values;
-        label = "Checkerboard", units = "fraction")
-end
 
 """Custom continuous encoding supplied by a downstream package."""
 struct RootSignalEncoding <: AbstractPottsEncoding

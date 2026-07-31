@@ -12,6 +12,8 @@
         unknowns = source_unknowns,
         parameters = source_parameters,
         independent_variables = [t],
+        inputs = [k],
+        outputs = [x],
         initial_conditions = source_initial,
     )
 
@@ -36,6 +38,62 @@
     )
     @test nameof(tree) == :parent
     @test propertynames(tree) == [:child]
+    qualified_tree = complete(tree)
+    energy_record = only(filter(
+        record -> record.identity.local_id == StatementID(:energy),
+        inspect(qualified_tree, Statements()),
+    ))
+    @test any(isequal(
+        ModelingToolkitBase.renamespace(:child, x)
+    ), energy_record.reads)
+    @test any(isequal(
+        ModelingToolkitBase.renamespace(:child, k)
+    ), energy_record.reads)
+    @test !any(isequal(x), energy_record.reads)
+    @test !any(isequal(k), energy_record.reads)
+    @test !any(isequal(x), inspect(qualified_tree, Variables()))
+
+    @test ModelingToolkitBase.equations(tree) == [
+        ModelingToolkitBase.renamespace(:child, x) ~
+        ModelingToolkitBase.renamespace(:child, k),
+    ]
+    @test isequal(ModelingToolkitBase.independent_variables(tree), [t])
+    @test isequal(ModelingToolkitBase.inputs(tree), [
+        ModelingToolkitBase.renamespace(:child, k),
+    ])
+    @test isequal(ModelingToolkitBase.outputs(tree), [
+        ModelingToolkitBase.renamespace(:child, x),
+    ])
+    @test ModelingToolkitBase.initial_conditions(tree) == Dict(
+        ModelingToolkitBase.renamespace(:child, x) => 1.0
+    )
+
+    flattened = flatten(tree)
+    @test isempty(ModelingToolkitBase.get_systems(flattened))
+    @test ModelingToolkitBase.equations(flattened) ==
+          ModelingToolkitBase.equations(tree)
+    @test isequal(
+        ModelingToolkitBase.unknowns(flattened),
+        ModelingToolkitBase.unknowns(tree),
+    )
+    @test isequal(
+        ModelingToolkitBase.parameters(flattened),
+        ModelingToolkitBase.parameters(tree),
+    )
+    @test isequal(
+        ModelingToolkitBase.inputs(flattened),
+        ModelingToolkitBase.inputs(tree),
+    )
+    @test isequal(
+        ModelingToolkitBase.outputs(flattened),
+        ModelingToolkitBase.outputs(tree),
+    )
+    @test ModelingToolkitBase.initial_conditions(flattened) ==
+          ModelingToolkitBase.initial_conditions(tree)
+    @test Symbol(statement_id(only(filter(
+        statement -> statement isa ProposalEnergy,
+        statements(flattened),
+    )))) == :child₊energy
 
     renamed = Symbolics.rename(child, :renamed)
     @test nameof(renamed) == :renamed

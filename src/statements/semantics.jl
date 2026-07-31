@@ -159,7 +159,7 @@ struct CellCentered end
 
 function _symbolic_local_name(value)
     return try
-        Symbol(Symbolics.getname(Symbolics.unwrap(value)))
+        Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(value)))
     catch
         throw(ArgumentError(
             "a state declared from a symbolic value requires an explicit `name`"
@@ -298,6 +298,36 @@ struct ObserveStage{C, O}
 end
 ObserveStage(name::Symbol; every::Integer = 1, kwargs...) =
     ObserveStage(name, Every(every), (; kwargs...))
+
+function _map_symbolic_fields(f, value)
+    mapped = map(
+        field -> _map_symbolic_payload(f, getfield(value, field)),
+        fieldnames(typeof(value)),
+    )
+    return typeof(value)(mapped...)
+end
+
+# Typed effects, bounded iteration domains, and protocol stages are part of a
+# statement's semantic payload. They therefore participate in the same single
+# symbolic traversal as direct expression fields.
+_map_symbolic_payload(f, value::AbstractPottsEffect) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::AbstractIterationDomain) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::AbstractBoundaryPolicy) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::AbstractRelationshipEndpointPolicy) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::SweepStage) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::ObserveStage) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::SymmetricPair) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::ProposalContext) =
+    map_symbolics(f, value)
+_map_symbolic_payload(f, value::RelationshipBinding) =
+    map_symbolics(f, value)
 
 Protocol(stages...; name::Symbol = :protocol, source = UnknownSource(), kwargs...) =
     Protocol(name; stages, source, kwargs...)

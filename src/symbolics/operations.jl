@@ -36,7 +36,6 @@ for (operation_name, result_type) in (
         (:field_gradient, Real),
         (:laplacian, Real),
         (:occupancy, Real),
-        (:linked, Bool),
         (:history_value, Real),
     )
     @eval begin
@@ -50,29 +49,44 @@ function lost_contact end
 function edge_payload end
 function lag end
 function _potts_draw end
+function linked end
 
 Symbolics.@register_symbolic new_contact(x, y)::Bool
 Symbolics.@register_symbolic lost_contact(x, y)::Bool
+Symbolics.@register_symbolic linked(relationship, a, b)::Bool
 Symbolics.@register_symbolic edge_payload(edge, payload)::Real
 Symbolics.@register_symbolic lag(state, amount)::Real
 Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 
 _kind_token(kind::Union{CellKind, MediumKind}) =
-    Symbolics.variable(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)
+    _potts_token(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)
 _relationship_token(relationship::RelationshipState) =
-    Symbolics.variable(
-        Symbol("__potts_relationship_set__", Symbol(statement_id(relationship))); T = Int
+    _potts_token(
+        Symbol("__potts_relationship_set__", Symbol(statement_id(relationship)));
+        T = Int,
+    )
+_field_token(field::FieldState) =
+    _potts_token(
+        Symbol("__potts_field__", Symbol(statement_id(field))); T = Real
     )
 
 cell_volume(kind::Union{CellKind, MediumKind}) = cell_volume(_kind_token(kind))
 cell_surface(kind::Union{CellKind, MediumKind}) = cell_surface(_kind_token(kind))
 occupancy(kind::Union{CellKind, MediumKind}, site) = occupancy(_kind_token(kind), site)
+occupancy(kind::Union{CellKind, MediumKind}, site::Symbol) =
+    occupancy(_kind_token(kind), _potts_token(site; T = Int))
 linked(relationship::RelationshipState, a, b) =
     linked(_relationship_token(relationship), a, b)
+field_value(field::FieldState, site) = field_value(_field_token(field), site)
+field_gradient(field::FieldState, site) = field_gradient(_field_token(field), site)
+laplacian(field::FieldState, relation) =
+    laplacian(_field_token(field), relation)
 degree(relationship::RelationshipState, cell) =
     neighbor_count(_relationship_token(relationship), cell)
 edge_payload(edge, ::Val{name}) where {name} =
-    edge_payload(edge, Symbolics.variable(Symbol("__potts_payload__", name); T = Int))
+    edge_payload(
+        edge, _potts_token(Symbol("__potts_payload__", name); T = Int)
+    )
 
 source_site(binding::ProposalContext) = source_site(_binding_token(binding))
 target_site(binding::ProposalContext) = target_site(_binding_token(binding))
@@ -82,4 +96,3 @@ source_kind(binding::ProposalContext) = source_kind(_binding_token(binding))
 target_kind(binding::ProposalContext) = target_kind(_binding_token(binding))
 is_extension(binding::ProposalContext) = is_extension(_binding_token(binding))
 is_retraction(binding::ProposalContext) = is_retraction(_binding_token(binding))
-

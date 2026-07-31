@@ -2,58 +2,70 @@ using Test
 using Aqua
 using CairoMakie
 using MakiePotts
+using ModelingToolkitBase: @named
 using Random
-import CorePotts
 import Makie
 import PottsToolkit
+using Symbolics
 
 include("downstream_fixture.jl")
 include("allocation_fixture.jl")
 
 function render_fixture(; dimensions = 2)
     dims = dimensions == 2 ? (5, 4) : (5, 4, 3)
-    owners = fill(CorePotts.MediumOwner(1), dims)
+    labels = zeros(Int, dims)
     if dimensions == 2
-        fill!(view(owners, 2:3, 2:3), CorePotts.CellOwner(1))
-        fill!(view(owners, 4:5, 2:3), CorePotts.CellOwner(2))
-        obstacle = CartesianIndex(1, 1)
+        fill!(view(labels, 2:3, 2:3), 1)
+        fill!(view(labels, 4:5, 2:3), 2)
     else
-        fill!(view(owners, 2:3, 2:3, 2), CorePotts.CellOwner(1))
-        fill!(view(owners, 4:5, 2:3, 2), CorePotts.CellOwner(2))
-        obstacle = CartesianIndex(1, 1, 2)
+        fill!(view(labels, 2:3, 2:3, 2), 1)
+        fill!(view(labels, 4:5, 2:3, 2), 2)
     end
-    owners[obstacle] = CorePotts.MediumOwner(2)
-    state = CorePotts.LogicalPottsState(owners, CorePotts.CellCapacity(2);
-        cell_types = Dict(
-            CorePotts.CellID(1) => CorePotts.CellTypeID(1),
-            CorePotts.CellID(2) => CorePotts.CellTypeID(2)),
-        generations = (3, 7),
-        medium_domains = (CorePotts.MediumID(1), CorePotts.MediumID(2)))
-    domain = CorePotts.CartesianDomain(dims;
-        spacing = ntuple(i -> 0.5i, dimensions),
-        obstacles = (obstacle => CorePotts.MediumOwner(2),))
-    proposal = CorePotts.first_shell_relation(
-        CorePotts.ProposalRole(), Val(dimensions))
-    surface = CorePotts.first_shell_relation(
-        CorePotts.SurfaceRole(), Val(dimensions))
-    tracker = CorePotts.BoundaryMeasureTracker(
-        CorePotts.BoundaryEdgeCount(), surface)
-    model = CorePotts.PottsModel(proposal, tracker)
-    problem = CorePotts.PottsProblem(model, state, domain, (0, 1))
-    return (; state, domain, problem, obstacle)
+    cell = PottsToolkit.CellKind(:cell)
+    other = PottsToolkit.CellKind(:other)
+    medium = PottsToolkit.MediumKind(:medium)
+    @named visual = PottsToolkit.PottsSystem(
+        statements = PottsToolkit.StatementSet((
+            PottsToolkit.Lattice(dims),
+            cell,
+            other,
+            medium,
+            PottsToolkit.Volume(cell; target = 4.0, strength = 1.0),
+            PottsToolkit.Volume(other; target = 4.0, strength = 1.0),
+            PottsToolkit.Protocol(
+                PottsToolkit.Sweep(; temperature = 2.0); name = :main
+            ),
+        )),
+    )
+    executable = PottsToolkit.compile(
+        PottsToolkit.complete(visual);
+        engine = PottsToolkit.SequentialEngine(),
+        backend = PottsToolkit.CPUBackend(),
+        scalar_type = Float64,
+    )
+    initial = PottsToolkit.PottsInitialState(
+        ownership = PottsToolkit.LabelledCells(
+            labels; cells = [cell, other], medium
+        )
+    )
+    problem = PottsToolkit.PottsProblem(
+        executable, initial, (0, 0); seed = 1
+    )
+    state = only(PottsToolkit.solve(problem))
+    return (; state, problem)
 end
 
 @testset "validated semantic frames" begin
     fixture = render_fixture()
-    frame = renderframe(fixture.state, fixture.problem; mcs = 9)
+    frame = renderframe(fixture.state)
     @test frame isa AbstractPottsRenderFrame{2}
-    @test frame_mcs(frame) == 9
+    @test frame_mcs(frame) == 0
     @test frame_size(frame) == (5, 4)
-    @test frame_geometry(frame).spacing == (0.5, 1.0)
-    @test owner_at(frame, fixture.obstacle).kind === ObstacleSite
-    @test cell_metadata(frame, CellIdentity(1, 3)).cell_type == 1
+    @test frame_geometry(frame).spacing == (1.0, 1.0)
+    @test owner_at(frame, CartesianIndex(1, 1)).kind === MediumSite
+    @test cell_metadata(frame, CellIdentity(1, 1)).cell_type == 2
     @test isempty(available_channels(frame))
-    @test frame_provenance(frame).source === :logical_state
+    @test frame_provenance(frame).source === :saved_state
     @test Base.isvalid(render_frame_conformance(frame))
     @test assert_render_frame_conformance(frame) === frame
     @test_throws ArgumentError CellIdentity(0, 0)
@@ -97,21 +109,16 @@ end
 @testset "requests, slices, and retained observations" begin
     fixture = render_fixture(dimensions = 3)
     request = RenderRequest(extent = OrthogonalSlice(3, 2))
-    frame = renderframe(fixture.state, fixture.problem, request; mcs = 4)
+    frame = renderframe(fixture.state, request)
     @test frame_size(frame) == (5, 4)
     @test frame_geometry(frame).source_axes == (1, 2)
-    @test frame_geometry(frame).spacing == (0.5, 1.0)
-    @test owner_at(frame, CartesianIndex(1, 1)).kind === ObstacleSite
+    @test frame_geometry(frame).spacing == (1.0, 1.0)
+    @test owner_at(frame, CartesianIndex(1, 1)).kind === MediumSite
     @test size(encode(
-        renderframe(fixture.state, fixture.problem; mcs = 4),
+        renderframe(fixture.state),
         CellIdentityEncoding()).values) == (5, 4, 3)
 
-    observed = PottsToolkit.observe(
-        fixture.state, fixture.problem, PottsToolkit.LatticeOwnership())
-    observed_frame = renderframe(observed, fixture.problem, request; mcs = 4)
-    @test [owner_at(frame, site) for site in CartesianIndices(frame_size(frame))] ==
-          [owner_at(observed_frame, site)
-           for site in CartesianIndices(frame_size(observed_frame))]
+    @test assert_render_frame_conformance(frame) === frame
 end
 
 @testset "open typed channels and encodings" begin
@@ -147,7 +154,7 @@ end
 @testset "Makie-native recipe interoperability and reactivity" begin
     CairoMakie.activate!(type = "png")
     first_fixture = render_fixture()
-    first_frame = renderframe(first_fixture.state, first_fixture.problem)
+    first_frame = renderframe(first_fixture.state)
     second_frame = PottsRenderFrame(1,
         fill(RenderOwner(MediumSite, 1), frame_size(first_frame)),
         RenderCellMetadata[];
@@ -161,10 +168,10 @@ end
     frame[] = second_frame
     @test plot.plots == children
     @test Makie.data_limits(plot) ==
-          Makie.Rect3d(Makie.Point3d(0, 0, 0), Makie.Vec3d(2.5, 4.0, 0))
+          Makie.Rect3d(Makie.Point3d(0, 0, 0), Makie.Vec3d(5.0, 4.0, 0))
     @test Makie.extract_colormap(plot) isa Makie.ColorMapping
     @test Makie.boundingbox(plot) ==
-          Makie.Rect3d(Makie.Point3d(0, 0, 0), Makie.Vec3d(2.5, 4.0, 0))
+          Makie.Rect3d(Makie.Point3d(0, 0, 0), Makie.Vec3d(5.0, 4.0, 0))
     @test Makie.boundingbox(plot.plots[1]) == Makie.boundingbox(plot)
     @test Makie.boundingbox(plot.plots[2]) == Makie.boundingbox(plot)
 
@@ -192,12 +199,12 @@ end
     @test filesize(output) > 1_000
     Makie.translate!(plot, 1, 2, 0)
     @test Makie.boundingbox(plot) ==
-          Makie.Rect3d(Makie.Point3d(1, 2, 0), Makie.Vec3d(2.5, 4.0, 0))
+          Makie.Rect3d(Makie.Point3d(1, 2, 0), Makie.Vec3d(5.0, 4.0, 0))
 end
 
 @testset "recording and explorer lifecycle" begin
     fixture = render_fixture()
-    first_frame = renderframe(fixture.state, fixture.problem)
+    first_frame = renderframe(fixture.state)
     second_frame = PottsRenderFrame(1,
         fill(RenderOwner(MediumSite, 1), frame_size(first_frame)),
         RenderCellMetadata[];

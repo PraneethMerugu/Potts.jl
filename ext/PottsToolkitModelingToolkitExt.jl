@@ -21,6 +21,40 @@ function _require_supported_external_system(system)
     return nothing
 end
 
+function _assimilate_external(
+        external::ModelingToolkitBase.AbstractSystem,
+        name::Symbol;
+        process = nothing,
+    )
+    _require_supported_external_system(external)
+    nested = PottsToolkit.PottsSystem[
+        _assimilate_external(child, nameof(child))
+        for child in ModelingToolkitBase.get_systems(external)
+    ]
+    statements = process === nothing ?
+                 PottsToolkit.StatementSet() :
+                 PottsToolkit.StatementSet(process)
+    return PottsToolkit.PottsSystem(
+        name = name,
+        statements = statements,
+        equations = ModelingToolkitBase.get_eqs(external),
+        unknowns = ModelingToolkitBase.get_unknowns(external),
+        parameters = ModelingToolkitBase.get_ps(external),
+        independent_variables =
+            ModelingToolkitBase.independent_variables(external),
+        systems = nested,
+        inputs = ModelingToolkitBase.inputs(external),
+        outputs = ModelingToolkitBase.outputs(external),
+        initial_conditions =
+            ModelingToolkitBase.get_initial_conditions(external),
+        observed = ModelingToolkitBase.get_observed(external),
+        continuous_events =
+            ModelingToolkitBase.get_continuous_events(external),
+        discrete_events =
+            ModelingToolkitBase.get_discrete_events(external),
+    )
+end
+
 function PottsToolkit.EquationComponent(
         external::ModelingToolkitBase.AbstractSystem,
         process::PottsToolkit.EquationProcess;
@@ -30,35 +64,13 @@ function PottsToolkit.EquationComponent(
         "EquationComponent requires `name`; use `@named field = EquationComponent(...)`"
     ))
     _require_supported_external_system(external)
-
-    nested = PottsToolkit.PottsSystem[
-        PottsToolkit.EquationComponent(
-            child,
-            PottsToolkit.EquationProcess(
-                Symbol(PottsToolkit.statement_id(process)),
-                ModelingToolkitBase.equations(child);
-                writes = (),
-            );
-            name = nameof(child),
-        )
-        for child in ModelingToolkitBase.get_systems(external)
-    ]
-
-    return PottsToolkit.PottsSystem(
-        name = name,
-        statements = PottsToolkit.StatementSet(process),
-        equations = ModelingToolkitBase.get_eqs(external),
-        unknowns = ModelingToolkitBase.get_unknowns(external),
-        parameters = ModelingToolkitBase.get_ps(external),
-        independent_variables = ModelingToolkitBase.independent_variables(external),
-        systems = nested,
-        inputs = ModelingToolkitBase.inputs(external),
-        outputs = ModelingToolkitBase.outputs(external),
-        initial_conditions = ModelingToolkitBase.get_initial_conditions(external),
-        observed = ModelingToolkitBase.get_observed(external),
-        continuous_events = ModelingToolkitBase.get_continuous_events(external),
-        discrete_events = ModelingToolkitBase.get_discrete_events(external),
-    )
+    selected = PottsToolkit._statement_arguments(process).equations
+    available = ModelingToolkitBase.equations(external)
+    all(equation -> any(isequal(equation), available), selected) ||
+        throw(ArgumentError(
+            "EquationProcess references an equation outside the external system"
+        ))
+    return _assimilate_external(external, name; process)
 end
 
 end

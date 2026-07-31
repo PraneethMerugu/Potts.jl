@@ -37,6 +37,26 @@
     resumed = solve!(init(problem; checkpoint = captured, save_start = false))
     @test uninterrupted(10).ownership == resumed(10).ownership
     @test uninterrupted(10).volumes == resumed(10).volumes
+    @test uninterrupted(10).cell_generations ==
+          resumed(10).cell_generations
+
+    corrupted = PottsCheckpoint(
+        captured.schema,
+        captured.executable_fingerprint,
+        captured.core,
+        captured.parameter_history,
+        captured.replay_class,
+        "corrupted",
+    )
+    @test_throws ArgumentError init(problem; checkpoint = corrupted)
+    @test_throws ArgumentError init(
+        remake(problem; seed = 0x123457);
+        checkpoint = captured,
+    )
+    @test_throws ArgumentError init(
+        remake(problem; replica = 2);
+        checkpoint = captured,
+    )
 
     other_executable = compile(
         complete(source);
@@ -49,4 +69,3 @@
     )
     @test_throws ArgumentError init(other_problem; checkpoint = captured)
 end
-

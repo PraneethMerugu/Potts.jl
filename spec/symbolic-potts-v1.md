@@ -4,8 +4,9 @@ Date: 2026-07-29
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: Implementation-grade consolidation and audit complete; implementation remains prohibited
-until explicit owner send-off
+Status: superseded in part by the
+[Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md);
+implementation remains prohibited until explicit owner send-off
 
 ## Authority
 
@@ -16,6 +17,11 @@ construction.
 
 When this document conflicts with historical PottsToolkit authoring APIs, migration registries,
 compatibility promises, examples, tutorials, or tests, this document governs this branch.
+
+The Architecture Redirection Contract governs later accepted changes to compiler openness,
+CorePotts execution architecture, checkerboard concurrency, relationship admission, portability,
+test authority, implementation order, and phase exit. Compatible scientific, syntax, unit,
+stochastic, lifecycle, SciML, inspection, and clean-break clauses in this document survive.
 
 The existing scientific specifications remain authoritative for accepted CPM meaning: proposal
 semantics, Hamiltonian terms, lifecycle behavior, relationship behavior, normalized MCS,
@@ -654,6 +660,10 @@ their complete construction. A hidden reference-model constructor, model import,
 not a valid syntax fixture.
 
 ### SPV1-032 — One autonomous clean-break implementation phase
+
+For implementation ordering only, this clause is superseded by G0 through G9 in CCV1-022 of the
+[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md). Its product scope,
+clean-break authority, and no-owner-review-between-gates rule survive.
 
 After the project owner gives explicit implementation send-off, this branch authorizes one
 end-to-end autonomous implementation phase.

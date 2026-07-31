@@ -80,12 +80,10 @@ jobs:
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Install and load the public package
+      - name: Install and run a tiny public sequential trajectory
         run: >-
           julia --startup-file=no -e
           'using Pkg;
           Pkg.activate(; temp=true);
           Pkg.develop(path=pwd());
-          using PottsToolkit;
-          PottsToolkit.scientific_contract_versions().authoring_dsl == v"1.0.0" ||
-          error("public API smoke failed")'
+          include("test/platform_smoke.jl")'

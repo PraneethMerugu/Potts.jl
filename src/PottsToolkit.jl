@@ -48,6 +48,7 @@ export compose, extend, flatten, complete, iscomplete
 export compile, PottsExecutable, SequentialEngine, CheckerboardEngine, CPUBackend
 export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
+export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
 export PottsStats, init, solve, solve!, step!, remake, terminate!
 export PottsCheckpoint, checkpoint
@@ -77,16 +78,23 @@ export RelationshipEnergy, RelationshipConstraint, ↔
 export inspect, Statements, Variables, Effects, RandomOperations, Schedule
 export Capabilities, Fingerprints, StoragePlan, Kernels
 export semantic_fingerprint, completed_system_fingerprint
-export EquationComponent
+export EquationComponent, process_component
 
 public map_symbolics, statement_kind, with_source
+public registered_statement_lowering
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError
+public PottsLookupError, PottsUnknownIdentityError, PottsKnownUnsavedError
+public PottsUnsavedTimeError
 public RuntimeParameter, ParameterManifest, executable_fingerprint
+public ReferenceUnitDescriptor
+public ParameterSchema, StateSchema, Observations, ExternalIO, ReplayContract
+public stage_external_inputs!, runtime_statistics
 public to_dynamic_quantity, to_unitful_quantity
 
 function EquationComponent end
+function process_component end
 function compile end
 function to_unitful_quantity end
 to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value
@@ -96,5 +104,7 @@ const extend = ModelingToolkitBase.extend
 const flatten = ModelingToolkitBase.flatten
 const complete = ModelingToolkitBase.complete
 const iscomplete = ModelingToolkitBase.iscomplete
+
+include("precompile.jl")
 
 end

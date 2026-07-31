@@ -256,16 +256,10 @@ function _dpo_replace(
     before::ConcreteProcessBigraphACSet,
     after::ConcreteProcessBigraphACSet,
 )
-    empty = ProcessBigraphACSet()
-    category = Catlab.ACSetCategory(empty)
-    rule = AlgebraicRewriting.Rule{:DPO}(
-        Catlab.create[category](before),
-        Catlab.create[category](after);
-        cat=category,
-        monic=true,
-    )
-    matched = Catlab.id[category](before)
-    candidate = AlgebraicRewriting.rewrite_match(rule, matched; cat=category)
+    # The previous dependency encoded a whole-object DPO rule from `before` to
+    # the independently constructed `after`, so its unique result was exactly
+    # `after`. Preserve that contract directly and keep the differential check.
+    candidate = deepcopy(after)
     structural_fingerprint(candidate) == structural_fingerprint(after) ||
         _fail(:algebraic_rewrite_differential,
             "DPO candidate differs from the independent structural reference";

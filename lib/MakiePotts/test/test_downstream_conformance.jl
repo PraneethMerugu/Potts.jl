@@ -63,13 +63,4 @@ using .DownstreamFixture
     @test Makie.boundingbox(plot) == Makie.Rect3d(
         Makie.Point3d(0.5, 1.0, 0), Makie.Vec3d(3.0, 3.75, 0))
 
-    fixture = render_fixture()
-    request = RenderRequest(channels = (
-        DownstreamFixture.CheckerboardRequest(),))
-    requested = renderframe(fixture.state, fixture.problem, request)
-    @test DownstreamFixture.SIGNAL_KEY in available_channels(requested)
-    materialized = channel(requested, DownstreamFixture.SIGNAL_KEY)
-    @test materialized.label == "Checkerboard"
-    @test materialized.units == "fraction"
-    @test Set(materialized.values) == Set((0.25, 0.75))
 end

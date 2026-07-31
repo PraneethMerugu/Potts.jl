@@ -67,7 +67,7 @@ function record_potts(filename::AbstractString,
 end
 
 function record_potts(filename::AbstractString,
-        solution::CorePotts.PottsSolution;
+        solution::PottsToolkit.PottsSolution;
         request::RenderRequest = RenderRequest(), kwargs...)
     return record_potts(filename, renderframes(solution, request); kwargs...)
 end

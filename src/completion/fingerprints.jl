@@ -41,7 +41,8 @@ function _canonical_value(value)
         "[", join((_canonical_value(item) for item in value), ","), "]"
     )
     value isa DataType && return string(parentmodule(value), ".", nameof(value))
-    if !(Symbolics.symbolic_type(value) isa SymbolicIndexingInterface.NotSymbolic)
+    if !(SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic)
         return string(value)
     end
     return repr(value)
@@ -51,8 +52,28 @@ _sha256_hex(parts...) =
     bytes2hex(SHA.sha256(codeunits(join(_canonical_value.(parts), "\n"))))
 
 function _semantic_fingerprint(system::PottsSystem, records)
+    function semantic_payload(record)
+        arguments, options = record.normalized_payload
+        if record.kind in (
+                :SiteState,
+                :CellState,
+                :MediumState,
+                :ModelState,
+                :FieldState,
+                :HistoryState,
+                :RelationshipState,
+            ) && arguments isa NamedTuple && haskey(arguments, :initial)
+            retained = Tuple(
+                name for name in keys(arguments) if name !== :initial
+            )
+            arguments = NamedTuple{retained}(Tuple(
+                getproperty(arguments, name) for name in retained
+            ))
+        end
+        return (arguments, options)
+    end
     normalized = sort!(
-        [_canonical_value(record.normalized_payload) for record in records]
+        [_canonical_value(semantic_payload(record)) for record in records]
     )
     equations = sort!(_canonical_value.(ModelingToolkitBase.equations(system)))
     return SemanticFingerprint(_sha256_hex("potts-semantic-v1", normalized, equations))
@@ -64,10 +85,19 @@ function _completed_fingerprint(
     summaries = sort!([
         _canonical_value((
             record.identity,
+            record.result_type,
+            record.shape,
+            record.units,
+            record.reference_conversion,
             record.reads,
             record.writes,
+            record.ownership,
+            record.persistence,
+            record.resources,
             record.effect,
             record.bound,
+            record.transaction_identity,
+            record.lifecycle,
             record.random_operations,
             record.phase,
             record.engine_admission,
@@ -85,4 +115,3 @@ function _completed_fingerprint(
         )
     )
 end
-

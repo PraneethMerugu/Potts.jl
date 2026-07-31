@@ -29,7 +29,7 @@ struct DrawKey
 end
 
 _draw_key_token(key::DrawKey) =
-    Symbolics.variable(Symbol("__potts_draw__", key.value); T = Int)
+    _potts_token(Symbol("__potts_draw__", key.value); T = Int)
 
 draw(distribution::Bernoulli, key::DrawKey) =
     _potts_draw(1, distribution.probability, 0, _draw_key_token(key))
@@ -39,4 +39,3 @@ draw(distribution::Normal, key::DrawKey) =
     _potts_draw(3, distribution.mean, distribution.standard_deviation, _draw_key_token(key))
 draw(::UnitVector{N}, key::DrawKey) where {N} =
     _potts_draw(4, N, 0, _draw_key_token(key))
-

@@ -1,4 +1,4 @@
-struct PottsSolution{S, P, R, A} <:
+struct PottsSolution{S, P, R, A, H} <:
        SciMLBase.AbstractTimeseriesSolution{S, 1, A}
     u::A
     t::Vector{Int}
@@ -9,6 +9,7 @@ struct PottsSolution{S, P, R, A} <:
     retcode::SciMLBase.ReturnCode.T
     stats::PottsStats
     provenance::R
+    parameter_history::H
 end
 
 function PottsSolution(
@@ -17,17 +18,40 @@ function PottsSolution(
         problem,
         retcode,
         stats,
+        parameter_history,
     ) where {S}
+    frozen_parameter_history = Tuple(
+        time => parameters.values
+        for (time, parameters) in parameter_history
+    )
     provenance = (
         executable = executable_fingerprint(problem.executable),
+        problem = _sha256_hex(
+            "potts-problem-v1",
+            executable_fingerprint(problem.executable),
+            problem.initial,
+            problem.tspan,
+            problem.parameters.values,
+            problem.seed,
+            problem.replica,
+            problem.ensemble_repeat,
+        ),
         engine = problem.executable.reports.execution.engine,
         backend = problem.executable.reports.execution.backend,
         scalar_type = problem.executable.reports.execution.scalar_type,
         replay = problem.executable.reports.replay,
         seed = problem.seed,
         replica = problem.replica,
+        ensemble_repeat = problem.ensemble_repeat,
+        parameter_history = frozen_parameter_history,
     )
-    return PottsSolution{S, typeof(problem), typeof(provenance), Vector{S}}(
+    return PottsSolution{
+        S,
+        typeof(problem),
+        typeof(provenance),
+        Vector{S},
+        typeof(frozen_parameter_history),
+    }(
         states,
         times,
         problem,
@@ -37,6 +61,7 @@ function PottsSolution(
         retcode,
         stats,
         provenance,
+        frozen_parameter_history,
     )
 end
 
@@ -50,9 +75,7 @@ Base.eltype(::Type{<:PottsSolution{S}}) where {S} = S
 
 function (solution::PottsSolution)(mcs::Integer; idxs = nothing)
     index = findfirst(==(Int(mcs)), solution.t)
-    index === nothing && throw(ArgumentError(
-        "MCS $(Int(mcs)) is known to the trajectory but was not saved"
-    ))
+    index === nothing && throw(PottsUnsavedTimeError(Int(mcs)))
     state = solution.u[index]
     idxs === nothing && return state
     name = _state_name(idxs)
@@ -77,10 +100,48 @@ function solve!(integrator::PottsIntegrator)
         integrator.prob,
         integrator.retcode,
         _integrator_stats(integrator),
+        integrator.parameter_history,
     )
 end
 
 solve(problem::PottsProblem; kwargs...) = solve!(init(problem; kwargs...))
+solve(problem::PottsProblem, ::Nothing; kwargs...) = solve(problem; kwargs...)
+
+function SciMLBase.EnsembleProblem(
+        problem::PottsProblem;
+        prob_func = nothing,
+        output_func = nothing,
+        reduction = nothing,
+        u_init = nothing,
+        safetycopy::Bool = prob_func !== nothing,
+    )
+    wrapped_prob_func = function (template, context)
+        candidate = prob_func === nothing ?
+                    template : prob_func(template, context)
+        candidate isa PottsProblem || throw(ArgumentError(
+            "a Potts ensemble prob_func must return PottsProblem"
+        ))
+        replica = candidate.replica == template.replica ?
+                  context.sim_id : candidate.replica
+        return _with_ensemble_context(
+            candidate, replica, context.repeat
+        )
+    end
+    wrapped_output = output_func === nothing ?
+                     ((solution, _) -> (solution, false)) : output_func
+    wrapped_reduction = reduction === nothing ?
+                        ((accumulator, data, _) -> (
+                            append!(accumulator, data), false
+                        )) : reduction
+    return SciMLBase.EnsembleProblem(
+        problem,
+        wrapped_prob_func,
+        wrapped_output,
+        wrapped_reduction,
+        u_init,
+        safetycopy,
+    )
+end
 
 function Base.show(io::IO, solution::PottsSolution)
     print(
@@ -96,4 +157,3 @@ function Base.show(io::IO, solution::PottsSolution)
         ")",
     )
 end
-

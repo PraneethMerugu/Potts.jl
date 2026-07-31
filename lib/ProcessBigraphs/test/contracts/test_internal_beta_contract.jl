@@ -2,8 +2,7 @@ using CommonSolve
 using SciMLBase
 
 @testset "internal-beta dependency and extension boundary" begin
-    @test isdefined(ProcessBigraphs, :AlgebraicRewriting)
-    @test :AlgebraicRewriting ∉ names(ProcessBigraphs)
+    @test !isdefined(ProcessBigraphs, :AlgebraicRewriting)
     @test :SciMLBase ∉ names(ProcessBigraphs; all=true)
     @test :CommonSolve ∉ names(ProcessBigraphs; all=true)
 

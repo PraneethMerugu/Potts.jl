@@ -1,7 +1,6 @@
 module ProcessBigraphs
 
 import ACSets
-import AlgebraicRewriting
 import Catlab
 using SHA
 using ACSets: BasicSchema, @acset_type
@@ -127,7 +126,8 @@ public AbstractEngineAdapter, AbstractEngineInstance, AbstractEngineOperation,
        EngineInvocation, EngineCandidate, EngineEarlyReturn,
        EngineEventRequest, EngineFailure, projection_value,
        prepare_engine, stage_operation!, complete_operation!,
-       validate_candidate, publish_candidate!, discard_candidate!
+       validate_candidate, publish_candidate!, discard_candidate!,
+       execute_engine!
 
 include("api_docstrings.jl")
 

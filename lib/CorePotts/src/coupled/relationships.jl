@@ -1,7 +1,0 @@
-include("relationship_parts/requests.jl")
-include("relationship_parts/contact_model.jl")
-include("relationship_parts/accepted_copy_effects.jl")
-include("relationship_parts/request_application.jl")
-include("relationship_parts/elastic_retuning.jl")
-include("relationship_parts/cleanup.jl")
-include("relationship_parts/dynamics_and_lifecycle.jl")
