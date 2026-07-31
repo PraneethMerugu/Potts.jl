@@ -250,6 +250,13 @@ function _lower_descriptor_plan(
             ),
         )
     end
+    descriptor_sources = Int32[
+        CorePotts.descriptor_source_handle(descriptor)
+        for descriptor in descriptors
+    ]
+    allunique(descriptor_sources) || throw(ArgumentError(
+        "V1 requires exactly one proposal descriptor occurrence per source statement"
+    ))
     groups = _descriptor_groups(descriptors)
     constraints = _domain_constraints(ir, manifest, T, state_handles)
     fingerprint = _sha256_hex(

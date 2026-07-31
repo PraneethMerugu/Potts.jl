@@ -50,6 +50,8 @@ function descriptor_role end
 function descriptor_dependencies end
 function descriptor_support end
 function descriptor_evaluate_proposal end
+function descriptor_evaluate_energy end
+function descriptor_hamiltonian_delta end
 function descriptor_emit_requests! end
 function descriptor_apply_stage! end
 function descriptor_adapt end
@@ -155,13 +157,48 @@ ProposalDescriptor(
     support,
     (),
     (),
-    HamiltonianRole(),
+    ProposalDriveRole(),
     source_handle,
     EmptyDescriptorPayload(),
 )
 
 abstract type AbstractProposalRole end
-struct HamiltonianRole <: AbstractProposalRole end
+abstract type AbstractEnergyDomainPlan end
+struct SiteEnergyDomainPlan <: AbstractEnergyDomainPlan end
+struct CellEnergyDomainPlan <: AbstractEnergyDomainPlan
+    kind::Int16
+end
+struct ContactEnergyDomainPlan <: AbstractEnergyDomainPlan
+    relation_handle::Int32
+end
+struct RelationshipEnergyDomainPlan <: AbstractEnergyDomainPlan
+    relationship_handle::Int32
+end
+
+abstract type AbstractAffectedAnchorPlan end
+struct TargetSiteAffectedPlan <: AbstractAffectedAnchorPlan
+    maximum::Int32
+end
+struct SourceTargetCellsAffectedPlan <: AbstractAffectedAnchorPlan
+    maximum::Int32
+end
+struct IncidentContactsAffectedPlan <: AbstractAffectedAnchorPlan
+    maximum::Int32
+end
+struct IncidentRelationshipsAffectedPlan <: AbstractAffectedAnchorPlan
+    maximum::Int32
+end
+
+struct HamiltonianRole{
+        D <: AbstractEnergyDomainPlan,
+        A <: AbstractAffectedAnchorPlan,
+    } <: AbstractProposalRole
+    domain::D
+    affected::A
+end
+HamiltonianRole() = HamiltonianRole(
+    SiteEnergyDomainPlan(), TargetSiteAffectedPlan(Int32(1))
+)
 struct ProposalDriveRole <: AbstractProposalRole end
 struct ProposalConstraintRole <: AbstractProposalRole end
 struct ProposalModifierRole <: AbstractProposalRole end
@@ -175,8 +212,16 @@ descriptor_stage(::ProposalDescriptor) = :proposal
 descriptor_role(descriptor::ProposalDescriptor) = descriptor.role
 descriptor_dependencies(::ProposalDescriptor) = ()
 descriptor_support(descriptor::ProposalDescriptor) = descriptor.support
-@inline descriptor_evaluate_proposal(descriptor::ProposalDescriptor, context) =
+@inline descriptor_evaluate_energy(descriptor::ProposalDescriptor, context) =
     evaluate_static(descriptor.evaluator, context)
+@inline function descriptor_evaluate_proposal(
+        descriptor::ProposalDescriptor,
+        context,
+    )
+    descriptor.role isa HamiltonianRole &&
+        return descriptor_hamiltonian_delta(descriptor, context)
+    return evaluate_static(descriptor.evaluator, context)
+end
 function descriptor_adapt(to, descriptor::ProposalDescriptor)
     payload = descriptor_payload_adapt(to, descriptor.payload)
     return ProposalDescriptor(
@@ -221,6 +266,10 @@ descriptor_inspection(descriptor::ProposalDescriptor) = (
     evaluator = nameof(typeof(descriptor.evaluator.expression)),
     stage = :proposal,
     role = nameof(typeof(descriptor.role)),
+    energy_domain = descriptor.role isa HamiltonianRole ?
+                    nameof(typeof(descriptor.role.domain)) : nothing,
+    affected_plan = descriptor.role isa HamiltonianRole ?
+                    nameof(typeof(descriptor.role.affected)) : nothing,
     state_handles = descriptor.state_handles,
     workspace_handles = descriptor.workspace_handles,
     payload = descriptor_payload_inspection(descriptor.payload),

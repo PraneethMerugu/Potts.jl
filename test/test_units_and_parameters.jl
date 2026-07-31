@@ -11,7 +11,10 @@
             Lattice(
                 (6, 6);
                 spacing = (1.0u"μm", 1.0u"μm"),
-                relations = (proposal = VonNeumann(),),
+                relations = (
+                    proposal = VonNeumann(),
+                    contact = Moore(),
+                ),
             ),
             cell,
             medium,

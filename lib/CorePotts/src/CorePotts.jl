@@ -15,6 +15,7 @@ include("execution/storage_runtime.jl")
 include("execution/descriptor_protocol.jl")
 include("execution/descriptor_plan.jl")
 include("program/v1.jl")
+include("execution/hamiltonian_runtime.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
 public CPUProgramBackend, CompiledScalar, compiled_scalar_value
@@ -30,6 +31,8 @@ public CreateRelationshipRequest, RemoveRelationshipRequest
 public RetuneRelationshipRequest, apply_relationship_requests!
 public initialize_program_relationships
 public ProgramInitialState, ProgramSnapshot, ProgramRuntime
+public BeforeProposalView, AfterProposalView, CanonicalContactAnchor
+public HamiltonianEvaluationContext
 public initialize_program, program_snapshot, advance_mcs!
 public initialization_bounded
 public update_program_parameters!, program_observations
@@ -72,6 +75,7 @@ public descriptor_state_requirements, descriptor_workspace_requirements
 public descriptor_resource_access, descriptor_stage, descriptor_role
 public descriptor_dependencies
 public descriptor_support, descriptor_evaluate_proposal
+public descriptor_evaluate_energy, descriptor_hamiltonian_delta
 public descriptor_emit_requests!, descriptor_apply_stage!
 public descriptor_adapt, descriptor_evaluator_node_count
 public descriptor_source_handle, descriptor_checkpoint_policy
@@ -82,9 +86,15 @@ public descriptor_payload_checkpoint_reconstruct
 public descriptor_payload_inspection, EmptyDescriptorPayload
 public AbstractProposalRole, HamiltonianRole, ProposalDriveRole
 public ProposalConstraintRole, ProposalModifierRole
+public AbstractEnergyDomainPlan, SiteEnergyDomainPlan, CellEnergyDomainPlan
+public ContactEnergyDomainPlan, RelationshipEnergyDomainPlan
+public AbstractAffectedAnchorPlan, TargetSiteAffectedPlan
+public SourceTargetCellsAffectedPlan, IncidentContactsAffectedPlan
+public IncidentRelationshipsAffectedPlan
 public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
 public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
 public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan
 public validate_parameters, descriptor_plan_report
+public evaluate_hamiltonian_contributions!, fold_hamiltonian_contributions
 
 end

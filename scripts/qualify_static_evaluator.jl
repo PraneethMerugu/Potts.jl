@@ -1,6 +1,6 @@
 using CorePotts
+using CorePotts.KernelAbstractions: @index, @kernel
 using InteractiveUtils
-using KernelAbstractions
 using SHA
 
 const KA = CorePotts.KernelAbstractions
@@ -563,6 +563,11 @@ CorePotts.descriptor_dependencies(::QualificationDescriptor) = ()
 CorePotts.descriptor_support(::QualificationDescriptor) =
     CorePotts.DescriptorSupport(true, true, true, true)
 @inline CorePotts.descriptor_evaluate_proposal(
+    descriptor::QualificationDescriptor, context
+) = candidate_evaluate(
+    descriptor.evaluator, descriptor.occurrence, context
+)
+@inline CorePotts.descriptor_evaluate_energy(
     descriptor::QualificationDescriptor, context
 ) = candidate_evaluate(
     descriptor.evaluator, descriptor.occurrence, context

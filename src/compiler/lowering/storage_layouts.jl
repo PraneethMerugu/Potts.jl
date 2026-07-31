@@ -141,6 +141,7 @@ _descriptor_source(record::QualifiedStatement) = DescriptorSource(
 
 function _descriptor_candidate_enabled(record::QualifiedStatement)
     _registered_record(record) && return true
+    record.kind === :HamiltonianTerm && return true
     payload = record.normalized_payload
     payload isa Tuple && length(payload) >= 2 || return true
     options = payload[2]
@@ -289,9 +290,71 @@ function _record_workspace_handles(
     return Tuple(values)
 end
 
-function _proposal_role(record::QualifiedStatement)
-    record.kind === :HamiltonianTerm &&
-        return CorePotts.HamiltonianRole()
+function _domain_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
+    fact = candidate.energy_domain
+    fact.kind === :sites && return CorePotts.SiteEnergyDomainPlan()
+    if fact.kind === :cells
+        kind = _compiled_kind_index(
+            ir, Symbol(statement_id(fact.resource))
+        )
+        kind === nothing && throw(ArgumentError(
+            "cell energy domain has no compiled kind index"
+        ))
+        return CorePotts.CellEnergyDomainPlan(kind)
+    end
+    owner = ir.source.records[candidate.record]
+    if fact.kind === :contacts
+        relation = _resource_record(
+            ir.source, owner, :SpatialRelation, fact.resource
+        )
+        relation === nothing && throw(ArgumentError(
+            "contact energy domain has no compiled relation handle"
+        ))
+        handle = findfirst(
+            record -> record.identity == relation.identity,
+            ir.source.records,
+        )
+        return CorePotts.ContactEnergyDomainPlan(Int32(handle))
+    end
+    if fact.kind === :edges
+        relationship = _resource_record(
+            ir.source, owner, :RelationshipState, fact.resource
+        )
+        relationship === nothing && throw(ArgumentError(
+            "relationship energy domain has no compiled resource handle"
+        ))
+        handle = findfirst(
+            record -> record.identity == relationship.identity,
+            ir.source.records,
+        )
+        return CorePotts.RelationshipEnergyDomainPlan(Int32(handle))
+    end
+    throw(ArgumentError("unsupported energy domain plan `$(fact.kind)`"))
+end
+
+function _affected_plan(candidate::DescriptorCandidate)
+    fact = candidate.affected_anchors
+    maximum = Int32(fact.maximum)
+    fact.kind === :target_site &&
+        return CorePotts.TargetSiteAffectedPlan(maximum)
+    fact.kind === :source_and_target_cells &&
+        return CorePotts.SourceTargetCellsAffectedPlan(maximum)
+    fact.kind === :incident_contacts &&
+        return CorePotts.IncidentContactsAffectedPlan(maximum)
+    fact.kind === :incident_relationships &&
+        return CorePotts.IncidentRelationshipsAffectedPlan(maximum)
+    throw(ArgumentError("unsupported affected-anchor plan `$(fact.kind)`"))
+end
+
+function _proposal_role(
+        ir::AnalyzedTermIR,
+        candidate::DescriptorCandidate,
+        record::QualifiedStatement,
+    )
+    record.kind === :HamiltonianTerm && return CorePotts.HamiltonianRole(
+        _domain_plan(ir, candidate),
+        _affected_plan(candidate),
+    )
     record.kind === :ProposalDrive &&
         return CorePotts.ProposalDriveRole()
     record.kind === :ProposalConstraint &&

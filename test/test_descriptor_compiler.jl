@@ -65,6 +65,12 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
     source_handle = descriptor.origin,
 )
 
+function _hamiltonian_contribution_allocations(contributions, plan, context)
+    return @allocated CorePotts.evaluate_hamiltonian_contributions!(
+        contributions, plan, context
+    )
+end
+
 @testset "G2 descriptor compiler boundary" begin
     fixture_registry = NeutralExternalTerms.registry()
 
@@ -380,20 +386,21 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
         @parameters external_weight = weight_default
         endothelial = CellKind(:endothelial)
         extracellular = MediumKind(:extracellular)
-        proposal = ProposalContext(:copy)
+        site = SiteBinding(:site)
         activity = SiteState(
             external_activity;
             name = :external_activity,
             initial = 1.0,
             owner = endothelial,
-            lifecycle = ClearOnOwnershipChange(),
+            lifecycle = PreserveOnOwnershipChange(),
         )
         terms = AbstractPottsStatement[
             NeutralExternalTerms.ExternalWeightedSiteTerm(
                 Symbol(identity_prefix, :_, index),
                 external_weight,
                 external_activity,
-                proposal,
+                endothelial,
+                site,
             )
             for index in 1:count
         ]
@@ -599,7 +606,13 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
         target_kind = Int16(1),
         is_extension = true,
         is_retraction = false,
+        energy_anchor_site = Int32(2),
+        energy_anchor_cell = Int32(1),
+        energy_anchor_contact = (Int32(1), Int32(2)),
+        energy_anchor_relationship = Int32(1),
         cell_volumes = Float64[0, 7],
+        ownership = Int32[0, 1],
+        cell_kinds = Int16[2],
     )
     initial_external_state = zeros(Float64, 4, 4)
     initial_external_state[2] = 7
@@ -615,16 +628,16 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
         auxiliary_state,
         runtime_workspaces,
     )
-    @test CorePotts.descriptor_evaluate_proposal(
+    @test CorePotts.descriptor_evaluate_energy(
         descriptor, context
     ) == 17.5
-    CorePotts.descriptor_evaluate_proposal(descriptor, context)
+    CorePotts.descriptor_evaluate_energy(descriptor, context)
     warmed_descriptor_allocations(descriptor, context) = @allocated(
-        CorePotts.descriptor_evaluate_proposal(descriptor, context)
+        CorePotts.descriptor_evaluate_energy(descriptor, context)
     )
     @test warmed_descriptor_allocations(descriptor, context) == 0
     inferred = Core.Compiler.return_type(
-        CorePotts.descriptor_evaluate_proposal,
+        CorePotts.descriptor_evaluate_energy,
         Tuple{typeof(descriptor), typeof(context)},
     )
     @test inferred === Float64
@@ -922,4 +935,195 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
     @test !hasproperty(single.core_program.descriptor_plan, :activity)
     @test !hasproperty(single.core_program.descriptor_plan, :field)
     @test !hasproperty(single.core_program.descriptor_plan, :relationships)
+end
+
+@testset "G2 local Hamiltonian equivalence" begin
+    cell = CellKind(:equivalence_cell)
+    medium = MediumKind(:equivalence_medium)
+    site = SiteBinding(:energy_site)
+    @named equivalence = PottsSystem(statements = StatementSet((
+        Lattice(
+            (4, 4);
+            relations = (proposal = VonNeumann(), contact = Moore()),
+        ),
+        cell,
+        medium,
+        Volume(cell; target = 4.0, strength = 2.0),
+        ContactEnergy([(cell ↔ medium) => 3.0]),
+        HamiltonianTerm(
+            :site_energy_with_offset;
+            domain = sites(:lattice),
+            anchor = site,
+            expression = 5.0 * occupancy(cell, site) + 99.0,
+        ),
+        Protocol(Sweep(); name = :main),
+    )))
+    executable = compile(
+        complete(equivalence);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    program = executable.core_program
+    plan = program.descriptor_plan
+    @test plan.occurrence_count == 3
+    roles = [
+        descriptor.role
+        for group in plan.groups
+        for descriptor in group.launch.instances
+        if descriptor.role isa CorePotts.HamiltonianRole
+    ]
+    @test any(role -> role.domain isa CorePotts.CellEnergyDomainPlan, roles)
+    @test any(role -> role.domain isa CorePotts.ContactEnergyDomainPlan, roles)
+    @test any(role -> role.domain isa CorePotts.SiteEnergyDomainPlan, roles)
+    @test only(filter(
+        role -> role.affected isa CorePotts.IncidentContactsAffectedPlan,
+        roles,
+    )).affected.maximum == 8
+
+    ownership = zeros(Int32, 4, 4)
+    ownership[2:3, 2:3] .= 1
+    initial = CorePotts.ProgramInitialState(
+        ownership,
+        Int16[2];
+        scalar_type = Float64,
+    )
+    runtime = CorePotts.initialize_program(
+        program,
+        initial,
+        program.parameter_defaults,
+        UInt64(0x42),
+        UInt32(1),
+    )
+
+    # Deliberately independent full-energy oracle. It does not call a compiled
+    # evaluator, affected-anchor plan, or any production delta implementation.
+    moore_offsets = Tuple(
+        (row, column)
+        for row in -1:1 for column in -1:1
+        if !(row == 0 && column == 0)
+    )
+    function global_energy(labels)
+        volume = count(==(Int32(1)), labels)
+        energy = 2.0 * (volume - 4.0)^2
+        energy += 5.0 * volume + 99.0 * length(labels)
+        contacts_seen = Set{Tuple{Int, Int}}()
+        linear = LinearIndices(labels)
+        for site_index in CartesianIndices(labels)
+            for offset in moore_offsets
+                neighbor = CartesianIndex(
+                    mod1(site_index[1] + offset[1], size(labels, 1)),
+                    mod1(site_index[2] + offset[2], size(labels, 2)),
+                )
+                edge = minmax(linear[site_index], linear[neighbor])
+                edge in contacts_seen && continue
+                push!(contacts_seen, edge)
+                labels[site_index] == labels[neighbor] || (energy += 3.0)
+            end
+        end
+        return energy
+    end
+
+    function proposal_context(source, target, attempt)
+        return CorePotts._ProposalEvaluationContext(
+            runtime,
+            source,
+            target,
+            @inbounds(runtime.ownership[target]),
+            @inbounds(runtime.ownership[source]),
+            attempt,
+            0,
+        )
+    end
+    contributions = zeros(Float64, length(plan.source_table))
+    before_ownership = copy(runtime.ownership)
+    before_volumes = copy(runtime.volumes)
+    checked = 0
+    for target in CartesianIndices(ownership)
+        for offset in ((-1, 0), (1, 0), (0, -1), (0, 1))
+            source = CartesianIndex(
+                mod1(target[1] + offset[1], size(ownership, 1)),
+                mod1(target[2] + offset[2], size(ownership, 2)),
+            )
+            runtime.ownership[target] == runtime.ownership[source] && continue
+            checked += 1
+            context = proposal_context(source, target, checked)
+            CorePotts.evaluate_hamiltonian_contributions!(
+                contributions, plan, context
+            )
+            local_delta = CorePotts.fold_hamiltonian_contributions(
+                plan, contributions
+            )
+            after = copy(ownership)
+            after[target] = ownership[source]
+            @test local_delta ≈ global_energy(after) - global_energy(ownership)
+            @test runtime.ownership == before_ownership
+            @test runtime.volumes == before_volumes
+        end
+    end
+    @test checked > 0
+
+    context = proposal_context(CartesianIndex(2, 2), CartesianIndex(1, 2), 99)
+    CorePotts.evaluate_hamiltonian_contributions!(contributions, plan, context)
+    canonical = CorePotts.fold_hamiltonian_contributions(plan, contributions)
+    reordered = CorePotts.DescriptorExecutionPlan(
+        reverse(plan.groups),
+        plan.state_layout,
+        plan.workspace_layout,
+        plan.constraints,
+        plan.source_table,
+        plan.occurrence_count,
+        plan.fingerprint,
+    )
+    reordered_contributions = similar(contributions)
+    CorePotts.evaluate_hamiltonian_contributions!(
+        reordered_contributions, reordered, context
+    )
+    @test reordered_contributions == contributions
+    @test CorePotts.fold_hamiltonian_contributions(
+        reordered, reordered_contributions
+    ) == canonical
+
+    _hamiltonian_contribution_allocations(contributions, plan, context)
+    @test _hamiltonian_contribution_allocations(
+        contributions, plan, context
+    ) == 0
+    @test Core.Compiler.return_type(
+        CorePotts.fold_hamiltonian_contributions,
+        Tuple{typeof(plan), typeof(contributions)},
+    ) === Float64
+
+    function structural_types(statement_name, anchor_name)
+        local_anchor = SiteBinding(anchor_name)
+        @named structural = PottsSystem(statements = StatementSet((
+            Lattice((3, 3)),
+            CellKind(:structural_cell),
+            MediumKind(:structural_medium),
+            HamiltonianTerm(
+                statement_name;
+                domain = sites(:lattice),
+                anchor = local_anchor,
+                expression = 2.0 * occupancy(
+                    CellKind(:structural_cell), local_anchor
+                ) + 7.0,
+            ),
+            Protocol(Sweep(); name = :structural_protocol),
+        )))
+        compiled = compile(
+            complete(structural);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        descriptor = only(CorePotts.descriptor_launch(
+            only(compiled.core_program.descriptor_plan.groups)
+        ).instances)
+        return (
+            typeof(descriptor),
+            typeof(descriptor.role),
+            typeof(descriptor.evaluator.expression),
+        )
+    end
+    @test structural_types(:first_energy, :first_anchor) ==
+          structural_types(:renamed_energy, :renamed_anchor)
 end

@@ -168,8 +168,7 @@ function _statement_lowering_rejection(statement, statements, system)
     elseif statement isa HamiltonianTerm
         mechanism = _statement_option(statement, :mechanism)
         mechanism === nothing || mechanism === :symbolic || mechanism in (
-            :volume, :contact, :activity, :chemotaxis, :relationship,
-            :elongation,
+            :volume, :contact, :relationship, :elongation,
         ) || return "unsupported HamiltonianTerm mechanism $(repr(mechanism))"
         if mechanism === :relationship
             expression = string(_statement_arguments(statement).expression)

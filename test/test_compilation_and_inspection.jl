@@ -141,14 +141,14 @@
     )
     symbolic_program = getfield(symbolic_executable, :core_program)
     symbolic_groups = symbolic_program.descriptor_plan.groups
-    @test length(symbolic_groups) == 4
+    @test length(symbolic_groups) == 5
     symbolic_roles = Tuple(
         CorePotts.descriptor_role(
             first(group.launch.instances)
         ) |> typeof
         for group in symbolic_groups
     )
-    @test count(==(CorePotts.HamiltonianRole), symbolic_roles) == 1
+    @test count(role -> role <: CorePotts.HamiltonianRole, symbolic_roles) == 1
     @test count(==(CorePotts.ProposalDriveRole), symbolic_roles) == 2
     @test count(==(CorePotts.ProposalConstraintRole), symbolic_roles) == 1
     @test count(==(CorePotts.ProposalModifierRole), symbolic_roles) == 1

@@ -1302,6 +1302,28 @@ function _cell_center(
     return ntuple(dimension -> totals[dimension] / T(count), N)
 end
 
+function _cell_center(
+        runtime::ProgramRuntime{T, 2},
+        cell::Int32;
+        replaced_site = nothing,
+        replacement_owner::Int32 = Int32(-1),
+    ) where {T}
+    first_total = zero(T)
+    second_total = zero(T)
+    count = 0
+    for site in CartesianIndices(runtime.ownership)
+        owner = site == replaced_site ?
+                replacement_owner : @inbounds(runtime.ownership[site])
+        owner == cell || continue
+        first_total += T(site[1]) - T(0.5)
+        second_total += T(site[2]) - T(0.5)
+        count += 1
+    end
+    count > 0 || return nothing
+    inverse = inv(T(count))
+    return first_total * inverse, second_total * inverse
+end
+
 function _cell_shape_statistics(
         runtime::ProgramRuntime{T, N},
         cell::Int32;
@@ -1321,7 +1343,8 @@ function _cell_shape_statistics(
         for row in 1:N
             totals[row] += coordinates[row]
             for column in 1:N
-                quadratic[row, column] += coordinates[row] * coordinates[column]
+                quadratic[row, column] +=
+                    coordinates[row] * coordinates[column]
             end
         end
         count += 1
@@ -1337,6 +1360,63 @@ function _cell_shape_statistics(
     return count, totals .* inverse, covariance
 end
 
+function _cell_shape_statistics(
+        runtime::ProgramRuntime{T, 2},
+        cell::Int32;
+        replaced_site = nothing,
+        replacement_owner::Int32 = Int32(-1),
+    ) where {T}
+    first_total = zero(T)
+    second_total = zero(T)
+    first_squared = zero(T)
+    cross_product = zero(T)
+    second_squared = zero(T)
+    count = 0
+    for site in CartesianIndices(runtime.ownership)
+        owner = site == replaced_site ?
+                replacement_owner : @inbounds(runtime.ownership[site])
+        owner == cell || continue
+        first_coordinate = T(site[1]) - T(0.5)
+        second_coordinate = T(site[2]) - T(0.5)
+        first_total += first_coordinate
+        second_total += second_coordinate
+        first_squared += first_coordinate^2
+        cross_product += first_coordinate * second_coordinate
+        second_squared += second_coordinate^2
+        count += 1
+    end
+    count == 0 && return nothing
+    inverse = inv(T(count))
+    first_center = first_total * inverse
+    second_center = second_total * inverse
+    covariance = (
+        first_squared * inverse - first_center^2,
+        cross_product * inverse - first_center * second_center,
+        cross_product * inverse - first_center * second_center,
+        second_squared * inverse - second_center^2,
+    )
+    return count, (first_center, second_center), covariance
+end
+
+@inline function _maximum_covariance_eigenvalue(
+        ::Val{2}, covariance::NTuple{4, T}
+    ) where {T}
+    first_diagonal = covariance[1]
+    off_diagonal = covariance[2]
+    second_diagonal = covariance[4]
+    discriminant = max(
+        zero(T),
+        (first_diagonal - second_diagonal)^2 +
+        T(4) * off_diagonal^2,
+    )
+    return (
+        first_diagonal + second_diagonal + sqrt(discriminant)
+    ) / T(2)
+end
+
+_maximum_covariance_eigenvalue(::Val, covariance::AbstractMatrix) =
+    maximum(eigen(Symmetric(covariance)).values)
+
 function _cell_length(
         runtime::ProgramRuntime{T, N},
         cell::Int32;
@@ -1348,7 +1428,7 @@ function _cell_length(
     )
     statistics === nothing && return zero(T)
     covariance = statistics[3]
-    maximum_variance = maximum(eigen(Symmetric(covariance)).values)
+    maximum_variance = _maximum_covariance_eigenvalue(Val(N), covariance)
     return T(4) * sqrt(max(zero(T), maximum_variance))
 end
 
@@ -1379,6 +1459,14 @@ function _elongation_delta(
         )
     end
     return delta
+end
+
+@inline function _center_distance(
+        first::NTuple{2, T}, second::NTuple{2, T}
+    ) where {T}
+    return sqrt(
+        (first[1] - second[1])^2 + (first[2] - second[2])^2
+    )
 end
 
 @inline function _center_distance(first, second)

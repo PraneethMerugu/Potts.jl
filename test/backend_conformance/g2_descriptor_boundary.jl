@@ -12,20 +12,21 @@ function _g2_external_site_model(count)
     @parameters external_weight = 2.5
     endothelial = CellKind(:endothelial)
     extracellular = MediumKind(:extracellular)
-    proposal = ProposalContext(:copy)
+    site = SiteBinding(:energy_site)
     activity = SiteState(
         external_activity;
         name = :external_activity,
         initial = 1.0,
         owner = endothelial,
-        lifecycle = ClearOnOwnershipChange(),
+        lifecycle = PreserveOnOwnershipChange(),
     )
     terms = AbstractPottsStatement[
         NeutralExternalTerms.ExternalWeightedSiteTerm(
             Symbol(:external_site_, index),
             external_weight,
             external_activity,
-            proposal,
+            endothelial,
+            site,
         )
         for index in 1:count
     ]
@@ -84,9 +85,15 @@ function run_g2_descriptor_boundary(
         device_array, plan.workspace_layout, host_workspaces
     )
     parameters = device_array(Float32[2.5])
+    ownership = device_array(fill(Int32(1), 16))
+    cell_kinds = device_array(Int16[2])
     context = CorePotts.EvaluatorProbeContext(
         parameters,
-        (target_site = Int32(2),),
+        (
+            energy_anchor_site = Int32(2),
+            ownership,
+            cell_kinds,
+        ),
         device_state,
         device_workspaces,
     )

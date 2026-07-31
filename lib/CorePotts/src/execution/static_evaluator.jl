@@ -183,6 +183,10 @@ for identity in (
         :target_kind,
         :is_extension,
         :is_retraction,
+        :energy_anchor_site,
+        :energy_anchor_cell,
+        :energy_anchor_contact,
+        :energy_anchor_relationship,
     )
     @eval operation_callable(
         ::Val{$(QuoteNode(identity))}, version::VersionNumber
@@ -316,6 +320,10 @@ for identity in (
         :target_kind,
         :is_extension,
         :is_retraction,
+        :energy_anchor_site,
+        :energy_anchor_cell,
+        :energy_anchor_contact,
+        :energy_anchor_relationship,
     )
     @eval @inline context_value(
         ::ContextOperation{$(QuoteNode(identity))},
@@ -328,6 +336,17 @@ end
     arguments,
     context::EvaluatorProbeContext,
 ) = @inbounds context.values.cell_volumes[only(arguments)]
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:occupancy},
+        arguments,
+        context::EvaluatorProbeContext,
+    )
+    kind = Int16(first(arguments))
+    owner = @inbounds context.values.ownership[Int(last(arguments))]
+    owner <= 0 && return false
+    return @inbounds context.values.cell_kinds[owner] == kind
+end
 
 @inline state_value(
     context::EvaluatorProbeContext,
@@ -358,8 +377,8 @@ end
     )
     index = @index(Global, Linear)
     if index <= length(output)
-        @inbounds output[index] = descriptor_evaluate_proposal(
-            descriptor, context
-        )
+        @inbounds output[index] = descriptor_role(descriptor) isa HamiltonianRole ?
+                                  descriptor_evaluate_energy(descriptor, context) :
+                                  descriptor_evaluate_proposal(descriptor, context)
     end
 end

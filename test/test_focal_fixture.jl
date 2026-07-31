@@ -1,3 +1,9 @@
+function _focal_delta_allocations(descriptor, context)
+    return @allocated CorePotts.descriptor_evaluate_proposal(
+        descriptor, context
+    )
+end
+
 @testset "visible focal-point-plasticity fixture" begin
     @parameters begin
         A₀ = 6.0
@@ -101,6 +107,64 @@
         values = [focal_links => [(1, 2)]],
     )
     problem = PottsProblem(executable, initial, (0, 4); seed = 0xf0ca1)
+    core_initial = PottsToolkit._core_initial_state(
+        executable, initial, problem.seed, problem.replica
+    )
+    core_runtime = CorePotts.initialize_program(
+        executable.core_program,
+        core_initial,
+        executable.core_program.parameter_defaults,
+        problem.seed,
+        problem.replica,
+    )
+    relationship_descriptor = only([
+        descriptor
+        for group in executable.core_program.descriptor_plan.groups
+        for descriptor in group.launch.instances
+        if descriptor.role isa CorePotts.HamiltonianRole &&
+           descriptor.role.domain isa CorePotts.RelationshipEnergyDomainPlan
+    ])
+    source_site = CartesianIndex(3, 4)
+    target_site = CartesianIndex(2, 4)
+    relationship_context = CorePotts._ProposalEvaluationContext(
+        core_runtime,
+        source_site,
+        target_site,
+        core_runtime.ownership[target_site],
+        core_runtime.ownership[source_site],
+        1,
+        0,
+    )
+    local_relationship_delta = CorePotts.descriptor_evaluate_proposal(
+        relationship_descriptor, relationship_context
+    )
+    _focal_delta_allocations(
+        relationship_descriptor, relationship_context
+    )
+    @test _focal_delta_allocations(
+        relationship_descriptor, relationship_context
+    ) == 0
+    function independent_center(owner_map, cell)
+        sites = findall(==(cell), owner_map)
+        isempty(sites) && return nothing
+        return ntuple(2) do dimension
+            sum(site[dimension] - 0.5 for site in sites) / length(sites)
+        end
+    end
+    function independent_relationship_energy(owner_map)
+        first_center = independent_center(owner_map, 1)
+        second_center = independent_center(owner_map, 2)
+        separation = sqrt(sum(
+            (first_center[index] - second_center[index])^2 for index in 1:2
+        ))
+        return 1.5 * (separation - 4.0)^2
+    end
+    after_relationship_copy = copy(labels)
+    after_relationship_copy[target_site] = labels[source_site]
+    @test local_relationship_delta ≈
+          independent_relationship_energy(after_relationship_copy) -
+          independent_relationship_energy(labels)
+    @test core_runtime.ownership == labels
     stale_initial = PottsInitialState(
         ownership = LabelledCells(
             labels;

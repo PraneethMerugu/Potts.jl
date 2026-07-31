@@ -6,7 +6,9 @@ The mechanism-free device boundary is split by ownership:
 - `storage_schema.jl`: typed handles, schemas, layouts, and extension protocols;
 - `storage_runtime.jl`: allocation, adaptation, reset, logical codecs, and checkpoint state;
 - `descriptor_protocol.jl`: resource footprints and the universal symbolic proposal descriptor; and
-- `descriptor_plan.jl`: launch groups, validation constraints, adaptation, and inspection.
+- `descriptor_plan.jl`: launch groups, validation constraints, adaptation, and inspection; and
+- `hamiltonian_runtime.jl`: immutable before/after views and finite affected-anchor energy
+  differences. It is included after `program/v1.jl` because the views wrap its runtime types.
 
 PottsToolkit supplies fully analyzed concrete values. CorePotts does not know biological mechanism
 names and does not resolve symbols, registries, units, or Symbolics expressions.

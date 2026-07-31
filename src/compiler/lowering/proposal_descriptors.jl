@@ -277,7 +277,7 @@ function _proposal_descriptor(
         _descriptor_support(ir, candidate),
         resolved_states,
         resolved_workspaces,
-        _proposal_role(record),
+        _proposal_role(ir, candidate, record),
         candidate.record,
         _descriptor_source(record),
     )

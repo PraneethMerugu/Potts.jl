@@ -187,6 +187,43 @@ function _draw_handle_for_leaf(
     return UInt16(index + 15)
 end
 
+function _compiled_kind_index(ir::AnalyzedTermIR, requested::Symbol)
+    declarations = filter(
+        record -> record.kind in (:CellKind, :MediumKind),
+        ir.source.records,
+    )
+    sort!(declarations; by = record -> (
+        record.kind === :MediumKind ? 0 : 1,
+        String(Symbol(record.identity.local_id)),
+    ))
+    index = findfirst(
+        record -> Symbol(record.identity.local_id) === requested,
+        declarations,
+    )
+    index === nothing && return nothing
+    return Int16(index)
+end
+
+function _compiled_kind_leaf(ir::AnalyzedTermIR, node::NormalizedTermNode)
+    name = _try_symbolic_name(node.payload)
+    name === nothing && return nothing
+    text = String(name)
+    prefix = "__potts_kind__"
+    startswith(text, prefix) || return nothing
+    return _compiled_kind_index(
+        ir, Symbol(text[(length(prefix) + 1):end])
+    )
+end
+
+function _energy_anchor_expression(kind::Symbol)
+    identity = kind === :site_anchor ? :energy_anchor_site :
+               kind === :cell_anchor ? :energy_anchor_cell :
+               kind === :contact_anchor ? :energy_anchor_contact :
+               kind === :relationship_context ? :energy_anchor_relationship :
+               throw(ArgumentError("unsupported energy anchor leaf `$kind`"))
+    return CorePotts.ContextExpression(CorePotts.ContextOperation{identity}())
+end
+
 function _lower_static_node(
         graph::NormalizedTermGraph,
         ir::AnalyzedTermIR,
@@ -220,17 +257,50 @@ function _lower_static_node(
         CorePotts.StateExpression(handle)
     elseif node.payload_kind in (
             :proposal_context,
-            :site_anchor,
-            :cell_anchor,
-            :contact_anchor,
-            :relationship_context,
             :relation,
-            :kind,
-            :relationship_payload,
         )
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
         CorePotts.LiteralExpression(Int32(0))
+    elseif node.payload_kind === :relationship_payload
+        name = _try_symbolic_name(node.payload)
+        name === nothing && throw(ArgumentError(
+            "relationship payload selector has no symbolic identity"
+        ))
+        text = String(name)
+        prefix = "__potts_payload__"
+        startswith(text, prefix) || throw(ArgumentError(
+            "relationship payload selector has an invalid identity"
+        ))
+        selector = Symbol(text[(length(prefix) + 1):end])
+        code = selector === :strength ? UInt8(1) :
+               selector === :target ? UInt8(2) :
+               selector === :maximum ? UInt8(3) :
+               throw(ArgumentError(
+                   "unsupported relationship payload selector `$selector`"
+               ))
+        CorePotts.LiteralExpression(code)
+    elseif node.payload_kind in (
+            :site_anchor, :cell_anchor, :contact_anchor,
+            :relationship_context,
+        )
+        _energy_anchor_expression(node.payload_kind)
+    elseif node.payload_kind === :kind
+        kind = _compiled_kind_leaf(ir, node)
+        kind === nothing && throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :unresolved_kind_handle,
+                node.source,
+                repr(node.payload),
+                node.source.path,
+                "a declared value-level kind index",
+                "no matching cell or medium kind",
+                (),
+                UnknownSource(),
+            ),),
+        ))
+        CorePotts.LiteralExpression(kind)
     elseif node.payload_kind === :symbolic_leaf
         draw_handle = _draw_handle_for_leaf(ir, node)
         draw_handle === nothing ? throw(PottsValidationError(
@@ -272,6 +342,8 @@ end
 
 function _descriptor_footprint(locality::Symbol)
     locality === :scalar && return CorePotts.EmptyFootprint()
+    locality === :site_local && return CorePotts.FiniteSpatialFootprint(())
+    locality === :contact_local && return CorePotts.FiniteSpatialFootprint(())
     locality === :proposal_context &&
         return CorePotts.ProposalContextFootprint()
     locality === :owner_local && return CorePotts.OwnerFootprint()

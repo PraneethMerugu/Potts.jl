@@ -92,9 +92,10 @@ end
     )
     index = @index(Global, Linear)
     if index <= length(launch.instances)
-        @inbounds output[index] = descriptor_evaluate_proposal(
-            launch.instances[index], context
-        )
+        descriptor = @inbounds launch.instances[index]
+        @inbounds output[index] = descriptor_role(descriptor) isa HamiltonianRole ?
+                                  descriptor_evaluate_energy(descriptor, context) :
+                                  descriptor_evaluate_proposal(descriptor, context)
     end
 end
 
@@ -120,6 +121,73 @@ function validate_parameters(plan::DescriptorExecutionPlan, parameters)
         end
     end
     return nothing
+end
+
+"""
+Evaluate Hamiltonian descriptor groups into source-indexed contribution storage.
+
+Group execution order is deliberately decoupled from numerical folding order.
+Callers provide the buffer so a warmed proposal path does not allocate.
+"""
+@inline function _evaluate_hamiltonian_instances!(
+        contributions,
+        instances::AbstractVector{D},
+        context,
+    ) where {D}
+    for descriptor in instances
+        descriptor_role(descriptor) isa HamiltonianRole || continue
+        source = Int(descriptor_source_handle(descriptor))
+        @inbounds contributions[source] = descriptor_evaluate_proposal(
+            descriptor, context
+        )
+    end
+    return contributions
+end
+
+@inline _evaluate_hamiltonian_groups!(
+    contributions, ::Tuple{}, context
+) = contributions
+@inline function _evaluate_hamiltonian_groups!(
+        contributions,
+        groups::Tuple,
+        context,
+    )
+    group = first(groups)
+    _evaluate_hamiltonian_instances!(
+        contributions, group.launch.instances, context
+    )
+    return _evaluate_hamiltonian_groups!(
+        contributions, Base.tail(groups), context
+    )
+end
+
+@inline function evaluate_hamiltonian_contributions!(
+        contributions,
+        plan::DescriptorExecutionPlan,
+        context,
+    )
+    length(contributions) >= length(plan.source_table) || throw(
+        ArgumentError("Hamiltonian contribution storage is too small"),
+    )
+    fill!(contributions, zero(eltype(contributions)))
+    return _evaluate_hamiltonian_groups!(
+        contributions, plan.groups, context
+    )
+end
+
+"""Fold source-indexed Hamiltonian contributions in canonical source order."""
+@inline function fold_hamiltonian_contributions(
+        plan::DescriptorExecutionPlan,
+        contributions,
+    )
+    length(contributions) >= length(plan.source_table) || throw(
+        ArgumentError("Hamiltonian contribution storage is too small"),
+    )
+    total = zero(eltype(contributions))
+    for source in eachindex(plan.source_table)
+        total += @inbounds contributions[source]
+    end
+    return total
 end
 
 function descriptor_plan_report(plan::DescriptorExecutionPlan)

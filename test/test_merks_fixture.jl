@@ -1,3 +1,11 @@
+using LinearAlgebra
+
+function _merks_delta_allocations(descriptor, context)
+    return @allocated CorePotts.descriptor_evaluate_proposal(
+        descriptor, context
+    )
+end
+
 @testset "visible Merks vasculogenesis fixture" begin
     # Reduced dimensions and duration keep this an ordinary test; every Merks
     # mechanism remains assembled directly in public V1 syntax.
@@ -118,6 +126,74 @@
         values = [chemoattractant => initial_field],
     )
     problem = PottsProblem(executable, initial, (0, 3); seed = 2006)
+    core_initial = PottsToolkit._core_initial_state(
+        executable, initial, problem.seed, problem.replica
+    )
+    core_runtime = CorePotts.initialize_program(
+        executable.core_program,
+        core_initial,
+        executable.core_program.parameter_defaults,
+        problem.seed,
+        problem.replica,
+    )
+    elongation_descriptor = only([
+        descriptor
+        for group in executable.core_program.descriptor_plan.groups
+        for descriptor in group.launch.instances
+        if descriptor.role isa CorePotts.HamiltonianRole &&
+           executable.core_program.descriptor_plan.source_table[
+               descriptor.source_handle
+           ].local_id == StatementID(:elongation_endothelial)
+    ])
+    elongation_source = CartesianIndex(4, 4)
+    elongation_target = CartesianIndex(3, 4)
+    elongation_context = CorePotts._ProposalEvaluationContext(
+        core_runtime,
+        elongation_source,
+        elongation_target,
+        core_runtime.ownership[elongation_target],
+        core_runtime.ownership[elongation_source],
+        1,
+        0,
+    )
+    local_elongation_delta = CorePotts.descriptor_evaluate_proposal(
+        elongation_descriptor, elongation_context
+    )
+    _merks_delta_allocations(elongation_descriptor, elongation_context)
+    @test _merks_delta_allocations(
+        elongation_descriptor, elongation_context
+    ) == 0
+    function independent_cell_length(owner_map, cell)
+        sites = findall(==(cell), owner_map)
+        isempty(sites) && return 0.0
+        coordinates = [
+            (site[1] - 0.5, site[2] - 0.5) for site in sites
+        ]
+        center = (
+            sum(first, coordinates) / length(coordinates),
+            sum(last, coordinates) / length(coordinates),
+        )
+        covariance = zeros(Float64, 2, 2)
+        for point in coordinates
+            displacement = (point[1] - center[1], point[2] - center[2])
+            for row in 1:2, column in 1:2
+                covariance[row, column] +=
+                    displacement[row] * displacement[column]
+            end
+        end
+        covariance ./= length(coordinates)
+        return 4.0 * sqrt(maximum(eigvals(Symmetric(covariance))))
+    end
+    independent_elongation_energy(owner_map) = sum(
+        (independent_cell_length(owner_map, cell_index) - 5.0)^2
+        for cell_index in 1:3
+    )
+    after_elongation_copy = copy(labels)
+    after_elongation_copy[elongation_target] = labels[elongation_source]
+    @test local_elongation_delta ≈
+          independent_elongation_energy(after_elongation_copy) -
+          independent_elongation_energy(labels)
+    @test core_runtime.ownership == labels
     trajectory = solve(
         problem; save_everystep = true, observables = (:field_mass,)
     )

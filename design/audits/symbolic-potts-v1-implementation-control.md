@@ -123,8 +123,8 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
-| G1 host compiler facts | `repair_in_progress` | prior structural tests passed; Hamiltonian taxonomy/affected-region P0 found at G3 preflight | `64ab5a2` (superseded as gate evidence) | scientific-classification rereview required |
-| G2 descriptor/group/evaluator/state/workspace | `blocked_by_G1` | evaluator/storage checkpoint remains useful; no typed before/after Hamiltonian plan | `b269164` (partial boundary only) | R1 must be rerun after repair |
+| G1 host compiler facts | `passed` | conservative Hamiltonian taxonomy, closed domains, compiler-proven finite affected anchors, adversarial rejection suite | `eb8a37a` | included in fresh R1 scope |
+| G2 descriptor/group/evaluator/state/workspace | `candidate_pending_R1` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | pending | fresh R1 required |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
@@ -536,6 +536,70 @@ passes:
 G2 remains reopened. This G1 result does not authorize G3: the executor still needs immutable
 before/after views, structural domain and affected plans, local/global energy equivalence, and fresh
 inference, allocation, specialization-growth, Metal, and independent R1 clearance.
+
+## Repaired G2 candidate
+
+The repaired G2 boundary preserves the previously cleared normalized DAG, versioned operation
+resolution, bounded callable evaluator, universal descriptor, grouping, representation-canonical
+state/workspace handles, adaptation, diagnostics, payload contract, capability analysis, and
+backend launch work. It adds no second evaluator and does not connect descriptors to the G3
+proposal loop.
+
+`HamiltonianRole` now carries a structural energy-domain plan and a structural affected-anchor
+plan. Kind, relation, relationship, source, and occurrence identities remain compact values.
+Lowering resolves bound energy anchors to contextual callable objects and resolves kind and
+relationship-payload selectors to compact values. Every Hamiltonian proposal evaluation constructs
+immutable before and after views over the unchanged runtime, enumerates only the compiler-proven
+finite affected anchors, evaluates the same stored energy expression in each view, and subtracts
+before from after.
+
+The closed V1 plans are:
+
+- one target-site anchor for site energies;
+- at most the distinct source and target cells for cell energies;
+- canonical incident contacts, bounded by the resolved spatial relation; and
+- unique active incident relationship edges, bounded by the resolved maximum degree.
+
+Contact anchors are canonicalized and deduplicated without a collection. Relationship edges are
+visited once. Runtime bounds defend the host proof. Descriptor contributions are written into
+source-indexed caller-owned storage, then folded in frozen source order, so heterogeneous group
+execution order cannot change floating-point contribution order. Descriptor source handles are
+required to be unique in V1, preventing occurrence overwrite.
+
+Permanent scientific tests use independently written full-energy implementations only as test
+oracles. They establish local descriptor delta equality with `H(after) - H(before)` for site,
+volume, contact, elongation, and eligible focal-point relationship elasticity; constant-offset
+cancellation; affected-anchor completeness over all differing cardinal proposals in the neutral
+fixture; unchanged runtime ownership and volumes; group-order-independent source contributions;
+and canonical source-order folding. Act and chemotaxis remain drives, connectivity remains a
+constraint, and relationship topology changes remain processes.
+
+Qualification on the candidate tree:
+
+- preserved standalone G2 descriptor/compiler boundary: 124/124;
+- repaired local Hamiltonian equivalence and structural-specialization suite: 59/59;
+- Merks elongation fixture: 11/11, including independent global energy and zero warmed allocation;
+- focal-point-plasticity fixture: 19/19, including independent global energy and zero warmed
+  allocation;
+- full symbolic specialization growth at 1/32/1,024 occurrences: 5/5 in 2m57.7s;
+- selected bounded callable evaluator on CPU: inferred `Float32`, zero `Any` slots, zero ordinary
+  warm allocation, exact semantic RNG words, fixed occurrence specialization, and deliberate
+  `G=1/4/8` group growth;
+- shared Metal boundary: 32 adapted external Hamiltonian descriptors with device parameter,
+  state, and workspace buffers returned exact `17.5f0` values;
+- full evaluator experiment on functional Metal: exact semantic RNG words, concrete inference,
+  selected bounded callable compilation over all tested shapes, fixed specialization through
+  1,024 occurrences, and measured device-code growth only with heterogeneous group count;
+- complete CorePotts package suite: passed, including Aqua; and
+- complete root package suite: 542/542 in 5m19.0s, including Aqua and ExplicitImports.
+
+The wide static-SSA comparison still fails selected Metal shapes and remains rejected; that is
+comparison evidence rather than a candidate failure. The Metal environment was read from the
+`main` branch into a temporary directory and used only to supply the vendor package. The code under
+qualification came from this branch.
+
+G3 remains stopped. This candidate requires a fresh independent R1 clearance of the exact
+checkpoint before any proposal-loop integration or Wortel/Merks migration.
 
 ## Prohibited record contents
 

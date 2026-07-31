@@ -710,8 +710,7 @@ function _lower_core_program(
         elseif statement isa HamiltonianTerm &&
                 !(mechanism in (
                     nothing, :symbolic,
-                    :volume, :contact, :activity, :chemotaxis, :relationship,
-                    :elongation,
+                    :volume, :contact, :relationship, :elongation,
                 ))
             throw(ArgumentError(
                 "no V1 lowering is registered for HamiltonianTerm mechanism " *
