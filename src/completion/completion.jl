@@ -442,8 +442,21 @@ end
 function _validate_statement_draws!(diagnostics, statement, identity, path)
     calls = _draw_calls(statement)
     isempty(calls) && return nothing
+    if statement isa HamiltonianTerm
+        push!(diagnostics, PottsDiagnostic(
+            :stochastic_hamiltonian,
+            identity,
+            _statement_expression(statement),
+            path,
+            "a deterministic conservative energy expression",
+            "a Hamiltonian expression containing a random draw",
+            (),
+            statement_source(statement),
+        ))
+        return nothing
+    end
     statement isa Union{
-        ProposalEnergy, ProposalDrive, ProposalConstraint, ProposalModifier,
+        ProposalDrive, ProposalConstraint, ProposalModifier,
         SynchronousProcess, AcceptedCopyProcess, RelationshipProcess,
         LifecycleProcess, EquationProcess, Observation, RegisteredStatement,
     } || push!(diagnostics, PottsDiagnostic(
@@ -490,6 +503,9 @@ const _REGISTERED_ORIGIN_FIELDS = (
     :serialization_identity,
     :lowering_identity,
     :descriptor_payload_type,
+    :scientific_category,
+    :energy_domain,
+    :affected_region,
 )
 
 function _registered_origin_for(definition::StatementDefinition)
@@ -501,7 +517,29 @@ function _registered_origin_for(definition::StatementDefinition)
         lowering_identity = definition.contract.lowering_identity,
         descriptor_payload_type =
             definition.contract.descriptor_payload_type,
+        scientific_category = definition.contract.scientific_category,
+        energy_domain = definition.contract.energy_domain,
+        affected_region = definition.contract.affected_region,
     )
+end
+
+function _statement_scientific_category(statement)
+    statement isa HamiltonianTerm && return :hamiltonian
+    statement isa ProposalDrive && return :drive
+    statement isa ProposalConstraint && return :constraint
+    statement isa ProposalModifier && return :modifier
+    statement isa Observation && return :observation
+    return :process
+end
+
+function _statement_energy_domain(statement)
+    statement isa HamiltonianTerm || return nothing
+    domain = _statement_arguments(statement).domain
+    domain isa Sites && return :sites
+    domain isa Cells && return :cells
+    domain isa Contacts && return :contacts
+    domain isa Edges && return :relationships
+    return :invalid
 end
 
 function _authenticated_registered_origin(
@@ -603,6 +641,8 @@ function _validate_registered_lowering!(
     inferred_admission = _engine_admission(statement)
     inferred_random = _random_operations(statement, identity)
     inferred_result = _record_result_type(statement)
+    inferred_category = _statement_scientific_category(statement)
+    inferred_energy_domain = _statement_energy_domain(statement)
     checks = (
         (
             :registered_result_type_mismatch,
@@ -663,6 +703,18 @@ function _validate_registered_lowering!(
             ),
             repr(contract.capabilities),
             repr(inferred_admission),
+        ),
+        (
+            :registered_scientific_category_mismatch,
+            inferred_category === contract.scientific_category,
+            String(contract.scientific_category),
+            String(inferred_category),
+        ),
+        (
+            :registered_energy_domain_mismatch,
+            inferred_energy_domain === contract.energy_domain,
+            repr(contract.energy_domain),
+            repr(inferred_energy_domain),
         ),
     )
     valid = true
@@ -1029,6 +1081,10 @@ function _qualify_records!(
                 registered_lowering_identity = origin.lowering_identity,
                 registered_descriptor_payload_type =
                     origin.descriptor_payload_type,
+                registered_scientific_category =
+                    origin.scientific_category,
+                registered_energy_domain = origin.energy_domain,
+                registered_affected_region = origin.affected_region,
             ),
             (_statement_arguments(statement), _statement_options(statement)),
             registered === nothing ?

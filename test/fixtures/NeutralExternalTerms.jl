@@ -31,7 +31,7 @@ operation_transfer(::typeof(external_site_value), ::Int) =
         :declared,
         :pure,
         :total,
-        :finite_spatial,
+        :site_local,
         true,
         true,
     )
@@ -183,11 +183,13 @@ function registered_statement_lowering(
     )
     isempty(options) ||
         throw(ArgumentError("ExternalWeightedSiteTerm accepts no options"))
-    weight, state, target_site_expression = arguments
-    return ProposalEnergy(
-        id,
-        weight * external_site_value(state, target_site_expression);
-        source,
+    weight, state, site, energy_density = arguments
+    return HamiltonianTerm(
+        id;
+        domain = sites(:lattice),
+        anchor = site,
+        expression = weight * energy_density,
+        source = source,
     )
 end
 
@@ -200,17 +202,45 @@ function registered_statement_lowering(
     )
     isempty(options) ||
         throw(ArgumentError("ExternalBoundedPairTerm accepts no options"))
-    weight, linked_expression = arguments
-    return ProposalEnergy(
-        id,
-        ifelse(linked_expression, weight, zero(weight));
-        source,
+    weight, edge, energy_density = arguments
+    return HamiltonianTerm(
+        id;
+        domain = edges(edge.relationship),
+        anchor = edge,
+        expression = energy_density,
+        source = source,
     )
 end
 
-function registry()
+function registry(;
+        site_affected_region::Symbol = :target_site,
+        pair_affected_region::Symbol = :incident_relationships,
+    )
     site_contract = (
-        argument_types = (Num, Num, Num),
+        argument_types = (Num, Num, SiteBinding, Num),
+        result_type = Real,
+        unit_constraints = :energy_from_weight,
+        namespace_traversal = :map_symbolics,
+        access = (reads = (1, 2, 3, 4), writes = ()),
+        effect = :pure_read,
+        rng = (),
+        boundedness = (maximum = 0, basis = :read_only),
+        phase = Proposal(),
+        capabilities = (
+            sequential = true,
+            checkerboard = true,
+            reason = "",
+        ),
+        scientific_category = :hamiltonian,
+        energy_domain = :sites,
+        affected_region = site_affected_region,
+        reference_semantics = :weighted_site_occupancy_energy,
+        descriptor_payload_type = ExternalWeightedSitePayload,
+        serialization_identity = "external-weighted-site-term-v1",
+        lowering_identity = :lower_external_weighted_site_term,
+    )
+    pair_contract = (
+        argument_types = (Num, RelationshipBinding, Num),
         result_type = Real,
         unit_constraints = :energy_from_weight,
         namespace_traversal = :map_symbolics,
@@ -224,26 +254,9 @@ function registry()
             checkerboard = true,
             reason = "",
         ),
-        reference_semantics = :declared_energy,
-        descriptor_payload_type = ExternalWeightedSitePayload,
-        serialization_identity = "external-weighted-site-term-v1",
-        lowering_identity = :lower_external_weighted_site_term,
-    )
-    pair_contract = (
-        argument_types = (Num, Num),
-        result_type = Real,
-        unit_constraints = :energy_from_weight,
-        namespace_traversal = :map_symbolics,
-        access = (reads = (1, 2), writes = ()),
-        effect = :pure_read,
-        rng = (),
-        boundedness = (maximum = 0, basis = :read_only),
-        phase = Proposal(),
-        capabilities = (
-            sequential = true,
-            checkerboard = true,
-            reason = "",
-        ),
+        scientific_category = :hamiltonian,
+        energy_domain = :relationships,
+        affected_region = pair_affected_region,
         reference_semantics = :bounded_pair_membership,
         descriptor_payload_type = ExternalBoundedPairPayload,
         serialization_identity = "external-bounded-pair-term-v1",
@@ -259,7 +272,8 @@ function ExternalWeightedSiteTerm(
         id::Symbol,
         weight,
         state,
-        proposal::ProposalContext,
+        kind::CellKind,
+        site::SiteBinding,
     )
     return RegisteredStatement(
         id,
@@ -267,7 +281,9 @@ function ExternalWeightedSiteTerm(
         VERSION,
         weight,
         state,
-        proposal.target_site,
+        site,
+        external_site_value(state, anchor_value(site)) *
+        occupancy(kind, site),
     )
 end
 
@@ -275,19 +291,15 @@ function ExternalBoundedPairTerm(
         id::Symbol,
         weight,
         relationship::RelationshipState,
-        proposal::ProposalContext,
-    )
-    membership = linked(
-        relationship,
-        proposal.source_cell,
-        proposal.target_cell,
+        edge::RelationshipBinding,
     )
     return RegisteredStatement(
         id,
         PAIR_SCHEMA,
         VERSION,
         weight,
-        membership,
+        edge,
+        weight * edge.strength,
     )
 end
 
@@ -315,7 +327,7 @@ function bounded_pair_fixture(
             :external_bounded_pair,
             weight,
             relationships,
-            proposal,
+            edge,
         ),
         AcceptedCopy(
             :request_neutral_pair,

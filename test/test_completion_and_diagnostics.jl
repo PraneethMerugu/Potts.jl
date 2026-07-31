@@ -144,6 +144,9 @@ end
             checkerboard = true,
             reason = "",
         ),
+        scientific_category = :observation,
+        energy_domain = nothing,
+        affected_region = nothing,
         reference_semantics = :dimensionless,
         descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
         serialization_identity = "example-read-v1",
@@ -211,7 +214,7 @@ end
         (; __registered_origin = forged_origin),
         UnknownSource(),
     )
-    forged_statement = ProposalEnergy(forged_core)
+    forged_statement = HamiltonianTerm(forged_core)
     @named forged_origin_model = PottsSystem(
         statements = StatementSet((forged_statement,)),
         parameters = [activity_strength],
@@ -240,7 +243,7 @@ end
         UnknownSource(),
     )
     @named mismatched_origin_model = PottsSystem(
-        statements = StatementSet((ProposalEnergy(mismatched_core),)),
+        statements = StatementSet((HamiltonianTerm(mismatched_core),)),
         parameters = [activity_strength],
     )
     mismatched_origin_error = try

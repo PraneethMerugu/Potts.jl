@@ -1,6 +1,7 @@
 @testset "statements and traversal" begin
     @variables t x(t)
     @parameters k
+    site_anchor = SiteBinding(:site_anchor)
 
     declarations = (
         CellKind(:cell),
@@ -18,7 +19,12 @@
         RelationshipState(:links; capacity = 8),
     )
     proposals = (
-        ProposalEnergy(:energy, k * x),
+        HamiltonianTerm(
+            :energy;
+            domain = sites(:lattice),
+            anchor = site_anchor,
+            expression = k * x,
+        ),
         ProposalDrive(:drive, x),
         ProposalConstraint(:constraint, x > 0),
         ProposalModifier(:modifier, k),
@@ -58,15 +64,26 @@
 
     captured = @statements begin
         CellKind(:captured_cell)
-        ProposalEnergy(:captured_energy, k * x)
+        HamiltonianTerm(
+            :captured_energy;
+            domain = sites(:lattice),
+            anchor = site_anchor,
+            expression = k * x,
+        )
     end
     @test length(captured) == 2
     @test all(statement -> statement_source(statement) isa SourceLocation, captured)
-    @test occursin("ProposalEnergy", statement_source(captured[2]).expression)
+    @test occursin("HamiltonianTerm", statement_source(captured[2]).expression)
 
     mapped = PottsToolkit.map_symbolics(
         value -> substitute(value, Dict(k => 4.0)),
-        ProposalEnergy(:mapped, k * x; coefficient = k),
+        HamiltonianTerm(
+            :mapped;
+            domain = sites(:lattice),
+            anchor = site_anchor,
+            expression = k * x,
+            coefficient = k,
+        ),
     )
     @test occursin("4.0", sprint(show, mapped))
     mapped_effect = PottsToolkit.map_symbolics(
@@ -111,6 +128,9 @@
             checkerboard = true,
             reason = "",
         ),
+        scientific_category = :observation,
+        energy_domain = nothing,
+        affected_region = nothing,
         reference_semantics = :dimensionless,
         descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
         serialization_identity = "example-schema-v1",
@@ -141,9 +161,11 @@
         x;
         callback = identity,
     )
-    @test_throws ArgumentError ProposalEnergy(
-        :forged_public_origin,
-        x;
+    @test_throws ArgumentError HamiltonianTerm(
+        :forged_public_origin;
+        domain = sites(:lattice),
+        anchor = site_anchor,
+        expression = x,
         __registered_origin = (
             schema = :example,
             version = v"1.0.0",

@@ -231,7 +231,9 @@ function _lower_descriptor_plan(
     workspace_layout, workspace_handles = _workspace_layout(ir, T)
     descriptors = Any[]
     for candidate in ir.candidates
-        candidate.category === :proposal || continue
+        candidate.category in (
+            :hamiltonian, :drive, :constraint, :modifier,
+        ) || continue
         _descriptor_candidate_enabled(
             ir.source.records[candidate.record]
         ) || continue

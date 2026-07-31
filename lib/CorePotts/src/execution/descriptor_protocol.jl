@@ -155,13 +155,13 @@ ProposalDescriptor(
     support,
     (),
     (),
-    ProposalEnergyRole(),
+    HamiltonianRole(),
     source_handle,
     EmptyDescriptorPayload(),
 )
 
 abstract type AbstractProposalRole end
-struct ProposalEnergyRole <: AbstractProposalRole end
+struct HamiltonianRole <: AbstractProposalRole end
 struct ProposalDriveRole <: AbstractProposalRole end
 struct ProposalConstraintRole <: AbstractProposalRole end
 struct ProposalModifierRole <: AbstractProposalRole end

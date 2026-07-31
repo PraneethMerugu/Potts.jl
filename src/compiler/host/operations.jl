@@ -157,7 +157,7 @@ for operation in (is_extension, is_retraction, new_contact, lost_contact, linked
 end
 
 for operation in (
-        cell_volume, cell_surface, cell_center, unwrapped_center, endpoint_a,
+        cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b, degree,
     )
     identity = nameof(operation)
@@ -172,9 +172,26 @@ for operation in (
 end
 
 for operation in (
+        contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b,
+    )
+    identity = nameof(operation)
+    @eval operation_transfer(::typeof($operation), ::Int) =
+        _transfer(
+            $(QuoteNode(identity)), 1, :integer, :dimensionless;
+            locality = :contact_local,
+        )
+end
+
+operation_transfer(::typeof(occupancy), ::Int) =
+    _transfer(
+        :occupancy, 2, :real, :declared;
+        locality = :site_local,
+    )
+
+for operation in (
         distance, contact_measure, boundary_measure, neighbor_count, neighbor_sum,
         neighbor_mean, neighbor_geomean, field_value, field_gradient, laplacian,
-        occupancy, history_value, edge_payload, lag,
+        history_value, edge_payload, lag,
     )
     identity = nameof(operation)
     result_rule = operation === neighbor_count ? :integer : :real

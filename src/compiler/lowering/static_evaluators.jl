@@ -220,6 +220,9 @@ function _lower_static_node(
         CorePotts.StateExpression(handle)
     elseif node.payload_kind in (
             :proposal_context,
+            :site_anchor,
+            :cell_anchor,
+            :contact_anchor,
             :relationship_context,
             :relation,
             :kind,
@@ -322,4 +325,3 @@ _storage_class_sort_key(value::Type) =
     "type:" * string(parentmodule(value)) * "." * string(value)
 _storage_class_sort_key(value) =
     string(typeof(value), ":", repr(value))
-

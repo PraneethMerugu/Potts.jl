@@ -8,10 +8,15 @@ for (operation_name, result_type) in (
         (:target_cell, Int),
         (:source_kind, Int),
         (:target_kind, Int),
+        (:contact_owner_a, Int),
+        (:contact_owner_b, Int),
+        (:contact_kind_a, Int),
+        (:contact_kind_b, Int),
         (:is_extension, Bool),
         (:is_retraction, Bool),
         (:cell_volume, Real),
         (:cell_surface, Real),
+        (:cell_elongation, Real),
         (:cell_center, Real),
         (:unwrapped_center, Real),
         (:endpoint_a, Int),
@@ -72,7 +77,16 @@ _field_token(field::FieldState) =
 
 cell_volume(kind::Union{CellKind, MediumKind}) = cell_volume(_kind_token(kind))
 cell_surface(kind::Union{CellKind, MediumKind}) = cell_surface(_kind_token(kind))
+cell_volume(binding::CellBinding) = cell_volume(_binding_token(binding))
+cell_surface(binding::CellBinding) = cell_surface(_binding_token(binding))
+cell_elongation(binding::CellBinding) = cell_elongation(_binding_token(binding))
+contact_owner_a(binding::ContactBinding) = contact_owner_a(_binding_token(binding))
+contact_owner_b(binding::ContactBinding) = contact_owner_b(_binding_token(binding))
+contact_kind_a(binding::ContactBinding) = contact_kind_a(_binding_token(binding))
+contact_kind_b(binding::ContactBinding) = contact_kind_b(_binding_token(binding))
 occupancy(kind::Union{CellKind, MediumKind}, site) = occupancy(_kind_token(kind), site)
+occupancy(kind::Union{CellKind, MediumKind}, site::SiteBinding) =
+    occupancy(_kind_token(kind), _binding_token(site))
 occupancy(kind::Union{CellKind, MediumKind}, site::Symbol) =
     occupancy(_kind_token(kind), _potts_token(site; T = Int))
 linked(relationship::RelationshipState, a, b) =

@@ -80,7 +80,7 @@ public descriptor_checkpoint, descriptor_inspection
 public descriptor_payload_adapt, descriptor_payload_checkpoint_encode
 public descriptor_payload_checkpoint_reconstruct
 public descriptor_payload_inspection, EmptyDescriptorPayload
-public AbstractProposalRole, ProposalEnergyRole, ProposalDriveRole
+public AbstractProposalRole, HamiltonianRole, ProposalDriveRole
 public ProposalConstraintRole, ProposalModifierRole
 public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
 public DescriptorGroup, descriptor_launch, adapt_descriptor_launch

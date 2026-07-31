@@ -23,7 +23,10 @@ function _collect_symbolics!(found, value)
         for field in fieldnames(typeof(value))
             _collect_symbolics!(found, getfield(value, field))
         end
-    elseif value isa Union{ProposalContext, RelationshipBinding}
+    elseif value isa Union{
+            ProposalContext, SiteBinding, CellBinding, ContactBinding,
+            RelationshipBinding,
+        }
         _collect_symbolics!(found, _binding_token(value))
     elseif value isa AbstractPottsStatement
         # Statement references are semantic identities, not nested declarations.
@@ -92,7 +95,7 @@ end
 _statement_effect(::Union{
     CellKind, MediumKind, LatticeDomain, SpatialRelation,
     SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
-    RelationshipState, ProposalEnergy, ProposalDrive, ProposalConstraint,
+    RelationshipState, HamiltonianTerm, ProposalDrive, ProposalConstraint,
     ProposalModifier, EquationProcess, Observation, Protocol,
 }) = PureRead()
 _statement_effect(::SynchronousProcess) = SynchronousAssign()
@@ -105,7 +108,7 @@ function _statement_phase(statement)
     options isa NamedTuple && haskey(options, :phase) &&
         options.phase !== nothing && return options.phase
     statement isa Union{
-        ProposalEnergy, ProposalDrive, ProposalConstraint, ProposalModifier
+        HamiltonianTerm, ProposalDrive, ProposalConstraint, ProposalModifier
     } && return Proposal()
     statement isa AcceptedCopyProcess && return AcceptedCopy()
     statement isa SynchronousProcess && return AfterMCS()

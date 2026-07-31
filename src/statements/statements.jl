@@ -106,7 +106,7 @@ end
 @_define_statement_type FieldState
 @_define_statement_type HistoryState
 @_define_statement_type RelationshipState
-@_define_statement_type ProposalEnergy
+@_define_statement_type HamiltonianTerm
 @_define_statement_type ProposalDrive
 @_define_statement_type ProposalConstraint
 @_define_statement_type ProposalModifier
@@ -137,7 +137,6 @@ const _STATE_TYPES = Union{
 }
 
 const _PROPOSAL_TYPES = Union{
-    ProposalEnergy,
     ProposalDrive,
     ProposalConstraint,
     ProposalModifier,
@@ -379,6 +378,9 @@ const _REGISTERED_CONTRACT_FIELDS = (
     :boundedness,
     :phase,
     :capabilities,
+    :scientific_category,
+    :energy_domain,
+    :affected_region,
     :reference_semantics,
     :descriptor_payload_type,
     :serialization_identity,
@@ -488,6 +490,34 @@ function _validate_registered_contract(contract)
         throw(ArgumentError(
             "a checkerboard rejection requires a nonempty reason"
         ))
+    contract.scientific_category in (
+        :hamiltonian, :drive, :constraint, :modifier, :process, :observation,
+    ) || throw(ArgumentError(
+        "registered scientific_category is not a closed V1 category"
+    ))
+    contract.energy_domain in (
+        nothing, :sites, :cells, :contacts, :relationships,
+    ) || throw(ArgumentError(
+        "registered energy_domain is not a closed V1 energy domain"
+    ))
+    contract.affected_region in (
+        nothing, :target_site, :source_and_target_cells,
+        :incident_contacts, :incident_relationships,
+    ) || throw(ArgumentError(
+        "registered affected_region is not a closed V1 affected-anchor class"
+    ))
+    if contract.scientific_category === :hamiltonian
+        contract.energy_domain === nothing && throw(ArgumentError(
+            "a registered Hamiltonian requires an energy_domain declaration"
+        ))
+        contract.affected_region === nothing && throw(ArgumentError(
+            "a registered Hamiltonian requires an affected_region declaration"
+        ))
+    elseif contract.energy_domain !== nothing || contract.affected_region !== nothing
+        throw(ArgumentError(
+            "only registered Hamiltonians may declare energy_domain or affected_region"
+        ))
+    end
     contract.reference_semantics isa Symbol ||
         throw(ArgumentError("registered reference_semantics must be a Symbol"))
     contract.descriptor_payload_type isa Type &&

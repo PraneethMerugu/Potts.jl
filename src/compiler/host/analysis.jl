@@ -31,6 +31,8 @@ struct DescriptorCandidate
     record::Int32
     category::Symbol
     roots::Vector{Int32}
+    energy_domain::Any
+    affected_anchors::Any
     structural_key::String
     provenance::Any
 end
@@ -47,7 +49,25 @@ _join_locality(values) =
     :bounded_relationship in values ? :bounded_relationship :
     :finite_spatial in values ? :finite_spatial :
     :owner_local in values ? :owner_local :
+    :contact_local in values ? :contact_local :
+    :site_local in values ? :site_local :
     :proposal_context in values ? :proposal_context : :scalar
+
+function _hamiltonian_analysis_error(record, error)
+    return PottsValidationError(
+        :analysis,
+        (PottsDiagnostic(
+            :invalid_hamiltonian_domain,
+            record.identity,
+            repr(first(record.normalized_payload).expression),
+            record.identity.path,
+            "a conservative energy expression with a compiler-proven finite affected-anchor plan",
+            sprint(showerror, error),
+            (),
+            record.source,
+        ),),
+    )
+end
 
 function _analyze_term_graph(
         source::FrozenSourceGraph,
@@ -89,7 +109,8 @@ function _analyze_term_graph(
         elseif node.payload_kind in (:parameter, :variable, :state, :symbolic_leaf)
             record.result_type === Nothing ? Real : record.result_type
         elseif node.payload_kind in (
-                :proposal_context, :relationship_context, :relation, :kind,
+                :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
+                :relationship_context, :relation, :kind,
                 :relationship_payload,
             )
             Real
@@ -127,11 +148,14 @@ function _analyze_term_graph(
         )
         effect[index] = record.effect
         emission_bound[index] = record.bound
-        scientific_category[index] = if record.kind in (
-                :ProposalEnergy, :ProposalDrive, :ProposalConstraint,
-                :ProposalModifier,
-            )
-            :proposal
+        scientific_category[index] = if record.kind === :HamiltonianTerm
+            :hamiltonian
+        elseif record.kind === :ProposalDrive
+            :drive
+        elseif record.kind === :ProposalConstraint
+            :constraint
+        elseif record.kind === :ProposalModifier
+            :modifier
         elseif record.kind in (
                 :RelationshipProcess, :LifecycleProcess, :RelationshipState,
             )
@@ -230,6 +254,31 @@ function _analyze_term_graph(
         )
         record = source.records[record_index]
         category = scientific_category[Int(first(roots))]
+        energy_domain, affected_anchors = if category === :hamiltonian
+            try
+                domain = _energy_domain_fact(source, record)
+                affected = _affected_anchor_fact(
+                    source,
+                    record,
+                    domain,
+                    locality[Int(first(roots))],
+                )
+                if record.provenance isa NamedTuple &&
+                        haskey(record.provenance, :registered_affected_region)
+                    declared = record.provenance.registered_affected_region
+                    declared === affected.kind || throw(ArgumentError(
+                        "registered affected_region $(repr(declared)) does not match " *
+                        "the compiler-proven class $(repr(affected.kind))"
+                    ))
+                end
+                (domain, affected)
+            catch error
+                error isa PottsValidationError && rethrow(error)
+                throw(_hamiltonian_analysis_error(record, error))
+            end
+        else
+            (nothing, nothing)
+        end
         push!(
             candidates,
             DescriptorCandidate(
@@ -237,11 +286,16 @@ function _analyze_term_graph(
                 record_index,
                 category,
                 roots,
+                energy_domain,
+                affected_anchors,
                 _sha256_hex(
                     "potts-descriptor-candidate-v1",
                     record.lowering_identity,
                     Tuple(graph.nodes[root].structural_key for root in roots),
                     category,
+                    energy_domain === nothing ? nothing :
+                    (energy_domain.kind, energy_domain.anchor_kind),
+                    affected_anchors,
                 ),
                 record.provenance,
             ),

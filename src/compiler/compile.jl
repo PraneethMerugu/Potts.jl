@@ -41,7 +41,7 @@ end
 
 function _compiled_activity_declaration(statements)
     index = findfirst(statement ->
-        statement isa ProposalEnergy &&
+        statement isa ProposalDrive &&
         _statement_option(statement, :mechanism) === :activity, statements)
     return index === nothing ? nothing : statements[index]
 end
@@ -165,19 +165,13 @@ function _statement_lowering_rejection(statement, statements, system)
         return nothing
     elseif statement isa ProposalConstraint
         return nothing
-    elseif statement isa ProposalEnergy
+    elseif statement isa HamiltonianTerm
         mechanism = _statement_option(statement, :mechanism)
         mechanism === nothing || mechanism === :symbolic || mechanism in (
             :volume, :contact, :activity, :chemotaxis, :relationship,
             :elongation,
-        ) || return "unsupported ProposalEnergy mechanism $(repr(mechanism))"
-        if mechanism === :chemotaxis
-            _statement_option(statement, :mode, ExtensionsOnly()) isa
-                ExtensionsOnly ||
-                return "V1 chemotaxis lowering currently requires ExtensionsOnly"
-            _statement_option(statement, :sample, Nearest()) isa Nearest ||
-                return "V1 chemotaxis lowering currently requires Nearest sampling"
-        elseif mechanism === :relationship
+        ) || return "unsupported HamiltonianTerm mechanism $(repr(mechanism))"
+        if mechanism === :relationship
             expression = string(_statement_arguments(statement).expression)
             all(token -> occursin(token, expression), (
                 "distance", "unwrapped_center", "__potts_payload__strength",
@@ -679,7 +673,7 @@ function compile(
     ]
     all_statements = _all_system_statements(completed)
     activity_reference = let index = findfirst(statement ->
-            statement isa ProposalEnergy &&
+            statement isa ProposalDrive &&
             _statement_option(statement, :mechanism) === :activity,
             all_statements)
         index === nothing ? nothing :

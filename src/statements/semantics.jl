@@ -60,6 +60,22 @@ contacts(relation) = Contacts(relation)
 edges(relationship) = Edges(relationship)
 incident_edges(relationship, cell) = IncidentEdges(relationship, cell)
 
+function HamiltonianTerm(
+        id::Union{Symbol, StatementID};
+        domain::AbstractIterationDomain,
+        anchor,
+        expression,
+        source = UnknownSource(),
+        kwargs...,
+    )
+    return HamiltonianTerm(_statement_core(
+        id,
+        (; domain, anchor, expression),
+        (; kwargs...),
+        source,
+    ))
+end
+
 struct Assign{T, V} <: AbstractPottsEffect
     target::T
     value::V
@@ -220,27 +236,67 @@ end
 
 function Volume(kind; target, strength,
         name::Symbol = Symbol(:volume_, Symbol(statement_id(kind))))
-    copy = ProposalContext(:copy)
-    expression = strength * (
-        2 * (cell_volume(copy.target_cell) - target) *
-        (is_extension(copy) - is_retraction(copy)) + 1
+    cell = CellBinding(:cell)
+    expression = strength * (cell_volume(cell) - target)^2
+    return HamiltonianTerm(
+        name;
+        domain = cells(kind),
+        anchor = cell,
+        expression,
+        mechanism = :volume,
+        kind,
+        target,
+        strength,
     )
-    return ProposalEnergy(name, expression; mechanism = :volume, kind, target, strength)
 end
 
-function ContactEnergy(laws; name::Symbol = :contact_energy)
+function ContactEnergy(laws;
+        relation = :contact,
+        name::Symbol = :contact_energy,
+    )
     normalized = Tuple(
         law isa Pair && first(law) isa SymmetricPair ? law :
         throw(ArgumentError("contact laws use `(kind_a ↔ kind_b) => energy`"))
         for law in laws
     )
-    return ProposalEnergy(name, 0.0; mechanism = :contact, laws = normalized)
+    contact = ContactBinding(:contact, relation)
+    expression = 0.0
+    for law in reverse(normalized)
+        pair = first(law)
+        kind_a = _kind_token(pair.first)
+        kind_b = _kind_token(pair.second)
+        matching_kinds =
+            ((contact.kind_a == kind_a) & (contact.kind_b == kind_b)) |
+            ((contact.kind_a == kind_b) & (contact.kind_b == kind_a))
+        expression = ifelse(
+            (contact.owner_a != contact.owner_b) & matching_kinds,
+            last(law),
+            expression,
+        )
+    end
+    return HamiltonianTerm(
+        name;
+        domain = contacts(relation),
+        anchor = contact,
+        expression,
+        mechanism = :contact,
+        relation,
+        laws = normalized,
+    )
 end
 
 function Elongation(kind; target, strength,
         name::Symbol = Symbol(:elongation_, Symbol(statement_id(kind))))
-    return ProposalEnergy(
-        name, 0.0; mechanism = :elongation, kind, target, strength
+    cell = CellBinding(:cell)
+    return HamiltonianTerm(
+        name;
+        domain = cells(kind),
+        anchor = cell,
+        expression = strength * (cell_elongation(cell) - target)^2,
+        mechanism = :elongation,
+        kind,
+        target,
+        strength,
     )
 end
 
@@ -253,7 +309,7 @@ function Chemotaxis(kind, field; strength,
         field_value(field, copy.target_site) -
         field_value(field, copy.source_site)
     )
-    return ProposalEnergy(
+    return ProposalDrive(
         name, expression; mechanism = :chemotaxis, kind, field, strength, mode, sample
     )
 end
@@ -267,7 +323,7 @@ end
 
 function ActEnergy(kind, activity; maximum, strength, reduction = Moore(1),
         name::Symbol = Symbol(:activity_, Symbol(statement_id(kind))))
-    return ProposalEnergy(
+    return ProposalDrive(
         name, 0.0;
         mechanism = :activity,
         kind,
@@ -326,13 +382,27 @@ _map_symbolic_payload(f, value::SymmetricPair) =
     _map_symbolic_fields(f, value)
 _map_symbolic_payload(f, value::ProposalContext) =
     map_symbolics(f, value)
+_map_symbolic_payload(f, value::SiteBinding) =
+    map_symbolics(f, value)
+_map_symbolic_payload(f, value::CellBinding) =
+    map_symbolics(f, value)
+_map_symbolic_payload(f, value::ContactBinding) =
+    map_symbolics(f, value)
 _map_symbolic_payload(f, value::RelationshipBinding) =
     map_symbolics(f, value)
 
 Protocol(stages...; name::Symbol = :protocol, source = UnknownSource(), kwargs...) =
     Protocol(name; stages, source, kwargs...)
 
-RelationshipEnergy(id, relationship, expression; kwargs...) =
-    ProposalEnergy(id, expression; mechanism = :relationship, relationship, kwargs...)
+RelationshipEnergy(id, edge::RelationshipBinding, expression; kwargs...) =
+    HamiltonianTerm(
+        id;
+        domain = edges(edge.relationship),
+        anchor = edge,
+        expression,
+        mechanism = :relationship,
+        relationship = edge.relationship,
+        kwargs...,
+    )
 RelationshipConstraint(id, relationship, constraint; kwargs...) =
     ProposalConstraint(id, constraint; mechanism = :relationship, relationship, kwargs...)

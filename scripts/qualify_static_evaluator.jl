@@ -596,7 +596,7 @@ function _group_variant(index::Int)
         CorePotts.FiniteSpatialFootprint((Int8(index),)),
     )
     roles = (
-        CorePotts.ProposalEnergyRole(),
+        CorePotts.HamiltonianRole(),
         CorePotts.ProposalDriveRole(),
         CorePotts.ProposalModifierRole(),
         CorePotts.ProposalConstraintRole(),

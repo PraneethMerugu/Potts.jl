@@ -53,6 +53,9 @@ function _compiler_leaf_kind(value, completed::PottsSystem)
     name === nothing && return :literal
     text = String(name)
     startswith(text, "__potts_proposal__") && return :proposal_context
+    startswith(text, "__potts_energy_site__") && return :site_anchor
+    startswith(text, "__potts_energy_cell__") && return :cell_anchor
+    startswith(text, "__potts_energy_contact__") && return :contact_anchor
     startswith(text, "__potts_relationship__") && return :relationship_context
     startswith(text, "__potts_relationship_set__") && return :relation
     startswith(text, "__potts_kind__") && return :kind
@@ -131,6 +134,9 @@ function _normalize_term!(
             :variable,
             :state,
             :proposal_context,
+            :site_anchor,
+            :cell_anchor,
+            :contact_anchor,
             :relationship_context,
             :relation,
             :kind,
@@ -263,6 +269,8 @@ const _TOTALITY_TRANSFER_RULES = Set((
 const _LOCALITY_TRANSFER_RULES = Set((
     :scalar,
     :proposal_context,
+    :site_local,
+    :contact_local,
     :owner_local,
     :finite_spatial,
     :bounded_relationship,

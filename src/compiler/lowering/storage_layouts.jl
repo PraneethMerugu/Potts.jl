@@ -163,7 +163,9 @@ function _workspace_layout(ir::AnalyzedTermIR, ::Type{T}) where {
     }()
     shape = _lattice_shape(ir)
     for candidate in ir.candidates
-        candidate.category === :proposal || continue
+        candidate.category in (
+            :hamiltonian, :drive, :constraint, :modifier,
+        ) || continue
         record = ir.source.records[candidate.record]
         _descriptor_candidate_enabled(record) || continue
         source = _descriptor_source(record)
@@ -288,8 +290,8 @@ function _record_workspace_handles(
 end
 
 function _proposal_role(record::QualifiedStatement)
-    record.kind === :ProposalEnergy &&
-        return CorePotts.ProposalEnergyRole()
+    record.kind === :HamiltonianTerm &&
+        return CorePotts.HamiltonianRole()
     record.kind === :ProposalDrive &&
         return CorePotts.ProposalDriveRole()
     record.kind === :ProposalConstraint &&

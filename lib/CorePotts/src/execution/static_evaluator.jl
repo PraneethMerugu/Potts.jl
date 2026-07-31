@@ -194,6 +194,11 @@ end
 for identity in (
         :cell_volume,
         :cell_surface,
+        :cell_elongation,
+        :contact_owner_a,
+        :contact_owner_b,
+        :contact_kind_a,
+        :contact_kind_b,
         :cell_center,
         :unwrapped_center,
         :distance,
@@ -358,4 +363,3 @@ end
         )
     end
 end
-

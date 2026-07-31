@@ -183,7 +183,7 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
             CorePotts.DescriptorSupport(true, true, true, true),
             (handle,),
             (),
-            CorePotts.ProposalEnergyRole(),
+            CorePotts.HamiltonianRole(),
             1,
         )
         return typeof(CorePotts.DescriptorKernelStrategy{
@@ -321,14 +321,17 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
         1.0 + NeutralExternalTerms.external_cpu_only_value(
         cpu_only_parameter
     )
+    cpu_only_site = SiteBinding(:cpu_only_site)
     @named nested_cpu_only = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
             CellKind(:cpu_only_cell),
             MediumKind(:cpu_only_medium),
-            ProposalEnergy(
-                :nested_cpu_only_energy,
-                nested_cpu_only_expression,
+            HamiltonianTerm(
+                :nested_cpu_only_energy;
+                domain = sites(:lattice),
+                anchor = cpu_only_site,
+                expression = nested_cpu_only_expression,
             ),
             Protocol(Sweep(); name = :main),
         )),
@@ -575,7 +578,7 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
     @test CorePotts.handle_slot(workspace_handle) == 1
     @test CorePotts.descriptor_stage(descriptor) === :proposal
     @test CorePotts.descriptor_role(descriptor) isa
-          CorePotts.ProposalEnergyRole
+          CorePotts.HamiltonianRole
     @test CorePotts.descriptor_support(descriptor).gpu
     @test CorePotts.descriptor_resource_access(descriptor).footprint isa
           CorePotts.FiniteSpatialFootprint
@@ -727,14 +730,14 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
         CorePotts.StaticEvaluator(CorePotts.LiteralExpression(2.0)),
         CorePotts.ResourceAccess((), (), CorePotts.EmptyFootprint()),
         CorePotts.DescriptorSupport(true, true, true, true),
-        CorePotts.ProposalEnergyRole(),
+        CorePotts.HamiltonianRole(),
         Int32(1),
     )
     opaque_strategy = CorePotts.DescriptorKernelStrategy{
         typeof(opaque),
         typeof(opaque.program.expression),
         CorePotts.EmptyFootprint,
-        CorePotts.ProposalEnergyRole,
+        CorePotts.HamiltonianRole,
         Val{:proposal},
     }()
     opaque_launch = CorePotts.DescriptorLaunch(
@@ -746,7 +749,7 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
             descriptor = :OpaqueDescriptor,
             evaluator = nameof(typeof(opaque.program.expression)),
             footprint = :EmptyFootprint,
-            role = :ProposalEnergyRole,
+            role = :HamiltonianRole,
             stage = :proposal,
         ),
     )
@@ -799,12 +802,18 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
     # Partial mathematical operations are admitted only with an explicit
     # parameter-only prelaunch constraint.
     @parameters positive_scale = 2.0
+    constrained_site = SiteBinding(:constrained_site)
     @named constrained = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
             CellKind(:cell),
             MediumKind(:medium),
-            ProposalEnergy(:validated_log, log(positive_scale)),
+            HamiltonianTerm(
+                :validated_log;
+                domain = sites(:lattice),
+                anchor = constrained_site,
+                expression = log(positive_scale),
+            ),
             Protocol(Sweep(); name = :main),
         )),
         parameters = [positive_scale],
@@ -868,6 +877,7 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
 
     @variables unsafe_state
     unsafe_kind = CellKind(:unsafe_kind)
+    unsafe_site = SiteBinding(:unsafe_site)
     @named unsafe = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
@@ -879,7 +889,12 @@ CorePotts.descriptor_inspection(descriptor::OpaqueDescriptor) = (
                 owner = unsafe_kind,
                 lifecycle = ClearOnOwnershipChange(),
             ),
-            ProposalEnergy(:unsafe_sqrt, sqrt(unsafe_state)),
+            HamiltonianTerm(
+                :unsafe_sqrt;
+                domain = sites(:lattice),
+                anchor = unsafe_site,
+                expression = sqrt(unsafe_state),
+            ),
             Protocol(Sweep(); name = :main),
         )),
         unknowns = [unsafe_state],

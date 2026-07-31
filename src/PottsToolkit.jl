@@ -23,6 +23,7 @@ include("completion/completion.jl")
 include("compiler/host/source_graph.jl")
 include("compiler/host/operations.jl")
 include("compiler/host/normalization.jl")
+include("compiler/host/energy_domains.jl")
 include("compiler/host/analysis.jl")
 include("compiler/execution/executable.jl")
 include("compiler/lowering/parameters.jl")
@@ -47,7 +48,7 @@ export AbstractPottsStatement, AbstractPottsEffect, AbstractPottsPhase
 export CellKind, MediumKind, LatticeDomain, SpatialRelation
 export SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
 export RelationshipState
-export ProposalEnergy, ProposalDrive, ProposalConstraint, ProposalModifier
+export HamiltonianTerm, ProposalDrive, ProposalConstraint, ProposalModifier
 export SynchronousProcess, AcceptedCopyProcess, RelationshipProcess, LifecycleProcess
 export EquationProcess, Observation, Protocol, RegisteredStatement
 export StatementRegistry, default_statement_registry, register_statement
@@ -56,6 +57,8 @@ export compose, extend, flatten, complete, iscomplete
 export compile, PottsExecutable, SequentialEngine, CheckerboardEngine, CPUBackend
 export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
+export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
+export anchor_value
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
 export PottsStats, init, solve, solve!, step!, remake, terminate!
@@ -64,7 +67,8 @@ export DeclaredReferenceUnits, ReferenceUnits
 export ProposalContext, RelationshipBinding
 export source_site, target_site, source_cell, target_cell, source_kind, target_kind
 export is_extension, is_retraction, new_contact, lost_contact
-export cell_volume, cell_surface, cell_center, unwrapped_center, distance
+export cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, distance
+export contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b
 export contact_measure, boundary_measure, neighbor_count, neighbor_sum, neighbor_mean
 export neighbor_geomean, field_value, field_gradient, laplacian, occupancy
 export linked, degree, endpoint_a, endpoint_b, edge_payload, lag, history_value

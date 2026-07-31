@@ -7,13 +7,15 @@ using Symbolics
 function direct_model(count::Integer; weight_default = 2.0)
     count > 0 || throw(ArgumentError("term count must be positive"))
     @parameters weight = weight_default
-    copy = ProposalContext(:copy)
+    site = SiteBinding(:site)
     endothelial = CellKind(:endothelial)
     extracellular = MediumKind(:extracellular)
     terms = AbstractPottsStatement[
-        ProposalEnergy(
-            Symbol(:direct_, index),
-            weight * cell_volume(copy.target_cell),
+        HamiltonianTerm(
+            Symbol(:direct_, index);
+            domain = sites(:lattice),
+            anchor = site,
+            expression = weight * occupancy(endothelial, site),
         )
         for index in 1:count
     ]

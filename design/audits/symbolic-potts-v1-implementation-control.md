@@ -505,6 +505,38 @@ affected-region analysis, typed Hamiltonian plan, neutral external delta, algebr
 evidence are repaired. The earlier checkpoints remain recovery points for the valid expression,
 storage, grouping, provenance, and device-boundary work; they are not complete gate evidence.
 
+## Repaired G1 checkpoint
+
+The reopened G1 boundary now stores conservative `HamiltonianTerm` statements as an energy
+domain, a bound anchor, and one energy expression. The removed `ProposalEnergy` name has no alias
+or wrapper. The closed domain vocabulary is limited to sites, cells, canonical contacts, and
+bounded relationship edges. Volume and elongation are cell energies, contact adhesion is a
+canonical-contact energy, eligible relationship elasticity is a relationship energy, chemotaxis
+and Act are drives, and local connectivity remains a constraint.
+
+Host analysis independently derives a finite affected-anchor fact from the domain, the expression's
+actual anchor reads, operation-locality transfer facts, and resolved structural bounds. It proves
+target-site, source/target-cell, incident-contact, or incident-relationship plans; a registered
+extension may declare the expected class, but a false declaration is rejected after the compiler's
+proof. Contact bounds resolve the declared finite lattice relation and relationship bounds resolve
+the declared maximum degree. Anchor names and resource identities are retained only as host values;
+the new candidate structural contribution contains only domain/anchor classes and the proven
+affected-plan class/bound.
+
+Permanent rejection tests cover proposal-context reads, stochastic draws, a foreign bound anchor,
+finite-spatial reads without a closed affected rule, domain/anchor mismatch, a forged mutating
+Hamiltonian payload, and a false registered affected-region assertion. Focused checkpoint evidence
+passes:
+
+- public statement/traversal tests: 24/24;
+- system contract tests: 40/40;
+- completion, provenance, and diagnostics tests: 49/49; and
+- expanded G1 host compiler facts and rejection suite: 62/62.
+
+G2 remains reopened. This G1 result does not authorize G3: the executor still needs immutable
+before/after views, structural domain and affected plans, local/global energy equivalence, and fresh
+inference, allocation, specialization-growth, Metal, and independent R1 clearance.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,

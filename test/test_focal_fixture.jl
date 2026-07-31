@@ -31,7 +31,7 @@
         Volume(endothelial; target = A₀, strength = λA)
         RelationshipEnergy(
             :focal_spring,
-            focal_links,
+            edge,
             edge.strength * (
                 distance(
                     unwrapped_center(edge.a),

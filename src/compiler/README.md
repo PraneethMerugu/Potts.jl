@@ -12,6 +12,9 @@ host/operations.jl
 host/normalization.jl
     normalize symbolic expressions into the ordered term DAG
 
+host/energy_domains.jl
+    prove conservative energy domains and finite affected-anchor plans
+
 host/analysis.jl
     infer and verify semantic facts over the normalized DAG
 

@@ -6,8 +6,17 @@
     source_unknowns = [x]
     source_parameters = [k]
     source_initial = Dict(x => 1.0)
+    site_anchor = SiteBinding(:site_anchor)
     @named child = PottsSystem(
-        statements = StatementSet((CellKind(:cell), ProposalEnergy(:energy, k * x))),
+        statements = StatementSet((
+            CellKind(:cell),
+            HamiltonianTerm(
+                :energy;
+                domain = sites(:lattice),
+                anchor = site_anchor,
+                expression = k * x,
+            ),
+        )),
         equations = source_equations,
         unknowns = source_unknowns,
         parameters = source_parameters,
@@ -91,7 +100,7 @@
     @test ModelingToolkitBase.initial_conditions(flattened) ==
           ModelingToolkitBase.initial_conditions(tree)
     @test Symbol(statement_id(only(filter(
-        statement -> statement isa ProposalEnergy,
+        statement -> statement isa HamiltonianTerm,
         statements(flattened),
     )))) == :child₊energy
 

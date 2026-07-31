@@ -121,8 +121,8 @@
         cell,
         medium,
         Volume(cell; target = 4.0, strength = 1.0),
-        ProposalEnergy(
-            :directional_energy,
+        ProposalDrive(
+            :directional_drive,
             ifelse(proposal.is_extension, 0.0, 0.1),
         ),
         ProposalDrive(:custom_drive, explicit_noise),
@@ -148,8 +148,8 @@
         ) |> typeof
         for group in symbolic_groups
     )
-    @test count(==(CorePotts.ProposalEnergyRole), symbolic_roles) == 1
-    @test count(==(CorePotts.ProposalDriveRole), symbolic_roles) == 1
+    @test count(==(CorePotts.HamiltonianRole), symbolic_roles) == 1
+    @test count(==(CorePotts.ProposalDriveRole), symbolic_roles) == 2
     @test count(==(CorePotts.ProposalConstraintRole), symbolic_roles) == 1
     @test count(==(CorePotts.ProposalModifierRole), symbolic_roles) == 1
     @test !forbidden(symbolic_program)

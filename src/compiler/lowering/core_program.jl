@@ -80,7 +80,7 @@ function _lower_activity(statements, kinds, manifest, ::Type{T}, dimensions) whe
         T <: AbstractFloat,
     }
     term = findfirst(statement ->
-        statement isa ProposalEnergy &&
+        statement isa ProposalDrive &&
         _statement_option(statement, :mechanism) === :activity, statements)
     term === nothing && return nothing
     statement = statements[term]
@@ -122,7 +122,7 @@ function _lower_field(
     ))
     field_state = only(field_states)
     chemotaxis_index = findfirst(statement ->
-        statement isa ProposalEnergy &&
+        statement isa ProposalDrive &&
         _statement_option(statement, :mechanism) === :chemotaxis, statements)
     chemotaxis = chemotaxis_index === nothing ?
                   nothing : statements[chemotaxis_index]
@@ -277,7 +277,7 @@ function _lower_elongation(statements, kinds, manifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
     terms = filter(statement ->
-        statement isa ProposalEnergy &&
+        statement isa HamiltonianTerm &&
         _statement_option(statement, :mechanism) === :elongation, statements)
     isempty(terms) && return nothing
     length(terms) == 1 || throw(ArgumentError(
@@ -604,7 +604,7 @@ function _lower_proposal_expressions(
     energies = Tuple(
         lower(statement)
         for statement in statements
-        if statement isa ProposalEnergy &&
+        if statement isa HamiltonianTerm &&
            _statement_option(statement, :mechanism) in (nothing, :symbolic) &&
            legacy(statement)
     )
@@ -686,7 +686,7 @@ function _lower_core_program(
 
     for statement in all_statements
         mechanism = _statement_option(statement, :mechanism)
-        if statement isa ProposalEnergy && mechanism === :volume
+        if statement isa HamiltonianTerm && mechanism === :volume
             kind = kinds[_kind_name(_statement_option(statement, :kind))]
             volume_targets[kind] = _compiled_scalar(
                 _statement_option(statement, :target), manifest, T
@@ -694,7 +694,7 @@ function _lower_core_program(
             volume_strengths[kind] = _compiled_scalar(
                 _statement_option(statement, :strength), manifest, T
             )
-        elseif statement isa ProposalEnergy && mechanism === :contact
+        elseif statement isa HamiltonianTerm && mechanism === :contact
             for law in _statement_option(statement, :laws, ())
                 pair = first(law)
                 energy = _compiled_scalar(last(law), manifest, T)
@@ -707,14 +707,14 @@ function _lower_core_program(
                 mechanism === :local_connectivity
             kind = kinds[_kind_name(_statement_option(statement, :kind))]
             connectivity_kinds[kind] = true
-        elseif statement isa ProposalEnergy &&
+        elseif statement isa HamiltonianTerm &&
                 !(mechanism in (
                     nothing, :symbolic,
                     :volume, :contact, :activity, :chemotaxis, :relationship,
                     :elongation,
                 ))
             throw(ArgumentError(
-                "no V1 lowering is registered for ProposalEnergy mechanism " *
+                "no V1 lowering is registered for HamiltonianTerm mechanism " *
                 "$(repr(mechanism))"
             ))
         end
