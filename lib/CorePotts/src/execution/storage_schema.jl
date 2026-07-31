@@ -66,16 +66,26 @@ function _schema_layout_entries(
         entry_type,
     )
     classes = Any[]
-    counts = Int[]
-    entries = ()
     for schema in schemas
         representation = storage_class(schema)
-        bank = findfirst(==(representation), classes)
-        if bank === nothing
+        any(isequal(representation), classes) ||
             push!(classes, representation)
-            push!(counts, 0)
-            bank = length(classes)
-        end
+    end
+    sort!(classes; by = representation ->
+        "type:" * string(parentmodule(representation)) * "." *
+        string(representation)
+    )
+    banks = [
+        only(findall(isequal(storage_class(schema)), classes))
+        for schema in schemas
+    ]
+    order = sortperm(eachindex(schemas); by = index -> banks[index])
+    counts = zeros(Int, length(classes))
+    entries = ()
+    for index in order
+        schema = schemas[index]
+        representation = storage_class(schema)
+        bank = banks[index]
         counts[bank] += 1
         handle = handle_type(representation, bank, counts[bank])
         entries = (entries..., entry_type(handle, schema))

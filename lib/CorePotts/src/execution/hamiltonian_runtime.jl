@@ -46,6 +46,18 @@ for (identity, kind) in (
     ) = context.anchor
 end
 
+@inline function _compiled_context_value(
+        operation::ContextOperation{Identity},
+        context::HamiltonianEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        context_value,
+        Tuple{ContextOperation{Identity}, HamiltonianEvaluationContext},
+        operation,
+        context,
+    )
+end
+
 @inline _view_owner(view::BeforeProposalView, site) =
     @inbounds view.runtime.ownership[site]
 @inline _view_owner(view::AfterProposalView, site) =
@@ -200,6 +212,20 @@ end
     ).values[site]
 end
 
+@inline function _compiled_resource_operation(
+        operation::ResourceOperation{Identity},
+        arguments::Tuple,
+        context::HamiltonianEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        apply_resource_operation,
+        Tuple{ResourceOperation{Identity}, Any, HamiltonianEvaluationContext},
+        operation,
+        arguments,
+        context,
+    )
+end
+
 @inline function _canonical_contact(runtime, first, second)
     linear = LinearIndices(runtime.ownership)
     return linear[first] <= linear[second] ?
@@ -219,7 +245,7 @@ end
     context = HamiltonianEvaluationContext(
         view, anchor, proposal, domain_resource
     )
-    return evaluate_static(evaluator, context)
+    return _compiled_evaluate_static(evaluator, context)
 end
 
 @inline function _anchor_energy_delta(

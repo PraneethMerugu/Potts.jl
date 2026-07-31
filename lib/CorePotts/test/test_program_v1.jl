@@ -352,10 +352,75 @@ struct ExternalSquareOperation <: CorePotts.AbstractContextualOperation end
         CorePotts.evaluate_static,
         Tuple{typeof(descriptor.evaluator), typeof(context)},
     ) === Float32
+    @test Core.Compiler.return_type(
+        CorePotts._compiled_evaluate_static,
+        Tuple{typeof(descriptor.evaluator), typeof(context)},
+    ) === Float32
     output = zeros(Float32, 4)
     backend = CorePotts.KernelAbstractions.CPU()
     kernel = CorePotts.descriptor_probe_kernel!(backend)
     kernel(output, descriptor, context; ndrange = length(output))
     CorePotts.KernelAbstractions.synchronize(backend)
     @test output == fill(10.0f0, 4)
+end
+
+@testset "public storage layouts canonicalize representation banks" begin
+    function state_schema(name, element_type)
+        return CorePotts.StateBlockSchema(
+            CorePotts.QualifiedResourceIdentity((), name),
+            v"1.0.0",
+            :site,
+            element_type,
+            (2,),
+            2,
+            :structure_of_arrays,
+            :provided_or_zero,
+            :shape_and_finite,
+            :logical,
+            :preserve,
+            :declared,
+            :bounded_write,
+            :adapt_storage,
+            :copy,
+            :logical_copy,
+            :qualified,
+            true,
+        )
+    end
+    function workspace_schema(name, element_type)
+        return CorePotts.WorkspaceSchema(
+            CorePotts.QualifiedResourceIdentity((), name),
+            v"1.0.0",
+            element_type,
+            (2,),
+            2,
+            Array,
+            :zero,
+            :proposal,
+            :bounded_write,
+            :adapt_storage,
+            :qualified,
+            false,
+        )
+    end
+    function banks_by_representation(layout)
+        return Dict(
+            CorePotts.handle_representation(entry.handle) =>
+                CorePotts.handle_bank(entry.handle)
+            for entry in layout.entries
+        )
+    end
+
+    states = [
+        state_schema(:float64_state, Float64),
+        state_schema(:float32_state, Float32),
+    ]
+    workspaces = [
+        workspace_schema(:float64_workspace, Float64),
+        workspace_schema(:float32_workspace, Float32),
+    ]
+    @test banks_by_representation(CorePotts.StateLayout(states)) ==
+          banks_by_representation(CorePotts.StateLayout(reverse(states)))
+    @test banks_by_representation(CorePotts.WorkspaceLayout(workspaces)) ==
+          banks_by_representation(CorePotts.WorkspaceLayout(reverse(workspaces)))
 end

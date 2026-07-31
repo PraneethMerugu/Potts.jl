@@ -1013,6 +1013,18 @@ function qualify_candidate(
     warm_allocation = @allocated candidate_evaluate(
         candidate, occurrence, host_context
     )
+    if execution_label === :concrete_callables &&
+            label === :bounded_nary_typed_tree
+        typed.inferred === Float32 || error(
+            "selected evaluator no longer infers Float32"
+        )
+        typed.any_slots == 0 || error(
+            "selected evaluator contains Any-typed compiler slots"
+        )
+        warm_allocation == 0 || error(
+            "selected evaluator allocates after warmup"
+        )
+    end
 
     occurrences = qualification_occurrences(32)
     host_group = qualification_group(candidate, occurrences, 1)
@@ -1078,6 +1090,7 @@ fixtures = (
     semantic_fixture(64; identity_wrappers = 44),
 )
 selected_failures = String[]
+selected_shape_results = NamedTuple[]
 
 for (execution_label, execution) in executions
     for fixture in fixtures
@@ -1094,6 +1107,10 @@ for (execution_label, execution) in executions
                     backend,
                     prototype,
                 )
+                if execution_label === :concrete_callables &&
+                        label === :bounded_nary_typed_tree
+                    push!(selected_shape_results, result)
+                end
                 println("candidate=", result)
             catch error
                 if execution_label === :concrete_callables &&
@@ -1113,6 +1130,35 @@ for (execution_label, execution) in executions
                 ))
             end
         end
+    end
+end
+
+
+selected_depth_four = sort(
+    filter(result -> result.semantic_depth == 4, selected_shape_results);
+    by = result -> result.semantic_nodes,
+)
+length(selected_depth_four) == 3 || push!(
+    selected_failures,
+    "selected evaluator did not produce all 16/32/64-node depth-four results",
+)
+if length(selected_depth_four) == 3
+    smallest = first(selected_depth_four)
+    largest = last(selected_depth_four)
+    largest.code_statements <= 4 * smallest.code_statements || push!(
+        selected_failures,
+        "selected evaluator host statement growth exceeded the 4x bound",
+    )
+    largest.host_llvm_bytes <= 4 * smallest.host_llvm_bytes || push!(
+        selected_failures,
+        "selected evaluator host LLVM growth exceeded the 4x bound",
+    )
+    if !ismissing(smallest.device_llvm_bytes) &&
+            !ismissing(largest.device_llvm_bytes)
+        largest.device_llvm_bytes <= 4 * smallest.device_llvm_bytes || push!(
+            selected_failures,
+            "selected evaluator device LLVM growth exceeded the 4x bound",
+        )
     end
 end
 
@@ -1194,6 +1240,19 @@ for (execution_label, execution) in executions
             )
             getfield.(results, :specialization_count) == (1, 4, 8) ||
                 error("actual group specialization count is incorrect")
+            if execution_label === :concrete_callables &&
+                    label === :bounded_nary_typed_tree
+                last(results).runner_statements <=
+                    8 * first(results).runner_statements || error(
+                    "selected evaluator group runner growth exceeded the 8x bound"
+                )
+                if !ismissing(first(results).device_llvm_bytes)
+                    last(results).device_llvm_bytes <=
+                        9 * first(results).device_llvm_bytes || error(
+                        "selected evaluator group device growth exceeded the 9x bound"
+                    )
+                end
+            end
             println("group_growth=", (
                 execution = execution_label,
                 representation = label,

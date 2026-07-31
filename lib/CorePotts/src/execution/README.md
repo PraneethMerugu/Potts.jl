@@ -17,8 +17,10 @@ PottsToolkit supplies fully analyzed concrete values. CorePotts does not know bi
 names and does not resolve symbols, registries, units, or Symbolics expressions.
 
 Production plans contain only `ProposalDescriptor` values. They extract the compiler-supplied
-`StaticEvaluator` directly; no public descriptor-evaluation hook exists. Registered extensions may
-provide versioned operation callables and inert payload codecs, but payload types cannot replace
+`StaticEvaluator` directly and traverse it through a private CorePotts walker; public evaluator,
+expression, and operation wrappers are inspection/probe conveniences and are never production
+dispatch points. No public descriptor-evaluation hook exists. Registered extensions may provide
+versioned concrete operation callables and inert payload codecs, but payload types cannot replace
 evaluation, adaptation, grouping, source ownership, or resource selection. Hamiltonian domain
 resources and auxiliary-state banks are explicit plan/runtime values and are required at plan
 construction.

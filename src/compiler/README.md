@@ -18,8 +18,17 @@ host/energy_domains.jl
 host/analysis.jl
     infer and verify semantic facts over the normalized DAG
 
+host/coverage.jl
+    validate compiler choices and complete statement/equation lowering coverage
+
+execution/executable.jl
+    define public engine/backend selections and the executable wrapper
+
 lowering/parameters.jl
     lower units, defaults, and runtime parameter indices
+
+execution/manifests.jl
+    construct compiled statement/state/I/O manifests and time contracts
 
 lowering/static_evaluators.jl
     lower analyzed DAG nodes into bounded concrete callable expressions
@@ -36,9 +45,6 @@ lowering/proposal_descriptors.jl
 lowering/constraints.jl
     lower prelaunch parameter-domain constraints and assemble the plan
 
-execution/executable.jl
-    define public engine/backend selections and the executable wrapper
-
 execution/boundary.jl
     validate that only concrete compiled data crosses into CorePotts
 
@@ -46,7 +52,7 @@ lowering/core_program.jl
     lower non-descriptor universal runtime structures
 
 compile.jl
-    orchestrate the passes and assemble reports/fingerprints
+    orchestrate the passes and assemble the final executable/fingerprint
 ```
 
 Only `compile.jl` orchestrates the complete pipeline. Host IR and registries never cross

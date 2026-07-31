@@ -143,6 +143,8 @@ function operation_callable end
 function state_value end
 function workspace_value end
 function evaluator_parameters end
+function _compiled_context_value end
+function _compiled_resource_operation end
 
 for (identity, operation) in (
         :add => OrderedFold(+),
@@ -269,6 +271,47 @@ end
 @inline evaluate_static(evaluator::StaticEvaluator, context) =
     evaluate_expression(evaluator.expression, context)
 
+# Production execution deliberately does not redispatch through the public
+# evaluator/operation protocol. Registered concrete callables remain the one
+# semantic extension point after lowering.
+@inline _compiled_evaluate_expression(
+    expression::LiteralExpression, context
+) = expression.value
+
+@inline function _compiled_evaluate_expression(
+        expression::ParameterExpression,
+        context,
+    )
+    index = expression.index
+    return index == 0 ? expression.default :
+           @inbounds evaluator_parameters(context)[index]
+end
+
+@inline _compiled_evaluate_expression(
+    expression::ContextExpression, context
+) = _compiled_context_value(expression.operation, context)
+
+@inline _compiled_evaluate_expression(
+    expression::StateExpression, context
+) = expression.handle
+
+@inline function _compiled_evaluate_expression(
+        expression::OperationExpression,
+        context,
+    )
+    arguments = map(
+        argument -> _compiled_evaluate_expression(argument, context),
+        expression.arguments,
+    )
+    return _compiled_execute_operation(
+        expression.operation, arguments, context
+    )
+end
+
+@inline _compiled_evaluate_static(
+    evaluator::StaticEvaluator, context
+) = _compiled_evaluate_expression(evaluator.expression, context)
+
 @inline function _ordered_fold(operation, arguments::Tuple)
     length(arguments) == 1 && return operation(only(arguments))
     return foldl(operation, Base.tail(arguments); init = first(arguments))
@@ -284,6 +327,22 @@ end
     operation::OrderedFold, arguments::Tuple, context
 ) = operation(arguments)
 @inline execute_operation(
+    operation, arguments::Tuple, context
+) = operation(arguments...)
+
+@inline _compiled_execute_operation(
+    operation::ContextOperation, arguments::Tuple, context
+) = _compiled_context_value(operation, context)
+@inline _compiled_execute_operation(
+    operation::ResourceOperation, arguments::Tuple, context
+) = _compiled_resource_operation(operation, arguments, context)
+@inline _compiled_execute_operation(
+    operation::AbstractContextualOperation, arguments::Tuple, context
+) = operation(arguments, context)
+@inline _compiled_execute_operation(
+    operation::OrderedFold, arguments::Tuple, context
+) = _ordered_fold(operation.operation, arguments)
+@inline _compiled_execute_operation(
     operation, arguments::Tuple, context
 ) = operation(arguments...)
 
@@ -331,6 +390,18 @@ for identity in (
     ) = getproperty(context.values, $(QuoteNode(identity)))
 end
 
+@inline function _compiled_context_value(
+        operation::ContextOperation{Identity},
+        context::EvaluatorProbeContext,
+    ) where {Identity}
+    return invoke(
+        context_value,
+        Tuple{ContextOperation{Identity}, EvaluatorProbeContext},
+        operation,
+        context,
+    )
+end
+
 @inline apply_resource_operation(
     ::ResourceOperation{:cell_volume},
     arguments,
@@ -346,6 +417,20 @@ end
     owner = @inbounds context.values.ownership[Int(last(arguments))]
     owner <= 0 && return false
     return @inbounds context.values.cell_kinds[owner] == kind
+end
+
+@inline function _compiled_resource_operation(
+        operation::ResourceOperation{Identity},
+        arguments::Tuple,
+        context::EvaluatorProbeContext,
+    ) where {Identity}
+    return invoke(
+        apply_resource_operation,
+        Tuple{ResourceOperation{Identity}, Any, EvaluatorProbeContext},
+        operation,
+        arguments,
+        context,
+    )
 end
 
 @inline state_value(
@@ -366,7 +451,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= length(output)
-        @inbounds output[index] = evaluate_static(evaluator, context)
+        @inbounds output[index] = _compiled_evaluate_static(evaluator, context)
     end
 end
 
@@ -380,7 +465,7 @@ end
         descriptor isa ProposalDescriptor || error(
             "descriptor probes require compiler-owned ProposalDescriptor values"
         )
-        @inbounds output[index] = evaluate_static(
+        @inbounds output[index] = _compiled_evaluate_static(
             getfield(descriptor, :evaluator), context
         )
     end

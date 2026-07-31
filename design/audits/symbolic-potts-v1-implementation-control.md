@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `reopened` | four `598493b` P1 findings repaired; exact-tree rereview pending | dead alternate-evaluator P2 repaired by removal |
+| R1 compiler | `reopened` | `d9ffab1` evaluator-dispatch P1 repaired; exact-tree rereview pending | all three `d9ffab1` P2 findings repaired |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -663,6 +663,50 @@ selected design fails; rejected comparison candidates may still report nonblocki
 
 Fresh independent R1 review of the exact checkpoint is still required before this section may
 record G2 as passed. No G3 integration or Wortel/Merks migration is authorized meanwhile.
+
+## Evaluator-dispatch R1 return and repair
+
+Fresh independent R1 review of exact checkpoint `d9ffab1` confirmed the four preceding P1 repairs,
+the removal of the dead alternate evaluator, the production specialization policy, and the
+backend-agnostic Metal witness. It returned G2 for one adjacent P1: production still called the
+public `evaluate_static` generic, so an external module could specialize that method for the exact
+lowered evaluator type and replace the compiled result. The reviewer reproduced `17.5f0` becoming
+`12345.0f0` without changing lowering or the descriptor.
+
+The bounded repair adds a private CorePotts expression walker used by descriptor launches,
+constraint validation, descriptor probes, and Hamiltonian anchor evaluation. It invokes built-in
+context and resource semantics through compiler-owned paths and invokes registered concrete
+callables directly as the deliberate semantic extension point. Public `evaluate_static`,
+`evaluate_expression`, and `execute_operation` remain probe conveniences but are not production
+dispatch points. A permanent adversarial test specializes all three public functions, observes
+their forged values, and proves the same production Hamiltonian delta remains unchanged.
+
+The review's three P2s were also closed without expanding the gate:
+
+- `compile.jl` is now 176 lines of orchestration; compilation coverage moved to
+  `host/coverage.jl`, while manifests, external I/O, initial values, and time contracts moved to
+  `execution/manifests.jl`;
+- public state/workspace layout constructors now assign value-level bank ordinals from the same
+  canonical representation ordering as production lowering; and
+- the expensive evaluator qualification now fails on selected-design inference, `Any` slots,
+  warm allocation, and bounded host/device generated-code growth, while remaining outside
+  ordinary `Pkg.test()`.
+
+Qualification currently completed on this repair:
+
+- repaired R1 adversarial boundary: 24/24;
+- complete CorePotts suite: passed, including the internal evaluator inference assertion,
+  canonical public layout tests, and Aqua; and
+- ordinary root `Pkg.test()`: 568/568 in 6m42.8s, including Aqua and ExplicitImports;
+- full specialization growth: 5/5 in 2m56.0s;
+- the fail-closed CPU evaluator matrix passed all selected-design inference, allocation,
+  occurrence, group, and generated-code bounds;
+- the shared Metal boundary executed 32 adapted production descriptors with device parameter,
+  state, and workspace buffers and returned exact `17.5f0`; and
+- the fail-closed Metal evaluator matrix passed all selected-design checks over the tested
+  expression shapes, semantic RNG words, 1/32/1,024 occurrences, and 1/4/8 groups.
+
+Exact-checkpoint R1 rereview remains required. G3 remains stopped.
 
 ## Prohibited record contents
 

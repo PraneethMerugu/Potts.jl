@@ -1,5 +1,29 @@
 struct R1AdversarialPayload end
 
+struct R1StaticOverrideOperation end
+@inline (::R1StaticOverrideOperation)(value) = value
+
+const R1StaticOverrideExpression = CorePotts.OperationExpression{
+    R1StaticOverrideOperation,
+    Tuple{CorePotts.LiteralExpression{Float64}},
+}
+
+@inline _r1_override_value(context, value) =
+    context isa CorePotts.HamiltonianEvaluationContext &&
+    context.view isa CorePotts.AfterProposalView ? value : 0.0
+
+@inline CorePotts.evaluate_static(
+    ::CorePotts.StaticEvaluator{R1StaticOverrideExpression}, context
+) = _r1_override_value(context, 12345.0)
+
+@inline CorePotts.evaluate_expression(
+    ::R1StaticOverrideExpression, context
+) = _r1_override_value(context, 23456.0)
+
+@inline CorePotts.execute_operation(
+    ::R1StaticOverrideOperation, arguments::Tuple, context
+) = _r1_override_value(context, 34567.0)
+
 function CorePotts.descriptor_adapt(
         to,
         ::CorePotts.ProposalDescriptor{
@@ -232,6 +256,79 @@ end
         @test CorePotts.fold_hamiltonian_contributions(
             adversarial_plan, contributions
         ) == 5.0
+    end
+
+    @testset "public evaluator dispatch cannot replace production" begin
+        cell = CellKind(:closed_evaluator_cell)
+        medium = MediumKind(:closed_evaluator_medium)
+        anchor = SiteBinding(:closed_evaluator_site)
+        @named closed_evaluator_model = PottsSystem(
+            statements = StatementSet((
+                Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                HamiltonianTerm(
+                    :closed_evaluator_energy;
+                    domain = sites(:lattice),
+                    anchor,
+                    expression = 5.0 * occupancy(cell, anchor),
+                ),
+                Protocol(Sweep(); name = :main),
+            )),
+        )
+        executable = compile(
+            complete(closed_evaluator_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        ownership = zeros(Int32, 3, 3)
+        ownership[2, 2] = 1
+        runtime = _r1_runtime(executable, ownership, Int16[2])
+        proposal = _r1_proposal_context(
+            runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
+        )
+        role = only(only(
+            executable.core_program.descriptor_plan.groups
+        ).launch.instances).role
+        evaluator = CorePotts.StaticEvaluator(
+            CorePotts.OperationExpression(
+                R1StaticOverrideOperation(),
+                CorePotts.LiteralExpression(5.0),
+            ),
+        )
+        before = CorePotts.BeforeProposalView(
+            runtime,
+            proposal.target,
+            proposal.old_owner,
+            proposal.new_owner,
+        )
+        after = CorePotts.AfterProposalView(
+            runtime,
+            proposal.target,
+            proposal.old_owner,
+            proposal.new_owner,
+        )
+        before_context = CorePotts.HamiltonianEvaluationContext(
+            before, proposal.target, proposal
+        )
+        after_context = CorePotts.HamiltonianEvaluationContext(
+            after, proposal.target, proposal
+        )
+        @test CorePotts.evaluate_static(evaluator, after_context) -
+              CorePotts.evaluate_static(evaluator, before_context) == 12345.0
+        @test CorePotts.evaluate_expression(
+            evaluator.expression, after_context
+        ) == 23456.0
+        @test CorePotts.execute_operation(
+            R1StaticOverrideOperation(), (5.0,), after_context
+        ) == 34567.0
+        @test CorePotts._compiled_hamiltonian_delta(
+            evaluator,
+            role,
+            proposal,
+            executable.core_program.descriptor_plan.domain_resources,
+        ) == 0.0
     end
 
     @testset "cell domains exclude extinct after-view anchors" begin

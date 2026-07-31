@@ -165,7 +165,7 @@ end
         descriptor isa ProposalDescriptor || error(
             "production descriptor launches require compiler-owned ProposalDescriptor values"
         )
-        @inbounds output[index] = evaluate_static(
+        @inbounds output[index] = _compiled_evaluate_static(
             getfield(descriptor, :evaluator), context
         )
     end
@@ -182,7 +182,7 @@ function validate_parameters(plan::DescriptorExecutionPlan, parameters)
     context = EvaluatorProbeContext(parameters, NamedTuple())
     for group in plan.constraints
         for constraint in group.instances
-            value = evaluate_static(constraint.evaluator, context)
+            value = _compiled_evaluate_static(constraint.evaluator, context)
             _constraint_passes(value, constraint.predicate) || throw(
                 DomainError(
                     value,
