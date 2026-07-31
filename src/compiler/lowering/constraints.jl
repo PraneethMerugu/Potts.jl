@@ -251,7 +251,7 @@ function _lower_descriptor_plan(
         )
     end
     descriptor_sources = Int32[
-        CorePotts.descriptor_source_handle(descriptor)
+        descriptor.source_handle
         for descriptor in descriptors
     ]
     allunique(descriptor_sources) || throw(ArgumentError(
@@ -259,6 +259,7 @@ function _lower_descriptor_plan(
     ))
     groups = _descriptor_groups(descriptors)
     constraints = _domain_constraints(ir, manifest, T, state_handles)
+    domain_resources = _hamiltonian_domain_resources(ir)
     fingerprint = _sha256_hex(
         "potts-descriptor-execution-plan-v2",
         ir.structural_key,
@@ -285,6 +286,10 @@ function _lower_descriptor_plan(
             schema.shape,
             schema.capacity,
         ) for schema in workspace_layout.schemas),
+        domain_resources.contact_offsets,
+        domain_resources.contact_starts,
+        domain_resources.contact_counts,
+        domain_resources.relationship_slots,
     )
     return CorePotts.DescriptorExecutionPlan(
         groups,
@@ -294,5 +299,6 @@ function _lower_descriptor_plan(
         [record.identity for record in ir.source.records],
         Int32(length(descriptors)),
         fingerprint,
+        domain_resources,
     )
 end

@@ -218,6 +218,20 @@ function allocate_auxiliary_state(
     )
 end
 
+@inline function _copy_state_bank(
+        bank::BlockBank{Representation},
+    ) where {Representation}
+    blocks = map(bank.blocks) do block
+        DenseStateBlock(copy(block.values))
+    end
+    return BlockBank{Representation, typeof(blocks)}(blocks)
+end
+
+function copy_auxiliary_state(::StateLayout, state::AuxiliaryState)
+    banks = map(_copy_state_bank, state.banks)
+    return AuxiliaryState(banks)
+end
+
 function allocate_runtime_workspaces(layout::WorkspaceLayout)
     blocks = map(
         entry -> allocate_workspace_block(entry.schema),

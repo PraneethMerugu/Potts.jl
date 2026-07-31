@@ -6,6 +6,7 @@ empty_descriptor_plan() = CorePotts.DescriptorExecutionPlan(
     Any[],
     Int32(0),
     "empty-descriptor-plan-v1",
+    CorePotts.HamiltonianDomainResources(0, 0),
 )
 
 function test_program(
@@ -208,6 +209,8 @@ end
     @test count(state.active) == 1
     @test (state.endpoint_a[1], state.endpoint_b[1]) == (1, 2)
     @test (state.generation_a[1], state.generation_b[1]) == (4, 7)
+    @test state.degree == Int16[1, 1]
+    @test state.incident_edges[1, :] == Int32[1, 1]
 
     # The exact duplicate policy is idempotent.
     CorePotts.apply_relationship_requests!(
@@ -243,6 +246,19 @@ end
         state, Int16[2, 2], generations, plan, conflict
     )
     @test state.active == before.active
+    @test state.degree == before.degree
+    @test state.incident_edges == before.incident_edges
+
+    CorePotts.apply_relationship_requests!(
+        state,
+        Int16[2, 2],
+        generations,
+        plan,
+        [CorePotts.RemoveRelationshipRequest(1; identity = 12)],
+    )
+    @test iszero(count(state.active))
+    @test all(iszero, state.degree)
+    @test all(iszero, state.incident_edges)
 end
 
 @testset "logical checkpoints preserve exact continuation" begin
@@ -331,12 +347,10 @@ struct ExternalSquareOperation <: CorePotts.AbstractContextualOperation end
         CorePotts.DescriptorSupport(true, true, true, true),
         1,
     )
-    @test CorePotts.descriptor_evaluate_proposal(
-        descriptor, context
-    ) == 10.0f0
+    @test CorePotts.evaluate_static(descriptor.evaluator, context) == 10.0f0
     @test Core.Compiler.return_type(
-        CorePotts.descriptor_evaluate_proposal,
-        Tuple{typeof(descriptor), typeof(context)},
+        CorePotts.evaluate_static,
+        Tuple{typeof(descriptor.evaluator), typeof(context)},
     ) === Float32
     output = zeros(Float32, 4)
     backend = CorePotts.KernelAbstractions.CPU()

@@ -36,6 +36,7 @@ struct DescriptorExecutionPlan{
         G <: Tuple,
         C <: Tuple,
         S <: AbstractVector,
+        D <: HamiltonianDomainResources,
     }
     groups::G
     state_layout::StateLayout
@@ -44,6 +45,69 @@ struct DescriptorExecutionPlan{
     source_table::S
     occurrence_count::Int32
     fingerprint::String
+    domain_resources::D
+    function DescriptorExecutionPlan{G, C, S, D}(
+            groups::G,
+            state_layout::StateLayout,
+            workspace_layout::WorkspaceLayout,
+            constraints::C,
+            source_table::S,
+            occurrence_count::Int32,
+            fingerprint::String,
+            domain_resources::D,
+        ) where {
+            G <: Tuple,
+            C <: Tuple,
+            S <: AbstractVector,
+            D <: HamiltonianDomainResources,
+        }
+        all(groups) do group
+            all(descriptor -> descriptor isa ProposalDescriptor,
+                group.launch.instances)
+        end || throw(ArgumentError(
+            "descriptor execution plans admit only compiler-owned ProposalDescriptor values"
+        ))
+        occurrence_count >= 0 || throw(ArgumentError(
+            "descriptor occurrence count cannot be negative"
+        ))
+        return new{G, C, S, D}(
+            groups,
+            state_layout,
+            workspace_layout,
+            constraints,
+            source_table,
+            occurrence_count,
+            fingerprint,
+            domain_resources,
+        )
+    end
+end
+
+function DescriptorExecutionPlan(
+        groups::G,
+        state_layout::StateLayout,
+        workspace_layout::WorkspaceLayout,
+        constraints::C,
+        source_table::S,
+        occurrence_count,
+        fingerprint,
+        domain_resources::D,
+    ) where {
+        G <: Tuple,
+        C <: Tuple,
+        S <: AbstractVector,
+        D <: HamiltonianDomainResources,
+    }
+    return DescriptorExecutionPlan{G, C, S, D}(
+        groups,
+        state_layout,
+        workspace_layout,
+        constraints,
+        source_table,
+        Int32(occurrence_count),
+        String(fingerprint),
+        domain_resources,
+    )
 end
 
 Adapt.@adapt_structure LiteralExpression
@@ -73,7 +137,12 @@ Adapt.@adapt_structure ConstraintGroup
 function adapt_descriptor_launch(to, group::DescriptorGroup)
     launch = descriptor_launch(group)
     adapted_descriptors = map(
-        descriptor -> descriptor_adapt(to, descriptor),
+        descriptor -> begin
+            descriptor isa ProposalDescriptor || throw(ArgumentError(
+                "production launches require compiler-owned ProposalDescriptor values"
+            ))
+            _compiled_descriptor_adapt(to, descriptor)
+        end,
         launch.instances,
     )
     adapted_instances = Adapt.adapt(to, adapted_descriptors)
@@ -93,9 +162,12 @@ end
     index = @index(Global, Linear)
     if index <= length(launch.instances)
         descriptor = @inbounds launch.instances[index]
-        @inbounds output[index] = descriptor_role(descriptor) isa HamiltonianRole ?
-                                  descriptor_evaluate_energy(descriptor, context) :
-                                  descriptor_evaluate_proposal(descriptor, context)
+        descriptor isa ProposalDescriptor || error(
+            "production descriptor launches require compiler-owned ProposalDescriptor values"
+        )
+        @inbounds output[index] = evaluate_static(
+            getfield(descriptor, :evaluator), context
+        )
     end
 end
 
@@ -133,31 +205,37 @@ Callers provide the buffer so a warmed proposal path does not allocate.
         contributions,
         instances::AbstractVector{D},
         context,
+        resources,
     ) where {D}
     for descriptor in instances
-        descriptor_role(descriptor) isa HamiltonianRole || continue
-        source = Int(descriptor_source_handle(descriptor))
-        @inbounds contributions[source] = descriptor_evaluate_proposal(
-            descriptor, context
+        descriptor isa ProposalDescriptor || throw(ArgumentError(
+            "production Hamiltonian plans require compiler-owned ProposalDescriptor values"
+        ))
+        role = getfield(descriptor, :role)
+        role isa HamiltonianRole || continue
+        source = Int(getfield(descriptor, :source_handle))
+        @inbounds contributions[source] = _compiled_hamiltonian_delta(
+            getfield(descriptor, :evaluator), role, context, resources
         )
     end
     return contributions
 end
 
 @inline _evaluate_hamiltonian_groups!(
-    contributions, ::Tuple{}, context
+    contributions, ::Tuple{}, context, resources
 ) = contributions
 @inline function _evaluate_hamiltonian_groups!(
         contributions,
         groups::Tuple,
         context,
+        resources,
     )
     group = first(groups)
     _evaluate_hamiltonian_instances!(
-        contributions, group.launch.instances, context
+        contributions, group.launch.instances, context, resources
     )
     return _evaluate_hamiltonian_groups!(
-        contributions, Base.tail(groups), context
+        contributions, Base.tail(groups), context, resources
     )
 end
 
@@ -171,7 +249,7 @@ end
     )
     fill!(contributions, zero(eltype(contributions)))
     return _evaluate_hamiltonian_groups!(
-        contributions, plan.groups, context
+        contributions, plan.groups, context, plan.domain_resources
     )
 end
 
@@ -198,8 +276,8 @@ function descriptor_plan_report(plan::DescriptorExecutionPlan)
             length(group.launch.instances) for group in plan.groups
         ),
         evaluator_nodes = Tuple(
-            descriptor_evaluator_node_count(
-                first(group.launch.instances)
+            evaluator_node_count(
+                getfield(first(group.launch.instances), :evaluator)
             )
             for group in plan.groups
         ),
@@ -208,10 +286,10 @@ function descriptor_plan_report(plan::DescriptorExecutionPlan)
                 merge(
                     (
                         qualified_source = plan.source_table[
-                            descriptor_source_handle(descriptor)
+                            getfield(descriptor, :source_handle)
                         ],
                     ),
-                    descriptor_inspection(descriptor),
+                    _compiled_descriptor_inspection(descriptor),
                 )
                 for descriptor in group.launch.instances
             ]
@@ -221,6 +299,9 @@ function descriptor_plan_report(plan::DescriptorExecutionPlan)
         state_blocks = length(plan.state_layout.schemas),
         workspaces = length(plan.workspace_layout.schemas),
         validation_groups = length(plan.constraints),
+        contact_domain_resources = count(>(0), plan.domain_resources.contact_counts),
+        relationship_domain_resources =
+            count(>(0), plan.domain_resources.relationship_slots),
         group_splits = Tuple(group.split for group in plan.groups),
         kernel_families = Tuple(
             nameof(typeof(group.launch.strategy)) for group in plan.groups

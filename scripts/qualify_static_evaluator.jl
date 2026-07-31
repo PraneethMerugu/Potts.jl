@@ -562,16 +562,25 @@ CorePotts.descriptor_role(descriptor::QualificationDescriptor) =
 CorePotts.descriptor_dependencies(::QualificationDescriptor) = ()
 CorePotts.descriptor_support(::QualificationDescriptor) =
     CorePotts.DescriptorSupport(true, true, true, true)
-@inline CorePotts.descriptor_evaluate_proposal(
+@inline qualification_descriptor_evaluate(
     descriptor::QualificationDescriptor, context
 ) = candidate_evaluate(
     descriptor.evaluator, descriptor.occurrence, context
 )
-@inline CorePotts.descriptor_evaluate_energy(
-    descriptor::QualificationDescriptor, context
-) = candidate_evaluate(
-    descriptor.evaluator, descriptor.occurrence, context
-)
+
+@kernel function qualification_descriptor_group_probe_kernel!(
+        output,
+        launch,
+        context,
+    )
+    index = @index(Global, Linear)
+    if index <= length(launch.instances)
+        descriptor = @inbounds launch.instances[index]
+        @inbounds output[index] = qualification_descriptor_evaluate(
+            descriptor, context
+        )
+    end
+end
 CorePotts.descriptor_adapt(to, descriptor::QualificationDescriptor) =
     descriptor
 CorePotts.descriptor_evaluator_node_count(
@@ -642,8 +651,17 @@ end
 
 function adapt_qualification_group(group)
     USE_METAL || return group
+    launch = group.launch
+    adapted_instances = CorePotts.Adapt.adapt(
+        Metal.MtlArray, launch.instances
+    )
     return CorePotts.DescriptorGroup(
-        CorePotts.adapt_descriptor_launch(Metal.MtlArray, group),
+        CorePotts.DescriptorLaunch(
+            launch.strategy,
+            adapted_instances,
+            launch.state_handles,
+            launch.workspace_handles,
+        ),
         group.split,
     )
 end
@@ -729,7 +747,7 @@ if USE_METAL
             index = Int(Metal.thread_position_in_grid_1d())
             if index <= length(output)
                 @inbounds output[index] =
-                    CorePotts.descriptor_evaluate_proposal(
+                    qualification_descriptor_evaluate(
                         launch.instances[index], context
                     )
             end
@@ -759,7 +777,7 @@ function _launch_one(
     )
     launch = group.launch
     output = similar(prototype, Float32, length(launch.instances))
-    kernel = CorePotts.descriptor_group_probe_kernel!(backend)
+    kernel = qualification_descriptor_group_probe_kernel!(backend)
     first_launch = @elapsed begin
         kernel(output, launch, context; ndrange = length(output))
         KA.synchronize(backend)
@@ -810,7 +828,7 @@ function _launch_groups!(
     )
     group = first(groups)
     output = first(outputs)
-    kernel = CorePotts.descriptor_group_probe_kernel!(backend)
+    kernel = qualification_descriptor_group_probe_kernel!(backend)
     kernel(
         output,
         group.launch,
@@ -900,7 +918,7 @@ function _aggregate_group_measurement(
     ))
     device_bytes = sum(
         device_llvm_bytes(
-            CorePotts.descriptor_group_probe_kernel!(backend),
+            qualification_descriptor_group_probe_kernel!(backend),
             output,
             group.launch,
             device_context,
@@ -1059,6 +1077,7 @@ fixtures = (
     semantic_fixture(64; identity_wrappers = 12),
     semantic_fixture(64; identity_wrappers = 44),
 )
+selected_failures = String[]
 
 for (execution_label, execution) in executions
     for fixture in fixtures
@@ -1077,6 +1096,14 @@ for (execution_label, execution) in executions
                 )
                 println("candidate=", result)
             catch error
+                if execution_label === :concrete_callables &&
+                        label === :bounded_nary_typed_tree
+                    push!(
+                        selected_failures,
+                        "candidate nodes=$(fixture.node_count) " *
+                        "depth=$(fixture.depth): " * sprint(showerror, error),
+                    )
+                end
                 println("candidate_failure=", (
                     execution = execution_label,
                     representation = label,
@@ -1130,6 +1157,13 @@ for (execution_label, execution) in executions
                 results = Tuple(results),
             ))
         catch error
+            if execution_label === :concrete_callables &&
+                    label === :bounded_nary_typed_tree
+                push!(
+                    selected_failures,
+                    "occurrence growth: " * sprint(showerror, error),
+                )
+            end
             println("occurrence_growth_failure=", (
                 execution = execution_label,
                 representation = label,
@@ -1166,6 +1200,13 @@ for (execution_label, execution) in executions
                 results,
             ))
         catch error
+            if execution_label === :concrete_callables &&
+                    label === :bounded_nary_typed_tree
+                push!(
+                    selected_failures,
+                    "group growth: " * sprint(showerror, error),
+                )
+            end
             println("group_growth_failure=", (
                 execution = execution_label,
                 representation = label,
@@ -1174,3 +1215,8 @@ for (execution_label, execution) in executions
         end
     end
 end
+
+isempty(selected_failures) || error(
+    "selected concrete-callable bounded-nary qualification failed:\n" *
+    join(selected_failures, "\n"),
+)

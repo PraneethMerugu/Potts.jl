@@ -13,14 +13,13 @@ include("execution/static_evaluator.jl")
 include("execution/storage_schema.jl")
 include("execution/storage_runtime.jl")
 include("execution/descriptor_protocol.jl")
+include("execution/domain_resources.jl")
 include("execution/descriptor_plan.jl")
 include("program/v1.jl")
 include("execution/hamiltonian_runtime.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
 public CPUProgramBackend, CompiledScalar, compiled_scalar_value
-public AbstractProgramExpression, ProgramLiteral, ProgramScalar, ProgramCall
-public ProgramDraw, CompiledProposalTerm
 public CompiledActivityPlan, CompiledFieldPlan, CompiledHistoryPlan
 public CompiledElongationPlan
 public CompiledRelationshipPlan, CompiledPottsProgram
@@ -64,6 +63,7 @@ public encode_state_checkpoint, reconstruct_state_block, inspect_state_block
 public workspace_schema_metadata, workspace_storage_class
 public allocate_workspace_block, reset_workspace!, adapt_workspace_block
 public inspect_workspace_block, allocate_auxiliary_state
+public copy_auxiliary_state
 public allocate_runtime_workspaces, adapt_auxiliary_state
 public adapt_runtime_workspaces, encode_auxiliary_state_checkpoint
 public reconstruct_auxiliary_state, inspect_auxiliary_state
@@ -74,8 +74,7 @@ public FootprintUnion, ResourceAccess, DescriptorSupport
 public descriptor_state_requirements, descriptor_workspace_requirements
 public descriptor_resource_access, descriptor_stage, descriptor_role
 public descriptor_dependencies
-public descriptor_support, descriptor_evaluate_proposal
-public descriptor_evaluate_energy, descriptor_hamiltonian_delta
+public descriptor_support
 public descriptor_emit_requests!, descriptor_apply_stage!
 public descriptor_adapt, descriptor_evaluator_node_count
 public descriptor_source_handle, descriptor_checkpoint_policy
@@ -91,6 +90,7 @@ public ContactEnergyDomainPlan, RelationshipEnergyDomainPlan
 public AbstractAffectedAnchorPlan, TargetSiteAffectedPlan
 public SourceTargetCellsAffectedPlan, IncidentContactsAffectedPlan
 public IncidentRelationshipsAffectedPlan
+public HamiltonianDomainResources
 public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
 public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
 public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan

@@ -592,6 +592,20 @@ function _core_initial_state(
     stored_states = NamedTuple{stored_names}(
         Tuple(normalized_states[entry.name] for entry in stored_entries)
     )
+    descriptor_layout = executable.core_program.descriptor_plan.state_layout
+    descriptor_initial_values = map(descriptor_layout.entries) do layout_entry
+        name = layout_entry.schema.identity.name
+        if haskey(stored_states, name)
+            value = getproperty(stored_states, name)
+            value isa AbstractArray ? value :
+                fill(value, Tuple(layout_entry.schema.shape))
+        else
+            nothing
+        end
+    end
+    descriptor_state = CorePotts.allocate_auxiliary_state(
+        descriptor_layout, descriptor_initial_values
+    )
     relationships = if isempty(executable.reports.relationship_states)
         nothing
     else
@@ -609,5 +623,6 @@ function _core_initial_state(
         history,
         stored_states,
         relationships,
+        descriptor_state,
     )
 end

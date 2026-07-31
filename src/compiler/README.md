@@ -27,6 +27,9 @@ lowering/static_evaluators.jl
 lowering/storage_layouts.jl
     assign canonical state/workspace representations, banks, and slots
 
+lowering/domain_resources.jl
+    lower finite spatial relations and relationship resources into value-level lookup tables
+
 lowering/proposal_descriptors.jl
     construct the universal proposal descriptor and occurrence groups
 
@@ -49,7 +52,8 @@ compile.jl
 Only `compile.jl` orchestrates the complete pipeline. Host IR and registries never cross
 `execution/boundary.jl`. Registered scientific terms may contribute versioned operation callables,
 inert descriptor payload metadata, and declared resources; they cannot replace the compiler-owned
-evaluator or universal proposal descriptor.
+evaluator or universal proposal descriptor. Descriptor execution plans require the analyzed
+domain-resource table explicitly; there is no default or compatibility construction path.
 
 Every stage file remains a private implementation unit. Further changes must preserve this include
 order and may not create alternate lowering entry points.

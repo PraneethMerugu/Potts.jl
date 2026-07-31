@@ -1,8 +1,11 @@
 using LinearAlgebra
 
 function _merks_delta_allocations(descriptor, context)
-    return @allocated CorePotts.descriptor_evaluate_proposal(
-        descriptor, context
+    return @allocated CorePotts._compiled_hamiltonian_delta(
+        descriptor.evaluator,
+        descriptor.role,
+        context,
+        context.runtime.program.descriptor_plan.domain_resources,
     )
 end
 
@@ -156,8 +159,11 @@ end
         1,
         0,
     )
-    local_elongation_delta = CorePotts.descriptor_evaluate_proposal(
-        elongation_descriptor, elongation_context
+    local_elongation_delta = CorePotts._compiled_hamiltonian_delta(
+        elongation_descriptor.evaluator,
+        elongation_descriptor.role,
+        elongation_context,
+        executable.core_program.descriptor_plan.domain_resources,
     )
     _merks_delta_allocations(elongation_descriptor, elongation_context)
     @test _merks_delta_allocations(

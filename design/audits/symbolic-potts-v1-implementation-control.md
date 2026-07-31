@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `reopened` | Hamiltonian/affected-region P0 escaped the earlier evaluator-boundary review | none |
+| R1 compiler | `reopened` | four `598493b` P1 findings repaired; exact-tree rereview pending | dead alternate-evaluator P2 repaired by removal |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -600,6 +600,69 @@ qualification came from this branch.
 
 G3 remains stopped. This candidate requires a fresh independent R1 clearance of the exact
 checkpoint before any proposal-loop integration or Wortel/Merks migration.
+
+## First repaired-G2 R1 return
+
+Independent R1 review of checkpoint `598493b` returned the repaired G2 boundary with four P1
+findings and one P2 finding:
+
+1. payload-specialized external methods could replace descriptor evaluation on a supported
+   `ProposalDescriptor` subtype;
+2. contact-relation and relationship-state resource handles were lowered but the Hamiltonian
+   runtime ignored them;
+3. Hamiltonian state reads selected a legacy value by slot while ignoring the handle's canonical
+   storage representation; and
+4. relationship Hamiltonians were partial when a proposal extinguished an endpoint and found
+   affected edges by scanning full relationship capacity rather than the proven incident bound.
+
+The P2 identified a dead `ProgramExpression` lowering/evaluation vocabulary that looked like a
+plausible alternate production path. These findings were localized boundary failures. They did
+not invalidate the normalized DAG, callable evaluator, universal descriptor, grouping, storage
+schema, payload, capability, adaptation, diagnostic, or backend designs. G3 remained stopped.
+
+## Current repaired-G2 candidate
+
+The bounded repair keeps the cleared G2 machinery and closes the returned defects:
+
+- production plans accept only compiler-owned universal `ProposalDescriptor` values and invoke
+  their stored evaluators through non-extensible CorePotts implementation paths; public metadata
+  and checkpoint protocol calls cannot replace execution;
+- the compiler materializes one validated, adaptable, value-level domain-resource table, and
+  contact and relationship Hamiltonians resolve the exact frozen resource handle from that table;
+- Hamiltonian state reads use canonical representation-typed banks and value-level slots in the
+  runtime auxiliary state;
+- immutable after views make extinct cell and relationship anchors absent from their energy
+  domains, so their after energy is exactly zero;
+- relationship runtime state maintains a bounded, sorted incident-edge index; affected-edge
+  enumeration merges the old/new endpoint lists in canonical order without warm-path allocation;
+- descriptor contributions remain source-indexed and are folded in canonical frozen source order;
+  and
+- the dead `ProgramExpression`/`ProgramCall` evaluator and lowering vocabulary has been removed.
+
+Permanent adversarial tests cover bound relation selection, representation-bank selection,
+payload-method execution bypass, extinct cell and relationship anchors, bounded canonical
+incident-edge union, warm allocation, and absence of the dead evaluator vocabulary.
+
+Exact-tree qualification after the repair:
+
+- repaired R1 adversarial boundary: 20/20;
+- descriptor/compiler boundary: 126/126;
+- local Hamiltonian equivalence and structural specialization: 59/59;
+- focal-point-plasticity and Merks fixtures: 19/19 and 11/11;
+- complete CorePotts package suite: passed, including Aqua;
+- ordinary root `Pkg.test()`: 564/564 in 5m45.0s, including Aqua and ExplicitImports;
+- full symbolic specialization growth: 5/5 in 2m40.7s;
+- shared Metal boundary: 32 adapted production Hamiltonian descriptors with device parameter,
+  state, and workspace buffers returned exact `17.5f0`; and
+- the fail-closed CPU and Metal evaluator matrix passed the selected concrete-callable bounded-nary
+  design across all tested shapes, semantic RNG words, 1/32/1,024 occurrences, and 1/4/8 groups.
+
+The evaluator qualification's private comparison descriptors now adapt through their own test
+path rather than the production `ProposalDescriptor` adapter. The script exits nonzero if the
+selected design fails; rejected comparison candidates may still report nonblocking failures.
+
+Fresh independent R1 review of the exact checkpoint is still required before this section may
+record G2 as passed. No G3 integration or Wortel/Merks migration is authorized meanwhile.
 
 ## Prohibited record contents
 

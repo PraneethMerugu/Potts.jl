@@ -377,8 +377,11 @@ end
     )
     index = @index(Global, Linear)
     if index <= length(output)
-        @inbounds output[index] = descriptor_role(descriptor) isa HamiltonianRole ?
-                                  descriptor_evaluate_energy(descriptor, context) :
-                                  descriptor_evaluate_proposal(descriptor, context)
+        descriptor isa ProposalDescriptor || error(
+            "descriptor probes require compiler-owned ProposalDescriptor values"
+        )
+        @inbounds output[index] = evaluate_static(
+            getfield(descriptor, :evaluator), context
+        )
     end
 end

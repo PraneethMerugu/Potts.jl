@@ -49,9 +49,6 @@ function descriptor_stage end
 function descriptor_role end
 function descriptor_dependencies end
 function descriptor_support end
-function descriptor_evaluate_proposal end
-function descriptor_evaluate_energy end
-function descriptor_hamiltonian_delta end
 function descriptor_emit_requests! end
 function descriptor_apply_stage! end
 function descriptor_adapt end
@@ -212,17 +209,7 @@ descriptor_stage(::ProposalDescriptor) = :proposal
 descriptor_role(descriptor::ProposalDescriptor) = descriptor.role
 descriptor_dependencies(::ProposalDescriptor) = ()
 descriptor_support(descriptor::ProposalDescriptor) = descriptor.support
-@inline descriptor_evaluate_energy(descriptor::ProposalDescriptor, context) =
-    evaluate_static(descriptor.evaluator, context)
-@inline function descriptor_evaluate_proposal(
-        descriptor::ProposalDescriptor,
-        context,
-    )
-    descriptor.role isa HamiltonianRole &&
-        return descriptor_hamiltonian_delta(descriptor, context)
-    return evaluate_static(descriptor.evaluator, context)
-end
-function descriptor_adapt(to, descriptor::ProposalDescriptor)
+function _compiled_descriptor_adapt(to, descriptor::ProposalDescriptor)
     payload = descriptor_payload_adapt(to, descriptor.payload)
     return ProposalDescriptor(
         descriptor.evaluator,
@@ -235,6 +222,8 @@ function descriptor_adapt(to, descriptor::ProposalDescriptor)
         payload,
     )
 end
+descriptor_adapt(to, descriptor::ProposalDescriptor) =
+    _compiled_descriptor_adapt(to, descriptor)
 descriptor_evaluator_node_count(descriptor::ProposalDescriptor) =
     evaluator_node_count(descriptor.evaluator)
 descriptor_source_handle(descriptor::ProposalDescriptor) =
@@ -244,6 +233,9 @@ descriptor_checkpoint_policy(::ProposalDescriptor) =
 descriptor_checkpoint_encode(descriptor::ProposalDescriptor) =
     descriptor_payload_checkpoint_encode(descriptor.payload)
 descriptor_checkpoint_reconstruct(
+    descriptor::ProposalDescriptor, payload
+) = _compiled_descriptor_checkpoint_reconstruct(descriptor, payload)
+_compiled_descriptor_checkpoint_reconstruct(
     descriptor::ProposalDescriptor, payload
 ) = ProposalDescriptor(
     descriptor.evaluator,
@@ -261,7 +253,9 @@ descriptor_checkpoint(descriptor::ProposalDescriptor) = (
     policy = descriptor_checkpoint_policy(descriptor),
     payload = descriptor_checkpoint_encode(descriptor),
 )
-descriptor_inspection(descriptor::ProposalDescriptor) = (
+descriptor_inspection(descriptor::ProposalDescriptor) =
+    _compiled_descriptor_inspection(descriptor)
+_compiled_descriptor_inspection(descriptor::ProposalDescriptor) = (
     source_handle = descriptor.source_handle,
     evaluator = nameof(typeof(descriptor.evaluator.expression)),
     stage = :proposal,

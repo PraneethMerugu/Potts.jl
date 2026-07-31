@@ -151,26 +151,38 @@ function _validate_descriptor_protocol(
         expected_source_handle::Integer,
     )
     facts = try
-        payload = CorePotts.descriptor_checkpoint_encode(descriptor)
-        reconstructed = CorePotts.descriptor_checkpoint_reconstruct(
-            descriptor, payload
+        payload = CorePotts.descriptor_payload_checkpoint_encode(
+            descriptor.payload
+        )
+        reconstructed = invoke(
+            CorePotts.descriptor_checkpoint_reconstruct,
+            Tuple{CorePotts.ProposalDescriptor, Any},
+            descriptor,
+            payload,
         )
         (
-            states = CorePotts.descriptor_state_requirements(descriptor),
-            workspaces =
-                CorePotts.descriptor_workspace_requirements(descriptor),
-            access = CorePotts.descriptor_resource_access(descriptor),
-            stage = CorePotts.descriptor_stage(descriptor),
-            role = CorePotts.descriptor_role(descriptor),
-            dependencies = CorePotts.descriptor_dependencies(descriptor),
-            support = CorePotts.descriptor_support(descriptor),
-            adapted = CorePotts.descriptor_adapt(nothing, descriptor),
-            nodes = CorePotts.descriptor_evaluator_node_count(descriptor),
-            source_handle = CorePotts.descriptor_source_handle(descriptor),
-            checkpoint_policy =
-                CorePotts.descriptor_checkpoint_policy(descriptor),
+            states = descriptor.state_handles,
+            workspaces = descriptor.workspace_handles,
+            access = descriptor.access,
+            stage = :proposal,
+            role = descriptor.role,
+            dependencies = (),
+            support = descriptor.support,
+            adapted = invoke(
+                CorePotts.descriptor_adapt,
+                Tuple{Any, CorePotts.ProposalDescriptor},
+                nothing,
+                descriptor,
+            ),
+            nodes = CorePotts.evaluator_node_count(descriptor.evaluator),
+            source_handle = descriptor.source_handle,
+            checkpoint_policy = :reconstruct_from_executable,
             reconstructed,
-            inspection = CorePotts.descriptor_inspection(descriptor),
+            inspection = invoke(
+                CorePotts.descriptor_inspection,
+                Tuple{CorePotts.ProposalDescriptor},
+                descriptor,
+            ),
         )
     catch error
         throw(_descriptor_protocol_error(
@@ -307,7 +319,7 @@ function _descriptor_group_key(descriptor::CorePotts.ProposalDescriptor)
         evaluator_type = typeof(descriptor.evaluator.expression),
         footprint_type = typeof(descriptor.access.footprint),
         role_type = typeof(descriptor.role),
-        stage = CorePotts.descriptor_stage(descriptor),
+        stage = :proposal,
     )
 end
 
@@ -335,7 +347,7 @@ function _descriptor_groups(descriptors)
                 handle
                 for descriptor in instances
                 for handle in
-                    CorePotts.descriptor_state_requirements(descriptor)
+                    descriptor.state_handles
             ]
         ); by = handle -> (
             CorePotts.handle_bank(handle),
@@ -346,7 +358,7 @@ function _descriptor_groups(descriptors)
                 handle
                 for descriptor in instances
                 for handle in
-                    CorePotts.descriptor_workspace_requirements(descriptor)
+                    descriptor.workspace_handles
             ]
         ); by = handle -> (
             CorePotts.handle_bank(handle),

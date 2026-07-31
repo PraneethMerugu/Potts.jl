@@ -1,6 +1,9 @@
 function _focal_delta_allocations(descriptor, context)
-    return @allocated CorePotts.descriptor_evaluate_proposal(
-        descriptor, context
+    return @allocated CorePotts._compiled_hamiltonian_delta(
+        descriptor.evaluator,
+        descriptor.role,
+        context,
+        context.runtime.program.descriptor_plan.domain_resources,
     )
 end
 
@@ -135,8 +138,11 @@ end
         1,
         0,
     )
-    local_relationship_delta = CorePotts.descriptor_evaluate_proposal(
-        relationship_descriptor, relationship_context
+    local_relationship_delta = CorePotts._compiled_hamiltonian_delta(
+        relationship_descriptor.evaluator,
+        relationship_descriptor.role,
+        relationship_context,
+        executable.core_program.descriptor_plan.domain_resources,
     )
     _focal_delta_allocations(
         relationship_descriptor, relationship_context

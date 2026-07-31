@@ -22,49 +22,6 @@ end
     return index == 0 ? scalar.value : @inbounds parameters[index]
 end
 
-# Concrete, unit-free expression nodes produced by the PottsToolkit compiler.
-# These values deliberately contain neither Symbolics objects nor executable
-# host closures. Operation identity is a type parameter so warmed proposal
-# evaluation remains fully dispatch-resolved.
-abstract type AbstractProgramExpression end
-
-struct ProgramLiteral{T} <: AbstractProgramExpression
-    value::T
-end
-
-struct ProgramScalar{T <: AbstractFloat} <: AbstractProgramExpression
-    value::CompiledScalar{T}
-end
-
-struct ProgramCall{F, A <: Tuple} <: AbstractProgramExpression
-    arguments::A
-end
-
-ProgramCall(::Val{F}, arguments...) where {F} =
-    ProgramCall{F, typeof(arguments)}(arguments)
-
-struct ProgramDraw{F, A, B} <: AbstractProgramExpression
-    first_parameter::A
-    second_parameter::B
-    operation::UInt16
-end
-
-function ProgramDraw(
-        ::Val{F}, first_parameter, second_parameter, operation::Integer
-    ) where {F}
-    1 <= operation <= _RNG_MAX_OPERATION ||
-        throw(ArgumentError("explicit draw operation is outside the RNG address domain"))
-    F in (:bernoulli, :uniform, :normal) ||
-        throw(ArgumentError("unsupported scalar proposal draw family `$F`"))
-    return ProgramDraw{F, typeof(first_parameter), typeof(second_parameter)}(
-        first_parameter, second_parameter, UInt16(operation)
-    )
-end
-
-struct CompiledProposalTerm{E <: AbstractProgramExpression}
-    expression::E
-end
-
 struct CompiledActivityPlan{T <: AbstractFloat}
     kind::Int16
     maximum::CompiledScalar{T}
@@ -310,7 +267,7 @@ function program_observations(runtime)
     end
 end
 
-struct ProgramInitialState{T <: AbstractFloat, N, A, F, H, S, R}
+struct ProgramInitialState{T <: AbstractFloat, N, A, F, H, S, R, D}
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
@@ -319,6 +276,7 @@ struct ProgramInitialState{T <: AbstractFloat, N, A, F, H, S, R}
     history::H
     stored_states::S
     relationships::R
+    descriptor_state::D
 end
 
 _copy_program_value(value::AbstractArray) = copy(value)
@@ -339,6 +297,7 @@ function ProgramInitialState(
         history = nothing,
         stored_states::NamedTuple = NamedTuple(),
         relationships = nothing,
+        descriptor_state = nothing,
     ) where {N, T <: AbstractFloat}
     owned = Array{Int32, N}(ownership)
     kinds = Int16.(cell_kinds)
@@ -358,7 +317,7 @@ function ProgramInitialState(
     return ProgramInitialState{
         T, N, typeof(activity_values), typeof(field_values),
         typeof(history_values), typeof(stored_values),
-        typeof(relationship_values),
+        typeof(relationship_values), typeof(descriptor_state),
     }(
         owned,
         kinds,
@@ -368,6 +327,7 @@ function ProgramInitialState(
         history_values,
         stored_values,
         relationship_values,
+        descriptor_state,
     )
 end
 
@@ -380,11 +340,31 @@ struct ProgramRelationshipState{T <: AbstractFloat}
     strength::Vector{T}
     target::Vector{T}
     maximum::Vector{T}
+    degree::Vector{Int16}
+    incident_edges::Matrix{Int32}
 end
 
 function ProgramRelationshipState(::Type{T}, capacity::Integer) where {
         T <: AbstractFloat,
     }
+    return ProgramRelationshipState(T, capacity, capacity, capacity)
+end
+
+function ProgramRelationshipState(
+        ::Type{T},
+        capacity::Integer,
+        endpoint_capacity::Integer,
+        maximum_degree::Integer,
+    ) where {T <: AbstractFloat}
+    capacity > 0 || throw(ArgumentError(
+        "relationship capacity must be positive"
+    ))
+    endpoint_capacity >= 0 || throw(ArgumentError(
+        "relationship endpoint capacity cannot be negative"
+    ))
+    maximum_degree > 0 || throw(ArgumentError(
+        "relationship maximum degree must be positive"
+    ))
     return ProgramRelationshipState(
         falses(capacity),
         zeros(Int32, capacity),
@@ -394,6 +374,8 @@ function ProgramRelationshipState(::Type{T}, capacity::Integer) where {
         zeros(T, capacity),
         zeros(T, capacity),
         zeros(T, capacity),
+        zeros(Int16, endpoint_capacity),
+        zeros(Int32, maximum_degree, endpoint_capacity),
     )
 end
 
@@ -407,6 +389,8 @@ function Base.copy(state::ProgramRelationshipState)
         copy(state.strength),
         copy(state.target),
         copy(state.maximum),
+        copy(state.degree),
+        copy(state.incident_edges),
     )
 end
 
@@ -498,15 +482,55 @@ function _relationship_edge(
 end
 
 function _relationship_degree(state::ProgramRelationshipState, endpoint::Int32)
-    degree = 0
-    for edge in eachindex(state.active)
-        @inbounds state.active[edge] || continue
-        degree += @inbounds(
-            state.endpoint_a[edge] == endpoint ||
-            state.endpoint_b[edge] == endpoint
-        )
+    1 <= endpoint <= length(state.degree) || return 0
+    return @inbounds state.degree[endpoint]
+end
+
+function _insert_incident_edge!(
+        state::ProgramRelationshipState,
+        endpoint::Int32,
+        edge::Int32,
+    )
+    1 <= endpoint <= length(state.degree) || throw(ArgumentError(
+        "relationship endpoint $endpoint is outside incident storage"
+    ))
+    degree = Int(@inbounds state.degree[endpoint])
+    degree < size(state.incident_edges, 1) || throw(ArgumentError(
+        "relationship maximum degree exceeded for $endpoint"
+    ))
+    position = degree + 1
+    while position > 1 &&
+            @inbounds(state.incident_edges[position - 1, endpoint]) > edge
+        @inbounds state.incident_edges[position, endpoint] =
+            state.incident_edges[position - 1, endpoint]
+        position -= 1
     end
-    return degree
+    @inbounds state.incident_edges[position, endpoint] = edge
+    @inbounds state.degree[endpoint] = Int16(degree + 1)
+    return nothing
+end
+
+function _remove_incident_edge!(
+        state::ProgramRelationshipState,
+        endpoint::Int32,
+        edge::Int32,
+    )
+    degree = Int(@inbounds state.degree[endpoint])
+    position = 0
+    for index in 1:degree
+        if @inbounds(state.incident_edges[index, endpoint]) == edge
+            position = index
+            break
+        end
+    end
+    position > 0 || error("active relationship is absent from its incident index")
+    for index in position:(degree - 1)
+        @inbounds state.incident_edges[index, endpoint] =
+            state.incident_edges[index + 1, endpoint]
+    end
+    @inbounds state.incident_edges[degree, endpoint] = 0
+    @inbounds state.degree[endpoint] = Int16(degree - 1)
+    return nothing
 end
 
 function _validate_relationship_endpoint(
@@ -591,6 +615,8 @@ function apply_relationship_requests!(
             staged.strength[slot] = request.strength
             staged.target[slot] = request.target
             staged.maximum[slot] = request.maximum
+            _insert_incident_edge!(staged, a, Int32(slot))
+            _insert_incident_edge!(staged, b, Int32(slot))
         elseif request isa RemoveRelationshipRequest
             edge = request.edge
             1 <= edge <= length(staged.active) && staged.active[edge] ||
@@ -598,6 +624,10 @@ function apply_relationship_requests!(
             edge in touched_edges &&
                 throw(ArgumentError("conflicting relationship requests for edge $edge"))
             push!(touched_edges, edge)
+            a = @inbounds staged.endpoint_a[edge]
+            b = @inbounds staged.endpoint_b[edge]
+            _remove_incident_edge!(staged, a, edge)
+            _remove_incident_edge!(staged, b, edge)
             staged.active[edge] = false
             staged.endpoint_a[edge] = 0
             staged.endpoint_b[edge] = 0
@@ -630,6 +660,8 @@ function apply_relationship_requests!(
     copyto!(state.strength, staged.strength)
     copyto!(state.target, staged.target)
     copyto!(state.maximum, staged.maximum)
+    copyto!(state.degree, staged.degree)
+    copyto!(state.incident_edges, staged.incident_edges)
     return state
 end
 
@@ -640,7 +672,12 @@ function initialize_program_relationships(
         parameters,
         entries,
     ) where {T}
-    state = ProgramRelationshipState(T, plan.capacity)
+    state = ProgramRelationshipState(
+        T,
+        plan.capacity,
+        length(cell_kinds),
+        plan.maximum_degree,
+    )
     entries === nothing && return state
     default_strength = compiled_scalar_value(plan.strength, parameters)
     default_target = compiled_scalar_value(plan.target, parameters)
@@ -681,7 +718,7 @@ function initialize_program_relationships(
     return state
 end
 
-struct ProgramSnapshot{T <: AbstractFloat, N, A, F, H, S, R}
+struct ProgramSnapshot{T <: AbstractFloat, N, A, F, H, S, R, D}
     mcs::Int
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
@@ -692,6 +729,7 @@ struct ProgramSnapshot{T <: AbstractFloat, N, A, F, H, S, R}
     history::H
     stored_states::S
     relationships::R
+    descriptor_state::D
 end
 
 struct ProgramCheckpoint{S, P}
@@ -736,6 +774,7 @@ function _program_checkpoint_checksum(
         snapshot.history === nothing ? "nothing" :
         join((join(vec(entry), ',') for entry in snapshot.history), ';'), '\n',
         repr(snapshot.stored_states), '\n',
+        repr(snapshot.descriptor_state), '\n',
         snapshot.relationships === nothing ? "nothing" :
         string(
             join(snapshot.relationships.active, ','),
@@ -746,6 +785,8 @@ function _program_checkpoint_checksum(
             ';', join(snapshot.relationships.strength, ','),
             ';', join(snapshot.relationships.target, ','),
             ';', join(snapshot.relationships.maximum, ','),
+            ';', join(snapshot.relationships.degree, ','),
+            ';', join(vec(snapshot.relationships.incident_edges), ','),
         ), '\n',
         join(parameters, ','), '\n',
         seed, '\n',
@@ -823,6 +864,7 @@ function restore_program_checkpoint(
         history = checkpoint.snapshot.history,
         stored_states = checkpoint.snapshot.stored_states,
         relationships = nothing,
+        descriptor_state = checkpoint.snapshot.descriptor_state,
     )
     runtime = initialize_program(
         program,
@@ -844,7 +886,7 @@ function restore_program_checkpoint(
     return runtime
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R, D}
     program::P
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
@@ -855,6 +897,7 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R}
     history::H
     stored_states::S
     relationships::R
+    descriptor_state::D
     parameters::Vector{T}
     seed::UInt64
     replica::UInt32
@@ -956,9 +999,21 @@ function initialize_program(
         )
     end
     stored_states = _copy_program_value(initial.stored_states)
+    descriptor_state = if initial.descriptor_state === nothing
+        allocate_auxiliary_state(program.descriptor_plan.state_layout)
+    elseif initial.descriptor_state isa AuxiliaryState
+        copy_auxiliary_state(
+            program.descriptor_plan.state_layout,
+            initial.descriptor_state,
+        )
+    else
+        throw(ArgumentError(
+            "descriptor state must be a CorePotts AuxiliaryState"
+        ))
+    end
     return ProgramRuntime{
         T, N, typeof(program), typeof(activity), typeof(field), typeof(history),
-        typeof(stored_states), typeof(relationships),
+        typeof(stored_states), typeof(relationships), typeof(descriptor_state),
     }(
         program,
         copy(initial.ownership),
@@ -970,6 +1025,7 @@ function initialize_program(
         history,
         stored_states,
         relationships,
+        descriptor_state,
         T.(parameters),
         seed,
         replica,
@@ -993,9 +1049,13 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     stored_states = _copy_program_value(runtime.stored_states)
     relationships = runtime.relationships === nothing ?
                     nothing : copy(runtime.relationships)
+    descriptor_state = copy_auxiliary_state(
+        runtime.program.descriptor_plan.state_layout,
+        runtime.descriptor_state,
+    )
     return ProgramSnapshot{
         T, N, typeof(activity), typeof(field), typeof(history),
-        typeof(stored_states), typeof(relationships),
+        typeof(stored_states), typeof(relationships), typeof(descriptor_state),
     }(
         runtime.mcs,
         copy(runtime.ownership),
@@ -1007,6 +1067,7 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
         history,
         stored_states,
         relationships,
+        descriptor_state,
     )
 end
 
@@ -1725,209 +1786,9 @@ end
         handle::StateHandle,
         site,
     )
-    states = values(context.runtime.stored_states)
-    return @inbounds states[Int(handle.index)][site]
-end
-
-@inline _evaluate_program_expression(
-    expression::ProgramLiteral, context::_ProposalEvaluationContext
-) = expression.value
-
-@inline _evaluate_program_expression(
-    expression::ProgramScalar, context::_ProposalEvaluationContext
-) = compiled_scalar_value(expression.value, context.runtime.parameters)
-
-@inline function _evaluate_program_expression(
-        expression::ProgramCall, context::_ProposalEvaluationContext
-    )
-    return _evaluate_program_call(expression, context)
-end
-
-@inline _evaluate_program_call(
-    expression::ProgramCall{:source_site}, context::_ProposalEvaluationContext
-) = context.source
-@inline _evaluate_program_call(
-    expression::ProgramCall{:target_site}, context::_ProposalEvaluationContext
-) = context.target
-@inline _evaluate_program_call(
-    expression::ProgramCall{:source_cell}, context::_ProposalEvaluationContext
-) = context.new_owner
-@inline _evaluate_program_call(
-    expression::ProgramCall{:target_cell}, context::_ProposalEvaluationContext
-) = context.old_owner
-@inline _evaluate_program_call(
-    expression::ProgramCall{:source_kind}, context::_ProposalEvaluationContext
-) = _owner_kind(context.runtime, context.new_owner)
-@inline _evaluate_program_call(
-    expression::ProgramCall{:target_kind}, context::_ProposalEvaluationContext
-) = _owner_kind(context.runtime, context.old_owner)
-@inline _evaluate_program_call(
-    expression::ProgramCall{:is_extension}, context::_ProposalEvaluationContext
-) = context.old_owner <= 0 && context.new_owner > 0
-@inline _evaluate_program_call(
-    expression::ProgramCall{:is_retraction}, context::_ProposalEvaluationContext
-) = context.old_owner > 0 && context.new_owner <= 0
-
-@inline function _evaluate_program_call(
-        expression::ProgramCall{:cell_volume}, context::_ProposalEvaluationContext
-    )
-    owner = Int(_evaluate_program_expression(only(expression.arguments), context))
-    owner <= 0 && return 0
-    1 <= owner <= length(context.runtime.volumes) ||
-        throw(ArgumentError("proposal expression addressed an invalid cell `$owner`"))
-    return @inbounds context.runtime.volumes[owner]
-end
-
-@inline function _evaluate_program_call(
-        expression::ProgramCall{:field_value}, context::_ProposalEvaluationContext
-    )
-    context.runtime.field === nothing &&
-        throw(ArgumentError("proposal expression reads an unavailable field"))
-    site_expression = last(expression.arguments)
-    site = _evaluate_program_expression(site_expression, context)
-    return @inbounds context.runtime.field[site]
-end
-
-for (name, operator) in (
-        (:add, :+),
-        (:subtract, :-),
-        (:multiply, :*),
-        (:divide, :/),
-        (:power, :^),
-        (:maximum, :max),
-        (:minimum, :min),
-        (:less, :<),
-        (:less_equal, :<=),
-        (:greater, :>),
-        (:greater_equal, :>=),
-        (:equal, :(==)),
-        (:not_equal, :(!=)),
-        (:and, :(&)),
-        (:or, :(|)),
-    )
-    @eval @inline function _evaluate_program_call(
-            expression::ProgramCall{$(QuoteNode(name))},
-            context::_ProposalEvaluationContext,
-        )
-        arguments = expression.arguments
-        return $(operator)(
-            _evaluate_program_expression(first(arguments), context),
-            _evaluate_program_expression(last(arguments), context),
-        )
-    end
-end
-
-for (name, operator) in (
-        (:negate, :-),
-        (:not, :!),
-        (:absolute, :abs),
-        (:exponential, :exp),
-        (:logarithm, :log),
-        (:square_root, :sqrt),
-    )
-    @eval @inline function _evaluate_program_call(
-            expression::ProgramCall{$(QuoteNode(name))},
-            context::_ProposalEvaluationContext,
-        )
-        return $(operator)(
-            _evaluate_program_expression(only(expression.arguments), context)
-        )
-    end
-end
-
-@inline function _evaluate_program_call(
-        expression::ProgramCall{:ifelse}, context::_ProposalEvaluationContext
-    )
-    condition, when_true, when_false = expression.arguments
-    return ifelse(
-        _evaluate_program_expression(condition, context),
-        _evaluate_program_expression(when_true, context),
-        _evaluate_program_expression(when_false, context),
-    )
-end
-
-@inline function _explicit_draw_uniform(
-        ::Type{T}, expression::ProgramDraw, context::_ProposalEvaluationContext;
-        draw::Integer = 0,
-    ) where {T}
-    return _program_uniform(
-        T,
-        context.runtime,
-        ExplicitProposalDrawStream,
-        expression.operation,
-        context.attempt;
-        subround = context.subround,
-        draw,
-    )
-end
-
-@inline function _evaluate_program_expression(
-        expression::ProgramDraw{:bernoulli},
-        context::_ProposalEvaluationContext,
-    )
-    T = eltype(context.runtime.parameters)
-    probability = T(_evaluate_program_expression(
-        expression.first_parameter, context
-    ))
-    zero(T) <= probability <= one(T) ||
-        throw(ArgumentError("Bernoulli probability must remain in [0, 1]"))
-    return _explicit_draw_uniform(T, expression, context) < probability
-end
-
-@inline function _evaluate_program_expression(
-        expression::ProgramDraw{:uniform},
-        context::_ProposalEvaluationContext,
-    )
-    T = eltype(context.runtime.parameters)
-    minimum = T(_evaluate_program_expression(
-        expression.first_parameter, context
-    ))
-    maximum = T(_evaluate_program_expression(
-        expression.second_parameter, context
-    ))
-    minimum < maximum ||
-        throw(ArgumentError("Uniform draw bounds must remain strictly ordered"))
-    draw = _explicit_draw_uniform(T, expression, context)
-    return muladd(draw, maximum - minimum, minimum)
-end
-
-@inline function _evaluate_program_expression(
-        expression::ProgramDraw{:normal},
-        context::_ProposalEvaluationContext,
-    )
-    T = eltype(context.runtime.parameters)
-    mean = T(_evaluate_program_expression(
-        expression.first_parameter, context
-    ))
-    standard_deviation = T(_evaluate_program_expression(
-        expression.second_parameter, context
-    ))
-    standard_deviation >= zero(T) ||
-        throw(ArgumentError("Normal standard deviation must remain nonnegative"))
-    iszero(standard_deviation) && return mean
-    first_uniform = _explicit_draw_uniform(T, expression, context; draw = 0)
-    second_uniform = _explicit_draw_uniform(T, expression, context; draw = 1)
-    normal = sqrt(-T(2) * log(first_uniform)) *
-             cos(T(2pi) * second_uniform)
-    return muladd(standard_deviation, normal, mean)
-end
-
-@inline _proposal_term_value(term::CompiledProposalTerm, context) =
-    _evaluate_program_expression(term.expression, context)
-
-@inline _proposal_sum(::Tuple{}, context, initial) = initial
-@inline function _proposal_sum(terms::Tuple, context, initial)
-    return _proposal_sum(
-        Base.tail(terms),
-        context,
-        initial + _proposal_term_value(first(terms), context),
-    )
-end
-
-@inline _proposal_all(::Tuple{}, context) = true
-@inline function _proposal_all(terms::Tuple, context)
-    Bool(_proposal_term_value(first(terms), context)) || return false
-    return _proposal_all(Base.tail(terms), context)
+    return @inbounds state_block(
+        context.runtime.descriptor_state, handle
+    ).values[site]
 end
 
 function _attempt!(

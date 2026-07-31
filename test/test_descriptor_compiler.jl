@@ -46,9 +46,6 @@ CorePotts.descriptor_role(descriptor::OpaqueDescriptor) =
 CorePotts.descriptor_dependencies(::OpaqueDescriptor) = ()
 CorePotts.descriptor_support(descriptor::OpaqueDescriptor) =
     descriptor.capabilities
-CorePotts.descriptor_evaluate_proposal(
-    descriptor::OpaqueDescriptor, context
-) = CorePotts.evaluate_static(descriptor.program, context)
 CorePotts.descriptor_adapt(to, descriptor::OpaqueDescriptor) = descriptor
 CorePotts.descriptor_evaluator_node_count(descriptor::OpaqueDescriptor) =
     CorePotts.evaluator_node_count(descriptor.program)
@@ -525,6 +522,7 @@ end
             single_plan.source_table,
             Int32(count),
             single_plan.fingerprint,
+            single_plan.domain_resources,
         )
     end
     repeated_plan = replicated_plan(32)
@@ -554,6 +552,7 @@ end
                   single_plan.source_table,
                   Int32(1),
                   single_plan.fingerprint,
+                  single_plan.domain_resources,
               ),
           ).group_splits
     @test repeated_report.kernel_families ==
@@ -628,22 +627,59 @@ end
         auxiliary_state,
         runtime_workspaces,
     )
-    @test CorePotts.descriptor_evaluate_energy(
-        descriptor, context
-    ) == 17.5
-    CorePotts.descriptor_evaluate_energy(descriptor, context)
+    @test CorePotts.evaluate_static(descriptor.evaluator, context) == 17.5
+    CorePotts.evaluate_static(descriptor.evaluator, context)
     warmed_descriptor_allocations(descriptor, context) = @allocated(
-        CorePotts.descriptor_evaluate_energy(descriptor, context)
+        CorePotts.evaluate_static(descriptor.evaluator, context)
     )
     @test warmed_descriptor_allocations(descriptor, context) == 0
     inferred = Core.Compiler.return_type(
-        CorePotts.descriptor_evaluate_energy,
-        Tuple{typeof(descriptor), typeof(context)},
+        CorePotts.evaluate_static,
+        Tuple{typeof(descriptor.evaluator), typeof(context)},
     )
     @test inferred === Float64
     @test isbitstype(typeof(descriptor.evaluator))
     @test isbits(descriptor)
     @test isconcretetype(typeof(launch.instances))
+
+    runtime_state_values = zeros(Float64, 4, 4)
+    runtime_state_values[2] = 7.0
+    runtime_initial = PottsInitialState(
+        ownership = LabelledCells(
+            ones(Int32, 4, 4);
+            cells = [:endothelial],
+            medium = :extracellular,
+        ),
+        values = [:external_activity => runtime_state_values],
+    )
+    core_initial = PottsToolkit._core_initial_state(
+        single, runtime_initial
+    )
+    runtime = CorePotts.initialize_program(
+        single.core_program,
+        core_initial,
+        single.core_program.parameter_defaults,
+        UInt64(0x724),
+        UInt32(1),
+    )
+    runtime_view = CorePotts.BeforeProposalView(
+        runtime, CartesianIndex(2, 1), Int32(1), Int32(1)
+    )
+    runtime_context = CorePotts.HamiltonianEvaluationContext(
+        runtime_view, CartesianIndex(2, 1), nothing
+    )
+    @test CorePotts.evaluate_static(
+        descriptor.evaluator, runtime_context
+    ) == 17.5
+    @test CorePotts.state_block(
+        runtime.descriptor_state, only(launch.state_handles)
+    ).values == runtime_state_values
+    restored_runtime = CorePotts.restore_program_checkpoint(
+        single.core_program, CorePotts.program_checkpoint(runtime)
+    )
+    @test CorePotts.state_block(
+        restored_runtime.descriptor_state, only(launch.state_handles)
+    ).values == runtime_state_values
 
     adapted_launch = CorePotts.adapt_descriptor_launch(
         DescriptorProbeAdaptor(), group
@@ -766,7 +802,7 @@ end
             stage = :proposal,
         ),
     )
-    opaque_plan = CorePotts.DescriptorExecutionPlan(
+    @test_throws ArgumentError CorePotts.DescriptorExecutionPlan(
         (opaque_group,),
         CorePotts.StateLayout(()),
         CorePotts.WorkspaceLayout(()),
@@ -774,11 +810,8 @@ end
         Any[:opaque_source],
         Int32(1),
         "opaque-report-probe",
+        CorePotts.HamiltonianDomainResources(0, 1),
     )
-    opaque_report = CorePotts.descriptor_plan_report(opaque_plan)
-    @test opaque_report.evaluator_nodes == (1,)
-    @test only(only(opaque_report.descriptor_inspections)).family ===
-          :opaque_test_descriptor
 
     # Direct built-in terms use the same sole grouped boundary; no occurrence
     # tuple remains hidden in CompiledPottsProgram.
@@ -796,6 +829,7 @@ end
             direct_plan.source_table,
             Int32(count),
             direct_plan.fingerprint,
+            direct_plan.domain_resources,
         )
     )
     direct_reports = (
@@ -1074,6 +1108,7 @@ end
         plan.source_table,
         plan.occurrence_count,
         plan.fingerprint,
+        plan.domain_resources,
     )
     reordered_contributions = similar(contributions)
     CorePotts.evaluate_hamiltonian_contributions!(
