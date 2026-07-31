@@ -89,15 +89,42 @@ It completed in 5 minutes 16.4 seconds with 272 passes, no assertion failures, a
 `initial_problem` reaches `CorePotts.initialization_bounded`, which calls the keyword-only
 `RNGAddress` constructor with an obsolete positional `Int64` at
 `lib/CorePotts/src/program/v1.jl:1056`. This is an inherited prototype defect, not a moved
-baseline. Its correction belongs to implementation after the G0 checkpoint.
+baseline. It was corrected after the G0 checkpoint by naming the final `draw` keyword and adding
+a direct semantic-RNG initialization regression.
+
+## G1 evidence
+
+G1 introduced:
+
+- a frozen, indexed, host-only source graph with hierarchy, source order, registry snapshot,
+  qualified references, provenance, and a stable structural key;
+- an ordered normalized term DAG whose pure-node interning is record-local;
+- versioned operation transfer methods with validation;
+- explicit analyzed fact tables and descriptor candidates;
+- normalization and analysis verifiers with qualified diagnostics; and
+- downstream `ExternalWeightedSiteTerm` and `ExternalBoundedPairTerm` fixtures authored in a
+  separate test module through public registration and lowering protocols.
+
+Qualification:
+
+- G1 focused compiler tests: 33 passed;
+- CorePotts focused program tests: 43 passed;
+- initial-state/problem/remake tests: 24 passed;
+- Wortel fixture: 14 passed;
+- Merks fixture: 8 passed; and
+- complete ordinary root package suite: 313 passed in 6 minutes 15.2 seconds.
+
+The full-suite probe initially exposed state variables represented as symbolic calls. The host
+normalizer now resolves declared variables and parameters before operation lookup, preserving
+state identity without treating `activity(t)` or a field variable as an extension operation.
 
 ## Gate state
 
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
-| G0 authority and recovery baseline | `in_progress` | branch/worktree inventory; specification validation; baseline checkpoint | pending | none |
-| G1 host compiler facts | `pending` | pending | pending | none |
-| G2 descriptor/group/evaluator/state/workspace | `pending` | pending | pending | R1 |
+| G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
+| G1 host compiler facts | `passed` | 33 focused compiler tests; 313-test full suite; two neutral candidates | pending | none |
+| G2 descriptor/group/evaluator/state/workspace | `in_progress` | pending | pending | R1 |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
@@ -126,9 +153,9 @@ Required:
 - [x] specification links, Markdown fences, clause count, gates, reviews, and send-off boundary
       validated;
 - [x] surviving prototype/test authority inventoried;
-- [ ] complete baseline checkpoint commit;
-- [ ] verify the checkpoint worktree is clean; and
-- [ ] mark G0 `passed` and G1 `in_progress`.
+- [x] complete baseline checkpoint commit (`0cc013ae8086`);
+- [x] verify the checkpoint worktree is clean; and
+- [x] mark G0 `passed` and G1 `in_progress`.
 
 Commands used:
 

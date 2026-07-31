@@ -630,6 +630,7 @@ function compile(
         scalar_type,
     )
     _validate_compilation_choices(completed, engine, backend, scalar_type)
+    analyzed_ir = _analyze_completed_system(completed)
     diagnostics = PottsDiagnostic[]
     _validate_compilation_coverage!(diagnostics, completed)
     _validate_equation_and_event_coverage!(diagnostics, completed)
@@ -729,6 +730,7 @@ function compile(
     reports = (
         execution,
         capability,
+        compiler = _compiler_analysis_report(analyzed_ir),
         storage,
         workspace,
         statements = statement_manifest,

@@ -20,6 +20,7 @@ include("systems.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/completion.jl")
+include("compiler/host_ir.jl")
 include("compiler/executable.jl")
 include("compiler/parameters.jl")
 include("compiler/storage.jl")
@@ -82,6 +83,7 @@ export EquationComponent, process_component
 
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
+public OperationTransfer, operation_transfer
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError

@@ -1059,7 +1059,7 @@ function initialization_bounded(
         operation = addressed_operation,
         entity_kind = GlobalEntity,
         invocation = 0,
-        draw,
+        draw = draw,
     )
     return Int(bounded_uint(
         Philox4x32x10V1(),

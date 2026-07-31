@@ -1,4 +1,4 @@
-struct CompletedPottsData{R, U, P, Q, V, S, C, F, D}
+struct CompletedPottsData{R, U, P, Q, V, S, C, F, D, G}
     registry::R
     reference_units::U
     parameter_roles::P
@@ -8,6 +8,7 @@ struct CompletedPottsData{R, U, P, Q, V, S, C, F, D}
     capabilities::C
     fingerprints::F
     diagnostics::D
+    source_graph::G
 end
 
 const _STRUCTURAL_OPTION_NAMES = Set((
@@ -498,6 +499,22 @@ function _same_symbolic_set(left, right)
     return all(value -> any(isequal(value), right), left)
 end
 
+function _registered_access_values(arguments, indices)
+    values = Any[]
+    for index in indices
+        argument = arguments[index]
+        symbolic_values = _collect_symbolics(argument)
+        if isempty(symbolic_values)
+            any(isequal(argument), values) || push!(values, argument)
+        else
+            for value in symbolic_values
+                any(isequal(value), values) || push!(values, value)
+            end
+        end
+    end
+    return Tuple(values)
+end
+
 function _validate_registered_lowering!(
         diagnostics,
         registered::RegisteredStatement,
@@ -537,8 +554,12 @@ function _validate_registered_lowering!(
     end
     writes = _statement_writes(statement)
     reads = _statement_reads(statement, writes)
-    expected_reads = Tuple(arguments[index] for index in contract.access.reads)
-    expected_writes = Tuple(arguments[index] for index in contract.access.writes)
+    expected_reads = _registered_access_values(
+        arguments, contract.access.reads
+    )
+    expected_writes = _registered_access_values(
+        arguments, contract.access.writes
+    )
     inferred_effect = _statement_effect(statement)
     inferred_bound = _effect_bound(statement)
     inferred_phase = _statement_phase(statement)
@@ -1187,6 +1208,9 @@ function _complete_potts(
         semantic, qualified_records, reference_units, registry
     )
     fingerprints = (semantic = semantic, completed = completed)
+    source_graph = _freeze_source_graph(
+        system, qualified_records, registry
+    )
     return CompletedPottsData(
         registry,
         reference_units,
@@ -1197,5 +1221,6 @@ function _complete_potts(
         capabilities,
         fingerprints,
         (),
+        source_graph,
     )
 end

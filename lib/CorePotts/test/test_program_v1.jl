@@ -270,3 +270,17 @@ end
         program, corrupted
     )
 end
+@testset "initialization uses the semantic RNG address" begin
+    first_draw = CorePotts.initialization_bounded(
+        UInt64(0x1234), UInt32(1), 1, 0, 17
+    )
+    repeated_draw = CorePotts.initialization_bounded(
+        UInt64(0x1234), UInt32(1), 1, 0, 17
+    )
+    next_draw = CorePotts.initialization_bounded(
+        UInt64(0x1234), UInt32(1), 1, 1, 17
+    )
+    @test 1 <= first_draw <= 17
+    @test first_draw == repeated_draw
+    @test 1 <= next_draw <= 17
+end
