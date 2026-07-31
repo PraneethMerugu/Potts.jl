@@ -123,9 +123,9 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
-| G1 host compiler facts | `passed` | conservative Hamiltonian taxonomy, closed domains, compiler-proven finite affected anchors, adversarial rejection suite | `eb8a37a` | included in fresh R1 scope |
-| G2 descriptor/group/evaluator/state/workspace | `passed` | immutable before/after views, typed domain/affected plans, local/global equivalence, allocation/inference/growth/Metal qualification | `3e131d97e352` | R1 passed with no findings |
-| G3 sequential reference/finite transitions | `in_progress` | locally qualified candidate: descriptor-driven sequential execution, finite transition authority, public external lifecycle, exact RNG/locality/inference/allocation gates | `d8f00c352230` | R1.5 in progress |
+| G1 host compiler facts | `reopened` | R1.5 proved declared connectivity semantics are absent from lowering and explicit draw identities are occurrence-set ordinals | `eb8a37a` | R1.5 returned G1 |
+| G2 descriptor/group/evaluator/state/workspace | `reopened` | prior boundary passed; must requalify repaired connectivity and draw-identity representations | `3e131d97e352` | R1.5 returned through G2 |
+| G3 sequential reference/finite transitions | `reopened` | candidate passed 305/305 focused tests but R1.5 found descriptor-authority, oracle, allocation, accounting, and seam defects | `d8f00c352230` | R1.5 returned G3 |
 | G4 checkerboard/first GPU witness | `pending` | blocked until R1.5 clears G3 | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
 | G6 public integration spine | `pending` | pending | pending | none |
@@ -138,7 +138,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
 | R1 compiler | `passed` | none | none |
-| R1.5 sequential authority | `in_progress` | pending | pending |
+| R1.5 sequential authority | `returned` | 1 P0; 2 P1 | 4 P2 |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -836,6 +836,27 @@ G4 remains stopped until R1.5 reports zero P0 and zero P1 findings. A compiler-b
 returns work to G1 or G2; an acceptance, RNG, atomicity, tracker, lifecycle, or sequential-runtime
 finding returns work to G3. P2 findings remain nonblocking under the existing autonomous repair
 rule.
+
+### First R1.5 result — returned
+
+The read-only review of `d8f00c352230a3ce3a208312eee82444a93eef55` returned G1 through G3
+with one P0, two P1, four P2, and no P3 findings. It independently reproduced that:
+
+- `LocalConnectivity` lowers to a literal-true expression and the runtime instead traverses
+  proposal offsets, so declared connectivity relations do not control connectivity semantics;
+- connectivity and relationship-extinction vetoes can determine a proposal outside the compiled
+  descriptor plan;
+- adding an unrelated lexically earlier `DrawKey` renumbers an existing explicit draw identity;
+- the two-step transition check reuses the one-step oracle rather than independently enumerating
+  two proposals and their branches;
+- an admitted warmed connectivity rejection allocates 1,088 bytes;
+- required attempt-accounting categories are absent; and
+- underflow and proposal-level RNG-role evidence is incomplete.
+
+The reviewer also confirmed the single structural sequential call path, absence of reachable named
+energy-delta helpers, role separation, ordinary rejection atomicity, checkpoint scratch exclusion,
+and the public external fixture. Its focused G3 run passed 305/305 in 42.7 seconds. G4 remains
+blocked; repairs start at G1, requalify G2, complete G3 evidence, and receive a fresh R1.5 review.
 
 ## Prohibited record contents
 
