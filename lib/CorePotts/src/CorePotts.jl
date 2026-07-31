@@ -9,7 +9,11 @@ using KernelAbstractions
 const RNG_CONTRACT_VERSION = v"1.0.0"
 
 include("rng/semantic.jl")
-include("execution/descriptor_runtime.jl")
+include("execution/static_evaluator.jl")
+include("execution/storage_schema.jl")
+include("execution/storage_runtime.jl")
+include("execution/descriptor_protocol.jl")
+include("execution/descriptor_plan.jl")
 include("program/v1.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine

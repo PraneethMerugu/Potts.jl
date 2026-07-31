@@ -3,15 +3,32 @@
 The compiler is ordered by ownership stage:
 
 ```text
-host/ir.jl
-    freeze source → normalize expressions → analyze semantic facts
+host/source_graph.jl
+    freeze qualified source into indexed, host-only compiler data
+
+host/operations.jl
+    define the versioned operation-transfer authority
+
+host/normalization.jl
+    normalize symbolic expressions into the ordered term DAG
+
+host/analysis.jl
+    infer and verify semantic facts over the normalized DAG
 
 lowering/parameters.jl
     lower units, defaults, and runtime parameter indices
 
-lowering/descriptors.jl
-    lower the analyzed DAG → callable evaluator → universal descriptor
-    assign state/workspace layouts → group occurrences → validate domains
+lowering/static_evaluators.jl
+    lower analyzed DAG nodes into bounded concrete callable expressions
+
+lowering/storage_layouts.jl
+    assign canonical state/workspace representations, banks, and slots
+
+lowering/proposal_descriptors.jl
+    construct the universal proposal descriptor and occurrence groups
+
+lowering/constraints.jl
+    lower prelaunch parameter-domain constraints and assemble the plan
 
 execution/executable.jl
     define public engine/backend selections and the executable wrapper
@@ -31,5 +48,5 @@ Only `compile.jl` orchestrates the complete pipeline. Host IR and registries nev
 inert descriptor payload metadata, and declared resources; they cannot replace the compiler-owned
 evaluator or universal proposal descriptor.
 
-The large stage files remain private implementation units during G2. Further splits must preserve
-this include order and may not create alternate lowering entry points.
+Every stage file remains a private implementation unit. Further changes must preserve this include
+order and may not create alternate lowering entry points.

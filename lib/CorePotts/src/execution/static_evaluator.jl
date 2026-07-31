@@ -1,0 +1,361 @@
+# Generic, mechanism-free evaluator, storage, and descriptor runtime boundary.
+
+abstract type AbstractStaticExpression end
+abstract type AbstractContextualOperation end
+
+abstract type AbstractStorageRepresentation end
+
+struct StateStorageRepresentation{
+        ElementType,
+        Dimensions,
+        Layout,
+        Adaptation,
+    } <: AbstractStorageRepresentation end
+
+struct WorkspaceStorageRepresentation{
+        ContainerType,
+        ElementType,
+        Dimensions,
+        Adaptation,
+    } <: AbstractStorageRepresentation end
+
+struct DefaultStateStorageRepresentation <: AbstractStorageRepresentation end
+struct DefaultWorkspaceStorageRepresentation <: AbstractStorageRepresentation end
+
+struct StateHandle{Representation <: AbstractStorageRepresentation}
+    bank::Int32
+    slot::Int32
+    function StateHandle{Representation}(
+            bank::Integer,
+            slot::Integer,
+        ) where {Representation <: AbstractStorageRepresentation}
+        bank > 0 ||
+            throw(ArgumentError("a state bank ordinal must be positive"))
+        slot > 0 || throw(ArgumentError("a state handle slot must be positive"))
+        new{Representation}(Int32(bank), Int32(slot))
+    end
+end
+
+StateHandle{Representation}(slot::Integer) where {
+    Representation <: AbstractStorageRepresentation,
+} = StateHandle{Representation}(1, slot)
+StateHandle(
+    ::Type{Representation}, bank::Integer, slot::Integer
+) where {Representation <: AbstractStorageRepresentation} =
+    StateHandle{Representation}(bank, slot)
+StateHandle(slot::Integer) =
+    StateHandle{DefaultStateStorageRepresentation}(1, slot)
+StateHandle(bank::Integer, slot::Integer) =
+    StateHandle{DefaultStateStorageRepresentation}(bank, slot)
+
+struct WorkspaceHandle{Representation <: AbstractStorageRepresentation}
+    bank::Int32
+    slot::Int32
+    function WorkspaceHandle{Representation}(
+            bank::Integer,
+            slot::Integer,
+        ) where {Representation <: AbstractStorageRepresentation}
+        bank > 0 ||
+            throw(ArgumentError("a workspace bank ordinal must be positive"))
+        slot > 0 ||
+            throw(ArgumentError("a workspace handle slot must be positive"))
+        new{Representation}(Int32(bank), Int32(slot))
+    end
+end
+
+WorkspaceHandle{Representation}(slot::Integer) where {
+    Representation <: AbstractStorageRepresentation,
+} = WorkspaceHandle{Representation}(1, slot)
+WorkspaceHandle(
+    ::Type{Representation}, bank::Integer, slot::Integer
+) where {Representation <: AbstractStorageRepresentation} =
+    WorkspaceHandle{Representation}(bank, slot)
+WorkspaceHandle(slot::Integer) =
+    WorkspaceHandle{DefaultWorkspaceStorageRepresentation}(1, slot)
+WorkspaceHandle(bank::Integer, slot::Integer) =
+    WorkspaceHandle{DefaultWorkspaceStorageRepresentation}(bank, slot)
+
+handle_bank(handle::Union{StateHandle, WorkspaceHandle}) = handle.bank
+handle_slot(handle::Union{StateHandle, WorkspaceHandle}) = handle.slot
+handle_representation(
+    ::StateHandle{Representation}
+) where {Representation} = Representation
+handle_representation(
+    ::WorkspaceHandle{Representation}
+) where {Representation} = Representation
+
+function Base.getproperty(
+        handle::Union{StateHandle, WorkspaceHandle}, name::Symbol
+    )
+    name === :index && return getfield(handle, :slot)
+    return getfield(handle, name)
+end
+
+struct LiteralExpression{T} <: AbstractStaticExpression
+    value::T
+end
+
+struct ParameterExpression{T <: AbstractFloat} <: AbstractStaticExpression
+    default::T
+    index::Int32
+    function ParameterExpression(default::T, index::Integer = 0) where {
+            T <: AbstractFloat,
+        }
+        0 <= index <= typemax(Int32) ||
+            throw(ArgumentError("parameter expression index is out of range"))
+        new{T}(default, Int32(index))
+    end
+end
+
+struct ContextExpression{T <: AbstractContextualOperation} <: AbstractStaticExpression
+    operation::T
+end
+
+struct StateExpression{H <: StateHandle} <: AbstractStaticExpression
+    handle::H
+end
+
+struct OperationExpression{
+        T,
+        A <: Tuple,
+    } <: AbstractStaticExpression
+    operation::T
+    arguments::A
+end
+
+OperationExpression(operation, arguments...) =
+    OperationExpression(operation, arguments)
+
+struct StaticEvaluator{E <: AbstractStaticExpression}
+    expression::E
+end
+
+struct OrderedFold{F}
+    operation::F
+end
+
+struct ContextOperation{Identity} <: AbstractContextualOperation end
+struct ResourceOperation{Identity} <: AbstractContextualOperation end
+
+function context_value end
+function apply_resource_operation end
+function operation_callable end
+function state_value end
+function workspace_value end
+function evaluator_parameters end
+
+for (identity, operation) in (
+        :add => OrderedFold(+),
+        :subtract => OrderedFold(-),
+        :multiply => OrderedFold(*),
+        :divide => OrderedFold(/),
+        :power => (^),
+        :maximum => OrderedFold(max),
+        :minimum => OrderedFold(min),
+        :less => (<),
+        :less_equal => (<=),
+        :greater => (>),
+        :greater_equal => (>=),
+        :equal => (==),
+        :not_equal => (!=),
+        :and => (&),
+        :or => (|),
+        :not => (!),
+        :ifelse => ifelse,
+        :absolute => abs,
+        :exponential => exp,
+        :logarithm => log,
+        :square_root => sqrt,
+    )
+    @eval operation_callable(
+        ::Val{$(QuoteNode(identity))}, version::VersionNumber
+    ) = version == v"1.0.0" ?
+        $operation :
+        throw(ArgumentError("unsupported operation schema version $version"))
+end
+
+for identity in (
+        :source_site,
+        :target_site,
+        :source_cell,
+        :target_cell,
+        :source_kind,
+        :target_kind,
+        :is_extension,
+        :is_retraction,
+    )
+    @eval operation_callable(
+        ::Val{$(QuoteNode(identity))}, version::VersionNumber
+    ) = version == v"1.0.0" ?
+        ContextOperation{$(QuoteNode(identity))}() :
+        throw(ArgumentError("unsupported operation schema version $version"))
+end
+
+for identity in (
+        :cell_volume,
+        :cell_surface,
+        :cell_center,
+        :unwrapped_center,
+        :distance,
+        :contact_measure,
+        :boundary_measure,
+        :neighbor_count,
+        :neighbor_sum,
+        :neighbor_mean,
+        :neighbor_geomean,
+        :field_value,
+        :field_gradient,
+        :laplacian,
+        :occupancy,
+        :history_value,
+        :linked,
+        :endpoint_a,
+        :endpoint_b,
+        :degree,
+        :edge_payload,
+        :lag,
+        :new_contact,
+        :lost_contact,
+        :draw,
+    )
+    @eval operation_callable(
+        ::Val{$(QuoteNode(identity))}, version::VersionNumber
+    ) = version == v"1.0.0" ?
+        ResourceOperation{$(QuoteNode(identity))}() :
+        throw(ArgumentError("unsupported operation schema version $version"))
+end
+
+@inline evaluate_expression(
+    expression::LiteralExpression, context
+) = expression.value
+
+@inline function evaluate_expression(
+        expression::ParameterExpression,
+        context,
+    )
+    index = expression.index
+    return index == 0 ? expression.default :
+           @inbounds evaluator_parameters(context)[index]
+end
+
+@inline evaluate_expression(
+    expression::ContextExpression, context
+) = context_value(expression.operation, context)
+
+@inline evaluate_expression(
+    expression::StateExpression, context
+) = expression.handle
+
+@inline function evaluate_expression(
+        expression::OperationExpression,
+        context,
+    )
+    arguments = map(
+        argument -> evaluate_expression(argument, context),
+        expression.arguments,
+    )
+    return execute_operation(expression.operation, arguments, context)
+end
+
+@inline evaluate_static(evaluator::StaticEvaluator, context) =
+    evaluate_expression(evaluator.expression, context)
+
+@inline function _ordered_fold(operation, arguments::Tuple)
+    length(arguments) == 1 && return operation(only(arguments))
+    return foldl(operation, Base.tail(arguments); init = first(arguments))
+end
+
+@inline (fold::OrderedFold)(arguments::Tuple) =
+    _ordered_fold(fold.operation, arguments)
+
+@inline execute_operation(
+    operation::AbstractContextualOperation, arguments::Tuple, context
+) = operation(arguments, context)
+@inline execute_operation(
+    operation::OrderedFold, arguments::Tuple, context
+) = operation(arguments)
+@inline execute_operation(
+    operation, arguments::Tuple, context
+) = operation(arguments...)
+
+@inline (
+    operation::ContextOperation
+)(arguments::Tuple, context) =
+    context_value(operation, context)
+@inline (
+    operation::ResourceOperation
+)(arguments::Tuple, context) =
+    apply_resource_operation(operation, arguments, context)
+
+struct EvaluatorProbeContext{P, V, S, W}
+    parameters::P
+    values::V
+    states::S
+    workspaces::W
+end
+
+EvaluatorProbeContext(parameters, values) =
+    EvaluatorProbeContext(parameters, values, (), ())
+EvaluatorProbeContext(parameters, values, states) =
+    EvaluatorProbeContext(parameters, values, states, ())
+
+@inline evaluator_parameters(context::EvaluatorProbeContext) =
+    context.parameters
+
+for identity in (
+        :source_site,
+        :target_site,
+        :source_cell,
+        :target_cell,
+        :source_kind,
+        :target_kind,
+        :is_extension,
+        :is_retraction,
+    )
+    @eval @inline context_value(
+        ::ContextOperation{$(QuoteNode(identity))},
+        context::EvaluatorProbeContext,
+    ) = getproperty(context.values, $(QuoteNode(identity)))
+end
+
+@inline apply_resource_operation(
+    ::ResourceOperation{:cell_volume},
+    arguments,
+    context::EvaluatorProbeContext,
+) = @inbounds context.values.cell_volumes[only(arguments)]
+
+@inline state_value(
+    context::EvaluatorProbeContext,
+    handle::StateHandle,
+    site,
+) = @inbounds context.states[Int(handle.index)][site]
+
+@inline workspace_value(
+    context::EvaluatorProbeContext,
+    handle::WorkspaceHandle,
+) = workspace_block(context.workspaces, handle).values
+
+@kernel function evaluator_probe_kernel!(
+        output,
+        evaluator,
+        context,
+    )
+    index = @index(Global, Linear)
+    if index <= length(output)
+        @inbounds output[index] = evaluate_static(evaluator, context)
+    end
+end
+
+@kernel function descriptor_probe_kernel!(
+        output,
+        descriptor,
+        context,
+    )
+    index = @index(Global, Linear)
+    if index <= length(output)
+        @inbounds output[index] = descriptor_evaluate_proposal(
+            descriptor, context
+        )
+    end
+end
+

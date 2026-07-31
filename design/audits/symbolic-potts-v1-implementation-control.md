@@ -137,7 +137,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
-| R1 compiler | `passed` | none | mechanical stage-file decomposition before substantial G3 growth |
+| R1 compiler | `passed` | none | none; both P2 findings repaired after checkpoint |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -197,12 +197,10 @@ verification. R1 should distinguish:
 - legacy `program/v1.jl` organization that is intentionally removed or replaced at G8; and
 - cosmetic moves that can wait without weakening compiler ownership.
 
-The first organization repair now groups compiler sources under `host/`, `lowering/`, and
-`execution/`, leaves only orchestration in `compiler/compile.jl`, and moves the mechanism-free
-CorePotts boundary to `execution/descriptor_runtime.jl`. Package-local READMEs record stage
-ownership and the single lowering path. Further decomposition of the large private stage files is
-allowed after G2 but must not create alternate entry points; legacy `program/v1.jl` removal remains
-G8 work.
+The organization repair groups compiler sources under `host/`, `lowering/`, and `execution/`,
+leaves only orchestration in `compiler/compile.jl`, and splits the mechanism-free CorePotts
+boundary under `execution/`. Package-local READMEs record exact include order, stage ownership,
+and the single lowering path. Legacy `program/v1.jl` removal remains G8 work.
 
 ## G0 checks
 
@@ -469,9 +467,23 @@ commutative multiplication when replacing a parameter default. That was a positi
 not a production evaluator defect. The test now locates and replaces `ParameterExpression` nodes
 structurally, and the truly standalone G2 suite passes 124/124 in 42.1 seconds. Second, the large
 private stage files must be mechanically split by ownership before substantial G3 growth, without
-adding an entry point. That organization repair is the first post-checkpoint task.
+adding an entry point.
 
-R1 cleared the G2 checkpoint and authorized G3 to begin after the recorded P2 organization repair.
+The organization P2 is closed. `host/ir.jl` is now four ordered files for source freezing,
+operation authority, normalization, and analysis. `lowering/descriptors.jl` is now four ordered
+files for static evaluators, storage layouts, proposal descriptors, and constraints. CorePotts'
+`descriptor_runtime.jl` is now five ordered files for static evaluation, storage schemas, storage
+runtime, descriptor protocol, and descriptor plans. The split introduced no public or complete
+pipeline entry point. Its largest reviewed unit is 510 lines.
+
+Post-split qualification passed:
+
+- package load and all extension precompilation;
+- standalone G2 descriptor/compiler boundary: 124/124 in 45.3 seconds;
+- complete CorePotts package suite, including package quality; and
+- root `Pkg.test`: 448/448 in 4m37.9s.
+
+R1 cleared the G2 checkpoint, both R1 P2 findings are repaired, and G3 may begin.
 
 ## Prohibited record contents
 
