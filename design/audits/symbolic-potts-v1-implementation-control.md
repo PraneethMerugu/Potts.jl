@@ -124,7 +124,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
 | G1 host compiler facts | `passed` | 33 focused compiler tests; 313-test full suite; two neutral candidates | `64ab5a2` | none |
-| G2 descriptor/group/evaluator/state/workspace | `passed` | provenance/fingerprint repair: focused 73/73 and 124/124; standalone 124/124; full growth 5/5; root 448/448; Metal exact | `b56491d` | R1 passed: 0 P0, 0 P1 |
+| G2 descriptor/group/evaluator/state/workspace | `passed` | provenance/fingerprint repair: focused 73/73 and 124/124; standalone 124/124; full growth 5/5; root 448/448; Metal exact | `b269164` | R1 passed: 0 P0, 0 P1 |
 | G3 sequential reference/finite transitions | `pending` | pending | pending | none |
 | G4 checkerboard/first GPU witness | `pending` | pending | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
