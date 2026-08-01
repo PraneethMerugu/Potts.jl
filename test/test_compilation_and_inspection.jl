@@ -183,7 +183,7 @@
 
     links = RelationshipState(:links; capacity = 8)
     copy_context = ProposalContext(:copy)
-    @named rejected = PottsSystem(statements = StatementSet((
+    @named accepted_relationship = PottsSystem(statements = StatementSet((
         Lattice((4, 4)),
         cell,
         medium,
@@ -194,12 +194,13 @@
         ),
         Protocol(Sweep(); name = :main),
     )))
-    @test_throws ArgumentError compile(
-        complete(rejected);
+    relationship_checkerboard = compile(
+        complete(accepted_relationship);
         engine = CheckerboardEngine(),
         backend = CPUBackend(),
         scalar_type = Float64,
     )
+    @test relationship_checkerboard isa PottsExecutable
 
     proposal = ProposalContext(:copy)
     explicit_noise = draw(Normal(0.0, 0.05), DrawKey(:explicit_bias))

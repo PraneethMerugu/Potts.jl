@@ -291,18 +291,8 @@ end
         end
     end
 
-    unsupported_stage = CorePotts.StageExecutionPlan(
-        (), (), 1, 0, "unsupported-checkerboard-stage"
-    )
-    @test_throws ArgumentError CorePotts.initialize_program(
-        test_program(
-            CorePotts.CheckerboardProgramEngine();
-            stage_plan = unsupported_stage,
-        ),
-        test_initial(),
-        Float64[],
-        UInt64(9),
-        UInt32(1),
+    @test_throws ArgumentError CorePotts.StageExecutionPlan(
+        (), (), 1, 0, "inconsistent-stage-plan"
     )
 
     cleared_schema = CorePotts.StateBlockSchema(
@@ -340,18 +330,27 @@ end
         test_initial().ownership,
         Int16[2];
         scalar_type = Float64,
-        descriptor_state = CorePotts.allocate_auxiliary_state(cleared_layout),
+        descriptor_state = CorePotts.allocate_auxiliary_state(
+            cleared_layout, (ones(Float64, 6, 6),)
+        ),
     )
-    @test_throws ArgumentError CorePotts.initialize_program(
+    cleared_runtime = CorePotts.initialize_program(
         test_program(
             CorePotts.CheckerboardProgramEngine();
             descriptor_plan = cleared_plan,
         ),
         cleared_initial,
         Float64[],
-        UInt64(10),
+        UInt64(1),
         UInt32(1),
     )
+    CorePotts.advance_mcs!(cleared_runtime)
+    @test cleared_runtime.accepted > 0
+    cleared_values = CorePotts.state_block(
+        cleared_runtime.descriptor_state,
+        only(cleared_layout.entries).handle,
+    ).values
+    @test any(iszero, cleared_values)
 
     sequential = test_program(CorePotts.SequentialProgramEngine())
     first = CorePotts.initialize_program(
@@ -428,6 +427,25 @@ end
         state, Int16[2, 2], generations, plan, [create]
     )
     @test count(state.active) == 1
+
+    contradictory_create = CorePotts.CreateRelationshipRequest(
+        1,
+        2,
+        (9.0, 2.0, 5.0);
+        generation_a = 4,
+        generation_b = 7,
+        identity = 10,
+    )
+    duplicate_before = copy(state)
+    @test_throws ArgumentError CorePotts.apply_relationship_requests!(
+        state,
+        Int16[2, 2],
+        generations,
+        plan,
+        [create, contradictory_create],
+    )
+    @test state.payload == duplicate_before.payload
+    @test state.incident_edges == duplicate_before.incident_edges
     @test (state.endpoint_a[1], state.endpoint_b[1]) == (1, 2)
     @test (state.generation_a[1], state.generation_b[1]) == (4, 7)
     @test state.degree == Int16[1, 1]
@@ -510,6 +528,68 @@ end
     @test iszero(count(state.active))
     @test all(iszero, state.degree)
     @test all(iszero, state.incident_edges)
+
+    replacement_plan = CorePotts.RelationshipStoreSchema(
+        1, 1, (scalar(0),)
+    )
+    function replaced_state(requests)
+        value = CorePotts.ProgramRelationshipState(Float64, 1, 3, 1, 1)
+        CorePotts.apply_relationship_requests!(
+            value,
+            Int16[2, 2, 2],
+            UInt32[1, 1, 1],
+            replacement_plan,
+            [CorePotts.CreateRelationshipRequest(
+                1, 2, (1.0,); identity = 1
+            )],
+        )
+        CorePotts.apply_relationship_requests!(
+            value,
+            Int16[2, 2, 2],
+            UInt32[1, 1, 1],
+            replacement_plan,
+            requests,
+        )
+        return value
+    end
+    remove = CorePotts.RemoveRelationshipRequest(1; identity = 20)
+    replacement = CorePotts.CreateRelationshipRequest(
+        2, 3, (2.0,); identity = 10
+    )
+    forward = replaced_state([remove, replacement])
+    reverse = replaced_state([replacement, remove])
+    for result in (forward, reverse)
+        @test count(result.active) == 1
+        @test (result.endpoint_a[1], result.endpoint_b[1]) == (2, 3)
+        @test result.payload[1][1] == 2.0
+        @test result.degree == Int16[0, 1, 1]
+    end
+    @test forward.active == reverse.active
+    @test forward.endpoint_a == reverse.endpoint_a
+    @test forward.endpoint_b == reverse.endpoint_b
+    @test forward.payload == reverse.payload
+
+    duplicate_remove_state = CorePotts.ProgramRelationshipState(
+        Float64, 1, 2, 1, 1
+    )
+    CorePotts.apply_relationship_requests!(
+        duplicate_remove_state,
+        Int16[2, 2],
+        UInt32[1, 1],
+        replacement_plan,
+        [CorePotts.CreateRelationshipRequest(1, 2, (1.0,); identity = 1)],
+    )
+    CorePotts.apply_relationship_requests!(
+        duplicate_remove_state,
+        Int16[2, 2],
+        UInt32[1, 1],
+        replacement_plan,
+        [
+            CorePotts.RemoveRelationshipRequest(1; identity = 2),
+            CorePotts.RemoveRelationshipRequest(1; identity = 3),
+        ],
+    )
+    @test iszero(count(duplicate_remove_state.active))
 end
 
 @testset "logical checkpoints preserve exact continuation" begin

@@ -172,6 +172,7 @@ function restore_program_checkpoint(
         eltype(runtime.parameters),
         program.shape,
         runtime.relationships,
+        accepted_batch_bound = _accepted_copy_batch_bound(program),
     )
     runtime.engine_workspace = allocate_program_engine_workspace(
         program,
@@ -181,6 +182,7 @@ function restore_program_checkpoint(
         runtime.volumes,
         runtime.relationships,
         runtime.descriptor_state,
+        runtime.stage_buffers,
         runtime.parameters,
         runtime.seed,
         runtime.replica,
@@ -193,6 +195,12 @@ function restore_program_checkpoint(
     runtime.energy_rejections = checkpoint.energy_rejections
     runtime.retired_cells = checkpoint.retired_cells
     return runtime
+end
+
+function _accepted_copy_batch_bound(program::CompiledPottsProgram)
+    plan = program.checkerboard_plan
+    return plan isa CheckerboardPlan ?
+           Int(plan.maximum_color_size) * Int(program.attempts_per_site) : 1
 end
 
 mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB, EW}
@@ -304,6 +312,7 @@ function initialize_program(
         T,
         program.shape,
         relationships,
+        accepted_batch_bound = _accepted_copy_batch_bound(program),
     )
     engine_workspace = allocate_program_engine_workspace(
         program,
@@ -313,6 +322,7 @@ function initialize_program(
         volumes,
         relationships,
         descriptor_state,
+        stage_buffers,
         runtime_parameters,
         seed,
         replica,

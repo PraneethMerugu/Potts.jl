@@ -218,9 +218,10 @@ end
         AcceptedCopy(:create_link, edge_effect; when = copy.is_extension),
     )))
     focal_completed = complete(focal)
-    @test !inspect(focal_completed, Capabilities()).checkerboard
-    @test only(inspect(focal_completed, Capabilities()).checkerboard_rejections)[1] ==
-          PottsToolkit.QualifiedStatementID((:focal,), StatementID(:create_link))
+    @test inspect(focal_completed, Capabilities()).checkerboard
+    @test isempty(
+        inspect(focal_completed, Capabilities()).checkerboard_rejections
+    )
 
     @named invalid = PottsSystem(statements = StatementSet((
         CellKind(:duplicate),

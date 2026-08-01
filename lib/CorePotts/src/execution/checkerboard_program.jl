@@ -7,19 +7,22 @@ const _PROGRAM_CHECKERBOARD_CONSTRAINT = UInt8(3)
 const _PROGRAM_CHECKERBOARD_ENERGY = UInt8(4)
 const _PROGRAM_CHECKERBOARD_ACCEPTED = UInt8(5)
 
-struct CheckerboardKernelProgram{T, N, O, D, C}
+struct CheckerboardKernelProgram{T, N, O, R, D, S, H, C}
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
     proposal_offsets::O
     medium_kind::Int16
     temperature::CompiledScalar{T}
     attempts_per_site::Int32
+    relationships::R
     descriptor_plan::D
+    stage_plan::S
+    ownership_change_handles::H
     checkerboard_plan::C
 end
 
 struct CheckerboardExecutionState{
-        P, O, K, G, V, R, D, W, A,
+        P, O, K, G, V, R, D, W, S, A,
     }
     program::P
     ownership::O
@@ -29,6 +32,7 @@ struct CheckerboardExecutionState{
     relationships::R
     descriptor_state::D
     descriptor_workspaces::W
+    stage_buffers::S
     parameters::A
     seed::UInt64
     replica::UInt32
@@ -69,10 +73,11 @@ end
 end
 
 struct CheckerboardWorkspace{
-        S, C, T, O, N, P, D, M, I, R, Q, U, Z,
+        S, C, E, T, O, N, P, D, M, I, R, Q, U, Z,
     }
     state::S
     contributions::C
+    accepted_copy_evaluations::E
     target_sites::T
     source_sites::O
     old_owners::N
@@ -87,6 +92,21 @@ struct CheckerboardWorkspace{
 end
 
 function _checkerboard_kernel_program(program, to)
+    ownership_change_handles = if program isa CheckerboardKernelProgram
+        program.ownership_change_handles
+    else
+        Tuple(
+            entry.handle
+            for entry in program.descriptor_plan.state_layout.entries
+            if begin
+                lifecycle = entry.schema.lifecycle
+                declared = lifecycle isa NamedTuple &&
+                           haskey(lifecycle, :declared) ?
+                           lifecycle.declared : nothing
+                declared === :ClearOnOwnershipChange
+            end
+        )
+    end
     return CheckerboardKernelProgram(
         program.shape,
         program.periodic,
@@ -95,7 +115,12 @@ function _checkerboard_kernel_program(program, to)
         program.medium_kind,
         program.temperature,
         program.attempts_per_site,
+        to === nothing ? program.relationships :
+        Adapt.adapt(to, program.relationships),
         adapt_descriptor_kernel_plan(to, program.descriptor_plan),
+        to === nothing ? program.stage_plan : Adapt.adapt(to, program.stage_plan),
+        to === nothing ? ownership_change_handles :
+        Adapt.adapt(to, ownership_change_handles),
         to === nothing ? program.checkerboard_plan :
         Adapt.adapt(to, program.checkerboard_plan),
     )
@@ -112,6 +137,7 @@ function _checkerboard_execution_state(
         volumes,
         relationships,
         descriptor_state,
+        stage_buffers,
         parameters,
         seed,
         replica,
@@ -130,6 +156,7 @@ function _checkerboard_execution_state(
         _checkerboard_adapt(to, relationships),
         _checkerboard_adapt(to, descriptor_state),
         _checkerboard_adapt(to, descriptor_workspaces),
+        _checkerboard_adapt(to, stage_buffers),
         _checkerboard_adapt(to, parameters),
         UInt64(seed),
         UInt32(replica),
@@ -148,6 +175,7 @@ function _checkerboard_state_at_mcs(state::CheckerboardExecutionState, mcs)
         state.relationships,
         state.descriptor_state,
         state.descriptor_workspaces,
+        state.stage_buffers,
         state.parameters,
         state.seed,
         state.replica,
@@ -191,6 +219,16 @@ function _allocate_checkerboard_workspace(
         maximum_batch,
     )
     fill!(contributions, neutral)
+    accepted_copy_evaluations = _checkerboard_similar(
+        state.parameters,
+        StageEvaluation{eltype(state.parameters)},
+        max(1, Int(state.program.stage_plan.accepted_count)),
+        maximum_batch,
+    )
+    fill!(
+        accepted_copy_evaluations,
+        StageEvaluation(false, zero(eltype(state.parameters))),
+    )
     target_sites = _checkerboard_similar(
         state.parameters, Int32, maximum_batch
     )
@@ -214,6 +252,7 @@ function _allocate_checkerboard_workspace(
     return CheckerboardWorkspace(
         state,
         contributions,
+        accepted_copy_evaluations,
         target_sites,
         source_sites,
         old_owners,
@@ -236,26 +275,13 @@ function allocate_program_engine_workspace(
         volumes,
         relationships,
         descriptor_state,
+        stage_buffers,
         parameters,
         seed,
         replica,
         repeat,
     )
     program.engine isa CheckerboardProgramEngine || return nothing
-    program.stage_plan.accepted_count == 0 || throw(ArgumentError(
-        "G4 checkerboard execution does not yet admit accepted-copy stages"
-    ))
-    program.stage_plan.after_mcs_count == 0 || throw(ArgumentError(
-        "G4 checkerboard execution does not yet admit after-MCS stages"
-    ))
-    all(program.descriptor_plan.state_layout.entries) do entry
-        lifecycle = entry.schema.lifecycle
-        declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
-                   lifecycle.declared : nothing
-        declared !== :ClearOnOwnershipChange
-    end || throw(ArgumentError(
-        "G4 checkerboard execution does not yet admit ownership-cleared auxiliary state"
-    ))
     state = _checkerboard_execution_state(
         program,
         ownership,
@@ -264,6 +290,7 @@ function allocate_program_engine_workspace(
         volumes,
         relationships,
         descriptor_state,
+        stage_buffers,
         parameters,
         seed,
         replica,
@@ -274,6 +301,15 @@ end
 
 function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     state = workspace.state
+    state.program.stage_plan.accepted_count == 0 || throw(ArgumentError(
+        "accepted-copy checkerboard stages are not qualified on device backends"
+    ))
+    state.program.stage_plan.after_mcs_count == 0 || throw(ArgumentError(
+        "after-MCS checkerboard stages are not qualified on device backends"
+    ))
+    isempty(state.program.ownership_change_handles) || throw(ArgumentError(
+        "ownership-cleared checkerboard state is not qualified on device backends"
+    ))
     adapted = CheckerboardExecutionState(
         _checkerboard_kernel_program(state.program, to),
         Adapt.adapt(to, state.ownership),
@@ -283,6 +319,7 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
         Adapt.adapt(to, state.relationships),
         Adapt.adapt(to, state.descriptor_state),
         Adapt.adapt(to, state.descriptor_workspaces),
+        Adapt.adapt(to, state.stage_buffers),
         Adapt.adapt(to, state.parameters),
         state.seed,
         state.replica,
@@ -316,6 +353,140 @@ function _clear_checkerboard_bulk!(workspace::CheckerboardWorkspace)
     return nothing
 end
 
+function _checkerboard_requires_accepted_commit(state)
+    state.program.stage_plan.accepted_count > 0 && return true
+    return !isempty(state.program.ownership_change_handles)
+end
+
+@inline function _checkerboard_proposal_context(state, workspace, candidate, color)
+    target = CartesianIndices(state.ownership)[Int(
+        @inbounds workspace.target_sites[candidate]
+    )]
+    source = CartesianIndices(state.ownership)[Int(
+        @inbounds workspace.source_sites[candidate]
+    )]
+    return _ProposalEvaluationContext(
+        state,
+        source,
+        target,
+        @inbounds(workspace.old_owners[candidate]),
+        @inbounds(workspace.new_owners[candidate]),
+        Int(@inbounds(workspace.semantic_ids[candidate])),
+        Int(color),
+    )
+end
+
+@inline function _store_checkerboard_stage_evaluations!(
+        storage, ::Tuple{}, requests, candidate
+    )
+    return storage
+end
+
+@inline function _store_checkerboard_stage_evaluations!(
+        storage, groups::Tuple, requests, candidate
+    )
+    for descriptor in first(groups).instances
+        slot = Int(descriptor.buffer_slot)
+        @inbounds storage[slot, candidate] = requests[slot]
+    end
+    return _store_checkerboard_stage_evaluations!(
+        storage, Base.tail(groups), requests, candidate
+    )
+end
+
+function _prepare_checkerboard_accepted_stage!(
+        workspace::CheckerboardWorkspace,
+        state,
+        color::Integer,
+        batch_size::Integer,
+    )
+    buffers = state.stage_buffers
+    _reset_relationship_transactions!(
+        buffers.relationship_transactions, state.relationships
+    )
+    for candidate in 1:batch_size
+        @inbounds(workspace.dispositions[candidate]) ==
+            _PROGRAM_CHECKERBOARD_ACCEPTED || continue
+        context = _checkerboard_proposal_context(
+            state, workspace, candidate, color
+        )
+        _emit_accepted_copy_groups!(
+            buffers.accepted_copy,
+            state.program.stage_plan.accepted_copy,
+            context,
+        )
+        _store_checkerboard_stage_evaluations!(
+            workspace.accepted_copy_evaluations,
+            state.program.stage_plan.accepted_copy,
+            buffers.accepted_copy,
+            candidate,
+        )
+    end
+    _prepare_relationship_transactions!(
+        buffers.relationship_transactions,
+        state.cell_kinds,
+        state.cell_generations,
+        state.program.relationships,
+    )
+    return nothing
+end
+
+@inline function _apply_checkerboard_accepted_groups!(
+        runtime, ::Tuple{}, evaluations, candidate, context
+    )
+    return runtime
+end
+
+@inline function _apply_checkerboard_accepted_groups!(
+        runtime, groups::Tuple, evaluations, candidate, context
+    )
+    for descriptor in first(groups).instances
+        evaluation = @inbounds evaluations[
+            Int(descriptor.buffer_slot), candidate
+        ]
+        descriptor_apply_stage!(descriptor, evaluation, runtime, context)
+    end
+    return _apply_checkerboard_accepted_groups!(
+        runtime,
+        Base.tail(groups),
+        evaluations,
+        candidate,
+        context,
+    )
+end
+
+function _publish_checkerboard_accepted_stage!(
+        workspace::CheckerboardWorkspace,
+        state,
+        color::Integer,
+        batch_size::Integer,
+    )
+    for candidate in 1:batch_size
+        @inbounds(workspace.dispositions[candidate]) ==
+            _PROGRAM_CHECKERBOARD_ACCEPTED || continue
+        context = _checkerboard_proposal_context(
+            state, workspace, candidate, color
+        )
+        _clear_ownership_changed_handles!(
+            state.program.ownership_change_handles,
+            state.descriptor_state,
+            context.target,
+        )
+        _apply_checkerboard_accepted_groups!(
+            state,
+            state.program.stage_plan.accepted_copy,
+            workspace.accepted_copy_evaluations,
+            candidate,
+            context,
+        )
+    end
+    _publish_relationship_transactions!(
+        state.relationships,
+        state.stage_buffers.relationship_transactions,
+    )
+    return nothing
+end
+
 function execute_checkerboard_mcs!(
         workspace::CheckerboardWorkspace,
         mcs::Integer = workspace.state.mcs,
@@ -323,6 +494,12 @@ function execute_checkerboard_mcs!(
     state = _checkerboard_state_at_mcs(workspace.state, mcs)
     plan = state.program.checkerboard_plan
     backend = KernelAbstractions.get_backend(workspace.dispositions)
+    staged_commit = _checkerboard_requires_accepted_commit(state)
+    staged_commit && !(backend isa KernelAbstractions.CPU) && throw(
+        ArgumentError(
+            "accepted-copy checkerboard stages are not qualified on this backend"
+        )
+    )
     _clear_checkerboard_bulk!(workspace)
     maximum_batch = length(workspace.dispositions)
     candidate_kernel = _checkerboard_candidates_kernel!(backend)
@@ -397,6 +574,9 @@ function execute_checkerboard_mcs!(
             ndrange = maximum_batch,
         )
         KernelAbstractions.synchronize(backend)
+        staged_commit && _prepare_checkerboard_accepted_stage!(
+            workspace, state, color, batch_size
+        )
         commit_kernel(
             workspace.target_sites,
             workspace.old_owners,
@@ -407,6 +587,9 @@ function execute_checkerboard_mcs!(
             ndrange = maximum_batch,
         )
         KernelAbstractions.synchronize(backend)
+        staged_commit && _publish_checkerboard_accepted_stage!(
+            workspace, state, color, batch_size
+        )
         report_kernel(
             workspace.report,
             workspace.dispositions,

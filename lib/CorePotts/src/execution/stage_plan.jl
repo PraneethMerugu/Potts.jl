@@ -280,6 +280,12 @@ function StageExecutionPlan(
     after_mcs_count >= 0 || throw(ArgumentError(
         "after-MCS descriptor count cannot be negative"
     ))
+    actual_accepted = sum(
+        length(group.instances) for group in accepted_copy; init = 0
+    )
+    actual_accepted == accepted_count || throw(ArgumentError(
+        "accepted-copy descriptor count does not match its groups"
+    ))
     return StageExecutionPlan{A, M}(
         accepted_copy,
         after_mcs,
@@ -307,7 +313,12 @@ function allocate_stage_runtime_buffers(
         ::Type{T},
         shape::NTuple{N, Int},
         relationships::RelationshipStorage = RelationshipStorage(()),
+        ;
+        accepted_batch_bound::Integer = 1,
     ) where {T <: AbstractFloat, N}
+    accepted_batch_bound > 0 || throw(ArgumentError(
+        "accepted-copy batch bound must be positive"
+    ))
     accepted = fill(
         StageEvaluation(false, zero(T)), Int(plan.accepted_count)
     )
@@ -331,7 +342,8 @@ function allocate_stage_runtime_buffers(
                descriptor.effect.relationship_slot == store_slot
         ); init = 0)
         push!(transactions, RelationshipTransactionBuffer(
-            relationships[store_slot], max(accepted_bound, after_bound)
+            relationships[store_slot],
+            max(accepted_bound * accepted_batch_bound, after_bound),
         ))
     end
     relationship_transactions = RelationshipStorage(transactions)

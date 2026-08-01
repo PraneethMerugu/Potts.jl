@@ -310,7 +310,7 @@ end
             C, V, E, AcceptedCopyStage,
         },
         request::StageEvaluation,
-        runtime::ProgramRuntime,
+        runtime,
         context::_ProposalEvaluationContext,
     ) where {C, V, E <: SiteAssignmentEffect}
     return descriptor_apply_stage!(
@@ -326,7 +326,7 @@ end
             C, V, E, AcceptedCopyStage,
         },
         evaluation::StageEvaluation,
-        runtime::ProgramRuntime,
+        runtime,
         context::_ProposalEvaluationContext,
     ) where {C, V, E <: RelationshipCreateEffect}
     evaluation.enabled || return runtime
@@ -436,6 +436,13 @@ function _clear_ownership_changed_state!(
         @inbounds values[site] = zero(eltype(values))
     end
     return state
+end
+
+@inline _clear_ownership_changed_handles!(::Tuple{}, state, site) = state
+@inline function _clear_ownership_changed_handles!(handles::Tuple, state, site)
+    values = state_block(state, first(handles)).values
+    @inbounds values[site] = zero(eltype(values))
+    return _clear_ownership_changed_handles!(Base.tail(handles), state, site)
 end
 
 function _emit_after_mcs_descriptor!(

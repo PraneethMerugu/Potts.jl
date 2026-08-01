@@ -144,16 +144,7 @@ end
 
 function _engine_admission(statement)
     sequential = EngineAdmission(:sequential, true, "")
-    if statement isa AcceptedCopyProcess &&
-            _contains_relationship_effect(_statement_arguments(statement))
-        checkerboard = EngineAdmission(
-            :checkerboard,
-            false,
-            "accepted-copy relationship mutation has no proven complete conflict set",
-        )
-    else
-        checkerboard = EngineAdmission(:checkerboard, true, "")
-    end
+    checkerboard = EngineAdmission(:checkerboard, true, "")
     return (sequential, checkerboard)
 end
 

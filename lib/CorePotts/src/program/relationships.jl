@@ -350,12 +350,40 @@ end
 
 function _request_sort_key(request::CreateRelationshipRequest)
     a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
-    return (request.priority, 1, a, b, 0, request.identity)
+    return (3, request.priority, a, b, 0, request.identity)
 end
 _request_sort_key(request::RetuneRelationshipRequest) =
-    (request.priority, 2, Int32(0), Int32(0), request.edge, request.identity)
+    (2, request.priority, Int32(0), Int32(0), request.edge, request.identity)
 _request_sort_key(request::RemoveRelationshipRequest) =
-    (request.priority, 3, Int32(0), Int32(0), request.edge, request.identity)
+    (1, request.priority, Int32(0), Int32(0), request.edge, request.identity)
+
+@inline function _canonical_create_signature(request::CreateRelationshipRequest)
+    a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
+    generations = request.endpoint_a == a ?
+                  (request.generation_a, request.generation_b) :
+                  (request.generation_b, request.generation_a)
+    return (a, b, generations..., request.payload, request.priority)
+end
+
+@inline _relationship_request_equivalent(
+    left::CreateRelationshipRequest,
+    right::CreateRelationshipRequest,
+) = _canonical_create_signature(left) == _canonical_create_signature(right)
+
+@inline _relationship_request_equivalent(
+    left::RemoveRelationshipRequest,
+    right::RemoveRelationshipRequest,
+) = left.edge == right.edge && left.priority == right.priority
+
+@inline _relationship_request_equivalent(
+    left::RetuneRelationshipRequest,
+    right::RetuneRelationshipRequest,
+) = left.edge == right.edge && left.payload == right.payload &&
+    left.priority == right.priority
+
+@inline _relationship_request_equivalent(
+    ::ProgramRelationshipRequest, ::ProgramRelationshipRequest
+) = false
 
 function validate_relationship_request(
         state::ProgramRelationshipState,
@@ -376,7 +404,19 @@ function validate_relationship_request(
     _validate_relationship_endpoint(
         b, generation_b, endpoint_status, endpoint_generations
     )
-    _relationship_edge(state, a, b) === nothing || return false
+    existing = _relationship_edge(state, a, b)
+    if existing !== nothing
+        edge = Int(existing)
+        existing_payload = map(values -> @inbounds(values[edge]), state.payload)
+        existing_generation_a = @inbounds state.generation_a[edge]
+        existing_generation_b = @inbounds state.generation_b[edge]
+        existing_generation_a == generation_a &&
+            existing_generation_b == generation_b &&
+            existing_payload == request.payload && return false
+        throw(ArgumentError(
+            "contradictory relationship creations target endpoints ($a, $b)"
+        ))
+    end
     _relationship_degree(state, a) < schema.maximum_degree ||
         throw(ArgumentError("relationship maximum degree exceeded for $a"))
     _relationship_degree(state, b) < schema.maximum_degree ||
@@ -504,14 +544,21 @@ function prepare_relationship_transaction!(
     for index in 1:Int(buffer.count)
         request = @inbounds buffer.requests[index]
         edge = _request_edge(request)
+        duplicate = false
         if edge > 0
             for prior_index in 1:(index - 1)
                 prior = @inbounds buffer.requests[prior_index]
-                _request_edge(prior) == edge && throw(ArgumentError(
+                _request_edge(prior) == edge || continue
+                if _relationship_request_equivalent(prior, request)
+                    duplicate = true
+                    break
+                end
+                throw(ArgumentError(
                     "conflicting relationship requests for edge $edge"
                 ))
             end
         end
+        duplicate && continue
         if request isa CreateRelationshipRequest
             validate_relationship_request(
                 staged,
