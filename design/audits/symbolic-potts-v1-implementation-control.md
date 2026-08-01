@@ -1409,6 +1409,35 @@ R1.5 must report findings with exact production call paths and the earliest repa
 bundled fixture passing, a concrete type, or a zero-allocation microprobe is not by itself evidence
 of extensibility, scientific correctness, device legality, or semantic DRYness.
 
+### Fourth R1.5 result — returned
+
+The fresh read-only review of audit-record checkpoint
+`eee31816b731be1d670eee650812499cccc4b17e` returned G2 with one P0, one P1, and no P2 findings.
+G4 remains stopped.
+
+- Core-program lowering retraverses and flattens the completed system instead of consuming the
+  authoritative qualified source graph. A composed child declaring a Moore proposal relation was
+  independently observed to compile with the Von Neumann fallback, changing executable science.
+  The same identity fork breaks composed direct-state observations, state-manifest matching,
+  initial kind resolution, and sibling reuse of local statement names.
+- Relationship-store occurrence count controls `CompiledPottsProgram` and `ProgramRuntime` tuple
+  types, while `_call_relationship_slot` emits one branch per store and transaction barriers recurse
+  over the occurrence-length tuple. Identical store representations therefore create new method
+  instances and linearly growing generated code; no explicit small V1 bound justifies that growth.
+
+The reviewer cleared the sole symbolic-to-evaluator construction path, callable policy,
+state/workspace representation banks, Hamiltonian domain and affected-anchor semantics, repaired
+relationship transaction algebra, CorePotts mechanism independence, folder ownership, flat-model
+checkpoint reconstruction, test-tier placement, restrained backend claims, and fail-closed
+`cell_surface` admission.
+
+Repair returns to G2. Core resources, manifests, observations, kinds, and public names must derive
+from one qualified source graph or canonical identity table. Relationship storage must bank by
+canonical representation with value-level handles, unless a deliberately small closed bound and a
+measured generated-code budget are specified and justified. Direct-versus-composed neighborhoods,
+composed observations and initial kinds, sibling local-name reuse, and 1/32/1,024 same-
+representation relationship growth are mandatory regression probes before a fifth candidate.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
