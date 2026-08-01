@@ -1438,6 +1438,85 @@ measured generated-code budget are specified and justified. Direct-versus-compos
 composed observations and initial kinds, sibling local-name reuse, and 1/32/1,024 same-
 representation relationship growth are mandatory regression probes before a fifth candidate.
 
+### Fifth repaired R1.5 candidate — awaiting independent review
+
+The exact implementation checkpoint is
+`bcbdcdcb730f1c1a56a25e2d7a38275f1e369b8a`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent R1.5 review reports zero P0 and zero P1 findings.
+
+The candidate makes the following claims for the reviewer to challenge rather than accept:
+
+- core-program resources, kinds, neighborhoods, states, observations, relationships, manifests,
+  and public qualified names now consume the frozen `AnalyzedTermIR.source` graph and exact
+  `QualifiedStatementID`/`QualifiedResourceIdentity` values. Core lowering no longer reconstructs
+  subsystem identity by flattening local statements;
+- direct and composed forms of the same child retain identical proposal and contact neighborhoods,
+  composed direct-state observations resolve their exact layout handles, original child state
+  variables and unique kind declarations remain usable during initialization, and sibling reuse of
+  local statement names either resolves through a qualified identity or fails as ambiguous;
+- compiled relationship schemas, runtime states, and transaction buffers use one canonical
+  representation-banked `RelationshipStorage`. Declaration occurrence is represented by value-level
+  `RelationshipSlot`s, while generated dispatch branches only over distinct structural
+  representations; and
+- checkpoint, saved-state, query, staged Create/Remove/Retune, and Hamiltonian paths consume that
+  same storage and slot authority. No occurrence-length tuple executor or second relationship slot
+  map remains in production.
+
+Qualification relevant to the implementation checkpoint:
+
+- ordinary root `Pkg.test()` passed 1,244/1,244 in 10m00.2s on the completed repair immediately
+  before a final behavior-preserving semantic-DRY cleanup;
+- the exact checkpoint then passed the focused G2 adversarial and G3 sequential suites, including
+  direct/composed equivalence, qualified observations and initialization, sibling local-name reuse,
+  allocation-free multi-store transactions, saved topology, and checkpoint continuation;
+- the exact checkpoint passed the CorePotts program suite, including 1, 32, and 1,024 identical
+  relationship declarations reusing the same program/runtime/transaction storage types; the full
+  CorePotts package suite including Aqua passed before the same final focused cleanup;
+- the expensive specialization-growth qualification passed 8/8 in 1m48.1s, including equal
+  optimized typed IR for 1, 32, and 1,024 relationship declarations; and
+- the real Metal G2 descriptor boundary retained `MtlArray` descriptor, state, and workspace
+  buffers and returned `17.5f0`.
+
+In addition to every previously specified R1.5 question, the reviewer MUST independently audit
+code and test DRYness. Repetition is a finding when it creates duplicated semantic authority or
+avoidable compute, not merely because two concise tests contain similar syntax.
+
+For production code, trace each rule to one owner and search specifically for duplicated qualified
+identity resolution, neighborhood selection, kind ordering, state/resource matching, relationship
+representation banking, flat-slot mapping, transaction arbitration, evaluator construction,
+before/after energy semantics, snapshot reconstruction, and backend adaptation. Distinguish a
+legitimate cold inspection path from a second production executor. Report any duplicated authority
+with both call paths and the earliest common repair boundary.
+
+For tests, produce a guarantee-to-test ownership map and challenge all avoidable repeated compute:
+
+- identify fixtures that compile scientifically equivalent models repeatedly when one immutable
+  executable could be shared safely;
+- identify assertions repeated across CorePotts, focused G2/G3, root integration, model fixtures,
+  and expensive qualification without protecting a distinct boundary;
+- distinguish the cheapest structural proof, one independent scientific/statistical oracle, one
+  inference/allocation witness, and one real admitted-backend witness from redundant replicas;
+- preserve negative admission, local-versus-global Hamiltonian equivalence, stochastic and
+  biophysical confidence, external-extension coverage, inference, allocation, specialization
+  growth, checkpoint continuation, and backend portability while proposing a smaller everyday
+  compute budget;
+- keep optimized-IR stress and real GPU compilation outside the ordinary Julia test loop unless a
+  cheaper fast test cannot preserve the relevant failure signal; and
+- do not gain apparent DRYness by reusing production evaluators inside independent scientific
+  oracles, deleting adversarial boundary tests, reducing statistical power without analysis, or
+  rebuilding an evidence ledger.
+
+The reviewer should recommend a concrete standard-Julia test partition: which tests run on every
+local/PR invocation, which run as package-level integration, and which are release or explicitly
+requested qualifications. It should name the highest-cost duplicated compilation or fixture paths
+and estimate what can be consolidated without losing a distinct guarantee. Test wall time is a
+design input, not a freshness artifact and not itself a pass/fail oracle.
+
+R1.5 must again answer: Is there exactly one production path from a symbolic expression to a
+concrete callable evaluator? It must also answer: Does every important production and scientific
+guarantee have one cheapest authoritative test owner, with additional tests justified by a
+different boundary or independent oracle?
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
