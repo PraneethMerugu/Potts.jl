@@ -1776,6 +1776,49 @@ The seventh reviewer must re-run every standing R1.5 question and specifically c
 8. the two prior P2 findings are correctly disposed: the bounded growth probes are complete, while
    AcceleratedKernels remains an explicit G4 decision to give a genuine structural role or remove.
 
+### Seventh R1.5 result — returned
+
+The fresh read-only review of implementation checkpoint
+`fa9f4788f25e398c18d81935c484a21b0109ae4d` returned with no P0, one P1, and four P2 findings.
+G4 remains stopped.
+
+The reviewer independently cleared exactly one production symbolic-expression-to-concrete-callable
+path, registered and versioned callable admission, CorePotts-owned representation banking, the
+single compiled relationship endpoint/slot policy, structural rather than model-identity
+specialization, mechanism-free CorePotts execution, external extension coverage across the total
+qualification portfolio, current scientific-test ownership, and the restrained Metal-only local
+hardware claim.
+
+The blocking P1 is test-tier ownership rather than production architecture. The audit handoff
+claimed that `test/fast/runtests.jl` owns an immediate registered external
+descriptor/state/workspace execution signal, but it includes only the adversarial G2 repair and
+checkpoint files. The registered extension runs in the complete descriptor compiler suite, the G3
+public integration suite, the explicit specialization qualification, and the shared backend
+conformance body, so aggregate rigor is intact; however, a developer can break registered statement
+lowering, external descriptor payload construction, or external workspace declaration without the
+advertised fast target failing. The bounded repair is one shared focused CPU invocation of the
+neutral external conformance path, not another evaluator or scientific oracle.
+
+The four nonblocking P2 findings are:
+
+- broad test-only CorePotts method overrides in `test_g2_r1_repairs.jl` make results depend on file
+  include order; the overrides should use a unique test-owned parameter/context representation or
+  isolation;
+- the compiler ownership README omits relationship-policy and stage-descriptor lowering, while two
+  large lowering files should be split by responsibility before substantial growth;
+- AcceleratedKernels remains imported and declared without a production role, requiring a genuine
+  structural use or removal at G4; and
+- vendor launchers check hardware functionality only after loading the shared MTK/Potts fixture;
+  they should fail closed before that expensive include.
+
+Independent qualification reproduced the fast target at 64/64 in 1m39.4s, specialization growth at
+19/19 in 4m23.7s, CorePotts at 92/92 including Aqua, the complete selected CPU evaluator matrix,
+and the real Apple Silicon Metal 32-descriptor witness with device-backed state/workspace and value
+`17.5f0`. CUDA and AMDGPU remain unexecuted future release-matrix environments.
+
+Repair remains bounded to test organization and ownership documentation. A fresh independent
+R1.5 recheck is required before G4 begins.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
