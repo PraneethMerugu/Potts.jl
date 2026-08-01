@@ -123,8 +123,11 @@ end
         )
         representation = CorePotts.state_storage_class(first(schemas))
         @test order == collect(1:count)
-        @test unique(typeof.(handles)) ==
-              [CorePotts.StateHandle{representation}]
+        handle_types = unique(typeof.(handles))
+        @test length(handle_types) == 1
+        @test only(handle_types) <: CorePotts.StateHandle{representation}
+        @test fieldtype(only(handle_types), :location) ===
+              CorePotts.BlockLocation{2}
         @test all(
             index -> CorePotts.handle_slot(handles[index]) == index,
             eachindex(handles),
@@ -240,10 +243,15 @@ end
         CorePotts.workspace_storage_class,
         CorePotts.WorkspaceHandle,
     )
-    @test unique(typeof.(workspace_handles)) ==
-          [CorePotts.WorkspaceHandle{
-              CorePotts.workspace_storage_class(first(same_workspace_class))
-          }]
+    workspace_handle_types = unique(typeof.(workspace_handles))
+    workspace_representation = CorePotts.workspace_storage_class(
+        first(same_workspace_class)
+    )
+    @test length(workspace_handle_types) == 1
+    @test only(workspace_handle_types) <:
+          CorePotts.WorkspaceHandle{workspace_representation}
+    @test fieldtype(only(workspace_handle_types), :location) ===
+          CorePotts.BlockLocation{2}
 
     target_workspace = bank_workspace_schema(
         :stable_float_workspace, Float64, (4, 4)

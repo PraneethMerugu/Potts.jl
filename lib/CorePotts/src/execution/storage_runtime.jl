@@ -169,18 +169,18 @@ inspect_workspace_block(
     ),
 )
 
-function _assemble_block_banks(entries::Tuple, blocks::Tuple)
+function _assemble_block_banks(entries, blocks)
     isempty(entries) && return ()
     maximum_bank = maximum(
         Int(handle_bank(entry.handle)) for entry in entries
     )
     banks = ()
     for bank_index in 1:maximum_bank
-        selected_pairs = Tuple(
+        selected_pairs = [
             (entry, block)
             for (entry, block) in zip(entries, blocks)
             if handle_bank(entry.handle) == bank_index
-        )
+        ]
         isempty(selected_pairs) &&
             error("compiled block-bank ordinals must be contiguous")
         representation = handle_representation(
@@ -190,10 +190,22 @@ function _assemble_block_banks(entries::Tuple, blocks::Tuple)
             pair -> handle_representation(pair[1].handle) === representation,
             selected_pairs,
         ) || error("one physical bank contains multiple storage representations")
-        selected = map(last, selected_pairs)
+        total = sum(length(last(pair).values) for pair in selected_pairs)
+        element_type = eltype(first(selected_pairs)[2].values)
+        values = Vector{element_type}(undef, total)
+        expected_offset = 1
+        for (entry, block) in selected_pairs
+            offset = Int(handle_offset(entry.handle))
+            offset == expected_offset || error(
+                "compiled block locations must be contiguous within a bank"
+            )
+            source = vec(block.values)
+            copyto!(values, offset, source, 1, length(source))
+            expected_offset += length(source)
+        end
         banks = (
             banks...,
-            BlockBank{representation, typeof(selected)}(selected),
+            BlockBank{representation, typeof(values)}(values),
         )
     end
     return banks
@@ -201,9 +213,7 @@ end
 
 function allocate_auxiliary_state(
         layout::StateLayout,
-        initial_values::Tuple = ntuple(
-            _ -> nothing, length(layout.entries)
-        ),
+        initial_values = fill(nothing, length(layout.entries)),
     )
     length(initial_values) == length(layout.entries) ||
         throw(ArgumentError("initial auxiliary-state tuple has the wrong length"))
@@ -221,10 +231,8 @@ end
 @inline function _copy_state_bank(
         bank::BlockBank{Representation},
     ) where {Representation}
-    blocks = map(bank.blocks) do block
-        DenseStateBlock(copy(block.values))
-    end
-    return BlockBank{Representation, typeof(blocks)}(blocks)
+    values = copy(bank.values)
+    return BlockBank{Representation, typeof(values)}(values)
 end
 
 function copy_auxiliary_state(::StateLayout, state::AuxiliaryState)
@@ -245,14 +253,8 @@ end
 function adapt_auxiliary_state(
         to, layout::StateLayout, state::AuxiliaryState
     )
-    blocks = map(layout.entries) do entry
-        adapt_state_block(
-            to, entry.schema, state_block(state, entry.handle)
-        )
-    end
-    return AuxiliaryState(
-        _assemble_block_banks(layout.entries, blocks)
-    )
+    banks = map(bank -> Adapt.adapt(to, bank), state.banks)
+    return AuxiliaryState(banks)
 end
 
 function adapt_runtime_workspaces(
@@ -260,16 +262,8 @@ function adapt_runtime_workspaces(
         layout::WorkspaceLayout,
         workspaces::RuntimeWorkspaces,
     )
-    blocks = map(layout.entries) do entry
-        adapt_workspace_block(
-            to,
-            entry.schema,
-            workspace_block(workspaces, entry.handle),
-        )
-    end
-    return RuntimeWorkspaces(
-        _assemble_block_banks(layout.entries, blocks)
-    )
+    banks = map(bank -> Adapt.adapt(to, bank), workspaces.banks)
+    return RuntimeWorkspaces(banks)
 end
 
 settled_state_export(

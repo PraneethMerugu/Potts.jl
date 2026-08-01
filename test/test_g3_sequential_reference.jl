@@ -905,11 +905,9 @@ end
             )
             representation = CorePotts.handle_representation(handle)
             counting = G3CountingArray(ones(Float64, shape))
-            block = CorePotts.DenseStateBlock(counting)
-            blocks = (block,)
             bank = CorePotts.BlockBank{
-                representation, typeof(blocks),
-            }(blocks)
+                representation, typeof(counting),
+            }(counting)
             descriptor_state = CorePotts.AuxiliaryState((bank,))
             counted_initial = CorePotts.ProgramInitialState(
                 core_initial.ownership,
@@ -935,9 +933,10 @@ end
                 1,
                 0,
             )
-            runtime_counting = CorePotts.state_block(
+            runtime_values = CorePotts.state_block(
                 runtime.descriptor_state, handle
             ).values
+            runtime_counting = parent(runtime_values)
             runtime_counting.reads[] = 0
             evaluation = _g3_evaluate_proposal!(runtime, context)
             return runtime_counting.reads[], evaluation

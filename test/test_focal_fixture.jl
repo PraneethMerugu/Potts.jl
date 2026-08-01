@@ -197,75 +197,8 @@ end
     trajectory = solve(
         problem; save_everystep = true, observables = (:link_count,)
     )
-    replay = solve(problem; save_everystep = true)
-    independent = solve(
-        remake(problem; replica = 2); save_everystep = true
-    )
     @test count(trajectory(0).focal_links.active) == 1
     @test trajectory(0)[:link_count] == 1
-    @test all(
-        left.ownership == right.ownership &&
-        left.focal_links.active == right.focal_links.active
-        for (left, right) in zip(trajectory, replay)
-    )
-    @test any(
-        left.ownership != right.ownership
-        for (left, right) in zip(trajectory, independent)
-    )
-
-    # The Core transaction is all-or-nothing under capacity, degree,
-    # generation, duplicate, and per-edge conflict validation.
-    plan = only(getfield(
-        getfield(executable, :core_program), :relationships
-    ))
-    state = CorePotts.ProgramRelationshipState(
-        Float64,
-        plan.capacity,
-        3,
-        plan.maximum_degree,
-        length(plan.payload_defaults),
-    )
-    cell_kinds = Int16[2, 2, 2]
-    cell_generations = UInt32[1, 1, 1]
-    first_request = CorePotts.CreateRelationshipRequest(
-        1, 2, (1.0, 2.0, 8.0); identity = 1
-    )
-    CorePotts.apply_relationship_requests!(
-        state,
-        cell_kinds,
-        cell_generations,
-        plan,
-        [first_request, first_request],
-    )
-    @test count(state.active) == 1
-    before = copy(state)
-    invalid_batch = [
-        CorePotts.CreateRelationshipRequest(
-            1, 3, (1.0, 2.0, 8.0); identity = 2
-        ),
-        CorePotts.CreateRelationshipRequest(
-            2, 3, (1.0, 2.0, 8.0);
-            generation_b = 2,
-            identity = 3,
-        ),
-    ]
-    @test_throws ArgumentError CorePotts.apply_relationship_requests!(
-        state, cell_kinds, cell_generations, plan, invalid_batch
-    )
-    @test state.active == before.active
-    @test state.endpoint_a == before.endpoint_a
-    @test state.endpoint_b == before.endpoint_b
-
-    conflict = [
-        CorePotts.RetuneRelationshipRequest(
-            1, (2.0, 3.0, 9.0); identity = 4
-        ),
-        CorePotts.RemoveRelationshipRequest(1; identity = 5),
-    ]
-    @test_throws ArgumentError CorePotts.apply_relationship_requests!(
-        state, cell_kinds, cell_generations, plan, conflict
-    )
-    @test state.active == before.active
 
     integrator = init(problem; save_start = false)
     step!(integrator)

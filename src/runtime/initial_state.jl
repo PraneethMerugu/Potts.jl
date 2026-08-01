@@ -568,6 +568,49 @@ function _normalize_initial_relationships(
     )
 end
 
+function _validate_initial_relationship_endpoints!(
+        relationship,
+        entries,
+        cell_kinds::Vector{Int16},
+        kind_indices,
+    )
+    entries === nothing && return entries
+    relationship.endpoints.direction === :undirected || throw(ArgumentError(
+        "initial relationship `$(relationship.name)` requires unsupported " *
+        "directed endpoint semantics"
+    ))
+    required_a = get(
+        kind_indices, relationship.endpoints.kind_a, nothing
+    )
+    required_b = get(
+        kind_indices, relationship.endpoints.kind_b, nothing
+    )
+    if required_a === nothing || required_b === nothing
+        throw(ArgumentError(
+            "initial relationship `$(relationship.name)` has unresolved " *
+            "endpoint kinds"
+        ))
+    end
+    for entry in entries
+        endpoint_a, endpoint_b = entry[1], entry[2]
+        endpoint_a isa Integer && endpoint_b isa Integer || continue
+        1 <= endpoint_a <= length(cell_kinds) || continue
+        1 <= endpoint_b <= length(cell_kinds) || continue
+        actual_a = @inbounds cell_kinds[endpoint_a]
+        actual_b = @inbounds cell_kinds[endpoint_b]
+        _undirected_endpoint_kinds_match(
+            actual_a,
+            actual_b,
+            Int16(required_a),
+            Int16(required_b),
+        ) || throw(ArgumentError(
+            "initial relationship `$(relationship.name)` endpoint kinds do " *
+            "not satisfy its declared Undirected contract"
+        ))
+    end
+    return entries
+end
+
 function _core_initial_state(
         executable::PottsExecutable,
         initial::PottsInitialState,
@@ -624,9 +667,15 @@ function _core_initial_state(
     descriptor_state = CorePotts.allocate_auxiliary_state(
         descriptor_layout, descriptor_initial_values
     )
+    kind_indices = _kind_indices(executable)
     relationships = Tuple(
-        _normalize_initial_relationships(
-            relationship, get(values, relationship.name, nothing), T
+        _validate_initial_relationship_endpoints!(
+            relationship,
+            _normalize_initial_relationships(
+                relationship, get(values, relationship.name, nothing), T
+            ),
+            cell_kinds,
+            kind_indices,
         )
         for relationship in executable.reports.relationship_states
     )

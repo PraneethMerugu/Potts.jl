@@ -125,8 +125,8 @@ function Adapt.adapt_structure(
         to,
         bank::BlockBank{Representation},
     ) where {Representation}
-    blocks = Adapt.adapt(to, bank.blocks)
-    return BlockBank{Representation, typeof(blocks)}(blocks)
+    values = Adapt.adapt(to, bank.values)
+    return BlockBank{Representation, typeof(values)}(values)
 end
 Adapt.@adapt_structure AuxiliaryState
 Adapt.@adapt_structure RuntimeWorkspaces

@@ -32,6 +32,135 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
            fill(12345.0, length(parameters)) : parameters
 end
 
+@testset "relationship composition and endpoint contracts" begin
+    relationship_a = CellKind(:a)
+    relationship_b = CellKind(:b)
+    relationship_medium = MediumKind(:medium)
+    relationship_links = RelationshipState(
+        :links;
+        endpoints = Undirected(relationship_a, relationship_a),
+        capacity = 4,
+        maximum_degree = 2,
+        lifecycle = RemoveWithEndpoint(),
+    )
+    @named relationship_child = PottsSystem(statements = StatementSet((
+        Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+        relationship_a,
+        relationship_b,
+        relationship_medium,
+        relationship_links,
+        Protocol(Sweep(); name = :main),
+    )))
+    direct = compile(
+        complete(relationship_child);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @named relationship_parent = PottsSystem()
+    composed = compile(
+        complete(compose(relationship_parent, [relationship_child]));
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test size(direct.core_program.proposal_offsets) ==
+          size(composed.core_program.proposal_offsets)
+    @test length(direct.core_program.relationships) ==
+          length(composed.core_program.relationships) == 1
+    @test only(composed.reports.relationship_states).name ===
+          :relationship_child₊links
+
+    labels = zeros(Int32, 5, 5)
+    labels[2, 2] = 1
+    labels[4, 4] = 2
+    invalid = PottsInitialState(
+        ownership = LabelledCells(
+            labels;
+            cells = [relationship_a, relationship_b],
+            medium = relationship_medium,
+        ),
+        values = [relationship_links => [(1, 2)]],
+    )
+    @test_throws ArgumentError PottsToolkit._core_initial_state(
+        composed, invalid
+    )
+    valid = PottsInitialState(
+        ownership = LabelledCells(
+            labels;
+            cells = [relationship_a, relationship_a],
+            medium = relationship_medium,
+        ),
+        values = [relationship_links => [(1, 2)]],
+    )
+    valid_core = PottsToolkit._core_initial_state(composed, valid)
+    valid_runtime = CorePotts.initialize_program(
+        composed.core_program,
+        valid_core,
+        composed.core_program.parameter_defaults,
+        UInt64(0x727),
+        UInt32(1),
+    )
+    @test only(valid_runtime.relationships).active[1]
+
+    directed_links = RelationshipState(
+        :directed_links;
+        endpoints = Directed(relationship_a, relationship_b),
+        capacity = 2,
+        maximum_degree = 1,
+    )
+    @named directed_model = PottsSystem(statements = StatementSet((
+        relationship_a,
+        relationship_b,
+        directed_links,
+    )))
+    directed_error = try
+        complete(directed_model)
+        nothing
+    catch caught
+        caught
+    end
+    @test directed_error isa PottsToolkit.PottsValidationError
+    @test only(directed_error.diagnostics).kind ===
+          :unsupported_relationship_direction
+
+    sibling_a = CellKind(:a)
+    sibling_medium = MediumKind(:medium)
+    @named left_relationships = PottsSystem(statements = StatementSet((
+        RelationshipState(
+            :links;
+            endpoints = Undirected(sibling_a, sibling_a),
+            capacity = 2,
+            maximum_degree = 1,
+        ),
+    )))
+    @named right_relationships = PottsSystem(statements = StatementSet((
+        RelationshipState(
+            :links;
+            endpoints = Undirected(sibling_a, sibling_a),
+            capacity = 2,
+            maximum_degree = 1,
+        ),
+    )))
+    @named relationship_root = PottsSystem(statements = StatementSet((
+        Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+        sibling_a,
+        sibling_medium,
+        Protocol(Sweep(); name = :main),
+    )))
+    sibling_executable = compile(
+        complete(compose(
+            relationship_root, [left_relationships, right_relationships]
+        ));
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test Tuple(
+        entry.name for entry in sibling_executable.reports.relationship_states
+    ) == (:left_relationships₊links, :right_relationships₊links)
+end
+
 @inline CorePotts.evaluator_parameters(
     context::CorePotts.EvaluatorProbeContext{Vector{Float64}, V, S, W}
 ) where {V, S, W} = fill(-1.0, length(context.parameters))

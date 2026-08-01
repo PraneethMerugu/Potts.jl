@@ -60,11 +60,12 @@ public EvaluatorProbeContext
 public evaluator_probe_kernel!, descriptor_probe_kernel!, descriptor_group_probe_kernel!
 public AbstractStorageRepresentation
 public StateStorageRepresentation, WorkspaceStorageRepresentation
-public StateHandle, WorkspaceHandle, handle_bank, handle_slot
+public BlockLocation, StateHandle, WorkspaceHandle
+public handle_bank, handle_slot, handle_offset, handle_shape
 public handle_representation
 public StateBlockSchema, WorkspaceSchema, StateEntry, WorkspaceEntry
 public QualifiedResourceIdentity, StateLayout, WorkspaceLayout
-public DenseStateBlock, DenseWorkspaceBlock, BlockBank
+public DenseStateBlock, DenseWorkspaceBlock, BlockView, BlockBank
 public AuxiliaryState, RuntimeWorkspaces, StateCheckpointEntry
 public AuxiliaryStateCheckpoint, state_block, workspace_block
 public state_schema_metadata, state_storage_class, allocate_state_block

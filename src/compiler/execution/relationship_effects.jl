@@ -2,6 +2,16 @@
 
 function _potts_relationship_endpoint_kinds end
 
+@inline function _undirected_endpoint_kinds_match(
+        actual_a::Int16,
+        actual_b::Int16,
+        required_a::Int16,
+        required_b::Int16,
+    )
+    return (actual_a == required_a && actual_b == required_b) ||
+           (actual_a == required_b && actual_b == required_a)
+end
+
 struct RelationshipEndpointKindsCallable <:
        CorePotts.AbstractContextualOperation end
 
@@ -38,6 +48,7 @@ end
     endpoint_a > 0 && endpoint_b > 0 || return false
     actual_a = CorePotts.owner_kind(context, endpoint_a)
     actual_b = CorePotts.owner_kind(context, endpoint_b)
-    return (actual_a == kind_a && actual_b == kind_b) ||
-           (actual_a == kind_b && actual_b == kind_a)
+    return _undirected_endpoint_kinds_match(
+        actual_a, actual_b, kind_a, kind_b
+    )
 end

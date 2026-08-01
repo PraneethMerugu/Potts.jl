@@ -35,54 +35,114 @@ struct WorkspaceStorageRepresentation{
 struct DefaultStateStorageRepresentation <: AbstractStorageRepresentation end
 struct DefaultWorkspaceStorageRepresentation <: AbstractStorageRepresentation end
 
-struct StateHandle{Representation <: AbstractStorageRepresentation}
+struct BlockLocation{N}
+    offset::Int32
+    shape::NTuple{N, Int32}
+    function BlockLocation(
+            offset::Integer, shape::NTuple{N, <:Integer}
+        ) where {N}
+        offset > 0 || throw(ArgumentError(
+            "a block location offset must be positive"
+        ))
+        all(>(0), shape) || throw(ArgumentError(
+            "block location dimensions must be positive"
+        ))
+        return new{N}(Int32(offset), Int32.(shape))
+    end
+end
+
+struct StateHandle{
+        Representation <: AbstractStorageRepresentation,
+        L <: BlockLocation,
+    }
     bank::Int32
     slot::Int32
+    location::L
     function StateHandle{Representation}(
             bank::Integer,
             slot::Integer,
-        ) where {Representation <: AbstractStorageRepresentation}
+            location::L,
+        ) where {
+            Representation <: AbstractStorageRepresentation,
+            L <: BlockLocation,
+        }
         bank > 0 ||
             throw(ArgumentError("a state bank ordinal must be positive"))
         slot > 0 || throw(ArgumentError("a state handle slot must be positive"))
-        new{Representation}(Int32(bank), Int32(slot))
+        new{Representation, L}(Int32(bank), Int32(slot), location)
     end
 end
 
 StateHandle{Representation}(slot::Integer) where {
     Representation <: AbstractStorageRepresentation,
-} = StateHandle{Representation}(1, slot)
+} = StateHandle{Representation}(1, slot, BlockLocation(slot, (1,)))
+StateHandle{Representation}(
+    bank::Integer, slot::Integer
+) where {Representation <: AbstractStorageRepresentation} =
+    StateHandle{Representation}(bank, slot, BlockLocation(slot, (1,)))
 StateHandle(
     ::Type{Representation}, bank::Integer, slot::Integer
 ) where {Representation <: AbstractStorageRepresentation} =
     StateHandle{Representation}(bank, slot)
+StateHandle(
+    ::Type{Representation},
+    bank::Integer,
+    slot::Integer,
+    offset::Integer,
+    shape::Tuple,
+) where {Representation <: AbstractStorageRepresentation} =
+    StateHandle{Representation}(
+        bank, slot, BlockLocation(offset, shape)
+    )
 StateHandle(slot::Integer) =
     StateHandle{DefaultStateStorageRepresentation}(1, slot)
 StateHandle(bank::Integer, slot::Integer) =
     StateHandle{DefaultStateStorageRepresentation}(bank, slot)
 
-struct WorkspaceHandle{Representation <: AbstractStorageRepresentation}
+struct WorkspaceHandle{
+        Representation <: AbstractStorageRepresentation,
+        L <: BlockLocation,
+    }
     bank::Int32
     slot::Int32
+    location::L
     function WorkspaceHandle{Representation}(
             bank::Integer,
             slot::Integer,
-        ) where {Representation <: AbstractStorageRepresentation}
+            location::L,
+        ) where {
+            Representation <: AbstractStorageRepresentation,
+            L <: BlockLocation,
+        }
         bank > 0 ||
             throw(ArgumentError("a workspace bank ordinal must be positive"))
         slot > 0 ||
             throw(ArgumentError("a workspace handle slot must be positive"))
-        new{Representation}(Int32(bank), Int32(slot))
+        new{Representation, L}(Int32(bank), Int32(slot), location)
     end
 end
 
 WorkspaceHandle{Representation}(slot::Integer) where {
     Representation <: AbstractStorageRepresentation,
-} = WorkspaceHandle{Representation}(1, slot)
+} = WorkspaceHandle{Representation}(1, slot, BlockLocation(slot, (1,)))
+WorkspaceHandle{Representation}(
+    bank::Integer, slot::Integer
+) where {Representation <: AbstractStorageRepresentation} =
+    WorkspaceHandle{Representation}(bank, slot, BlockLocation(slot, (1,)))
 WorkspaceHandle(
     ::Type{Representation}, bank::Integer, slot::Integer
 ) where {Representation <: AbstractStorageRepresentation} =
     WorkspaceHandle{Representation}(bank, slot)
+WorkspaceHandle(
+    ::Type{Representation},
+    bank::Integer,
+    slot::Integer,
+    offset::Integer,
+    shape::Tuple,
+) where {Representation <: AbstractStorageRepresentation} =
+    WorkspaceHandle{Representation}(
+        bank, slot, BlockLocation(offset, shape)
+    )
 WorkspaceHandle(slot::Integer) =
     WorkspaceHandle{DefaultWorkspaceStorageRepresentation}(1, slot)
 WorkspaceHandle(bank::Integer, slot::Integer) =
@@ -90,6 +150,10 @@ WorkspaceHandle(bank::Integer, slot::Integer) =
 
 handle_bank(handle::Union{StateHandle, WorkspaceHandle}) = handle.bank
 handle_slot(handle::Union{StateHandle, WorkspaceHandle}) = handle.slot
+handle_offset(handle::Union{StateHandle, WorkspaceHandle}) =
+    handle.location.offset
+handle_shape(handle::Union{StateHandle, WorkspaceHandle}) =
+    handle.location.shape
 handle_representation(
     ::StateHandle{Representation}
 ) where {Representation} = Representation

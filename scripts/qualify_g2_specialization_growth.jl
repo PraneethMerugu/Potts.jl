@@ -24,6 +24,38 @@ function relationship_typed_ir_size(storage)
     return ncodeunits(sprint(show, first(typed)))
 end
 
+function state_schema(index)
+    return CorePotts.StateBlockSchema(
+        CorePotts.QualifiedResourceIdentity((), Symbol(:state_, index)),
+        v"1.0.0",
+        :site,
+        Float64,
+        (2,),
+        2,
+        :structure_of_arrays,
+        :provided_or_zero,
+        :shape_and_finite,
+        :logical,
+        :preserve,
+        :declared,
+        :bounded_write,
+        :adapt_storage,
+        :copy,
+        :logical_copy,
+        :qualified,
+        true,
+    )
+end
+
+function state_block_typed_ir_size(state, handle)
+    typed = only(code_typed(
+        CorePotts.state_block,
+        Tuple{typeof(state), typeof(handle)};
+        optimize = true,
+    ))
+    return ncodeunits(sprint(show, first(typed)))
+end
+
 @testset "G2 full specialization-growth qualification" begin
     one = G2SpecializationFixtures.compile_direct_model(1)
     many = G2SpecializationFixtures.compile_direct_model(32)
@@ -63,4 +95,15 @@ end
         Int32(1024),
         (),
     ) == 1
+
+    state_layouts = Tuple(
+        CorePotts.StateLayout([state_schema(index) for index in 1:count])
+        for count in (1, 32, 1024)
+    )
+    states = map(CorePotts.allocate_auxiliary_state, state_layouts)
+    handles = map(layout -> last(layout.entries).handle, state_layouts)
+    @test allequal(typeof(layout) for layout in state_layouts)
+    @test allequal(typeof(state) for state in states)
+    @test allequal(typeof(handle) for handle in handles)
+    @test allequal(state_block_typed_ir_size.(states, handles))
 end

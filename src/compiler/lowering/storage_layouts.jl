@@ -17,15 +17,22 @@ function _canonical_bank_handles(
     ]
     order = sortperm(eachindex(schemas); by = index -> banks[index])
     counts = zeros(Int, length(classes))
+    offsets = zeros(Int, length(classes))
     handles = Vector{Any}(undef, length(schemas))
     for index in order
         bank = banks[index]
         counts[bank] += 1
+        schema = schemas[index]
+        shape = schema.shape isa Tuple ? Tuple(Int.(schema.shape)) :
+                (Int(schema.capacity),)
         handles[index] = handle_type(
             classes[bank],
             bank,
             counts[bank],
+            offsets[bank] + 1,
+            shape,
         )
+        offsets[bank] += prod(shape)
     end
     return order, handles
 end
@@ -107,13 +114,10 @@ function _state_layout(
         CorePotts.state_storage_class,
         CorePotts.StateHandle,
     )
-    entries = ()
+    entries = CorePotts.StateEntry[]
     for index in order
         handle = assigned[index]
-        entries = (
-            entries...,
-            CorePotts.StateEntry(handle, schemas[index]),
-        )
+        push!(entries, CorePotts.StateEntry(handle, schemas[index]))
         handles[records[index].identity] = handle
     end
     return CorePotts.StateLayout(entries), handles
@@ -232,13 +236,10 @@ function _workspace_layout(ir::AnalyzedTermIR, ::Type{T}) where {
         CorePotts.workspace_storage_class,
         CorePotts.WorkspaceHandle,
     )
-    entries = ()
+    entries = CorePotts.WorkspaceEntry[]
     for index in order
         handle = assigned[index]
-        entries = (
-            entries...,
-            CorePotts.WorkspaceEntry(handle, schemas[index]),
-        )
+        push!(entries, CorePotts.WorkspaceEntry(handle, schemas[index]))
         for key in schema_keys[index]
             handles[key] = handle
         end

@@ -51,13 +51,16 @@ struct WorkspaceEntry{H <: WorkspaceHandle, S}
     schema::S
 end
 
-struct StateLayout{E <: Tuple}
+struct StateLayout{E <: AbstractVector}
     entries::E
 end
 
-struct WorkspaceLayout{E <: Tuple}
+struct WorkspaceLayout{E <: AbstractVector}
     entries::E
 end
+
+StateLayout(entries::Tuple) = StateLayout(StateEntry[entries...])
+WorkspaceLayout(entries::Tuple) = WorkspaceLayout(WorkspaceEntry[entries...])
 
 function _schema_layout_entries(
         schemas::AbstractVector,
@@ -81,19 +84,29 @@ function _schema_layout_entries(
     ]
     order = sortperm(eachindex(schemas); by = index -> banks[index])
     counts = zeros(Int, length(classes))
-    entries = ()
+    offsets = zeros(Int, length(classes))
+    entries = entry_type[]
     for index in order
         schema = schemas[index]
         representation = storage_class(schema)
         bank = banks[index]
         counts[bank] += 1
-        handle = handle_type(representation, bank, counts[bank])
-        entries = (entries..., entry_type(handle, schema))
+        shape = schema.shape isa Tuple ? Tuple(Int.(schema.shape)) :
+                (Int(schema.capacity),)
+        handle = handle_type(
+            representation,
+            bank,
+            counts[bank],
+            offsets[bank] + 1,
+            shape,
+        )
+        offsets[bank] += prod(shape)
+        push!(entries, entry_type(handle, schema))
     end
     return entries
 end
 
-function StateLayout(schemas::AbstractVector)
+function StateLayout(schemas::AbstractVector{<:StateBlockSchema})
     return StateLayout(
         _schema_layout_entries(
             schemas,
@@ -104,7 +117,7 @@ function StateLayout(schemas::AbstractVector)
     )
 end
 
-function WorkspaceLayout(schemas::AbstractVector)
+function WorkspaceLayout(schemas::AbstractVector{<:WorkspaceSchema})
     return WorkspaceLayout(
         _schema_layout_entries(
             schemas,
@@ -135,11 +148,45 @@ struct DenseWorkspaceBlock{A <: AbstractArray}
     values::A
 end
 
+struct BlockView{
+        T,
+        N,
+        A <: AbstractArray{T},
+    } <: AbstractArray{T, N}
+    storage::A
+    offset::Int32
+    dimensions::NTuple{N, Int32}
+end
+
+BlockView(
+    storage::AbstractArray{T}, offset::Integer, shape::NTuple{N, <:Integer}
+) where {T, N} = BlockView{T, N, typeof(storage)}(
+    storage, Int32(offset), Int32.(shape)
+)
+
+Base.IndexStyle(::Type{<:BlockView}) = IndexLinear()
+Base.size(view::BlockView) = Tuple(Int.(view.dimensions))
+Base.length(view::BlockView) = prod(size(view))
+Base.parent(view::BlockView) = view.storage
+Base.similar(::BlockView, ::Type{T}, dimensions::Dims) where {T} =
+    Array{T}(undef, dimensions)
+
+@inline function Base.getindex(view::BlockView, index::Int)
+    @boundscheck checkbounds(view, index)
+    return @inbounds view.storage[Int(view.offset) + index - 1]
+end
+
+@inline function Base.setindex!(view::BlockView, value, index::Int)
+    @boundscheck checkbounds(view, index)
+    @inbounds view.storage[Int(view.offset) + index - 1] = value
+    return value
+end
+
 struct BlockBank{
         Representation <: AbstractStorageRepresentation,
-        B <: Tuple,
+        V <: AbstractArray,
     }
-    blocks::B
+    values::V
 end
 
 struct AuxiliaryState{B <: Tuple}
@@ -156,7 +203,7 @@ struct StateCheckpointEntry{I, P}
     payload::P
 end
 
-struct AuxiliaryStateCheckpoint{E <: Tuple}
+struct AuxiliaryStateCheckpoint{E <: AbstractVector}
     entries::E
 end
 
@@ -183,7 +230,11 @@ end
         handle::StateHandle{Representation},
     ) where {Representation}
     bank = _representation_bank(state.banks, Representation)
-    return @inbounds bank.blocks[Int(handle.slot)]
+    return DenseStateBlock(BlockView(
+        bank.values,
+        Int(handle.location.offset),
+        handle.location.shape,
+    ))
 end
 
 @inline function workspace_block(
@@ -191,7 +242,11 @@ end
         handle::WorkspaceHandle{Representation},
     ) where {Representation}
     bank = _representation_bank(workspaces.banks, Representation)
-    return @inbounds bank.blocks[Int(handle.slot)]
+    return DenseWorkspaceBlock(BlockView(
+        bank.values,
+        Int(handle.location.offset),
+        handle.location.shape,
+    ))
 end
 
 @inline state_value(

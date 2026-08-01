@@ -564,6 +564,65 @@ end
           banks_by_representation(CorePotts.StateLayout(reverse(states)))
     @test banks_by_representation(CorePotts.WorkspaceLayout(workspaces)) ==
           banks_by_representation(CorePotts.WorkspaceLayout(reverse(workspaces)))
+
+    state_layouts = map((1, 32, 1024)) do count
+        CorePotts.StateLayout([
+            state_schema(Symbol(:state_, index), Float64)
+            for index in 1:count
+        ])
+    end
+    workspace_layouts = map((1, 32, 1024)) do count
+        CorePotts.WorkspaceLayout([
+            workspace_schema(Symbol(:workspace_, index), Float64)
+            for index in 1:count
+        ])
+    end
+    @test allequal(typeof(layout) for layout in state_layouts)
+    @test allequal(typeof(layout) for layout in workspace_layouts)
+
+    states = map(CorePotts.allocate_auxiliary_state, state_layouts)
+    workspaces = map(CorePotts.allocate_runtime_workspaces, workspace_layouts)
+    @test allequal(typeof(state) for state in states)
+    @test allequal(typeof(workspace) for workspace in workspaces)
+    @test all(length(state.banks) == 1 for state in states)
+    @test all(length(workspace.banks) == 1 for workspace in workspaces)
+    @test size(CorePotts.state_block(
+        last(states), last(last(state_layouts).entries).handle
+    ).values) == (2,)
+    @test size(CorePotts.workspace_block(
+        last(workspaces), last(last(workspace_layouts).entries).handle
+    ).values) == (2,)
+
+    plans = map(state_layouts, workspace_layouts) do state_layout, workspace_layout
+        CorePotts.DescriptorExecutionPlan(
+            (),
+            state_layout,
+            workspace_layout,
+            (),
+            Any[],
+            0,
+            "count-stable-storage-plan",
+            CorePotts.HamiltonianDomainResources(2, 0),
+        )
+    end
+    programs = map(plans) do plan
+        test_program(
+            CorePotts.SequentialProgramEngine(); descriptor_plan = plan
+        )
+    end
+    runtimes = map(programs, states) do program, descriptor_state
+        initial = CorePotts.ProgramInitialState(
+            zeros(Int32, program.shape),
+            Int16[];
+            scalar_type = Float64,
+            descriptor_state,
+        )
+        CorePotts.initialize_program(
+            program, initial, Float64[], UInt64(0x726), UInt32(1)
+        )
+    end
+    @test allequal(typeof(program) for program in programs)
+    @test allequal(typeof(runtime) for runtime in runtimes)
 end
 
 @testset "relationship declarations grow data rather than specialization" begin

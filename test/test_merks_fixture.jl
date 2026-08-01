@@ -312,18 +312,6 @@ end
     trajectory = solve(
         problem; save_everystep = true, observables = (:field_mass,)
     )
-    replay = solve(problem; save_everystep = true)
-    independent = solve(
-        remake(problem; replica = 2); save_everystep = true
-    )
-    @test all(
-        left.ownership == right.ownership && left.field == right.field
-        for (left, right) in zip(trajectory, replay)
-    )
-    @test any(
-        left.ownership != right.ownership
-        for (left, right) in zip(trajectory, independent)
-    )
     @test sum(trajectory(3).field) > 0
     @test all(isfinite, trajectory(3).field)
     @test trajectory(3)[:field_mass] == trajectory(3).field

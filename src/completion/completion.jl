@@ -863,10 +863,23 @@ function _expand_structural_policies(system::PottsSystem)
         lifecycle = _statement_option(
             statement, :lifecycle, RejectEndpointRetirement()
         )
-        if lifecycle isa RejectEndpointRetirement
-            push!(expanded, _endpoint_retirement_constraint(statement))
-        elseif lifecycle isa RemoveWithEndpoint
-            push!(expanded, _endpoint_removal_process(statement))
+        derived = lifecycle isa RejectEndpointRetirement ?
+                  _endpoint_retirement_constraint(statement) :
+                  lifecycle isa RemoveWithEndpoint ?
+                  _endpoint_removal_process(statement) : nothing
+        derived === nothing && continue
+        existing = findfirst(
+            candidate -> statement_id(candidate) == statement_id(derived),
+            expanded,
+        )
+        if existing === nothing
+            push!(expanded, derived)
+        elseif !isequal(expanded[existing], derived)
+            throw(ArgumentError(
+                "relationship structural policy identity `" *
+                "$(Symbol(statement_id(derived)))` collides with a different " *
+                "statement"
+            ))
         end
     end
     children = PottsSystem[
@@ -1004,6 +1017,20 @@ function _qualify_records!(
         statement = _namespace_statement(originating_statement, current_path)
         identity = QualifiedStatementID(current_path, id)
         options = _statement_options(statement)
+        if statement isa RelationshipState &&
+                get(options, :endpoints, nothing) isa Directed
+            push!(diagnostics, PottsDiagnostic(
+                :unsupported_relationship_direction,
+                identity,
+                _statement_expression(originating_statement),
+                current_path,
+                "Undirected endpoint semantics in V1",
+                "Directed endpoint semantics require directed runtime storage",
+                (),
+                statement_source(originating_statement),
+            ))
+            continue
+        end
         origin = haskey(options, :__registered_origin) ?
                  options.__registered_origin : nothing
         if origin !== nothing &&
