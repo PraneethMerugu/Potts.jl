@@ -1944,6 +1944,67 @@ mandatory after G5 and must independently review concurrency, device behavior, h
 leakage, code and test DRYness, and whether the same rigor can be retained with less routine
 compute.
 
+## G5 execution-boundary candidate
+
+The G5 implementation candidate is checkpoint `083d3e0`. It removes the named volume cache from
+the central runtime and replaces it with a tuple-backed tracker plan whose public protocol owns
+quantity identity, independent reconstruction, proposal commit, checkpoint policy, and
+inspection. An external tracker defined only in the test module runs through the same sequential
+and checkerboard commit paths, remains inferred, survives exact checkpoint continuation, and
+fails reconstruction after deliberate corruption. Host inspection fingerprints are separated
+from fingerprint-free isbits tracker and stage kernel plans.
+
+Relationship state remains occurrence-stable and value-addressed. Host mutation uses bounded
+generation-aware stores, canonical incident indices, preallocated request buffers, deterministic
+sorting, transaction preflight, and one atomic publication boundary. A create targeting an
+already committed endpoint/generation pair is idempotent and preserves the canonical first
+payload; stale generations, invalid endpoints, nonfinite payloads, capacity, degree, and
+transaction conflicts fail before publication. Cold integrity validation covers endpoints,
+generations, payloads, degrees, sorted incidence, inactive zero-fill, and exact incidence
+reconstruction. Cell retirement increments generation before lifecycle cleanup.
+
+Device relationship reads use a representation-banked packed structure-of-arrays view. Flat
+edge, endpoint, payload, degree, and incident buffers are addressed by value-level offsets; the
+number of relationship declarations does not enter the bank type. Permanent 1/32/1,024-store
+tests prove occurrence-stable program, runtime, and packed-bank types. The checkerboard device
+boundary admits immutable incident-local relationship Hamiltonians but fails closed for
+accepted-copy mutation, after-MCS mutation, and ownership-cleared state. The shared vendor harness
+checks each backend's actual converted kernel argument (`mtlconvert`, `cudaconvert`, or
+`rocconvert`) for an isbits representation before execution.
+
+The existing logically equivalent suite exposed and resolved three contract details before this
+checkpoint: same-generation duplicate creates use canonical first-writer idempotence; omitted
+relationship `maximum_degree` defaults structurally to capacity; and endpoint kinds remain
+explicit rather than guessed. Focal-point plasticity is now admitted by checkerboard compilation,
+while its existing sequential scientific microfixture remains unchanged.
+
+Qualification for checkpoint `083d3e0`:
+
+- CorePotts: 184/184 assertions passed, including external tracker inference/reconstruction,
+  relationship corruption, atomicity, storage-growth, and Aqua checks;
+- focused external relationship/lifecycle fixture: 20/20 passed;
+- ordinary fast target: 74/74 passed in 1 minute 54.5 seconds;
+- complete ordinary root suite: 1,276/1,276 passed in 12 minutes 4.0 seconds, including clean
+  temporary-environment resolution and extension precompilation;
+- real Apple Silicon Metal G2: 32 descriptors, device-backed state/workspace views, value
+  `17.5f0`;
+- real Apple Silicon Metal G4: two colors, 36 attempts, two accepted, six rejected, 28 null,
+  ownership checksum 320; and
+- real Apple Silicon Metal G5 immutable relationship witness: one external relationship store,
+  25 attempts, five accepted, six rejected, 14 null, ownership checksum 175, with exact CPU/Metal
+  parity.
+
+CUDA and AMDGPU use the identical shared G4/G5 conformance bodies and resolved vendor projects.
+They were not executed on this Apple Silicon MacBook and receive no local hardware qualification
+claim. Relationship mutation remains CPU-qualified in G5; the device claim is deliberately
+limited to immutable incident-local relationship reads.
+
+R2 is now the blocking boundary. Its fresh-context review must inspect footprints, deterministic
+claim and transaction semantics, device conversion and no-fallback behavior, tracker and
+relationship extensibility, hardcoded scientific-policy leakage, code and test DRYness, and
+whether equivalent rigor can be retained with a cheaper everyday test partition. G6 cannot begin
+until R2 reports zero P0 and zero P1 findings.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
