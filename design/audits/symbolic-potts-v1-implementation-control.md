@@ -1560,6 +1560,106 @@ state/workspace storage representation, then G3 initial endpoint validation. The
 consolidation must follow a guarantee-to-test ownership map and is not permission to weaken rigor.
 After the blocking repairs and bounded consolidation, a sixth independent R1.5 review is required.
 
+### Sixth repaired R1.5 candidate — awaiting independent review
+
+The exact implementation checkpoint is
+`2a0ef231b53542facd9719b66a3c75f71c2f0115`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent R1.5 review reports zero P0 and zero P1 findings.
+
+The candidate makes the following claims for the reviewer to challenge rather than accept:
+
+- completion of generated relationship cleanup and retirement policies is idempotent across direct
+  and composed systems, while collisions with nonidentical user statements still fail closed;
+- V1 rejects directed relationship declarations before lowering, and initial topology validates the
+  same qualified undirected endpoint-kind contract as dynamic Create before entering CorePotts;
+- state and workspace blocks are packed into one flat array per canonical representation bank;
+  value-level `BlockLocation`s select offset and shape through a `BlockView`, so 1, 32, and 1,024
+  same-representation declarations retain equal layout, plan, program, auxiliary-state, workspace,
+  and runtime types; and
+- model fixtures no longer repeat CorePotts relationship transaction tests or exact replay across
+  all three visible models. Wortel retains the visible model-level stochastic replay witness, while
+  Merks and focal fixtures retain their distinct scientific and integration checks.
+
+Qualification on the exact implementation checkpoint:
+
+- ordinary root `Pkg.test()` passed 1,249/1,249 in 10m09.6s (621.51s wall including the temporary
+  package-test environment);
+- the complete CorePotts package suite passed 92/92 including Aqua in 26.7s;
+- the focused G3 sequential suite passed 628/628 in 2m17.6s;
+- the focused descriptor compiler and local/global Hamiltonian suites passed 139/139 and 59/59;
+- the full specialization-growth qualification passed 12/12 in 1m48.6s, including typed-IR and
+  full-runtime stability at 1, 32, and 1,024 repeated state/workspace blocks; and
+- the real Metal G2 descriptor boundary passed in 1m52s with 32 descriptors, `MtlArray` descriptor
+  storage, `BlockView` state/workspace storage backed by adapted device arrays, and value `17.5f0`.
+
+The real Metal run also exposed a developer-environment defect that the review must classify: the
+checked-in `examples/Manifest.toml` predates CorePotts' declared AcceleratedKernels dependency and
+cannot currently resolve because other old manifest pins conflict. The hardware qualification was
+therefore run from a fresh temporary Julia environment with PottsToolkit, CorePotts, Metal,
+ModelingToolkitBase, and Symbolics declared directly. Do not treat the successful temporary run as
+proof that the repository owns a polished, reproducible backend-qualification environment.
+
+#### Mandatory R1.5 test rigor, DRYness, and compute audit
+
+R1.5 must determine whether the same rigor can be obtained with materially less repeated
+compilation, execution, and fixture construction. The fifth candidate passed 1,244 tests in
+10m00.2s. This candidate removed repeated focal transaction tests and repeated Merks/focal replay,
+yet the root suite passed 1,249 tests in 10m09.6s after adding the required endpoint and
+specialization regressions. The absence of an improvement is evidence to investigate, not license
+to weaken the suite and not by itself proof of duplication.
+
+The reviewer must produce a guarantee-to-owner map for at least:
+
+- syntax and completion admission, qualified composition, and diagnostic rejection;
+- the single symbolic-expression-to-callable path and external descriptor extensibility;
+- local descriptor delta versus independent global `H(after)-H(before)`;
+- relationship transaction atomicity, endpoint legality, lifecycle, and checkpoint continuation;
+- inference, warm-path allocation, generated-code growth, and structural specialization;
+- stochastic reproducibility and independence plus accepted biophysical/statistical witnesses;
+- Wortel, Merks, and focal scientific behavior and public integration wiring; and
+- backend-agnostic conformance plus one real admitted-backend compilation witness.
+
+For every repeated model compilation or simulation, the reviewer must name the distinct failure
+signal it protects. If no distinct signal exists, identify the cheapest authoritative owner and
+the earliest safe consolidation boundary. Specifically inspect repeated `complete`, `compile`,
+`init`, `solve`, checkpoint, and replica calls across CorePotts, G1/G2/G3 focused tests, public API
+tests, and model fixtures. Inspect whether immutable completed/compiled fixtures can be shared
+without introducing order dependence, hidden mutable state, or a production-derived oracle.
+
+R1.5 must propose a concrete standard-Julia partition with commands and ownership, not a new
+evidence framework:
+
+1. a fast deterministic inner loop for the compiler/runtime boundary most edits touch;
+2. ordinary package `Pkg.test()` coverage suitable for local work and pull requests;
+3. explicitly requested compiler/statistical qualification for optimized IR, scale growth, and
+   longer stochastic evidence; and
+4. backend-matrix qualification using the same vendor-neutral conformance body, with vendor
+   projects supplying only dependencies, allocation, and launch.
+
+The proposed partition must preserve the same total rigor when all tiers run. It may move expensive
+optimized-IR, statistical, or GPU work out of the ordinary suite only when a cheap test in the
+ordinary tier preserves the relevant immediate failure signal and the expensive independent
+qualification remains an explicit runnable Julia test target. It may not use freshness files,
+manually renewed hashes, stored pass artifacts, duplicated vendor suites, or a second production
+evaluator.
+
+Severity for this audit is semantic rather than aesthetic:
+
+- loss of an independent oracle, statistical guarantee, or backend failure signal is P0;
+- duplicated semantic authority, repeated high-cost execution without a distinct guarantee, no
+  practical fast/default test path, or a backend harness that is not reproducibly runnable from an
+  owned environment is P1;
+- small repeated fixture syntax or low-cost assertions with clear independent ownership is P2 or
+  no finding.
+
+R1.5 must answer both questions explicitly:
+
+1. Is there exactly one production path from a symbolic expression to a concrete callable
+   evaluator?
+2. Does every important compiler, runtime, scientific, statistical, and portability guarantee
+   have one cheapest authoritative test owner, with every additional witness justified by a
+   different boundary or independent oracle?
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
