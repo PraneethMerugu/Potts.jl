@@ -1707,6 +1707,75 @@ Repair returns to G2 for storage and endpoint-policy ownership, then to test org
 backend qualification infrastructure before a seventh independent R1.5 review. No G4 work may
 begin until that review reports zero P0 and zero P1.
 
+### Seventh repaired R1.5 candidate — awaiting independent review
+
+The exact implementation checkpoint is
+`fa9f4788f25e398c18d81935c484a21b0109ae4d`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent R1.5 review reports zero P0 and zero P1 findings.
+
+The candidate makes the following claims for the reviewer to challenge rather than accept:
+
+- PottsToolkit no longer assigns state or workspace banks, slots, offsets, or shapes. It submits
+  qualified schemas to the public CorePotts layout constructors and derives its host-side
+  identity-to-handle maps from the returned canonical entries.
+- one compiled relationship-endpoint-policy table owns qualified relationship identity, value-level
+  runtime slot, endpoint direction, compiled endpoint kind IDs, and public endpoint names. Dynamic
+  Create, relationship processes, Hamiltonian resources, observations, runtime storage, reports,
+  and initial-state validation all consume or derive from this table rather than reconstructing
+  policy independently;
+- `test/setup.jl` is the shared bootstrap for both the complete suite and the repository-owned
+  `test/fast/runtests.jl`. The fast target owns the cheapest immediate signals for compiler
+  admission and lowering, external descriptor/state/workspace execution, independent local/global
+  Hamiltonian equivalence, one accepted transition, relationship endpoint policy, and checkpoint
+  continuation. It does not replace the complete package suite or expensive qualifications;
+- Metal, CUDA, and AMDGPU each have a minimal standard Julia project, resolved manifest, and thin
+  launcher. Each launcher imports its vendor, fails closed unless the selected hardware backend is
+  functional, and invokes the single shared backend-neutral conformance body. No vendor-specific
+  semantic suite or alternate evaluator was added; and
+- the specialization qualification now includes optimized workspace-block lookup and full external
+  statement compilation at 1, 32, and 1,024 occurrences.
+
+Qualification on the exact implementation checkpoint:
+
+- the fast deterministic target passed 64/64 in 1m34.7s;
+- ordinary root `Pkg.test()` passed 1,256/1,256 in 11m16.4s suite time. The invoking process took
+  15m59.5s because its fresh isolated package environment spent about 273 seconds precompiling
+  ModelingToolkit dependencies;
+- the complete CorePotts package suite passed 92/92 including Aqua in 26.1s;
+- the expanded specialization-growth qualification passed 19/19 in 4m00.3s, including optimized
+  state/workspace lookup IR and external compilation at 1, 32, and 1,024 occurrences;
+- the explicit CPU evaluator matrix passed all selected concrete-callable bounded-n-ary inference,
+  zero-warm-allocation, ordered-semantics, node/depth growth, occurrence-growth, and group-growth
+  gates; and
+- the exact checkpoint executed the shared 32-descriptor conformance body on this Apple Silicon
+  MacBook through Metal, retaining `MtlArray` descriptor storage, device-backed `BlockView` state
+  and workspace storage, and value `17.5f0`.
+
+The CUDA and AMDGPU projects were resolved and their required `functional`, array, and allocation
+APIs were verified to exist. They were not executed on GPU hardware on this MacBook and this record
+makes no CUDA or AMDGPU hardware-qualification claim. Their launchers deliberately fail closed
+without functional matching hardware so a future release matrix can run the same conformance body
+without changing its semantics.
+
+The seventh reviewer must re-run every standing R1.5 question and specifically challenge whether:
+
+1. any PottsToolkit production path still duplicates CorePotts representation banking;
+2. any initial, dynamic, observation, report, Hamiltonian, storage, or process path derives a
+   second relationship endpoint or slot policy;
+3. the fast target preserves all promised immediate failure signals without importing a second
+   scientific oracle, mutable shared executable, or hidden test-order dependency;
+4. the three vendor projects are the smallest practical repository-owned standard-Julia
+   qualification environments, and their launchers remain allocation/launch adapters around one
+   shared suite;
+5. generated code and specialization depend only on structural facts, while statement names,
+   qualified identities, relationship slots, owners, and occurrence counts remain value-level;
+6. code and test DRYness have improved without removing a distinct compiler, statistical,
+   biophysical, checkpoint, or backend guarantee;
+7. exactly one production path still exists from a symbolic expression to a concrete callable
+   evaluator; and
+8. the two prior P2 findings are correctly disposed: the bounded growth probes are complete, while
+   AcceleratedKernels remains an explicit G4 decision to give a genuine structural role or remove.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
