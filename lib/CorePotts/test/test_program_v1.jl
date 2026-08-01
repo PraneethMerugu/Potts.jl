@@ -248,6 +248,42 @@ end
         report = CorePotts.program_execution_report(program)
         @test report.backend === :CPUProgramBackend
         @test report.numerical_policy.reductions === :deterministic
+        if engine isa CorePotts.CheckerboardProgramEngine
+            plan_report = CorePotts.checkerboard_plan_report(
+                program.checkerboard_plan
+            )
+            @test plan_report.algorithm === :canonical_realized_greedy_v1
+            @test plan_report.site_count == prod(program.shape)
+            @test plan_report.color_count >= 2
+        else
+            @test program.checkerboard_plan isa CorePotts.NoCheckerboardPlan
+        end
+    end
+
+    odd_periodic = CorePotts.CheckerboardPlan(
+        (3, 3),
+        (true, true),
+        Int8[1 -1 0 0; 0 0 1 -1],
+    )
+    colors = Dict{Int32, Int}()
+    for color in 1:Int(odd_periodic.color_count)
+        first_index = Int(odd_periodic.color_offsets[color])
+        stop_index = Int(odd_periodic.color_offsets[color + 1]) - 1
+        for site in odd_periodic.sites[first_index:stop_index]
+            colors[site] = color
+        end
+    end
+    indices = CartesianIndices((3, 3))
+    linear = LinearIndices((3, 3))
+    for site in 1:9
+        coordinates = Tuple(indices[site])
+        for displacement in ((-1, 0), (1, 0), (0, -1), (0, 1))
+            neighbor = CartesianIndex(
+                mod1(coordinates[1] + displacement[1], 3),
+                mod1(coordinates[2] + displacement[2], 3),
+            )
+            @test colors[Int32(site)] != colors[Int32(linear[neighbor])]
+        end
     end
 
     sequential = test_program(CorePotts.SequentialProgramEngine())

@@ -15,6 +15,7 @@ include("execution/storage_runtime.jl")
 include("execution/descriptor_protocol.jl")
 include("execution/domain_resources.jl")
 include("execution/descriptor_plan.jl")
+include("program/checkerboard_plan.jl")
 include("program/types.jl")
 include("execution/stage_plan.jl")
 include("program/v1.jl")
@@ -22,6 +23,8 @@ include("execution/hamiltonian_runtime.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
 public CPUProgramBackend, CompiledScalar, compiled_scalar_value
+public AbstractCheckerboardPlan, NoCheckerboardPlan, CheckerboardPlan
+public checkerboard_plan_report
 public RelationshipStoreSchema, CompiledPottsProgram
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest

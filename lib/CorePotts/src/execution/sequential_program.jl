@@ -190,18 +190,20 @@ function _advance_sequential!(runtime::ProgramRuntime)
 end
 
 function _advance_checkerboard!(runtime::ProgramRuntime{T, N}) where {T, N}
-    colors = 1 << N
-    attempt_identity = 0
-    for color in 0:(colors - 1)
-        for target in CartesianIndices(runtime.ownership)
-            encoded = 0
-            coordinates = Tuple(target)
-            for dimension in 1:N
-                encoded |= ((coordinates[dimension] - 1) & 1) << (dimension - 1)
-            end
-            encoded == color || continue
-            for _ in 1:Int(runtime.program.attempts_per_site)
-                attempt_identity += 1
+    plan = runtime.program.checkerboard_plan
+    plan isa CheckerboardPlan || error(
+        "checkerboard execution requires a realized-domain plan"
+    )
+    indices = CartesianIndices(runtime.ownership)
+    site_count = length(indices)
+    for color in 1:Int(plan.color_count)
+        first_index = Int(@inbounds plan.color_offsets[color])
+        stop_index = Int(@inbounds plan.color_offsets[color + 1]) - 1
+        for schedule_index in first_index:stop_index
+            site = Int(@inbounds plan.sites[schedule_index])
+            target = indices[site]
+            for attempt_round in 1:Int(runtime.program.attempts_per_site)
+                attempt_identity = (attempt_round - 1) * site_count + site
                 _attempt!(runtime, target, attempt_identity, color)
             end
         end
@@ -309,4 +311,5 @@ program_capability_report(program::CompiledPottsProgram) = (
         for descriptor in group.instances
     )),
     relationships = !isempty(program.relationships),
+    checkerboard_plan = checkerboard_plan_report(program.checkerboard_plan),
 )

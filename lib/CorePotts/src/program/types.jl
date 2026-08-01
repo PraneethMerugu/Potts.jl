@@ -133,6 +133,7 @@ struct CompiledPottsProgram{
         R,
         D,
         SP,
+        CP <: AbstractCheckerboardPlan,
     }
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
@@ -146,6 +147,7 @@ struct CompiledPottsProgram{
     relationships::R
     descriptor_plan::D
     stage_plan::SP
+    checkerboard_plan::CP
     engine::E
     backend::B
     fingerprint::String
@@ -167,6 +169,7 @@ function CompiledPottsProgram(
         backend::B,
         fingerprint::AbstractString;
         medium_kinds = nothing,
+        checkerboard_plan = nothing,
     ) where {T <: AbstractFloat, N, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
@@ -187,8 +190,19 @@ function CompiledPottsProgram(
         throw(ArgumentError("attempts per site must be positive"))
     relationship_storage = relationships isa RelationshipStorage ?
                            relationships : RelationshipStorage(relationships)
+    resolved_checkerboard_plan = if checkerboard_plan === nothing
+        engine isa CheckerboardProgramEngine ? CheckerboardPlan(
+            shape, periodic, proposal_offsets
+        ) : NoCheckerboardPlan()
+    else
+        checkerboard_plan
+    end
+    resolved_checkerboard_plan isa AbstractCheckerboardPlan || throw(
+        ArgumentError("checkerboard_plan has the wrong type")
+    )
     return CompiledPottsProgram{
         T, N, E, B, typeof(relationship_storage), D, SP,
+        typeof(resolved_checkerboard_plan),
     }(
         shape,
         periodic,
@@ -202,6 +216,7 @@ function CompiledPottsProgram(
         relationship_storage,
         descriptor_plan,
         stage_plan,
+        resolved_checkerboard_plan,
         engine,
         backend,
         String(fingerprint),
