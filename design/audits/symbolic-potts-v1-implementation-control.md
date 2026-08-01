@@ -126,8 +126,8 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | G1 host compiler facts | `passed` | eighth R1.5 cleared host facts, lowering authority, diagnostics, and extension admission | `a014c80707d9` | R1.5 passed |
 | G2 descriptor/group/evaluator/state/workspace | `passed` | eighth R1.5 cleared the single evaluator path, storage ownership, specialization, and backend-neutral external boundary | `a014c80707d9` | R1.5 passed |
 | G3 sequential reference/finite transitions | `passed` | eighth R1.5 cleared sequential authority, finite transitions, checkpoints, scientific ownership, and the fast/default/qualification partition | `a014c80707d9` | R1.5 passed |
-| G4 checkerboard/first GPU witness | `in_progress` | eighth R1.5 reported zero P0/P1 and admitted G4 entry | pending | none |
-| G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
+| G4 checkerboard/first GPU witness | `passed` | compiler-derived coloring; deterministic portable claim/evaluate/commit path; exact CPU/Metal shared-fixture parity | `498edf6` | R1.5 entry clearance |
+| G5 trackers/relationships/lifecycle/checkpoint | `in_progress` | G4 qualified and checkpointed; accepted-copy/after-MCS lifecycle work opened | pending | R2 |
 | G6 public integration spine | `pending` | pending | pending | none |
 | G7 proof-model reconstruction | `pending` | pending | pending | R3 |
 | G8 clean break/full integration | `pending` | pending | pending | none |
@@ -1890,6 +1890,59 @@ The three nonblocking G4 obligations are explicit:
   applied at G4 entry.
 
 CUDA and AMDGPU were not run and receive no hardware qualification claim.
+
+## G4 checkerboard and first GPU witness
+
+G4 closed at implementation checkpoint `498edf6` with one production checkerboard path shared by
+KernelAbstractions CPU and device backends. The compiler, rather than a model or engine-specific
+policy table, derives a canonical symmetric conflict stencil, realizes a finite coloring in
+canonical site order, verifies periodic seams, and stores grouped sites and color offsets in the
+compiled program. Configured neighborhood displacements therefore remain data-level compiler
+input; neither von Neumann nor Moore behavior is hardcoded into the execution engine.
+
+The execution boundary consists of explicit candidate, deterministic claim, descriptor evaluation,
+and commit kernels separated by color barriers. Candidate priority uses the semantic counter-based
+RNG address; Atomix performs deterministic max/min claims over the finite affected owner set; and
+descriptor contributions retain canonical source-order folding even when launch groups differ.
+Every lattice site receives exactly one semantic attempt per attempts-per-site round. The G4
+implementation fails closed when a compiled program requires accepted-copy stages, after-MCS
+stages, or ownership-cleared auxiliary state not yet admitted by G5.
+
+The same backend-neutral conformance body owns the CPU, Metal, CUDA, and AMDGPU launch contracts.
+It defines an external registered Hamiltonian term and checks exact attempt accounting, ownership
+and volume invariants, concrete workspace storage, rejection behavior, and CPU/device parity.
+AcceleratedKernels now has a bounded structural role: its backend-portable `foreachindex` clears
+contention-claim and report buffers on the production execution path. That path executed on real
+Metal hardware; this establishes functional portability, not a standalone performance-speedup
+claim.
+
+Qualification at the G4 tree:
+
+- CorePotts: 140 assertions passed, including 57 narrow compiled-program checks, five inferred and
+  bounded runtime barriers, representation-bank canonicalization, external extension, checkpoint,
+  relationship-transaction, and Aqua coverage;
+- ordinary fast target: 74/74 passed in approximately 1 minute 50 seconds;
+- complete ordinary root suite: 1,255/1,255 passed in 15 minutes 45.5 seconds, including cold
+  temporary-environment resolution and extension precompilation;
+- shared CPU checkerboard fixture: two colors, 36 attempts, two accepted, six rejected, 28 null,
+  ownership checksum 320;
+- real Apple Silicon Metal G2 descriptor witness: 32 `MtlArray` descriptors, device-backed state
+  and workspace `BlockView`s, value `17.5f0`; and
+- the same real Metal G4 fixture: two colors, 36 attempts, two accepted, six rejected, 28 null,
+  ownership checksum 320.
+
+After the final encapsulation of the validated domain-resource adaptation token, the full CorePotts
+suite and the complete Metal G2/G4 launcher were rerun and passed. CUDA and AMDGPU projects and
+resolved manifests include the identical shared G4 harness, but they were not executed on this
+Apple Silicon MacBook and receive no local hardware qualification claim. They remain future
+release-matrix environments.
+
+The three R1.5 P2 obligations are disposed as follows: compiler lowering files were split by stage
+and ownership before checkerboard growth; the compiler README include order was corrected; and
+AcceleratedKernels gained the bounded production role described above. G5 is now open. R2 remains
+mandatory after G5 and must independently review concurrency, device behavior, hardcoded-policy
+leakage, code and test DRYness, and whether the same rigor can be retained with less routine
+compute.
 
 ## Prohibited record contents
 
