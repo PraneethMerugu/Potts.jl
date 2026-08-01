@@ -1517,6 +1517,49 @@ concrete callable evaluator? It must also answer: Does every important productio
 guarantee have one cheapest authoritative test owner, with additional tests justified by a
 different boundary or independent oracle?
 
+### Fifth R1.5 result — returned
+
+The fresh read-only review of audit-record checkpoint
+`2810dff3bab9b09790a857efcc885deb25aa8ac0` returned G1/G2/G3 with one P0, two P1, and one P2
+finding. G4 remains stopped.
+
+- Initial relationship topology bypasses the declared endpoint contract. An `Undirected(a,a)`
+  declaration accepted an initial `(a,b)` edge, while `Directed(a,b)` accepted a reversed edge and
+  Core canonicalized it as undirected even though the executable report continued to claim
+  `direction=:directed`. Dynamic Create validates endpoint kinds, but initial topology has a
+  separate policy-free path. V1 must reject Directed everywhere until directed storage semantics
+  exist, and initial topology must validate the same qualified endpoint-kind contract before
+  entering Core's generic transaction initializer.
+- Composed children containing any relationship declaration fail completion. Root completion
+  expands the child's generated endpoint cleanup/retirement policy, then recursively completes the
+  already-expanded incomplete child and generates the same statement again. Structural-policy
+  expansion must occur exactly once or be idempotent, with direct/composed relationship equivalence
+  and sibling-local-name regression probes.
+- State and workspace handle types are representation-canonical, but `StateLayout`,
+  `WorkspaceLayout`, `BlockBank`, and `AuxiliaryState` still contain occurrence-length tuples. Full
+  plan/program/runtime types therefore specialize separately for 1, 32, and 1,024 identical
+  representations even though optimized lookup IR is nearly flat. Layout entries and runtime
+  block banks require count-stable homogeneous representation storage plus full-layout/runtime
+  growth tests.
+- Test ownership is unnecessarily diffuse: generic relationship transaction semantics are repeated
+  in the focal fixture despite CorePotts authority, exact replay is repeated across three model
+  fixtures, and several public happy-path files independently compile equivalent small models.
+  Consolidation may share immutable compiled fixtures and retain one visible model-level stochastic
+  witness, but must preserve distinct scientific behavior, independent oracles, negative tests,
+  and statistical power.
+
+The reviewer independently cleared the singular symbolic-expression-to-callable evaluator path,
+named singleton and callable policy, relationship representation banking, Hamiltonian
+domain/anchor/affected-plan semantics, CorePotts mechanism independence, current folder ownership,
+backend-agnostic harness, restrained Metal claim, and placement of expensive GPU and optimized-IR
+qualification outside ordinary tests. AcceleratedKernels remains imported but unused; G4 must give
+it a concrete structural role or remove the idle dependency.
+
+Repair returns first to G1 endpoint admission and exactly-once composition completion, then G2
+state/workspace storage representation, then G3 initial endpoint validation. The P2 test
+consolidation must follow a guarantee-to-test ownership map and is not permission to weaken rigor.
+After the blocking repairs and bounded consolidation, a sixth independent R1.5 review is required.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
