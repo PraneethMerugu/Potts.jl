@@ -30,8 +30,17 @@ lowering/parameters.jl
 execution/manifests.jl
     construct compiled statement/state/I/O manifests and time contracts
 
-lowering/static_evaluators.jl
+lowering/evaluator_protocols.jl
+    own registered payload metadata, callable admission, and evaluator construction
+
+lowering/evaluator_resources.jl
+    resolve typed state, draw, kind, resource, and anchor leaves
+
+lowering/evaluator_nodes.jl
     lower analyzed DAG nodes into bounded concrete callable expressions
+
+lowering/descriptor_footprints.jl
+    derive closed descriptor footprints and backend/engine support
 
 lowering/relationship_policies.jl
     compile the single qualified relationship endpoint and runtime-slot authority
@@ -45,8 +54,23 @@ lowering/domain_resources.jl
 lowering/proposal_descriptors.jl
     construct the universal proposal descriptor and occurrence groups
 
-lowering/stage_descriptors.jl
-    lower accepted-copy and after-MCS effects into the closed stage taxonomy
+lowering/stage_evaluators.jl
+    lower shared stage roots, evaluators, state handles, and support
+
+lowering/accepted_copy_descriptors.jl
+    lower accepted-copy assignments and bounded relationship creation
+
+lowering/relationship_stage_descriptors.jl
+    lower relationship and lifecycle process effects
+
+lowering/stage_grouping.jl
+    group stage descriptors by compiler-owned concrete type
+
+lowering/after_mcs_descriptors.jl
+    lower field and history work at the after-MCS boundary
+
+lowering/stage_plan.jl
+    orchestrate the closed accepted-copy and after-MCS stage plan
 
 lowering/constraints.jl
     lower prelaunch parameter-domain constraints and assemble the plan
