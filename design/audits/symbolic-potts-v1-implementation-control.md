@@ -1329,6 +1329,86 @@ observation lowering; to G2/G3 for canonical batched topology transactions, mult
 the complete create/remove/retune algebra; and then performs the semantic DRYness audit before a
 fresh R1.5 review.
 
+### Fourth repaired R1.5 candidate — awaiting independent review
+
+The exact implementation checkpoint is
+`52856077f2ae7ab678d644320b91323b9680121d`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent R1.5 review reports zero P0 and zero P1 findings.
+
+The candidate makes the following claims for the reviewer to challenge rather than accept:
+
+- every compiler-produced executable expression reaches `CorePotts.StaticEvaluator` through one
+  `_static_evaluator` construction site after versioned operation transfer, concrete callable
+  resolution, context admission, and device-representation checks; unsupported `cell_surface`
+  use now fails compilation instead of reaching a runtime `MethodError`;
+- all accepted-copy relationship Creates enter one preallocated batched transaction per store,
+  canonical arbitration occurs before any publication, duplicate Creates are idempotent, and
+  after-MCS Remove and Retune use the same transaction and publication machinery;
+- relationship declarations are canonically ordered once by qualified identity, multiple stores
+  remain independently addressable across initialization, queries, Hamiltonians, staged effects,
+  observations, saved state, reports, and checkpoints, and value-level slots select heterogeneous
+  stores through one generated relationship-slot call primitive without warm-path allocation;
+- direct observations lower generically for declared site, cell, medium, model, field, and history
+  state; Retune is a production symbolic effect rather than test-only transaction machinery;
+- CorePotts contains no Wortel, Merks, focal-point-plasticity, Act, chemotaxis, or connectivity
+  mechanism identity; the remaining PottsToolkit qualification branches are front-end policy and
+  not engine semantics; and
+- the former `program/v1.jl` ownership mixture is now a ten-line include manifest over files owned
+  by program types, relationship storage, runtime state, RNG, proposal context, staged execution,
+  and sequential execution. The dead duplicated `contact_offsets` program field is removed.
+
+Qualification on the exact implementation checkpoint:
+
+- ordinary root `Pkg.test()`: 1,233/1,233 in 9m23.7s;
+- focused G3 sequential suite: 628/628, including two independently addressable relationship
+  stores, allocation-free multi-store query/Create/Retune execution, and checkpoint restoration;
+- focused descriptor, local/global Hamiltonian, and adversarial G2 suites: 131/131, 59/59, and
+  28/28;
+- complete CorePotts package suite: passed, including Aqua;
+- full specialization-growth qualification at 1, 32, and 1,024 repeated terms: 5/5; and
+- real Metal G2 descriptor boundary: 32 descriptors with descriptor, state, and workspace buffers
+  adapted to `MtlArray`, returning `17.5f0`.
+
+The reviewer MUST apply the engine-hardcoding, primitive-legitimacy, semantic-DRYness, and
+single-source protocols above. In addition, it MUST independently debate the following supplied
+review leads; none is a pre-accepted fact or mandated implementation:
+
+- Is there exactly one production path from a symbolic expression to a concrete callable
+  evaluator, including registered external descriptors and every contextual operation, or can an
+  extension bypass canonical normalization, transfer, callable resolution, or context admission?
+- Are named singleton Base functions, finite parametric semantic operations, and `OrderedFold(+)`
+  used only where structural meaning warrants specialization? Is the name-string closure check
+  merely defense-in-depth, with registered schema provenance, `isbits`, declared capability, and
+  real backend compilation remaining authoritative?
+- Are storage-bank and handle types derived canonically from representation rather than encounter
+  order or declaration identity? Do 1, 32, and 1,024 same-representation blocks reuse handle types,
+  and do relationship-store tuple structure or generated slot branches introduce unacceptable
+  specialization or generated-code growth as store count increases?
+- Does each accepted Hamiltonian still store an energy domain, bound anchor, and normalized energy
+  expression while the compiler proves a finite affected-anchor plan and derives local
+  after-minus-before contributions? Are proposal-context reads, random draws, mutation, unbounded
+  domains, user names in types, and source-order folding drift still rejected?
+- Can a scientifically unrelated external module add a Hamiltonian term, constraint, drive,
+  accepted-copy effect, after-MCS process, observation, and relationship operation without editing
+  CorePotts, the proposal loop, stage executors, checkpoint machinery, or backend kernels? Must it
+  pass the same CPU, inference, allocation, specialization, and admitted-backend gates?
+- Are Act, chemotaxis, and Merks local-connectivity branches in PottsToolkit honest finite V1
+  qualification adapters, or do any hard-code biological mechanisms where a compiler fact or
+  reusable primitive should control lowering? Conversely, would abstracting them further create a
+  speculative general query or mechanism framework outside the closed V1 scope?
+- Does folder ownership now make compiler stages and runtime authority legible, and has relocation
+  actually removed semantic duplication? Search specifically for duplicate evaluator factories,
+  relationship ordering, slot mapping, payload validation, transaction arbitration, observation
+  export, before/after energy evaluation, checkpoint reconstruction, and backend adaptation.
+- Are expensive Metal and specialization qualifications properly outside the everyday test loop
+  while the ordinary Julia suite retains fast negative admission, scientific equivalence,
+  inference, and allocation proofs? No renewed evidence ledger or second production oracle may be
+  introduced to answer this question.
+
+R1.5 must report findings with exact production call paths and the earliest repair boundary. A
+bundled fixture passing, a concrete type, or a zero-allocation microprobe is not by itself evidence
+of extensibility, scientific correctness, device legality, or semantic DRYness.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
