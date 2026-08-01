@@ -1660,6 +1660,53 @@ R1.5 must answer both questions explicitly:
    have one cheapest authoritative test owner, with every additional witness justified by a
    different boundary or independent oracle?
 
+### Sixth R1.5 result — returned
+
+The fresh read-only review of audit-record checkpoint
+`de7f7756065c2cc8528da0423aef0e8489ffd115` returned with no P0, four P1, and two P2 findings.
+G4 remains stopped.
+
+- State/workspace representation banking has two production authorities. PottsToolkit assigns
+  representations, bank ordinals, slots, offsets, shapes, and handles in
+  `src/compiler/lowering/storage_layouts.jl`; CorePotts independently implements the same
+  canonicalization behind its public `StateLayout(schemas)` and `WorkspaceLayout(schemas)`
+  constructors. CorePotts must own canonical layout construction once, while PottsToolkit derives
+  qualified identity-to-handle maps from the resulting entries.
+- Initial and dynamic relationship endpoint legality still derive one contract through separate
+  paths. Dynamic Create embeds resolved kind IDs directly in its evaluator, while initialization
+  reconstructs endpoint names from public reports and maps them back to kind IDs. One compiled
+  endpoint-policy table keyed by relationship slot or qualified identity must feed both paths;
+  public reports must be derived inspection rather than executable policy.
+- The repository has no practical owned fast deterministic test target. `test/runtests.jl`
+  unconditionally includes all sixteen suites, focused files depend on root-only imports and
+  setup, and ordinary `Pkg.test()` takes roughly ten minutes. A shared bootstrap and real
+  `test/fast/runtests.jl` must preserve immediate failure signals for admission, canonical
+  evaluator lowering, an independent Hamiltonian delta oracle, one transition, and checkpoint
+  continuation without replacing the complete suite.
+- Backend qualification is not reproducibly runnable from a repository-owned environment. The
+  shared conformance body is sound and real Metal passed, but the vendor directories are empty,
+  the Metal launcher depends on the active environment, and the examples manifest is stale. Each
+  vendor needs a minimal dependency project and launcher that supplies allocation and launch only
+  while invoking the single shared conformance body.
+
+The reviewer cleared exactly one production symbolic-expression-to-concrete-callable path,
+callable admission, the behavioral endpoint repairs, count-stable runtime types, mechanism-free
+CorePotts execution, external extension paths, current folder ownership, KernelAbstractions as the
+backend-neutral kernel boundary, Adapt transfer, and the guarantee ownership of the remaining
+scientific tests. It found no further high-cost test execution that lacked a distinct failure
+signal. The ten-minute complete suite remains justified; the fast-path repair is organizational,
+not permission to weaken aggregate rigor or cache mutable executables across files.
+
+The two nonblocking P2 findings require G4 disposition: AcceleratedKernels is declared and imported
+but unused, and specialization qualification lacks an optimized workspace-block lookup probe and a
+full external-statement 1/32/1,024 compilation-growth fixture. The latter two bounded tests should
+be added with the P1 repairs; AcceleratedKernels must gain a genuine structural role in G4 or be
+removed.
+
+Repair returns to G2 for storage and endpoint-policy ownership, then to test organization and
+backend qualification infrastructure before a seventh independent R1.5 review. No G4 work may
+begin until that review reports zero P0 and zero P1.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
