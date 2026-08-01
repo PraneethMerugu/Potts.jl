@@ -1819,6 +1819,46 @@ and the real Apple Silicon Metal 32-descriptor witness with device-backed state/
 Repair remains bounded to test organization and ownership documentation. A fresh independent
 R1.5 recheck is required before G4 begins.
 
+### Eighth repaired R1.5 candidate — awaiting independent review
+
+The exact repair checkpoint is
+`a014c80707d954009466a60c6aa3ac64210b371a`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent R1.5 review reports zero P0 and zero P1 findings.
+
+The repair addresses the single seventh-review P1 without adding another fixture, evaluator, or
+scientific oracle:
+
+- the one shared backend-neutral registered-extension conformance runner now accepts a positive
+  descriptor count;
+- vendor qualification retains the 32-descriptor stress default;
+- `test/fast/runtests.jl` invokes that same runner on KernelAbstractions CPU with one registered
+  external Hamiltonian, its declared site state and workspace, the compiler-owned descriptor
+  launch, private production evaluation, and state/workspace handle access; and
+- the resulting fast target passed 74/74 in 1m47.9s, compared with the reviewer's 64/64 in 1m39.4s
+  before the external signal was added.
+
+Three bounded P2 repairs were also made:
+
+- the broad `EvaluatorProbeContext{Vector{Float64}}` test override is now restricted to a unique
+  test-owned `R1PoisonedParameters` array type, and the root include-order host/compiler/R1 sequence
+  passed 62/62 host facts, 139/139 descriptor compiler, 59/59 local Hamiltonian equivalence, 15/15
+  relationship composition, 27/27 adversarial boundaries, and 11/11 qualified source-graph tests;
+- the compiler ownership README now includes relationship-policy and stage-descriptor lowering and
+  identifies CorePotts, rather than PottsToolkit, as the canonical state/workspace layout owner;
+  the requested large-file ownership split remains an explicit pre-growth G4 entry task; and
+- Metal, CUDA, and AMDGPU launchers now check `functional()` immediately after vendor import and
+  before loading the shared MTK/Potts conformance body.
+
+The updated shared conformance runner retained its default 32-descriptor Metal behavior on this
+Apple Silicon MacBook: `MtlArray` descriptor storage, device-backed state/workspace `BlockView`s,
+and value `17.5f0`. CUDA and AMDGPU remain unexecuted future release-matrix environments.
+
+AcceleratedKernels remains deliberately undisposed at this checkpoint because the seventh reviewer
+classified it as a nonblocking G4 responsibility: give it a measured structural bulk-algorithm role
+or remove it before G4 closes. The eighth review must not manufacture a pre-G4 use merely to silence
+an import, but must confirm that this bounded disposition and the deferred compiler-file split do
+not conceal a P0/P1 boundary defect.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
