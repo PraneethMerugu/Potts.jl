@@ -23,12 +23,17 @@ function _relation_offsets(
     return _neighborhood_offsets(neighborhood, dimensions)
 end
 
-function _lower_relationships(ir::AnalyzedTermIR, manifest, ::Type{T}) where {
+function _lower_relationships(
+        ir::AnalyzedTermIR,
+        relationship_endpoint_policies,
+        manifest,
+        ::Type{T},
+    ) where {
         T <: AbstractFloat,
     }
-    resources = _ordered_relationships(ir.source.records)
     return Tuple(
         begin
+            relationship = _relationship_policy_record(ir, policy)
             capacity = _numeric_value(
                 _statement_option(relationship, :capacity)
             )
@@ -59,7 +64,7 @@ function _lower_relationships(ir::AnalyzedTermIR, manifest, ::Type{T}) where {
                 defaults,
             )
         end
-        for relationship in resources
+        for policy in relationship_endpoint_policies
     )
 end
 
@@ -69,7 +74,12 @@ function _token_suffix(value, prefix::AbstractString)
     return Symbol(name[(lastindex(prefix) + 1):end])
 end
 
-function _lower_observations(ir::AnalyzedTermIR, kinds, state_layout)
+function _lower_observations(
+        ir::AnalyzedTermIR,
+        kinds,
+        state_layout,
+        relationship_endpoint_policies,
+    )
     manifest = NamedTuple[]
     records = ir.source.records
     state_variables = Pair{QualifiedStatement, Any}[]
@@ -82,7 +92,6 @@ function _lower_observations(ir::AnalyzedTermIR, kinds, state_layout)
         haskey(arguments, :variable) || continue
         push!(state_variables, record => arguments.variable)
     end
-    relationships = _ordered_relationships(records)
     for record in records
         record.kind === :Observation || continue
         expression = _record_arguments(record).expression
@@ -156,13 +165,9 @@ function _lower_observations(ir::AnalyzedTermIR, kinds, state_layout)
             endpoint = _numeric_value(last(arguments))
             endpoint isa Integer || isinteger(endpoint) ||
                 throw(ArgumentError("relationship degree endpoint must be integral"))
-            relationship_slot = findfirst(
-                candidate -> candidate.identity == relationship.identity,
-                relationships,
+            endpoint_policy = _relationship_endpoint_policy(
+                relationship_endpoint_policies, relationship.identity
             )
-            relationship_slot === nothing && throw(ArgumentError(
-                "observation `$name` references an undeclared relationship state"
-            ))
             push!(manifest, (
                 name,
                 kind = :relationship_degree,
@@ -170,7 +175,7 @@ function _lower_observations(ir::AnalyzedTermIR, kinds, state_layout)
                     relationship.identity
                 ),
                 evaluator = RelationshipDegreeObservationEvaluator(
-                    Int32(relationship_slot), Int32(endpoint)
+                    endpoint_policy.slot, Int32(endpoint)
                 ),
             ))
         else
@@ -209,6 +214,7 @@ function _lower_core_program(
         manifest::ParameterManifest,
         descriptor_plan::CorePotts.DescriptorExecutionPlan,
         stage_plan::CorePotts.StageExecutionPlan,
+        relationship_endpoint_policies,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
     records = ir.source.records
@@ -254,9 +260,14 @@ function _lower_core_program(
         ir.source, domain, :contact, dimensions, Moore()
     )
     attempts, temperature = _protocol_settings(records, manifest, T)
-    relationships = _lower_relationships(ir, manifest, T)
+    relationships = _lower_relationships(
+        ir, relationship_endpoint_policies, manifest, T
+    )
     observation_manifest = _lower_observations(
-        ir, kinds, descriptor_plan.state_layout
+        ir,
+        kinds,
+        descriptor_plan.state_layout,
+        relationship_endpoint_policies,
     )
     core_engine = engine isa SequentialEngine ?
                   CorePotts.SequentialProgramEngine() :

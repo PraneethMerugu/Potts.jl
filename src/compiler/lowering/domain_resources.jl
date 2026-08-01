@@ -34,7 +34,10 @@ function _neighborhood_offsets(neighborhood::Moore, dimensions::Int)
     return _offset_matrix(offsets, dimensions)
 end
 
-function _hamiltonian_domain_resources(ir::AnalyzedTermIR)
+function _hamiltonian_domain_resources(
+        ir::AnalyzedTermIR,
+        relationship_endpoint_policies,
+    )
     source_count = length(ir.source.records)
     dimensions = length(_lattice_shape(ir))
     contact_starts = zeros(Int32, source_count)
@@ -43,7 +46,6 @@ function _hamiltonian_domain_resources(ir::AnalyzedTermIR)
 
     relation_offsets = Matrix{Int8}[]
     total_offsets = 0
-    relationships = _ordered_relationships(ir.source.records)
     for (handle, record) in enumerate(ir.source.records)
         if record.kind === :SpatialRelation
             options = _record_options(record)
@@ -55,14 +57,9 @@ function _hamiltonian_domain_resources(ir::AnalyzedTermIR)
             contact_counts[handle] = Int32(size(offsets, 2))
             total_offsets += size(offsets, 2)
         elseif record.kind === :RelationshipState
-            relationship_slot = findfirst(
-                candidate -> candidate.identity == record.identity,
-                relationships,
-            )
-            relationship_slot === nothing && error(
-                "relationship resource is absent from canonical storage order"
-            )
-            relationship_slots[handle] = Int32(relationship_slot)
+            relationship_slots[handle] = _relationship_endpoint_policy(
+                relationship_endpoint_policies, record.identity
+            ).slot
         end
     end
 

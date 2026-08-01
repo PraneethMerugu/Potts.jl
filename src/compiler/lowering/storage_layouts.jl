@@ -1,41 +1,4 @@
-# Canonical storage representations, value-level banks, and resource slots.
-
-function _canonical_bank_handles(
-        schemas,
-        storage_class,
-        handle_type,
-    )
-    classes = Any[]
-    for schema in schemas
-        class = storage_class(schema)
-        any(isequal(class), classes) || push!(classes, class)
-    end
-    sort!(classes; by = _storage_class_sort_key)
-    banks = [
-        only(findall(isequal(storage_class(schema)), classes))
-        for schema in schemas
-    ]
-    order = sortperm(eachindex(schemas); by = index -> banks[index])
-    counts = zeros(Int, length(classes))
-    offsets = zeros(Int, length(classes))
-    handles = Vector{Any}(undef, length(schemas))
-    for index in order
-        bank = banks[index]
-        counts[bank] += 1
-        schema = schemas[index]
-        shape = schema.shape isa Tuple ? Tuple(Int.(schema.shape)) :
-                (Int(schema.capacity),)
-        handles[index] = handle_type(
-            classes[bank],
-            bank,
-            counts[bank],
-            offsets[bank] + 1,
-            shape,
-        )
-        offsets[bank] += prod(shape)
-    end
-    return order, handles
-end
+# Qualified compiler resources mapped onto CorePotts-owned canonical layouts.
 
 function _state_layout(
         ir::AnalyzedTermIR, ::Type{T}
@@ -109,18 +72,15 @@ function _state_layout(
         push!(records, record)
         push!(schemas, schema)
     end
-    order, assigned = _canonical_bank_handles(
-        schemas,
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    layout = CorePotts.StateLayout(schemas)
+    record_identities = Dict{Any, QualifiedStatementID}(
+        schema.identity => record.identity
+        for (schema, record) in zip(schemas, records)
     )
-    entries = CorePotts.StateEntry[]
-    for index in order
-        handle = assigned[index]
-        push!(entries, CorePotts.StateEntry(handle, schemas[index]))
-        handles[records[index].identity] = handle
+    for entry in layout.entries
+        handles[record_identities[entry.schema.identity]] = entry.handle
     end
-    return CorePotts.StateLayout(entries), handles
+    return layout, handles
 end
 
 function _lattice_shape(ir::AnalyzedTermIR)
@@ -231,20 +191,17 @@ function _workspace_layout(ir::AnalyzedTermIR, ::Type{T}) where {
             end
         end
     end
-    order, assigned = _canonical_bank_handles(
-        schemas,
-        CorePotts.workspace_storage_class,
-        CorePotts.WorkspaceHandle,
+    layout = CorePotts.WorkspaceLayout(schemas)
+    handles_by_identity = Dict{Any, CorePotts.WorkspaceHandle}(
+        entry.schema.identity => entry.handle for entry in layout.entries
     )
-    entries = CorePotts.WorkspaceEntry[]
-    for index in order
-        handle = assigned[index]
-        push!(entries, CorePotts.WorkspaceEntry(handle, schemas[index]))
+    for index in eachindex(schemas)
+        handle = handles_by_identity[schemas[index].identity]
         for key in schema_keys[index]
             handles[key] = handle
         end
     end
-    return CorePotts.WorkspaceLayout(entries), handles
+    return layout, handles
 end
 
 function _record_state_handles(

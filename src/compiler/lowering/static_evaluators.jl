@@ -745,10 +745,3 @@ _qualified_resource_identity(identity::QualifiedStatementID) =
     CorePotts.QualifiedResourceIdentity(
         identity.path, Symbol(identity.local_id)
     )
-
-_storage_class_sort_key(value::Tuple) =
-    join((_storage_class_sort_key(item) for item in value), "\u001f")
-_storage_class_sort_key(value::Type) =
-    "type:" * string(parentmodule(value)) * "." * string(value)
-_storage_class_sort_key(value) =
-    string(typeof(value), ":", repr(value))

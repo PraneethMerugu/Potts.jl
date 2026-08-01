@@ -68,8 +68,19 @@ end
           size(composed.core_program.proposal_offsets)
     @test length(direct.core_program.relationships) ==
           length(composed.core_program.relationships) == 1
-    @test only(composed.reports.relationship_states).name ===
-          :relationship_child₊links
+    relationship_report = only(composed.reports.relationship_states)
+    endpoint_policy = only(composed.relationship_endpoint_policies)
+    @test relationship_report.name === :relationship_child₊links
+    @test endpoint_policy.identity == relationship_report.identity
+    @test endpoint_policy.slot == 1
+    @test endpoint_policy.direction === :undirected
+    @test endpoint_policy.direction ===
+          relationship_report.endpoints.direction
+    @test (endpoint_policy.kind_a_name, endpoint_policy.kind_b_name) ==
+          (
+              relationship_report.endpoints.kind_a,
+              relationship_report.endpoints.kind_b,
+          )
 
     labels = zeros(Int32, 5, 5)
     labels[2, 2] = 1
@@ -159,6 +170,14 @@ end
     @test Tuple(
         entry.name for entry in sibling_executable.reports.relationship_states
     ) == (:left_relationships₊links, :right_relationships₊links)
+    @test getfield.(
+        sibling_executable.relationship_endpoint_policies, :slot
+    ) == Int32[1, 2]
+    @test getfield.(
+        sibling_executable.relationship_endpoint_policies, :identity
+    ) == collect(getfield.(
+        sibling_executable.reports.relationship_states, :identity
+    ))
 end
 
 @inline CorePotts.evaluator_parameters(

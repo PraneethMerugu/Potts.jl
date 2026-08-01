@@ -19,8 +19,13 @@ function compile(
     _validate_equation_and_event_coverage!(diagnostics, completed)
     _throw_diagnostics(:compilation, diagnostics)
     manifest = _build_parameter_manifest(completed, scalar_type)
+    relationship_endpoint_policies =
+        _compile_relationship_endpoint_policies(analyzed_ir)
     lowered_descriptors = _lower_descriptor_plan(
-        analyzed_ir, manifest, scalar_type
+        analyzed_ir,
+        manifest,
+        scalar_type,
+        relationship_endpoint_policies,
     )
     descriptor_plan = lowered_descriptors.plan
     stage_plan = _lower_stage_plan(
@@ -30,6 +35,7 @@ function compile(
         lowered_descriptors.state_handles,
         lowered_descriptors.draw_handles,
         descriptor_plan.state_layout,
+        relationship_endpoint_policies,
     )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
@@ -53,6 +59,7 @@ function compile(
         manifest,
         descriptor_plan,
         stage_plan,
+        relationship_endpoint_policies,
         seed,
     )
     _assert_concrete_core_boundary(core_program)
@@ -88,19 +95,10 @@ function compile(
     )
     relationship_states = Tuple(
         let
+            statement = _relationship_policy_record(
+                analyzed_ir, endpoint_policy
+            )
             payload = _statement_option(statement, :payload, NamedTuple())
-            endpoint_name = function (value)
-                declaration = _resource_record(
-                    analyzed_ir.source, statement, :CellKind, value
-                )
-                declaration === nothing && (declaration = _resource_record(
-                    analyzed_ir.source, statement, :MediumKind, value
-                ))
-                declaration === nothing && throw(ArgumentError(
-                    "relationship endpoint kind is not declared"
-                ))
-                return _qualified_public_name(declaration.identity)
-            end
             (
                 name = _qualified_public_name(statement.identity),
                 local_name = Symbol(statement.identity.local_id),
@@ -111,15 +109,11 @@ function compile(
                 maximum_degree = Int(_numeric_value(
                     _statement_option(statement, :maximum_degree)
                 )),
-                endpoints = let endpoints =
-                        _statement_option(statement, :endpoints)
-                    (
-                        direction = endpoints isa Undirected ? :undirected :
-                                    :directed,
-                        kind_a = endpoint_name(endpoints.kind_a),
-                        kind_b = endpoint_name(endpoints.kind_b),
-                    )
-                end,
+                endpoints = (
+                    direction = endpoint_policy.direction,
+                    kind_a = endpoint_policy.kind_a_name,
+                    kind_b = endpoint_policy.kind_b_name,
+                ),
                 lifecycle = nameof(typeof(_statement_option(
                     statement, :lifecycle, RejectEndpointRetirement()
                 ))),
@@ -129,7 +123,7 @@ function compile(
                 )),
             )
         end
-        for statement in _ordered_relationships(records)
+        for endpoint_policy in relationship_endpoint_policies
     )
     time = _compiled_time_contract(records)
     external_io = _compiled_external_io(
@@ -191,6 +185,7 @@ function compile(
     executable = PottsExecutable(
         core_program,
         manifest,
+        relationship_endpoint_policies,
         reports,
         observations,
         fingerprint,

@@ -44,21 +44,6 @@ function _stage_state_handle(
     ))
 end
 
-function _relationship_store_slot(
-        ir::AnalyzedTermIR,
-        relationship::QualifiedStatement,
-    )
-    relationships = _ordered_relationships(ir.source.records)
-    slot = findfirst(
-        candidate -> candidate.identity == relationship.identity,
-        relationships,
-    )
-    slot === nothing && throw(ArgumentError(
-        "relationship does not resolve to a compiled runtime store"
-    ))
-    return Int32(slot)
-end
-
 function _stage_evaluator(
         ir::AnalyzedTermIR,
         record_index::Integer,
@@ -193,6 +178,7 @@ function _relationship_create_stage_descriptor(
         ::Type{T},
         state_handles,
         draw_handles,
+        relationship_endpoint_policies,
         slot::Integer,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
@@ -208,7 +194,10 @@ function _relationship_create_stage_descriptor(
     relationship === nothing && throw(ArgumentError(
         "relationship-create effect does not resolve to a declared store"
     ))
-    store_slot = _relationship_store_slot(ir, relationship)
+    endpoint_policy = _relationship_endpoint_policy(
+        relationship_endpoint_policies, relationship.identity
+    )
+    store_slot = endpoint_policy.slot
 
     condition = _stage_evaluator(
         ir,
@@ -270,22 +259,13 @@ function _relationship_create_stage_descriptor(
         for name in keys(declared_payload)
     )
 
-    endpoints = get(relationship_options, :endpoints, nothing)
-    endpoints isa Undirected || throw(ArgumentError(
-        "V1 relationship creation currently requires Undirected endpoints"
-    ))
-    kind_a = _compiled_kind_index(ir, record, endpoints.kind_a)
-    kind_b = _compiled_kind_index(ir, record, endpoints.kind_b)
-    (kind_a === nothing || kind_b === nothing) && throw(ArgumentError(
-        "relationship endpoint kind is not declared"
-    ))
     kind_condition = _compiler_operation_expression(
         _potts_relationship_endpoint_kinds,
         (
             endpoint_a.expression,
             endpoint_b.expression,
-            CorePotts.LiteralExpression(kind_a),
-            CorePotts.LiteralExpression(kind_b),
+            CorePotts.LiteralExpression(endpoint_policy.kind_a),
+            CorePotts.LiteralExpression(endpoint_policy.kind_b),
         ),
         record,
     )
@@ -339,6 +319,7 @@ function _relationship_process_stage_descriptor(
         ::Type{T},
         state_handles,
         draw_handles,
+        relationship_endpoint_policies,
         slot::Integer,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
@@ -355,7 +336,9 @@ function _relationship_process_stage_descriptor(
     relationship === nothing && throw(ArgumentError(
         "relationship request does not resolve to a declared store"
     ))
-    store_slot = _relationship_store_slot(ir, relationship)
+    store_slot = _relationship_endpoint_policy(
+        relationship_endpoint_policies, relationship.identity
+    ).slot
     arguments.domain isa Edges && _same_domain_resource(
         arguments.domain.relationship, effect.relationship
     ) || throw(ArgumentError(
@@ -559,6 +542,7 @@ function _lower_stage_plan(
         state_handles,
         draw_handles,
         state_layout::CorePotts.StateLayout,
+        relationship_endpoint_policies,
     ) where {T <: AbstractFloat}
     accepted = Any[]
     after_mcs_assignments = Any[]
@@ -591,6 +575,7 @@ function _lower_stage_plan(
                     T,
                     state_handles,
                     draw_handles,
+                    relationship_endpoint_policies,
                     length(accepted) + 1,
                 )
             else
@@ -626,6 +611,7 @@ function _lower_stage_plan(
                     T,
                     state_handles,
                     draw_handles,
+                    relationship_endpoint_policies,
                     relationship_slot,
                 ),
             )

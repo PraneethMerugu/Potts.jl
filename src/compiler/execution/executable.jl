@@ -86,9 +86,20 @@ end
 _parameter_buffer(parameters::PottsParameters{T}) where {T <: AbstractFloat} =
     _parameter_buffer(parameters.values, T)
 
+struct CompiledRelationshipEndpointPolicy
+    identity::CorePotts.QualifiedResourceIdentity
+    slot::Int32
+    direction::Symbol
+    kind_a::Int16
+    kind_b::Int16
+    kind_a_name::Symbol
+    kind_b_name::Symbol
+end
+
 struct PottsExecutable{P, M, R, O}
     core_program::P
     parameter_manifest::M
+    relationship_endpoint_policies::Vector{CompiledRelationshipEndpointPolicy}
     reports::R
     observations::O
     fingerprint::ExecutableFingerprint

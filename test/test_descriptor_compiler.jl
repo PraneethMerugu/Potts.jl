@@ -111,15 +111,28 @@ end
         )
     end
 
+    function canonical_layout_handles(layout_type, schemas)
+        layout = layout_type(schemas)
+        handles = Dict(
+            entry.schema.identity => entry.handle for entry in layout.entries
+        )
+        order = [
+            only(findall(
+                schema -> schema.identity == entry.schema.identity,
+                schemas,
+            ))
+            for entry in layout.entries
+        ]
+        return order, [handles[schema.identity] for schema in schemas]
+    end
+
     state_handle_sets = map((1, 32, 1024)) do count
         schemas = [
             bank_state_schema(Symbol(:state_, index), Float64, (4, 4))
             for index in 1:count
         ]
-        order, handles = PottsToolkit._canonical_bank_handles(
-            schemas,
-            CorePotts.state_storage_class,
-            CorePotts.StateHandle,
+        order, handles = canonical_layout_handles(
+            CorePotts.StateLayout, schemas
         )
         representation = CorePotts.state_storage_class(first(schemas))
         @test order == collect(1:count)
@@ -146,10 +159,8 @@ end
         bank_state_schema(Symbol(:renamed_, index), Float64, (9, 9))
         for index in 1:1024
     ])
-    _, renamed_state_handles = PottsToolkit._canonical_bank_handles(
-        renamed_state_class,
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    _, renamed_state_handles = canonical_layout_handles(
+        CorePotts.StateLayout, renamed_state_class
     )
     @test typeof.(renamed_state_handles) == typeof.(state_handles)
 
@@ -159,15 +170,11 @@ end
     earlier_state = bank_state_schema(
         :added_boolean_state, Bool, (4, 4)
     )
-    _, target_only_handles = PottsToolkit._canonical_bank_handles(
-        [target_state],
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    _, target_only_handles = canonical_layout_handles(
+        CorePotts.StateLayout, [target_state]
     )
-    _, with_earlier_handles = PottsToolkit._canonical_bank_handles(
-        [target_state, earlier_state],
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    _, with_earlier_handles = canonical_layout_handles(
+        CorePotts.StateLayout, [target_state, earlier_state]
     )
     @test typeof(only(target_only_handles)) ===
           typeof(first(with_earlier_handles))
@@ -212,15 +219,11 @@ end
         bank_state_schema(:two_dimensional, Float64, (4, 4)),
         bank_state_schema(:one_dimensional, Int32, (16,)),
     ]
-    _, mixed_handles = PottsToolkit._canonical_bank_handles(
-        mixed_states,
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    _, mixed_handles = canonical_layout_handles(
+        CorePotts.StateLayout, mixed_states
     )
-    _, reordered_mixed_handles = PottsToolkit._canonical_bank_handles(
-        reverse(mixed_states),
-        CorePotts.state_storage_class,
-        CorePotts.StateHandle,
+    _, reordered_mixed_handles = canonical_layout_handles(
+        CorePotts.StateLayout, reverse(mixed_states)
     )
     mixed_types_by_class = Dict(
         CorePotts.state_storage_class(schema) => typeof(handle)
@@ -238,10 +241,8 @@ end
         bank_workspace_schema(Symbol(:workspace_, index), Float64, (4, 4))
         for index in 1:1024
     ]
-    _, workspace_handles = PottsToolkit._canonical_bank_handles(
-        same_workspace_class,
-        CorePotts.workspace_storage_class,
-        CorePotts.WorkspaceHandle,
+    _, workspace_handles = canonical_layout_handles(
+        CorePotts.WorkspaceLayout, same_workspace_class
     )
     workspace_handle_types = unique(typeof.(workspace_handles))
     workspace_representation = CorePotts.workspace_storage_class(
@@ -259,18 +260,12 @@ end
     earlier_workspace = bank_workspace_schema(
         :added_boolean_workspace, Bool, (4, 4)
     )
-    _, target_only_workspace_handles =
-        PottsToolkit._canonical_bank_handles(
-            [target_workspace],
-            CorePotts.workspace_storage_class,
-            CorePotts.WorkspaceHandle,
-        )
-    _, with_earlier_workspace_handles =
-        PottsToolkit._canonical_bank_handles(
-            [target_workspace, earlier_workspace],
-            CorePotts.workspace_storage_class,
-            CorePotts.WorkspaceHandle,
-        )
+    _, target_only_workspace_handles = canonical_layout_handles(
+        CorePotts.WorkspaceLayout, [target_workspace]
+    )
+    _, with_earlier_workspace_handles = canonical_layout_handles(
+        CorePotts.WorkspaceLayout, [target_workspace, earlier_workspace]
+    )
     @test typeof(only(target_only_workspace_handles)) ===
           typeof(first(with_earlier_workspace_handles))
 

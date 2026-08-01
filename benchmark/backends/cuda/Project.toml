@@ -1,0 +1,14 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+CorePotts = {path = "../../../lib/CorePotts"}
+PottsToolkit = {path = "../../.."}
+
+[compat]
+julia = "1.12"

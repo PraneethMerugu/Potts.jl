@@ -242,6 +242,7 @@ function _lower_descriptor_plan(
         ir::AnalyzedTermIR,
         manifest::ParameterManifest,
         ::Type{T},
+        relationship_endpoint_policies,
     ) where {T <: AbstractFloat}
     state_layout, state_handles = _state_layout(ir, T)
     workspace_layout, workspace_handles = _workspace_layout(ir, T)
@@ -279,7 +280,9 @@ function _lower_descriptor_plan(
     constraints = _domain_constraints(
         ir, manifest, T, state_handles, draw_handles
     )
-    domain_resources = _hamiltonian_domain_resources(ir)
+    domain_resources = _hamiltonian_domain_resources(
+        ir, relationship_endpoint_policies
+    )
     fingerprint = _sha256_hex(
         "potts-descriptor-execution-plan-v2",
         ir.structural_key,
