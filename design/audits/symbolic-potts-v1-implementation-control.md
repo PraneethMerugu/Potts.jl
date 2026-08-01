@@ -1184,6 +1184,76 @@ repair questions. G4 remains stopped. The earliest repair boundary is G2/G3: mak
 request/stage execution real, express Act and chemotaxis through that generic path, and remove or
 quarantine reachable named CorePotts policy before requesting another R1.5 review.
 
+### Third repaired R1.5 candidate — awaiting independent review
+
+The repaired implementation checkpoint is
+`27964c6e9ce0a6af82bbc1baa1021f1804f2cd4b`. This checkpoint is a candidate, not a clearance. G4
+remains stopped until a fresh independent review reports zero P0 and zero P1 findings.
+
+The candidate makes the following claims for the reviewer to challenge:
+
+- `ActEnergy` now lowers to a concrete PottsToolkit-owned callable and participates in the
+  canonical drive evaluator. Chemotaxis has one exact admitted V1 profile; unsupported responding
+  modes and interpolation policies fail closed during compilation instead of becoming inert
+  metadata.
+- accepted-copy and after-MCS policies now execute through the production `CompiledStagePlan`.
+  Generic relationship create and remove effects emit requests whose validation, arbitration,
+  and commit are owned by structural CorePotts transaction primitives.
+- relationship storage has generic positional payload tuples. Payload names, endpoint-kind
+  eligibility, creation predicates, lifecycle predicates, and scientific payload meaning are
+  supplied outside CorePotts. The unrelated external fixture uses `score`, `cutoff`, and `marker`
+  payloads through the same production stages.
+- the public saved-state layer now indexes declared state and topology by value-level declaration
+  names rather than carrying dedicated activity, field, history, focal, or relationship aliases.
+- relationship stage execution is warm allocation-free in its admitted focused probes and returns
+  inferred concrete result types.
+
+The review MUST NOT accept those claims from passing bundled fixtures. It must apply the engine-
+hardcoding protocol, primitive-legitimacy test, and additive/subtractive dependency-inversion
+probes above. In particular, it must trace every reachable `isa`, trait, symbol branch, resource
+operation, tuple position, slot convention, default, sentinel, descriptor role, capability field,
+checkpoint field, and backend branch from the sequential production entry point back to an
+explicit compiler fact or public structural contract.
+
+The following are mandatory unresolved leads:
+
+- relationship evaluation, snapshots, and saved topology still expose a one-runtime-store and
+  slot-one bound. The reviewer must decide whether this is a coherent closed V1 structural limit
+  that treats every declaration equivalently or an accidental privileged resource that blocks
+  external extension. No clearance is implied by documenting the limit.
+- CorePotts resource operations for geometry, fields, histories, contacts, owner kinds, and
+  relationships must each pass the primitive-legitimacy test. Concrete singleton representation
+  and zero allocation are insufficient if the operation fixes scientific interpretation.
+- the finite stage-effect algebra must be checked for dependency inversion. Adding an unrelated
+  accepted-copy effect, after-MCS process, observation, and relationship operation must require
+  zero changes to CorePotts, the proposal loop, stage executors, checkpoint machinery, and backend
+  kernels; removing each bundled mechanism must leave those paths coherent.
+- inspection roles such as activity, field, and history must remain value-level reporting facts.
+  They must not select runtime storage, evaluation, mutation, observation, checkpoint, or backend
+  behavior.
+- every retained CorePotts relationship, retirement, and ownership mutation must be justified by
+  a generic bounded-topology or ownership invariant and exercised by a scientifically unrelated
+  external use.
+
+Qualification on the implementation checkpoint:
+
+- CorePotts package suite: passed, including Aqua;
+- focused G1 host facts: 62/62;
+- focused G2 descriptor, local Hamiltonian equivalence, and adversarial-boundary suites: 131/131,
+  59/59, and 28/28;
+- focused repaired G3 sequential suite: 602/602, including the unrelated relationship payload and
+  stage-effect fixture;
+- specialization-growth qualification: 5/5;
+- real Metal G2 descriptor boundary: passed with descriptor, state, and workspace buffers adapted
+  to `MtlArray` and the expected value `17.5f0`; and
+- ordinary root `Pkg.test()`: 1,205/1,205 in 8m40.6s, including Wortel, Merks,
+  focal-point-plasticity, SciML/SII, checkpoint, Aqua, and ExplicitImports coverage.
+
+The Metal evidence qualifies the already admitted G2 descriptor boundary only. It is not evidence
+that later relationship or stage effects execute on every GPU backend. Those paths must adapt,
+declare capability, fail closed where not admitted, and receive real backend-agnostic device
+qualification at the gate that first admits them.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
