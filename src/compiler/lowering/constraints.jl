@@ -13,6 +13,7 @@ function _parameter_constraint(
         expression::CorePotts.AbstractStaticExpression,
         predicate::UInt8,
         node::NormalizedTermNode,
+        record::QualifiedStatement,
     )
     _parameter_only_expression(expression) || throw(PottsValidationError(
         :descriptor_lowering,
@@ -28,7 +29,11 @@ function _parameter_constraint(
         ),),
     ))
     return CorePotts.ParameterDomainConstraint(
-        CorePotts.StaticEvaluator(expression),
+        _static_evaluator(
+            expression,
+            CorePotts.AbstractProbeEvaluationContext,
+            record,
+        ),
         predicate,
         node.record,
     )
@@ -68,6 +73,7 @@ function _draw_domain_constraints(
         "validated draw operation has invalid normalized arity"
     )
     family = _draw_family_code(ir.graph, node)
+    record = ir.source.records[node.record]
     cache = Dict{Int32, CorePotts.AbstractStaticExpression}()
     first_parameter = _lower_static_node(
         ir.graph,
@@ -92,34 +98,34 @@ function _draw_domain_constraints(
     zero_expression = CorePotts.LiteralExpression(zero(T))
     one_expression = CorePotts.LiteralExpression(one(T))
     if family == 1
-        lower = CorePotts.OperationExpression(
-            CorePotts.operation_callable(Val(:greater_equal), v"1.0.0"),
-            first_parameter,
-            zero_expression,
+        lower = _compiler_operation_expression(
+            (>=),
+            (first_parameter, zero_expression),
+            record,
         )
-        upper = CorePotts.OperationExpression(
-            CorePotts.operation_callable(Val(:less_equal), v"1.0.0"),
-            first_parameter,
-            one_expression,
+        upper = _compiler_operation_expression(
+            (<=),
+            (first_parameter, one_expression),
+            record,
         )
         return (
-            _parameter_constraint(lower, 0x03, node),
-            _parameter_constraint(upper, 0x03, node),
+            _parameter_constraint(lower, 0x03, node, record),
+            _parameter_constraint(upper, 0x03, node, record),
         )
     elseif family == 2
-        ordered = CorePotts.OperationExpression(
-            CorePotts.operation_callable(Val(:less), v"1.0.0"),
-            first_parameter,
-            second_parameter,
+        ordered = _compiler_operation_expression(
+            (<),
+            (first_parameter, second_parameter),
+            record,
         )
-        return (_parameter_constraint(ordered, 0x03, node),)
+        return (_parameter_constraint(ordered, 0x03, node, record),)
     elseif family == 3
-        positive = CorePotts.OperationExpression(
-            CorePotts.operation_callable(Val(:greater), v"1.0.0"),
-            second_parameter,
-            zero_expression,
+        positive = _compiler_operation_expression(
+            (>),
+            (second_parameter, zero_expression),
+            record,
         )
-        return (_parameter_constraint(positive, 0x03, node),)
+        return (_parameter_constraint(positive, 0x03, node, record),)
     elseif family == 4
         throw(PottsValidationError(
             :descriptor_lowering,
@@ -204,7 +210,12 @@ function _domain_constraints(
         predicate = node.operation === :logarithm ? UInt8(0x01) : UInt8(0x02)
         push!(
             constraints,
-            _parameter_constraint(operand, predicate, node),
+            _parameter_constraint(
+                operand,
+                predicate,
+                node,
+                ir.source.records[node.record],
+            ),
         )
     end
     keys = DataType[]

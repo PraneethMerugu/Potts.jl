@@ -36,11 +36,15 @@ public update_program_parameters!
 public program_execution_report, program_capability_report
 public ProgramCheckpoint, program_checkpoint, restore_program_checkpoint
 public AbstractStaticExpression, AbstractContextualOperation
+public AbstractEvaluatorExecutionContext, AbstractProbeEvaluationContext
+public AbstractHamiltonianEvaluationContext, AbstractProposalEvaluationContext
+public AbstractSiteStageEvaluationContext
+public AbstractRelationshipStageEvaluationContext
 public LiteralExpression, ParameterExpression, ContextExpression, StateExpression
 public OperationExpression
 public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
 public execute_operation, context_value
-public apply_resource_operation, operation_callable
+public apply_resource_operation, operation_callable, operation_context_supported
 public state_value, workspace_value, evaluator_parameters
 public proposal_source_site, proposal_target_site, proposal_source_owner
 public proposal_target_owner, proposal_target_kind
@@ -111,6 +115,7 @@ public AbstractCompiledEffect, SiteAssignmentEffect
 public IteratedSiteAssignmentEffect
 public ShiftAppendEffect
 public RelationshipCreateEffect, RelationshipRemoveEffect
+public RelationshipRetuneEffect
 public stage_effect_buffered
 public CompiledStageDescriptor, StageDescriptorGroup, StageExecutionPlan
 public StageEvaluation, StageRuntimeBuffers, allocate_stage_runtime_buffers

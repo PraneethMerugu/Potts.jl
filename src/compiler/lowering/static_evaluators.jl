@@ -74,10 +74,15 @@ function _static_parameter(value, manifest::ParameterManifest, ::Type{T}) where 
     )
 end
 
-function _static_operation_callable(node::NormalizedTermNode)
+function _static_operation_callable(
+        identity::Symbol,
+        version::VersionNumber,
+        source::QualifiedStatementID,
+        provenance,
+    )
     operation = try
         CorePotts.operation_callable(
-            Val(node.operation), node.schema_version
+            Val(identity), version
         )
     catch error
         if error isa MethodError && error.f === CorePotts.operation_callable
@@ -85,13 +90,13 @@ function _static_operation_callable(node::NormalizedTermNode)
                 :descriptor_lowering,
                 (PottsDiagnostic(
                     :missing_concrete_operation_callable,
-                    node.source,
-                    String(node.operation),
-                    node.source.path,
+                    source,
+                    String(identity),
+                    source.path,
                     "a concrete public CorePotts operation callable",
-                    "$(node.operation) $(node.schema_version)",
+                    "$identity $version",
                     (),
-                    UnknownSource(),
+                    provenance,
                 ),),
             ))
         end
@@ -101,16 +106,118 @@ function _static_operation_callable(node::NormalizedTermNode)
         :descriptor_lowering,
         (PottsDiagnostic(
             :device_illegal_operation_callable,
-            node.source,
-            String(node.operation),
-            node.source.path,
+            source,
+            String(identity),
+            source.path,
             "an isbits concrete operation callable",
             string(typeof(operation)),
             (),
-            UnknownSource(),
+            provenance,
         ),),
     ))
     return operation
+end
+
+_static_operation_callable(node::NormalizedTermNode) =
+    _static_operation_callable(
+        node.operation,
+        node.schema_version,
+        node.source,
+        UnknownSource(),
+    )
+
+function _compiler_operation_expression(
+        operation,
+        arguments::Tuple,
+        record::QualifiedStatement,
+    )
+    transfer = try
+        operation_transfer(operation, length(arguments))
+    catch error
+        if error isa MethodError && error.f === operation_transfer
+            throw(PottsValidationError(
+                :descriptor_lowering,
+                (PottsDiagnostic(
+                    :missing_operation_transfer,
+                    record.identity,
+                    repr(operation),
+                    record.identity.path,
+                    "a versioned operation transfer rule",
+                    repr(operation),
+                    (),
+                    record.source,
+                ),),
+            ))
+        end
+        rethrow(error)
+    end
+    reason = _operation_transfer_error(transfer, length(arguments))
+    reason === nothing || throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :invalid_operation_transfer,
+            record.identity,
+            String(transfer.identity),
+            record.identity.path,
+            "a valid frozen operation transfer",
+            reason,
+            (),
+            record.source,
+        ),),
+    ))
+    callable = _static_operation_callable(
+        transfer.identity,
+        transfer.schema_version,
+        record.identity,
+        record.source,
+    )
+    return _bounded_static_operation(callable, arguments)
+end
+
+function _validate_static_expression_context(
+        expression::CorePotts.AbstractStaticExpression,
+        context::Type{<:CorePotts.AbstractEvaluatorExecutionContext},
+        record::QualifiedStatement,
+    )
+    operation = if expression isa CorePotts.ContextExpression
+        expression.operation
+    elseif expression isa CorePotts.OperationExpression
+        expression.operation
+    else
+        nothing
+    end
+    if operation !== nothing && !CorePotts.operation_context_supported(
+            operation, context
+        )
+        throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :unsupported_operation_context,
+                record.identity,
+                string(typeof(operation)),
+                record.identity.path,
+                "a concrete callable implemented for $(nameof(context))",
+                "no callable implementation for $(nameof(context))",
+                (),
+                record.source,
+            ),),
+        ))
+    end
+    if expression isa CorePotts.OperationExpression
+        for argument in expression.arguments
+            _validate_static_expression_context(argument, context, record)
+        end
+    end
+    return nothing
+end
+
+function _static_evaluator(
+        expression::CorePotts.AbstractStaticExpression,
+        context::Type{<:CorePotts.AbstractEvaluatorExecutionContext},
+        record::QualifiedStatement,
+    )
+    _validate_static_expression_context(expression, context, record)
+    return CorePotts.StaticEvaluator(expression)
 end
 
 function _bounded_static_operation(operation, arguments::Tuple)
@@ -333,13 +440,22 @@ function _relationship_payload_slot(
     return Int32(slot)
 end
 
-function _energy_anchor_expression(kind::Symbol)
+function _energy_anchor_expression(
+        kind::Symbol,
+        node::NormalizedTermNode,
+    )
     identity = kind === :site_anchor ? :energy_anchor_site :
                kind === :cell_anchor ? :energy_anchor_cell :
                kind === :contact_anchor ? :energy_anchor_contact :
                kind === :relationship_context ? :energy_anchor_relationship :
                throw(ArgumentError("unsupported energy anchor leaf `$kind`"))
-    return CorePotts.ContextExpression(CorePotts.ContextOperation{identity}())
+    operation = _static_operation_callable(
+        identity,
+        node.schema_version,
+        node.source,
+        UnknownSource(),
+    )
+    return CorePotts.ContextExpression(operation)
 end
 
 function _lower_static_node(
@@ -378,9 +494,12 @@ function _lower_static_node(
         ))
         state_expression = CorePotts.StateExpression(handle)
         state_binding === nothing ? state_expression :
-        CorePotts.OperationExpression(
-            CorePotts.BoundStateValueOperation{typeof(state_binding)}(),
-            state_expression,
+        _compiler_operation_expression(
+            state_binding isa CorePotts.ProposalTargetStageSite ?
+                _potts_proposal_bound_state_value :
+                _potts_iteration_bound_state_value,
+            (state_expression,),
+            ir.source.records[node.record],
         )
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
@@ -446,7 +565,7 @@ function _lower_static_node(
             :site_anchor, :cell_anchor, :contact_anchor,
             :relationship_context,
         )
-        _energy_anchor_expression(node.payload_kind)
+        _energy_anchor_expression(node.payload_kind, node)
     elseif node.payload_kind === :kind
         kind = _compiled_kind_leaf(ir, node)
         kind === nothing && throw(PottsValidationError(

@@ -21,6 +21,11 @@ Symbolics.@register_symbolic external_cpu_only_value(value)::Real
 struct ExternalSiteValueCallable <: CorePotts.AbstractContextualOperation end
 struct ExternalCpuOnlyValueCallable end
 
+CorePotts.operation_context_supported(
+    ::ExternalSiteValueCallable,
+    ::Type{CorePotts.AbstractHamiltonianEvaluationContext},
+) = true
+
 operation_transfer(::typeof(external_site_value), ::Int) =
     PottsToolkit.OperationTransfer(
         :neutral_external_site_value,

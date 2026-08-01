@@ -54,7 +54,7 @@ end
     )
 end
 
-function _r1_runtime(executable, ownership, cell_kinds; relationships = nothing)
+function _r1_runtime(executable, ownership, cell_kinds; relationships = ())
     initial = CorePotts.ProgramInitialState(
         ownership,
         cell_kinds;
@@ -219,6 +219,7 @@ end
                 domain = sites(:lattice),
                 anchor,
                 expression = 5.0 * occupancy(cell, anchor),
+                mechanism = :external_probe,
             ),
             Protocol(Sweep(); name = :main),
         )))
@@ -527,8 +528,8 @@ end
         )
         before_energy = 2.0 * (2.0 - 1.0)^2
         @test _r1_descriptor_delta(descriptor, context) == -before_energy
-        @test size(runtime.relationships.incident_edges) == (2, 2)
-        @test runtime.relationships.degree == Int16[1, 1]
+        @test size(only(runtime.relationships).incident_edges) == (2, 2)
+        @test only(runtime.relationships).degree == Int16[1, 1]
     end
 
     @testset "relationship affected anchors are a canonical bounded union" begin
@@ -620,9 +621,9 @@ end
                    global_relationship_energy(ownership)
         @test _r1_descriptor_delta(descriptor, context) ≈ expected
         @test descriptor.role.affected.maximum == 4
-        @test runtime.relationships.incident_edges[:, 1] == Int32[1, 2]
-        @test runtime.relationships.incident_edges[:, 2] == Int32[1, 3]
-        @test runtime.relationships.incident_edges[:, 3] == Int32[2, 3]
+        @test only(runtime.relationships).incident_edges[:, 1] == Int32[1, 2]
+        @test only(runtime.relationships).incident_edges[:, 2] == Int32[1, 3]
+        @test only(runtime.relationships).incident_edges[:, 3] == Int32[2, 3]
         _r1_descriptor_delta(descriptor, context)
         @test @allocated(
             _r1_descriptor_delta(descriptor, context)

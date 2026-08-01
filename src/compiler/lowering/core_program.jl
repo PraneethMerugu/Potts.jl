@@ -45,32 +45,40 @@ end
 function _lower_relationships(statements, manifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    resources = filter(statement -> statement isa RelationshipState, statements)
-    isempty(resources) && return nothing
-    length(resources) == 1 || throw(ArgumentError(
-        "the V1 runtime currently supports one RelationshipState per executable"
-    ))
-    relationship = only(resources)
-    capacity = _numeric_value(_statement_option(relationship, :capacity))
-    maximum_degree =
-        _numeric_value(_statement_option(relationship, :maximum_degree))
-    capacity isa Real && isinteger(capacity) ||
-        throw(ArgumentError("relationship capacity must be structurally resolved"))
-    maximum_degree isa Real && isinteger(maximum_degree) || throw(ArgumentError(
-        "relationship maximum_degree must be structurally resolved"
-    ))
-    payload = _statement_option(relationship, :payload, NamedTuple())
-    payload isa NamedTuple || throw(ArgumentError(
-        "relationship payload declaration must be a named tuple"
-    ))
-    defaults = Tuple(
-        _compiled_scalar(getproperty(payload, name), manifest, T)
-        for name in keys(payload)
-    )
-    return CorePotts.RelationshipStoreSchema(
-        Int(capacity),
-        Int(maximum_degree),
-        defaults,
+    resources = _ordered_relationships(statements)
+    return Tuple(
+        begin
+            capacity = _numeric_value(
+                _statement_option(relationship, :capacity)
+            )
+            maximum_degree = _numeric_value(
+                _statement_option(relationship, :maximum_degree)
+            )
+            capacity isa Real && isinteger(capacity) || throw(ArgumentError(
+                "relationship capacity must be structurally resolved"
+            ))
+            maximum_degree isa Real && isinteger(maximum_degree) || throw(
+                ArgumentError(
+                    "relationship maximum_degree must be structurally resolved"
+                )
+            )
+            payload = _statement_option(
+                relationship, :payload, NamedTuple()
+            )
+            payload isa NamedTuple || throw(ArgumentError(
+                "relationship payload declaration must be a named tuple"
+            ))
+            defaults = Tuple(
+                _compiled_scalar(getproperty(payload, name), manifest, T)
+                for name in keys(payload)
+            )
+            CorePotts.RelationshipStoreSchema(
+                Int(capacity),
+                Int(maximum_degree),
+                defaults,
+            )
+        end
+        for relationship in resources
     )
 end
 
@@ -82,19 +90,26 @@ end
 
 function _lower_observations(statements, kinds, state_layout)
     manifest = NamedTuple[]
-    field_variables = Dict{Any, Symbol}()
+    state_variables = Dict{Any, Symbol}()
     for statement in statements
-        statement isa FieldState || continue
+        statement isa Union{
+            SiteState, CellState, MediumState, ModelState, FieldState,
+            HistoryState,
+        } || continue
         arguments = _statement_arguments(statement)
         haskey(arguments, :variable) || continue
-        field_variables[arguments.variable] = Symbol(statement_id(statement))
+        state_variables[arguments.variable] = Symbol(statement_id(statement))
     end
+    relationship_names = Symbol[
+        Symbol(statement_id(statement))
+        for statement in _ordered_relationships(statements)
+    ]
     for statement in statements
         statement isa Observation || continue
         expression = _statement_arguments(statement).expression
         name = Symbol(statement_id(statement))
-        if any(variable -> isequal(expression, variable), keys(field_variables))
-            state_name = field_variables[expression]
+        if any(variable -> isequal(expression, variable), keys(state_variables))
+            state_name = state_variables[expression]
             layout_entry = only(filter(
                 entry -> entry.schema.identity.name === state_name,
                 state_layout.entries,
@@ -142,12 +157,16 @@ function _lower_observations(statements, kinds, state_layout)
             endpoint = _numeric_value(last(arguments))
             endpoint isa Integer || isinteger(endpoint) ||
                 throw(ArgumentError("relationship degree endpoint must be integral"))
+            relationship_slot = findfirst(==(relationship_name), relationship_names)
+            relationship_slot === nothing && throw(ArgumentError(
+                "observation `$name` references an undeclared relationship state"
+            ))
             push!(manifest, (
                 name,
                 kind = :relationship_degree,
                 relationship_name,
                 evaluator = RelationshipDegreeObservationEvaluator(
-                    Int32(1), Int32(endpoint)
+                    Int32(relationship_slot), Int32(endpoint)
                 ),
             ))
         else
@@ -231,20 +250,6 @@ function _lower_core_program(
     end
     count = length(kinds)
     defaults = _default_parameter_buffer(manifest, T)
-    for statement in all_statements
-        mechanism = _statement_option(statement, :mechanism)
-        if statement isa HamiltonianTerm &&
-                !(mechanism in (
-                    nothing, :symbolic,
-                    :volume, :contact, :relationship, :elongation,
-                ))
-            throw(ArgumentError(
-                "no V1 lowering is registered for HamiltonianTerm mechanism " *
-                "$(repr(mechanism))"
-            ))
-        end
-    end
-
     proposal_offsets = _relation_offsets(
         all_statements, :proposal, dimensions, VonNeumann()
     )
@@ -276,7 +281,6 @@ function _lower_core_program(
         shape,
         periodic,
         proposal_offsets,
-        contact_offsets,
         count,
         medium_kind,
         temperature,

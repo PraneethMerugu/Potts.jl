@@ -56,6 +56,9 @@ function lag end
 function _potts_draw end
 function _potts_merks_local_connectivity end
 function _potts_act_energy end
+function _potts_explicit_field_euler end
+function _potts_proposal_bound_state_value end
+function _potts_iteration_bound_state_value end
 function linked end
 
 Symbolics.@register_symbolic new_contact(x, y)::Bool
@@ -99,6 +102,19 @@ const _MERKS_CLOCKWISE_OFFSETS = (
 struct MerksLocalConnectivityCallable <: CorePotts.AbstractContextualOperation end
 struct ActEnergyCallable <: CorePotts.AbstractContextualOperation end
 struct ExplicitFieldEulerCallable <: CorePotts.AbstractContextualOperation end
+
+CorePotts.operation_context_supported(
+    ::MerksLocalConnectivityCallable,
+    ::Type{CorePotts.AbstractProposalEvaluationContext},
+) = true
+CorePotts.operation_context_supported(
+    ::ActEnergyCallable,
+    ::Type{CorePotts.AbstractProposalEvaluationContext},
+) = true
+CorePotts.operation_context_supported(
+    ::ExplicitFieldEulerCallable,
+    ::Type{CorePotts.AbstractSiteStageEvaluationContext},
+) = true
 
 function CorePotts.operation_callable(
         ::Val{:merks_local_connectivity},
@@ -145,6 +161,16 @@ end
             T(diffusion) * laplace - T(decay) * center + source
         ),
     )
+end
+
+function CorePotts.operation_callable(
+        ::Val{:explicit_field_euler},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported explicit-field-Euler operation version $version"
+    ))
+    return ExplicitFieldEulerCallable()
 end
 
 function CorePotts.operation_callable(

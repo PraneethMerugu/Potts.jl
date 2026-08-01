@@ -44,6 +44,21 @@ function _stage_state_handle(
     ))
 end
 
+function _relationship_store_slot(
+        ir::AnalyzedTermIR,
+        relationship::QualifiedStatement,
+    )
+    relationships = _ordered_relationships(ir.source.records)
+    slot = findfirst(
+        candidate -> candidate.identity == relationship.identity,
+        relationships,
+    )
+    slot === nothing && throw(ArgumentError(
+        "relationship does not resolve to a compiled runtime store"
+    ))
+    return Int32(slot)
+end
+
 function _stage_evaluator(
         ir::AnalyzedTermIR,
         record_index::Integer,
@@ -71,7 +86,16 @@ function _stage_evaluator(
             binding,
         )
     end
-    return CorePotts.StaticEvaluator(expression)
+    execution_context = binding isa CorePotts.ProposalTargetStageSite ?
+        CorePotts.AbstractProposalEvaluationContext :
+        binding isa CorePotts.IterationStageSite ?
+        CorePotts.AbstractSiteStageEvaluationContext :
+        CorePotts.AbstractRelationshipStageEvaluationContext
+    return _static_evaluator(
+        expression,
+        execution_context,
+        ir.source.records[record_index],
+    )
 end
 
 function _stage_support(
@@ -184,17 +208,7 @@ function _relationship_create_stage_descriptor(
     relationship === nothing && throw(ArgumentError(
         "relationship-create effect does not resolve to a declared store"
     ))
-    relationships = filter(
-        candidate -> candidate.kind === :RelationshipState,
-        ir.source.records,
-    )
-    length(relationships) == 1 || throw(ArgumentError(
-        "V1 relationship effects require exactly one relationship store"
-    ))
-    relationship.identity == only(relationships).identity ||
-        throw(ArgumentError(
-            "relationship-create effect resolves to an unavailable store"
-        ))
+    store_slot = _relationship_store_slot(ir, relationship)
 
     condition = _stage_evaluator(
         ir,
@@ -265,19 +279,27 @@ function _relationship_create_stage_descriptor(
     (kind_a === nothing || kind_b === nothing) && throw(ArgumentError(
         "relationship endpoint kind is not declared"
     ))
-    kind_condition = CorePotts.OperationExpression(
-        RelationshipEndpointKindsCallable(),
-        endpoint_a.expression,
-        endpoint_b.expression,
-        CorePotts.LiteralExpression(kind_a),
-        CorePotts.LiteralExpression(kind_b),
+    kind_condition = _compiler_operation_expression(
+        _potts_relationship_endpoint_kinds,
+        (
+            endpoint_a.expression,
+            endpoint_b.expression,
+            CorePotts.LiteralExpression(kind_a),
+            CorePotts.LiteralExpression(kind_b),
+        ),
+        record,
     )
-    compiled_condition = CorePotts.StaticEvaluator(
-        CorePotts.OperationExpression(
-            CorePotts.OrderedFold(&),
+    compiled_condition = _static_evaluator(
+        _compiler_operation_expression(
+            (&),
+            (
             condition.expression,
             kind_condition,
-        )
+            ),
+            record,
+        ),
+        CorePotts.AbstractProposalEvaluationContext,
+        record,
     )
     priority = _numeric_value(effect.priority)
     priority isa Real && isinteger(priority) || throw(ArgumentError(
@@ -286,9 +308,13 @@ function _relationship_create_stage_descriptor(
     reads = _record_state_handles(ir, record, state_handles)
     return CorePotts.CompiledStageDescriptor(
         compiled_condition,
-        CorePotts.StaticEvaluator(CorePotts.LiteralExpression(zero(T))),
+        _static_evaluator(
+            CorePotts.LiteralExpression(zero(T)),
+            CorePotts.AbstractProposalEvaluationContext,
+            record,
+        ),
         CorePotts.RelationshipCreateEffect(
-            1,
+            store_slot,
             endpoint_a,
             endpoint_b,
             payload,
@@ -306,7 +332,7 @@ function _relationship_create_stage_descriptor(
     )
 end
 
-function _relationship_remove_stage_descriptor(
+function _relationship_process_stage_descriptor(
         ir::AnalyzedTermIR,
         record_index::Integer,
         manifest::ParameterManifest,
@@ -317,30 +343,23 @@ function _relationship_remove_stage_descriptor(
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     arguments = first(record.normalized_payload)
-    length(arguments.effects) == 1 && only(arguments.effects) isa Remove ||
+    length(arguments.effects) == 1 &&
+        only(arguments.effects) isa Union{Remove, Retune} ||
         throw(ArgumentError(
-            "a relationship lifecycle stage requires exactly one Remove effect"
+            "a relationship stage requires exactly one Remove or Retune effect"
         ))
     effect = only(arguments.effects)
     relationship = _resource_record(
         ir.source, record, :RelationshipState, effect.relationship
     )
     relationship === nothing && throw(ArgumentError(
-        "relationship removal does not resolve to a declared store"
+        "relationship request does not resolve to a declared store"
     ))
-    relationships = filter(
-        candidate -> candidate.kind === :RelationshipState,
-        ir.source.records,
-    )
-    length(relationships) == 1 &&
-        relationship.identity == only(relationships).identity ||
-        throw(ArgumentError(
-            "V1 relationship effects require exactly one relationship store"
-        ))
+    store_slot = _relationship_store_slot(ir, relationship)
     arguments.domain isa Edges && _same_domain_resource(
         arguments.domain.relationship, effect.relationship
     ) || throw(ArgumentError(
-        "relationship removal must iterate the affected relationship store"
+        "relationship request must iterate the affected relationship store"
     ))
     condition = _stage_evaluator(
         ir,
@@ -357,10 +376,42 @@ function _relationship_remove_stage_descriptor(
         _record_options(relationship), :maximum_degree, 0
     )))
     reads = _record_state_handles(ir, record, state_handles)
+    compiled_effect = if effect isa Remove
+        CorePotts.RelationshipRemoveEffect(store_slot)
+    else
+        declared_payload = get(
+            _record_options(relationship), :payload, NamedTuple()
+        )
+        effect.payload isa NamedTuple &&
+            keys(effect.payload) == keys(declared_payload) || throw(
+                ArgumentError(
+                    "relationship-retune payload must exactly match its declared schema"
+                )
+            )
+        payload = Tuple(
+            _stage_evaluator(
+                ir,
+                record_index,
+                Symbol(:effect_1_payload_, name),
+                getproperty(effect.payload, name),
+                manifest,
+                T,
+                state_handles,
+                draw_handles,
+                nothing,
+            )
+            for name in keys(declared_payload)
+        )
+        CorePotts.RelationshipRetuneEffect(store_slot, payload)
+    end
     return CorePotts.CompiledStageDescriptor(
         condition,
-        CorePotts.StaticEvaluator(CorePotts.LiteralExpression(zero(T))),
-        CorePotts.RelationshipRemoveEffect(1),
+        _static_evaluator(
+            CorePotts.LiteralExpression(zero(T)),
+            CorePotts.AbstractRelationshipStageEvaluationContext,
+            record,
+        ),
+        compiled_effect,
         CorePotts.AfterMCSStage(),
         CorePotts.ResourceAccess(
             reads,
@@ -464,18 +515,29 @@ function _field_stage_descriptor(
     secretion = _static_parameter(
         get(options, :secretion, zero(T)), manifest, T
     )
-    value = CorePotts.StaticEvaluator(CorePotts.OperationExpression(
-        ExplicitFieldEulerCallable(),
-        CorePotts.StateExpression(target),
-        CorePotts.LiteralExpression(Int32(relation_handle)),
-        diffusion,
-        decay,
-        secretion,
-        CorePotts.LiteralExpression(source_kind),
-        CorePotts.LiteralExpression(duration / T(substeps)),
-    ))
+    value = _static_evaluator(
+        _compiler_operation_expression(
+            _potts_explicit_field_euler,
+            (
+                CorePotts.StateExpression(target),
+                CorePotts.LiteralExpression(Int32(relation_handle)),
+                diffusion,
+                decay,
+                secretion,
+                CorePotts.LiteralExpression(source_kind),
+                CorePotts.LiteralExpression(duration / T(substeps)),
+            ),
+            record,
+        ),
+        CorePotts.AbstractSiteStageEvaluationContext,
+        record,
+    )
     return CorePotts.CompiledStageDescriptor(
-        CorePotts.StaticEvaluator(CorePotts.LiteralExpression(true)),
+        _static_evaluator(
+            CorePotts.LiteralExpression(true),
+            CorePotts.AbstractSiteStageEvaluationContext,
+            record,
+        ),
         value,
         CorePotts.IteratedSiteAssignmentEffect(target, substeps),
         CorePotts.AfterMCSStage(),
@@ -553,11 +615,11 @@ function _lower_stage_plan(
         elseif record.kind in (:RelationshipProcess, :LifecycleProcess)
             arguments = first(record.normalized_payload)
             length(arguments.effects) == 1 &&
-                only(arguments.effects) isa Remove || continue
+                only(arguments.effects) isa Union{Remove, Retune} || continue
             relationship_slot += 1
             push!(
                 after_mcs_relationships,
-                _relationship_remove_stage_descriptor(
+                _relationship_process_stage_descriptor(
                     ir,
                     record_index,
                     manifest,
@@ -591,11 +653,15 @@ function _lower_stage_plan(
                 throw(ArgumentError(
                     "HistoryState source and target storage shapes are incompatible"
                 ))
-            condition = CorePotts.StaticEvaluator(
-                CorePotts.LiteralExpression(true)
+            condition = _static_evaluator(
+                CorePotts.LiteralExpression(true),
+                CorePotts.AbstractSiteStageEvaluationContext,
+                record,
             )
-            value = CorePotts.StaticEvaluator(
-                CorePotts.LiteralExpression(zero(T))
+            value = _static_evaluator(
+                CorePotts.LiteralExpression(zero(T)),
+                CorePotts.AbstractSiteStageEvaluationContext,
+                record,
             )
             push!(after_mcs_commits, CorePotts.CompiledStageDescriptor(
                 condition,

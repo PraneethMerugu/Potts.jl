@@ -1,7 +1,34 @@
 # PottsToolkit-owned relationship policies composed over CorePotts primitives.
 
+function _potts_relationship_endpoint_kinds end
+
 struct RelationshipEndpointKindsCallable <:
        CorePotts.AbstractContextualOperation end
+
+CorePotts.operation_context_supported(
+    ::RelationshipEndpointKindsCallable,
+    ::Type{CorePotts.AbstractProposalEvaluationContext},
+) = true
+
+operation_transfer(
+    ::typeof(_potts_relationship_endpoint_kinds), ::Int
+) = _transfer(
+    :relationship_endpoint_kinds,
+    4,
+    :boolean,
+    :dimensionless;
+    locality = :proposal_context,
+)
+
+function CorePotts.operation_callable(
+        ::Val{:relationship_endpoint_kinds},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported relationship endpoint-kind operation version $version"
+    ))
+    return RelationshipEndpointKindsCallable()
+end
 
 @inline function (::RelationshipEndpointKindsCallable)(arguments::Tuple, context)
     endpoint_a = Int32(arguments[1])

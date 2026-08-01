@@ -597,14 +597,12 @@ function _core_initial_state(
     descriptor_state = CorePotts.allocate_auxiliary_state(
         descriptor_layout, descriptor_initial_values
     )
-    relationships = if isempty(executable.reports.relationship_states)
-        nothing
-    else
-        relationship = only(executable.reports.relationship_states)
+    relationships = Tuple(
         _normalize_initial_relationships(
             relationship, get(values, relationship.name, nothing), T
         )
-    end
+        for relationship in executable.reports.relationship_states
+    )
     return CorePotts.ProgramInitialState(
         ownership,
         cell_kinds;

@@ -72,14 +72,11 @@ end
 function _descriptor_saved_topology(executable, snapshot)
     entries = executable.reports.relationship_states
     isempty(entries) && return NamedTuple()
-    snapshot.relationships === nothing && throw(ArgumentError(
-        "compiled topology state is absent from the runtime snapshot"
-    ))
-    length(entries) == 1 || throw(ArgumentError(
-        "V1 saved topology requires one runtime store per declaration"
+    length(entries) == length(snapshot.relationships) || throw(ArgumentError(
+        "compiled topology declarations and runtime stores are misaligned"
     ))
     names = Tuple(entry.name for entry in entries)
-    return NamedTuple{names}((copy(snapshot.relationships),))
+    return NamedTuple{names}(map(copy, snapshot.relationships))
 end
 
 function _saved_state(

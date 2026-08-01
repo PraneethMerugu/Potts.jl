@@ -11,7 +11,7 @@ empty_descriptor_plan() = CorePotts.DescriptorExecutionPlan(
 
 function test_program(
         engine;
-        relationships = nothing,
+        relationships = (),
         temperature = 3,
         descriptor_plan = empty_descriptor_plan(),
         stage_plan = CorePotts.StageExecutionPlan(),
@@ -25,7 +25,6 @@ function test_program(
     return CorePotts.CompiledPottsProgram(
         (6, 6),
         (true, true),
-        offsets,
         offsets,
         2,
         1,
@@ -342,6 +341,34 @@ end
     @test state.active == before.active
     @test state.endpoint_a == before.endpoint_a
     @test state.endpoint_b == before.endpoint_b
+
+    nonfinite_create_state = CorePotts.ProgramRelationshipState(
+        Float64, 2, 2, 1, 3
+    )
+    nonfinite_create = CorePotts.CreateRelationshipRequest(
+        1,
+        2,
+        (NaN, 2.0, 5.0);
+        generation_a = 4,
+        generation_b = 7,
+        identity = 12,
+    )
+    @test_throws DomainError CorePotts.apply_relationship_requests!(
+        nonfinite_create_state,
+        Int16[2, 2],
+        generations,
+        plan,
+        [nonfinite_create],
+    )
+    @test iszero(count(nonfinite_create_state.active))
+
+    nonfinite_retune = CorePotts.RetuneRelationshipRequest(
+        1, (2.0, Inf, 5.0); identity = 13
+    )
+    @test_throws DomainError CorePotts.apply_relationship_requests!(
+        state, Int16[2, 2], generations, plan, [nonfinite_retune]
+    )
+    @test state.payload == before.payload
 
     conflict = [
         CorePotts.RetuneRelationshipRequest(

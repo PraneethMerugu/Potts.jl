@@ -48,9 +48,13 @@ function _compiled_activity_declaration(statements)
     return index === nothing ? nothing : statements[index]
 end
 
-function _compiled_relationship_declaration(statements)
+function _compiled_relationship_declaration(statements, requested)
     resources = filter(statement -> statement isa RelationshipState, statements)
-    return length(resources) == 1 ? only(resources) : nothing
+    matches = filter(
+        statement -> _same_statement_resource(statement, requested),
+        resources,
+    )
+    return length(matches) == 1 ? only(matches) : nothing
 end
 
 function _declared_assignment_state(target, statements)
@@ -86,7 +90,9 @@ function _accepted_copy_rejection(statement, statements)
             return "accepted-copy Assign requires an explicit bounded condition"
         return nothing
     elseif effect isa Create
-        relationship = _compiled_relationship_declaration(statements)
+        relationship = _compiled_relationship_declaration(
+            statements, effect.relationship
+        )
         relationship === nothing &&
             return "Create has no matching compiled relationship state"
         _same_statement_resource(effect.relationship, relationship) ||
@@ -116,19 +122,22 @@ function _synchronous_rejection(statement, statements)
 end
 
 function _relationship_process_rejection(statement, statements)
-    relationship = _compiled_relationship_declaration(statements)
-    relationship === nothing &&
-        return "relationship process requires exactly one relationship state"
     arguments = _statement_arguments(statement)
+    length(arguments.effects) == 1 ||
+        return "relationship process must emit one bounded request"
+    effect = only(arguments.effects)
+    effect isa Union{Remove, Retune} ||
+        return "relationship process must emit one Remove or Retune request"
+    relationship = _compiled_relationship_declaration(
+        statements, effect.relationship
+    )
+    relationship === nothing &&
+        return "relationship process request has no matching relationship state"
     arguments.domain isa Edges &&
         _same_statement_resource(arguments.domain.relationship, relationship) ||
         return "relationship process domain must be edges(relationship)"
-    length(arguments.effects) == 1 &&
-        only(arguments.effects) isa Remove &&
-        _same_statement_resource(
-            only(arguments.effects).relationship, relationship
-        ) ||
-        return "relationship process must emit one Remove request"
+    _same_statement_resource(effect.relationship, relationship) ||
+        return "relationship process request must target its iterated store"
     arguments.expression === nothing &&
         return "relationship removal requires an explicit bounded condition"
     return nothing
@@ -240,11 +249,6 @@ function _statement_lowering_rejection(statement, statements, system)
         _statement_option(statement, :mechanism) === :local_connectivity &&
             return _local_connectivity_rejection(statement, statements)
         return nothing
-    elseif statement isa HamiltonianTerm
-        mechanism = _statement_option(statement, :mechanism)
-        mechanism === nothing || mechanism === :symbolic || mechanism in (
-            :volume, :contact, :relationship, :elongation,
-        ) || return "unsupported HamiltonianTerm mechanism $(repr(mechanism))"
     elseif statement isa SynchronousProcess
         return _synchronous_rejection(statement, statements)
     elseif statement isa AcceptedCopyProcess

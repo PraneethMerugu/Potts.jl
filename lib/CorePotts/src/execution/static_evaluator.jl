@@ -3,6 +3,19 @@
 abstract type AbstractStaticExpression end
 abstract type AbstractContextualOperation end
 
+"""Structural execution contexts used to qualify concrete evaluator callables."""
+abstract type AbstractEvaluatorExecutionContext end
+abstract type AbstractProbeEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractHamiltonianEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractProposalEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractSiteStageEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractRelationshipStageEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+
 abstract type AbstractStorageRepresentation end
 
 struct StateStorageRepresentation{
@@ -140,6 +153,7 @@ struct ResourceOperation{Identity} <: AbstractContextualOperation end
 function context_value end
 function apply_resource_operation end
 function operation_callable end
+function operation_context_supported end
 function state_value end
 function workspace_value end
 function evaluator_parameters end
@@ -160,6 +174,17 @@ function relation_neighbor_site end
 function _compiled_evaluator_parameters end
 function _compiled_context_value end
 function _compiled_resource_operation end
+
+# Ordinary Julia callables carry no evaluator-context dependency. Contextual
+# callables must prove support explicitly; ResourceOperation and ContextOperation
+# derive that proof from their actual context method at each runtime boundary.
+operation_context_supported(
+    operation, ::Type{<:AbstractEvaluatorExecutionContext}
+) = !(operation isa AbstractContextualOperation)
+operation_context_supported(
+    ::AbstractContextualOperation,
+    ::Type{<:AbstractEvaluatorExecutionContext},
+) = false
 
 for (identity, operation) in (
         :add => OrderedFold(+),
@@ -370,7 +395,8 @@ end
 )(arguments::Tuple, context) =
     apply_resource_operation(operation, arguments, context)
 
-struct EvaluatorProbeContext{P, V, S, W}
+struct EvaluatorProbeContext{P, V, S, W} <:
+       AbstractProbeEvaluationContext
     parameters::P
     values::V
     states::S
@@ -449,6 +475,22 @@ end
         context,
     )
 end
+
+operation_context_supported(
+    operation::ContextOperation,
+    ::Type{AbstractProbeEvaluationContext},
+) = hasmethod(
+    context_value,
+    Tuple{typeof(operation), EvaluatorProbeContext},
+)
+
+operation_context_supported(
+    operation::ResourceOperation,
+    ::Type{AbstractProbeEvaluationContext},
+) = hasmethod(
+    apply_resource_operation,
+    Tuple{typeof(operation), Tuple, EvaluatorProbeContext},
+)
 
 @inline state_value(
     context::EvaluatorProbeContext,

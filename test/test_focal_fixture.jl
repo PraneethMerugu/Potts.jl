@@ -215,7 +215,9 @@ end
 
     # The Core transaction is all-or-nothing under capacity, degree,
     # generation, duplicate, and per-edge conflict validation.
-    plan = getfield(getfield(executable, :core_program), :relationships)
+    plan = only(getfield(
+        getfield(executable, :core_program), :relationships
+    ))
     state = CorePotts.ProgramRelationshipState(
         Float64,
         plan.capacity,

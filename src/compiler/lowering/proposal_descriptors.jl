@@ -275,8 +275,11 @@ function _proposal_descriptor(
         draw_handles,
         cache,
     )
-    evaluator = CorePotts.StaticEvaluator(expression)
     record = ir.source.records[candidate.record]
+    execution_context = candidate.category === :hamiltonian ?
+        CorePotts.AbstractHamiltonianEvaluationContext :
+        CorePotts.AbstractProposalEvaluationContext
+    evaluator = _static_evaluator(expression, execution_context, record)
     resolved_states = _record_state_handles(ir, record, state_handles)
     resolved_workspaces = _record_workspace_handles(
         record, workspace_layout, workspace_handles

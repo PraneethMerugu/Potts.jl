@@ -171,6 +171,36 @@ end
         "Nearest", only(interpolation_error.diagnostics).actual
     )
 
+    cell = CellBinding(:cell)
+    @named unsupported_surface = PottsSystem(
+        statements = StatementSet((
+            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+            endothelial,
+            extracellular,
+            HamiltonianTerm(
+                :surface;
+                domain = cells(endothelial),
+                anchor = cell,
+                expression = cell_surface(cell),
+            ),
+            Protocol(Sweep(); name = :main),
+        )),
+    )
+    surface_error = try
+        compile(
+            complete(unsupported_surface);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test surface_error isa PottsToolkit.PottsValidationError
+    @test only(surface_error.diagnostics).kind ===
+          :unsupported_operation_context
+
     @named same_science = PottsSystem(
         statements = model_statements,
         unknowns = [activity],

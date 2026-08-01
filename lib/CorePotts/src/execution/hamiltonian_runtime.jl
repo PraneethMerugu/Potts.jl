@@ -21,7 +21,8 @@ struct CanonicalContactAnchor{I}
     second::I
 end
 
-struct HamiltonianEvaluationContext{V, A, P, D}
+struct HamiltonianEvaluationContext{V, A, P, D} <:
+       AbstractHamiltonianEvaluationContext
     view::V
     anchor::A
     proposal::P
@@ -226,6 +227,22 @@ end
     )
 end
 
+operation_context_supported(
+    operation::ContextOperation,
+    ::Type{AbstractHamiltonianEvaluationContext},
+) = hasmethod(
+    context_value,
+    Tuple{typeof(operation), HamiltonianEvaluationContext},
+)
+
+operation_context_supported(
+    operation::ResourceOperation,
+    ::Type{AbstractHamiltonianEvaluationContext},
+) = hasmethod(
+    apply_resource_operation,
+    Tuple{typeof(operation), Tuple, HamiltonianEvaluationContext},
+)
+
 @inline function _canonical_contact(runtime, first, second)
     linear = LinearIndices(runtime.ownership)
     return linear[first] <= linear[second] ?
@@ -380,7 +397,8 @@ end
     return delta
 end
 
-@inline function _hamiltonian_delta(
+@inline function _relationship_hamiltonian_delta(
+        state,
         evaluator::StaticEvaluator,
         role::HamiltonianRole{<:RelationshipEnergyDomainPlan, <:IncidentRelationshipsAffectedPlan},
         before,
@@ -390,14 +408,6 @@ end
     )
     runtime = proposal.runtime
     T = eltype(runtime.parameters)
-    slot = _relationship_domain_slot(
-        resources, role.domain.relationship_handle
-    )
-    slot == 1 || throw(ArgumentError(
-        "V1 runtime contains one relationship storage slot"
-    ))
-    state = runtime.relationships
-    state === nothing && return zero(T)
     delta = zero(T)
     count = 0
 
@@ -441,6 +451,25 @@ end
         )
     end
     return delta
+end
+
+@inline function _hamiltonian_delta(
+        evaluator::StaticEvaluator,
+        role::HamiltonianRole{<:RelationshipEnergyDomainPlan, <:IncidentRelationshipsAffectedPlan},
+        before,
+        after,
+        proposal,
+        resources,
+    )
+    slot = _relationship_domain_slot(
+        resources, role.domain.relationship_handle
+    )
+    return _call_relationship_slot(
+        _relationship_hamiltonian_delta,
+        proposal.runtime.relationships,
+        slot,
+        (evaluator, role, before, after, proposal, resources),
+    )
 end
 
 @inline function _compiled_hamiltonian_delta(

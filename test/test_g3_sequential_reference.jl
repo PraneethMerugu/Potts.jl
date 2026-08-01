@@ -1049,24 +1049,25 @@ end
         ) == 0
         before_ownership = copy(linked_runtime.ownership)
         before_volumes = copy(linked_runtime.volumes)
-        before_relationships = deepcopy(linked_runtime.relationships)
+        before_relationships = copy(only(linked_runtime.relationships))
         @test !_g3_scripted_attempt!(
             linked_runtime, source, target, 0.5
         )
         @test linked_runtime.ownership == before_ownership
         @test linked_runtime.volumes == before_volumes
-        @test linked_runtime.relationships.active == before_relationships.active
-        @test linked_runtime.relationships.endpoint_a ==
+        linked_relationships = only(linked_runtime.relationships)
+        @test linked_relationships.active == before_relationships.active
+        @test linked_relationships.endpoint_a ==
               before_relationships.endpoint_a
-        @test linked_runtime.relationships.endpoint_b ==
+        @test linked_relationships.endpoint_b ==
               before_relationships.endpoint_b
-        @test linked_runtime.relationships.generation_a ==
+        @test linked_relationships.generation_a ==
               before_relationships.generation_a
-        @test linked_runtime.relationships.generation_b ==
+        @test linked_relationships.generation_b ==
               before_relationships.generation_b
-        @test linked_runtime.relationships.payload == before_relationships.payload
-        @test linked_runtime.relationships.degree == before_relationships.degree
-        @test linked_runtime.relationships.incident_edges ==
+        @test linked_relationships.payload == before_relationships.payload
+        @test linked_relationships.degree == before_relationships.degree
+        @test linked_relationships.incident_edges ==
               before_relationships.incident_edges
 
         unlinked_runtime = relationship_runtime(Tuple{Int, Int}[])
@@ -1116,6 +1117,7 @@ end
                 medium,
                 state,
                 term,
+                Observation(:g3_external_state_snapshot, g3_external_state),
                 Protocol(Sweep(; temperature); name = :main),
             )),
             unknowns = [g3_external_state],
@@ -1135,12 +1137,19 @@ end
             values = [g3_external_state => initial_values],
         )
         problem = PottsProblem(executable, initial, (0, 3); seed = 0x303)
-        uninterrupted = init(problem; save_everystep = true)
+        uninterrupted = init(
+            problem;
+            save_everystep = true,
+            observables = (:g3_external_state_snapshot,),
+        )
         step!(uninterrupted)
         saved = checkpoint(uninterrupted)
         continued = solve!(uninterrupted)
         resumed = solve(
-            problem; checkpoint = saved, save_everystep = true
+            problem;
+            checkpoint = saved,
+            save_everystep = true,
+            observables = (:g3_external_state_snapshot,),
         )
         continued_final = last(continued.u)
         resumed_final = last(resumed.u)
@@ -1148,6 +1157,10 @@ end
         @test continued_final.cell_kinds == resumed_final.cell_kinds
         @test continued_final.volumes == resumed_final.volumes
         @test continued_final[:g3_external_state] ==
+              resumed_final[:g3_external_state]
+        @test continued_final[:g3_external_state_snapshot] ==
+              continued_final[:g3_external_state]
+        @test resumed_final[:g3_external_state_snapshot] ==
               resumed_final[:g3_external_state]
         @test continued.stats.accepted == resumed.stats.accepted
         @test continued.stats.rejected == resumed.stats.rejected
@@ -1182,12 +1195,52 @@ end
             statement -> statement isa RelationshipState,
             collect(fixture),
         ))
+        retune_edge = RelationshipBinding(:g3_retune_edge, relationship)
+        retune_process = LifecycleProcess(
+            :retune_neutral_pairs;
+            domain = edges(relationship),
+            expression =
+                (retune_edge.score >= retune_edge.cutoff) &
+                (retune_edge.marker > zero(pair_weight)),
+            effects = (Retune(
+                relationship,
+                retune_edge;
+                payload = (
+                    score = retune_edge.score + pair_weight,
+                    cutoff = retune_edge.cutoff,
+                    marker = zero(pair_weight),
+                ),
+            ),),
+            phase = Lifecycle(),
+        )
+        duplicate_create = AcceptedCopy(
+            :request_neutral_pair_duplicate,
+            Create(
+                relationship,
+                proposal.source_cell,
+                proposal.target_cell;
+                payload = (
+                    score = 2 * pair_weight,
+                    cutoff = zero(pair_weight),
+                    marker = 2 * pair_weight,
+                ),
+            );
+            when = new_contact(
+                proposal.source_cell, proposal.target_cell
+            ) & !linked(
+                relationship,
+                proposal.source_cell,
+                proposal.target_cell,
+            ),
+        )
         @named model = PottsSystem(
             statements = StatementSet((
                 Lattice((5, 5); relations = (proposal = VonNeumann(),)),
                 cell,
                 medium,
                 fixture,
+                retune_process,
+                duplicate_create,
                 Protocol(Sweep(; temperature); name = :main),
             )),
             parameters = [pair_weight, temperature],
@@ -1200,20 +1253,32 @@ end
         )
         @test keys(only(executable.reports.relationship_states).payload_units) ==
               (:score, :cutoff, :marker)
-        create_descriptor = only([
+        create_descriptors = [
             descriptor
             for group in executable.core_program.stage_plan.accepted_copy
             for descriptor in group.instances
             if descriptor.effect isa CorePotts.RelationshipCreateEffect
-        ])
+        ]
         remove_descriptors = [
             descriptor
             for group in executable.core_program.stage_plan.after_mcs
             for descriptor in group.instances
             if descriptor.effect isa CorePotts.RelationshipRemoveEffect
         ]
-        @test create_descriptor.effect.relationship_slot == 1
+        retune_descriptors = [
+            descriptor
+            for group in executable.core_program.stage_plan.after_mcs
+            for descriptor in group.instances
+            if descriptor.effect isa CorePotts.RelationshipRetuneEffect
+        ]
+        @test length(create_descriptors) == 2
+        @test all(
+            descriptor -> descriptor.effect.relationship_slot == 1,
+            create_descriptors,
+        )
         @test length(remove_descriptors) == 2
+        @test length(retune_descriptors) == 1
+        @test only(retune_descriptors).effect.relationship_slot == 1
 
         labels = zeros(Int, 5, 5)
         labels[2, 2] = 1
@@ -1248,8 +1313,9 @@ end
         @test _g3_scripted_attempt!(
             runtime, source, target, 0.5
         )
-        @test count(runtime.relationships.active) == 1
-        @test map(values -> values[1], runtime.relationships.payload) ==
+        runtime_relationships = only(runtime.relationships)
+        @test count(runtime_relationships.active) == 1
+        @test map(values -> values[1], runtime_relationships.payload) ==
               (1.25, 0.0, 1.25)
 
         lifecycle_initial = PottsInitialState(
@@ -1270,13 +1336,15 @@ end
         lifecycle_integrator = init(lifecycle_problem; save_start = false)
         saved = checkpoint(lifecycle_integrator)
         step!(lifecycle_integrator)
-        @test count(lifecycle_integrator.runtime.relationships.active) == 0
+        @test count(only(
+            lifecycle_integrator.runtime.relationships
+        ).active) == 0
         resumed = init(
             lifecycle_problem; checkpoint = saved, save_start = false
         )
         step!(resumed)
-        @test resumed.runtime.relationships.active ==
-              lifecycle_integrator.runtime.relationships.active
+        @test only(resumed.runtime.relationships).active ==
+              only(lifecycle_integrator.runtime.relationships).active
 
         allocation_initial = PottsInitialState(
             ownership = LabelledCells(
@@ -1294,6 +1362,9 @@ end
             executable, allocation_initial, (0, 1); seed = 0x30c
         )).runtime
         CorePotts._execute_after_mcs_stage!(allocation_runtime)
+        @test map(values -> values[1], only(
+            allocation_runtime.relationships
+        ).payload) == (2.25, 0.0, 0.0)
         @test @allocated(
             CorePotts._execute_after_mcs_stage!(allocation_runtime)
         ) == 0
@@ -1301,5 +1372,213 @@ end
             CorePotts._execute_after_mcs_stage!,
             Tuple{typeof(allocation_runtime)},
         ) === Nothing
+    end
+
+    @testset "multiple relationship stores remain independently addressable" begin
+        @parameters multi_weight = 1.5 multi_temperature = 2.0
+        cell = CellKind(:g3_multi_cell)
+        medium = MediumKind(:g3_multi_medium)
+        proposal = ProposalContext(:g3_multi_copy)
+        score_links = RelationshipState(
+            :g3_score_links;
+            endpoints = Undirected(cell, cell),
+            payload = (score = multi_weight,),
+            capacity = 4,
+            maximum_degree = 2,
+            lifecycle = RemoveWithEndpoint(),
+        )
+        elastic_links = RelationshipState(
+            :g3_elastic_links;
+            endpoints = Undirected(cell, cell),
+            payload = (
+                stiffness = multi_weight,
+                rest_length = zero(multi_weight),
+            ),
+            capacity = 5,
+            maximum_degree = 3,
+            lifecycle = RemoveWithEndpoint(),
+        )
+        score_edge = RelationshipBinding(:g3_multi_score_edge, score_links)
+        retune_score = LifecycleProcess(
+            :g3_multi_retune_score;
+            domain = edges(score_links),
+            expression = score_edge.score > zero(multi_weight),
+            effects = (Retune(
+                score_links,
+                score_edge;
+                payload = (score = score_edge.score + multi_weight,),
+            ),),
+            phase = Lifecycle(),
+        )
+        @named model = PottsSystem(
+            statements = StatementSet((
+                Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                score_links,
+                elastic_links,
+                AcceptedCopy(
+                    :create_score_link,
+                    Create(
+                        score_links,
+                        proposal.source_cell,
+                        proposal.target_cell;
+                        payload = (score = multi_weight,),
+                    );
+                    when = new_contact(
+                        proposal.source_cell, proposal.target_cell
+                    ) & !linked(
+                        score_links,
+                        proposal.source_cell,
+                        proposal.target_cell,
+                    ),
+                ),
+                AcceptedCopy(
+                    :create_elastic_link,
+                    Create(
+                        elastic_links,
+                        proposal.source_cell,
+                        proposal.target_cell;
+                        payload = (
+                            stiffness = 2 * multi_weight,
+                            rest_length = zero(multi_weight),
+                        ),
+                    );
+                    when = new_contact(
+                        proposal.source_cell, proposal.target_cell
+                    ) & !linked(
+                        elastic_links,
+                        proposal.source_cell,
+                        proposal.target_cell,
+                    ),
+                ),
+                retune_score,
+                Observation(:g3_score_degree, degree(score_links, 1)),
+                Observation(:g3_elastic_degree, degree(elastic_links, 1)),
+                Protocol(Sweep(; temperature = multi_temperature); name = :main),
+            )),
+            parameters = [multi_weight, multi_temperature],
+        )
+        executable = compile(
+            complete(model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        @test length(executable.core_program.relationships) == 2
+        @test length(executable.reports.relationship_states) == 2
+        @test Tuple(
+            entry.name for entry in executable.reports.relationship_states
+        ) == (:g3_elastic_links, :g3_score_links)
+        create_descriptors = [
+            descriptor
+            for group in executable.core_program.stage_plan.accepted_copy
+            for descriptor in group.instances
+            if descriptor.effect isa CorePotts.RelationshipCreateEffect
+        ]
+        @test sort(Int[
+            descriptor.effect.relationship_slot
+            for descriptor in create_descriptors
+        ]) == [1, 2]
+
+        labels = zeros(Int, 5, 5)
+        labels[2, 2] = 1
+        labels[2, 3:4] .= 2
+        problem = PottsProblem(
+            executable,
+            PottsInitialState(ownership = LabelledCells(
+                labels; cells = [cell, cell], medium
+            )),
+            (0, 1);
+            seed = 0x30d,
+        )
+        integrator = init(problem; save_start = false)
+        source = CartesianIndex(2, 2)
+        target = CartesianIndex(2, 3)
+        create_context = CorePotts._ProposalEvaluationContext(
+            integrator.runtime,
+            source,
+            target,
+            Int32(2),
+            Int32(1),
+            1,
+            0,
+        )
+        CorePotts._emit_accepted_copy_stage!(
+            integrator.runtime, create_context
+        )
+        transactions = integrator.runtime.stage_buffers.relationship_transactions
+        CorePotts._reset_relationship_transactions!(
+            transactions, integrator.runtime.relationships
+        )
+        reset_bytes = @allocated CorePotts._reset_relationship_transactions!(
+            transactions, integrator.runtime.relationships
+        )
+        CorePotts._emit_accepted_copy_groups!(
+            integrator.runtime.stage_buffers.accepted_copy,
+            integrator.runtime.program.stage_plan.accepted_copy,
+            create_context,
+        )
+        CorePotts._reset_relationship_transactions!(
+            transactions, integrator.runtime.relationships
+        )
+        emit_bytes = @allocated CorePotts._emit_accepted_copy_groups!(
+            integrator.runtime.stage_buffers.accepted_copy,
+            integrator.runtime.program.stage_plan.accepted_copy,
+            create_context,
+        )
+        CorePotts._prepare_relationship_transactions!(
+            transactions,
+            integrator.runtime.cell_kinds,
+            integrator.runtime.cell_generations,
+            integrator.runtime.program.relationships,
+        )
+        CorePotts._reset_relationship_transactions!(
+            transactions, integrator.runtime.relationships
+        )
+        CorePotts._emit_accepted_copy_groups!(
+            integrator.runtime.stage_buffers.accepted_copy,
+            integrator.runtime.program.stage_plan.accepted_copy,
+            create_context,
+        )
+        prepare_bytes = @allocated CorePotts._prepare_relationship_transactions!(
+            transactions,
+            integrator.runtime.cell_kinds,
+            integrator.runtime.cell_generations,
+            integrator.runtime.program.relationships,
+        )
+        @test (reset_bytes, emit_bytes, prepare_bytes) == (0, 0, 0)
+        @test Core.Compiler.return_type(
+            CorePotts._emit_accepted_copy_stage!,
+            Tuple{typeof(integrator.runtime), typeof(create_context)},
+        ) === typeof(integrator.runtime.stage_buffers.accepted_copy)
+        @test _g3_scripted_attempt!(
+            integrator.runtime, source, target, 0.5
+        )
+        elastic_state, score_state = integrator.runtime.relationships
+        @test count(score_state.active) == 1
+        @test count(elastic_state.active) == 1
+        @test map(values -> values[1], score_state.payload) == (1.5,)
+        @test map(values -> values[1], elastic_state.payload) == (3.0, 0.0)
+        CorePotts._execute_after_mcs_stage!(integrator.runtime)
+        @test @allocated(
+            CorePotts._execute_after_mcs_stage!(integrator.runtime)
+        ) == 0
+        @test map(values -> values[1], score_state.payload) == (4.5,)
+        @test map(values -> values[1], elastic_state.payload) == (3.0, 0.0)
+
+        saved = checkpoint(integrator)
+        resumed = init(
+            problem;
+            checkpoint = saved,
+            save_start = false,
+            observables = (:g3_score_degree, :g3_elastic_degree),
+        )
+        @test resumed.u[:g3_score_degree] == 1
+        @test resumed.u[:g3_elastic_degree] == 1
+        @test resumed.runtime.relationships[1].payload == elastic_state.payload
+        @test resumed.runtime.relationships[2].payload == score_state.payload
+        @test resumed.runtime.relationships[1].active == elastic_state.active
+        @test resumed.runtime.relationships[2].active == score_state.active
     end
 end

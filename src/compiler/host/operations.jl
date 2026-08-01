@@ -175,6 +175,34 @@ operation_transfer(::typeof(_potts_act_energy), ::Int) =
         gpu = false,
     )
 
+operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
+    _transfer(
+        :explicit_field_euler,
+        7,
+        :real,
+        :declared;
+        locality = :finite_spatial,
+        gpu = false,
+    )
+
+operation_transfer(::typeof(_potts_proposal_bound_state_value), ::Int) =
+    _transfer(
+        :proposal_bound_state_value,
+        1,
+        :real,
+        :declared;
+        locality = :site_local,
+    )
+
+operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
+    _transfer(
+        :iteration_bound_state_value,
+        1,
+        :real,
+        :declared;
+        locality = :site_local,
+    )
+
 for operation in (
         cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b,

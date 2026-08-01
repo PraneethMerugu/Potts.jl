@@ -12,6 +12,26 @@ struct IterationStageSite <: AbstractStageSiteSelector end
 struct BoundStateValueOperation{S <: AbstractStageSiteSelector} <:
         AbstractContextualOperation end
 
+function operation_callable(
+        ::Val{:proposal_bound_state_value},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported proposal-bound-state operation version $version"
+    ))
+    return BoundStateValueOperation{ProposalTargetStageSite}()
+end
+
+function operation_callable(
+        ::Val{:iteration_bound_state_value},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported iteration-bound-state operation version $version"
+    ))
+    return BoundStateValueOperation{IterationStageSite}()
+end
+
 function stage_site end
 
 @inline function (operation::BoundStateValueOperation{S})(
@@ -20,6 +40,16 @@ function stage_site end
     handle = only(arguments)
     return state_value(context, handle, stage_site(S(), context))
 end
+
+operation_context_supported(
+    ::BoundStateValueOperation{ProposalTargetStageSite},
+    ::Type{AbstractProposalEvaluationContext},
+) = true
+
+operation_context_supported(
+    ::BoundStateValueOperation{IterationStageSite},
+    ::Type{AbstractSiteStageEvaluationContext},
+) = true
 
 abstract type AbstractCompiledEffect end
 
@@ -111,6 +141,26 @@ struct RelationshipRemoveEffect <: AbstractCompiledEffect
     end
 end
 
+"""Retune one bounded relationship payload from compiled evaluators."""
+struct RelationshipRetuneEffect{P <: Tuple} <: AbstractCompiledEffect
+    relationship_slot::Int32
+    payload::P
+    function RelationshipRetuneEffect(
+            relationship_slot::Integer,
+            payload::P,
+        ) where {P <: Tuple}
+        relationship_slot > 0 || throw(ArgumentError(
+            "a relationship-retune effect requires a positive storage slot"
+        ))
+        all(evaluator -> evaluator isa StaticEvaluator, payload) || throw(
+            ArgumentError(
+                "relationship-retune payload entries must be compiled evaluators"
+            )
+        )
+        new{P}(Int32(relationship_slot), payload)
+    end
+end
+
 
 function stage_effect_buffered end
 stage_effect_buffered(::AbstractCompiledEffect) = false
@@ -118,6 +168,7 @@ stage_effect_buffered(::SiteAssignmentEffect) = true
 stage_effect_buffered(::IteratedSiteAssignmentEffect) = true
 stage_effect_buffered(::RelationshipCreateEffect) = true
 stage_effect_buffered(::RelationshipRemoveEffect) = true
+stage_effect_buffered(::RelationshipRetuneEffect) = true
 
 struct CompiledStageDescriptor{
         C <: StaticEvaluator,
@@ -245,35 +296,46 @@ struct StageEvaluation{T <: AbstractFloat}
     value::T
 end
 
-mutable struct StageRuntimeBuffers{T <: AbstractFloat, N}
+mutable struct StageRuntimeBuffers{T <: AbstractFloat, N, R <: Tuple}
     accepted_copy::Vector{StageEvaluation{T}}
     after_mcs::Vector{Array{T, N}}
-    relationship_after_mcs::Vector{BitVector}
+    relationship_transactions::R
 end
 
 function allocate_stage_runtime_buffers(
         plan::StageExecutionPlan,
         ::Type{T},
         shape::NTuple{N, Int},
-        relationship_capacity::Integer = 0,
+        relationships::Tuple = (),
     ) where {T <: AbstractFloat, N}
     accepted = fill(
         StageEvaluation(false, zero(T)), Int(plan.accepted_count)
     )
     after = [zeros(T, shape) for _ in 1:Int(plan.after_mcs_count)]
-    relationship_count = sum((
-        1
-        for group in plan.after_mcs
-        for descriptor in group.instances
-        if descriptor.effect isa RelationshipRemoveEffect
-    ); init = 0)
-    relationship_capacity >= 0 || throw(ArgumentError(
-        "relationship stage capacity cannot be negative"
-    ))
-    relationship = [
-        falses(relationship_capacity) for _ in 1:relationship_count
-    ]
-    return StageRuntimeBuffers{T, N}(accepted, after, relationship)
+    transactions = ntuple(length(relationships)) do store_slot
+        accepted_bound = sum((
+            1
+            for group in plan.accepted_copy
+            for descriptor in group.instances
+            if descriptor.effect isa RelationshipCreateEffect &&
+               descriptor.effect.relationship_slot == store_slot
+        ); init = 0)
+        after_bound = sum((
+            length(relationships[store_slot].active)
+            for group in plan.after_mcs
+            for descriptor in group.instances
+            if descriptor.effect isa Union{
+                RelationshipRemoveEffect, RelationshipRetuneEffect,
+            } &&
+               descriptor.effect.relationship_slot == store_slot
+        ); init = 0)
+        RelationshipTransactionBuffer(
+            relationships[store_slot], max(accepted_bound, after_bound)
+        )
+    end
+    return StageRuntimeBuffers{T, N, typeof(transactions)}(
+        accepted, after, transactions
+    )
 end
 
 Adapt.@adapt_structure BoundStateValueOperation
@@ -282,6 +344,7 @@ Adapt.@adapt_structure IteratedSiteAssignmentEffect
 Adapt.@adapt_structure ShiftAppendEffect
 Adapt.@adapt_structure RelationshipCreateEffect
 Adapt.@adapt_structure RelationshipRemoveEffect
+Adapt.@adapt_structure RelationshipRetuneEffect
 Adapt.@adapt_structure CompiledStageDescriptor
 Adapt.@adapt_structure StageDescriptorGroup
 Adapt.@adapt_structure StageExecutionPlan

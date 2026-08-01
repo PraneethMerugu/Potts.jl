@@ -43,7 +43,7 @@ function _hamiltonian_domain_resources(ir::AnalyzedTermIR)
 
     relation_offsets = Matrix{Int8}[]
     total_offsets = 0
-    relationship_slot = 0
+    relationships = _ordered_relationships(ir.source.records)
     for (handle, record) in enumerate(ir.source.records)
         if record.kind === :SpatialRelation
             options = _record_options(record)
@@ -55,7 +55,13 @@ function _hamiltonian_domain_resources(ir::AnalyzedTermIR)
             contact_counts[handle] = Int32(size(offsets, 2))
             total_offsets += size(offsets, 2)
         elseif record.kind === :RelationshipState
-            relationship_slot += 1
+            relationship_slot = findfirst(
+                candidate -> candidate.identity == record.identity,
+                relationships,
+            )
+            relationship_slot === nothing && error(
+                "relationship resource is absent from canonical storage order"
+            )
             relationship_slots[handle] = Int32(relationship_slot)
         end
     end

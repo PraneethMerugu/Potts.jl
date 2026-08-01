@@ -115,8 +115,7 @@ function compile(
                 )),
             )
         end
-        for statement in all_statements
-        if statement isa RelationshipState
+        for statement in _ordered_relationships(all_statements)
     )
     time = _compiled_time_contract(all_statements)
     external_io = _compiled_external_io(

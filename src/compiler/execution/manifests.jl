@@ -5,6 +5,22 @@ _manifest_identity(identity::QualifiedStatementID) = (
     local_id = Symbol(identity.local_id),
 )
 
+_relationship_order_key(identity::QualifiedStatementID) = string(identity)
+_relationship_order_key(record::QualifiedStatement) =
+    _relationship_order_key(record.identity)
+_relationship_order_key(statement::RelationshipState) =
+    String(Symbol(statement_id(statement)))
+
+_is_relationship_resource(::AbstractPottsStatement) = false
+_is_relationship_resource(::RelationshipState) = true
+_is_relationship_resource(record::QualifiedStatement) =
+    record.kind === :RelationshipState
+
+_ordered_relationships(values) = sort(
+    filter(_is_relationship_resource, values);
+    by = _relationship_order_key,
+)
+
 function _manifest_symbol(value)
     value isa AbstractPottsStatement && return Symbol(statement_id(value))
     name = _try_symbolic_name(value)

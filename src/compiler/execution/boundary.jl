@@ -13,13 +13,13 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
             CorePotts.state_schema_metadata(entry.schema)
             for entry in program.descriptor_plan.state_layout.entries
         ),
-        relationships = program.relationships === nothing ? nothing : (
-            capacity = program.relationships.capacity,
-            maximum_degree = program.relationships.maximum_degree,
+        relationships = Tuple((
+            capacity = schema.capacity,
+            maximum_degree = schema.maximum_degree,
             endpoint = Int32,
             generation = UInt32,
             payload = eltype(program.parameter_defaults),
-        ),
+        ) for schema in program.relationships),
     )
 end
 
@@ -35,16 +35,19 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
             }
         ); init = 0) * prod(program.shape),
         proposal_scratch = length(program.descriptor_plan.source_table),
-        relationship_requests = program.relationships === nothing ? 0 :
-                                program.relationships.capacity,
+        relationship_requests = sum(
+            schema.capacity for schema in program.relationships; init = 0
+        ),
         relationship_lifecycle_scratch =
-            program.relationships === nothing ? 0 :
             sum((
-                1
+                program.relationships[Int(descriptor.effect.relationship_slot)].capacity
                 for group in program.stage_plan.after_mcs
                 for descriptor in group.instances
-                if descriptor.effect isa CorePotts.RelationshipRemoveEffect
-            ); init = 0) * program.relationships.capacity,
+                if descriptor.effect isa Union{
+                    CorePotts.RelationshipRemoveEffect,
+                    CorePotts.RelationshipRetuneEffect,
+                }
+            ); init = 0),
         live_state_allocated = false,
     )
 end
