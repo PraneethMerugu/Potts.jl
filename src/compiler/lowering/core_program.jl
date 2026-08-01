@@ -42,141 +42,7 @@ function _relation_offsets(statements, name::Symbol, dimensions::Int, fallback)
     return _neighborhood_offsets(neighborhood, dimensions)
 end
 
-function _lower_activity(statements, kinds, manifest, ::Type{T}, dimensions) where {
-        T <: AbstractFloat,
-    }
-    term = findfirst(statement ->
-        statement isa ProposalDrive &&
-        _statement_option(statement, :mechanism) === :activity, statements)
-    term === nothing && return nothing
-    statement = statements[term]
-    kind = kinds[_kind_name(_statement_option(statement, :kind))]
-    reduction = _statement_option(statement, :reduction, Moore())
-    offsets = _neighborhood_offsets(reduction, dimensions)
-    maximum = _compiled_scalar(_statement_option(statement, :maximum), manifest, T)
-    strength = _compiled_scalar(_statement_option(statement, :strength), manifest, T)
-    activity_state = _statement_option(statement, :activity)
-    activate_extensions = any(statements) do candidate
-        candidate isa AcceptedCopyProcess || return false
-        arguments = _statement_arguments(candidate)
-        any(arguments.effects) do effect
-            effect isa Assign && isequal(effect.target, activity_state)
-        end
-    end
-    decay = one(T)
-    for candidate in statements
-        candidate isa SynchronousProcess || continue
-        arguments = _statement_arguments(candidate)
-        any(effect -> effect isa Assign && isequal(effect.target, activity_state),
-            arguments.effects) || continue
-        decay = T(_numeric_value(_statement_option(candidate, :decay, one(T))))
-    end
-    return CorePotts.CompiledActivityPlan(
-        Int16(kind), maximum, strength, offsets, activate_extensions, decay
-    )
-end
-
-function _lower_field(
-        statements, kinds, manifest, ::Type{T}, dimensions
-    ) where {
-        T <: AbstractFloat,
-    }
-    field_states = filter(statement -> statement isa FieldState, statements)
-    isempty(field_states) && return nothing
-    length(field_states) == 1 || throw(ArgumentError(
-        "the V1 runtime currently supports one FieldState per executable"
-    ))
-    field_state = only(field_states)
-    chemotaxis_index = findfirst(statement ->
-        statement isa ProposalDrive &&
-        _statement_option(statement, :mechanism) === :chemotaxis, statements)
-    chemotaxis = chemotaxis_index === nothing ?
-                  nothing : statements[chemotaxis_index]
-    if chemotaxis !== nothing
-        field_ref = _statement_option(chemotaxis, :field)
-        isequal(field_state, field_ref) ||
-            Symbol(statement_id(field_state)) ===
-            (field_ref isa Symbol ? field_ref :
-             field_ref isa AbstractPottsStatement ?
-             Symbol(statement_id(field_ref)) : Symbol("")) ||
-            throw(ArgumentError(
-                "chemotaxis references an undeclared FieldState"
-            ))
-    end
-    source_kind_ref = _statement_option(
-        field_state,
-        :source_kind,
-        chemotaxis === nothing ? nothing :
-        _statement_option(chemotaxis, :kind),
-    )
-    source_kind = source_kind_ref === nothing ? 0 :
-                  kinds[_kind_name(source_kind_ref)]
-    chemotaxis_kind = chemotaxis === nothing ? 0 :
-                       kinds[_kind_name(_statement_option(chemotaxis, :kind))]
-    diffusion = _compiled_scalar(
-        _statement_option(field_state, :diffusion, 0.0), manifest, T
-    )
-    decay = _compiled_scalar(
-        _statement_option(field_state, :decay, 0.0), manifest, T
-    )
-    secretion = _compiled_scalar(
-        _statement_option(field_state, :secretion, 0.0), manifest, T
-    )
-    strength = chemotaxis === nothing ?
-               CorePotts.CompiledScalar(zero(T)) :
-               _compiled_scalar(
-                   _statement_option(chemotaxis, :strength), manifest, T
-               )
-    substeps = Int(_statement_option(field_state, :substeps, 1))
-    substeps > 0 || throw(ArgumentError("field substeps must be positive"))
-    duration_value = _statement_option(
-        field_state, :duration_per_mcs, 1.0
-    )
-    duration = T(_numeric_value(
-        duration_value,
-        _reference_for(manifest.reference_units, duration_value),
-    ))
-    stencil_offsets = _relation_offsets(
-        statements, :field_stencil, dimensions, VonNeumann()
-    )
-    return CorePotts.CompiledFieldPlan(
-        true,
-        diffusion,
-        decay,
-        secretion,
-        Int16(source_kind),
-        Int16(chemotaxis_kind),
-        strength,
-        stencil_offsets,
-        Int32(substeps),
-        duration,
-    )
-end
-
-function _lower_history(statements)
-    histories = filter(statement -> statement isa HistoryState, statements)
-    isempty(histories) && return nothing
-    length(histories) == 1 || throw(ArgumentError(
-        "the V1 runtime currently supports one HistoryState per executable"
-    ))
-    statement = only(histories)
-    source = _statement_option(statement, :of, nothing)
-    source === nothing && throw(ArgumentError(
-        "HistoryState requires an explicit `of` source in V1"
-    ))
-    activity_states = filter(candidate ->
-        candidate isa SiteState &&
-        isequal(_statement_arguments(candidate).variable, source), statements)
-    length(activity_states) == 1 || throw(ArgumentError(
-        "V1 history source must identify one declared SiteState"
-    ))
-    depth = _numeric_value(_statement_option(statement, :depth, 1))
-    depth isa Real && isinteger(depth) ||
-        throw(ArgumentError("history depth must be structurally resolved"))
-    return CorePotts.CompiledHistoryPlan(Int(depth), :activity)
-end
-
-function _lower_relationships(statements, kinds, manifest, ::Type{T}) where {
+function _lower_relationships(statements, manifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
     resources = filter(statement -> statement isa RelationshipState, statements)
@@ -185,12 +51,6 @@ function _lower_relationships(statements, kinds, manifest, ::Type{T}) where {
         "the V1 runtime currently supports one RelationshipState per executable"
     ))
     relationship = only(resources)
-    endpoints = _statement_option(relationship, :endpoints)
-    endpoints isa Undirected || throw(ArgumentError(
-        "V1 relationship lowering currently requires Undirected endpoints"
-    ))
-    kind_a = kinds[_kind_name(endpoints.kind_a)]
-    kind_b = kinds[_kind_name(endpoints.kind_b)]
     capacity = _numeric_value(_statement_option(relationship, :capacity))
     maximum_degree =
         _numeric_value(_statement_option(relationship, :maximum_degree))
@@ -200,61 +60,17 @@ function _lower_relationships(statements, kinds, manifest, ::Type{T}) where {
         "relationship maximum_degree must be structurally resolved"
     ))
     payload = _statement_option(relationship, :payload, NamedTuple())
-    all(name -> haskey(payload, name), (:strength, :target, :maximum)) ||
-        throw(ArgumentError(
-            "relationship payload requires strength, target, and maximum"
-        ))
-    strength = _compiled_scalar(payload.strength, manifest, T)
-    target = _compiled_scalar(payload.target, manifest, T)
-    maximum = _compiled_scalar(payload.maximum, manifest, T)
-    create_on_copy = any(statements) do candidate
-        candidate isa AcceptedCopyProcess || return false
-        any(_statement_arguments(candidate).effects) do effect
-            effect isa Create && isequal(effect.relationship, relationship)
-        end
-    end
-    break_after_mcs = any(statements) do candidate
-        candidate isa Union{RelationshipProcess, LifecycleProcess} || return false
-        any(_statement_arguments(candidate).effects) do effect
-            effect isa Remove && isequal(effect.relationship, relationship)
-        end
-    end
-    lifecycle = _statement_option(
-        relationship, :lifecycle, RejectEndpointRetirement()
+    payload isa NamedTuple || throw(ArgumentError(
+        "relationship payload declaration must be a named tuple"
+    ))
+    defaults = Tuple(
+        _compiled_scalar(getproperty(payload, name), manifest, T)
+        for name in keys(payload)
     )
-    lifecycle isa Union{RemoveWithEndpoint, RejectEndpointRetirement} ||
-        throw(ArgumentError("unsupported relationship lifecycle policy"))
-    remove_with_endpoint = lifecycle isa RemoveWithEndpoint
-    return CorePotts.CompiledRelationshipPlan(
+    return CorePotts.RelationshipStoreSchema(
         Int(capacity),
         Int(maximum_degree),
-        kind_a,
-        kind_b,
-        strength,
-        target,
-        maximum;
-        create_on_accepted_copy = create_on_copy,
-        break_after_mcs,
-        remove_with_endpoint,
-    )
-end
-
-function _lower_elongation(statements, kinds, manifest, ::Type{T}) where {
-        T <: AbstractFloat,
-    }
-    terms = filter(statement ->
-        statement isa HamiltonianTerm &&
-        _statement_option(statement, :mechanism) === :elongation, statements)
-    isempty(terms) && return nothing
-    length(terms) == 1 || throw(ArgumentError(
-        "the V1 runtime currently supports one elongation term"
-    ))
-    term = only(terms)
-    kind = kinds[_kind_name(_statement_option(term, :kind))]
-    return CorePotts.CompiledElongationPlan(
-        Int16(kind),
-        _compiled_scalar(_statement_option(term, :target), manifest, T),
-        _compiled_scalar(_statement_option(term, :strength), manifest, T),
+        defaults,
     )
 end
 
@@ -264,8 +80,7 @@ function _token_suffix(value, prefix::AbstractString)
     return Symbol(name[(lastindex(prefix) + 1):end])
 end
 
-function _lower_observations(statements, kinds)
-    plans = CorePotts.AbstractProgramObservation[]
+function _lower_observations(statements, kinds, state_layout)
     manifest = NamedTuple[]
     field_variables = Dict{Any, Symbol}()
     for statement in statements
@@ -279,8 +94,19 @@ function _lower_observations(statements, kinds)
         expression = _statement_arguments(statement).expression
         name = Symbol(statement_id(statement))
         if any(variable -> isequal(expression, variable), keys(field_variables))
-            push!(plans, CorePotts.FieldStateObservation())
-            push!(manifest, (name, kind = :field_state))
+            state_name = field_variables[expression]
+            layout_entry = only(filter(
+                entry -> entry.schema.identity.name === state_name,
+                state_layout.entries,
+            ))
+            push!(manifest, (
+                name,
+                kind = :state_export,
+                state_name,
+                evaluator = StateExportObservationEvaluator(
+                    layout_entry.handle
+                ),
+            ))
             continue
         end
         unwrapped = Symbolics.unwrap(expression)
@@ -299,10 +125,13 @@ function _lower_observations(statements, kinds)
             kind_name === nothing && throw(ArgumentError(
                 "observation `$name` has an invalid occupancy kind"
             ))
-            push!(plans, CorePotts.OccupiedSitesObservation(
-                Int16(kinds[kind_name])
+            push!(manifest, (
+                name,
+                kind = :occupied_sites,
+                evaluator = OccupiedSitesObservationEvaluator(
+                    Int16(kinds[kind_name])
+                ),
             ))
-            push!(manifest, (name, kind = :occupied_sites))
         elseif operation in (neighbor_count, degree) && length(arguments) == 2
             relationship_name = _token_suffix(
                 first(arguments), "__potts_relationship_set__"
@@ -313,11 +142,13 @@ function _lower_observations(statements, kinds)
             endpoint = _numeric_value(last(arguments))
             endpoint isa Integer || isinteger(endpoint) ||
                 throw(ArgumentError("relationship degree endpoint must be integral"))
-            push!(plans, CorePotts.RelationshipDegreeObservation(
-                Int32(endpoint)
-            ))
             push!(manifest, (
-                name, kind = :relationship_degree, relationship_name
+                name,
+                kind = :relationship_degree,
+                relationship_name,
+                evaluator = RelationshipDegreeObservationEvaluator(
+                    Int32(1), Int32(endpoint)
+                ),
             ))
         else
             throw(ArgumentError(
@@ -326,7 +157,7 @@ function _lower_observations(statements, kinds)
             ))
         end
     end
-    return Tuple(plans), Tuple(manifest)
+    return Tuple(manifest)
 end
 
 function _protocol_settings(statements, manifest, ::Type{T}) where {
@@ -354,6 +185,7 @@ function _lower_core_program(
         ::Type{T},
         manifest::ParameterManifest,
         descriptor_plan::CorePotts.DescriptorExecutionPlan,
+        stage_plan::CorePotts.StageExecutionPlan,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
     all_statements = _all_system_statements(completed)
@@ -399,31 +231,9 @@ function _lower_core_program(
     end
     count = length(kinds)
     defaults = _default_parameter_buffer(manifest, T)
-    zero_scalar = CorePotts.CompiledScalar(zero(T))
-    volume_targets = fill(zero_scalar, count)
-    volume_strengths = fill(zero_scalar, count)
-    contact_energies = fill(zero_scalar, count, count)
-
     for statement in all_statements
         mechanism = _statement_option(statement, :mechanism)
-        if statement isa HamiltonianTerm && mechanism === :volume
-            kind = kinds[_kind_name(_statement_option(statement, :kind))]
-            volume_targets[kind] = _compiled_scalar(
-                _statement_option(statement, :target), manifest, T
-            )
-            volume_strengths[kind] = _compiled_scalar(
-                _statement_option(statement, :strength), manifest, T
-            )
-        elseif statement isa HamiltonianTerm && mechanism === :contact
-            for law in _statement_option(statement, :laws, ())
-                pair = first(law)
-                energy = _compiled_scalar(last(law), manifest, T)
-                first_kind = kinds[_kind_name(pair.first)]
-                second_kind = kinds[_kind_name(pair.second)]
-                contact_energies[first_kind, second_kind] = energy
-                contact_energies[second_kind, first_kind] = energy
-            end
-        elseif statement isa HamiltonianTerm &&
+        if statement isa HamiltonianTerm &&
                 !(mechanism in (
                     nothing, :symbolic,
                     :volume, :contact, :relationship, :elongation,
@@ -442,18 +252,9 @@ function _lower_core_program(
         all_statements, :contact, dimensions, Moore()
     )
     attempts, temperature = _protocol_settings(all_statements, manifest, T)
-    activity = _lower_activity(all_statements, kinds, manifest, T, dimensions)
-    field = _lower_field(all_statements, kinds, manifest, T, dimensions)
-    history = _lower_history(all_statements)
-    elongation = _lower_elongation(all_statements, kinds, manifest, T)
-    relationships = _lower_relationships(all_statements, kinds, manifest, T)
-    observations, observation_manifest =
-        _lower_observations(all_statements, kinds)
-    cell_state_fields = Tuple(
-        Symbol(statement_id(statement))
-        for statement in all_statements
-        if statement isa CellState &&
-           haskey(_statement_arguments(statement), :variable)
+    relationships = _lower_relationships(all_statements, manifest, T)
+    observation_manifest = _lower_observations(
+        all_statements, kinds, descriptor_plan.state_layout
     )
     core_engine = engine isa SequentialEngine ?
                   CorePotts.SequentialProgramEngine() :
@@ -478,24 +279,16 @@ function _lower_core_program(
         contact_offsets,
         count,
         medium_kind,
-        volume_targets,
-        volume_strengths,
-        contact_energies,
         temperature,
         attempts,
         defaults,
-        activity,
-        field,
-        history,
-        elongation,
         relationships,
-        observations,
         descriptor_plan,
+        stage_plan,
         core_engine,
         core_backend,
         program_fingerprint;
         medium_kinds,
-        cell_state_fields,
     ), Tuple(_kind_name(declaration) for declaration in sorted_declarations),
        observation_manifest
 end

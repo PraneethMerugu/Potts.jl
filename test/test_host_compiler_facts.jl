@@ -190,6 +190,7 @@ end
             relations = (
                 proposal = VonNeumann(),
                 contact = Moore(),
+                activity_neighborhood = Moore(),
                 connectivity = Moore(),
                 connectivity_background = VonNeumann(),
             ),
@@ -220,6 +221,7 @@ end
             external_site_state;
             maximum = 2.0,
             strength = 1.0,
+            reduction = :activity_neighborhood,
         ),
         LocalConnectivity(endothelial),
         Protocol(Sweep(); name = :built_in_protocol),

@@ -305,12 +305,24 @@ function Chemotaxis(kind, field; strength,
         sample::AbstractInterpolationPolicy = Nearest(),
         name::Symbol = Symbol(:chemotaxis_, Symbol(statement_id(kind))))
     copy = ProposalContext(:copy)
-    expression = -strength * (
-        field_value(field, copy.target_site) -
-        field_value(field, copy.source_site)
+    response = -strength * (
+        field_value(field, copy.target_site) - field_value(field, copy.source_site)
+    )
+    expression = ifelse(
+        copy.is_extension & (source_kind(copy) == _kind_token(kind)),
+        response,
+        zero(strength),
     )
     return ProposalDrive(
-        name, expression; mechanism = :chemotaxis, kind, field, strength, mode, sample
+        name,
+        expression;
+        mechanism = :chemotaxis,
+        drive_scale = :energy,
+        kind,
+        field,
+        strength,
+        mode,
+        sample,
     )
 end
 
@@ -334,11 +346,20 @@ function LocalConnectivity(kind;
     )
 end
 
-function ActEnergy(kind, activity; maximum, strength, reduction = Moore(1),
+function ActEnergy(kind, activity; maximum, strength,
+        reduction::Symbol = :activity_neighborhood,
         name::Symbol = Symbol(:activity_, Symbol(statement_id(kind))))
+    expression = _potts_act_energy(
+        _kind_token(kind),
+        activity,
+        _spatial_relation_token(reduction),
+        maximum,
+        strength,
+    )
     return ProposalDrive(
-        name, 0.0;
+        name, expression;
         mechanism = :activity,
+        drive_scale = :energy,
         kind,
         activity,
         maximum,

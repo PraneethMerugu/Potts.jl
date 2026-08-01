@@ -45,9 +45,9 @@ function _normalize_observables(executable, observables)
     declared = Set{Symbol}(
         (
             :ownership, :cell_kinds, :cell_generations, :volumes,
-            :activity, :field, :history, :relationships,
         )
     )
+    union!(declared, entry.name for entry in executable.reports.states)
     union!(declared, entry.name for entry in executable.reports.relationship_states)
     union!(declared, value.name for value in executable.observations)
     unknown = setdiff(Set(requested), declared)
@@ -90,12 +90,12 @@ function _save_policy(
 end
 
 function _named_runtime_observations(runtime, executable, requested_names)
-    available = CorePotts.program_observations(runtime)
     requested = Set(requested_names)
     pairs = Pair{Symbol, Any}[]
-    for (index, entry) in enumerate(executable.observations)
+    for entry in executable.observations
         entry.name in requested || continue
-        push!(pairs, entry.name => available[index])
+        value = _evaluate_observation(entry.evaluator, runtime)
+        push!(pairs, entry.name => value)
     end
     names = Tuple(first(pair) for pair in pairs)
     return NamedTuple{names}(Tuple(last(pair) for pair in pairs))
@@ -109,6 +109,7 @@ function _current_saved_state(integrator::PottsIntegrator)
         integrator.policy.observables,
     )
     return _saved_state(
+        integrator.prob.executable,
         snapshot,
         observations,
         (entry.name for entry in integrator.prob.executable.observations),
@@ -153,6 +154,7 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
     )
     initial_snapshot = CorePotts.program_snapshot(runtime)
     initial_state = _saved_state(
+        problem.executable,
         initial_snapshot,
         _named_runtime_observations(
             runtime, problem.executable, policy.observables
@@ -274,12 +276,12 @@ function stage_external_inputs!(integrator::PottsIntegrator, values)
 
     T = eltype(integrator.runtime.parameters)
     parameters = copy(integrator.runtime.parameters)
-    activity = integrator.runtime.activity === nothing ? nothing :
-               copy(integrator.runtime.activity)
-    field = integrator.runtime.field === nothing ? nothing :
-            copy(integrator.runtime.field)
-    stored_states = _copy_saved_value(integrator.runtime.stored_states)
+    state_layout = integrator.prob.executable.core_program.descriptor_plan.state_layout
+    descriptor_state = CorePotts.copy_auxiliary_state(
+        state_layout, integrator.runtime.descriptor_state
+    )
     parameter_changed = false
+    state_changed = false
     for (entry, value) in resolved
         if entry.parameter_index !== nothing
             parameter = integrator.prob.executable.parameter_manifest[
@@ -290,61 +292,39 @@ function stage_external_inputs!(integrator::PottsIntegrator, values)
             parameter_changed = true
         else
             state = integrator.prob.executable.reports.states[entry.state_index]
-            if state.role === :activity
-                value isa AbstractArray ||
-                    throw(ArgumentError(
-                        "external activity state `$(entry.identity)` requires an array"
-                    ))
-                size(value) == entry.shape || throw(ArgumentError(
-                    "external state `$(entry.identity)` has shape $(size(value)); " *
-                    "expected $(entry.shape)"
-                ))
-                converted = map(
-                    item -> _convert_initial_scalar(state, item, T), value
+            converted = _normalize_initial_state_entry(
+                state,
+                Dict(state.name => value),
+                integrator.prob.executable.core_program.shape,
+                length(integrator.runtime.cell_kinds),
+                T,
+            )
+            target = CorePotts.state_block(
+                descriptor_state, state.handle
+            ).values
+            if state.storage === :history
+                axis = ndims(target)
+                length(converted) == size(target, axis) || error(
+                    "normalized external history depth is incompatible"
                 )
-                activity === nothing && throw(ArgumentError(
-                    "external activity state is not allocated"
-                ))
-                activity = converted
-            elseif state.role === :field
-                value isa AbstractArray ||
-                    throw(ArgumentError(
-                        "external field state `$(entry.identity)` requires an array"
-                    ))
-                size(value) == entry.shape || throw(ArgumentError(
-                    "external state `$(entry.identity)` has shape $(size(value)); " *
-                    "expected $(entry.shape)"
-                ))
-                converted = map(
-                    item -> _convert_initial_scalar(state, item, T), value
+                for index in eachindex(converted)
+                    copyto!(selectdim(target, axis, index), converted[index])
+                end
+            elseif converted isa AbstractArray
+                size(converted) == size(target) || error(
+                    "normalized external state shape is incompatible"
                 )
-                field === nothing && throw(ArgumentError(
-                    "external field state is not allocated"
-                ))
-                field = converted
+                copyto!(target, converted)
             else
-                converted = _normalize_initial_state_entry(
-                    state,
-                    Dict(state.name => value),
-                    integrator.prob.executable.core_program.shape,
-                    length(integrator.runtime.cell_kinds),
-                    T,
-                )
-                stored_states = merge(
-                    stored_states,
-                    NamedTuple{(state.name,)}((converted,)),
-                )
+                fill!(target, converted)
             end
+            state_changed = true
         end
     end
 
     parameter_changed &&
         CorePotts.update_program_parameters!(integrator.runtime, parameters)
-    activity === nothing ||
-        copyto!(integrator.runtime.activity, activity)
-    field === nothing ||
-        copyto!(integrator.runtime.field, field)
-    integrator.runtime.stored_states = stored_states
+    state_changed && (integrator.runtime.descriptor_state = descriptor_state)
     if parameter_changed
         names = Tuple(
             entry.name

@@ -300,7 +300,7 @@ function _lower_descriptor_plan(
         domain_resources.contact_counts,
         domain_resources.relationship_slots,
     )
-    return CorePotts.DescriptorExecutionPlan(
+    plan = CorePotts.DescriptorExecutionPlan(
         groups,
         state_layout,
         workspace_layout,
@@ -310,4 +310,5 @@ function _lower_descriptor_plan(
         fingerprint,
         domain_resources,
     )
+    return (; plan, state_handles, draw_handles)
 end

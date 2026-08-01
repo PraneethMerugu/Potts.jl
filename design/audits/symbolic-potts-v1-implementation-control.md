@@ -861,6 +861,230 @@ CorePotts edit needed only to add a genuinely reusable structural primitive is p
 repair, but the reviewer must reject an operation whose API or semantics merely spell the new
 mechanism. Search results are evidence leads; absence of a biological name is not clearance.
 
+### Engine-hardcoding audit protocol
+
+Engine hardcoding is a recurring architectural failure mode and MUST be audited independently of
+the mechanism-leakage name search. The question is not whether CorePotts mentions `Act`,
+`chemotaxis`, or another familiar mechanism. The question is whether engine control flow or engine
+state assumes a scientific policy that should instead be compiled from reusable structural
+primitives.
+
+CorePotts may own only bounded execution facts such as immutable proposal views, resource handles,
+typed structural domains, bounded traversal, descriptor evaluation, canonical folding,
+transactional request arbitration, generic state effects, scheduling, adaptation, and backend
+launch. PottsToolkit or an external module must own the scientific composition of those facts.
+Renaming a mechanism to a generic-looking tag, capability bit, plan, callback, or singleton does
+not change its ownership.
+
+This division applies equally to constraints. CorePotts may own the closed execution result of a
+constraint evaluation, the canonical rule for combining compiled results, and the bounded
+primitives needed to inspect a proposal. It MUST NOT own connectivity preservation, fragmentation
+policy, a privileged constraint neighborhood, or any other scientific admissibility rule. Those
+belong in PottsToolkit or an external module as ordinary compiled descriptors composed from the
+same public proposal, state, relation, and bounded-traversal primitives available to every other
+constraint.
+
+For every reachable branch, field, tag, callable, mutation, or checkpoint datum under the engine,
+the reviewer MUST record:
+
+1. the exact source location and production call path;
+2. the invariant that makes it structural rather than scientific;
+3. the smallest public primitive or closed structural algebra that exposes that invariant;
+4. whether an external module can express an equally demanding but scientifically unrelated use;
+5. whether adding that external use changes CorePotts, `CompiledPottsProgram`, the proposal loop,
+   stage executors, checkpoint machinery, or backend kernels; and
+6. the disposition: retain as primitive, generalize, move to PottsToolkit, quarantine as
+   unreachable legacy, or remove.
+
+The audit MUST challenge these common disguises of hardcoding:
+
+- a closed `isa`, symbol, enum, or trait ladder that dispatches scientific behavior;
+- one program/runtime/checkpoint field or capability boolean per mechanism;
+- a named constraint, drive, Hamiltonian term, process, or observation with a privileged engine
+  descriptor, executor branch, proposal veto, affected-region algorithm, or backend kernel;
+- an engine-selected neighborhood, owner, cell kind, field, history depth, reduction, decay law,
+  interpolation rule, or lifecycle condition;
+- accepted-copy or after-MCS branches that mutate a named resource directly instead of executing a
+  compiled typed effect;
+- observation code that knows particular biological state layouts instead of consuming compiled
+  observation descriptors;
+- relationship creation, retirement, or force policy embedded beside generic topology storage and
+  transaction primitives;
+- a compiler special case that recognizes a built-in mechanism where a registered operation,
+  domain, effect, or capability rule should suffice;
+- a generic-looking constraint or effect tag whose implementation still fixes the scientific
+  predicate, traversal, or mutation rather than only its bounded execution contract;
+- a backend-specific implementation that restates scientific semantics instead of implementing
+  the same structural primitive; and
+- defaults, zero values, empty plans, sentinels, or skipped descriptor categories that silently
+  disable or select a mechanism.
+
+#### Primitive-legitimacy test
+
+Calling something a primitive is not sufficient. Every operation reachable from an engine loop
+MUST be classified as exactly one of:
+
+1. a **structural kernel primitive** owned by CorePotts;
+2. a **compiled policy object** whose concrete behavior is supplied by PottsToolkit or an external
+   module; or
+3. a **scientific composition** owned entirely outside CorePotts.
+
+A CorePotts operation qualifies as a structural primitive only when all of the following hold:
+
+- its inputs and result describe execution structure, topology, geometry, proposal views, resource
+  access, bounded traversal, scheduling, or transactional state change—not a named biological or
+  biophysical rule;
+- it does not choose a scientific predicate, coefficient meaning, endpoint-kind policy,
+  neighborhood, lifecycle condition, or payload schema;
+- its bounds, aliasing, mutation, allocation, inference, and backend behavior have an explicit
+  compiler contract;
+- at least two scientifically unrelated compositions can use the same implementation without a
+  CorePotts edit or a new engine branch;
+- every backend already admitted by the current gate executes the same semantics through that
+  primitive; a primitive reserved for a later device gate must already adapt, report capability,
+  and fail closed, then receive its real-device execution proof at that gate; and
+- removing any one built-in mechanism leaves the primitive and its tests coherent.
+
+If an operation fails any item, the default disposition is to move its policy into a compiled
+callable/effect outside CorePotts and retain only the smallest structural operation it needs. A
+new symbol, trait, singleton type, descriptor role, capability flag, or `isa` case is not an
+acceptable repair unless the item itself passes this test. Conversely, the audit MUST NOT force a
+useful structural primitive out of CorePotts merely because one built-in model currently happens
+to be its only user; the independent negative probe decides that boundary.
+
+For each candidate primitive, the reviewer records its exact semantic contract and constructs a
+counterexample: a scientifically unrelated external use that stresses the same access, traversal,
+mutation, and backend behavior. Failure of the counterexample is a P1 even when all bundled models
+pass.
+
+#### Dependency-inversion and zero-engine-edit probes
+
+R1.5 MUST also audit the direction of dependency, not only the apparent generality of individual
+types. Scientific modules may depend on CorePotts primitives; CorePotts execution MUST NOT depend
+on the presence, names, registration order, payload vocabulary, or policy choices of bundled
+scientific modules.
+
+For every admitted extension category—Hamiltonian, drive, constraint, accepted-copy effect,
+after-MCS process, observation, and bounded relationship operation—the reviewer performs both of
+these probes:
+
+1. **Additive probe:** add a scientifically unrelated test-only implementation using only public
+   registration, lowering, descriptor, resource, and effect interfaces. The diff required under
+   `lib/CorePotts`, the proposal loop, stage executors, checkpoint machinery, and backend kernels
+   MUST be empty.
+2. **Subtractive probe:** omit the corresponding bundled mechanism and its registrations while
+   retaining the structural primitive and external fixture. Core compilation, execution,
+   checkpoint continuation, inference, and selected backend qualification MUST remain coherent.
+
+Any engine edit demanded by the additive probe is presumed to expose a missing primitive or a
+hard-coded policy. The reviewer must identify the smallest reusable structural contract before an
+edit is accepted. Any failure of the subtractive probe shows that the alleged primitive still
+derives meaning, defaults, layout, dispatch, or lifecycle behavior from a privileged built-in.
+
+The source audit therefore starts from production entry points and works inward. It traces every
+reachable `isa`/trait/symbol branch, tuple-position assumption, program or checkpoint field,
+resource slot convention, default/sentinel, and backend dispatch case to its declaring compiler
+fact. A branch is not cleared because several current models happen to share it. It is cleared only
+when the branch selects a bounded execution representation and all scientific choices arrive in a
+compiled value or callable owned outside CorePotts.
+
+The reviewer records the result in a compact table with: source location, reachable caller,
+suspected embedded policy, proposed structural primitive, additive-probe result,
+subtractive-probe result, backend result, and disposition. This table is a bounded review artifact,
+not a permanent evidence subsystem.
+
+#### Current candidate hardcoding inventory
+
+The following are evidence leads and repair claims in the current candidate, not predetermined
+verdicts. R1.5 MUST trace and either clear or dispose of every item against the
+primitive-legitimacy test:
+
+- the former `CompiledRelationshipPlan` mixed structural capacity/degree bounds with endpoint
+  kinds, focal-point payload defaults, accepted-copy creation, breakage, and endpoint-removal
+  policy. The repaired candidate replaces it with `RelationshipStoreSchema`; the audit must prove
+  that this replacement owns only bounded storage structure and that endpoint eligibility,
+  creation conditions, lifecycle predicates, and scientific payload meaning now arrive through
+  compiled policy outside CorePotts;
+- the former relationship request, initialization, checkpoint, and energy path spelled the focal
+  payload fields `strength`, `target`, and `maximum`. The repaired candidate uses positional tuple
+  payload storage plus compiler-owned value-level field resolution. The audit must prove no payload
+  name, declaration order, or bundled schema controls a CorePotts type, branch, slot convention, or
+  checkpoint interpretation;
+- the former `_accepted_copy_relationship_state` chose contact traversal, relationship creation,
+  payload defaults, and timing inside the proposal executor. The repaired candidate claims a
+  generic `RelationshipCreateEffect` over compiled evaluators and the public relationship
+  transaction primitive. The audit must trace the full emit/validate/commit path, prove warm
+  allocation and rejection atomicity, and exercise it with an unrelated external topology update;
+- the former `_after_mcs!` owned focal-link breakage and endpoint-removal decisions. The repaired
+  candidate claims a generic `RelationshipRemoveEffect` whose compiled predicate is evaluated from
+  an immutable relationship-stage view before canonical mutation. The audit must prove the engine
+  neither interprets payload meaning nor selects lifecycle policy and that multiple descriptors
+  obey the declared snapshot and conflict semantics;
+- relationship evaluation and observation currently contain a one-store/slot-one assumption. The
+  audit must decide whether this is an explicit closed V1 structural bound or an accidental
+  privileged resource, and must reject any path in which the first declared relationship gains
+  semantics unavailable to another declaration.
+- named resource operations such as cell volume/elongation, field/history access, relationship
+  degree, contact access, and owner-kind access require individual review. Geometry and generic
+  resource reads may be legitimate primitives; a hidden choice of model state, reduction,
+  neighborhood, or biological interpretation is not. They are not cleared merely because their
+  operation structs are concrete and allocation-free.
+- canonical cell-volume tracking and cell-retirement cleanup require an ownership audit: the
+  engine may maintain structural ownership invariants and generically retire cell-domain storage,
+  but it must not select mechanism-specific state, relationship policy, or observation behavior
+  during retirement.
+- every `ResourceOperation`, `ContextOperation`, stage-effect type, descriptor role, capability
+  field, and backend dispatch case must have a public structural contract and an unrelated external
+  probe. Any entry whose only coherent explanation is a bundled Wortel, Merks, Act, connectivity,
+  elongation, chemotaxis, or focal-point feature is a mechanism leak even if its name is generic.
+
+This inventory is updated during repair: a removed item is marked with the replacing primitive and
+its negative-probe test; a retained item is marked with the structural invariant that justifies it.
+Passing the bundled fixtures alone cannot clear any item.
+
+Clearance requires external, test-only negative probes for every production phase admitted by V1,
+not one token extension that exercises only proposal energy. At minimum the probes cover:
+
+- a proposal contribution and a hard constraint using declared state and bounded neighborhood
+  access;
+- an accepted-copy state update expressed as a compiled request/effect;
+- an after-MCS state transformation expressed through the same generic stage executor;
+- a compiled observation over externally declared state;
+- a bounded relationship request and lifecycle operation when the relationship surface is in
+  scope; and
+- checkpoint/restore plus the selected CPU qualification boundary for the resulting generic
+  resources and effects, with adaptation and fail-closed capability evidence for device paths not
+  yet admitted by the current gate. The same probe must execute on the selected real device at the
+  first gate that admits that stage; R1.5 must not circularly require G4 execution before allowing
+  G4 to begin.
+
+Each probe must use names and scientific meaning absent from CorePotts, run through the ordinary
+public compile and execution path, and require no engine edit. A test that merely subclasses a
+CorePotts mechanism-specific plan does not qualify. If one external probe cannot be expressed, the
+finding returns to the earliest missing primitive or executor boundary; it is not repaired by
+adding another named engine branch.
+
+The hard-constraint probe MUST use a predicate unrelated to connectivity and MUST prove that it
+uses the identical descriptor lowering, proposal-view access, canonical decision combination,
+checkpoint path, inference boundary, and selected backend launch as built-in PottsToolkit
+constraints. Conversely, the connectivity implementation MUST be removable from PottsToolkit
+without changing CorePotts or weakening that external probe. This bidirectional check distinguishes
+a real constraint primitive from a connectivity engine with an extension-shaped API.
+
+Severity is assigned by reachability and consequence:
+
+- P0 when hardcoding makes an accepted model scientifically inert or executes different science
+  from its declaration;
+- P1 when an external mechanism of an admitted V1 category requires an engine edit, bypass, host
+  fallback, or new specialization category; and
+- P2 only for unreachable legacy or organization that cannot affect production behavior and has a
+  bounded removal checkpoint.
+
+This protocol is applied at R1.5, repeated over concurrency and device paths at R2, exercised by
+Wortel, Merks, focal-point plasticity, and at least one unrelated external mechanism at R3, and
+repeated over the complete reachable tree at R4. It is intentionally a source-and-negative-probe
+review, not a new evidence framework or a permanent slow test tier.
+
 G4 remains stopped until R1.5 reports zero P0 and zero P1 findings. A compiler-boundary finding
 returns work to G1 or G2; an acceptance, RNG, atomicity, tracker, lifecycle, or sequential-runtime
 finding returns work to G3. P2 findings remain nonblocking under the existing autonomous repair

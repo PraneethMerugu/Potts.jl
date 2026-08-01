@@ -145,7 +145,7 @@ function _compiled_external_io(
                 shape
             elseif state !== nothing && state.shape isa Tuple
                 state.shape
-            elseif observation !== nothing && observation.kind === :field_state
+            elseif observation !== nothing && observation.kind === :state_export
                 shape
             else
                 ()
@@ -229,6 +229,7 @@ function _compiled_state_manifest(
         statements,
         activity_reference,
         manifest::ParameterManifest,
+        state_layout::CorePotts.StateLayout,
         shape,
         ::Type{T},
     ) where {T <: AbstractFloat}
@@ -256,9 +257,20 @@ function _compiled_state_manifest(
                           shape...,
                           Int(_numeric_value(_statement_option(statement, :depth, 1))),
                       ) : ()
+        matching_entries = filter(
+            entry -> entry.schema.identity.name === Symbol(statement_id(statement)),
+            state_layout.entries,
+        )
+        length(matching_entries) == 1 || throw(ArgumentError(
+            "compiled state `$(statement_id(statement))` does not resolve to exactly " *
+            "one canonical state-layout entry"
+        ))
+        layout_entry = only(matching_entries)
         push!(result, (
             key = _symbolic_name(arguments.variable),
             name = Symbol(statement_id(statement)),
+            identity = layout_entry.schema.identity,
+            handle = layout_entry.handle,
             kind = statement_kind(statement),
             role,
             storage,

@@ -838,6 +838,24 @@ function _endpoint_retirement_constraint(relationship::RelationshipState)
     )
 end
 
+function _endpoint_removal_process(relationship::RelationshipState)
+    relationship_name = Symbol(statement_id(relationship))
+    edge = RelationshipBinding(
+        Symbol(:endpoint_cleanup_edge_, relationship_name), relationship
+    )
+    expression = (cell_volume(edge.a) == 0) |
+                 (cell_volume(edge.b) == 0)
+    return LifecycleProcess(
+        Symbol(:__potts_endpoint_cleanup_, relationship_name);
+        domain = edges(relationship),
+        expression,
+        effects = (Remove(relationship, edge),),
+        phase = Lifecycle(),
+        derived_from = :remove_with_endpoint,
+        source = statement_source(relationship),
+    )
+end
+
 function _expand_structural_policies(system::PottsSystem)
     expanded = AbstractPottsStatement[statements(system)...]
     for statement in statements(system)
@@ -845,8 +863,11 @@ function _expand_structural_policies(system::PottsSystem)
         lifecycle = _statement_option(
             statement, :lifecycle, RejectEndpointRetirement()
         )
-        lifecycle isa RejectEndpointRetirement || continue
-        push!(expanded, _endpoint_retirement_constraint(statement))
+        if lifecycle isa RejectEndpointRetirement
+            push!(expanded, _endpoint_retirement_constraint(statement))
+        elseif lifecycle isa RemoveWithEndpoint
+            push!(expanded, _endpoint_removal_process(statement))
+        end
     end
     children = PottsSystem[
         _expand_structural_policies(child)

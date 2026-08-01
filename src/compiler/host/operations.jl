@@ -165,6 +165,16 @@ operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
         locality = :finite_spatial,
     )
 
+operation_transfer(::typeof(_potts_act_energy), ::Int) =
+    _transfer(
+        :act_energy,
+        5,
+        :real,
+        :declared;
+        locality = :finite_spatial,
+        gpu = false,
+    )
+
 for operation in (
         cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b,

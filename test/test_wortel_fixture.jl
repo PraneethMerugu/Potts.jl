@@ -37,6 +37,7 @@
                 contact = Moore(1),
                 surface = Moore(1),
                 query = Moore(1),
+                activity_neighborhood = Moore(1),
                 connectivity = Moore(1),
                 connectivity_background = VonNeumann(1),
             ),
@@ -55,7 +56,7 @@
             activity;
             maximum = M,
             strength = λact,
-            reduction = Moore(1),
+            reduction = :activity_neighborhood,
         )
         AcceptedCopy(
             :activate_protrusion,
@@ -91,8 +92,11 @@
         backend = CPUBackend(),
         scalar_type = Float32,
     )
-    @test inspect(executable, Capabilities()).activity
-    @test inspect(executable, Capabilities()).history
+    capabilities = inspect(executable, Capabilities())
+    @test :site in capabilities.state_domains
+    @test :history in capabilities.state_domains
+    @test :SiteAssignmentEffect in capabilities.stage_effects
+    @test :ShiftAppendEffect in capabilities.stage_effects
 
     labels = zeros(Int, 20, 16)
     labels[4:6, 6:8] .= 1
@@ -114,7 +118,7 @@
     @test all(
         left.ownership == right.ownership &&
         left.activity == right.activity &&
-        left.history == right.history
+        left.activity_history == right.activity_history
         for (left, right) in zip(trajectory, replay)
     )
     @test any(
@@ -123,8 +127,8 @@
     )
     @test maximum(trajectory(6).activity) <= 10
     @test minimum(trajectory(6).activity) >= 0
-    @test length(trajectory(6).history) == 2
-    @test last(trajectory(6).history) == trajectory(6).activity
+    @test length(trajectory(6).activity_history) == 2
+    @test last(trajectory(6).activity_history) == trajectory(6).activity
     @test trajectory(6)[:occupied_sites] ==
           count(!iszero, trajectory(6).ownership)
     @test_throws PottsToolkit.PottsKnownUnsavedError replay(6)[:occupied_sites]

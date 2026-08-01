@@ -9,17 +9,10 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
         cell_kind = Int16,
         cell_generation = UInt32,
         volume = Int,
-        activity = program.activity === nothing ? nothing :
-                   (element = eltype(program.parameter_defaults), count = site_count),
-        field = program.field === nothing ? nothing :
-                (element = eltype(program.parameter_defaults), count = site_count),
-        history = program.history === nothing ? nothing : (
-            element = eltype(program.parameter_defaults),
-            depth = Int(program.history.depth),
-            count = site_count * Int(program.history.depth),
+        declared_state_blocks = Tuple(
+            CorePotts.state_schema_metadata(entry.schema)
+            for entry in program.descriptor_plan.state_layout.entries
         ),
-        elongation = program.elongation === nothing ? nothing :
-                     (moments = :recomputed_reference, dimension = length(program.shape)),
         relationships = program.relationships === nothing ? nothing : (
             capacity = program.relationships.capacity,
             maximum_degree = program.relationships.maximum_degree,
@@ -32,10 +25,26 @@ end
 
 function _workspace_report(program::CorePotts.CompiledPottsProgram)
     return (
-        field_scratch = program.field === nothing ? 0 : prod(program.shape),
+        stage_site_scratch = sum((
+            1
+            for group in program.stage_plan.after_mcs
+            for descriptor in group.instances
+            if descriptor.effect isa Union{
+                CorePotts.SiteAssignmentEffect,
+                CorePotts.IteratedSiteAssignmentEffect,
+            }
+        ); init = 0) * prod(program.shape),
         proposal_scratch = length(program.descriptor_plan.source_table),
         relationship_requests = program.relationships === nothing ? 0 :
                                 program.relationships.capacity,
+        relationship_lifecycle_scratch =
+            program.relationships === nothing ? 0 :
+            sum((
+                1
+                for group in program.stage_plan.after_mcs
+                for descriptor in group.instances
+                if descriptor.effect isa CorePotts.RelationshipRemoveEffect
+            ); init = 0) * program.relationships.capacity,
         live_state_allocated = false,
     )
 end

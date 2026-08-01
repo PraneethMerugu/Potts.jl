@@ -161,6 +161,21 @@ function _state_handle_for_leaf(
         haskey(handles, record.identity) || continue
         return handles[record.identity]
     end
+    name = _try_symbolic_name(node.payload)
+    if name !== nothing
+        text = String(name)
+        for (prefix, kind) in (
+                "__potts_field__" => :FieldState,
+                "__potts_state__" => :SiteState,
+            )
+            startswith(text, prefix) || continue
+            requested = Symbol(text[(lastindex(prefix) + 1):end])
+            owner = ir.source.records[Int(node.record)]
+            record = _resource_record(ir.source, owner, kind, requested)
+            record === nothing && continue
+            haskey(handles, record.identity) && return handles[record.identity]
+        end
+    end
     return nothing
 end
 
@@ -273,6 +288,51 @@ function _compiled_resource_leaf(
     return handle === nothing ? nothing : Int32(handle)
 end
 
+function _relationship_payload_slot(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        selector::Symbol,
+    )
+    owner = ir.source.records[Int(node.record)]
+    declarations = filter(ir.source.records) do record
+        record.kind === :RelationshipState && record.identity in owner.resources
+    end
+    length(declarations) == 1 || throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :ambiguous_relationship_payload,
+            node.source,
+            String(selector),
+            node.source.path,
+            "one relationship resource owning the payload selector",
+            "$(length(declarations)) matching relationship resources",
+            (),
+            owner.source,
+        ),),
+    ))
+    payload = get(
+        _record_options(only(declarations)), :payload, NamedTuple()
+    )
+    payload isa NamedTuple || throw(ArgumentError(
+        "relationship payload declaration must be a named tuple"
+    ))
+    slot = findfirst(==(selector), keys(payload))
+    slot === nothing && throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :unknown_relationship_payload,
+            node.source,
+            String(selector),
+            node.source.path,
+            "one field declared by the relationship payload schema",
+            join(String.(keys(payload)), ", "),
+            (),
+            owner.source,
+        ),),
+    ))
+    return Int32(slot)
+end
+
 function _energy_anchor_expression(kind::Symbol)
     identity = kind === :site_anchor ? :energy_anchor_site :
                kind === :cell_anchor ? :energy_anchor_cell :
@@ -291,6 +351,9 @@ function _lower_static_node(
         state_handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
         draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         cache::Dict{Int32, CorePotts.AbstractStaticExpression},
+        state_binding::Union{
+            Nothing, CorePotts.AbstractStageSiteSelector,
+        } = nothing,
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
@@ -313,7 +376,12 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        CorePotts.StateExpression(handle)
+        state_expression = CorePotts.StateExpression(handle)
+        state_binding === nothing ? state_expression :
+        CorePotts.OperationExpression(
+            CorePotts.BoundStateValueOperation{typeof(state_binding)}(),
+            state_expression,
+        )
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
@@ -371,13 +439,9 @@ function _lower_static_node(
             "relationship payload selector has an invalid identity"
         ))
         selector = Symbol(text[(length(prefix) + 1):end])
-        code = selector === :strength ? UInt8(1) :
-               selector === :target ? UInt8(2) :
-               selector === :maximum ? UInt8(3) :
-               throw(ArgumentError(
-                   "unsupported relationship payload selector `$selector`"
-               ))
-        CorePotts.LiteralExpression(code)
+        CorePotts.LiteralExpression(
+            _relationship_payload_slot(ir, node, selector)
+        )
     elseif node.payload_kind in (
             :site_anchor, :cell_anchor, :contact_anchor,
             :relationship_context,
@@ -426,6 +490,7 @@ function _lower_static_node(
                 state_handles,
                 draw_handles,
                 cache,
+                state_binding,
             )
             for operand in node.operands
         )

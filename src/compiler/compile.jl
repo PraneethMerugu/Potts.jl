@@ -19,12 +19,22 @@ function compile(
     _validate_equation_and_event_coverage!(diagnostics, completed)
     _throw_diagnostics(:compilation, diagnostics)
     manifest = _build_parameter_manifest(completed, scalar_type)
-    descriptor_plan = _lower_descriptor_plan(
+    lowered_descriptors = _lower_descriptor_plan(
         analyzed_ir, manifest, scalar_type
+    )
+    descriptor_plan = lowered_descriptors.plan
+    stage_plan = _lower_stage_plan(
+        analyzed_ir,
+        manifest,
+        scalar_type,
+        lowered_descriptors.state_handles,
+        lowered_descriptors.draw_handles,
+        descriptor_plan.state_layout,
     )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
     )
+    _assert_concrete_core_boundary(stage_plan; path = "stage_plan")
     completion_fingerprint = completed_system_fingerprint(completed)
     seed = _sha256_hex(
         "potts-executable-seed-v1",
@@ -42,6 +52,7 @@ function compile(
         scalar_type,
         manifest,
         descriptor_plan,
+        stage_plan,
         seed,
     )
     _assert_concrete_core_boundary(core_program)
@@ -71,6 +82,7 @@ function compile(
         all_statements,
         activity_reference,
         manifest,
+        descriptor_plan.state_layout,
         core_program.shape,
         scalar_type,
     )
@@ -97,17 +109,10 @@ function compile(
                 lifecycle = nameof(typeof(_statement_option(
                     statement, :lifecycle, RejectEndpointRetirement()
                 ))),
-                payload_units = (
-                    strength = haskey(payload, :strength) ?
-                               _compiled_value_unit(payload.strength, manifest) :
-                               nothing,
-                    target = haskey(payload, :target) ?
-                             _compiled_value_unit(payload.target, manifest) :
-                             nothing,
-                    maximum = haskey(payload, :maximum) ?
-                              _compiled_value_unit(payload.maximum, manifest) :
-                              nothing,
-                ),
+                payload_units = NamedTuple{keys(payload)}(map(
+                    value -> _compiled_value_unit(value, manifest),
+                    values(payload),
+                )),
             )
         end
         for statement in all_statements

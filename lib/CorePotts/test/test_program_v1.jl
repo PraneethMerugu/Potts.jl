@@ -11,14 +11,10 @@ empty_descriptor_plan() = CorePotts.DescriptorExecutionPlan(
 
 function test_program(
         engine;
-        activity = nothing,
-        history = nothing,
         relationships = nothing,
-        observations = (),
-        volume_target = 9,
-        volume_strength = 1,
         temperature = 3,
-        cell_state_fields = (),
+        descriptor_plan = empty_descriptor_plan(),
+        stage_plan = CorePotts.StageExecutionPlan(),
     )
     T = Float64
     scalar(value) = CorePotts.CompiledScalar(T(value))
@@ -33,33 +29,55 @@ function test_program(
         offsets,
         2,
         1,
-        [scalar(0), scalar(volume_target)],
-        [scalar(0), scalar(volume_strength)],
-        [scalar(0) scalar(4); scalar(4) scalar(1)],
         scalar(temperature),
         1,
         T[],
-        activity,
-        nothing,
-        history,
-        nothing,
         relationships,
-        observations,
-        empty_descriptor_plan(),
+        descriptor_plan,
+        stage_plan,
         engine,
         CorePotts.CPUProgramBackend(),
-        "core-program-v1-test";
-        cell_state_fields,
+        "core-program-v1-test",
     )
 end
 
 @testset "extinction retires a generation at the lifecycle boundary" begin
+    marker_schema = CorePotts.StateBlockSchema(
+        CorePotts.QualifiedResourceIdentity((), :marker),
+        v"1.0.0",
+        :cell,
+        Float64,
+        (1,),
+        1,
+        :structure_of_arrays,
+        :provided_or_zero,
+        :shape_and_finite,
+        :logical,
+        :preserve,
+        :declared,
+        :bounded_write,
+        :adapt_storage,
+        :copy,
+        :logical_copy,
+        :qualified,
+        true,
+    )
+    layout = CorePotts.StateLayout([marker_schema])
+    descriptor_plan = CorePotts.DescriptorExecutionPlan(
+        (),
+        layout,
+        CorePotts.WorkspaceLayout(CorePotts.WorkspaceSchema[]),
+        (),
+        Any[],
+        0,
+        "cell-state-descriptor-plan-v1",
+        CorePotts.HamiltonianDomainResources(0, 0),
+    )
+    marker_handle = only(layout.entries).handle
     program = test_program(
         CorePotts.SequentialProgramEngine();
-        volume_target = 0,
-        volume_strength = 20,
         temperature = 0,
-        cell_state_fields = (:marker,),
+        descriptor_plan,
     )
     ownership = zeros(Int32, 6, 6)
     ownership[3, 3] = 1
@@ -67,7 +85,9 @@ end
         ownership,
         Int16[2];
         scalar_type = Float64,
-        stored_states = (marker = [7.0],),
+        descriptor_state = CorePotts.allocate_auxiliary_state(
+            layout, ([7.0],)
+        ),
     )
     runtime = CorePotts.initialize_program(
         program, initial, Float64[], UInt64(0x77), UInt32(1)
@@ -78,12 +98,18 @@ end
     end
     @test runtime.volumes[1] == 0
     @test runtime.cell_kinds[1] == 0
-    @test runtime.stored_states.marker[1] == 0
+    @test CorePotts.state_block(
+        runtime.descriptor_state, marker_handle
+    ).values[1] == 0
     restored = CorePotts.restore_program_checkpoint(
         program, CorePotts.program_checkpoint(runtime)
     )
     @test restored.cell_kinds == runtime.cell_kinds
-    @test restored.stored_states == runtime.stored_states
+    @test CorePotts.state_block(
+        restored.descriptor_state, marker_handle
+    ).values == CorePotts.state_block(
+        runtime.descriptor_state, marker_handle
+    ).values
 end
 
 function test_initial()
@@ -95,38 +121,111 @@ function test_initial()
 end
 
 @testset "bounded histories are logical checkpoint state" begin
-    scalar(value) = CorePotts.CompiledScalar(Float64(value))
-    offsets = Int8[
-        1 -1 0 0
-        0 0 1 -1
-    ]
-    activity = CorePotts.CompiledActivityPlan(
-        Int16(2), scalar(10), scalar(0), offsets, false, 1.0
+    function state_schema(name, domain, shape)
+        return CorePotts.StateBlockSchema(
+            CorePotts.QualifiedResourceIdentity((), name),
+            v"1.0.0",
+            domain,
+            Float64,
+            shape,
+            prod(shape),
+            :structure_of_arrays,
+            :provided_or_zero,
+            :shape_and_finite,
+            :logical,
+            :preserve,
+            :declared,
+            :bounded_write,
+            :adapt_storage,
+            :copy,
+            :logical_copy,
+            :qualified,
+            true,
+        )
+    end
+    layout = CorePotts.StateLayout([
+        state_schema(:signal, :site, (6, 6)),
+        state_schema(:signal_memory, :history, (6, 6, 2)),
+    ])
+    signal_entry = only(filter(
+        entry -> entry.schema.identity.name === :signal,
+        layout.entries,
+    ))
+    memory_entry = only(filter(
+        entry -> entry.schema.identity.name === :signal_memory,
+        layout.entries,
+    ))
+    descriptor_plan = CorePotts.DescriptorExecutionPlan(
+        (),
+        layout,
+        CorePotts.WorkspaceLayout(CorePotts.WorkspaceSchema[]),
+        (),
+        Any[],
+        0,
+        "history-descriptor-plan-v1",
+        CorePotts.HamiltonianDomainResources(0, 0),
     )
-    history = CorePotts.CompiledHistoryPlan(2, :activity)
+    shift = CorePotts.CompiledStageDescriptor(
+        CorePotts.StaticEvaluator(CorePotts.LiteralExpression(true)),
+        CorePotts.StaticEvaluator(CorePotts.LiteralExpression(0.0)),
+        CorePotts.ShiftAppendEffect(
+            memory_entry.handle, signal_entry.handle, 3
+        ),
+        CorePotts.AfterMCSStage(),
+        CorePotts.ResourceAccess(
+            (memory_entry.handle, signal_entry.handle),
+            (memory_entry.handle,),
+            CorePotts.FiniteSpatialFootprint(()),
+        ),
+        CorePotts.DescriptorSupport(true, true, true, true),
+        1,
+        0,
+    )
+    stage_plan = CorePotts.StageExecutionPlan(
+        (),
+        (CorePotts.StageDescriptorGroup([shift]),),
+        0,
+        0,
+        "history-stage-plan-v1",
+    )
     program = test_program(
-        CorePotts.SequentialProgramEngine(); activity, history
+        CorePotts.SequentialProgramEngine(); descriptor_plan, stage_plan
     )
     initial = test_initial()
     activity_values = fill(3.0, 6, 6)
+    history_values = Array{Float64}(undef, 6, 6, 2)
+    fill!(selectdim(history_values, 3, 1), 1.0)
+    fill!(selectdim(history_values, 3, 2), 2.0)
+    descriptor_values = map(layout.entries) do entry
+        entry.schema.identity.name === :signal ?
+        activity_values : history_values
+    end
     state = CorePotts.ProgramInitialState(
         initial.ownership,
         initial.cell_kinds;
         scalar_type = Float64,
-        activity = activity_values,
+        descriptor_state = CorePotts.allocate_auxiliary_state(
+            layout, descriptor_values
+        ),
     )
     runtime = CorePotts.initialize_program(
         program, state, Float64[], UInt64(4), UInt32(1)
     )
     CorePotts.advance_mcs!(runtime)
     snapshot = CorePotts.program_snapshot(runtime)
-    @test length(snapshot.history) == 2
-    @test snapshot.history[1] == activity_values
-    @test snapshot.history[2] == snapshot.activity
+    saved_history = CorePotts.state_block(
+        snapshot.descriptor_state, memory_entry.handle
+    ).values
+    @test selectdim(saved_history, 3, 1) == fill(2.0, 6, 6)
+    @test selectdim(saved_history, 3, 2) == activity_values
     restored = CorePotts.restore_program_checkpoint(
         program, CorePotts.program_checkpoint(runtime)
     )
-    @test CorePotts.program_snapshot(restored).history == snapshot.history
+    restored_history = CorePotts.state_block(
+        CorePotts.program_snapshot(restored).descriptor_state,
+        memory_entry.handle,
+    ).values
+    @test restored_history == saved_history
 end
 
 @testset "narrow compiled-program interface" begin
@@ -187,17 +286,24 @@ end
 
 @testset "relationship transactions are atomic and canonical" begin
     scalar(value) = CorePotts.CompiledScalar(Float64(value))
-    plan = CorePotts.CompiledRelationshipPlan(
-        2, 1, 2, 2, scalar(1), scalar(2), scalar(5)
+    @test_throws ArgumentError CorePotts.RelationshipStoreSchema(
+        Int(typemax(Int32)) + 1, 1
     )
-    state = CorePotts.ProgramRelationshipState(Float64, 2)
+    @test_throws ArgumentError CorePotts.RelationshipStoreSchema(
+        1, Int(typemax(Int16)) + 1
+    )
+    @test_throws ArgumentError CorePotts.ProgramRelationshipState(
+        Float64, 1, 1, Int(typemax(Int16)) + 1, 0
+    )
+    plan = CorePotts.RelationshipStoreSchema(
+        2, 1, (scalar(1), scalar(2), scalar(5))
+    )
+    state = CorePotts.ProgramRelationshipState(Float64, 2, 2, 1, 3)
     generations = UInt32[4, 7]
     create = CorePotts.CreateRelationshipRequest(
         2,
         1,
-        1.0,
-        2.0,
-        5.0;
+        (1.0, 2.0, 5.0);
         generation_a = 7,
         generation_b = 4,
         identity = 9,
@@ -219,7 +325,7 @@ end
 
     before = copy(state)
     stale = CorePotts.CreateRelationshipRequest(
-        1, 2, 1.0, 2.0, 5.0; identity = 10
+        1, 2, (1.0, 2.0, 5.0); identity = 10
     )
     @test_throws ArgumentError CorePotts.apply_relationship_requests!(
         state, Int16[2, 2], generations, plan, [stale]
@@ -228,7 +334,7 @@ end
     @test state.generation_b == before.generation_b
 
     invalid = CorePotts.CreateRelationshipRequest(
-        1, 3, 1.0, 2.0, 5.0; identity = 11
+        1, 3, (1.0, 2.0, 5.0); identity = 11
     )
     @test_throws ArgumentError CorePotts.apply_relationship_requests!(
         state, Int16[2, 2], generations, plan, [invalid]
@@ -238,7 +344,9 @@ end
     @test state.endpoint_b == before.endpoint_b
 
     conflict = [
-        CorePotts.RetuneRelationshipRequest(1, 2.0, 2.0, 5.0; identity = 1),
+        CorePotts.RetuneRelationshipRequest(
+            1, (2.0, 2.0, 5.0); identity = 1
+        ),
         CorePotts.RemoveRelationshipRequest(1; identity = 2),
     ]
     @test_throws ArgumentError CorePotts.apply_relationship_requests!(

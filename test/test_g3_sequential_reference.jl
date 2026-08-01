@@ -196,6 +196,311 @@ end
         @test_throws ArgumentError CorePotts.proposal_acceptance_probability(
             CorePotts.ProposalEvaluation(NaN, 0.0, 0.0, true), 1.0
         )
+
+        energy_drive = CorePotts.ProposalEvaluation(
+            0.0, 2.0, 0.0, 0.0, true
+        )
+        dimensionless_drive = CorePotts.ProposalEvaluation(
+            0.0, 0.0, 2.0, 0.0, true
+        )
+        @test CorePotts.proposal_log_acceptance_ratio(
+            energy_drive, 4.0
+        ) == -0.5
+        @test CorePotts.proposal_log_acceptance_ratio(
+            dimensionless_drive, 4.0
+        ) == 2.0
+    end
+
+    @testset "compiled Act and chemotaxis drives" begin
+        @variables activity_drive_state
+        act_cell = CellKind(:act_cell)
+        foreign_cell = CellKind(:foreign_cell)
+        act_medium = MediumKind(:act_medium)
+        activity = SiteState(
+            activity_drive_state;
+            name = :act_state,
+            initial = 0.0,
+            owner = act_cell,
+            lifecycle = ClearOnOwnershipChange(),
+        )
+        @named act_model = PottsSystem(
+            statements = StatementSet((
+                Lattice(
+                    (5, 5);
+                    boundary = Closed(),
+                    relations = (
+                        proposal = VonNeumann(),
+                        activity_neighborhood = Moore(),
+                    ),
+                ),
+                act_cell,
+                foreign_cell,
+                act_medium,
+                activity,
+                ActEnergy(
+                    act_cell,
+                    activity_drive_state;
+                    maximum = 10.0,
+                    strength = 2.0,
+                    reduction = :activity_neighborhood,
+                ),
+                Protocol(Sweep(; temperature = 4.0); name = :main),
+            )),
+            unknowns = [activity_drive_state],
+        )
+        act_executable = compile(
+            complete(act_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        act_labels = zeros(Int, 5, 5)
+        act_labels[3, 2] = 1
+        act_labels[2, 2] = 1
+        act_labels[3, 4] = 2
+        act_values = zeros(Float64, 5, 5)
+        act_values[3, 2] = 3.0
+        act_values[2, 2] = 8.0
+        act_initial = PottsInitialState(
+            ownership = LabelledCells(
+                act_labels;
+                cells = [act_cell, foreign_cell],
+                medium = act_medium,
+            ),
+            values = [activity_drive_state => act_values],
+        )
+        act_runtime = init(PottsProblem(
+            act_executable, act_initial, (0, 1); seed = 0x30a
+        )).runtime
+        act_context = CorePotts._ProposalEvaluationContext(
+            act_runtime,
+            CartesianIndex(3, 2),
+            CartesianIndex(3, 3),
+            Int32(0),
+            Int32(1),
+            1,
+            0,
+        )
+        act_evaluation = _g3_evaluate_proposal!(act_runtime, act_context)
+        @test act_evaluation.delta_h == 0.0
+        @test act_evaluation.drive_energy ≈ -1.0
+        @test act_evaluation.drive_log_bias == 0.0
+        @test act_evaluation.kinetic_modifier == 0.0
+        @test act_evaluation.constraints_allowed
+        @test any(
+            descriptor.role isa CorePotts.ProposalEnergyDriveRole
+            for group in act_executable.core_program.descriptor_plan.groups
+            for descriptor in group.launch.instances
+        )
+        foreign_context = CorePotts._ProposalEvaluationContext(
+            act_runtime,
+            CartesianIndex(3, 4),
+            CartesianIndex(3, 3),
+            Int32(0),
+            Int32(2),
+            2,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            act_runtime, foreign_context
+        ).drive_energy == 0.0
+        retraction_context = CorePotts._ProposalEvaluationContext(
+            act_runtime,
+            CartesianIndex(3, 3),
+            CartesianIndex(3, 2),
+            Int32(1),
+            Int32(0),
+            3,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            act_runtime, retraction_context
+        ).drive_energy == 0.0
+        _g3_evaluate_proposal!(act_runtime, act_context)
+        @test @allocated(_g3_evaluate_proposal!(
+            act_runtime, act_context
+        )) == 0
+
+        @variables chemo_state
+        chemo_cell = CellKind(:chemo_cell)
+        nonresponding_cell = CellKind(:nonresponding_cell)
+        chemo_medium = MediumKind(:chemo_medium)
+        field = FieldState(
+            chemo_state;
+            name = :chemo_field,
+            initial = 0.0,
+        )
+        @named chemo_model = PottsSystem(
+            statements = StatementSet((
+                Lattice(
+                    (5, 5);
+                    boundary = Closed(),
+                    relations = (proposal = VonNeumann(),),
+                ),
+                chemo_cell,
+                nonresponding_cell,
+                chemo_medium,
+                field,
+                Chemotaxis(
+                    chemo_cell,
+                    field;
+                    strength = 2.0,
+                    mode = ExtensionsOnly(),
+                    sample = Nearest(),
+                ),
+                Protocol(Sweep(; temperature = 4.0); name = :main),
+            )),
+            unknowns = [chemo_state],
+        )
+        chemo_executable = compile(
+            complete(chemo_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        chemo_labels = zeros(Int, 5, 5)
+        chemo_labels[3, 2] = 1
+        chemo_labels[3, 4] = 2
+        chemo_values = zeros(Float64, 5, 5)
+        chemo_values[3, 2] = 1.0
+        chemo_values[3, 3] = 4.0
+        chemo_initial = PottsInitialState(
+            ownership = LabelledCells(
+                chemo_labels;
+                cells = [chemo_cell, nonresponding_cell],
+                medium = chemo_medium,
+            ),
+            values = [chemo_state => chemo_values],
+        )
+        chemo_runtime = init(PottsProblem(
+            chemo_executable, chemo_initial, (0, 1); seed = 0x30b
+        )).runtime
+        chemo_context = CorePotts._ProposalEvaluationContext(
+            chemo_runtime,
+            CartesianIndex(3, 2),
+            CartesianIndex(3, 3),
+            Int32(0),
+            Int32(1),
+            1,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            chemo_runtime, chemo_context
+        ).drive_energy == -6.0
+        chemo_foreign_context = CorePotts._ProposalEvaluationContext(
+            chemo_runtime,
+            CartesianIndex(3, 4),
+            CartesianIndex(3, 3),
+            Int32(0),
+            Int32(2),
+            2,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            chemo_runtime, chemo_foreign_context
+        ).drive_energy == 0.0
+        chemo_retraction_context = CorePotts._ProposalEvaluationContext(
+            chemo_runtime,
+            CartesianIndex(3, 3),
+            CartesianIndex(3, 2),
+            Int32(1),
+            Int32(0),
+            3,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            chemo_runtime, chemo_retraction_context
+        ).drive_energy == 0.0
+        _g3_evaluate_proposal!(chemo_runtime, chemo_context)
+        @test @allocated(_g3_evaluate_proposal!(
+            chemo_runtime, chemo_context
+        )) == 0
+    end
+
+    @testset "external generic staged state effects" begin
+        @variables external_tracer
+        tracer_cell = CellKind(:tracer_cell)
+        tracer_medium = MediumKind(:tracer_medium)
+        tracer = SiteState(
+            external_tracer;
+            name = :external_tracer_state,
+            initial = 0.0,
+            owner = tracer_cell,
+            lifecycle = ClearOnOwnershipChange(),
+        )
+        copy = ProposalContext(:external_tracer_copy)
+        @named tracer_model = PottsSystem(
+            statements = StatementSet((
+                Lattice(
+                    (3, 3);
+                    boundary = Closed(),
+                    relations = (proposal = VonNeumann(),),
+                ),
+                tracer_cell,
+                tracer_medium,
+                tracer,
+                AcceptedCopy(
+                    :external_refresh,
+                    Assign(external_tracer, 7.0);
+                    when = copy.is_extension,
+                ),
+                Synchronous(
+                    :external_relaxation,
+                    Assign(external_tracer, max(external_tracer - 2.0, 0.0));
+                    phase = AfterMCS(),
+                ),
+                Protocol(Sweep(; temperature = 1.0); name = :main),
+            )),
+            unknowns = [external_tracer],
+        )
+        tracer_executable = compile(
+            complete(tracer_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        @test tracer_executable.core_program.stage_plan.accepted_count == 1
+        @test tracer_executable.core_program.stage_plan.after_mcs_count == 1
+        labels = zeros(Int, 3, 3)
+        labels[2, 2] = 1
+        tracer_values = zeros(Float64, 3, 3)
+        tracer_values[2, 2] = 4.0
+        tracer_values[2, 3] = 99.0
+        initial = PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = [tracer_cell], medium = tracer_medium
+            ),
+            values = [external_tracer => tracer_values],
+        )
+        runtime = init(PottsProblem(
+            tracer_executable, initial, (0, 1); seed = 0x30c
+        )).runtime
+        accepted_descriptor = only(only(
+            tracer_executable.core_program.stage_plan.accepted_copy
+        ).instances)
+        state_handle = accepted_descriptor.effect.target
+        state_values = CorePotts.state_block(
+            runtime.descriptor_state, state_handle
+        ).values
+        @test _g3_scripted_attempt!(
+            runtime,
+            CartesianIndex(2, 2),
+            CartesianIndex(2, 3),
+            0.5,
+        )
+        @test state_values[2, 3] == 7.0
+        @test runtime.ownership[2, 3] == 1
+        CorePotts._execute_after_mcs_stage!(runtime)
+        @test state_values[2, 2] == 2.0
+        @test state_values[2, 3] == 5.0
+        CorePotts._execute_after_mcs_stage!(runtime)
+        @test @allocated(CorePotts._execute_after_mcs_stage!(runtime)) == 0
+        @test Core.Compiler.return_type(
+            CorePotts._execute_after_mcs_stage!,
+            Tuple{typeof(runtime)},
+        ) === Nothing
+        @test CorePotts.program_checkpoint(runtime).snapshot.descriptor_state !==
+              runtime.descriptor_state
     end
 
     @testset "complete finite one-attempt transition matrix" begin
@@ -611,10 +916,6 @@ end
                 core_initial.cell_kinds;
                 scalar_type = Float64,
                 cell_generations = core_initial.cell_generations,
-                activity = core_initial.activity,
-                field = core_initial.field,
-                history = core_initial.history,
-                stored_states = core_initial.stored_states,
                 relationships = core_initial.relationships,
                 descriptor_state,
             )
@@ -748,19 +1049,25 @@ end
         ) == 0
         before_ownership = copy(linked_runtime.ownership)
         before_volumes = copy(linked_runtime.volumes)
-        before_relationships = map(
-            name -> copy(getfield(linked_runtime.relationships, name)),
-            fieldnames(typeof(linked_runtime.relationships)),
-        )
+        before_relationships = deepcopy(linked_runtime.relationships)
         @test !_g3_scripted_attempt!(
             linked_runtime, source, target, 0.5
         )
         @test linked_runtime.ownership == before_ownership
         @test linked_runtime.volumes == before_volumes
-        @test map(
-            name -> getfield(linked_runtime.relationships, name),
-            fieldnames(typeof(linked_runtime.relationships)),
-        ) == before_relationships
+        @test linked_runtime.relationships.active == before_relationships.active
+        @test linked_runtime.relationships.endpoint_a ==
+              before_relationships.endpoint_a
+        @test linked_runtime.relationships.endpoint_b ==
+              before_relationships.endpoint_b
+        @test linked_runtime.relationships.generation_a ==
+              before_relationships.generation_a
+        @test linked_runtime.relationships.generation_b ==
+              before_relationships.generation_b
+        @test linked_runtime.relationships.payload == before_relationships.payload
+        @test linked_runtime.relationships.degree == before_relationships.degree
+        @test linked_runtime.relationships.incident_edges ==
+              before_relationships.incident_edges
 
         unlinked_runtime = relationship_runtime(Tuple{Int, Int}[])
         unlinked_context = CorePotts._ProposalEvaluationContext(
@@ -860,5 +1167,139 @@ end
             fresh_runtime.descriptor_state,
             state_handle,
         ).values == initial_values
+    end
+
+
+    @testset "external relationship policy uses generic topology effects" begin
+        @parameters pair_weight = 1.25 temperature = 1.5
+        cell = CellKind(:g3_external_pair_cell)
+        medium = MediumKind(:g3_external_pair_medium)
+        proposal = ProposalContext(:g3_external_pair_copy)
+        fixture = NeutralExternalTerms.bounded_pair_fixture(
+            cell, pair_weight, proposal
+        )
+        relationship = only(filter(
+            statement -> statement isa RelationshipState,
+            collect(fixture),
+        ))
+        @named model = PottsSystem(
+            statements = StatementSet((
+                Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                fixture,
+                Protocol(Sweep(; temperature); name = :main),
+            )),
+            parameters = [pair_weight, temperature],
+        )
+        executable = compile(
+            complete(model; registry = NeutralExternalTerms.registry());
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        @test keys(only(executable.reports.relationship_states).payload_units) ==
+              (:score, :cutoff, :marker)
+        create_descriptor = only([
+            descriptor
+            for group in executable.core_program.stage_plan.accepted_copy
+            for descriptor in group.instances
+            if descriptor.effect isa CorePotts.RelationshipCreateEffect
+        ])
+        remove_descriptors = [
+            descriptor
+            for group in executable.core_program.stage_plan.after_mcs
+            for descriptor in group.instances
+            if descriptor.effect isa CorePotts.RelationshipRemoveEffect
+        ]
+        @test create_descriptor.effect.relationship_slot == 1
+        @test length(remove_descriptors) == 2
+
+        labels = zeros(Int, 5, 5)
+        labels[2, 2] = 1
+        labels[2, 3:4] .= 2
+        initial = PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = [cell, cell], medium
+            ),
+        )
+        runtime = init(PottsProblem(
+            executable, initial, (0, 1); seed = 0x30a
+        )).runtime
+        source = CartesianIndex(2, 2)
+        target = CartesianIndex(2, 3)
+        create_context = CorePotts._ProposalEvaluationContext(
+            runtime,
+            source,
+            target,
+            Int32(2),
+            Int32(1),
+            1,
+            0,
+        )
+        CorePotts._emit_accepted_copy_stage!(runtime, create_context)
+        @test @allocated(
+            CorePotts._emit_accepted_copy_stage!(runtime, create_context)
+        ) == 0
+        @test Core.Compiler.return_type(
+            CorePotts._emit_accepted_copy_stage!,
+            Tuple{typeof(runtime), typeof(create_context)},
+        ) === typeof(runtime.stage_buffers.accepted_copy)
+        @test _g3_scripted_attempt!(
+            runtime, source, target, 0.5
+        )
+        @test count(runtime.relationships.active) == 1
+        @test map(values -> values[1], runtime.relationships.payload) ==
+              (1.25, 0.0, 1.25)
+
+        lifecycle_initial = PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = [cell, cell], medium
+            ),
+            values = [
+                relationship => [(
+                    1,
+                    2,
+                    (score = -1.0, cutoff = 0.0, marker = 7.0),
+                )],
+            ],
+        )
+        lifecycle_problem = PottsProblem(
+            executable, lifecycle_initial, (0, 1); seed = 0x30b
+        )
+        lifecycle_integrator = init(lifecycle_problem; save_start = false)
+        saved = checkpoint(lifecycle_integrator)
+        step!(lifecycle_integrator)
+        @test count(lifecycle_integrator.runtime.relationships.active) == 0
+        resumed = init(
+            lifecycle_problem; checkpoint = saved, save_start = false
+        )
+        step!(resumed)
+        @test resumed.runtime.relationships.active ==
+              lifecycle_integrator.runtime.relationships.active
+
+        allocation_initial = PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = [cell, cell], medium
+            ),
+            values = [
+                relationship => [(
+                    1,
+                    2,
+                    (score = 1.0, cutoff = 0.0, marker = 7.0),
+                )],
+            ],
+        )
+        allocation_runtime = init(PottsProblem(
+            executable, allocation_initial, (0, 1); seed = 0x30c
+        )).runtime
+        CorePotts._execute_after_mcs_stage!(allocation_runtime)
+        @test @allocated(
+            CorePotts._execute_after_mcs_stage!(allocation_runtime)
+        ) == 0
+        @test Core.Compiler.return_type(
+            CorePotts._execute_after_mcs_stage!,
+            Tuple{typeof(allocation_runtime)},
+        ) === Nothing
     end
 end

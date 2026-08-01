@@ -197,12 +197,9 @@ end
         context::HamiltonianEvaluationContext,
     )
     edge = Int(first(arguments))
-    payload = UInt8(last(arguments))
+    payload_slot = Int(last(arguments))
     state = context.domain_resource
-    payload == 0x01 && return @inbounds state.strength[edge]
-    payload == 0x02 && return @inbounds state.target[edge]
-    payload == 0x03 && return @inbounds state.maximum[edge]
-    throw(ArgumentError("unknown relationship energy payload `$payload`"))
+    return relationship_payload(state, edge, payload_slot)
 end
 
 @inline function state_value(

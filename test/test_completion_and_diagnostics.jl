@@ -24,7 +24,11 @@ end
         Lattice(
             (8, 8);
             spacing = (1.0, 1.0),
-            relations = (proposal = Moore(), contact = Moore()),
+            relations = (
+                proposal = Moore(),
+                contact = Moore(),
+                activity_neighborhood = Moore(),
+            ),
         ),
         endothelial,
         extracellular,
@@ -44,7 +48,7 @@ end
             activity;
             maximum,
             strength = activity_strength,
-            reduction = Moore(),
+            reduction = :activity_neighborhood,
         ),
         AcceptedCopy(
             :activate,
@@ -67,7 +71,7 @@ end
     )
     completed = complete(wortel)
     records = inspect(completed, Statements())
-    @test length(records) == 12
+    @test length(records) == 13
     activity_record = only(filter(
         record -> record.lowering_identity === :lower_activity, records
     ))
@@ -93,6 +97,79 @@ end
     )
     @test length(string(semantic_fingerprint(completed))) == 64
     @test length(string(completed_system_fingerprint(completed))) == 64
+
+    @variables chemo_signal(t)
+    chemo_field = FieldState(
+        chemo_signal; name = :chemo_signal, initial = 0.0
+    )
+    @named unsupported_retraction = PottsSystem(
+        statements = StatementSet((
+            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+            endothelial,
+            extracellular,
+            chemo_field,
+            Chemotaxis(
+                endothelial,
+                chemo_field;
+                strength = 1.0,
+                mode = RetractionsOnly(),
+            ),
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [chemo_signal],
+        independent_variables = [t],
+    )
+    retraction_error = try
+        compile(
+            complete(unsupported_retraction);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test retraction_error isa PottsToolkit.PottsValidationError
+    @test only(retraction_error.diagnostics).kind === :unsupported_v1_lowering
+    @test occursin(
+        "ExtensionsOnly", only(retraction_error.diagnostics).actual
+    )
+
+    @named unsupported_interpolation = PottsSystem(
+        statements = StatementSet((
+            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+            endothelial,
+            extracellular,
+            chemo_field,
+            Chemotaxis(
+                endothelial,
+                chemo_field;
+                strength = 1.0,
+                sample = Multilinear(),
+            ),
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [chemo_signal],
+        independent_variables = [t],
+    )
+    interpolation_error = try
+        compile(
+            complete(unsupported_interpolation);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test interpolation_error isa PottsToolkit.PottsValidationError
+    @test only(interpolation_error.diagnostics).kind ===
+          :unsupported_v1_lowering
+    @test occursin(
+        "Nearest", only(interpolation_error.diagnostics).actual
+    )
 
     @named same_science = PottsSystem(
         statements = model_statements,

@@ -178,9 +178,6 @@ function SymbolicIndexingInterface.finalize_parameters_hook!(
 end
 
 function _state_value(saved::PottsSavedState, entry)
-    entry.role === :activity && return saved.activity
-    entry.role === :field && return saved.field
-    entry.role === :history && return saved.history
     return saved[entry.name]
 end
 
@@ -205,11 +202,15 @@ function _problem_saved_state(problem::PottsProblem)
         repeat = problem.ensemble_repeat,
         initial_mcs = problem.tspan[1],
     )
-    available = CorePotts.program_observations(runtime)
     names = Tuple(entry.name for entry in problem.executable.observations)
-    observations = NamedTuple{names}(Tuple(available))
+    observations = _named_runtime_observations(
+        runtime, problem.executable, names
+    )
     return _saved_state(
-        CorePotts.program_snapshot(runtime), observations, names
+        problem.executable,
+        CorePotts.program_snapshot(runtime),
+        observations,
+        names,
     )
 end
 

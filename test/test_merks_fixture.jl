@@ -38,6 +38,7 @@ end
         substeps = 2,
         duration_per_mcs = 1.0,
         source_kind = endothelial,
+        stencil = :field_stencil,
     )
     field_equation = Differential(t)(chemoattractant) ~
                      diffusion * chemoattractant -
@@ -109,12 +110,26 @@ end
         scalar_type = Float64,
     )
     capabilities = inspect(executable, Capabilities())
-    @test capabilities.field
-    @test capabilities.elongation
-    @test size(
-        getfield(getfield(executable, :core_program), :field).stencil_offsets,
-        2,
-    ) == 4
+    @test :site in capabilities.state_domains
+    @test :IteratedSiteAssignmentEffect in capabilities.stage_effects
+    @test any(
+        descriptor.role isa CorePotts.HamiltonianRole &&
+        executable.core_program.descriptor_plan.source_table[
+            descriptor.source_handle
+        ].local_id == StatementID(:elongation_endothelial)
+        for group in executable.core_program.descriptor_plan.groups
+        for descriptor in group.launch.instances
+    )
+    field_stage = only([
+        descriptor
+        for group in executable.core_program.stage_plan.after_mcs
+        for descriptor in group.instances
+        if descriptor.effect isa CorePotts.IteratedSiteAssignmentEffect
+    ])
+    field_relation = field_stage.value.expression.arguments[2].value
+    @test executable.core_program.descriptor_plan.domain_resources.contact_counts[
+        field_relation
+    ] == 4
 
     labels = zeros(Int, 18, 18)
     labels[4:6, 4:6] .= 1

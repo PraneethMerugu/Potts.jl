@@ -53,6 +53,18 @@ function _compiled_relationship_declaration(statements)
     return length(resources) == 1 ? only(resources) : nothing
 end
 
+function _declared_assignment_state(target, statements)
+    matches = filter(statements) do statement
+        statement isa Union{
+            SiteState, CellState, MediumState, ModelState, FieldState,
+            HistoryState,
+        } || return false
+        arguments = _statement_arguments(statement)
+        haskey(arguments, :variable) && isequal(arguments.variable, target)
+    end
+    return length(matches) == 1 ? only(matches) : nothing
+end
+
 _same_statement_resource(left, right) =
     left isa AbstractPottsStatement &&
     right isa AbstractPottsStatement &&
@@ -65,16 +77,13 @@ function _accepted_copy_rejection(statement, statements)
     effect = only(effects)
     condition = _statement_arguments(statement).expression
     if effect isa Assign
-        activity = _compiled_activity_declaration(statements)
-        activity === nothing &&
-            return "Assign has no matching compiled activity declaration"
-        isequal(effect.target, _statement_option(activity, :activity)) ||
-            return "Assign target is not the compiled activity state"
-        isequal(effect.value, _statement_option(activity, :maximum)) ||
-            return "activity activation must assign the declared maximum"
-        copy = ProposalContext(:copy)
-        isequal(condition, copy.is_extension) ||
-            return "activity activation condition must be copy.is_extension"
+        state = _declared_assignment_state(effect.target, statements)
+        state === nothing &&
+            return "Assign must target one declared state"
+        state isa SiteState ||
+            return "accepted-copy Assign currently requires a SiteState target"
+        condition === nothing &&
+            return "accepted-copy Assign requires an explicit bounded condition"
         return nothing
     elseif effect isa Create
         relationship = _compiled_relationship_declaration(statements)
@@ -83,17 +92,10 @@ function _accepted_copy_rejection(statement, statements)
         _same_statement_resource(effect.relationship, relationship) ||
             return "Create has no matching compiled relationship state"
         payload = _statement_option(relationship, :payload, NamedTuple())
-        all(name -> haskey(effect.payload, name) &&
-                    isequal(getproperty(effect.payload, name), getproperty(payload, name)),
-            keys(payload)) ||
-            return "Create payload must match the compiled relationship payload"
-        copy = ProposalContext(:copy)
-        expected = new_contact(copy.source_cell, copy.target_cell) &
-                   !linked(
-            relationship, copy.source_cell, copy.target_cell
-        )
-        isequal(condition, expected) ||
-            return "relationship creation condition must be new-contact and unlinked"
+        effect.payload isa NamedTuple && keys(effect.payload) == keys(payload) ||
+            return "Create payload must exactly match the declared payload schema"
+        condition === nothing &&
+            return "relationship creation requires an explicit bounded condition"
         return nothing
     end
     return "accepted-copy lowering does not support $(nameof(typeof(effect)))"
@@ -106,17 +108,10 @@ function _synchronous_rejection(statement, statements)
     effect = only(effects)
     effect isa Assign ||
         return "synchronous lowering currently requires Assign"
-    activity = _compiled_activity_declaration(statements)
-    activity === nothing &&
-        return "Assign has no matching compiled activity declaration"
-    isequal(effect.target, _statement_option(activity, :activity)) ||
-        return "Assign target is not the compiled activity state"
-    decay = _statement_option(statement, :decay, nothing)
-    decay === nothing &&
-        return "activity decay requires an explicit `decay` value"
-    expected = max(effect.target - decay, 0)
-    isequal(effect.value, expected) ||
-        return "activity decay expression must be max(activity - decay, 0)"
+    state = _declared_assignment_state(effect.target, statements)
+    state === nothing && return "Assign must target one declared state"
+    state isa SiteState ||
+        return "synchronous Assign currently requires a SiteState target"
     return nothing
 end
 
@@ -136,10 +131,6 @@ function _relationship_process_rejection(statement, statements)
         return "relationship process must emit one Remove request"
     arguments.expression === nothing &&
         return "relationship removal requires an explicit bounded condition"
-    expression = string(arguments.expression)
-    all(token -> occursin(token, expression), (
-        "distance", "unwrapped_center", "__potts_payload__maximum",
-    )) || return "relationship removal must compare unwrapped distance to edge.maximum"
     return nothing
 end
 
@@ -207,8 +198,43 @@ function _local_connectivity_rejection(statement, statements)
     return nothing
 end
 
+function _activity_rejection(statement, statements)
+    relation_name = _statement_option(statement, :reduction, nothing)
+    relation_name isa Symbol || return (
+        "Act reduction must name one declared SpatialRelation"
+    )
+    relations = filter(candidate ->
+        candidate isa SpatialRelation &&
+        Symbol(statement_id(candidate)) === relation_name,
+        statements,
+    )
+    length(relations) == 1 || return (
+        "Act reduction must name one declared SpatialRelation"
+    )
+    neighborhood = _statement_option(only(relations), :neighborhood, nothing)
+    neighborhood isa Moore && neighborhood.radius == 1 || return (
+        "the qualified Act profile requires a radius-one Moore reduction"
+    )
+    return nothing
+end
+
+function _chemotaxis_rejection(statement)
+    _statement_option(statement, :mode, nothing) isa ExtensionsOnly || return (
+        "V1 chemotaxis currently qualifies ExtensionsOnly()"
+    )
+    _statement_option(statement, :sample, nothing) isa Nearest || return (
+        "V1 chemotaxis currently qualifies Nearest() sampling"
+    )
+    return nothing
+end
+
 function _statement_lowering_rejection(statement, statements, system)
     if statement isa Union{ProposalDrive, ProposalModifier}
+        mechanism = _statement_option(statement, :mechanism, nothing)
+        mechanism === :activity && return _activity_rejection(
+            statement, statements
+        )
+        mechanism === :chemotaxis && return _chemotaxis_rejection(statement)
         return nothing
     elseif statement isa ProposalConstraint
         _statement_option(statement, :mechanism) === :local_connectivity &&
@@ -219,13 +245,6 @@ function _statement_lowering_rejection(statement, statements, system)
         mechanism === nothing || mechanism === :symbolic || mechanism in (
             :volume, :contact, :relationship, :elongation,
         ) || return "unsupported HamiltonianTerm mechanism $(repr(mechanism))"
-        if mechanism === :relationship
-            expression = string(_statement_arguments(statement).expression)
-            all(token -> occursin(token, expression), (
-                "distance", "unwrapped_center", "__potts_payload__strength",
-                "__potts_payload__target",
-            )) || return "relationship energy must be the canonical unwrapped spring"
-        end
     elseif statement isa SynchronousProcess
         return _synchronous_rejection(statement, statements)
     elseif statement isa AcceptedCopyProcess

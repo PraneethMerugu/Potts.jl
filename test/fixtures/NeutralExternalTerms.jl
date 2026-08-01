@@ -299,7 +299,7 @@ function ExternalBoundedPairTerm(
         VERSION,
         weight,
         edge,
-        weight * edge.strength,
+        weight * edge.score,
     )
 end
 
@@ -312,9 +312,9 @@ function bounded_pair_fixture(
         :neutral_pairs;
         endpoints = Undirected(endothelial, endothelial),
         payload = (
-            strength = weight,
-            target = zero(weight),
-            maximum = weight,
+            score = weight,
+            cutoff = zero(weight),
+            marker = weight,
         ),
         capacity = 8,
         maximum_degree = 2,
@@ -336,9 +336,9 @@ function bounded_pair_fixture(
                 proposal.source_cell,
                 proposal.target_cell;
                 payload = (
-                    strength = weight,
-                    target = zero(weight),
-                    maximum = weight,
+                    score = weight,
+                    cutoff = zero(weight),
+                    marker = weight,
                 ),
             );
             when = new_contact(
@@ -352,7 +352,7 @@ function bounded_pair_fixture(
         LifecycleProcess(
             :retire_disabled_neutral_pairs;
             domain = edges(relationships),
-            expression = edge.strength < zero(weight),
+            expression = edge.score < edge.cutoff,
             effects = (Remove(relationships, edge),),
             phase = Lifecycle(),
         ),

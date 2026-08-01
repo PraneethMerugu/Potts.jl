@@ -511,29 +511,30 @@ function _normalize_initial_relationships(
                 payload isa NamedTuple || throw(ArgumentError(
                     "relationship payloads must be named tuples"
                 ))
-                allowed = (
-                    :strength,
-                    :target,
-                    :maximum,
-                    :generation_a,
-                    :generation_b,
-                )
+                payload_names = keys(relationship.payload_units)
+                allowed = (payload_names..., :generation_a, :generation_b)
                 all(name -> name in allowed, keys(payload)) ||
                     throw(ArgumentError(
                         "relationship payload contains an unsupported field"
                     ))
-                converted = NamedTuple{keys(payload)}(map(
-                    name -> name in (:generation_a, :generation_b) ?
-                            UInt32(getproperty(payload, name)) :
-                            _convert_relationship_payload_value(
-                                relationship,
-                                name,
-                                getproperty(payload, name),
-                                T,
-                            ),
-                    keys(payload),
-                ))
-                (entry[1], entry[2], converted)
+                converted = ntuple(length(payload_names)) do slot
+                    name = payload_names[slot]
+                    haskey(payload, name) ?
+                    _convert_relationship_payload_value(
+                        relationship,
+                        name,
+                        getproperty(payload, name),
+                        T,
+                    ) : nothing
+                end
+                generation_a = haskey(payload, :generation_a) ?
+                               UInt32(payload.generation_a) : nothing
+                generation_b = haskey(payload, :generation_b) ?
+                               UInt32(payload.generation_b) : nothing
+                (
+                    entry[1], entry[2], converted,
+                    generation_a, generation_b,
+                )
             end
         end
         for entry in value
@@ -550,7 +551,7 @@ function _core_initial_state(
         _materialize_labelled(executable, initial.ownership) :
         _materialize_layout(executable, initial.ownership, seed, replica)
     values = _initial_value_map(executable, initial)
-    known = Set{Symbol}((:activity, :field))
+    known = Set{Symbol}()
     union!(known, entry.name for entry in executable.reports.states)
     union!(known, entry.name for entry in executable.reports.relationship_states)
     unknown = setdiff(Set(keys(values)), known)
@@ -558,18 +559,6 @@ function _core_initial_state(
         throw(ArgumentError("unknown initial state value$(length(unknown) == 1 ? "" : "s"): " *
                             join(string.(sort!(collect(unknown))), ", ")))
     T = eltype(executable.core_program.parameter_defaults)
-    activity_entry = findfirst(entry -> entry.role === :activity,
-        executable.reports.states)
-    field_entry = findfirst(entry -> entry.role === :field,
-        executable.reports.states)
-    history_entry = findfirst(entry -> entry.role === :history,
-        executable.reports.states)
-    activity_name = activity_entry === nothing ? :activity :
-                    executable.reports.states[activity_entry].name
-    field_name = field_entry === nothing ? :field :
-                 executable.reports.states[field_entry].name
-    history_name = history_entry === nothing ? :history :
-                   executable.reports.states[history_entry].name
     normalized_states = Dict{Symbol, Any}()
     for entry in executable.reports.states
         normalized_states[entry.name] = _normalize_initial_state_entry(
@@ -580,25 +569,27 @@ function _core_initial_state(
             T,
         )
     end
-    activity = activity_entry === nothing ? nothing :
-               normalized_states[activity_name]
-    field = field_entry === nothing ? nothing : normalized_states[field_name]
-    history = history_entry === nothing ? nothing :
-              normalized_states[history_name]
-    stored_entries = filter(
-        entry -> entry.role === :stored, executable.reports.states
-    )
-    stored_names = Tuple(entry.name for entry in stored_entries)
-    stored_states = NamedTuple{stored_names}(
-        Tuple(normalized_states[entry.name] for entry in stored_entries)
-    )
     descriptor_layout = executable.core_program.descriptor_plan.state_layout
     descriptor_initial_values = map(descriptor_layout.entries) do layout_entry
         name = layout_entry.schema.identity.name
-        if haskey(stored_states, name)
-            value = getproperty(stored_states, name)
-            value isa AbstractArray ? value :
+        if haskey(normalized_states, name)
+            value = normalized_states[name]
+            if value isa Tuple && all(item -> item isa AbstractArray, value)
+                shape = Tuple(layout_entry.schema.shape)
+                length(shape) > 1 && length(value) == last(shape) ||
+                    throw(ArgumentError(
+                        "history state `$name` is incompatible with its descriptor layout"
+                    ))
+                packed = Array{layout_entry.schema.element_type}(undef, shape)
+                for index in eachindex(value)
+                    copyto!(selectdim(packed, length(shape), index), value[index])
+                end
+                packed
+            elseif value isa AbstractArray
+                value
+            else
                 fill(value, Tuple(layout_entry.schema.shape))
+            end
         else
             nothing
         end
@@ -618,10 +609,6 @@ function _core_initial_state(
         ownership,
         cell_kinds;
         scalar_type = T,
-        activity,
-        field,
-        history,
-        stored_states,
         relationships,
         descriptor_state,
     )

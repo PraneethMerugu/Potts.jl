@@ -197,6 +197,7 @@ HamiltonianRole() = HamiltonianRole(
     SiteEnergyDomainPlan(), TargetSiteAffectedPlan(Int32(1))
 )
 struct ProposalDriveRole <: AbstractProposalRole end
+struct ProposalEnergyDriveRole <: AbstractProposalRole end
 struct ProposalConstraintRole <: AbstractProposalRole end
 struct ProposalModifierRole <: AbstractProposalRole end
 

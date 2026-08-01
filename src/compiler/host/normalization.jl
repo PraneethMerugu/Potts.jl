@@ -443,6 +443,32 @@ function _verify_normalized_graph!(
     return diagnostics
 end
 
+function _push_effect_expression_roots!(roots, role::Symbol, value)
+    if value isa NamedTuple
+        for name in keys(value)
+            _push_effect_expression_roots!(
+                roots,
+                Symbol(role, :_, name),
+                getproperty(value, name),
+            )
+        end
+        return roots
+    elseif value isa Tuple
+        for (index, item) in enumerate(value)
+            _push_effect_expression_roots!(
+                roots, Symbol(role, :_, index), item
+            )
+        end
+        return roots
+    end
+    isempty(try
+        Symbolics.get_variables(value)
+    catch
+        ()
+    end) || push!(roots, role => value)
+    return roots
+end
+
 function _record_expression_roots(record::QualifiedStatement)
     arguments = first(record.normalized_payload)
     roots = Pair{Symbol, Any}[]
@@ -458,14 +484,10 @@ function _record_expression_roots(record::QualifiedStatement)
         for (effect_index, effect) in enumerate(arguments.effects)
             for field in fieldnames(typeof(effect))
                 value = getfield(effect, field)
-                isempty(try
-                    Symbolics.get_variables(value)
-                catch
-                    ()
-                end) && continue
-                push!(
+                _push_effect_expression_roots!(
                     roots,
-                    Symbol(:effect_, effect_index, :_, field) => value,
+                    Symbol(:effect_, effect_index, :_, field),
+                    value,
                 )
             end
         end

@@ -15,26 +15,24 @@ include("execution/storage_runtime.jl")
 include("execution/descriptor_protocol.jl")
 include("execution/domain_resources.jl")
 include("execution/descriptor_plan.jl")
+include("execution/stage_plan.jl")
 include("program/v1.jl")
 include("execution/hamiltonian_runtime.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
 public CPUProgramBackend, CompiledScalar, compiled_scalar_value
-public CompiledActivityPlan, CompiledFieldPlan, CompiledHistoryPlan
-public CompiledElongationPlan
-public CompiledRelationshipPlan, CompiledPottsProgram
-public AbstractProgramObservation, OccupiedSitesObservation
-public FieldStateObservation, RelationshipDegreeObservation
+public RelationshipStoreSchema, CompiledPottsProgram
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest
 public RetuneRelationshipRequest, apply_relationship_requests!
-public initialize_program_relationships
+public validate_relationship_request, apply_validated_relationship_request!
+public initialize_program_relationships, relationship_payload
 public ProgramInitialState, ProgramSnapshot, ProgramRuntime
 public BeforeProposalView, AfterProposalView, CanonicalContactAnchor
 public HamiltonianEvaluationContext
 public initialize_program, program_snapshot, advance_mcs!
 public initialization_bounded
-public update_program_parameters!, program_observations
+public update_program_parameters!
 public program_execution_report, program_capability_report
 public ProgramCheckpoint, program_checkpoint, restore_program_checkpoint
 public AbstractStaticExpression, AbstractContextualOperation
@@ -44,8 +42,13 @@ public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
 public execute_operation, context_value
 public apply_resource_operation, operation_callable
 public state_value, workspace_value, evaluator_parameters
+public proposal_source_site, proposal_target_site, proposal_source_owner
 public proposal_target_owner, proposal_target_kind
-public proposal_relation_count, proposal_relation_neighbor_owner
+public proposal_source_kind, proposal_site_owner
+public proposal_relation_count, proposal_relation_neighbor_site
+public proposal_relation_neighbor_owner
+public site_owner, owner_kind, relation_count, relation_neighbor_site
+public ownership_state, relationship_degree
 public evaluate_expression, evaluate_static
 public evaluator_node_count
 public EvaluatorProbeContext
@@ -86,6 +89,7 @@ public descriptor_payload_adapt, descriptor_payload_checkpoint_encode
 public descriptor_payload_checkpoint_reconstruct
 public descriptor_payload_inspection, EmptyDescriptorPayload
 public AbstractProposalRole, HamiltonianRole, ProposalDriveRole
+public ProposalEnergyDriveRole
 public ProposalConstraintRole, ProposalModifierRole
 public AbstractEnergyDomainPlan, SiteEnergyDomainPlan, CellEnergyDomainPlan
 public ContactEnergyDomainPlan, RelationshipEnergyDomainPlan
@@ -100,6 +104,16 @@ public validate_parameters, descriptor_plan_report
 public evaluate_hamiltonian_contributions!, fold_hamiltonian_contributions
 public ProposalEvaluation, evaluate_proposal_contributions!
 public fold_proposal_contributions
+public AbstractCompiledStage, AcceptedCopyStage, AfterMCSStage
+public AbstractStageSiteSelector, ProposalTargetStageSite, IterationStageSite
+public BoundStateValueOperation, stage_site
+public AbstractCompiledEffect, SiteAssignmentEffect
+public IteratedSiteAssignmentEffect
+public ShiftAppendEffect
+public RelationshipCreateEffect, RelationshipRemoveEffect
+public stage_effect_buffered
+public CompiledStageDescriptor, StageDescriptorGroup, StageExecutionPlan
+public StageEvaluation, StageRuntimeBuffers, allocate_stage_runtime_buffers
 public proposal_log_acceptance_ratio, proposal_acceptance_probability
 public proposal_acceptance_decision
 public rng_operation_limit

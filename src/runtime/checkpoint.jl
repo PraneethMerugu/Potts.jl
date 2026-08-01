@@ -86,6 +86,7 @@ function _init_from_checkpoint(
         problem.executable.core_program, checkpoint_value.core
     )
     state = _saved_state(
+        problem.executable,
         CorePotts.program_snapshot(runtime),
         _named_runtime_observations(
             runtime, problem.executable, policy.observables

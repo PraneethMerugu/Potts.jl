@@ -55,6 +55,7 @@ function edge_payload end
 function lag end
 function _potts_draw end
 function _potts_merks_local_connectivity end
+function _potts_act_energy end
 function linked end
 
 Symbolics.@register_symbolic new_contact(x, y)::Bool
@@ -66,6 +67,9 @@ Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 Symbolics.@register_symbolic _potts_merks_local_connectivity(
     kind, foreground, background
 )::Bool
+Symbolics.@register_symbolic _potts_act_energy(
+    kind, activity, relation, maximum, strength
+)::Real
 
 _kind_token(kind::Union{CellKind, MediumKind}) =
     _potts_token(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)
@@ -93,6 +97,8 @@ const _MERKS_CLOCKWISE_OFFSETS = (
 )
 
 struct MerksLocalConnectivityCallable <: CorePotts.AbstractContextualOperation end
+struct ActEnergyCallable <: CorePotts.AbstractContextualOperation end
+struct ExplicitFieldEulerCallable <: CorePotts.AbstractContextualOperation end
 
 function CorePotts.operation_callable(
         ::Val{:merks_local_connectivity},
@@ -102,6 +108,53 @@ function CorePotts.operation_callable(
         "unsupported Merks local-connectivity operation version $version"
     ))
     return MerksLocalConnectivityCallable()
+end
+
+@inline function (operation::ExplicitFieldEulerCallable)(
+        arguments::Tuple, context
+    )
+    state_handle = arguments[1]
+    relation_handle = Int32(arguments[2])
+    diffusion = arguments[3]
+    decay = arguments[4]
+    secretion = arguments[5]
+    source_kind = Int16(arguments[6])
+    timestep = arguments[7]
+    T = promote_type(
+        typeof(diffusion), typeof(decay), typeof(secretion), typeof(timestep)
+    )
+    site = CorePotts.stage_site(CorePotts.IterationStageSite(), context)
+    center = T(CorePotts.state_value(context, state_handle, site))
+    laplace = zero(T)
+    for direction in 1:CorePotts.relation_count(context, relation_handle)
+        neighbor = CorePotts.relation_neighbor_site(
+            context, relation_handle, site, direction
+        )
+        neighbor === nothing && continue
+        laplace += T(CorePotts.state_value(
+            context, state_handle, neighbor
+        )) - center
+    end
+    owner = CorePotts.site_owner(context, site)
+    source = owner > 0 && source_kind != 0 &&
+             CorePotts.owner_kind(context, owner) == source_kind ?
+             T(secretion) : zero(T)
+    return max(
+        zero(T),
+        center + T(timestep) * (
+            T(diffusion) * laplace - T(decay) * center + source
+        ),
+    )
+end
+
+function CorePotts.operation_callable(
+        ::Val{:act_energy},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported Act-energy operation version $version"
+    ))
+    return ActEnergyCallable()
 end
 
 @inline function (operation::MerksLocalConnectivityCallable)(
@@ -148,6 +201,68 @@ end
         distinct_cells += !seen
     end
     return distinct_cells == 2
+end
+
+@inline function _act_local_geomean(
+        context,
+        state_handle,
+        relation_handle,
+        center,
+        owner::Int32,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    owner <= 0 && return zero(T)
+    total = zero(T)
+    count = 0
+    if CorePotts.proposal_site_owner(context, center) == owner
+        value = T(CorePotts.state_value(context, state_handle, center))
+        total += log1p(max(zero(T), value))
+        count += 1
+    end
+    for direction in 1:CorePotts.proposal_relation_count(
+            context, relation_handle
+        )
+        neighbor = CorePotts.proposal_relation_neighbor_site(
+            context, relation_handle, center, direction
+        )
+        neighbor === nothing && continue
+        CorePotts.proposal_site_owner(context, neighbor) == owner || continue
+        value = T(CorePotts.state_value(context, state_handle, neighbor))
+        total += log1p(max(zero(T), value))
+        count += 1
+    end
+    return iszero(count) ? zero(T) : exp(total / T(count)) - one(T)
+end
+
+@inline function (operation::ActEnergyCallable)(arguments::Tuple, context)
+    kind = Int16(arguments[1])
+    state_handle = arguments[2]
+    relation_handle = Int32(arguments[3])
+    maximum = arguments[4]
+    strength = arguments[5]
+    T = promote_type(typeof(maximum), typeof(strength))
+    new_owner = Int32(CorePotts.proposal_source_owner(context))
+    new_owner > 0 || return zero(T)
+    CorePotts.proposal_source_kind(context) == kind || return zero(T)
+    maximum > zero(T) || return zero(T)
+    source_activity = _act_local_geomean(
+        context,
+        state_handle,
+        relation_handle,
+        CorePotts.proposal_source_site(context),
+        new_owner,
+        T,
+    )
+    old_owner = Int32(CorePotts.proposal_target_owner(context))
+    target_activity = _act_local_geomean(
+        context,
+        state_handle,
+        relation_handle,
+        CorePotts.proposal_target_site(context),
+        old_owner,
+        T,
+    )
+    return -(strength / maximum) * (source_activity - target_activity)
 end
 
 cell_volume(kind::Union{CellKind, MediumKind}) = cell_volume(_kind_token(kind))

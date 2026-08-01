@@ -26,17 +26,14 @@ Base.showerror(io::IO, error::PottsKnownUnsavedError) =
 Base.showerror(io::IO, error::PottsUnsavedTimeError) =
     print(io, "MCS ", error.mcs, " is within the trajectory but was not saved")
 
-struct PottsSavedState{O, K, G, V, A, F, H, S, R, Q, D}
+struct PottsSavedState{O, K, G, V, S, R, Q, D}
     mcs::Int
     ownership::O
     cell_kinds::K
     cell_generations::G
     volumes::V
-    activity::A
-    field::F
-    history::H
-    stored_states::S
-    relationships::R
+    states::S
+    topology::R
     observations::Q
     declared_observations::D
 end
@@ -49,23 +46,58 @@ function _copy_saved_value(value::NamedTuple)
 end
 _copy_saved_value(value) = value
 
+function _descriptor_saved_value(descriptor_state, entry)
+    values = CorePotts.state_block(descriptor_state, entry.handle).values
+    if entry.storage === :history
+        axis = ndims(values)
+        return ntuple(
+            index -> copy(selectdim(values, axis, index)),
+            size(values, axis),
+        )
+    elseif entry.storage in (:medium, :model)
+        return only(values)
+    end
+    return copy(values)
+end
+
+function _descriptor_saved_states(executable, snapshot)
+    entries = executable.reports.states
+    values = map(
+        entry -> _descriptor_saved_value(snapshot.descriptor_state, entry),
+        entries,
+    )
+    return NamedTuple{Tuple(entry.name for entry in entries)}(values)
+end
+
+function _descriptor_saved_topology(executable, snapshot)
+    entries = executable.reports.relationship_states
+    isempty(entries) && return NamedTuple()
+    snapshot.relationships === nothing && throw(ArgumentError(
+        "compiled topology state is absent from the runtime snapshot"
+    ))
+    length(entries) == 1 || throw(ArgumentError(
+        "V1 saved topology requires one runtime store per declaration"
+    ))
+    names = Tuple(entry.name for entry in entries)
+    return NamedTuple{names}((copy(snapshot.relationships),))
+end
+
 function _saved_state(
+        executable,
         snapshot::CorePotts.ProgramSnapshot,
         observations,
         declared_observations = keys(observations),
-    )
+)
+    states = _descriptor_saved_states(executable, snapshot)
+    topology = _descriptor_saved_topology(executable, snapshot)
     return PottsSavedState(
         snapshot.mcs,
         copy(snapshot.ownership),
         copy(snapshot.cell_kinds),
         copy(snapshot.cell_generations),
         copy(snapshot.volumes),
-        snapshot.activity === nothing ? nothing : copy(snapshot.activity),
-        snapshot.field === nothing ? nothing : copy(snapshot.field),
-        snapshot.history === nothing ? nothing :
-        Tuple(copy(entry) for entry in snapshot.history),
-        _copy_saved_value(snapshot.stored_states),
-        snapshot.relationships === nothing ? nothing : copy(snapshot.relationships),
+        states,
+        topology,
         observations,
         Tuple(declared_observations),
     )
@@ -76,21 +108,23 @@ function Base.getindex(state::PottsSavedState, name::Symbol)
     name === :cell_kinds && return state.cell_kinds
     name === :cell_generations && return state.cell_generations
     name === :volumes && return state.volumes
-    name === :activity && return state.activity
-    name === :field && return state.field
-    name === :history && return state.history
-    haskey(state.stored_states, name) && return getproperty(state.stored_states, name)
-    name === :relationships && return state.relationships
+    haskey(state.states, name) && return getproperty(state.states, name)
+    haskey(state.topology, name) && return getproperty(state.topology, name)
     haskey(state.observations, name) && return state.observations[name]
     name in state.declared_observations &&
         throw(PottsKnownUnsavedError(name, state.mcs))
     throw(PottsUnknownIdentityError(name))
 end
 
+function Base.getproperty(state::PottsSavedState, name::Symbol)
+    name in fieldnames(typeof(state)) && return getfield(state, name)
+    return getindex(state, name)
+end
+
 Base.propertynames(state::PottsSavedState) = (
     :mcs, :ownership, :cell_kinds, :cell_generations, :volumes,
-    :activity, :field, :history, keys(state.stored_states)...,
-    :relationships,
+    keys(getfield(state, :states))...,
+    keys(getfield(state, :topology))...,
     keys(state.observations)...,
 )
 

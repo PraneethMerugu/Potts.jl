@@ -56,12 +56,16 @@ function _state_layout(
         else
             0
         end
-        domain = record.ownership === :relationship ? :relationship :
+        domain = record.kind === :HistoryState ? :history :
+                 record.ownership === :relationship ? :relationship :
                  record.ownership === :cell ? :cell :
                  record.ownership === :medium ? :medium :
                  record.ownership === :model ? :model : :site
         shape = if domain === :site && !isempty(lattice_shape)
             lattice_shape
+        elseif domain === :history && record.shape isa Tuple &&
+                all(item -> item isa Integer && item > 0, record.shape)
+            Tuple(Int.(record.shape))
         elseif record.shape isa Tuple &&
                 all(item -> item isa Integer && item > 0, record.shape)
             Tuple(Int.(record.shape))
@@ -142,6 +146,7 @@ _descriptor_source(record::QualifiedStatement) = DescriptorSource(
 function _descriptor_candidate_enabled(record::QualifiedStatement)
     _registered_record(record) && return true
     record.kind === :HamiltonianTerm && return true
+    record.kind === :ProposalDrive && return true
     record.kind === :ProposalConstraint && return true
     payload = record.normalized_payload
     payload isa Tuple && length(payload) >= 2 || return true
@@ -356,8 +361,16 @@ function _proposal_role(
         _domain_plan(ir, candidate),
         _affected_plan(candidate),
     )
-    record.kind === :ProposalDrive &&
-        return CorePotts.ProposalDriveRole()
+    if record.kind === :ProposalDrive
+        options = last(record.normalized_payload)
+        scale = options isa NamedTuple && haskey(options, :drive_scale) ?
+                options.drive_scale : :log_bias
+        scale === :energy && return CorePotts.ProposalEnergyDriveRole()
+        scale === :log_bias && return CorePotts.ProposalDriveRole()
+        throw(ArgumentError(
+            "proposal drive $(record.identity) has unsupported scale $(repr(scale))"
+        ))
+    end
     record.kind === :ProposalConstraint &&
         return CorePotts.ProposalConstraintRole()
     record.kind === :ProposalModifier &&

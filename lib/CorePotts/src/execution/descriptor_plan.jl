@@ -271,13 +271,27 @@ end
 """One source-indexed proposal contribution with scientific roles kept distinct."""
 struct ProposalEvaluation{T <: AbstractFloat}
     delta_h::T
+    drive_energy::T
     drive_log_bias::T
     kinetic_modifier::T
     constraints_allowed::Bool
 end
 
+ProposalEvaluation(
+    delta_h::T,
+    drive_log_bias::T,
+    kinetic_modifier::T,
+    constraints_allowed::Bool,
+) where {T <: AbstractFloat} = ProposalEvaluation(
+    delta_h,
+    zero(T),
+    drive_log_bias,
+    kinetic_modifier,
+    constraints_allowed,
+)
+
 @inline _neutral_proposal_evaluation(::Type{T}) where {T <: AbstractFloat} =
-    ProposalEvaluation(zero(T), zero(T), zero(T), true)
+    ProposalEvaluation(zero(T), zero(T), zero(T), zero(T), true)
 
 @inline function _checked_proposal_scalar(value, ::Type{T}) where {
         T <: AbstractFloat,
@@ -299,7 +313,7 @@ end
     value = _checked_proposal_scalar(
         _compiled_hamiltonian_delta(evaluator, role, context, resources), T
     )
-    return ProposalEvaluation(value, zero(T), zero(T), true)
+    return ProposalEvaluation(value, zero(T), zero(T), zero(T), true)
 end
 
 @inline function _compiled_proposal_evaluation(
@@ -312,7 +326,20 @@ end
     value = _checked_proposal_scalar(
         _compiled_evaluate_static(evaluator, context), T
     )
-    return ProposalEvaluation(zero(T), value, zero(T), true)
+    return ProposalEvaluation(zero(T), zero(T), value, zero(T), true)
+end
+
+@inline function _compiled_proposal_evaluation(
+        evaluator::StaticEvaluator,
+        ::ProposalEnergyDriveRole,
+        context,
+        resources,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    value = _checked_proposal_scalar(
+        _compiled_evaluate_static(evaluator, context), T
+    )
+    return ProposalEvaluation(zero(T), value, zero(T), zero(T), true)
 end
 
 @inline function _compiled_proposal_evaluation(
@@ -325,7 +352,7 @@ end
     value = _checked_proposal_scalar(
         _compiled_evaluate_static(evaluator, context), T
     )
-    return ProposalEvaluation(zero(T), zero(T), value, true)
+    return ProposalEvaluation(zero(T), zero(T), zero(T), value, true)
 end
 
 @inline function _compiled_proposal_evaluation(
@@ -339,7 +366,7 @@ end
     value isa Bool || throw(ArgumentError(
         "proposal constraint descriptor must return Bool"
     ))
-    return ProposalEvaluation(zero(T), zero(T), zero(T), value)
+    return ProposalEvaluation(zero(T), zero(T), zero(T), zero(T), value)
 end
 
 @inline function _evaluate_proposal_instances!(
@@ -406,18 +433,24 @@ end
         ArgumentError("proposal contribution storage is too small"),
     )
     delta_h = zero(T)
+    drive_energy = zero(T)
     drive_log_bias = zero(T)
     kinetic_modifier = zero(T)
     constraints_allowed = true
     for source in eachindex(plan.source_table)
         contribution = @inbounds contributions[source]
         delta_h += contribution.delta_h
+        drive_energy += contribution.drive_energy
         drive_log_bias += contribution.drive_log_bias
         kinetic_modifier += contribution.kinetic_modifier
         constraints_allowed &= contribution.constraints_allowed
     end
     return ProposalEvaluation(
-        delta_h, drive_log_bias, kinetic_modifier, constraints_allowed
+        delta_h,
+        drive_energy,
+        drive_log_bias,
+        kinetic_modifier,
+        constraints_allowed,
     )
 end
 

@@ -22,99 +22,31 @@ end
     return index == 0 ? scalar.value : @inbounds parameters[index]
 end
 
-struct CompiledActivityPlan{T <: AbstractFloat}
-    kind::Int16
-    maximum::CompiledScalar{T}
-    strength::CompiledScalar{T}
-    neighborhood_offsets::Matrix{Int8}
-    activate_extensions::Bool
-    decay_per_mcs::T
-end
-
-struct CompiledFieldPlan{T <: AbstractFloat}
-    enabled::Bool
-    diffusion::CompiledScalar{T}
-    decay::CompiledScalar{T}
-    secretion::CompiledScalar{T}
-    source_kind::Int16
-    chemotaxis_kind::Int16
-    chemotaxis_strength::CompiledScalar{T}
-    stencil_offsets::Matrix{Int8}
-    substeps::Int32
-    duration_per_mcs::T
-end
-
-struct CompiledHistoryPlan
-    depth::Int32
-    source::Symbol
-    function CompiledHistoryPlan(depth::Integer, source::Symbol)
-        depth > 0 || throw(ArgumentError("history depth must be positive"))
-        source === :activity || throw(ArgumentError(
-            "V1 histories currently admit only the activity source"
-        ))
-        new(Int32(depth), source)
-    end
-end
-
-struct CompiledElongationPlan{T <: AbstractFloat}
-    kind::Int16
-    target::CompiledScalar{T}
-    strength::CompiledScalar{T}
-end
-
-struct CompiledRelationshipPlan{T <: AbstractFloat}
+struct RelationshipStoreSchema{D <: Tuple}
     capacity::Int32
     maximum_degree::Int16
-    kind_a::Int16
-    kind_b::Int16
-    strength::CompiledScalar{T}
-    target::CompiledScalar{T}
-    maximum::CompiledScalar{T}
-    create_on_accepted_copy::Bool
-    break_after_mcs::Bool
-    remove_with_endpoint::Bool
+    payload_defaults::D
 end
 
-function CompiledRelationshipPlan(
+function RelationshipStoreSchema(
         capacity::Integer,
         maximum_degree::Integer,
-        kind_a::Integer,
-        kind_b::Integer,
-        strength::CompiledScalar{T},
-        target::CompiledScalar{T},
-        maximum::CompiledScalar{T};
-        create_on_accepted_copy::Bool = false,
-        break_after_mcs::Bool = false,
-        remove_with_endpoint::Bool = false,
-    ) where {T <: AbstractFloat}
+        payload_defaults::Tuple = (),
+    )
     capacity > 0 || throw(ArgumentError("relationship capacity must be positive"))
+    capacity <= typemax(Int32) || throw(ArgumentError(
+        "relationship capacity exceeds the V1 Int32 storage bound"
+    ))
     maximum_degree > 0 ||
         throw(ArgumentError("relationship maximum degree must be positive"))
-    1 <= kind_a <= typemax(Int16) ||
-        throw(ArgumentError("relationship endpoint kind is out of range"))
-    1 <= kind_b <= typemax(Int16) ||
-        throw(ArgumentError("relationship endpoint kind is out of range"))
-    return CompiledRelationshipPlan(
+    maximum_degree <= typemax(Int16) || throw(ArgumentError(
+        "relationship maximum degree exceeds the V1 Int16 storage bound"
+    ))
+    return RelationshipStoreSchema(
         Int32(capacity),
         Int16(maximum_degree),
-        Int16(kind_a),
-        Int16(kind_b),
-        strength,
-        target,
-        maximum,
-        create_on_accepted_copy,
-        break_after_mcs,
-        remove_with_endpoint,
+        payload_defaults,
     )
-end
-
-abstract type AbstractProgramObservation end
-struct OccupiedSitesObservation <: AbstractProgramObservation
-    kind::Int16
-end
-struct FieldStateObservation <: AbstractProgramObservation end
-struct RelationshipDegreeObservation <: AbstractProgramObservation
-    endpoint::Int32
 end
 
 struct CompiledPottsProgram{
@@ -122,14 +54,9 @@ struct CompiledPottsProgram{
         N,
         E <: AbstractProgramEngine,
         B,
-        A,
-        F,
-        H,
-        G,
         R,
-        O,
         D,
-        CS,
+        SP,
     }
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
@@ -138,20 +65,12 @@ struct CompiledPottsProgram{
     kind_count::Int16
     medium_kind::Int16
     medium_kinds::BitVector
-    volume_targets::Vector{CompiledScalar{T}}
-    volume_strengths::Vector{CompiledScalar{T}}
-    contact_energies::Matrix{CompiledScalar{T}}
     temperature::CompiledScalar{T}
     attempts_per_site::Int32
     parameter_defaults::Vector{T}
-    activity::A
-    field::F
-    history::H
-    elongation::G
     relationships::R
-    observations::O
     descriptor_plan::D
-    cell_state_fields::CS
+    stage_plan::SP
     engine::E
     backend::B
     fingerprint::String
@@ -164,25 +83,17 @@ function CompiledPottsProgram(
         contact_offsets::Matrix{Int8},
         kind_count::Integer,
         medium_kind::Integer,
-        volume_targets::Vector{CompiledScalar{T}},
-        volume_strengths::Vector{CompiledScalar{T}},
-        contact_energies::Matrix{CompiledScalar{T}},
         temperature::CompiledScalar{T},
         attempts_per_site::Integer,
         parameter_defaults::Vector{T},
-        activity,
-        field,
-        history,
-        elongation,
         relationships,
-        observations,
         descriptor_plan::D,
+        stage_plan::SP,
         engine::E,
         backend::B,
         fingerprint::AbstractString;
         medium_kinds = nothing,
-        cell_state_fields = (),
-    ) where {T <: AbstractFloat, N, D, E <: AbstractProgramEngine, B}
+    ) where {T <: AbstractFloat, N, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
         throw(ArgumentError("proposal offsets have the wrong dimensionality"))
@@ -200,20 +111,10 @@ function CompiledPottsProgram(
         throw(ArgumentError("the medium-kind table has the wrong size"))
     medium_mask[medium_kind] ||
         throw(ArgumentError("the default medium must be a declared medium kind"))
-    length(volume_targets) == kind_count ||
-        throw(ArgumentError("volume target table has the wrong size"))
-    length(volume_strengths) == kind_count ||
-        throw(ArgumentError("volume strength table has the wrong size"))
-    size(contact_energies) == (kind_count, kind_count) ||
-        throw(ArgumentError("contact table has the wrong size"))
     attempts_per_site > 0 ||
         throw(ArgumentError("attempts per site must be positive"))
     return CompiledPottsProgram{
-        T, N, E, B, typeof(activity), typeof(field), typeof(history),
-        typeof(elongation),
-        typeof(relationships), typeof(observations),
-        D,
-        typeof(cell_state_fields),
+        T, N, E, B, typeof(relationships), D, SP,
     }(
         shape,
         periodic,
@@ -222,54 +123,22 @@ function CompiledPottsProgram(
         Int16(kind_count),
         Int16(medium_kind),
         medium_mask,
-        copy(volume_targets),
-        copy(volume_strengths),
-        copy(contact_energies),
         temperature,
         Int32(attempts_per_site),
         copy(parameter_defaults),
-        activity,
-        field,
-        history,
-        elongation,
         relationships,
-        observations,
         descriptor_plan,
-        Tuple(Symbol.(cell_state_fields)),
+        stage_plan,
         engine,
         backend,
         String(fingerprint),
     )
 end
 
-function program_observations(runtime)
-    return map(runtime.program.observations) do observation
-        if observation isa OccupiedSitesObservation
-            total = 0
-    for owner in runtime.ownership
-                _owner_kind(runtime, owner) == observation.kind &&
-                    (total += 1)
-            end
-            total
-        elseif observation isa FieldStateObservation
-            runtime.field === nothing ? nothing : copy(runtime.field)
-        elseif observation isa RelationshipDegreeObservation
-            runtime.relationships === nothing && return 0
-            _relationship_degree(runtime.relationships, observation.endpoint)
-        else
-            error("unreachable program observation")
-        end
-    end
-end
-
-struct ProgramInitialState{T <: AbstractFloat, N, A, F, H, S, R, D}
+struct ProgramInitialState{T <: AbstractFloat, N, R, D}
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
-    activity::A
-    field::F
-    history::H
-    stored_states::S
     relationships::R
     descriptor_state::D
 end
@@ -287,10 +156,6 @@ function ProgramInitialState(
         cell_kinds::AbstractVector{<:Integer};
         scalar_type::Type{T} = Float64,
         cell_generations = nothing,
-        activity = nothing,
-        field = nothing,
-        history = nothing,
-        stored_states::NamedTuple = NamedTuple(),
         relationships = nothing,
         descriptor_state = nothing,
     ) where {N, T <: AbstractFloat}
@@ -303,38 +168,25 @@ function ProgramInitialState(
         throw(ArgumentError("cell generation table has the wrong length"))
     all(!iszero, generations) ||
         throw(ArgumentError("active cell generations must be positive"))
-    activity_values = activity === nothing ? nothing : Array{T, N}(activity)
-    field_values = field === nothing ? nothing : Array{T, N}(field)
-    history_values = history === nothing ? nothing :
-                     [Array{T, N}(entry) for entry in history]
-    stored_values = _copy_program_value(stored_states)
     relationship_values = relationships === nothing ? nothing : deepcopy(relationships)
     return ProgramInitialState{
-        T, N, typeof(activity_values), typeof(field_values),
-        typeof(history_values), typeof(stored_values),
-        typeof(relationship_values), typeof(descriptor_state),
+        T, N, typeof(relationship_values), typeof(descriptor_state),
     }(
         owned,
         kinds,
         generations,
-        activity_values,
-        field_values,
-        history_values,
-        stored_values,
         relationship_values,
         descriptor_state,
     )
 end
 
-struct ProgramRelationshipState{T <: AbstractFloat}
+struct ProgramRelationshipState{P <: Tuple}
     active::BitVector
     endpoint_a::Vector{Int32}
     endpoint_b::Vector{Int32}
     generation_a::Vector{UInt32}
     generation_b::Vector{UInt32}
-    strength::Vector{T}
-    target::Vector{T}
-    maximum::Vector{T}
+    payload::P
     degree::Vector{Int16}
     incident_edges::Matrix{Int32}
 end
@@ -342,7 +194,7 @@ end
 function ProgramRelationshipState(::Type{T}, capacity::Integer) where {
         T <: AbstractFloat,
     }
-    return ProgramRelationshipState(T, capacity, capacity, capacity)
+    return ProgramRelationshipState(T, capacity, capacity, capacity, 0)
 end
 
 function ProgramRelationshipState(
@@ -350,15 +202,28 @@ function ProgramRelationshipState(
         capacity::Integer,
         endpoint_capacity::Integer,
         maximum_degree::Integer,
+        payload_count::Integer = 0,
     ) where {T <: AbstractFloat}
     capacity > 0 || throw(ArgumentError(
         "relationship capacity must be positive"
     ))
+    capacity <= typemax(Int32) || throw(ArgumentError(
+        "relationship capacity exceeds the V1 Int32 storage bound"
+    ))
     endpoint_capacity >= 0 || throw(ArgumentError(
         "relationship endpoint capacity cannot be negative"
     ))
+    endpoint_capacity <= typemax(Int32) || throw(ArgumentError(
+        "relationship endpoint capacity exceeds the V1 Int32 identity bound"
+    ))
     maximum_degree > 0 || throw(ArgumentError(
         "relationship maximum degree must be positive"
+    ))
+    maximum_degree <= typemax(Int16) || throw(ArgumentError(
+        "relationship maximum degree exceeds the V1 Int16 storage bound"
+    ))
+    payload_count >= 0 || throw(ArgumentError(
+        "relationship payload count cannot be negative"
     ))
     return ProgramRelationshipState(
         falses(capacity),
@@ -366,9 +231,7 @@ function ProgramRelationshipState(
         zeros(Int32, capacity),
         zeros(UInt32, capacity),
         zeros(UInt32, capacity),
-        zeros(T, capacity),
-        zeros(T, capacity),
-        zeros(T, capacity),
+        ntuple(_ -> zeros(T, capacity), payload_count),
         zeros(Int16, endpoint_capacity),
         zeros(Int32, maximum_degree, endpoint_capacity),
     )
@@ -381,9 +244,7 @@ function Base.copy(state::ProgramRelationshipState)
         copy(state.endpoint_b),
         copy(state.generation_a),
         copy(state.generation_b),
-        copy(state.strength),
-        copy(state.target),
-        copy(state.maximum),
+        map(copy, state.payload),
         copy(state.degree),
         copy(state.incident_edges),
     )
@@ -391,15 +252,13 @@ end
 
 abstract type ProgramRelationshipRequest end
 
-struct CreateRelationshipRequest{T <: AbstractFloat} <:
+struct CreateRelationshipRequest{P <: Tuple} <:
        ProgramRelationshipRequest
     endpoint_a::Int32
     endpoint_b::Int32
     generation_a::UInt32
     generation_b::UInt32
-    strength::T
-    target::T
-    maximum::T
+    payload::P
     priority::Int32
     identity::UInt64
 end
@@ -410,12 +269,10 @@ struct RemoveRelationshipRequest <: ProgramRelationshipRequest
     identity::UInt64
 end
 
-struct RetuneRelationshipRequest{T <: AbstractFloat} <:
+struct RetuneRelationshipRequest{P <: Tuple} <:
        ProgramRelationshipRequest
     edge::Int32
-    strength::T
-    target::T
-    maximum::T
+    payload::P
     priority::Int32
     identity::UInt64
 end
@@ -423,22 +280,18 @@ end
 function CreateRelationshipRequest(
         endpoint_a::Integer,
         endpoint_b::Integer,
-        strength::T,
-        target::T,
-        maximum::T;
+        payload::Tuple = ();
         generation_a::Integer = 1,
         generation_b::Integer = 1,
         priority::Integer = 0,
         identity::Integer = 0,
-    ) where {T <: AbstractFloat}
+    )
     return CreateRelationshipRequest(
         Int32(endpoint_a),
         Int32(endpoint_b),
         UInt32(generation_a),
         UInt32(generation_b),
-        strength,
-        target,
-        maximum,
+        payload,
         Int32(priority),
         UInt64(identity),
     )
@@ -450,14 +303,12 @@ RemoveRelationshipRequest(edge::Integer; priority::Integer = 0,
 
 function RetuneRelationshipRequest(
         edge::Integer,
-        strength::T,
-        target::T,
-        maximum::T;
+        payload::Tuple;
         priority::Integer = 0,
         identity::Integer = 0,
-    ) where {T <: AbstractFloat}
+    )
     return RetuneRelationshipRequest(
-        Int32(edge), strength, target, maximum, Int32(priority), UInt64(identity)
+        Int32(edge), payload, Int32(priority), UInt64(identity)
     )
 end
 
@@ -531,16 +382,15 @@ end
 function _validate_relationship_endpoint(
         endpoint::Int32,
         generation::UInt32,
-        expected_kind::Int16,
-        cell_kinds,
-        cell_generations,
+        endpoint_status,
+        endpoint_generations,
     )
-    1 <= endpoint <= length(cell_kinds) ||
+    1 <= endpoint <= length(endpoint_status) ||
         throw(ArgumentError("relationship endpoint $endpoint is not an active cell"))
-    @inbounds generation == cell_generations[endpoint] ||
+    @inbounds !iszero(endpoint_status[endpoint]) ||
+        throw(ArgumentError("relationship endpoint $endpoint is not active"))
+    @inbounds generation == endpoint_generations[endpoint] ||
         throw(ArgumentError("relationship endpoint generation is stale"))
-    @inbounds cell_kinds[endpoint] == expected_kind ||
-        throw(ArgumentError("relationship endpoint kind does not match"))
     return nothing
 end
 
@@ -553,65 +403,141 @@ _request_sort_key(request::RetuneRelationshipRequest) =
 _request_sort_key(request::RemoveRelationshipRequest) =
     (request.priority, 3, Int32(0), Int32(0), request.edge, request.identity)
 
+function validate_relationship_request(
+        state::ProgramRelationshipState,
+        endpoint_status,
+        endpoint_generations,
+        schema::RelationshipStoreSchema,
+        request::CreateRelationshipRequest,
+    )
+    request.endpoint_a != request.endpoint_b ||
+        throw(ArgumentError("a relationship cannot be a self-edge"))
+    a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
+    generation_a, generation_b = request.endpoint_a == a ?
+        (request.generation_a, request.generation_b) :
+        (request.generation_b, request.generation_a)
+    _validate_relationship_endpoint(
+        a, generation_a, endpoint_status, endpoint_generations
+    )
+    _validate_relationship_endpoint(
+        b, generation_b, endpoint_status, endpoint_generations
+    )
+    _relationship_edge(state, a, b) === nothing || return false
+    _relationship_degree(state, a) < schema.maximum_degree ||
+        throw(ArgumentError("relationship maximum degree exceeded for $a"))
+    _relationship_degree(state, b) < schema.maximum_degree ||
+        throw(ArgumentError("relationship maximum degree exceeded for $b"))
+    findfirst(!, state.active) === nothing &&
+        throw(ArgumentError("relationship capacity exceeded"))
+    length(request.payload) == length(state.payload) ||
+        throw(ArgumentError(
+            "relationship request payload does not match its schema"
+        ))
+    return true
+end
+
+function validate_relationship_request(
+        state::ProgramRelationshipState,
+        endpoint_status,
+        endpoint_generations,
+        ::RelationshipStoreSchema,
+        request::Union{RemoveRelationshipRequest, RetuneRelationshipRequest},
+    )
+    edge = request.edge
+    1 <= edge <= length(state.active) && @inbounds(state.active[edge]) ||
+        throw(ArgumentError(
+            "relationship request references an inactive edge"
+        ))
+    request isa RetuneRelationshipRequest &&
+        length(request.payload) != length(state.payload) &&
+        throw(ArgumentError(
+            "relationship request payload does not match its schema"
+        ))
+    return true
+end
+
+function apply_validated_relationship_request!(
+        state::ProgramRelationshipState,
+        request::CreateRelationshipRequest,
+    )
+    a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
+    generation_a, generation_b = request.endpoint_a == a ?
+        (request.generation_a, request.generation_b) :
+        (request.generation_b, request.generation_a)
+    slot = something(findfirst(!, state.active))
+    @inbounds begin
+        state.active[slot] = true
+        state.endpoint_a[slot] = a
+        state.endpoint_b[slot] = b
+        state.generation_a[slot] = generation_a
+        state.generation_b[slot] = generation_b
+    end
+    for payload_slot in eachindex(state.payload)
+        @inbounds state.payload[payload_slot][slot] =
+            request.payload[payload_slot]
+    end
+    _insert_incident_edge!(state, a, Int32(slot))
+    _insert_incident_edge!(state, b, Int32(slot))
+    return state
+end
+
+function apply_validated_relationship_request!(
+        state::ProgramRelationshipState,
+        request::RemoveRelationshipRequest,
+    )
+    edge = request.edge
+    a = @inbounds state.endpoint_a[edge]
+    b = @inbounds state.endpoint_b[edge]
+    _remove_incident_edge!(state, a, edge)
+    _remove_incident_edge!(state, b, edge)
+    @inbounds begin
+        state.active[edge] = false
+        state.endpoint_a[edge] = 0
+        state.endpoint_b[edge] = 0
+        state.generation_a[edge] = 0
+        state.generation_b[edge] = 0
+    end
+    for values in state.payload
+        @inbounds values[edge] = zero(eltype(values))
+    end
+    return state
+end
+
+function apply_validated_relationship_request!(
+        state::ProgramRelationshipState,
+        request::RetuneRelationshipRequest,
+    )
+    for payload_slot in eachindex(state.payload)
+        @inbounds state.payload[payload_slot][request.edge] =
+            request.payload[payload_slot]
+    end
+    return state
+end
+
 function apply_relationship_requests!(
-        state::ProgramRelationshipState{T},
-        cell_kinds,
-        cell_generations,
-        plan::CompiledRelationshipPlan{T},
+        state::ProgramRelationshipState,
+        endpoint_status,
+        endpoint_generations,
+        schema::RelationshipStoreSchema,
         requests,
-    ) where {T}
+    )
+    length(endpoint_status) == length(endpoint_generations) ||
+        throw(ArgumentError("relationship endpoint tables have different lengths"))
+    length(state.payload) == length(schema.payload_defaults) ||
+        throw(ArgumentError("relationship state payload does not match its schema"))
     staged = copy(state)
     ordered = sort!(collect(requests); by = _request_sort_key)
     touched_edges = Set{Int32}()
     for request in ordered
         if request isa CreateRelationshipRequest
-            request.endpoint_a != request.endpoint_b ||
-                throw(ArgumentError("a relationship cannot be a self-edge"))
-            a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
-            generation_a, generation_b =
-                request.endpoint_a == a ?
-                (request.generation_a, request.generation_b) :
-                (request.generation_b, request.generation_a)
-            1 <= a <= length(cell_kinds) ||
-                throw(ArgumentError("relationship endpoint $a is not an active cell"))
-            1 <= b <= length(cell_kinds) ||
-                throw(ArgumentError("relationship endpoint $b is not an active cell"))
-            kind_a = @inbounds cell_kinds[a]
-            kind_b = @inbounds cell_kinds[b]
-            legal = (kind_a == plan.kind_a && kind_b == plan.kind_b) ||
-                    (kind_a == plan.kind_b && kind_b == plan.kind_a)
-            legal || throw(ArgumentError("relationship endpoint kinds do not match"))
-            _validate_relationship_endpoint(
-                a, generation_a, kind_a, cell_kinds, cell_generations
-            )
-            _validate_relationship_endpoint(
-                b, generation_b, kind_b, cell_kinds, cell_generations
-            )
-            existing = _relationship_edge(staged, a, b)
-            existing === nothing || continue # declared duplicate policy: ignore exact create
-            _relationship_degree(staged, a) < plan.maximum_degree ||
-                throw(ArgumentError("relationship maximum degree exceeded for $a"))
-            _relationship_degree(staged, b) < plan.maximum_degree ||
-                throw(ArgumentError("relationship maximum degree exceeded for $b"))
-            slot = findfirst(!, staged.active)
-            slot === nothing &&
-                throw(ArgumentError("relationship capacity exceeded"))
-            request.maximum > zero(T) ||
-                throw(ArgumentError("relationship breaking length must be positive"))
-            request.target >= zero(T) ||
-                throw(ArgumentError("relationship target length must be nonnegative"))
-            request.strength >= zero(T) ||
-                throw(ArgumentError("relationship strength must be nonnegative"))
-            staged.active[slot] = true
-            staged.endpoint_a[slot] = a
-            staged.endpoint_b[slot] = b
-            staged.generation_a[slot] = generation_a
-            staged.generation_b[slot] = generation_b
-            staged.strength[slot] = request.strength
-            staged.target[slot] = request.target
-            staged.maximum[slot] = request.maximum
-            _insert_incident_edge!(staged, a, Int32(slot))
-            _insert_incident_edge!(staged, b, Int32(slot))
+            validate_relationship_request(
+                staged,
+                endpoint_status,
+                endpoint_generations,
+                schema,
+                request,
+            ) || continue # declared duplicate policy: ignore exact create
+            apply_validated_relationship_request!(staged, request)
         elseif request isa RemoveRelationshipRequest
             edge = request.edge
             1 <= edge <= length(staged.active) && staged.active[edge] ||
@@ -619,18 +545,14 @@ function apply_relationship_requests!(
             edge in touched_edges &&
                 throw(ArgumentError("conflicting relationship requests for edge $edge"))
             push!(touched_edges, edge)
-            a = @inbounds staged.endpoint_a[edge]
-            b = @inbounds staged.endpoint_b[edge]
-            _remove_incident_edge!(staged, a, edge)
-            _remove_incident_edge!(staged, b, edge)
-            staged.active[edge] = false
-            staged.endpoint_a[edge] = 0
-            staged.endpoint_b[edge] = 0
-            staged.generation_a[edge] = 0
-            staged.generation_b[edge] = 0
-            staged.strength[edge] = zero(T)
-            staged.target[edge] = zero(T)
-            staged.maximum[edge] = zero(T)
+            validate_relationship_request(
+                staged,
+                endpoint_status,
+                endpoint_generations,
+                schema,
+                request,
+            )
+            apply_validated_relationship_request!(staged, request)
         elseif request isa RetuneRelationshipRequest
             edge = request.edge
             1 <= edge <= length(staged.active) && staged.active[edge] ||
@@ -638,11 +560,14 @@ function apply_relationship_requests!(
             edge in touched_edges &&
                 throw(ArgumentError("conflicting relationship requests for edge $edge"))
             push!(touched_edges, edge)
-            request.maximum > zero(T) ||
-                throw(ArgumentError("relationship breaking length must be positive"))
-            staged.strength[edge] = request.strength
-            staged.target[edge] = request.target
-            staged.maximum[edge] = request.maximum
+            validate_relationship_request(
+                staged,
+                endpoint_status,
+                endpoint_generations,
+                schema,
+                request,
+            )
+            apply_validated_relationship_request!(staged, request)
         else
             throw(ArgumentError("unknown relationship request type"))
         end
@@ -652,77 +577,92 @@ function apply_relationship_requests!(
     copyto!(state.endpoint_b, staged.endpoint_b)
     copyto!(state.generation_a, staged.generation_a)
     copyto!(state.generation_b, staged.generation_b)
-    copyto!(state.strength, staged.strength)
-    copyto!(state.target, staged.target)
-    copyto!(state.maximum, staged.maximum)
+    for payload_slot in eachindex(state.payload)
+        copyto!(state.payload[payload_slot], staged.payload[payload_slot])
+    end
     copyto!(state.degree, staged.degree)
     copyto!(state.incident_edges, staged.incident_edges)
     return state
 end
 
 function initialize_program_relationships(
-        plan::CompiledRelationshipPlan{T},
-        cell_kinds,
-        cell_generations,
-        parameters,
+        schema::RelationshipStoreSchema,
+        endpoint_status,
+        endpoint_generations,
+        parameters::AbstractVector{T},
         entries,
     ) where {T}
     state = ProgramRelationshipState(
         T,
-        plan.capacity,
-        length(cell_kinds),
-        plan.maximum_degree,
+        schema.capacity,
+        length(endpoint_status),
+        schema.maximum_degree,
+        length(schema.payload_defaults),
     )
     entries === nothing && return state
-    default_strength = compiled_scalar_value(plan.strength, parameters)
-    default_target = compiled_scalar_value(plan.target, parameters)
-    default_maximum = compiled_scalar_value(plan.maximum, parameters)
+    defaults = map(
+        value -> compiled_scalar_value(value, parameters),
+        schema.payload_defaults,
+    )
     requests = ProgramRelationshipRequest[]
     for (identity, entry) in enumerate(entries)
-        length(entry) in (2, 3) ||
-            throw(ArgumentError("relationship entries are `(a, b)` or `(a, b, payload)`"))
+        entry isa Tuple && length(entry) in (2, 3, 5) || throw(ArgumentError(
+            "relationship entries are `(a, b)`, `(a, b, payload)`, or " *
+            "`(a, b, payload, generation_a, generation_b)`"
+        ))
         a, b = entry[1], entry[2]
-        a isa Integer && 1 <= a <= length(cell_generations) ||
+        a isa Integer && 1 <= a <= length(endpoint_generations) ||
             throw(ArgumentError("relationship endpoint $a is not an active cell"))
-        b isa Integer && 1 <= b <= length(cell_generations) ||
+        b isa Integer && 1 <= b <= length(endpoint_generations) ||
             throw(ArgumentError("relationship endpoint $b is not an active cell"))
-        payload = length(entry) == 3 ? entry[3] : NamedTuple()
-        strength = haskey(payload, :strength) ? T(payload.strength) : default_strength
-        target = haskey(payload, :target) ? T(payload.target) : default_target
-        maximum = haskey(payload, :maximum) ? T(payload.maximum) : default_maximum
-        generation_a = haskey(payload, :generation_a) ?
-                       UInt32(payload.generation_a) :
-                       cell_generations[Int(a)]
-        generation_b = haskey(payload, :generation_b) ?
-                       UInt32(payload.generation_b) :
-                       cell_generations[Int(b)]
+        supplied = length(entry) >= 3 ? entry[3] : ntuple(_ -> nothing, length(defaults))
+        supplied isa Tuple && length(supplied) == length(defaults) ||
+            throw(ArgumentError(
+                "initial relationship payload does not match its schema"
+            ))
+        payload = ntuple(length(defaults)) do slot
+            value = supplied[slot]
+            value === nothing ? defaults[slot] : T(value)
+        end
+        generation_a = length(entry) == 5 && entry[4] !== nothing ?
+                       UInt32(entry[4]) : endpoint_generations[Int(a)]
+        generation_b = length(entry) == 5 && entry[5] !== nothing ?
+                       UInt32(entry[5]) : endpoint_generations[Int(b)]
         push!(requests, CreateRelationshipRequest(
             a,
             b,
-            strength,
-            target,
-            maximum;
+            payload;
             generation_a,
             generation_b,
             identity,
         ))
     end
     apply_relationship_requests!(
-        state, cell_kinds, cell_generations, plan, requests
+        state, endpoint_status, endpoint_generations, schema, requests
     )
     return state
 end
 
-struct ProgramSnapshot{T <: AbstractFloat, N, A, F, H, S, R, D}
+@inline function relationship_payload(
+        state::ProgramRelationshipState,
+        edge::Integer,
+        slot::Integer,
+    )
+    1 <= slot <= length(state.payload) || throw(ArgumentError(
+        "relationship payload slot is outside the compiled schema"
+    ))
+    1 <= edge <= length(state.active) || throw(ArgumentError(
+        "relationship edge is outside the compiled store"
+    ))
+    return @inbounds state.payload[slot][edge]
+end
+
+struct ProgramSnapshot{T <: AbstractFloat, N, R, D}
     mcs::Int
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
     volumes::Vector{Int}
-    activity::A
-    field::F
-    history::H
-    stored_states::S
     relationships::R
     descriptor_state::D
 end
@@ -768,13 +708,6 @@ function _program_checkpoint_checksum(
         join(snapshot.cell_kinds, ','), '\n',
         join(snapshot.cell_generations, ','), '\n',
         join(snapshot.volumes, ','), '\n',
-        snapshot.activity === nothing ? "nothing" :
-        join(vec(snapshot.activity), ','), '\n',
-        snapshot.field === nothing ? "nothing" :
-        join(vec(snapshot.field), ','), '\n',
-        snapshot.history === nothing ? "nothing" :
-        join((join(vec(entry), ',') for entry in snapshot.history), ';'), '\n',
-        repr(snapshot.stored_states), '\n',
         repr(snapshot.descriptor_state), '\n',
         snapshot.relationships === nothing ? "nothing" :
         string(
@@ -783,9 +716,10 @@ function _program_checkpoint_checksum(
             ';', join(snapshot.relationships.endpoint_b, ','),
             ';', join(snapshot.relationships.generation_a, ','),
             ';', join(snapshot.relationships.generation_b, ','),
-            ';', join(snapshot.relationships.strength, ','),
-            ';', join(snapshot.relationships.target, ','),
-            ';', join(snapshot.relationships.maximum, ','),
+            ';', join(
+                (join(values, ',') for values in snapshot.relationships.payload),
+                '|',
+            ),
             ';', join(snapshot.relationships.degree, ','),
             ';', join(vec(snapshot.relationships.incident_edges), ','),
         ), '\n',
@@ -872,10 +806,6 @@ function restore_program_checkpoint(
         checkpoint.snapshot.cell_kinds;
         scalar_type = eltype(program.parameter_defaults),
         cell_generations = checkpoint.snapshot.cell_generations,
-        activity = checkpoint.snapshot.activity,
-        field = checkpoint.snapshot.field,
-        history = checkpoint.snapshot.history,
-        stored_states = checkpoint.snapshot.stored_states,
         relationships = nothing,
         descriptor_state = checkpoint.snapshot.descriptor_state,
     )
@@ -902,19 +832,16 @@ function restore_program_checkpoint(
     return runtime
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R, D}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB}
     program::P
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
     volumes::Vector{Int}
-    activity::A
-    field::F
-    history::H
-    stored_states::S
     relationships::R
     descriptor_state::D
     proposal_contributions::Vector{ProposalEvaluation{T}}
+    stage_buffers::SB
     parameters::Vector{T}
     seed::UInt64
     replica::UInt32
@@ -974,39 +901,6 @@ function initialize_program(
         "every active finite cell must own at least one site and inactive slots " *
         "must not appear in ownership"
     ))
-    activity = if program.activity === nothing
-        nothing
-    elseif initial.activity === nothing
-        zeros(T, program.shape)
-    else
-        size(initial.activity) == program.shape ||
-            throw(ArgumentError("activity state shape does not match the program"))
-        copy(initial.activity)
-    end
-    field = if program.field === nothing || !program.field.enabled
-        nothing
-    elseif initial.field === nothing
-        zeros(T, program.shape)
-    else
-        size(initial.field) == program.shape ||
-            throw(ArgumentError("field state shape does not match the program"))
-        copy(initial.field)
-    end
-    history = if program.history === nothing
-        nothing
-    elseif initial.history === nothing
-        source = program.history.source === :activity ? activity : nothing
-        source === nothing && throw(ArgumentError(
-            "compiled history source is not allocated"
-        ))
-        [copy(source) for _ in 1:Int(program.history.depth)]
-    else
-        length(initial.history) == Int(program.history.depth) ||
-            throw(ArgumentError("initial history has the wrong depth"))
-        all(entry -> size(entry) == program.shape, initial.history) ||
-            throw(ArgumentError("initial history state shape does not match the program"))
-        [copy(entry) for entry in initial.history]
-    end
     relationships = if program.relationships === nothing
         nothing
     else
@@ -1018,7 +912,6 @@ function initialize_program(
             initial.relationships,
         )
     end
-    stored_states = _copy_program_value(initial.stored_states)
     descriptor_state = if initial.descriptor_state === nothing
         allocate_auxiliary_state(program.descriptor_plan.state_layout)
     elseif initial.descriptor_state isa AuxiliaryState
@@ -1031,25 +924,29 @@ function initialize_program(
             "descriptor state must be a CorePotts AuxiliaryState"
         ))
     end
+    stage_buffers = allocate_stage_runtime_buffers(
+        program.stage_plan,
+        T,
+        program.shape,
+        program.relationships === nothing ? 0 : program.relationships.capacity,
+    )
     return ProgramRuntime{
-        T, N, typeof(program), typeof(activity), typeof(field), typeof(history),
-        typeof(stored_states), typeof(relationships), typeof(descriptor_state),
+        T, N, typeof(program), typeof(relationships),
+        typeof(descriptor_state),
+        typeof(stage_buffers),
     }(
         program,
         copy(initial.ownership),
         copy(initial.cell_kinds),
         copy(initial.cell_generations),
         volumes,
-        activity,
-        field,
-        history,
-        stored_states,
         relationships,
         descriptor_state,
         fill(
             _neutral_proposal_evaluation(T),
             length(program.descriptor_plan.source_table),
         ),
+        stage_buffers,
         T.(parameters),
         seed,
         replica,
@@ -1069,11 +966,6 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     runtime.settled || throw(ArgumentError(
         "a program snapshot requires a settled complete-MCS boundary"
     ))
-    activity = runtime.activity === nothing ? nothing : copy(runtime.activity)
-    field = runtime.field === nothing ? nothing : copy(runtime.field)
-    history = runtime.history === nothing ? nothing :
-              [copy(entry) for entry in runtime.history]
-    stored_states = _copy_program_value(runtime.stored_states)
     relationships = runtime.relationships === nothing ?
                     nothing : copy(runtime.relationships)
     descriptor_state = copy_auxiliary_state(
@@ -1081,18 +973,13 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
         runtime.descriptor_state,
     )
     return ProgramSnapshot{
-        T, N, typeof(activity), typeof(field), typeof(history),
-        typeof(stored_states), typeof(relationships), typeof(descriptor_state),
+        T, N, typeof(relationships), typeof(descriptor_state),
     }(
         runtime.mcs,
         copy(runtime.ownership),
         copy(runtime.cell_kinds),
         copy(runtime.cell_generations),
         copy(runtime.volumes),
-        activity,
-        field,
-        history,
-        stored_states,
         relationships,
         descriptor_state,
     )
@@ -1214,117 +1101,19 @@ end
     owner > 0 ? @inbounds(runtime.cell_kinds[owner]) :
     owner == 0 ? runtime.program.medium_kind : Int16(-owner)
 
-@inline function _volume_delta(runtime::ProgramRuntime{T}, old_owner, new_owner) where {T}
-    old_owner == new_owner && return zero(T)
-    program = runtime.program
-    parameters = runtime.parameters
-    delta = zero(T)
-    if old_owner > 0
-        kind = @inbounds runtime.cell_kinds[old_owner]
-        strength = compiled_scalar_value(program.volume_strengths[kind], parameters)
-        target = compiled_scalar_value(program.volume_targets[kind], parameters)
-        volume = @inbounds runtime.volumes[old_owner]
-        delta += strength * ((T(volume - 1) - target)^2 - (T(volume) - target)^2)
-    end
-    if new_owner > 0
-        kind = @inbounds runtime.cell_kinds[new_owner]
-        strength = compiled_scalar_value(program.volume_strengths[kind], parameters)
-        target = compiled_scalar_value(program.volume_targets[kind], parameters)
-        volume = @inbounds runtime.volumes[new_owner]
-        delta += strength * ((T(volume + 1) - target)^2 - (T(volume) - target)^2)
-    end
-    return delta
-end
-
-function _contact_delta(
-        runtime::ProgramRuntime{T, N},
-        target::CartesianIndex{N},
-        old_owner::Int32,
-        new_owner::Int32,
-    ) where {T, N}
-    old_kind = _owner_kind(runtime, old_owner)
-    new_kind = _owner_kind(runtime, new_owner)
-    delta = zero(T)
-    table = runtime.program.contact_energies
-    for direction in axes(runtime.program.contact_offsets, 2)
-        neighbor = _neighbor_index(
-            runtime.program, target, runtime.program.contact_offsets, direction
-        )
-        neighbor === nothing && continue
-        neighbor_owner = @inbounds runtime.ownership[neighbor]
-        neighbor_kind = _owner_kind(runtime, neighbor_owner)
-        old_owner == neighbor_owner || (
-            delta -= compiled_scalar_value(
-                @inbounds(table[old_kind, neighbor_kind]), runtime.parameters
-            )
-        )
-        new_owner == neighbor_owner || (
-            delta += compiled_scalar_value(
-                @inbounds(table[new_kind, neighbor_kind]), runtime.parameters
-            )
-        )
-    end
-    return delta
-end
-
-function _local_activity_geomean(
-        runtime::ProgramRuntime{T, N},
-        site::CartesianIndex{N},
-        owner::Int32,
-    ) where {T, N}
-    owner <= 0 && return zero(T)
-    plan = runtime.program.activity
-    plan === nothing && return zero(T)
-    total = zero(T)
-    count = 0
-    if @inbounds runtime.ownership[site] == owner
-        total += log1p(max(zero(T), @inbounds(runtime.activity[site])))
-        count += 1
-    end
-    for direction in axes(plan.neighborhood_offsets, 2)
-        neighbor = _neighbor_index(
-            runtime.program, site, plan.neighborhood_offsets, direction
-        )
-        neighbor === nothing && continue
-        @inbounds runtime.ownership[neighbor] == owner || continue
-        total += log1p(max(zero(T), @inbounds(runtime.activity[neighbor])))
-        count += 1
-    end
-    return count == 0 ? zero(T) : exp(total / T(count)) - one(T)
-end
-
-function _activity_delta(
-        runtime::ProgramRuntime{T, N},
-        source::CartesianIndex{N},
-        target::CartesianIndex{N},
-        old_owner::Int32,
-        new_owner::Int32,
-    ) where {T, N}
-    plan = runtime.program.activity
-    plan === nothing && return zero(T)
-    new_owner <= 0 && return zero(T)
-    @inbounds runtime.cell_kinds[new_owner] == plan.kind || return zero(T)
-    maximum = compiled_scalar_value(plan.maximum, runtime.parameters)
-    maximum > zero(T) || return zero(T)
-    strength = compiled_scalar_value(plan.strength, runtime.parameters)
-    source_activity = _local_activity_geomean(runtime, source, new_owner)
-    target_activity = _local_activity_geomean(runtime, target, old_owner)
-    return -(strength / maximum) * (source_activity - target_activity)
-end
-
-function _chemotaxis_delta(
-        runtime::ProgramRuntime{T, N},
-        source::CartesianIndex{N},
-        target::CartesianIndex{N},
-        new_owner::Int32,
-    ) where {T, N}
-    plan = runtime.program.field
-    plan === nothing && return zero(T)
-    plan.enabled || return zero(T)
-    new_owner <= 0 && return zero(T)
-    @inbounds runtime.cell_kinds[new_owner] == plan.chemotaxis_kind || return zero(T)
-    strength = compiled_scalar_value(plan.chemotaxis_strength, runtime.parameters)
-    return -strength * (@inbounds(runtime.field[target]) - @inbounds(runtime.field[source]))
+@inline ownership_state(runtime::ProgramRuntime) = runtime.ownership
+@inline owner_kind(runtime::ProgramRuntime, owner::Integer) =
+    _owner_kind(runtime, Int32(owner))
+@inline function relationship_degree(
+        runtime::ProgramRuntime,
+        relationship_slot::Integer,
+        endpoint::Integer,
+    )
+    relationship_slot == 1 || throw(ArgumentError(
+        "runtime relationship slot is outside the compiled store"
+    ))
+    runtime.relationships === nothing && return 0
+    return _relationship_degree(runtime.relationships, Int32(endpoint))
 end
 
 function _cell_center(
@@ -1479,35 +1268,6 @@ function _cell_length(
     return T(4) * sqrt(max(zero(T), maximum_variance))
 end
 
-function _elongation_delta(
-        runtime::ProgramRuntime{T, N},
-        target_site::CartesianIndex{N},
-        old_owner::Int32,
-        new_owner::Int32,
-    ) where {T, N}
-    plan = runtime.program.elongation
-    plan === nothing && return zero(T)
-    target_length = compiled_scalar_value(plan.target, runtime.parameters)
-    strength = compiled_scalar_value(plan.strength, runtime.parameters)
-    delta = zero(T)
-    for cell in (old_owner, new_owner)
-        cell == 0 && continue
-        @inbounds runtime.cell_kinds[cell] == plan.kind || continue
-        before_length = _cell_length(runtime, cell)
-        after_length = _cell_length(
-            runtime,
-            cell;
-            replaced_site = target_site,
-            replacement_owner = new_owner,
-        )
-        delta += strength * (
-            (after_length - target_length)^2 -
-            (before_length - target_length)^2
-        )
-    end
-    return delta
-end
-
 @inline function _center_distance(
         first::NTuple{2, T}, second::NTuple{2, T}
     ) where {T}
@@ -1520,126 +1280,26 @@ end
     return sqrt(sum((first[i] - second[i])^2 for i in eachindex(first)))
 end
 
-function _relationship_energy(
-        state::ProgramRelationshipState{T},
-        edge::Int,
-        runtime::ProgramRuntime{T, N};
-        replaced_site = nothing,
-        replacement_owner::Int32 = Int32(-1),
-    ) where {T, N}
-    a = @inbounds state.endpoint_a[edge]
-    b = @inbounds state.endpoint_b[edge]
-    center_a = _cell_center(
-        runtime, a; replaced_site, replacement_owner
-    )
-    center_b = _cell_center(
-        runtime, b; replaced_site, replacement_owner
-    )
-    (center_a === nothing || center_b === nothing) && return zero(T)
-    distance = _center_distance(center_a, center_b)
-    target = @inbounds state.target[edge]
-    strength = @inbounds state.strength[edge]
-    return strength * (distance - target)^2
-end
-
-function _relationship_delta(
-        runtime::ProgramRuntime{T, N},
-        target::CartesianIndex{N},
-        old_owner::Int32,
-        new_owner::Int32,
-    ) where {T, N}
-    state = runtime.relationships
-    state === nothing && return zero(T)
-    delta = zero(T)
-    for edge in eachindex(state.active)
-        @inbounds state.active[edge] || continue
-        a = @inbounds state.endpoint_a[edge]
-        b = @inbounds state.endpoint_b[edge]
-        (a in (old_owner, new_owner) || b in (old_owner, new_owner)) || continue
-        before = _relationship_energy(state, edge, runtime)
-        after = _relationship_energy(
-            state,
-            edge,
-            runtime;
-            replaced_site = target,
-            replacement_owner = new_owner,
-        )
-        delta += after - before
-    end
-    return delta
-end
-
-function _accepted_copy_relationship_state(
-        runtime::ProgramRuntime{T, N},
-        target::CartesianIndex{N},
-        new_owner::Int32,
-        attempt_identity::Int,
-    ) where {T, N}
-    plan = runtime.program.relationships
-    state = runtime.relationships
-    (plan === nothing || state === nothing ||
-     !plan.create_on_accepted_copy || new_owner <= 0) && return state
-    staged = copy(state)
-    requests = ProgramRelationshipRequest[]
-    strength = compiled_scalar_value(plan.strength, runtime.parameters)
-    target_length = compiled_scalar_value(plan.target, runtime.parameters)
-    maximum = compiled_scalar_value(plan.maximum, runtime.parameters)
-    request_index = 0
-    for direction in axes(runtime.program.contact_offsets, 2)
-        neighbor = _neighbor_index(
-            runtime.program, target, runtime.program.contact_offsets, direction
-        )
-        neighbor === nothing && continue
-        other = @inbounds runtime.ownership[neighbor]
-        (other <= 0 || other == new_owner) && continue
-        _relationship_edge(staged, new_owner, other) === nothing || continue
-        request_index += 1
-        identity = UInt64(attempt_identity) << 32 | UInt64(request_index)
-        push!(requests, CreateRelationshipRequest(
-            new_owner,
-            other,
-            strength,
-            target_length,
-            maximum;
-            generation_a = @inbounds(runtime.cell_generations[new_owner]),
-            generation_b = @inbounds(runtime.cell_generations[other]),
-            identity,
-        ))
-    end
-    isempty(requests) ||
-        apply_relationship_requests!(
-            staged,
-            runtime.cell_kinds,
-            runtime.cell_generations,
-            plan,
-            requests,
-        )
-    return staged
-end
+@inline _center_distance(::Nothing, second) = Inf
+@inline _center_distance(first, ::Nothing) = Inf
+@inline _center_distance(::Nothing, ::Nothing) = Inf
 
 function _commit_copy!(
         runtime::ProgramRuntime{T, N},
         target::CartesianIndex{N},
         old_owner::Int32,
         new_owner::Int32,
-        attempt_identity::Int,
+        context,
     ) where {T, N}
-    staged_relationships = _accepted_copy_relationship_state(
-        runtime, target, new_owner, attempt_identity
-    )
     @inbounds runtime.ownership[target] = new_owner
     old_owner > 0 && (@inbounds runtime.volumes[old_owner] -= 1)
     new_owner > 0 && (@inbounds runtime.volumes[new_owner] += 1)
-    plan = runtime.program.activity
-    if plan !== nothing && runtime.activity !== nothing
-        old_owner == new_owner || (@inbounds runtime.activity[target] = zero(T))
-        if plan.activate_extensions && old_owner <= 0 && new_owner > 0 &&
-                @inbounds(runtime.cell_kinds[new_owner]) == plan.kind
-            @inbounds runtime.activity[target] =
-                compiled_scalar_value(plan.maximum, runtime.parameters)
-        end
-    end
-    runtime.relationships = staged_relationships
+    old_owner == new_owner || _clear_ownership_changed_state!(
+        runtime.program.descriptor_plan.state_layout,
+        runtime.descriptor_state,
+        target,
+    )
+    _apply_accepted_copy_stage!(runtime, context)
     return nothing
 end
 
@@ -1657,10 +1317,25 @@ end
     context.runtime.parameters
 @inline _compiled_evaluator_parameters(context::_ProposalEvaluationContext) =
     context.runtime.parameters
+@inline proposal_source_site(context::_ProposalEvaluationContext) =
+    context.source
+@inline proposal_target_site(context::_ProposalEvaluationContext) =
+    context.target
+@inline proposal_source_owner(context::_ProposalEvaluationContext) =
+    context.new_owner
 @inline proposal_target_owner(context::_ProposalEvaluationContext) =
     context.old_owner
+@inline proposal_source_kind(context::_ProposalEvaluationContext) =
+    _owner_kind(context.runtime, context.new_owner)
 @inline proposal_target_kind(context::_ProposalEvaluationContext) =
     _owner_kind(context.runtime, context.old_owner)
+@inline owner_kind(
+    context::_ProposalEvaluationContext, owner::Integer
+) = _owner_kind(context.runtime, Int32(owner))
+@inline proposal_site_owner(
+    context::_ProposalEvaluationContext,
+    site,
+) = @inbounds context.runtime.ownership[site]
 
 @inline function proposal_relation_count(
         context::_ProposalEvaluationContext,
@@ -1671,6 +1346,26 @@ end
         Int32(relation_handle),
     )
     return Int(count)
+end
+
+@inline function proposal_relation_neighbor_site(
+        context::_ProposalEvaluationContext,
+        relation_handle::Integer,
+        center,
+        direction::Integer,
+    )
+    resources = context.runtime.program.descriptor_plan.domain_resources
+    start, count = _contact_domain_columns(
+        resources, Int32(relation_handle)
+    )
+    1 <= direction <= count || return nothing
+    column = start + Int32(direction - 1)
+    return _neighbor_index(
+        context.runtime.program,
+        center,
+        resources.contact_offsets,
+        Int(column),
+    )
 end
 
 @inline function proposal_relation_neighbor_owner(
@@ -1777,10 +1472,9 @@ end
         arguments,
         context::_ProposalEvaluationContext,
     )
-    context.runtime.field === nothing &&
-        return zero(eltype(context.runtime.parameters))
+    handle = first(arguments)
     site = last(arguments)
-    return @inbounds context.runtime.field[site]
+    return state_value(context, handle, site)
 end
 
 @inline function apply_resource_operation(
@@ -1802,6 +1496,46 @@ end
     state === nothing && return 0
     return _relationship_degree(state, owner)
 end
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:linked},
+        arguments,
+        context::_ProposalEvaluationContext,
+    )
+    relationship_handle = Int32(arguments[1])
+    endpoint_a = Int32(arguments[2])
+    endpoint_b = Int32(arguments[3])
+    (endpoint_a <= 0 || endpoint_b <= 0) && return false
+    slot = _relationship_domain_slot(
+        context.runtime.program.descriptor_plan.domain_resources,
+        relationship_handle,
+    )
+    slot == 1 || throw(ArgumentError(
+        "V1 runtime contains one relationship storage slot"
+    ))
+    state = context.runtime.relationships
+    state === nothing && return false
+    return _relationship_edge(state, endpoint_a, endpoint_b) !== nothing
+end
+
+@inline function _proposal_endpoint_pair(arguments, context)
+    endpoint_a = Int32(first(arguments))
+    endpoint_b = Int32(last(arguments))
+    declared = _canonical_endpoints(endpoint_a, endpoint_b)
+    transition = _canonical_endpoints(context.new_owner, context.old_owner)
+    return endpoint_a > 0 && endpoint_b > 0 &&
+           endpoint_a != endpoint_b && declared == transition
+end
+
+@inline apply_resource_operation(
+    ::ResourceOperation{:new_contact}, arguments,
+    context::_ProposalEvaluationContext,
+) = _proposal_endpoint_pair(arguments, context)
+
+@inline apply_resource_operation(
+    ::ResourceOperation{:lost_contact}, arguments,
+    context::_ProposalEvaluationContext,
+) = _proposal_endpoint_pair(arguments, context)
 
 @inline function apply_resource_operation(
         ::ResourceOperation{:draw},
@@ -1858,6 +1592,638 @@ end
     ).values[site]
 end
 
+@inline stage_site(
+    ::ProposalTargetStageSite,
+    context::_ProposalEvaluationContext,
+) = context.target
+
+struct _SiteStageEvaluationContext{R, I}
+    runtime::R
+    site::I
+end
+
+struct _RelationshipStageEvaluationContext{R}
+    runtime::R
+    relationship_slot::Int32
+    edge::Int32
+end
+
+@inline _compiled_evaluator_parameters(
+    context::_RelationshipStageEvaluationContext
+) = context.runtime.parameters
+@inline evaluator_parameters(
+    context::_RelationshipStageEvaluationContext
+) = context.runtime.parameters
+@inline context_value(
+    ::ContextOperation{:energy_anchor_relationship},
+    context::_RelationshipStageEvaluationContext,
+) = context.edge
+@inline function _compiled_context_value(
+        operation::ContextOperation{Identity},
+        context::_RelationshipStageEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        context_value,
+        Tuple{
+            ContextOperation{Identity},
+            _RelationshipStageEvaluationContext,
+        },
+        operation,
+        context,
+    )
+end
+@inline function _relationship_stage_state(
+        context::_RelationshipStageEvaluationContext,
+    )
+    context.relationship_slot == 1 || throw(ArgumentError(
+        "V1 runtime contains one relationship storage slot"
+    ))
+    state = context.runtime.relationships
+    state === nothing && throw(ArgumentError(
+        "relationship stage references absent runtime storage"
+    ))
+    return state
+end
+@inline function apply_resource_operation(
+        ::ResourceOperation{:endpoint_a},
+        arguments,
+        context::_RelationshipStageEvaluationContext,
+    )
+    state = _relationship_stage_state(context)
+    return @inbounds state.endpoint_a[Int(only(arguments))]
+end
+@inline function apply_resource_operation(
+        ::ResourceOperation{:endpoint_b},
+        arguments,
+        context::_RelationshipStageEvaluationContext,
+    )
+    state = _relationship_stage_state(context)
+    return @inbounds state.endpoint_b[Int(only(arguments))]
+end
+@inline function apply_resource_operation(
+        ::ResourceOperation{:edge_payload},
+        arguments,
+        context::_RelationshipStageEvaluationContext,
+    )
+    return relationship_payload(
+        _relationship_stage_state(context),
+        Int(first(arguments)),
+        Int(last(arguments)),
+    )
+end
+@inline function apply_resource_operation(
+        ::ResourceOperation{:cell_volume},
+        arguments,
+        context::_RelationshipStageEvaluationContext,
+    )
+    owner = Int(only(arguments))
+    owner <= 0 && return 0
+    return @inbounds context.runtime.volumes[owner]
+end
+@inline apply_resource_operation(
+    ::ResourceOperation{:unwrapped_center},
+    arguments,
+    context::_RelationshipStageEvaluationContext,
+) = _cell_center(context.runtime, Int32(only(arguments)))
+@inline apply_resource_operation(
+    ::ResourceOperation{:cell_center},
+    arguments,
+    context::_RelationshipStageEvaluationContext,
+) = _cell_center(context.runtime, Int32(only(arguments)))
+@inline apply_resource_operation(
+    ::ResourceOperation{:distance},
+    arguments,
+    ::_RelationshipStageEvaluationContext,
+) = _center_distance(first(arguments), last(arguments))
+@inline function _compiled_resource_operation(
+        operation::ResourceOperation{Identity},
+        arguments::Tuple,
+        context::_RelationshipStageEvaluationContext,
+    ) where {Identity}
+    return invoke(
+        apply_resource_operation,
+        Tuple{
+            ResourceOperation{Identity},
+            Any,
+            _RelationshipStageEvaluationContext,
+        },
+        operation,
+        arguments,
+        context,
+    )
+end
+@inline function state_value(
+        context::_RelationshipStageEvaluationContext,
+        handle::StateHandle,
+        site,
+    )
+    return @inbounds state_block(
+        context.runtime.descriptor_state, handle
+    ).values[site]
+end
+
+@inline _compiled_evaluator_parameters(
+    context::_SiteStageEvaluationContext
+) = context.runtime.parameters
+@inline evaluator_parameters(context::_SiteStageEvaluationContext) =
+    context.runtime.parameters
+@inline stage_site(
+    ::IterationStageSite,
+    context::_SiteStageEvaluationContext,
+) = context.site
+@inline function state_value(
+        context::_SiteStageEvaluationContext,
+        handle::StateHandle,
+        site,
+    )
+    return @inbounds state_block(
+        context.runtime.descriptor_state, handle
+    ).values[site]
+end
+@inline site_owner(
+    context::_SiteStageEvaluationContext, site
+) = @inbounds context.runtime.ownership[site]
+@inline owner_kind(
+    context::_SiteStageEvaluationContext, owner::Integer
+) = _owner_kind(context.runtime, Int32(owner))
+@inline function relation_count(
+        context::_SiteStageEvaluationContext,
+        relation_handle::Integer,
+    )
+    _, count = _contact_domain_columns(
+        context.runtime.program.descriptor_plan.domain_resources,
+        Int32(relation_handle),
+    )
+    return Int(count)
+end
+@inline function relation_neighbor_site(
+        context::_SiteStageEvaluationContext,
+        relation_handle::Integer,
+        center,
+        direction::Integer,
+    )
+    resources = context.runtime.program.descriptor_plan.domain_resources
+    start, count = _contact_domain_columns(
+        resources, Int32(relation_handle)
+    )
+    1 <= direction <= count || return nothing
+    return _neighbor_index(
+        context.runtime.program,
+        center,
+        resources.contact_offsets,
+        Int(start + Int32(direction - 1)),
+    )
+end
+
+@inline function descriptor_emit_requests!(
+        requests::AbstractVector{StageEvaluation{T}},
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AcceptedCopyStage,
+        },
+        context::_ProposalEvaluationContext,
+    ) where {T <: AbstractFloat, C, V, E}
+    condition = _compiled_evaluate_static(descriptor.condition, context)
+    condition isa Bool || throw(ArgumentError(
+        "accepted-copy stage condition must return Bool"
+    ))
+    value = condition ? T(_compiled_evaluate_static(
+        descriptor.value, context
+    )) : zero(T)
+    isfinite(value) || throw(DomainError(
+        value, "accepted-copy stage value must be finite"
+    ))
+    @inbounds requests[Int(descriptor.buffer_slot)] =
+        StageEvaluation(condition, value)
+    return requests
+end
+
+@inline function _relationship_create_request(
+        effect::RelationshipCreateEffect,
+        context::_ProposalEvaluationContext,
+    )
+    endpoint_a = Int32(_compiled_evaluate_static(
+        effect.endpoint_a, context
+    ))
+    endpoint_b = Int32(_compiled_evaluate_static(
+        effect.endpoint_b, context
+    ))
+    payload = map(
+        evaluator -> _compiled_evaluate_static(evaluator, context),
+        effect.payload,
+    )
+    generation_a = 1 <= endpoint_a <= length(context.runtime.cell_generations) ?
+                   @inbounds(context.runtime.cell_generations[endpoint_a]) :
+                   UInt32(0)
+    generation_b = 1 <= endpoint_b <= length(context.runtime.cell_generations) ?
+                   @inbounds(context.runtime.cell_generations[endpoint_b]) :
+                   UInt32(0)
+    return CreateRelationshipRequest(
+        endpoint_a,
+        endpoint_b,
+        payload;
+        generation_a,
+        generation_b,
+        priority = effect.priority,
+        identity = context.attempt,
+    )
+end
+
+@inline function descriptor_emit_requests!(
+        requests::AbstractVector{StageEvaluation{T}},
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AcceptedCopyStage,
+        },
+        context::_ProposalEvaluationContext,
+    ) where {
+        T <: AbstractFloat,
+        C,
+        V,
+        E <: RelationshipCreateEffect,
+    }
+    condition = _compiled_evaluate_static(descriptor.condition, context)
+    condition isa Bool || throw(ArgumentError(
+        "accepted-copy relationship condition must return Bool"
+    ))
+    enabled = false
+    if condition
+        effect = descriptor.effect
+        effect.relationship_slot == 1 || throw(ArgumentError(
+            "V1 runtime contains one relationship storage slot"
+        ))
+        state = context.runtime.relationships
+        schema = context.runtime.program.relationships
+        state === nothing || schema === nothing ? throw(ArgumentError(
+            "relationship effect references absent runtime storage"
+        )) : nothing
+        request = _relationship_create_request(effect, context)
+        enabled = validate_relationship_request(
+            state,
+            context.runtime.cell_kinds,
+            context.runtime.cell_generations,
+            schema,
+            request,
+        )
+    end
+    @inbounds requests[Int(descriptor.buffer_slot)] =
+        StageEvaluation(enabled, zero(T))
+    return requests
+end
+
+@inline function descriptor_emit_requests!(
+        scratch::AbstractArray{T},
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+        context::_SiteStageEvaluationContext,
+    ) where {T <: AbstractFloat, C, V, E}
+    condition = _compiled_evaluate_static(descriptor.condition, context)
+    condition isa Bool || throw(ArgumentError(
+        "after-MCS stage condition must return Bool"
+    ))
+    value = condition ? T(_compiled_evaluate_static(
+        descriptor.value, context
+    )) : T(state_value(
+        context, descriptor.effect.target, context.site
+    ))
+    isfinite(value) || throw(DomainError(
+        value, "after-MCS stage value must be finite"
+    ))
+    @inbounds scratch[context.site] = value
+    return scratch
+end
+
+@inline function descriptor_apply_stage!(
+        descriptor::CompiledStageDescriptor,
+        request::StageEvaluation,
+        state::AuxiliaryState,
+        site,
+    )
+    request.enabled || return state
+    effect = descriptor.effect
+    effect isa SiteAssignmentEffect || throw(ArgumentError(
+        "unsupported compiled accepted-copy effect"
+    ))
+    @inbounds state_block(state, effect.target).values[site] = request.value
+    return state
+end
+
+@inline function descriptor_apply_stage!(
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AcceptedCopyStage,
+        },
+        request::StageEvaluation,
+        runtime::ProgramRuntime,
+        context::_ProposalEvaluationContext,
+    ) where {C, V, E <: SiteAssignmentEffect}
+    return descriptor_apply_stage!(
+        descriptor,
+        request,
+        runtime.descriptor_state,
+        context.target,
+    )
+end
+
+@inline function descriptor_apply_stage!(
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AcceptedCopyStage,
+        },
+        evaluation::StageEvaluation,
+        runtime::ProgramRuntime,
+        context::_ProposalEvaluationContext,
+    ) where {C, V, E <: RelationshipCreateEffect}
+    evaluation.enabled || return runtime
+    request = _relationship_create_request(descriptor.effect, context)
+    apply_validated_relationship_request!(runtime.relationships, request)
+    return runtime
+end
+
+@inline function descriptor_apply_stage!(
+        descriptor::CompiledStageDescriptor,
+        scratch::AbstractArray,
+        state::AuxiliaryState,
+    )
+    effect = descriptor.effect
+    effect isa Union{SiteAssignmentEffect, IteratedSiteAssignmentEffect} ||
+        throw(ArgumentError(
+        "unsupported compiled after-MCS effect"
+    ))
+    copyto!(state_block(state, effect.target).values, scratch)
+    return state
+end
+
+@inline _emit_accepted_copy_groups!(
+    requests, ::Tuple{}, context
+) = requests
+@inline function _emit_accepted_copy_groups!(
+        requests,
+        groups::Tuple,
+        context,
+    )
+    for descriptor in first(groups).instances
+        descriptor_emit_requests!(requests, descriptor, context)
+    end
+    return _emit_accepted_copy_groups!(
+        requests, Base.tail(groups), context
+    )
+end
+
+@inline _apply_accepted_copy_groups!(
+    runtime, ::Tuple{}, requests, context
+) = runtime
+@inline function _apply_accepted_copy_groups!(
+        runtime,
+        groups::Tuple,
+        requests,
+        context,
+    )
+    for descriptor in first(groups).instances
+        request = @inbounds requests[Int(descriptor.buffer_slot)]
+        descriptor_apply_stage!(
+            descriptor, request, runtime, context
+        )
+    end
+    return _apply_accepted_copy_groups!(
+        runtime, Base.tail(groups), requests, context
+    )
+end
+
+@inline function _emit_accepted_copy_stage!(
+        runtime::ProgramRuntime,
+        context::_ProposalEvaluationContext,
+    )
+    return _emit_accepted_copy_groups!(
+        runtime.stage_buffers.accepted_copy,
+        runtime.program.stage_plan.accepted_copy,
+        context,
+    )
+end
+
+@inline function _apply_accepted_copy_stage!(
+        runtime::ProgramRuntime,
+        context::_ProposalEvaluationContext,
+    )
+    _apply_accepted_copy_groups!(
+        runtime,
+        runtime.program.stage_plan.accepted_copy,
+        runtime.stage_buffers.accepted_copy,
+        context,
+    )
+    return nothing
+end
+
+function _clear_ownership_changed_state!(
+        layout::StateLayout,
+        state::AuxiliaryState,
+        site,
+    )
+    for entry in layout.entries
+        lifecycle = entry.schema.lifecycle
+        declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
+                   lifecycle.declared : nothing
+        declared === :ClearOnOwnershipChange || continue
+        values = state_block(state, entry.handle).values
+        @inbounds values[site] = zero(eltype(values))
+    end
+    return state
+end
+
+function _emit_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: SiteAssignmentEffect}
+    scratch = @inbounds runtime.stage_buffers.after_mcs[
+        Int(descriptor.buffer_slot)
+    ]
+    for site in CartesianIndices(runtime.ownership)
+        descriptor_emit_requests!(
+            scratch,
+            descriptor,
+            _SiteStageEvaluationContext(runtime, site),
+        )
+    end
+    return runtime
+end
+
+@inline function _emit_after_mcs_descriptor!(
+        runtime,
+        ::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: ShiftAppendEffect}
+    return runtime
+end
+
+@inline function _emit_after_mcs_descriptor!(
+        runtime,
+        ::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: IteratedSiteAssignmentEffect}
+    return runtime
+end
+
+function _emit_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: RelationshipRemoveEffect}
+    effect = descriptor.effect
+    effect.relationship_slot == 1 || throw(ArgumentError(
+        "V1 runtime contains one relationship storage slot"
+    ))
+    state = runtime.relationships
+    state === nothing && throw(ArgumentError(
+        "relationship stage references absent runtime storage"
+    ))
+    scratch = @inbounds runtime.stage_buffers.relationship_after_mcs[
+        Int(descriptor.buffer_slot)
+    ]
+    fill!(scratch, false)
+    for edge in eachindex(state.active)
+        @inbounds state.active[edge] || continue
+        condition = _compiled_evaluate_static(
+            descriptor.condition,
+            _RelationshipStageEvaluationContext(
+                runtime, effect.relationship_slot, Int32(edge)
+            ),
+        )
+        condition isa Bool || throw(ArgumentError(
+            "relationship lifecycle condition must return Bool"
+        ))
+        @inbounds scratch[edge] = condition
+    end
+    return runtime
+end
+
+function _emit_after_mcs_groups!(runtime, ::Tuple{})
+    return runtime
+end
+function _emit_after_mcs_groups!(runtime, groups::Tuple)
+    for descriptor in first(groups).instances
+        _emit_after_mcs_descriptor!(runtime, descriptor)
+    end
+    return _emit_after_mcs_groups!(runtime, Base.tail(groups))
+end
+
+function _apply_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: SiteAssignmentEffect}
+    scratch = @inbounds runtime.stage_buffers.after_mcs[
+        Int(descriptor.buffer_slot)
+    ]
+    descriptor_apply_stage!(descriptor, scratch, runtime.descriptor_state)
+    return runtime
+end
+
+function _apply_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: RelationshipRemoveEffect}
+    state = runtime.relationships
+    schema = runtime.program.relationships
+    state === nothing || schema === nothing ? throw(ArgumentError(
+        "relationship stage references absent runtime storage"
+    )) : nothing
+    scratch = @inbounds runtime.stage_buffers.relationship_after_mcs[
+        Int(descriptor.buffer_slot)
+    ]
+    for edge in eachindex(scratch)
+        @inbounds scratch[edge] || continue
+        @inbounds state.active[edge] || continue
+        request = RemoveRelationshipRequest(
+            edge;
+            identity = UInt64(runtime.mcs + 1) << 32 | UInt64(edge),
+        )
+        validate_relationship_request(
+            state,
+            runtime.cell_kinds,
+            runtime.cell_generations,
+            schema,
+            request,
+        )
+        apply_validated_relationship_request!(state, request)
+    end
+    return runtime
+end
+
+function _apply_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: IteratedSiteAssignmentEffect}
+    scratch = @inbounds runtime.stage_buffers.after_mcs[
+        Int(descriptor.buffer_slot)
+    ]
+    for _ in 1:Int(descriptor.effect.iterations)
+        for site in CartesianIndices(runtime.ownership)
+            descriptor_emit_requests!(
+                scratch,
+                descriptor,
+                _SiteStageEvaluationContext(runtime, site),
+            )
+        end
+        descriptor_apply_stage!(
+            descriptor, scratch, runtime.descriptor_state
+        )
+    end
+    return runtime
+end
+
+function _apply_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: ShiftAppendEffect}
+    effect = descriptor.effect
+    target = state_block(runtime.descriptor_state, effect.target).values
+    source = state_block(runtime.descriptor_state, effect.source).values
+    axis = Int(effect.axis)
+    1 <= axis <= ndims(target) || error(
+        "compiled shift-append axis is outside its target block"
+    )
+    size(target)[1:(axis - 1)] == size(source) || error(
+        "compiled shift-append source shape is incompatible"
+    )
+    size(target)[(axis + 1):end] == () || error(
+        "compiled shift-append target has trailing dimensions"
+    )
+    depth = size(target, axis)
+    for index in 1:(depth - 1)
+        copyto!(
+            selectdim(target, axis, index),
+            selectdim(target, axis, index + 1),
+        )
+    end
+    copyto!(selectdim(target, axis, depth), source)
+    return runtime
+end
+
+function _apply_after_mcs_groups!(runtime, ::Tuple{})
+    return runtime
+end
+function _apply_after_mcs_groups!(runtime, groups::Tuple)
+    for descriptor in first(groups).instances
+        _apply_after_mcs_descriptor!(runtime, descriptor)
+    end
+    return _apply_after_mcs_groups!(runtime, Base.tail(groups))
+end
+
+function _execute_after_mcs_stage!(runtime::ProgramRuntime)
+    _emit_after_mcs_groups!(runtime, runtime.program.stage_plan.after_mcs)
+    _apply_after_mcs_groups!(runtime, runtime.program.stage_plan.after_mcs)
+    return nothing
+end
+
 """Log acceptance ratio for the conventional descriptor-driven V1 law."""
 @inline function proposal_log_acceptance_ratio(
         evaluation::ProposalEvaluation{T},
@@ -1870,6 +2236,7 @@ end
         ))
     all(isfinite, (
         evaluation.delta_h,
+        evaluation.drive_energy,
         evaluation.drive_log_bias,
         evaluation.kinetic_modifier,
     )) || throw(ArgumentError(
@@ -1881,9 +2248,11 @@ end
             iszero(evaluation.kinetic_modifier) || throw(ArgumentError(
                 "nonconservative drives and proposal modifiers require positive temperature"
             ))
-        return evaluation.delta_h <= zero(T) ? zero(T) : -T(Inf)
+        effective_energy = evaluation.delta_h + evaluation.drive_energy
+        return effective_energy <= zero(T) ? zero(T) : -T(Inf)
     end
-    return -evaluation.delta_h / converted_temperature +
+    return -(evaluation.delta_h + evaluation.drive_energy) /
+           converted_temperature +
            evaluation.drive_log_bias + evaluation.kinetic_modifier
 end
 
@@ -1988,7 +2357,14 @@ function _attempt_selected!(
         )
     end
     if accepted
-        _commit_copy!(runtime, target, old_owner, new_owner, attempt_identity)
+        _emit_accepted_copy_stage!(runtime, context)
+        _commit_copy!(
+            runtime,
+            target,
+            old_owner,
+            new_owner,
+            context,
+        )
         runtime.accepted += 1
         return true
     end
@@ -2058,11 +2434,20 @@ function _advance_checkerboard!(runtime::ProgramRuntime{T, N}) where {T, N}
     return nothing
 end
 
-@inline _clear_retired_cell_state!(states, ::Tuple{}, cell) = nothing
-@inline function _clear_retired_cell_state!(states, names::Tuple, cell)
-    values = getproperty(states, first(names))
-    @inbounds values[cell] = zero(eltype(values))
-    return _clear_retired_cell_state!(states, Base.tail(names), cell)
+function _clear_retired_cell_state!(
+        layout::StateLayout,
+        state::AuxiliaryState,
+        cell::Integer,
+    )
+    for entry in layout.entries
+        entry.schema.domain === :cell || continue
+        values = state_block(state, entry.handle).values
+        1 <= cell <= length(values) || error(
+            "compiled cell-state block is incompatible with the cell table"
+        )
+        @inbounds values[cell] = zero(eltype(values))
+    end
+    return state
 end
 
 function _retire_extinct_cells!(runtime::ProgramRuntime)
@@ -2072,7 +2457,9 @@ function _retire_extinct_cells!(runtime::ProgramRuntime)
         @inbounds runtime.cell_kinds[cell] = 0
         runtime.retired_cells += 1
         _clear_retired_cell_state!(
-            runtime.stored_states, runtime.program.cell_state_fields, cell
+            runtime.program.descriptor_plan.state_layout,
+            runtime.descriptor_state,
+            cell,
         )
     end
     return nothing
@@ -2080,91 +2467,7 @@ end
 
 function _after_mcs!(runtime::ProgramRuntime{T, N}) where {T, N}
     _retire_extinct_cells!(runtime)
-    plan = runtime.program.activity
-    if plan !== nothing && runtime.activity !== nothing
-        decay = plan.decay_per_mcs
-        for index in eachindex(runtime.activity)
-            @inbounds runtime.activity[index] =
-                max(zero(T), runtime.activity[index] - decay)
-        end
-    end
-    history_plan = runtime.program.history
-    if history_plan !== nothing && runtime.history !== nothing
-        source = history_plan.source === :activity ? runtime.activity : nothing
-        source === nothing && error("unreachable compiled history source")
-        for index in 1:(length(runtime.history) - 1)
-            copyto!(runtime.history[index], runtime.history[index + 1])
-        end
-        copyto!(last(runtime.history), source)
-    end
-    field_plan = runtime.program.field
-    if field_plan !== nothing && field_plan.enabled && runtime.field !== nothing
-        substeps = Int(field_plan.substeps)
-        dt = field_plan.duration_per_mcs / T(substeps)
-        diffusion = compiled_scalar_value(field_plan.diffusion, runtime.parameters)
-        decay = compiled_scalar_value(field_plan.decay, runtime.parameters)
-        secretion = compiled_scalar_value(field_plan.secretion, runtime.parameters)
-        scratch = similar(runtime.field)
-        for _ in 1:substeps
-            for site in CartesianIndices(runtime.field)
-                center = @inbounds runtime.field[site]
-                laplace = zero(T)
-                for direction in axes(field_plan.stencil_offsets, 2)
-                    neighbor = _neighbor_index(
-                        runtime.program,
-                        site,
-                        field_plan.stencil_offsets,
-                        direction,
-                    )
-                    neighbor === nothing && continue
-                    laplace += @inbounds(runtime.field[neighbor]) - center
-                end
-                owner = @inbounds runtime.ownership[site]
-                source = owner > 0 && field_plan.source_kind != 0 &&
-                         @inbounds(runtime.cell_kinds[owner]) ==
-                         field_plan.source_kind ? secretion : zero(T)
-                @inbounds scratch[site] = max(
-                    zero(T),
-                    center + dt * (diffusion * laplace - decay * center + source),
-                )
-            end
-            runtime.field, scratch = scratch, runtime.field
-        end
-    end
-    relationship_plan = runtime.program.relationships
-    if relationship_plan !== nothing && runtime.relationships !== nothing &&
-            (
-                relationship_plan.break_after_mcs ||
-                relationship_plan.remove_with_endpoint
-            )
-        requests = ProgramRelationshipRequest[]
-        for edge in eachindex(runtime.relationships.active)
-            @inbounds runtime.relationships.active[edge] || continue
-            a = @inbounds runtime.relationships.endpoint_a[edge]
-            b = @inbounds runtime.relationships.endpoint_b[edge]
-            center_a = _cell_center(runtime, a)
-            center_b = _cell_center(runtime, b)
-            missing_endpoint = center_a === nothing || center_b === nothing
-            too_long = relationship_plan.break_after_mcs &&
-                       !missing_endpoint &&
-                       _center_distance(center_a, center_b) >
-                    @inbounds(runtime.relationships.maximum[edge])
-            if (
-                    relationship_plan.remove_with_endpoint && missing_endpoint
-                ) || too_long
-                push!(requests, RemoveRelationshipRequest(
-                    edge; identity = edge
-                ))
-            end
-        end
-        isempty(requests) || apply_relationship_requests!(
-            runtime.relationships,
-            runtime.cell_kinds,
-            runtime.cell_generations,
-            relationship_plan,
-            requests,
-        )
-    end
+    _execute_after_mcs_stage!(runtime)
     return nothing
 end
 
@@ -2217,10 +2520,18 @@ program_capability_report(program::CompiledPottsProgram) = (
     sequential = program.engine isa SequentialProgramEngine,
     checkerboard = program.engine isa CheckerboardProgramEngine,
     cpu = program.backend isa CPUProgramBackend,
-    activity = program.activity !== nothing,
-    field = program.field !== nothing && program.field.enabled,
-    history = program.history !== nothing,
-    elongation = program.elongation !== nothing,
+    state_domains = Tuple(unique(
+        entry.schema.domain
+        for entry in program.descriptor_plan.state_layout.entries
+    )),
+    stage_effects = Tuple(unique(
+        nameof(typeof(descriptor.effect))
+        for groups in (
+            program.stage_plan.accepted_copy,
+            program.stage_plan.after_mcs,
+        )
+        for group in groups
+        for descriptor in group.instances
+    )),
     relationships = program.relationships !== nothing,
-    observations = length(program.observations),
 )
