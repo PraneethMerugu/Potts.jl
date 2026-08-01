@@ -893,6 +893,49 @@ descriptor-driven while retaining scientific mechanism knowledge in CorePotts. T
 instead add only public structural proposal/resource primitives to CorePotts and keep scientific
 callables and compositions in PottsToolkit or external modules.
 
+### Repaired R1.5 candidate
+
+The repaired implementation checkpoint is
+`2fce3b470eaa5d36a3cc5ad675967d69c5ffd038`. It replaces the two out-of-plan vetoes with ordinary
+compiled constraints. Merks connectivity is a PottsToolkit-owned concrete callable composed from
+public proposal-owner, kind, declared-relation, bounded-neighbor, and relation-count primitives.
+Endpoint retirement is a PottsToolkit completion rule expressed through the ordinary symbolic
+constraint and bounded relationship-degree path. Neither behavior adds a named CorePotts
+mechanism operation.
+
+Additional repaired evidence on that checkpoint includes:
+
+- declared radius-one Moore/Von Neumann connectivity resources, exact compiled footprints, a
+  diagonal-disconnection truth table, the two-cell Merks exception, conservative boundary
+  behavior, zero warmed evaluator allocation, and rejection of invalid relation declarations;
+- qualified, stable explicit-draw identities that do not renumber after an unrelated earlier draw,
+  with explicit compile-time collision rejection;
+- an independently enumerated two-attempt oracle that does not call the one-step row oracle;
+- null, constraint-rejection, energy-rejection, accepted-copy, and retired-cell counters whose
+  terminal outcomes partition candidate attempts and survive checkpoints;
+- subnormal and deep-underflow acceptance seams proving the proposal path compares in log space;
+  and
+- branch-invariant later RNG addresses across null, hard-rejection, energy-rejection, and accepted
+  first attempts.
+
+Qualification on the implementation checkpoint:
+
+- focused repaired G3 suite: 558/558;
+- focused G1 host facts: 62/62;
+- focused G2 descriptor and local-energy suites: 131/131 and 59/59;
+- CorePotts package suite: passed, including Aqua; and
+- ordinary root `Pkg.test()`: 1,152/1,152 in 6m52.7s, including the visible Wortel, Merks, and
+  focal-point-plasticity fixtures, SciML/SII, checkpoints, Aqua, and ExplicitImports.
+
+The following are mandatory semantic audit leads, not accepted dispositions. CorePotts still
+defines activity, field, history, elongation, relationship, and observation plan/state names;
+`CompiledPottsProgram`, `ProgramInitialState`, `ProgramRuntime`, snapshots, and checkpoints still
+carry some corresponding fields; `_commit_copy!` and `_after_mcs!` still contain conditional
+activity, history, field, and relationship behavior; and old named delta helpers remain defined
+although the proposal loop no longer calls them. R1.5 must determine which, if any, are genuinely
+reusable structural primitives, which are unreachable staged legacy, and which are blocking
+mechanism leakage. It must not infer clearance merely from descriptor-driven proposal energy.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
