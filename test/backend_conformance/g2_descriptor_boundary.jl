@@ -56,10 +56,14 @@ function run_g2_descriptor_boundary(
         device_array,
         device_zeros;
         backend_name::Symbol,
+        descriptor_count::Integer = 32,
     )
+    descriptor_count > 0 || throw(ArgumentError(
+        "descriptor_count must be positive"
+    ))
     executable = compile(
         complete(
-            _g2_external_site_model(32);
+            _g2_external_site_model(descriptor_count);
             registry = NeutralExternalTerms.registry(),
         );
         engine = SequentialEngine(),
@@ -97,14 +101,14 @@ function run_g2_descriptor_boundary(
         device_state,
         device_workspaces,
     )
-    output = device_zeros(Float32, 32)
+    output = device_zeros(Float32, descriptor_count)
     backend = CorePotts.KernelAbstractions.get_backend(output)
     kernel = CorePotts.descriptor_group_probe_kernel!(backend)
     kernel(output, launch, context; ndrange = length(output))
     CorePotts.KernelAbstractions.synchronize(backend)
 
-    @test Array(output) == fill(17.5f0, 32)
-    @test length(launch.instances) == 32
+    @test Array(output) == fill(17.5f0, descriptor_count)
+    @test length(launch.instances) == descriptor_count
     @test isconcretetype(eltype(launch.instances))
     @test isbits(first(Array(launch.instances)))
     @test CorePotts.handle_bank(only(launch.state_handles)) == 1

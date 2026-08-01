@@ -24,14 +24,6 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
     ::R1StaticOverrideOperation, arguments::Tuple, context
 ) = _r1_override_value(context, 34567.0)
 
-@inline function CorePotts.evaluator_parameters(
-        context::CorePotts.HamiltonianEvaluationContext{V, A, P, Nothing},
-    ) where {V, A, P}
-    parameters = context.view.runtime.parameters
-    return context.view isa CorePotts.AfterProposalView ?
-           fill(12345.0, length(parameters)) : parameters
-end
-
 @testset "relationship composition and endpoint contracts" begin
     relationship_a = CellKind(:a)
     relationship_b = CellKind(:b)
@@ -180,8 +172,17 @@ end
     ))
 end
 
+struct R1PoisonedParameters <: AbstractVector{Float64}
+    values::Vector{Float64}
+end
+
+Base.IndexStyle(::Type{R1PoisonedParameters}) = IndexLinear()
+Base.size(parameters::R1PoisonedParameters) = size(parameters.values)
+Base.getindex(parameters::R1PoisonedParameters, index::Int) =
+    parameters.values[index]
+
 @inline CorePotts.evaluator_parameters(
-    context::CorePotts.EvaluatorProbeContext{Vector{Float64}, V, S, W}
+    context::CorePotts.EvaluatorProbeContext{R1PoisonedParameters, V, S, W}
 ) where {V, S, W} = fill(-1.0, length(context.parameters))
 
 function CorePotts.descriptor_adapt(
@@ -546,34 +547,11 @@ end
         proposal = _r1_proposal_context(
             runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
         )
-        before = CorePotts.BeforeProposalView(
-            runtime,
-            proposal.target,
-            proposal.old_owner,
-            proposal.new_owner,
-        )
-        after = CorePotts.AfterProposalView(
-            runtime,
-            proposal.target,
-            proposal.old_owner,
-            proposal.new_owner,
-        )
-        before_context = CorePotts.HamiltonianEvaluationContext(
-            before, proposal.target, proposal
-        )
-        after_context = CorePotts.HamiltonianEvaluationContext(
-            after, proposal.target, proposal
-        )
-        @test CorePotts.evaluate_static(
-            descriptor.evaluator, after_context
-        ) - CorePotts.evaluate_static(
-            descriptor.evaluator, before_context
-        ) == 12345.0
         @test _r1_descriptor_delta(descriptor, proposal) == 5.0
 
         constraint = only(only(plan.constraints).instances)
         public_probe = CorePotts.EvaluatorProbeContext(
-            Float64[5.0, 2.0], NamedTuple()
+            R1PoisonedParameters(Float64[5.0, 2.0]), NamedTuple()
         )
         @test CorePotts.evaluate_static(
             constraint.evaluator, public_probe

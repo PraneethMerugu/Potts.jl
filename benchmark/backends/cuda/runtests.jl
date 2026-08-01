@@ -1,8 +1,8 @@
 using CUDA
 
-include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
-
 CUDA.functional() || error("the selected CUDA witness is not functional")
+
+include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 
 report = run_g2_descriptor_boundary(
     CUDA.CuArray,

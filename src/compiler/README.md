@@ -33,8 +33,11 @@ execution/manifests.jl
 lowering/static_evaluators.jl
     lower analyzed DAG nodes into bounded concrete callable expressions
 
+lowering/relationship_policies.jl
+    compile the single qualified relationship endpoint and runtime-slot authority
+
 lowering/storage_layouts.jl
-    assign canonical state/workspace representations, banks, and slots
+    submit qualified schemas to CorePotts and map returned canonical handles to compiler identities
 
 lowering/domain_resources.jl
     lower finite spatial relations and relationship resources into value-level lookup tables
@@ -44,6 +47,9 @@ lowering/proposal_descriptors.jl
 
 lowering/constraints.jl
     lower prelaunch parameter-domain constraints and assemble the plan
+
+lowering/stage_descriptors.jl
+    lower accepted-copy and after-MCS effects into the closed stage taxonomy
 
 execution/boundary.jl
     validate that only concrete compiled data crosses into CorePotts
