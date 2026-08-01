@@ -255,6 +255,11 @@ end
             @test plan_report.algorithm === :canonical_realized_greedy_v1
             @test plan_report.site_count == prod(program.shape)
             @test plan_report.color_count >= 2
+            @test first.engine_workspace isa CorePotts.CheckerboardWorkspace
+            @test isconcretetype(typeof(first.engine_workspace))
+            @test first.accepted + first.rejected + first.null_attempts ==
+                  length(first.ownership) * Int(program.attempts_per_site)
+            @test sum(first.volumes) == count(>(0), first.ownership)
         else
             @test program.checkerboard_plan isa CorePotts.NoCheckerboardPlan
         end
@@ -285,6 +290,68 @@ end
             @test colors[Int32(site)] != colors[Int32(linear[neighbor])]
         end
     end
+
+    unsupported_stage = CorePotts.StageExecutionPlan(
+        (), (), 1, 0, "unsupported-checkerboard-stage"
+    )
+    @test_throws ArgumentError CorePotts.initialize_program(
+        test_program(
+            CorePotts.CheckerboardProgramEngine();
+            stage_plan = unsupported_stage,
+        ),
+        test_initial(),
+        Float64[],
+        UInt64(9),
+        UInt32(1),
+    )
+
+    cleared_schema = CorePotts.StateBlockSchema(
+        CorePotts.QualifiedResourceIdentity((), :checkerboard_cleared),
+        v"1.0.0",
+        :site,
+        Float64,
+        (6, 6),
+        36,
+        :structure_of_arrays,
+        :provided_or_zero,
+        :shape_and_finite,
+        :logical,
+        (declared = :ClearOnOwnershipChange,),
+        :declared,
+        :bounded_write,
+        :adapt_storage,
+        :copy,
+        :logical_copy,
+        :qualified,
+        true,
+    )
+    cleared_layout = CorePotts.StateLayout([cleared_schema])
+    cleared_plan = CorePotts.DescriptorExecutionPlan(
+        (),
+        cleared_layout,
+        CorePotts.WorkspaceLayout(CorePotts.WorkspaceSchema[]),
+        (),
+        Any[],
+        0,
+        "unsupported-checkerboard-lifecycle",
+        CorePotts.HamiltonianDomainResources(2, 0),
+    )
+    cleared_initial = CorePotts.ProgramInitialState(
+        test_initial().ownership,
+        Int16[2];
+        scalar_type = Float64,
+        descriptor_state = CorePotts.allocate_auxiliary_state(cleared_layout),
+    )
+    @test_throws ArgumentError CorePotts.initialize_program(
+        test_program(
+            CorePotts.CheckerboardProgramEngine();
+            descriptor_plan = cleared_plan,
+        ),
+        cleared_initial,
+        Float64[],
+        UInt64(10),
+        UInt32(1),
+    )
 
     sequential = test_program(CorePotts.SequentialProgramEngine())
     first = CorePotts.initialize_program(
@@ -317,6 +384,20 @@ end
     # public whole-MCS barrier while leaving hardware tuning out of normal CI.
     bytes = @allocated CorePotts.advance_mcs!(runtime)
     @test bytes <= 256 * 1024
+
+    checkerboard_program = test_program(CorePotts.CheckerboardProgramEngine())
+    checkerboard_runtime = CorePotts.initialize_program(
+        checkerboard_program,
+        test_initial(),
+        Float64[],
+        UInt64(0x9a),
+        UInt32(1),
+    )
+    CorePotts.advance_mcs!(checkerboard_runtime)
+    @test @inferred(CorePotts.advance_mcs!(checkerboard_runtime)) ===
+          checkerboard_runtime
+    checkerboard_bytes = @allocated CorePotts.advance_mcs!(checkerboard_runtime)
+    @test checkerboard_bytes <= 512 * 1024
 end
 
 @testset "relationship transactions are atomic and canonical" begin

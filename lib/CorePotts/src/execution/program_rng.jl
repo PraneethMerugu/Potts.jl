@@ -62,7 +62,7 @@ end
 end
 
 @inline function _program_bounded(
-        runtime::ProgramRuntime, stream::RNGStream, operation, entity, bound;
+        runtime, stream::RNGStream, operation, entity, bound;
         subround = 0, draw = 0,
     )
     address = _program_address(
@@ -77,7 +77,7 @@ end
 end
 
 @inline function _program_uniform(
-        ::Type{T}, runtime::ProgramRuntime, stream::RNGStream, operation, entity;
+        ::Type{T}, runtime, stream::RNGStream, operation, entity;
         subround = 0, draw = 0,
     ) where {T}
     address = _program_address(

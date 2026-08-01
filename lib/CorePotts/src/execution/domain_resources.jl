@@ -1,5 +1,7 @@
 # Value-level tables for resources selected by conservative-energy domains.
 
+struct _ValidatedDomainResourceAdaptation end
+
 struct HamiltonianDomainResources{
         O <: AbstractMatrix{Int8},
         V <: AbstractVector{Int32},
@@ -41,6 +43,24 @@ struct HamiltonianDomainResources{
                 "a relationship-domain slot cannot be negative"
             ))
         end
+        return new{O, V}(
+            contact_offsets,
+            contact_starts,
+            contact_counts,
+            relationship_slots,
+        )
+    end
+
+    function HamiltonianDomainResources{O, V}(
+            contact_offsets::O,
+            contact_starts::V,
+            contact_counts::V,
+            relationship_slots::V,
+            ::_ValidatedDomainResourceAdaptation,
+        ) where {
+            O <: AbstractMatrix{Int8},
+            V <: AbstractVector{Int32},
+        }
         return new{O, V}(
             contact_offsets,
             contact_starts,
@@ -101,4 +121,18 @@ end
     return slot
 end
 
-Adapt.@adapt_structure HamiltonianDomainResources
+function Adapt.adapt_structure(to, resources::HamiltonianDomainResources)
+    offsets = Adapt.adapt(to, resources.contact_offsets)
+    starts = Adapt.adapt(to, resources.contact_starts)
+    counts = Adapt.adapt(to, resources.contact_counts)
+    slots = Adapt.adapt(to, resources.relationship_slots)
+    return HamiltonianDomainResources{
+        typeof(offsets), typeof(starts),
+    }(
+        offsets,
+        starts,
+        counts,
+        slots,
+        _ValidatedDomainResourceAdaptation(),
+    )
+end

@@ -189,28 +189,6 @@ function _advance_sequential!(runtime::ProgramRuntime)
     return nothing
 end
 
-function _advance_checkerboard!(runtime::ProgramRuntime{T, N}) where {T, N}
-    plan = runtime.program.checkerboard_plan
-    plan isa CheckerboardPlan || error(
-        "checkerboard execution requires a realized-domain plan"
-    )
-    indices = CartesianIndices(runtime.ownership)
-    site_count = length(indices)
-    for color in 1:Int(plan.color_count)
-        first_index = Int(@inbounds plan.color_offsets[color])
-        stop_index = Int(@inbounds plan.color_offsets[color + 1]) - 1
-        for schedule_index in first_index:stop_index
-            site = Int(@inbounds plan.sites[schedule_index])
-            target = indices[site]
-            for attempt_round in 1:Int(runtime.program.attempts_per_site)
-                attempt_identity = (attempt_round - 1) * site_count + site
-                _attempt!(runtime, target, attempt_identity, color)
-            end
-        end
-    end
-    return nothing
-end
-
 function _clear_retired_cell_state!(
         layout::StateLayout,
         state::AuxiliaryState,

@@ -4,6 +4,7 @@ using LinearAlgebra: Symmetric, eigen
 using SHA
 using AcceleratedKernels
 using Adapt
+using Atomix
 using KernelAbstractions
 
 const RNG_CONTRACT_VERSION = v"1.0.0"
@@ -25,6 +26,8 @@ public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
 public CPUProgramBackend, CompiledScalar, compiled_scalar_value
 public AbstractCheckerboardPlan, NoCheckerboardPlan, CheckerboardPlan
 public checkerboard_plan_report
+public CheckerboardWorkspace, adapt_checkerboard_workspace
+public execute_checkerboard_mcs!, copy_checkerboard_state!
 public RelationshipStoreSchema, CompiledPottsProgram
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest
@@ -109,6 +112,7 @@ public HamiltonianDomainResources
 public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
 public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
 public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan
+public DescriptorKernelPlan, adapt_descriptor_kernel_plan
 public validate_parameters, descriptor_plan_report
 public evaluate_hamiltonian_contributions!, fold_hamiltonian_contributions
 public ProposalEvaluation, evaluate_proposal_contributions!

@@ -1,11 +1,11 @@
 # Proposal geometry, immutable proposal views, and resource operations.
 
 @inline function _neighbor_index(
-        program::CompiledPottsProgram{T, N},
+        program,
         index::CartesianIndex{N},
-        offsets::Matrix{Int8},
+        offsets::AbstractMatrix{Int8},
         direction::Int,
-    ) where {T, N}
+    ) where {N}
     coords = Tuple(index)
     candidate = ntuple(N) do dimension
         value = coords[dimension] + Int(offsets[dimension, direction])
@@ -21,7 +21,7 @@
     return CartesianIndex(candidate)
 end
 
-@inline _owner_kind(runtime::ProgramRuntime, owner::Int32) =
+@inline _owner_kind(runtime, owner::Int32) =
     owner > 0 ? @inbounds(runtime.cell_kinds[owner]) :
     owner == 0 ? runtime.program.medium_kind : Int16(-owner)
 

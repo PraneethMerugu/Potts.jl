@@ -167,6 +167,25 @@ function restore_program_checkpoint(
     runtime.volumes == checkpoint.snapshot.volumes ||
         throw(ArgumentError("checkpoint logical volume invariant failed"))
     runtime.relationships = copy(checkpoint.snapshot.relationships)
+    runtime.stage_buffers = allocate_stage_runtime_buffers(
+        program.stage_plan,
+        eltype(runtime.parameters),
+        program.shape,
+        runtime.relationships,
+    )
+    runtime.engine_workspace = allocate_program_engine_workspace(
+        program,
+        runtime.ownership,
+        runtime.cell_kinds,
+        runtime.cell_generations,
+        runtime.volumes,
+        runtime.relationships,
+        runtime.descriptor_state,
+        runtime.parameters,
+        runtime.seed,
+        runtime.replica,
+        runtime.repeat,
+    )
     runtime.accepted = checkpoint.accepted
     runtime.rejected = checkpoint.rejected
     runtime.null_attempts = checkpoint.null_attempts
@@ -176,7 +195,7 @@ function restore_program_checkpoint(
     return runtime
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB, EW}
     program::P
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
@@ -186,6 +205,7 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB}
     descriptor_state::D
     proposal_contributions::Vector{ProposalEvaluation{T}}
     stage_buffers::SB
+    engine_workspace::EW
     parameters::Vector{T}
     seed::UInt64
     replica::UInt32
@@ -233,12 +253,15 @@ function initialize_program(
     initial_mcs >= 0 || throw(ArgumentError("initial MCS must be nonnegative"))
     repeat > 0 || throw(ArgumentError("ensemble repeat identity must be positive"))
 
-    volumes = zeros(Int, length(initial.cell_kinds))
-    for owner in initial.ownership
+    runtime_ownership = copy(initial.ownership)
+    runtime_cell_kinds = copy(initial.cell_kinds)
+    runtime_cell_generations = copy(initial.cell_generations)
+    volumes = zeros(Int, length(runtime_cell_kinds))
+    for owner in runtime_ownership
         owner > 0 && (volumes[owner] += 1)
     end
     all(eachindex(volumes)) do cell
-        active = initial.cell_kinds[cell] != 0
+        active = runtime_cell_kinds[cell] != 0
         occupied = volumes[cell] != 0
         active == occupied
     end || throw(ArgumentError(
@@ -275,21 +298,36 @@ function initialize_program(
             "descriptor state must be a CorePotts AuxiliaryState"
         ))
     end
+    runtime_parameters = T.(parameters)
     stage_buffers = allocate_stage_runtime_buffers(
         program.stage_plan,
         T,
         program.shape,
         relationships,
     )
+    engine_workspace = allocate_program_engine_workspace(
+        program,
+        runtime_ownership,
+        runtime_cell_kinds,
+        runtime_cell_generations,
+        volumes,
+        relationships,
+        descriptor_state,
+        runtime_parameters,
+        seed,
+        replica,
+        repeat,
+    )
     return ProgramRuntime{
         T, N, typeof(program), typeof(relationships),
         typeof(descriptor_state),
         typeof(stage_buffers),
+        typeof(engine_workspace),
     }(
         program,
-        copy(initial.ownership),
-        copy(initial.cell_kinds),
-        copy(initial.cell_generations),
+        runtime_ownership,
+        runtime_cell_kinds,
+        runtime_cell_generations,
         volumes,
         relationships,
         descriptor_state,
@@ -298,7 +336,8 @@ function initialize_program(
             length(program.descriptor_plan.source_table),
         ),
         stage_buffers,
-        T.(parameters),
+        engine_workspace,
+        runtime_parameters,
         seed,
         replica,
         repeat,

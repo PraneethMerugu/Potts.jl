@@ -20,6 +20,19 @@ struct DescriptorGroup{L, M}
     split::M
 end
 
+abstract type AbstractDescriptorEvaluationPlan end
+
+struct KernelDescriptorGroup{L}
+    launch::L
+end
+
+struct DescriptorKernelPlan{G <: Tuple, D <: HamiltonianDomainResources} <:
+        AbstractDescriptorEvaluationPlan
+    groups::G
+    source_count::Int32
+    domain_resources::D
+end
+
 descriptor_launch(group::DescriptorGroup) = group.launch
 
 struct ParameterDomainConstraint{E <: StaticEvaluator}
@@ -37,7 +50,7 @@ struct DescriptorExecutionPlan{
         C <: Tuple,
         S <: AbstractVector,
         D <: HamiltonianDomainResources,
-    }
+    } <: AbstractDescriptorEvaluationPlan
     groups::G
     state_layout::StateLayout
     workspace_layout::WorkspaceLayout
@@ -131,6 +144,8 @@ end
 Adapt.@adapt_structure AuxiliaryState
 Adapt.@adapt_structure RuntimeWorkspaces
 Adapt.@adapt_structure DescriptorLaunch
+Adapt.@adapt_structure KernelDescriptorGroup
+Adapt.@adapt_structure DescriptorKernelPlan
 Adapt.@adapt_structure ParameterDomainConstraint
 Adapt.@adapt_structure ConstraintGroup
 
@@ -153,6 +168,49 @@ function adapt_descriptor_launch(to, group::DescriptorGroup)
         launch.workspace_handles,
     )
 end
+
+function adapt_descriptor_kernel_plan(to, plan::DescriptorExecutionPlan)
+    groups = map(
+        group -> KernelDescriptorGroup(adapt_descriptor_launch(to, group)),
+        plan.groups,
+    )
+    return DescriptorKernelPlan(
+        groups,
+        Int32(length(plan.source_table)),
+        Adapt.adapt(to, plan.domain_resources),
+    )
+end
+
+function adapt_descriptor_launch(to, group::KernelDescriptorGroup)
+    launch = group.launch
+    adapted_descriptors = map(
+        descriptor -> _compiled_descriptor_adapt(to, descriptor),
+        launch.instances,
+    )
+    return DescriptorLaunch(
+        launch.strategy,
+        Adapt.adapt(to, adapted_descriptors),
+        launch.state_handles,
+        launch.workspace_handles,
+    )
+end
+
+function adapt_descriptor_kernel_plan(to, plan::DescriptorKernelPlan)
+    groups = map(
+        group -> KernelDescriptorGroup(adapt_descriptor_launch(to, group)),
+        plan.groups,
+    )
+    return DescriptorKernelPlan(
+        groups,
+        plan.source_count,
+        Adapt.adapt(to, plan.domain_resources),
+    )
+end
+
+_descriptor_source_count(plan::DescriptorExecutionPlan) =
+    length(plan.source_table)
+_descriptor_source_count(plan::DescriptorKernelPlan) =
+    Int(plan.source_count)
 
 @kernel function descriptor_group_probe_kernel!(
         output,
@@ -241,10 +299,10 @@ end
 
 @inline function evaluate_hamiltonian_contributions!(
         contributions,
-        plan::DescriptorExecutionPlan,
+        plan::AbstractDescriptorEvaluationPlan,
         context,
     )
-    length(contributions) >= length(plan.source_table) || throw(
+    length(contributions) >= _descriptor_source_count(plan) || throw(
         ArgumentError("Hamiltonian contribution storage is too small"),
     )
     fill!(contributions, zero(eltype(contributions)))
@@ -255,14 +313,15 @@ end
 
 """Fold source-indexed Hamiltonian contributions in canonical source order."""
 @inline function fold_hamiltonian_contributions(
-        plan::DescriptorExecutionPlan,
+        plan::AbstractDescriptorEvaluationPlan,
         contributions,
     )
-    length(contributions) >= length(plan.source_table) || throw(
+    source_count = _descriptor_source_count(plan)
+    length(contributions) >= source_count || throw(
         ArgumentError("Hamiltonian contribution storage is too small"),
     )
     total = zero(eltype(contributions))
-    for source in eachindex(plan.source_table)
+    for source in 1:source_count
         total += @inbounds contributions[source]
     end
     return total
@@ -412,10 +471,10 @@ end
 """Evaluate every proposal descriptor into caller-owned, source-indexed storage."""
 @inline function evaluate_proposal_contributions!(
         contributions::AbstractVector{ProposalEvaluation{T}},
-        plan::DescriptorExecutionPlan,
+        plan::AbstractDescriptorEvaluationPlan,
         context,
     ) where {T <: AbstractFloat}
-    length(contributions) >= length(plan.source_table) || throw(
+    length(contributions) >= _descriptor_source_count(plan) || throw(
         ArgumentError("proposal contribution storage is too small"),
     )
     fill!(contributions, _neutral_proposal_evaluation(T))
@@ -426,10 +485,11 @@ end
 
 """Fold proposal roles in canonical frozen source order."""
 @inline function fold_proposal_contributions(
-        plan::DescriptorExecutionPlan,
+        plan::AbstractDescriptorEvaluationPlan,
         contributions::AbstractVector{ProposalEvaluation{T}},
     ) where {T <: AbstractFloat}
-    length(contributions) >= length(plan.source_table) || throw(
+    source_count = _descriptor_source_count(plan)
+    length(contributions) >= source_count || throw(
         ArgumentError("proposal contribution storage is too small"),
     )
     delta_h = zero(T)
@@ -437,7 +497,7 @@ end
     drive_log_bias = zero(T)
     kinetic_modifier = zero(T)
     constraints_allowed = true
-    for source in eachindex(plan.source_table)
+    for source in 1:source_count
         contribution = @inbounds contributions[source]
         delta_h += contribution.delta_h
         drive_energy += contribution.drive_energy

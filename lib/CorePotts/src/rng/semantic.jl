@@ -8,6 +8,7 @@ struct Philox4x32x10V1 end
     AcceptanceStream = 5
     ExplicitProposalDrawStream = 6
     InitializationStream = 7
+    CheckerboardPriorityStream = 8
 end
 
 @enum RNGEntityKind::UInt8 begin

@@ -340,7 +340,7 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
     ConstructionBaseStaticArraysExt = "StaticArrays"
 
 [[deps.CorePotts]]
-deps = ["AcceleratedKernels", "Adapt", "KernelAbstractions", "LinearAlgebra", "SHA"]
+deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "SHA"]
 path = "../../../lib/CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0"
