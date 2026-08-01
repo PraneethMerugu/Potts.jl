@@ -4,6 +4,7 @@ AMDGPU.functional() || error("the selected AMDGPU witness is not functional")
 
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")
+include("../../../test/backend_conformance/g5_relationship_execution.jl")
 
 report = run_g2_descriptor_boundary(
     AMDGPU.ROCArray,
@@ -15,5 +16,13 @@ println(report)
 checkerboard_report = run_g4_checkerboard_execution(
     AMDGPU.ROCArray;
     backend_name = :amdgpu,
+    kernel_convert = AMDGPU.rocconvert,
 )
 println(checkerboard_report)
+
+relationship_report = run_g5_relationship_execution(
+    AMDGPU.ROCArray;
+    backend_name = :amdgpu,
+    kernel_convert = AMDGPU.rocconvert,
+)
+println(relationship_report)

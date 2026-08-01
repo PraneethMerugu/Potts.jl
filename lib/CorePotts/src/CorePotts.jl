@@ -16,6 +16,7 @@ include("execution/storage_runtime.jl")
 include("execution/descriptor_protocol.jl")
 include("execution/domain_resources.jl")
 include("execution/descriptor_plan.jl")
+include("execution/tracker_plan.jl")
 include("program/checkerboard_plan.jl")
 include("program/types.jl")
 include("execution/stage_plan.jl")
@@ -29,10 +30,20 @@ public checkerboard_plan_report
 public CheckerboardWorkspace, adapt_checkerboard_workspace
 public execute_checkerboard_mcs!, copy_checkerboard_state!
 public RelationshipStoreSchema, CompiledPottsProgram
+public AbstractTrackerDescriptor, OwnershipCountTracker
+public TrackerExecutionPlan, TrackerState
+public tracker_quantity, tracker_rebuild, tracker_proposal_update!
+public tracker_checkpoint_policy, tracker_inspection
+public initialize_tracker_state, copy_tracker_state, copyto_tracker_state!
+public commit_tracker_updates!
+public tracker_values, tracker_value, validate_tracker_state!
+public program_tracker_values, program_tracker_value
+public tracker_plan_report
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest
 public RetuneRelationshipRequest, apply_relationship_requests!
 public validate_relationship_request, apply_validated_relationship_request!
+public validate_relationship_integrity
 public initialize_program_relationships, relationship_payload
 public ProgramInitialState, ProgramSnapshot, ProgramRuntime
 public BeforeProposalView, AfterProposalView, CanonicalContactAnchor

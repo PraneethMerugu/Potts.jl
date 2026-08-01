@@ -1166,7 +1166,9 @@ end
     end
     contributions = zeros(Float64, length(plan.source_table))
     before_ownership = copy(runtime.ownership)
-    before_volumes = copy(runtime.volumes)
+    before_volumes = copy(CorePotts.program_tracker_values(
+        runtime, Val(:cell_volume)
+    ))
     checked = 0
     for target in CartesianIndices(ownership)
         for offset in ((-1, 0), (1, 0), (0, -1), (0, 1))
@@ -1187,7 +1189,9 @@ end
             after[target] = ownership[source]
             @test local_delta ≈ global_energy(after) - global_energy(ownership)
             @test runtime.ownership == before_ownership
-            @test runtime.volumes == before_volumes
+            @test CorePotts.program_tracker_values(
+                runtime, Val(:cell_volume)
+            ) == before_volumes
         end
     end
     @test checked > 0

@@ -55,6 +55,9 @@ end
     @test fixture.executable.core_program.stage_plan.accepted_count == 1
 
     runtime = init(fixture.problem; save_start = false).runtime
+    @test_throws ArgumentError CorePotts.adapt_checkerboard_workspace(
+        Array, runtime.engine_workspace
+    )
     transaction = only(
         runtime.stage_buffers.relationship_transactions
     )

@@ -8,41 +8,42 @@ import CorePotts
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("../fixtures/NeutralExternalTerms.jl")
 
-function _g4_external_checkerboard_fixture()
-    @variables checkerboard_activity
-    @parameters checkerboard_weight = 0.25
-    cell = CellKind(:checkerboard_cell)
-    medium = MediumKind(:checkerboard_medium)
-    anchor = SiteBinding(:checkerboard_energy_site)
-    activity = SiteState(
-        checkerboard_activity;
-        name = :checkerboard_activity,
-        initial = 1.0,
-        owner = cell,
-        lifecycle = PreserveOnOwnershipChange(),
+function _g5_external_relationship_fixture()
+    @parameters relationship_weight = 1.25
+    cell = CellKind(:relationship_cell)
+    medium = MediumKind(:relationship_medium)
+    relationships = RelationshipState(
+        :external_relationships;
+        endpoints = Undirected(cell, cell),
+        payload = (
+            score = relationship_weight,
+            cutoff = zero(relationship_weight),
+            marker = relationship_weight,
+        ),
+        capacity = 8,
+        maximum_degree = 2,
+        lifecycle = RejectEndpointRetirement(),
     )
-    term = NeutralExternalTerms.ExternalWeightedSiteTerm(
-        :checkerboard_external_energy,
-        checkerboard_weight,
-        checkerboard_activity,
-        cell,
-        anchor,
+    edge = RelationshipBinding(:external_relationship, relationships)
+    term = NeutralExternalTerms.ExternalBoundedPairTerm(
+        :external_relationship_energy,
+        relationship_weight,
+        relationships,
+        edge,
     )
     @named model = PottsSystem(
         statements = StatementSet((
             Lattice(
-                (6, 6);
-                boundary = Periodic(),
+                (5, 5);
                 relations = (proposal = VonNeumann(),),
             ),
             cell,
             medium,
-            activity,
+            relationships,
             term,
-            Protocol(Sweep(; temperature = 2.0); name = :main),
+            Protocol(Sweep(; temperature = 1.5); name = :main),
         )),
-        unknowns = [checkerboard_activity],
-        parameters = [checkerboard_weight],
+        parameters = [relationship_weight],
     )
     executable = compile(
         complete(model; registry = NeutralExternalTerms.registry());
@@ -50,38 +51,40 @@ function _g4_external_checkerboard_fixture()
         backend = CPUBackend(),
         scalar_type = Float32,
     )
-    labels = zeros(Int, 6, 6)
-    labels[2:5, 2:5] .= 1
+    labels = zeros(Int, 5, 5)
+    labels[2, 2] = 1
+    labels[2, 3:4] .= 2
     initial = PottsInitialState(
-        ownership = LabelledCells(labels; cells = [cell], medium),
-        values = [checkerboard_activity => reshape(
-            collect(Float32, 1:36), 6, 6
-        )],
+        ownership = LabelledCells(labels; cells = [cell, cell], medium),
+        values = [relationships => [(
+            1,
+            2,
+            (score = 1.25f0, cutoff = 0.0f0, marker = 1.25f0),
+        )]],
     )
     return executable, PottsToolkit._core_initial_state(executable, initial)
 end
 
 """
-    run_g4_checkerboard_execution(
+    run_g5_relationship_execution(
         device_array; backend_name, kernel_convert, to_host=Array
     )
 
-Execute the same external-descriptor checkerboard MCS through the CPU and a
-backend adaptor. Vendor runners provide only storage adaptation; all semantic
-inputs and exact assertions remain shared.
+Run an external incident-relationship Hamiltonian through the same checkerboard
+program on CPU and one vendor adaptor. Relationship mutation remains a staged
+host-qualified family; this witness qualifies immutable incident-local reads.
 """
-function run_g4_checkerboard_execution(
+function run_g5_relationship_execution(
         device_array;
         backend_name::Symbol,
         kernel_convert,
         to_host = Array,
     )
-    executable, initial = _g4_external_checkerboard_fixture()
+    executable, initial = _g5_external_relationship_fixture()
     program = executable.core_program
     parameters = program.parameter_defaults
-    # This fixed address exercises both a successful commit and rejection.
-    seed = UInt64(1)
-    replica = UInt32(3)
+    seed = UInt64(5)
+    replica = UInt32(4)
 
     cpu_runtime = CorePotts.initialize_program(
         program, initial, parameters, seed, replica
@@ -93,6 +96,8 @@ function run_g4_checkerboard_execution(
     device_workspace = CorePotts.adapt_checkerboard_workspace(
         device_array, device_runtime.engine_workspace
     )
+    relationship_bank = only(device_workspace.state.relationships.banks)
+    @test relationship_bank isa CorePotts.PackedRelationshipBank
     @test isbitstype(typeof(kernel_convert(device_workspace.state)))
 
     CorePotts.execute_checkerboard_mcs!(cpu_workspace, 0)
@@ -121,23 +126,16 @@ function run_g4_checkerboard_execution(
         cpu_runtime.constraint_rejections,
         cpu_runtime.energy_rejections,
     )
-    attempts = length(cpu_runtime.ownership) * Int(program.attempts_per_site)
-    @test cpu_runtime.accepted + cpu_runtime.rejected +
-          cpu_runtime.null_attempts == attempts
+    @test count(only(cpu_runtime.relationships).active) == 1
     @test sum(CorePotts.program_tracker_values(
         cpu_runtime, Val(:cell_volume)
     )) == count(>(0), cpu_runtime.ownership)
-    @test isconcretetype(typeof(device_workspace))
-    @test CorePotts.KernelAbstractions.get_backend(
-        device_workspace.state.ownership
-    ) == CorePotts.KernelAbstractions.get_backend(
-        device_workspace.dispositions
-    )
 
     return (
         backend = backend_name,
-        colors = Int(program.checkerboard_plan.color_count),
-        attempts,
+        relationship_stores = length(program.relationships),
+        attempts = length(cpu_runtime.ownership) *
+                   Int(program.attempts_per_site),
         accepted = cpu_runtime.accepted,
         rejected = cpu_runtime.rejected,
         null_attempts = cpu_runtime.null_attempts,

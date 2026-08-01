@@ -220,8 +220,13 @@ function _commit_copy!(
         context,
     ) where {T, N}
     @inbounds runtime.ownership[target] = new_owner
-    old_owner > 0 && (@inbounds runtime.volumes[old_owner] -= 1)
-    new_owner > 0 && (@inbounds runtime.volumes[new_owner] += 1)
+    commit_tracker_updates!(
+        runtime.trackers,
+        runtime.program.tracker_plan,
+        target,
+        old_owner,
+        new_owner,
+    )
     old_owner == new_owner || _clear_ownership_changed_state!(
         runtime.program.descriptor_plan.state_layout,
         runtime.descriptor_state,
@@ -393,7 +398,9 @@ end
     )
     owner = Int(only(arguments))
     owner <= 0 && return 0
-    return @inbounds context.runtime.volumes[owner]
+    return program_tracker_value(
+        context.runtime, Val(:cell_volume), owner
+    )
 end
 
 @inline function apply_resource_operation(

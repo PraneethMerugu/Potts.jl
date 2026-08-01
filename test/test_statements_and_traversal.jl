@@ -108,6 +108,7 @@
     @test occursin("source_cell", string(copy.source_cell))
     @test occursin("is_extension", string(copy.is_extension))
     links = RelationshipState(:focal_links; capacity = 16)
+    @test PottsToolkit._statement_options(links).maximum_degree == 16
     edge = RelationshipBinding(:edge, links)
     @test occursin("endpoint_a", string(edge.a))
     @test occursin("edge_payload", string(edge.strength))

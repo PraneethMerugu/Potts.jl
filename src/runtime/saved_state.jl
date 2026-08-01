@@ -93,7 +93,11 @@ function _saved_state(
         copy(snapshot.ownership),
         copy(snapshot.cell_kinds),
         copy(snapshot.cell_generations),
-        copy(snapshot.volumes),
+        copy(CorePotts.program_tracker_values(
+            executable.core_program,
+            snapshot,
+            Val(:cell_volume),
+        )),
         states,
         topology,
         observations,

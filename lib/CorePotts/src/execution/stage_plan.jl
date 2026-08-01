@@ -267,6 +267,23 @@ struct StageExecutionPlan{A <: Tuple, M <: Tuple}
     fingerprint::String
 end
 
+"""Fingerprint-free stage plan used by checkerboard kernels."""
+struct StageKernelPlan{A <: Tuple, M <: Tuple}
+    accepted_copy::A
+    after_mcs::M
+    accepted_count::Int32
+    after_mcs_count::Int32
+end
+
+
+stage_kernel_plan(plan::StageExecutionPlan) = StageKernelPlan(
+    plan.accepted_copy,
+    plan.after_mcs,
+    plan.accepted_count,
+    plan.after_mcs_count,
+)
+stage_kernel_plan(plan::StageKernelPlan) = plan
+
 function StageExecutionPlan(
         accepted_copy::A,
         after_mcs::M,
@@ -362,3 +379,4 @@ Adapt.@adapt_structure RelationshipRetuneEffect
 Adapt.@adapt_structure CompiledStageDescriptor
 Adapt.@adapt_structure StageDescriptorGroup
 Adapt.@adapt_structure StageExecutionPlan
+Adapt.@adapt_structure StageKernelPlan

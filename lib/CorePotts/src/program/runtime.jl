@@ -1,11 +1,11 @@
 # Logical snapshots, checkpoints, initialization, and runtime ownership.
 
-struct ProgramSnapshot{T <: AbstractFloat, N, R, D}
+struct ProgramSnapshot{T <: AbstractFloat, N, R, D, TS}
     mcs::Int
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
-    volumes::Vector{Int}
+    trackers::TS
     relationships::R
     descriptor_state::D
 end
@@ -43,6 +43,22 @@ end
 _relationship_checkpoint_payload(states::RelationshipStorage) =
     join((_relationship_checkpoint_payload(state) for state in states), "||")
 
+function _validate_runtime_relationships!(runtime)
+    length(runtime.relationships) == length(runtime.program.relationships) ||
+        throw(ArgumentError(
+            "runtime relationship state and compiled schemas are misaligned"
+        ))
+    for slot in eachindex(runtime.relationships)
+        validate_relationship_integrity(
+            runtime.relationships[slot],
+            runtime.program.relationships[slot],
+            runtime.cell_kinds,
+            runtime.cell_generations,
+        )
+    end
+    return runtime
+end
+
 function _program_checkpoint_checksum(
         schema,
         fingerprint,
@@ -66,7 +82,7 @@ function _program_checkpoint_checksum(
         join(vec(snapshot.ownership), ','), '\n',
         join(snapshot.cell_kinds, ','), '\n',
         join(snapshot.cell_generations, ','), '\n',
-        join(snapshot.volumes, ','), '\n',
+        repr(snapshot.trackers), '\n',
         repr(snapshot.descriptor_state), '\n',
         _relationship_checkpoint_payload(snapshot.relationships), '\n',
         join(parameters, ','), '\n',
@@ -164,9 +180,15 @@ function restore_program_checkpoint(
         repeat = checkpoint.repeat,
         initial_mcs = checkpoint.snapshot.mcs,
     )
-    runtime.volumes == checkpoint.snapshot.volumes ||
-        throw(ArgumentError("checkpoint logical volume invariant failed"))
+    validate_tracker_state!(
+        program.tracker_plan,
+        checkpoint.snapshot.trackers,
+        checkpoint.snapshot.ownership,
+        checkpoint.snapshot.cell_kinds,
+    )
+    runtime.trackers = copy_tracker_state(checkpoint.snapshot.trackers)
     runtime.relationships = copy(checkpoint.snapshot.relationships)
+    _validate_runtime_relationships!(runtime)
     runtime.stage_buffers = allocate_stage_runtime_buffers(
         program.stage_plan,
         eltype(runtime.parameters),
@@ -179,7 +201,7 @@ function restore_program_checkpoint(
         runtime.ownership,
         runtime.cell_kinds,
         runtime.cell_generations,
-        runtime.volumes,
+        runtime.trackers,
         runtime.relationships,
         runtime.descriptor_state,
         runtime.stage_buffers,
@@ -203,12 +225,12 @@ function _accepted_copy_batch_bound(program::CompiledPottsProgram)
            Int(plan.maximum_color_size) * Int(program.attempts_per_site) : 1
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, D, SB, EW}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW}
     program::P
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
-    volumes::Vector{Int}
+    trackers::TS
     relationships::R
     descriptor_state::D
     proposal_contributions::Vector{ProposalEvaluation{T}}
@@ -264,10 +286,12 @@ function initialize_program(
     runtime_ownership = copy(initial.ownership)
     runtime_cell_kinds = copy(initial.cell_kinds)
     runtime_cell_generations = copy(initial.cell_generations)
-    volumes = zeros(Int, length(runtime_cell_kinds))
-    for owner in runtime_ownership
-        owner > 0 && (volumes[owner] += 1)
-    end
+    trackers = initialize_tracker_state(
+        program.tracker_plan, runtime_ownership, runtime_cell_kinds
+    )
+    volumes = tracker_values(
+        program.tracker_plan, trackers, Val(:cell_volume)
+    )
     all(eachindex(volumes)) do cell
         active = runtime_cell_kinds[cell] != 0
         occupied = volumes[cell] != 0
@@ -319,7 +343,7 @@ function initialize_program(
         runtime_ownership,
         runtime_cell_kinds,
         runtime_cell_generations,
-        volumes,
+        trackers,
         relationships,
         descriptor_state,
         stage_buffers,
@@ -329,7 +353,7 @@ function initialize_program(
         repeat,
     )
     return ProgramRuntime{
-        T, N, typeof(program), typeof(relationships),
+        T, N, typeof(program), typeof(relationships), typeof(trackers),
         typeof(descriptor_state),
         typeof(stage_buffers),
         typeof(engine_workspace),
@@ -338,7 +362,7 @@ function initialize_program(
         runtime_ownership,
         runtime_cell_kinds,
         runtime_cell_generations,
-        volumes,
+        trackers,
         relationships,
         descriptor_state,
         fill(
@@ -366,6 +390,13 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     runtime.settled || throw(ArgumentError(
         "a program snapshot requires a settled complete-MCS boundary"
     ))
+    _validate_runtime_relationships!(runtime)
+    validate_tracker_state!(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        runtime.ownership,
+        runtime.cell_kinds,
+    )
     relationships = copy(runtime.relationships)
     descriptor_state = copy_auxiliary_state(
         runtime.program.descriptor_plan.state_layout,
@@ -373,12 +404,13 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     )
     return ProgramSnapshot{
         T, N, typeof(relationships), typeof(descriptor_state),
+        typeof(runtime.trackers),
     }(
         runtime.mcs,
         copy(runtime.ownership),
         copy(runtime.cell_kinds),
         copy(runtime.cell_generations),
-        copy(runtime.volumes),
+        copy_tracker_state(runtime.trackers),
         relationships,
         descriptor_state,
     )

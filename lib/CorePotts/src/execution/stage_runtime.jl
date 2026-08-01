@@ -69,7 +69,9 @@ end
     )
     owner = Int(only(arguments))
     owner <= 0 && return 0
-    return @inbounds context.runtime.volumes[owner]
+    return program_tracker_value(
+        context.runtime, Val(:cell_volume), owner
+    )
 end
 @inline apply_resource_operation(
     ::ResourceOperation{:unwrapped_center},

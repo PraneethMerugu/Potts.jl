@@ -68,10 +68,14 @@ end
     site == view.target ? view.new_owner : @inbounds(view.runtime.ownership[site])
 
 @inline _view_volume(view::BeforeProposalView, cell::Int32) =
-    cell <= 0 ? 0 : @inbounds(view.runtime.volumes[cell])
+    cell <= 0 ? 0 : program_tracker_value(
+        view.runtime, Val(:cell_volume), cell
+    )
 @inline function _view_volume(view::AfterProposalView, cell::Int32)
     cell <= 0 && return 0
-    value = @inbounds view.runtime.volumes[cell]
+    value = program_tracker_value(
+        view.runtime, Val(:cell_volume), cell
+    )
     cell == view.old_owner && (value -= 1)
     cell == view.new_owner && (value += 1)
     return value

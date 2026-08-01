@@ -41,6 +41,10 @@ function _g3_scripted_attempt!(runtime, source, target, draw)
     )
 end
 
+_g3_volumes(runtime) = CorePotts.program_tracker_values(
+    runtime, Val(:cell_volume)
+)
+
 function _g3_role_model(; constraint = true, modifier = 0.25)
     @parameters weight = 3.0 drive = 0.5 temperature = 2.0
     cell = CellKind(:g3_cell)
@@ -566,9 +570,10 @@ end
             (runtime.ownership[index] == 1 ? 1 : 0) << (index - 1)
             for index in eachindex(runtime.ownership)
         )
-        tracker_matches(runtime) = isempty(runtime.volumes) ?
+        tracker_matches(runtime) = isempty(_g3_volumes(runtime)) ?
             count(>(0), runtime.ownership) == 0 :
-            only(runtime.volumes) == count(==(Int32(1)), runtime.ownership)
+            only(_g3_volumes(runtime)) ==
+            count(==(Int32(1)), runtime.ownership)
         directions = (-1, 1)
         function analytic_row(mask)
             row = zeros(Float64, 8)
@@ -1047,13 +1052,13 @@ end
             _g3_evaluate_proposal!(linked_runtime, linked_context)
         ) == 0
         before_ownership = copy(linked_runtime.ownership)
-        before_volumes = copy(linked_runtime.volumes)
+        before_volumes = copy(_g3_volumes(linked_runtime))
         before_relationships = copy(only(linked_runtime.relationships))
         @test !_g3_scripted_attempt!(
             linked_runtime, source, target, 0.5
         )
         @test linked_runtime.ownership == before_ownership
-        @test linked_runtime.volumes == before_volumes
+        @test _g3_volumes(linked_runtime) == before_volumes
         linked_relationships = only(linked_runtime.relationships)
         @test linked_relationships.active == before_relationships.active
         @test linked_relationships.endpoint_a ==
@@ -1086,7 +1091,7 @@ end
             unlinked_runtime, source, target, 0.5
         )
         @test unlinked_runtime.ownership[target] == 0
-        @test unlinked_runtime.volumes[1] == 0
+        @test _g3_volumes(unlinked_runtime)[1] == 0
     end
 
     @testset "neutral external term uses public solve and checkpoint" begin

@@ -273,6 +273,10 @@ function _lower_core_program(
                   CorePotts.SequentialProgramEngine() :
                   CorePotts.CheckerboardProgramEngine()
     core_backend = CorePotts.CPUProgramBackend()
+    tracker_plan = CorePotts.TrackerExecutionPlan(
+        (CorePotts.OwnershipCountTracker(),),
+        _sha256_hex("potts-tracker-plan-v1", :cell_volume),
+    )
     program_fingerprint = _sha256_hex(
         "core-program-v1",
         fingerprint_seed,
@@ -284,6 +288,9 @@ function _lower_core_program(
         proposal_offsets,
         contact_offsets,
         Tuple((record.identity, kinds[record.identity]) for record in declarations),
+        tracker_plan.fingerprint,
+        descriptor_plan.fingerprint,
+        stage_plan.fingerprint,
     )
     return CorePotts.CompiledPottsProgram(
         shape,
@@ -295,6 +302,7 @@ function _lower_core_program(
         attempts,
         defaults,
         relationships,
+        tracker_plan,
         descriptor_plan,
         stage_plan,
         core_engine,

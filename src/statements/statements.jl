@@ -160,6 +160,22 @@ function (::Type{T})(id::Union{Symbol, StatementID}; initial = nothing,
     return T(_statement_core(id, (; initial), (; kwargs...), source))
 end
 
+function RelationshipState(
+        id::Union{Symbol, StatementID};
+        initial = nothing,
+        source = UnknownSource(),
+        capacity,
+        maximum_degree = capacity,
+        kwargs...,
+    )
+    return RelationshipState(_statement_core(
+        id,
+        (; initial),
+        (; capacity, maximum_degree, kwargs...),
+        source,
+    ))
+end
+
 function (::Type{T})(id::Union{Symbol, StatementID}, expression;
         source = UnknownSource(), kwargs...) where {T <: _PROPOSAL_TYPES}
     return T(_statement_core(id, (; expression), (; kwargs...), source))

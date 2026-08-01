@@ -7,7 +7,9 @@ const _PROGRAM_CHECKERBOARD_CONSTRAINT = UInt8(3)
 const _PROGRAM_CHECKERBOARD_ENERGY = UInt8(4)
 const _PROGRAM_CHECKERBOARD_ACCEPTED = UInt8(5)
 
-struct CheckerboardKernelProgram{T, N, O, R, D, S, H, C}
+struct NoCheckerboardStageBuffers end
+
+struct CheckerboardKernelProgram{T, N, O, R, TP, D, S, H, C}
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
     proposal_offsets::O
@@ -15,6 +17,7 @@ struct CheckerboardKernelProgram{T, N, O, R, D, S, H, C}
     temperature::CompiledScalar{T}
     attempts_per_site::Int32
     relationships::R
+    tracker_plan::TP
     descriptor_plan::D
     stage_plan::S
     ownership_change_handles::H
@@ -22,13 +25,13 @@ struct CheckerboardKernelProgram{T, N, O, R, D, S, H, C}
 end
 
 struct CheckerboardExecutionState{
-        P, O, K, G, V, R, D, W, S, A,
+        P, O, K, G, TS, R, D, W, S, A,
     }
     program::P
     ownership::O
     cell_kinds::K
     cell_generations::G
-    volumes::V
+    trackers::TS
     relationships::R
     descriptor_state::D
     descriptor_workspaces::W
@@ -107,6 +110,8 @@ function _checkerboard_kernel_program(program, to)
             end
         )
     end
+    tracker_kernel = tracker_kernel_plan(program.tracker_plan)
+    stage_kernel = stage_kernel_plan(program.stage_plan)
     return CheckerboardKernelProgram(
         program.shape,
         program.periodic,
@@ -117,8 +122,9 @@ function _checkerboard_kernel_program(program, to)
         program.attempts_per_site,
         to === nothing ? program.relationships :
         Adapt.adapt(to, program.relationships),
+        to === nothing ? tracker_kernel : Adapt.adapt(to, tracker_kernel),
         adapt_descriptor_kernel_plan(to, program.descriptor_plan),
-        to === nothing ? program.stage_plan : Adapt.adapt(to, program.stage_plan),
+        to === nothing ? stage_kernel : Adapt.adapt(to, stage_kernel),
         to === nothing ? ownership_change_handles :
         Adapt.adapt(to, ownership_change_handles),
         to === nothing ? program.checkerboard_plan :
@@ -134,7 +140,7 @@ function _checkerboard_execution_state(
         ownership,
         cell_kinds,
         cell_generations,
-        volumes,
+        trackers,
         relationships,
         descriptor_state,
         stage_buffers,
@@ -152,7 +158,7 @@ function _checkerboard_execution_state(
         _checkerboard_adapt(to, ownership),
         _checkerboard_adapt(to, cell_kinds),
         _checkerboard_adapt(to, cell_generations),
-        _checkerboard_adapt(to, volumes),
+        _checkerboard_adapt(to, trackers),
         _checkerboard_adapt(to, relationships),
         _checkerboard_adapt(to, descriptor_state),
         _checkerboard_adapt(to, descriptor_workspaces),
@@ -171,7 +177,7 @@ function _checkerboard_state_at_mcs(state::CheckerboardExecutionState, mcs)
         state.ownership,
         state.cell_kinds,
         state.cell_generations,
-        state.volumes,
+        state.trackers,
         state.relationships,
         state.descriptor_state,
         state.descriptor_workspaces,
@@ -272,7 +278,7 @@ function allocate_program_engine_workspace(
         ownership,
         cell_kinds,
         cell_generations,
-        volumes,
+        trackers,
         relationships,
         descriptor_state,
         stage_buffers,
@@ -287,7 +293,7 @@ function allocate_program_engine_workspace(
         ownership,
         cell_kinds,
         cell_generations,
-        volumes,
+        trackers,
         relationships,
         descriptor_state,
         stage_buffers,
@@ -304,7 +310,7 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     state.program.stage_plan.accepted_count == 0 || throw(ArgumentError(
         "accepted-copy checkerboard stages are not qualified on device backends"
     ))
-    state.program.stage_plan.after_mcs_count == 0 || throw(ArgumentError(
+    isempty(state.program.stage_plan.after_mcs) || throw(ArgumentError(
         "after-MCS checkerboard stages are not qualified on device backends"
     ))
     isempty(state.program.ownership_change_handles) || throw(ArgumentError(
@@ -315,11 +321,11 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
         Adapt.adapt(to, state.ownership),
         Adapt.adapt(to, state.cell_kinds),
         Adapt.adapt(to, state.cell_generations),
-        Adapt.adapt(to, state.volumes),
+        Adapt.adapt(to, state.trackers),
         Adapt.adapt(to, state.relationships),
         Adapt.adapt(to, state.descriptor_state),
         Adapt.adapt(to, state.descriptor_workspaces),
-        Adapt.adapt(to, state.stage_buffers),
+        NoCheckerboardStageBuffers(),
         Adapt.adapt(to, state.parameters),
         state.seed,
         state.replica,
@@ -628,8 +634,9 @@ end
 
 function copy_checkerboard_state!(runtime, workspace, to_host = Array)
     copyto!(runtime.ownership, to_host(workspace.state.ownership))
-    converted_volumes = Int.(to_host(workspace.state.volumes))
-    copyto!(runtime.volumes, converted_volumes)
+    copyto_tracker_state!(
+        runtime.trackers, workspace.state.trackers, to_host
+    )
     report = _checkerboard_report(workspace, to_host)
     runtime.accepted += report.accepted
     runtime.rejected += report.rejected

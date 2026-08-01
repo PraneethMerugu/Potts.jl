@@ -85,13 +85,15 @@ end
         parameters = [A₀, λA, λf, Lf, Lbreak, temperature],
     )
     completed = complete(focal)
-    @test !inspect(completed, Capabilities()).checkerboard
-    @test_throws ArgumentError compile(
+    @test inspect(completed, Capabilities()).checkerboard
+    checkerboard_executable = compile(
         completed;
         engine = CheckerboardEngine(),
         backend = CPUBackend(),
         scalar_type = Float64,
     )
+    @test checkerboard_executable.core_program.engine isa
+          CorePotts.CheckerboardProgramEngine
     executable = compile(
         completed;
         engine = SequentialEngine(),

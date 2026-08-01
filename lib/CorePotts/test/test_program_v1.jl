@@ -15,6 +15,10 @@ function test_program(
         temperature = 3,
         descriptor_plan = empty_descriptor_plan(),
         stage_plan = CorePotts.StageExecutionPlan(),
+        tracker_plan = CorePotts.TrackerExecutionPlan(
+            (CorePotts.OwnershipCountTracker(),),
+            "ownership-count-tracker-v1-test",
+        ),
     )
     T = Float64
     scalar(value) = CorePotts.CompiledScalar(T(value))
@@ -32,12 +36,53 @@ function test_program(
         1,
         T[],
         relationships,
+        tracker_plan,
         descriptor_plan,
         stage_plan,
         engine,
         CorePotts.CPUProgramBackend(),
         "core-program-v1-test",
     )
+end
+
+struct ExternalDoubleOccupancyTracker <: CorePotts.AbstractTrackerDescriptor end
+CorePotts.tracker_quantity(::ExternalDoubleOccupancyTracker) =
+    Val(:external_double_occupancy)
+CorePotts.tracker_checkpoint_policy(::ExternalDoubleOccupancyTracker) =
+    :persist_logical_state
+CorePotts.tracker_inspection(::ExternalDoubleOccupancyTracker) = (
+    quantity = :external_double_occupancy,
+    source = :ownership,
+    relation = :identity,
+    domain = :cell,
+    storage = :dense_int32,
+    rebuild = :external_double_histogram,
+    proposal_update = :external_source_target_double_delta,
+    visibility = :accepted_commit,
+    concurrency = :claimed_owner_exclusive,
+    checkpoint = :persist_logical_state,
+    proposal_cost = :constant,
+    rebuild_cost = :lattice_linear,
+)
+function CorePotts.tracker_rebuild(
+        ::ExternalDoubleOccupancyTracker, ownership, cell_kinds
+    )
+    values = zeros(Int32, length(cell_kinds))
+    for owner in ownership
+        owner > 0 && (values[Int(owner)] += Int32(2))
+    end
+    return values
+end
+@inline function CorePotts.tracker_proposal_update!(
+        values,
+        ::ExternalDoubleOccupancyTracker,
+        target,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    old_owner > 0 && (@inbounds values[Int(old_owner)] -= Int32(2))
+    new_owner > 0 && (@inbounds values[Int(new_owner)] += Int32(2))
+    return nothing
 end
 
 @testset "extinction retires a generation at the lifecycle boundary" begin
@@ -95,8 +140,11 @@ end
         CorePotts.advance_mcs!(runtime)
         iszero(runtime.cell_kinds[1]) && break
     end
-    @test runtime.volumes[1] == 0
+    @test CorePotts.program_tracker_values(
+        runtime, Val(:cell_volume)
+    )[1] == 0
     @test runtime.cell_kinds[1] == 0
+    @test runtime.cell_generations[1] == UInt32(2)
     @test CorePotts.state_block(
         runtime.descriptor_state, marker_handle
     ).values[1] == 0
@@ -248,6 +296,8 @@ end
         report = CorePotts.program_execution_report(program)
         @test report.backend === :CPUProgramBackend
         @test report.numerical_policy.reductions === :deterministic
+        @test report.trackers.quantities === (:cell_volume,)
+        @test CorePotts.program_capability_report(program).trackers.count == 1
         if engine isa CorePotts.CheckerboardProgramEngine
             plan_report = CorePotts.checkerboard_plan_report(
                 program.checkerboard_plan
@@ -259,7 +309,9 @@ end
             @test isconcretetype(typeof(first.engine_workspace))
             @test first.accepted + first.rejected + first.null_attempts ==
                   length(first.ownership) * Int(program.attempts_per_site)
-            @test sum(first.volumes) == count(>(0), first.ownership)
+            @test sum(CorePotts.program_tracker_values(
+                first, Val(:cell_volume)
+            )) == count(>(0), first.ownership)
         else
             @test program.checkerboard_plan isa CorePotts.NoCheckerboardPlan
         end
@@ -399,6 +451,77 @@ end
     @test checkerboard_bytes <= 512 * 1024
 end
 
+@testset "external trackers use the generic execution path" begin
+    plan = CorePotts.TrackerExecutionPlan(
+        (
+            CorePotts.OwnershipCountTracker(),
+            ExternalDoubleOccupancyTracker(),
+        ),
+        "external-double-occupancy-plan-v1-test",
+    )
+    @test_throws ArgumentError CorePotts.TrackerExecutionPlan(
+        (
+            ExternalDoubleOccupancyTracker(),
+            ExternalDoubleOccupancyTracker(),
+        ),
+        "duplicate-external-tracker",
+    )
+    @test isbitstype(typeof(CorePotts.tracker_kernel_plan(plan)))
+    @test CorePotts.tracker_plan_report(plan).quantities ==
+          (:cell_volume, :external_double_occupancy)
+    for engine in (
+            CorePotts.SequentialProgramEngine(),
+            CorePotts.CheckerboardProgramEngine(),
+        )
+        program = test_program(engine; tracker_plan = plan)
+        runtime = CorePotts.initialize_program(
+            program,
+            test_initial(),
+            Float64[],
+            UInt64(0x51),
+            UInt32(1),
+        )
+        CorePotts.advance_mcs!(runtime)
+        volumes = CorePotts.program_tracker_values(
+            runtime, Val(:cell_volume)
+        )
+        external = CorePotts.program_tracker_values(
+            runtime, Val(:external_double_occupancy)
+        )
+        @test external == Int32(2) .* volumes
+        @test CorePotts.validate_tracker_state!(
+            program.tracker_plan,
+            runtime.trackers,
+            runtime.ownership,
+            runtime.cell_kinds,
+        ) === runtime.trackers
+        corrupted_trackers = CorePotts.copy_tracker_state(runtime.trackers)
+        corrupted_trackers.values[2][1] += Int32(1)
+        @test_throws ArgumentError CorePotts.validate_tracker_state!(
+            program.tracker_plan,
+            corrupted_trackers,
+            runtime.ownership,
+            runtime.cell_kinds,
+        )
+        restored = CorePotts.restore_program_checkpoint(
+            program, CorePotts.program_checkpoint(runtime)
+        )
+        @test CorePotts.program_tracker_values(
+            restored, Val(:external_double_occupancy)
+        ) == external
+        @test Core.Compiler.return_type(
+            CorePotts.commit_tracker_updates!,
+            Tuple{
+                typeof(runtime.trackers),
+                typeof(program.tracker_plan),
+                CartesianIndex{2},
+                Int32,
+                Int32,
+            },
+        ) === Nothing
+    end
+end
+
 @testset "relationship transactions are atomic and canonical" begin
     scalar(value) = CorePotts.CompiledScalar(Float64(value))
     @test_throws ArgumentError CorePotts.RelationshipStoreSchema(
@@ -437,19 +560,39 @@ end
         identity = 10,
     )
     duplicate_before = copy(state)
-    @test_throws ArgumentError CorePotts.apply_relationship_requests!(
+    CorePotts.apply_relationship_requests!(
         state,
         Int16[2, 2],
         generations,
         plan,
         [create, contradictory_create],
     )
+    @test state.active == duplicate_before.active
     @test state.payload == duplicate_before.payload
     @test state.incident_edges == duplicate_before.incident_edges
     @test (state.endpoint_a[1], state.endpoint_b[1]) == (1, 2)
     @test (state.generation_a[1], state.generation_b[1]) == (4, 7)
     @test state.degree == Int16[1, 1]
     @test state.incident_edges[1, :] == Int32[1, 1]
+    @test CorePotts.validate_relationship_integrity(
+        state, plan, Int16[2, 2], generations
+    ) === state
+
+    invalid_incidence = copy(state)
+    invalid_incidence.incident_edges[1, 1] = Int32(2)
+    @test_throws ArgumentError CorePotts.validate_relationship_integrity(
+        invalid_incidence, plan, Int16[2, 2], generations
+    )
+    invalid_degree = copy(state)
+    invalid_degree.degree[1] = Int16(0)
+    @test_throws ArgumentError CorePotts.validate_relationship_integrity(
+        invalid_degree, plan, Int16[2, 2], generations
+    )
+    invalid_payload = copy(state)
+    invalid_payload.payload[1][1] = NaN
+    @test_throws DomainError CorePotts.validate_relationship_integrity(
+        invalid_payload, plan, Int16[2, 2], generations
+    )
 
     # The exact duplicate policy is idempotent.
     CorePotts.apply_relationship_requests!(
@@ -856,4 +999,14 @@ end
     @test all(
         length(runtime.relationships.banks) == 1 for runtime in runtimes
     )
+
+    packed = map(
+        runtime -> CorePotts.Adapt.adapt(Array, runtime.relationships), runtimes
+    )
+    @test allequal(typeof(storage) for storage in packed)
+    @test allequal(typeof(only(storage.banks)) for storage in packed)
+    @test length(last(packed)) == 1024
+    final_view = last(packed)[1024]
+    @test length(final_view.active) == 1
+    @test size(final_view.incident_edges) == (1, 0)
 end

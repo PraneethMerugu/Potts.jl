@@ -181,7 +181,11 @@
     @test size(executable.core_program.proposal_offsets, 2) == 4
     @test !hasfield(typeof(executable.core_program), :connectivity_kinds)
 
-    links = RelationshipState(:links; capacity = 8)
+    links = RelationshipState(
+        :links;
+        endpoints = Undirected(cell, cell),
+        capacity = 8,
+    )
     copy_context = ProposalContext(:copy)
     @named accepted_relationship = PottsSystem(statements = StatementSet((
         Lattice((4, 4)),

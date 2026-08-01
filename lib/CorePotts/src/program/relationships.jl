@@ -90,6 +90,196 @@ function Base.copyto!(
     return destination
 end
 
+"""Read-only offset view into one packed relationship vector."""
+struct PackedRelationshipVector{
+        T,
+        A <: AbstractVector{T},
+    } <: AbstractVector{T}
+    values::A
+    offset::Int32
+    count::Int32
+end
+
+Base.IndexStyle(::Type{<:PackedRelationshipVector}) = IndexLinear()
+Base.size(values::PackedRelationshipVector) = (Int(values.count),)
+Base.length(values::PackedRelationshipVector) = Int(values.count)
+@inline function Base.getindex(values::PackedRelationshipVector, index::Int)
+    @boundscheck checkbounds(values, index)
+    return @inbounds values.values[Int(values.offset) + index - 1]
+end
+
+"""Read-only column-major view into one packed incident-edge matrix."""
+struct PackedRelationshipMatrix{
+        T,
+        A <: AbstractVector{T},
+    } <: AbstractMatrix{T}
+    values::A
+    offset::Int32
+    rows::Int32
+    columns::Int32
+end
+
+Base.IndexStyle(::Type{<:PackedRelationshipMatrix}) = IndexCartesian()
+Base.size(values::PackedRelationshipMatrix) =
+    (Int(values.rows), Int(values.columns))
+@inline function Base.getindex(
+        values::PackedRelationshipMatrix, row::Int, column::Int
+    )
+    @boundscheck checkbounds(values, row, column)
+    index = Int(values.offset) + row - 1 + (column - 1) * Int(values.rows)
+    return @inbounds values.values[index]
+end
+
+"""One isbits relationship-store view reconstructed from a packed bank."""
+struct PackedRelationshipState{A, E, G, P, D, I}
+    active::A
+    endpoint_a::E
+    endpoint_b::E
+    generation_a::G
+    generation_b::G
+    payload::P
+    degree::D
+    incident_edges::I
+end
+
+"""Occurrence-stable SoA bank used for read-only relationship kernels."""
+struct PackedRelationshipBank{A, E, G, P, D, I, M}
+    active::A
+    endpoint_a::E
+    endpoint_b::E
+    generation_a::G
+    generation_b::G
+    payload::P
+    degree::D
+    incident_edges::I
+    edge_offsets::M
+    edge_counts::M
+    endpoint_offsets::M
+    endpoint_counts::M
+    incident_offsets::M
+    maximum_degrees::M
+end
+
+Adapt.@adapt_structure PackedRelationshipVector
+Adapt.@adapt_structure PackedRelationshipMatrix
+Adapt.@adapt_structure PackedRelationshipState
+Adapt.@adapt_structure PackedRelationshipBank
+
+Base.length(bank::PackedRelationshipBank) = length(bank.edge_offsets)
+
+@inline function Base.getindex(bank::PackedRelationshipBank, slot::Int)
+    @boundscheck checkbounds(bank.edge_offsets, slot)
+    edge_offset = @inbounds bank.edge_offsets[slot]
+    edge_count = @inbounds bank.edge_counts[slot]
+    endpoint_offset = @inbounds bank.endpoint_offsets[slot]
+    endpoint_count = @inbounds bank.endpoint_counts[slot]
+    incident_offset = @inbounds bank.incident_offsets[slot]
+    maximum_degree = @inbounds bank.maximum_degrees[slot]
+    return PackedRelationshipState(
+        PackedRelationshipVector(bank.active, edge_offset, edge_count),
+        PackedRelationshipVector(bank.endpoint_a, edge_offset, edge_count),
+        PackedRelationshipVector(bank.endpoint_b, edge_offset, edge_count),
+        PackedRelationshipVector(bank.generation_a, edge_offset, edge_count),
+        PackedRelationshipVector(bank.generation_b, edge_offset, edge_count),
+        map(
+            values -> PackedRelationshipVector(
+                values, edge_offset, edge_count
+            ),
+            bank.payload,
+        ),
+        PackedRelationshipVector(
+            bank.degree, endpoint_offset, endpoint_count
+        ),
+        PackedRelationshipMatrix(
+            bank.incident_edges,
+            incident_offset,
+            maximum_degree,
+            endpoint_count,
+        ),
+    )
+end
+
+function _flatten_relationship_arrays(states, accessor)
+    prototype = accessor(first(states))
+    total = sum(state -> length(accessor(state)), states; init = 0)
+    total <= typemax(Int32) || throw(ArgumentError(
+        "packed relationship storage exceeds the V1 Int32 offset bound"
+    ))
+    values = Vector{eltype(prototype)}(undef, total)
+    offset = 1
+    for state in states
+        source = accessor(state)
+        copyto!(values, offset, source, firstindex(source), length(source))
+        offset += length(source)
+    end
+    return values
+end
+
+function _relationship_offsets(lengths)
+    offsets = Vector{Int32}(undef, length(lengths))
+    offset = 1
+    for index in eachindex(lengths)
+        length_value = Int(lengths[index])
+        offset + length_value - 1 <= typemax(Int32) || throw(ArgumentError(
+            "packed relationship storage exceeds the V1 Int32 offset bound"
+        ))
+        offsets[index] = Int32(offset)
+        offset += length_value
+    end
+    return offsets, Int32.(lengths)
+end
+
+function _pack_relationship_bank(to, states::AbstractVector{S}) where {
+        P,
+        S <: ProgramRelationshipState{P},
+    }
+    isempty(states) && throw(ArgumentError(
+        "a packed relationship representation bank cannot be empty"
+    ))
+    edge_lengths = map(state -> length(state.active), states)
+    endpoint_lengths = map(state -> length(state.degree), states)
+    incident_lengths = map(state -> length(state.incident_edges), states)
+    maximum_degrees = map(state -> size(state.incident_edges, 1), states)
+    edge_offsets, edge_counts = _relationship_offsets(edge_lengths)
+    endpoint_offsets, endpoint_counts = _relationship_offsets(endpoint_lengths)
+    incident_offsets, _ = _relationship_offsets(incident_lengths)
+    payload = ntuple(Val(fieldcount(P))) do slot
+        Adapt.adapt(to, _flatten_relationship_arrays(
+            states, state -> state.payload[slot]
+        ))
+    end
+    return PackedRelationshipBank(
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.active)),
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.endpoint_a)),
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.endpoint_b)),
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.generation_a)),
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.generation_b)),
+        payload,
+        Adapt.adapt(to, _flatten_relationship_arrays(states, state -> state.degree)),
+        Adapt.adapt(to, _flatten_relationship_arrays(
+            states, state -> vec(state.incident_edges)
+        )),
+        Adapt.adapt(to, edge_offsets),
+        Adapt.adapt(to, edge_counts),
+        Adapt.adapt(to, endpoint_offsets),
+        Adapt.adapt(to, endpoint_counts),
+        Adapt.adapt(to, incident_offsets),
+        Adapt.adapt(to, Int32.(maximum_degrees)),
+    )
+end
+
+_adapt_relationship_bank(to, values) = Adapt.adapt(to, values)
+_adapt_relationship_bank(
+    to, values::AbstractVector{<:ProgramRelationshipState}
+) = _pack_relationship_bank(to, values)
+
+function Adapt.adapt_structure(to, storage::RelationshipStorage)
+    return RelationshipStorage(
+        map(bank -> _adapt_relationship_bank(to, bank), storage.banks),
+        Adapt.adapt(to, storage.slots),
+    )
+end
+
 abstract type ProgramRelationshipRequest end
 
 struct CreateRelationshipRequest{P <: Tuple} <:
@@ -256,9 +446,7 @@ end
     return a < b ? (a, b) : (b, a)
 end
 
-function _relationship_edge(
-        state::ProgramRelationshipState, a::Int32, b::Int32
-    )
+function _relationship_edge(state, a::Int32, b::Int32)
     a, b = _canonical_endpoints(a, b)
     return findfirst(eachindex(state.active)) do edge
         @inbounds state.active[edge] &&
@@ -267,7 +455,7 @@ function _relationship_edge(
     end
 end
 
-function _relationship_degree(state::ProgramRelationshipState, endpoint::Int32)
+function _relationship_degree(state, endpoint::Int32)
     1 <= endpoint <= length(state.degree) || return 0
     return @inbounds state.degree[endpoint]
 end
@@ -404,15 +592,14 @@ function validate_relationship_request(
     _validate_relationship_endpoint(
         b, generation_b, endpoint_status, endpoint_generations
     )
+    _validate_relationship_payload(state, request.payload)
     existing = _relationship_edge(state, a, b)
     if existing !== nothing
         edge = Int(existing)
-        existing_payload = map(values -> @inbounds(values[edge]), state.payload)
         existing_generation_a = @inbounds state.generation_a[edge]
         existing_generation_b = @inbounds state.generation_b[edge]
         existing_generation_a == generation_a &&
-            existing_generation_b == generation_b &&
-            existing_payload == request.payload && return false
+            existing_generation_b == generation_b && return false
         throw(ArgumentError(
             "contradictory relationship creations target endpoints ($a, $b)"
         ))
@@ -423,7 +610,6 @@ function validate_relationship_request(
         throw(ArgumentError("relationship maximum degree exceeded for $b"))
     findfirst(!, state.active) === nothing &&
         throw(ArgumentError("relationship capacity exceeded"))
-    _validate_relationship_payload(state, request.payload)
     return true
 end
 
@@ -747,7 +933,9 @@ function initialize_program_relationships(
         schema.maximum_degree,
         length(schema.payload_defaults),
     )
-    entries === nothing && return state
+    entries === nothing && return validate_relationship_integrity(
+        state, schema, endpoint_status, endpoint_generations
+    )
     defaults = map(
         value -> compiled_scalar_value(value, parameters),
         schema.payload_defaults,
@@ -788,11 +976,123 @@ function initialize_program_relationships(
     apply_relationship_requests!(
         state, endpoint_status, endpoint_generations, schema, requests
     )
+    return validate_relationship_integrity(
+        state, schema, endpoint_status, endpoint_generations
+    )
+end
+
+function validate_relationship_integrity(
+        state::ProgramRelationshipState,
+        schema::RelationshipStoreSchema,
+        endpoint_status,
+        endpoint_generations,
+    )
+    capacity = Int(schema.capacity)
+    length(state.active) == capacity || throw(ArgumentError(
+        "relationship active-slot storage has the wrong capacity"
+    ))
+    all(length(values) == capacity for values in state.payload) || throw(
+        ArgumentError("relationship payload storage has the wrong capacity")
+    )
+    length(state.payload) == length(schema.payload_defaults) || throw(
+        ArgumentError("relationship payload storage does not match its schema")
+    )
+    length(endpoint_status) == length(endpoint_generations) ==
+        length(state.degree) == size(state.incident_edges, 2) || throw(
+        ArgumentError("relationship endpoint tables are misaligned")
+    )
+    size(state.incident_edges, 1) == Int(schema.maximum_degree) || throw(
+        ArgumentError("relationship incident storage has the wrong degree bound")
+    )
+
+    for edge in eachindex(state.active)
+        if @inbounds state.active[edge]
+            a = @inbounds state.endpoint_a[edge]
+            b = @inbounds state.endpoint_b[edge]
+            1 <= a < b <= length(endpoint_status) || throw(ArgumentError(
+                "active relationship $edge has invalid canonical endpoints"
+            ))
+            @inbounds(!iszero(endpoint_status[a]) &&
+                      !iszero(endpoint_status[b])) || throw(ArgumentError(
+                "active relationship $edge references an inactive endpoint"
+            ))
+            @inbounds(state.generation_a[edge] == endpoint_generations[a] &&
+                      state.generation_b[edge] == endpoint_generations[b]) ||
+                throw(ArgumentError(
+                    "active relationship $edge has a stale endpoint generation"
+                ))
+            all(values -> isfinite(@inbounds(values[edge])), state.payload) ||
+                throw(DomainError(
+                    edge, "active relationship payload values must be finite"
+                ))
+            for prior in 1:(edge - 1)
+                @inbounds state.active[prior] || continue
+                @inbounds(
+                    state.endpoint_a[prior] == a &&
+                    state.endpoint_b[prior] == b
+                ) && throw(ArgumentError(
+                    "active relationship endpoints ($a, $b) are duplicated"
+                ))
+            end
+        else
+            @inbounds(
+                iszero(state.endpoint_a[edge]) &&
+                iszero(state.endpoint_b[edge]) &&
+                iszero(state.generation_a[edge]) &&
+                iszero(state.generation_b[edge])
+            ) || throw(ArgumentError(
+                "inactive relationship $edge retains structural state"
+            ))
+            all(values -> iszero(@inbounds(values[edge])), state.payload) ||
+                throw(ArgumentError(
+                    "inactive relationship $edge retains payload state"
+                ))
+        end
+    end
+
+    for endpoint in eachindex(state.degree)
+        degree = Int(@inbounds state.degree[endpoint])
+        0 <= degree <= Int(schema.maximum_degree) || throw(ArgumentError(
+            "relationship degree is outside its compiled bound"
+        ))
+        previous = Int32(0)
+        for position in 1:size(state.incident_edges, 1)
+            edge = @inbounds state.incident_edges[position, endpoint]
+            if position <= degree
+                edge > previous || throw(ArgumentError(
+                    "relationship incident indices are not strictly ordered"
+                ))
+                1 <= edge <= capacity && @inbounds(state.active[edge]) ||
+                    throw(ArgumentError(
+                        "relationship incident index references an inactive edge"
+                    ))
+                @inbounds(
+                    state.endpoint_a[edge] == endpoint ||
+                    state.endpoint_b[edge] == endpoint
+                ) || throw(ArgumentError(
+                    "relationship incident index references the wrong endpoint"
+                ))
+                previous = edge
+            else
+                iszero(edge) || throw(ArgumentError(
+                    "relationship incident storage is not zero-filled"
+                ))
+            end
+        end
+        expected = count(eachindex(state.active)) do edge
+            @inbounds state.active[edge] &&
+                (state.endpoint_a[edge] == endpoint ||
+                 state.endpoint_b[edge] == endpoint)
+        end
+        expected == degree || throw(ArgumentError(
+            "relationship degree disagrees with active endpoint incidence"
+        ))
+    end
     return state
 end
 
 @inline function relationship_payload(
-        state::ProgramRelationshipState,
+        state,
         edge::Integer,
         slot::Integer,
     )

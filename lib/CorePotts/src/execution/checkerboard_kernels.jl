@@ -285,8 +285,13 @@ end
         old_owner = @inbounds old_owners[index]
         new_owner = @inbounds new_owners[index]
         @inbounds state.ownership[target] = new_owner
-        old_owner > 0 && (@inbounds state.volumes[Int(old_owner)] -= 1)
-        new_owner > 0 && (@inbounds state.volumes[Int(new_owner)] += 1)
+        commit_tracker_updates!(
+            state.trackers,
+            state.program.tracker_plan,
+            target,
+            old_owner,
+            new_owner,
+        )
     end
 end
 

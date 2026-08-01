@@ -123,7 +123,6 @@ function Base.iterate(storage::RelationshipStorage, state::Int = 1)
 end
 
 Adapt.@adapt_structure RelationshipSlot
-Adapt.@adapt_structure RelationshipStorage
 
 struct CompiledPottsProgram{
         T <: AbstractFloat,
@@ -131,6 +130,7 @@ struct CompiledPottsProgram{
         E <: AbstractProgramEngine,
         B,
         R,
+        TP,
         D,
         SP,
         CP <: AbstractCheckerboardPlan,
@@ -145,6 +145,7 @@ struct CompiledPottsProgram{
     attempts_per_site::Int32
     parameter_defaults::Vector{T}
     relationships::R
+    tracker_plan::TP
     descriptor_plan::D
     stage_plan::SP
     checkerboard_plan::CP
@@ -163,6 +164,7 @@ function CompiledPottsProgram(
         attempts_per_site::Integer,
         parameter_defaults::Vector{T},
         relationships,
+        tracker_plan::TP,
         descriptor_plan::D,
         stage_plan::SP,
         engine::E,
@@ -170,7 +172,7 @@ function CompiledPottsProgram(
         fingerprint::AbstractString;
         medium_kinds = nothing,
         checkerboard_plan = nothing,
-    ) where {T <: AbstractFloat, N, D, SP, E <: AbstractProgramEngine, B}
+    ) where {T <: AbstractFloat, N, TP, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
         throw(ArgumentError("proposal offsets have the wrong dimensionality"))
@@ -201,7 +203,7 @@ function CompiledPottsProgram(
         ArgumentError("checkerboard_plan has the wrong type")
     )
     return CompiledPottsProgram{
-        T, N, E, B, typeof(relationship_storage), D, SP,
+        T, N, E, B, typeof(relationship_storage), TP, D, SP,
         typeof(resolved_checkerboard_plan),
     }(
         shape,
@@ -214,6 +216,7 @@ function CompiledPottsProgram(
         Int32(attempts_per_site),
         copy(parameter_defaults),
         relationship_storage,
+        tracker_plan,
         descriptor_plan,
         stage_plan,
         resolved_checkerboard_plan,

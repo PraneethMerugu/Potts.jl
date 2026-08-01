@@ -206,10 +206,16 @@ function _clear_retired_cell_state!(
 end
 
 function _retire_extinct_cells!(runtime::ProgramRuntime)
+    volumes = program_tracker_values(runtime, Val(:cell_volume))
     for cell in eachindex(runtime.cell_kinds)
         @inbounds runtime.cell_kinds[cell] == 0 && continue
-        @inbounds runtime.volumes[cell] == 0 || continue
+        @inbounds volumes[cell] == 0 || continue
         @inbounds runtime.cell_kinds[cell] = 0
+        generation = @inbounds runtime.cell_generations[cell]
+        generation < typemax(UInt32) || throw(OverflowError(
+            "cell generation overflow at lifecycle retirement"
+        ))
+        @inbounds runtime.cell_generations[cell] = generation + UInt32(1)
         runtime.retired_cells += 1
         _clear_retired_cell_state!(
             runtime.program.descriptor_plan.state_layout,
@@ -263,6 +269,7 @@ program_execution_report(program::CompiledPottsProgram) = (
     scalar_type = eltype(program.parameter_defaults),
     shape = program.shape,
     attempts_per_site = program.attempts_per_site,
+    trackers = tracker_plan_report(program.tracker_plan),
     rng = :Philox4x32x10V1,
     numerical_policy = (
         math = :accurate,
@@ -289,5 +296,6 @@ program_capability_report(program::CompiledPottsProgram) = (
         for descriptor in group.instances
     )),
     relationships = !isempty(program.relationships),
+    trackers = tracker_plan_report(program.tracker_plan),
     checkerboard_plan = checkerboard_plan_report(program.checkerboard_plan),
 )
