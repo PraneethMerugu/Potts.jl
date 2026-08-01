@@ -164,8 +164,55 @@ function _state_handle_for_leaf(
     return nothing
 end
 
+const _FIRST_EXPLICIT_DRAW_OPERATION = UInt16(0x0010)
+const _EXPLICIT_DRAW_OPERATION_COUNT =
+    Int(CorePotts.rng_operation_limit() - _FIRST_EXPLICIT_DRAW_OPERATION + 1)
+
+function _stable_draw_operation(path::Tuple, identity::Symbol)
+    digest = SHA.sha256(codeunits(_canonical_value((
+        :potts_draw_operation_v1,
+        path,
+        identity,
+    ))))
+    word = (UInt16(digest[1]) << 8) | UInt16(digest[2])
+    return _FIRST_EXPLICIT_DRAW_OPERATION +
+           UInt16(Int(word) % _EXPLICIT_DRAW_OPERATION_COUNT)
+end
+
+function _draw_operation_handles(ir::AnalyzedTermIR)
+    handles = Dict{Tuple{Tuple, Symbol}, UInt16}()
+    owners = Dict{UInt16, Tuple{Tuple, Symbol}}()
+    for record in ir.source.records
+        for operation in record.random_operations
+            operation.reserved && continue
+            key = (record.identity.path, operation.identity)
+            handle = _stable_draw_operation(key...)
+            if haskey(owners, handle) && owners[handle] != key
+                other = owners[handle]
+                throw(PottsValidationError(
+                    :descriptor_lowering,
+                    (PottsDiagnostic(
+                        :draw_operation_identity_collision,
+                        record.identity,
+                        String(operation.identity),
+                        record.identity.path,
+                        "a collision-free stable namespace-local draw identity",
+                        "$(other[1]).$(other[2]) and $(key[1]).$(key[2]) map to " *
+                        "operation $(Int(handle))",
+                        (),
+                        record.source,
+                    ),),
+                ))
+            end
+            handles[key] = handle
+            owners[handle] = key
+        end
+    end
+    return handles
+end
+
 function _draw_handle_for_leaf(
-        ir::AnalyzedTermIR,
+        handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         node::NormalizedTermNode,
     )
     name = _try_symbolic_name(node.payload)
@@ -174,17 +221,7 @@ function _draw_handle_for_leaf(
     prefix = "__potts_draw__"
     startswith(text, prefix) || return nothing
     identity = Symbol(text[(lastindex(prefix) + 1):end])
-    identities = Symbol[]
-    for record in ir.source.records
-        for operation in record.random_operations
-            operation.reserved && continue
-            operation.identity in identities || push!(identities, operation.identity)
-        end
-    end
-    sort!(identities; by = String)
-    index = findfirst(==(identity), identities)
-    index === nothing && return nothing
-    return UInt16(index + 15)
+    return get(handles, (node.source.path, identity), nothing)
 end
 
 function _compiled_kind_index(ir::AnalyzedTermIR, requested::Symbol)
@@ -215,6 +252,27 @@ function _compiled_kind_leaf(ir::AnalyzedTermIR, node::NormalizedTermNode)
     )
 end
 
+function _compiled_resource_leaf(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        prefix::String,
+        kind::Symbol,
+    )
+    name = _try_symbolic_name(node.payload)
+    name === nothing && return nothing
+    text = String(name)
+    startswith(text, prefix) || return nothing
+    requested = Symbol(text[(lastindex(prefix) + 1):end])
+    owner = ir.source.records[Int(node.record)]
+    record = _resource_record(ir.source, owner, kind, requested)
+    record === nothing && return nothing
+    handle = findfirst(
+        candidate -> candidate.identity == record.identity,
+        ir.source.records,
+    )
+    return handle === nothing ? nothing : Int32(handle)
+end
+
 function _energy_anchor_expression(kind::Symbol)
     identity = kind === :site_anchor ? :energy_anchor_site :
                kind === :cell_anchor ? :energy_anchor_cell :
@@ -231,6 +289,7 @@ function _lower_static_node(
         manifest::ParameterManifest,
         ::Type{T},
         state_handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
+        draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         cache::Dict{Int32, CorePotts.AbstractStaticExpression},
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
@@ -255,13 +314,52 @@ function _lower_static_node(
             ),),
         ))
         CorePotts.StateExpression(handle)
-    elseif node.payload_kind in (
-            :proposal_context,
-            :relation,
-        )
+    elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
         CorePotts.LiteralExpression(Int32(0))
+    elseif node.payload_kind === :spatial_relation
+        handle = _compiled_resource_leaf(
+            ir,
+            node,
+            "__potts_spatial_relation__",
+            :SpatialRelation,
+        )
+        handle === nothing && throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :unresolved_spatial_relation_handle,
+                node.source,
+                repr(node.payload),
+                node.source.path,
+                "a declared finite SpatialRelation",
+                "no matching spatial relation",
+                (),
+                UnknownSource(),
+            ),),
+        ))
+        CorePotts.LiteralExpression(handle)
+    elseif node.payload_kind === :relationship_set
+        handle = _compiled_resource_leaf(
+            ir,
+            node,
+            "__potts_relationship_set__",
+            :RelationshipState,
+        )
+        handle === nothing && throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :unresolved_relationship_handle,
+                node.source,
+                repr(node.payload),
+                node.source.path,
+                "a declared RelationshipState",
+                "no matching relationship resource",
+                (),
+                UnknownSource(),
+            ),),
+        ))
+        CorePotts.LiteralExpression(handle)
     elseif node.payload_kind === :relationship_payload
         name = _try_symbolic_name(node.payload)
         name === nothing && throw(ArgumentError(
@@ -302,7 +400,7 @@ function _lower_static_node(
         ))
         CorePotts.LiteralExpression(kind)
     elseif node.payload_kind === :symbolic_leaf
-        draw_handle = _draw_handle_for_leaf(ir, node)
+        draw_handle = _draw_handle_for_leaf(draw_handles, node)
         draw_handle === nothing ? throw(PottsValidationError(
             :descriptor_lowering,
             (PottsDiagnostic(
@@ -326,6 +424,7 @@ function _lower_static_node(
                 manifest,
                 T,
                 state_handles,
+                draw_handles,
                 cache,
             )
             for operand in node.operands
@@ -340,7 +439,72 @@ function _lower_static_node(
     return expression
 end
 
-function _descriptor_footprint(locality::Symbol)
+function _reachable_term_nodes(graph::NormalizedTermGraph, root::Int32)
+    pending = Int32[root]
+    seen = Set{Int32}()
+    while !isempty(pending)
+        node = pop!(pending)
+        node in seen && continue
+        push!(seen, node)
+        append!(pending, graph.nodes[Int(node)].operands)
+    end
+    return sort!(collect(seen))
+end
+
+function _spatial_footprint_offsets(ir::AnalyzedTermIR, root::Int32)
+    offsets = Tuple[]
+    for index in _reachable_term_nodes(ir.graph, root)
+        node = ir.graph.nodes[Int(index)]
+        node.payload_kind === :spatial_relation || continue
+        name = _try_symbolic_name(node.payload)
+        name === nothing && continue
+        text = String(name)
+        prefix = "__potts_spatial_relation__"
+        startswith(text, prefix) || continue
+        requested = Symbol(text[(lastindex(prefix) + 1):end])
+        owner = ir.source.records[Int(node.record)]
+        record = _resource_record(ir.source, owner, :SpatialRelation, requested)
+        record === nothing && continue
+        neighborhood = get(_record_options(record), :neighborhood, nothing)
+        neighborhood isa Union{VonNeumann, Moore} || continue
+        matrix = _neighborhood_offsets(
+            neighborhood, length(_lattice_shape(ir))
+        )
+        for column in axes(matrix, 2)
+            push!(offsets, Tuple(matrix[:, column]))
+        end
+    end
+    sort!(unique!(offsets))
+    return Tuple(offsets)
+end
+
+function _relationship_footprint_degree(ir::AnalyzedTermIR, root::Int32)
+    maximum_degree = 0
+    for index in _reachable_term_nodes(ir.graph, root)
+        node = ir.graph.nodes[Int(index)]
+        node.payload_kind === :relationship_set || continue
+        name = _try_symbolic_name(node.payload)
+        name === nothing && continue
+        text = String(name)
+        prefix = "__potts_relationship_set__"
+        startswith(text, prefix) || continue
+        requested = Symbol(text[(lastindex(prefix) + 1):end])
+        owner = ir.source.records[Int(node.record)]
+        record = _resource_record(ir.source, owner, :RelationshipState, requested)
+        record === nothing && continue
+        maximum_degree = max(
+            maximum_degree,
+            Int(_numeric_value(get(
+                _record_options(record), :maximum_degree, 0
+            ))),
+        )
+    end
+    return Int32(maximum_degree)
+end
+
+function _descriptor_footprint(
+        ir::AnalyzedTermIR, root::Int32, locality::Symbol
+    )
     locality === :scalar && return CorePotts.EmptyFootprint()
     locality === :site_local && return CorePotts.FiniteSpatialFootprint(())
     locality === :contact_local && return CorePotts.FiniteSpatialFootprint(())
@@ -348,9 +512,13 @@ function _descriptor_footprint(locality::Symbol)
         return CorePotts.ProposalContextFootprint()
     locality === :owner_local && return CorePotts.OwnerFootprint()
     locality === :finite_spatial &&
-        return CorePotts.FiniteSpatialFootprint(())
+        return CorePotts.FiniteSpatialFootprint(
+            _spatial_footprint_offsets(ir, root)
+        )
     locality === :bounded_relationship &&
-        return CorePotts.IncidentRelationshipFootprint(typemax(Int16))
+        return CorePotts.IncidentRelationshipFootprint(
+            _relationship_footprint_degree(ir, root)
+        )
     throw(ArgumentError("unsupported descriptor locality `$locality`"))
 end
 

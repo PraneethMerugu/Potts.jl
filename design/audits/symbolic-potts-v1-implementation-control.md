@@ -832,6 +832,35 @@ consumption, null/rejection atomicity, tracker invariants, checkpoint continuati
 exclusion, warm inference/allocation, and the public external fixture. It must also determine
 whether G3 changed any cleared G2 compiler boundary without returning that boundary to review.
 
+R1.5 must perform a mechanism-leakage inventory across CorePotts program fields, descriptor roles,
+callable and resource-operation identities, capability bits, evaluator dispatch, proposal loops,
+checkpoint code, and engine branches. A named scientific mechanism moved behind a descriptor or
+singleton operation tag remains a blocking leak. The reviewer must require the same behavior to be
+expressible by a PottsToolkit or external callable composed over public structural primitives with
+no CorePotts edit. This check is repeated at R4 for the completed tree.
+
+The inventory is semantic, not a name-only search. For every mechanism-shaped branch or datum, the
+reviewer records its owner, the invariant that allegedly makes it structural, and the public
+primitive that an external implementation would use. The review must challenge at least:
+
+- proposal vetoes or mutations performed before or after the canonical descriptor/request path;
+- program fields, checkpoint fields, or capability flags that exist for one scientific mechanism;
+- operation tags and callable types whose parameters name biology rather than bounded execution;
+- neighborhood traversal whose relation, radius, dimensionality, or boundary rule is selected by
+  the engine instead of a compiled resource or affected-anchor plan;
+- relationship lifecycle, connectivity, motility, adhesion, volume, elongation, and focal-point
+  behavior embedded in engine control flow rather than expressed from primitives;
+- backend-specialized branches that reproduce scientific meaning instead of specializing a
+  structural primitive; and
+- default values or sentinel encodings that silently select a named mechanism.
+
+The decisive negative probe is an external test-only mechanism with comparable resource access,
+bounded traversal, proposal inspection, and rejection or contribution behavior. It must compile,
+execute, qualify, and checkpoint through the ordinary public path without editing CorePotts. A
+CorePotts edit needed only to add a genuinely reusable structural primitive is permitted during
+repair, but the reviewer must reject an operation whose API or semantics merely spell the new
+mechanism. Search results are evidence leads; absence of a biological name is not clearance.
+
 G4 remains stopped until R1.5 reports zero P0 and zero P1 findings. A compiler-boundary finding
 returns work to G1 or G2; an acceptance, RNG, atomicity, tracker, lifecycle, or sequential-runtime
 finding returns work to G3. P2 findings remain nonblocking under the existing autonomous repair
@@ -857,6 +886,12 @@ The reviewer also confirmed the single structural sequential call path, absence 
 energy-delta helpers, role separation, ordinary rejection atomicity, checkpoint scratch exclusion,
 and the public external fixture. Its focused G3 run passed 305/305 in 42.7 seconds. G4 remains
 blocked; repairs start at G1, requalify G2, complete G3 evidence, and receive a fresh R1.5 review.
+
+During the first repair attempt, moving connectivity and endpoint-retirement semantics into named
+CorePotts resource operations was rejected before checkpointing. That shape made the executor look
+descriptor-driven while retaining scientific mechanism knowledge in CorePotts. The repair must
+instead add only public structural proposal/resource primitives to CorePotts and keep scientific
+callables and compositions in PottsToolkit or external modules.
 
 ## Prohibited record contents
 

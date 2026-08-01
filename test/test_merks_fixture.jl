@@ -51,6 +51,7 @@ end
                 proposal = Moore(1),
                 contact = Moore(1),
                 connectivity = Moore(1),
+                connectivity_background = VonNeumann(1),
                 field_stencil = VonNeumann(1),
             ),
         )
@@ -139,6 +140,99 @@ end
         problem.seed,
         problem.replica,
     )
+    connectivity_descriptor = only([
+        descriptor
+        for group in executable.core_program.descriptor_plan.groups
+        for descriptor in group.launch.instances
+        if executable.core_program.descriptor_plan.source_table[
+            descriptor.source_handle
+        ].local_id == StatementID(:connectivity_endothelial)
+    ])
+    original_connectivity_ownership = copy(core_runtime.ownership)
+    connectivity_target = CartesianIndex(9, 9)
+    clockwise_offsets = (
+        (-1, -1), (0, -1), (1, -1), (1, 0),
+        (1, 1), (0, 1), (-1, 1), (-1, 0),
+    )
+    function evaluate_connectivity_pattern(owners)
+        fill!(core_runtime.ownership, Int32(0))
+        core_runtime.ownership[connectivity_target] = 1
+        for (offset, owner) in zip(clockwise_offsets, owners)
+            site = CartesianIndex(
+                connectivity_target[1] + offset[1],
+                connectivity_target[2] + offset[2],
+            )
+            core_runtime.ownership[site] = owner
+        end
+        context = CorePotts._ProposalEvaluationContext(
+            core_runtime,
+            CartesianIndex(1, 1),
+            connectivity_target,
+            Int32(1),
+            Int32(0),
+            1,
+            0,
+        )
+        return CorePotts._compiled_evaluate_static(
+            connectivity_descriptor.evaluator, context
+        ), context
+    end
+    connectivity_truth_table = (
+        ((1, 1, 1, 0, 0, 0, 0, 0), true),
+        ((1, 0, 1, 0, 0, 0, 0, 0), false),
+        ((1, 0, 1, 0, 2, 0, 0, 0), true),
+        ((1, 0, 1, 0, 2, 0, 3, 0), false),
+        ((0, 0, 0, 0, 0, 0, 0, 0), true),
+    )
+    for (owners, expected) in connectivity_truth_table
+        observed, _ = evaluate_connectivity_pattern(owners)
+        @test observed == expected
+    end
+    _, connectivity_allocation_context = evaluate_connectivity_pattern(
+        first(first(connectivity_truth_table))
+    )
+    CorePotts._compiled_evaluate_static(
+        connectivity_descriptor.evaluator, connectivity_allocation_context
+    )
+    @test @allocated(CorePotts._compiled_evaluate_static(
+        connectivity_descriptor.evaluator, connectivity_allocation_context
+    )) == 0
+
+    false_rejection, _ = evaluate_connectivity_pattern(
+        (1, 0, 0, 0, 1, 0, 0, 0)
+    )
+    for site in (
+            CartesianIndex(7, 8), CartesianIndex(7, 9),
+            CartesianIndex(7, 10), CartesianIndex(8, 10),
+            CartesianIndex(9, 11),
+        )
+        core_runtime.ownership[site] = 1
+    end
+    function independently_connected(owner_map, owner, removed)
+        sites = Set(findall(==(Int32(owner)), owner_map))
+        delete!(sites, removed)
+        isempty(sites) && return true
+        reached = Set((first(sites),))
+        pending = [first(sites)]
+        while !isempty(pending)
+            current = pop!(pending)
+            for offset in clockwise_offsets
+                candidate = CartesianIndex(
+                    current[1] + offset[1], current[2] + offset[2]
+                )
+                candidate in sites || continue
+                candidate in reached && continue
+                push!(reached, candidate)
+                push!(pending, candidate)
+            end
+        end
+        return reached == sites
+    end
+    @test !false_rejection
+    @test independently_connected(
+        core_runtime.ownership, 1, connectivity_target
+    )
+    copyto!(core_runtime.ownership, original_connectivity_ownership)
     elongation_descriptor = only([
         descriptor
         for group in executable.core_program.descriptor_plan.groups

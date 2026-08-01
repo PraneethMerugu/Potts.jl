@@ -7,7 +7,12 @@
             Lattice(
                 (10, 8);
                 boundary = Periodic(),
-                relations = (proposal = VonNeumann(), contact = Moore()),
+                relations = (
+                    proposal = VonNeumann(),
+                    contact = Moore(),
+                    connectivity = Moore(),
+                    connectivity_background = VonNeumann(),
+                ),
             ),
             cell,
             medium,
@@ -33,6 +38,39 @@
     )
     @test_throws UndefKeywordError compile(
         completed; engine = SequentialEngine(), backend = CPUBackend()
+    )
+
+    @named invalid_connectivity = PottsSystem(
+        statements = StatementSet((
+            Lattice(
+                (10, 8);
+                relations = (
+                    proposal = VonNeumann(),
+                    connectivity = VonNeumann(),
+                    connectivity_background = Moore(),
+                ),
+            ),
+            cell,
+            medium,
+            LocalConnectivity(cell),
+            Protocol(Sweep(); name = :main),
+        )),
+    )
+    invalid_connectivity_error = try
+        compile(
+            complete(invalid_connectivity);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test invalid_connectivity_error isa PottsToolkit.PottsValidationError
+    @test occursin(
+        "radius-one Moore foreground",
+        sprint(showerror, invalid_connectivity_error),
     )
 
     executable = compile(
@@ -93,6 +131,55 @@
     end
     @test !forbidden(getfield(executable, :core_program))
     @test !forbidden(executable)
+
+    connectivity_descriptor = only([
+        descriptor
+        for group in executable.core_program.descriptor_plan.groups
+        for descriptor in group.launch.instances
+        if executable.core_program.descriptor_plan.source_table[
+            descriptor.source_handle
+        ].local_id == StatementID(:connectivity_cell)
+    ])
+    connectivity_footprint = CorePotts.descriptor_resource_access(
+        connectivity_descriptor
+    ).footprint
+    @test connectivity_footprint isa CorePotts.FiniteSpatialFootprint
+    @test length(connectivity_footprint.offsets) == 8
+    @test (-1, -1) in connectivity_footprint.offsets
+    connectivity_labels = zeros(Int, 10, 8)
+    connectivity_target = CartesianIndex(5, 4)
+    connectivity_source = CartesianIndex(5, 3)
+    connectivity_labels[connectivity_target] = 1
+    connectivity_labels[CartesianIndex(4, 3)] = 1
+    connectivity_labels[CartesianIndex(6, 5)] = 1
+    connectivity_initial = PottsInitialState(
+        ownership = LabelledCells(
+            connectivity_labels; cells = [cell], medium
+        ),
+    )
+    connectivity_runtime = init(PottsProblem(
+        executable, connectivity_initial, (0, 1); seed = 0xc011ec7
+    )).runtime
+    connectivity_context = CorePotts._ProposalEvaluationContext(
+        connectivity_runtime,
+        connectivity_source,
+        connectivity_target,
+        Int32(1),
+        Int32(0),
+        1,
+        0,
+    )
+    CorePotts._compiled_evaluate_static(
+        connectivity_descriptor.evaluator, connectivity_context
+    )
+    @test !CorePotts._compiled_evaluate_static(
+        connectivity_descriptor.evaluator, connectivity_context
+    )
+    @test @allocated(CorePotts._compiled_evaluate_static(
+        connectivity_descriptor.evaluator, connectivity_context
+    )) == 0
+    @test size(executable.core_program.proposal_offsets, 2) == 4
+    @test !hasfield(typeof(executable.core_program), :connectivity_kinds)
 
     links = RelationshipState(:links; capacity = 8)
     copy_context = ProposalContext(:copy)

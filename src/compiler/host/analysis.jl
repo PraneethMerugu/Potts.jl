@@ -110,7 +110,7 @@ function _analyze_term_graph(
             record.result_type === Nothing ? Real : record.result_type
         elseif node.payload_kind in (
                 :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
-                :relationship_context, :relation, :kind,
+                :relationship_context, :relationship_set, :spatial_relation, :kind,
                 :relationship_payload,
             )
             Real

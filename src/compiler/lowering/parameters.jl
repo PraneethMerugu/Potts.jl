@@ -233,10 +233,11 @@ end
 function _default_parameter_buffer(manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    return T[
-        entry.required ? zero(T) : T(entry.default)
-        for entry in manifest
-    ]
+    buffer = Vector{T}(undef, length(manifest))
+    for (index, entry) in enumerate(manifest)
+        buffer[index] = entry.required ? zero(T) : T(entry.default)
+    end
+    return buffer
 end
 
 function _normalize_parameter_pairs(values)

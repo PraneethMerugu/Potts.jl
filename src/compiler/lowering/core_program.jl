@@ -303,7 +303,7 @@ function _lower_observations(statements, kinds)
                 Int16(kinds[kind_name])
             ))
             push!(manifest, (name, kind = :occupied_sites))
-        elseif operation === neighbor_count && length(arguments) == 2
+        elseif operation in (neighbor_count, degree) && length(arguments) == 2
             relationship_name = _token_suffix(
                 first(arguments), "__potts_relationship_set__"
             )
@@ -403,7 +403,6 @@ function _lower_core_program(
     volume_targets = fill(zero_scalar, count)
     volume_strengths = fill(zero_scalar, count)
     contact_energies = fill(zero_scalar, count, count)
-    connectivity_kinds = falses(count)
 
     for statement in all_statements
         mechanism = _statement_option(statement, :mechanism)
@@ -424,10 +423,6 @@ function _lower_core_program(
                 contact_energies[first_kind, second_kind] = energy
                 contact_energies[second_kind, first_kind] = energy
             end
-        elseif statement isa ProposalConstraint &&
-                mechanism === :local_connectivity
-            kind = kinds[_kind_name(_statement_option(statement, :kind))]
-            connectivity_kinds[kind] = true
         elseif statement isa HamiltonianTerm &&
                 !(mechanism in (
                     nothing, :symbolic,
@@ -486,7 +481,6 @@ function _lower_core_program(
         volume_targets,
         volume_strengths,
         contact_energies,
-        connectivity_kinds,
         temperature,
         attempts,
         defaults,

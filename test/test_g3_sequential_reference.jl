@@ -148,6 +148,48 @@ end
         @test !CorePotts.proposal_acceptance_decision(
             unfavorable, 1.0, nextfloat(0.5)
         )
+        underflow_edge = CorePotts.ProposalEvaluation(
+            744.3, 0.0, 0.0, true
+        )
+        smallest_draw = nextfloat(0.0)
+        @test CorePotts.proposal_acceptance_probability(
+            underflow_edge, 1.0
+        ) == smallest_draw
+        @test CorePotts.proposal_acceptance_decision(
+            underflow_edge, 1.0, smallest_draw
+        )
+        deep_underflow = CorePotts.ProposalEvaluation(
+            1.0e6, 0.0, 0.0, true
+        )
+        @test CorePotts.proposal_acceptance_probability(
+            deep_underflow, 1.0
+        ) == 0.0
+        @test !CorePotts.proposal_acceptance_decision(
+            deep_underflow, 1.0, smallest_draw
+        )
+
+        log_runtime = init(problem).runtime
+        log_runtime.parameters .= (744.3, 0.0, 1.0)
+        @test _g3_scripted_attempt!(
+            log_runtime,
+            CartesianIndex(2, 2),
+            CartesianIndex(2, 3),
+            smallest_draw,
+        )
+        @test log_runtime.accepted == 1
+        @test log_runtime.energy_rejections == 0
+
+        retirement_runtime = init(problem).runtime
+        @test _g3_scripted_attempt!(
+            retirement_runtime,
+            CartesianIndex(2, 3),
+            CartesianIndex(2, 2),
+            0.75,
+        )
+        @test retirement_runtime.retired_cells == 0
+        CorePotts._retire_extinct_cells!(retirement_runtime)
+        @test retirement_runtime.retired_cells == 1
+        @test only(retirement_runtime.cell_kinds) == 0
         @test_throws ArgumentError CorePotts.proposal_acceptance_decision(
             neutral, 1.0, 0.0
         )
@@ -261,6 +303,10 @@ end
                 )
                 @test mask_of(runtime) == mask
                 @test tracker_matches(runtime)
+                @test runtime.null_attempts == 1
+                @test runtime.accepted == 0
+                @test runtime.constraint_rejections == 0
+                @test runtime.energy_rejections == 0
             elseif source_owner == 1
                 allowed = count_ones(mask) < 2
                 accepted_runtime = runtime_for(mask)
@@ -273,6 +319,10 @@ end
                 @test mask_of(accepted_runtime) == (allowed ?
                       mask | (1 << (target - 1)) : mask)
                 @test tracker_matches(accepted_runtime)
+                @test accepted_runtime.accepted == Int(allowed)
+                @test accepted_runtime.constraint_rejections == Int(!allowed)
+                @test accepted_runtime.energy_rejections == 0
+                @test accepted_runtime.rejected == Int(!allowed)
                 if allowed
                     rejected_runtime = runtime_for(mask)
                     @test !_g3_scripted_attempt!(
@@ -280,6 +330,10 @@ end
                     )
                     @test mask_of(rejected_runtime) == mask
                     @test tracker_matches(rejected_runtime)
+                    @test rejected_runtime.accepted == 0
+                    @test rejected_runtime.constraint_rejections == 0
+                    @test rejected_runtime.energy_rejections == 1
+                    @test rejected_runtime.rejected == 1
                 end
             else
                 runtime = runtime_for(mask)
@@ -290,23 +344,97 @@ end
                 @test mask_of(runtime) == (allowed ?
                       mask & ~(1 << (target - 1)) : mask)
                 @test tracker_matches(runtime)
+                @test runtime.accepted == Int(allowed)
+                @test runtime.constraint_rejections == Int(!allowed)
+                @test runtime.energy_rejections == 0
+                @test runtime.rejected == Int(!allowed)
             end
+        end
+
+        function direct_attempt_outcomes(mask, target, offset)
+            source = mod1(target + offset, 3)
+            target_owner = (mask >> (target - 1)) & 1
+            source_owner = (mask >> (source - 1)) & 1
+            target_owner == source_owner && return ((mask, 1.0),)
+            allowed = source_owner == 1 ?
+                      count_ones(mask) < 2 : count_ones(mask) > 1
+            allowed || return ((mask, 1.0),)
+            accepted_mask = source_owner == 1 ?
+                            mask | (1 << (target - 1)) :
+                            mask & ~(1 << (target - 1))
+            acceptance = source_owner == 1 ? 0.5 : 1.0
+            isone(acceptance) && return ((accepted_mask, 1.0),)
+            return (
+                (accepted_mask, acceptance),
+                (mask, 1 - acceptance),
+            )
         end
 
         two_step = zeros(Float64, 8, 8)
         for initial_mask in 0:7
-            first_row = analytic_row(initial_mask)
-            for middle_mask in 0:7
-                first_probability = first_row[middle_mask + 1]
-                iszero(first_probability) && continue
-                second_row = analytic_row(middle_mask)
-                for final_mask in 0:7
-                    two_step[initial_mask + 1, final_mask + 1] +=
-                        first_probability * second_row[final_mask + 1]
+            for first_target in 1:3, first_offset in directions
+                first_outcomes = direct_attempt_outcomes(
+                    initial_mask, first_target, first_offset
+                )
+                for (middle_mask, first_probability) in first_outcomes
+                    for second_target in 1:3, second_offset in directions
+                        second_outcomes = direct_attempt_outcomes(
+                            middle_mask, second_target, second_offset
+                        )
+                        for (final_mask, second_probability) in second_outcomes
+                            two_step[initial_mask + 1, final_mask + 1] +=
+                                first_probability * second_probability / 36
+                        end
+                    end
                 end
             end
         end
         @test two_step ≈ transition * transition atol = 1e-15
+
+        next_acceptance(runtime) = CorePotts._program_uniform(
+            Float64,
+            runtime,
+            CorePotts.AcceptanceStream,
+            3,
+            2;
+            subround = 0,
+        )
+        reference_next_draw = next_acceptance(runtime_for(1))
+        branch_cases = (
+            (runtime_for(1), CartesianIndex(1), CartesianIndex(1), 0.75),
+            (runtime_for(3), CartesianIndex(2), CartesianIndex(3), 0.75),
+            (runtime_for(1), CartesianIndex(1), CartesianIndex(2), 0.5),
+            (
+                runtime_for(1),
+                CartesianIndex(1),
+                CartesianIndex(2),
+                prevfloat(0.5),
+            ),
+        )
+        for (branch_runtime, source, target, draw) in branch_cases
+            _g3_scripted_attempt!(branch_runtime, source, target, draw)
+            @test next_acceptance(branch_runtime) == reference_next_draw
+        end
+
+        accounting_integrator = init(PottsProblem(
+            executable,
+            PottsInitialState(
+                ownership = LabelledCells(
+                    reshape(Int32[1, 0, 0], 3); cells = [cell], medium
+                ),
+            ),
+            (0, 1);
+            seed = 0x30a,
+        ))
+        step!(accounting_integrator)
+        accounting = PottsToolkit.runtime_statistics(accounting_integrator)
+        @test accounting.candidate_attempts == 3
+        @test accounting.candidate_attempts ==
+              accounting.accepted + accounting.null_attempts +
+              accounting.constraint_rejections + accounting.energy_rejections
+        @test accounting.rejected ==
+              accounting.constraint_rejections + accounting.energy_rejections
+        @test accounting.retired_cells <= accounting.accepted
 
         rotate(mask) = ((mask << 1) & 7) | ((mask >> 2) & 1)
         for initial_mask in 0:7, final_mask in 0:7
@@ -531,6 +659,129 @@ end
         @test all(state -> state.cell_kinds == initial_state.cell_kinds, solution.u)
     end
 
+    @testset "endpoint retirement is an ordinary compiled constraint" begin
+        cell = CellKind(:g3_linked_cell)
+        medium = MediumKind(:g3_linked_medium)
+        links = RelationshipState(
+            :g3_links;
+            endpoints = Undirected(cell, cell),
+            payload = (strength = 0.0, target = 1.0, maximum = 8.0),
+            capacity = 8,
+            maximum_degree = 2,
+            lifecycle = RejectEndpointRetirement(),
+        )
+        @named relationship_model = PottsSystem(statements = StatementSet((
+            Lattice(
+                (4, 3);
+                boundary = Closed(),
+                relations = (proposal = VonNeumann(),),
+            ),
+            cell,
+            medium,
+            links,
+            Protocol(Sweep(; temperature = 1.0); name = :main),
+        )))
+        completed = complete(relationship_model)
+        derived = only(filter(
+            statement -> statement isa ProposalConstraint &&
+                         PottsToolkit._statement_option(
+                             statement, :derived_from, nothing
+                         ) === :reject_endpoint_retirement,
+            statements(completed),
+        ))
+        @test Symbol(statement_id(derived)) ===
+              :__potts_endpoint_retirement_g3_links
+        executable = compile(
+            completed;
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        @test !isdefined(CorePotts, :_relationship_allows_extinction)
+        constraint_descriptor = only([
+            descriptor
+            for group in executable.core_program.descriptor_plan.groups
+            for descriptor in group.launch.instances
+            if executable.core_program.descriptor_plan.source_table[
+                descriptor.source_handle
+            ].local_id == statement_id(derived)
+        ])
+        @test CorePotts.descriptor_role(constraint_descriptor) isa
+              CorePotts.ProposalConstraintRole
+        @test CorePotts.descriptor_resource_access(
+            constraint_descriptor
+        ).footprint == CorePotts.IncidentRelationshipFootprint(2)
+
+        labels = zeros(Int, 4, 3)
+        labels[2, 2] = 1
+        labels[4, 2] = 2
+        function relationship_runtime(initial_edges)
+            initial = PottsInitialState(
+                ownership = LabelledCells(
+                    labels; cells = [cell, cell], medium
+                ),
+                values = [links => initial_edges],
+            )
+            return init(PottsProblem(
+                executable, initial, (0, 1); seed = 0x306
+            )).runtime
+        end
+        source = CartesianIndex(1, 2)
+        target = CartesianIndex(2, 2)
+        linked_runtime = relationship_runtime([(1, 2)])
+        linked_context = CorePotts._ProposalEvaluationContext(
+            linked_runtime,
+            source,
+            target,
+            Int32(1),
+            Int32(0),
+            1,
+            0,
+        )
+        linked_evaluation = _g3_evaluate_proposal!(
+            linked_runtime, linked_context
+        )
+        @test !linked_evaluation.constraints_allowed
+        _g3_evaluate_proposal!(linked_runtime, linked_context)
+        @test @allocated(
+            _g3_evaluate_proposal!(linked_runtime, linked_context)
+        ) == 0
+        before_ownership = copy(linked_runtime.ownership)
+        before_volumes = copy(linked_runtime.volumes)
+        before_relationships = map(
+            name -> copy(getfield(linked_runtime.relationships, name)),
+            fieldnames(typeof(linked_runtime.relationships)),
+        )
+        @test !_g3_scripted_attempt!(
+            linked_runtime, source, target, 0.5
+        )
+        @test linked_runtime.ownership == before_ownership
+        @test linked_runtime.volumes == before_volumes
+        @test map(
+            name -> getfield(linked_runtime.relationships, name),
+            fieldnames(typeof(linked_runtime.relationships)),
+        ) == before_relationships
+
+        unlinked_runtime = relationship_runtime(Tuple{Int, Int}[])
+        unlinked_context = CorePotts._ProposalEvaluationContext(
+            unlinked_runtime,
+            source,
+            target,
+            Int32(1),
+            Int32(0),
+            1,
+            0,
+        )
+        @test _g3_evaluate_proposal!(
+            unlinked_runtime, unlinked_context
+        ).constraints_allowed
+        @test _g3_scripted_attempt!(
+            unlinked_runtime, source, target, 0.5
+        )
+        @test unlinked_runtime.ownership[target] == 0
+        @test unlinked_runtime.volumes[1] == 0
+    end
+
     @testset "neutral external term uses public solve and checkpoint" begin
         @variables g3_external_state
         @parameters g3_external_weight = 1.25 temperature = 1.5
@@ -594,6 +845,13 @@ end
         @test continued.stats.accepted == resumed.stats.accepted
         @test continued.stats.rejected == resumed.stats.rejected
         @test continued.stats.null_attempts == resumed.stats.null_attempts
+        @test continued.stats.constraint_rejections ==
+              resumed.stats.constraint_rejections
+        @test continued.stats.energy_rejections ==
+              resumed.stats.energy_rejections
+        @test continued.stats.retired_cells == resumed.stats.retired_cells
+        @test continued.stats.candidate_attempts ==
+              resumed.stats.candidate_attempts
         fresh_runtime = init(problem).runtime
         state_handle = only(
             only(executable.core_program.descriptor_plan.groups).launch.state_handles

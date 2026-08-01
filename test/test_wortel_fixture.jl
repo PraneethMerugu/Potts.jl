@@ -37,6 +37,8 @@
                 contact = Moore(1),
                 surface = Moore(1),
                 query = Moore(1),
+                connectivity = Moore(1),
+                connectivity_background = VonNeumann(1),
             ),
         )
         endothelial

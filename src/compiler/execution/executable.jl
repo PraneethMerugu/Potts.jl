@@ -73,6 +73,19 @@ Base.getindex(parameters::PottsParameters, name::Symbol) =
     getproperty(parameters.named, name)
 Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
 
+function _parameter_buffer(values::Tuple, ::Type{T}) where {
+        T <: AbstractFloat,
+    }
+    buffer = Vector{T}(undef, length(values))
+    for index in eachindex(values)
+        buffer[index] = values[index]
+    end
+    return buffer
+end
+
+_parameter_buffer(parameters::PottsParameters{T}) where {T <: AbstractFloat} =
+    _parameter_buffer(parameters.values, T)
+
 struct PottsExecutable{P, M, R, O}
     core_program::P
     parameter_manifest::M

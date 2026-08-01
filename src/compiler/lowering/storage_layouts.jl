@@ -142,6 +142,7 @@ _descriptor_source(record::QualifiedStatement) = DescriptorSource(
 function _descriptor_candidate_enabled(record::QualifiedStatement)
     _registered_record(record) && return true
     record.kind === :HamiltonianTerm && return true
+    record.kind === :ProposalConstraint && return true
     payload = record.normalized_payload
     payload isa Tuple && length(payload) >= 2 || return true
     options = payload[2]

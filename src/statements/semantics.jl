@@ -315,9 +315,22 @@ function Chemotaxis(kind, field; strength,
 end
 
 function LocalConnectivity(kind;
+        foreground::Symbol = :connectivity,
+        background::Symbol = :connectivity_background,
         name::Symbol = Symbol(:connectivity_, Symbol(statement_id(kind))))
+    expression = _potts_merks_local_connectivity(
+        _kind_token(kind),
+        _spatial_relation_token(foreground),
+        _spatial_relation_token(background),
+    )
     return ProposalConstraint(
-        name, true; mechanism = :local_connectivity, kind
+        name,
+        expression;
+        mechanism = :local_connectivity,
+        kind,
+        foreground,
+        background,
+        theorem = :merks_2006_local_collision,
     )
 end
 

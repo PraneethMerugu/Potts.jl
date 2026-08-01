@@ -61,7 +61,7 @@ function PottsProblem(
     CorePotts.initialize_program(
         executable.core_program,
         core_initial,
-        collect(normalized_parameters.values),
+        _parameter_buffer(normalized_parameters),
         normalized_seed,
         normalized_replica;
         initial_mcs = normalized_span[1],

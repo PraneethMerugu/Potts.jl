@@ -62,6 +62,7 @@ function _draw_domain_constraints(
         manifest::ParameterManifest,
         ::Type{T},
         state_handles,
+        draw_handles,
     ) where {T <: AbstractFloat}
     length(node.operands) == 4 || error(
         "validated draw operation has invalid normalized arity"
@@ -75,6 +76,7 @@ function _draw_domain_constraints(
         manifest,
         T,
         state_handles,
+        draw_handles,
         cache,
     )
     second_parameter = _lower_static_node(
@@ -84,6 +86,7 @@ function _draw_domain_constraints(
         manifest,
         T,
         state_handles,
+        draw_handles,
         cache,
     )
     zero_expression = CorePotts.LiteralExpression(zero(T))
@@ -152,6 +155,7 @@ function _domain_constraints(
         manifest::ParameterManifest,
         ::Type{T},
         state_handles,
+        draw_handles,
     ) where {T <: AbstractFloat}
     constraints = Any[]
     for node in ir.graph.nodes
@@ -163,7 +167,7 @@ function _domain_constraints(
             append!(
                 constraints,
                 _draw_domain_constraints(
-                    ir, node, manifest, T, state_handles
+                    ir, node, manifest, T, state_handles, draw_handles
                 ),
             )
             continue
@@ -194,6 +198,7 @@ function _domain_constraints(
             manifest,
             T,
             state_handles,
+            draw_handles,
             cache,
         )
         predicate = node.operation === :logarithm ? UInt8(0x01) : UInt8(0x02)
@@ -229,6 +234,7 @@ function _lower_descriptor_plan(
     ) where {T <: AbstractFloat}
     state_layout, state_handles = _state_layout(ir, T)
     workspace_layout, workspace_handles = _workspace_layout(ir, T)
+    draw_handles = _draw_operation_handles(ir)
     descriptors = Any[]
     for candidate in ir.candidates
         candidate.category in (
@@ -247,6 +253,7 @@ function _lower_descriptor_plan(
                 state_handles,
                 workspace_layout,
                 workspace_handles,
+                draw_handles,
             ),
         )
     end
@@ -258,7 +265,9 @@ function _lower_descriptor_plan(
         "V1 requires exactly one proposal descriptor occurrence per source statement"
     ))
     groups = _descriptor_groups(descriptors)
-    constraints = _domain_constraints(ir, manifest, T, state_handles)
+    constraints = _domain_constraints(
+        ir, manifest, T, state_handles, draw_handles
+    )
     domain_resources = _hamiltonian_domain_resources(ir)
     fingerprint = _sha256_hex(
         "potts-descriptor-execution-plan-v2",

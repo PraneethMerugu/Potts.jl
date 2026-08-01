@@ -822,6 +822,39 @@ function _expand_registered_system(
     return _rebuild(system; statements = StatementSet(expanded), systems = children)
 end
 
+function _endpoint_retirement_constraint(relationship::RelationshipState)
+    relationship_name = Symbol(statement_id(relationship))
+    proposal = ProposalContext(Symbol(:endpoint_retirement_, relationship_name))
+    owner = proposal.target_cell
+    expression = (owner <= 0) |
+                 (cell_volume(owner) != 1) |
+                 (degree(relationship, owner) == 0)
+    return ProposalConstraint(
+        Symbol(:__potts_endpoint_retirement_, relationship_name),
+        expression;
+        source = statement_source(relationship),
+        derived_from = :reject_endpoint_retirement,
+        relationship,
+    )
+end
+
+function _expand_structural_policies(system::PottsSystem)
+    expanded = AbstractPottsStatement[statements(system)...]
+    for statement in statements(system)
+        statement isa RelationshipState || continue
+        lifecycle = _statement_option(
+            statement, :lifecycle, RejectEndpointRetirement()
+        )
+        lifecycle isa RejectEndpointRetirement || continue
+        push!(expanded, _endpoint_retirement_constraint(statement))
+    end
+    children = PottsSystem[
+        _expand_structural_policies(child)
+        for child in getfield(system, :systems)
+    ]
+    return _rebuild(system; statements = StatementSet(expanded), systems = children)
+end
+
 function _namespace_statement_names(
         statement::AbstractPottsStatement, names
     )

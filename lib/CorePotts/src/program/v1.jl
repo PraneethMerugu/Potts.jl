@@ -141,7 +141,6 @@ struct CompiledPottsProgram{
     volume_targets::Vector{CompiledScalar{T}}
     volume_strengths::Vector{CompiledScalar{T}}
     contact_energies::Matrix{CompiledScalar{T}}
-    connectivity_kinds::BitVector
     temperature::CompiledScalar{T}
     attempts_per_site::Int32
     parameter_defaults::Vector{T}
@@ -168,7 +167,6 @@ function CompiledPottsProgram(
         volume_targets::Vector{CompiledScalar{T}},
         volume_strengths::Vector{CompiledScalar{T}},
         contact_energies::Matrix{CompiledScalar{T}},
-        connectivity_kinds::BitVector,
         temperature::CompiledScalar{T},
         attempts_per_site::Integer,
         parameter_defaults::Vector{T},
@@ -208,8 +206,6 @@ function CompiledPottsProgram(
         throw(ArgumentError("volume strength table has the wrong size"))
     size(contact_energies) == (kind_count, kind_count) ||
         throw(ArgumentError("contact table has the wrong size"))
-    length(connectivity_kinds) == kind_count ||
-        throw(ArgumentError("connectivity table has the wrong size"))
     attempts_per_site > 0 ||
         throw(ArgumentError("attempts per site must be positive"))
     return CompiledPottsProgram{
@@ -229,7 +225,6 @@ function CompiledPottsProgram(
         copy(volume_targets),
         copy(volume_strengths),
         copy(contact_energies),
-        copy(connectivity_kinds),
         temperature,
         Int32(attempts_per_site),
         copy(parameter_defaults),
@@ -743,6 +738,9 @@ struct ProgramCheckpoint{S, P}
     accepted::Int
     rejected::Int
     null_attempts::Int
+    constraint_rejections::Int
+    energy_rejections::Int
+    retired_cells::Int
     checksum::String
 end
 
@@ -757,6 +755,9 @@ function _program_checkpoint_checksum(
         accepted,
         rejected,
         null_attempts,
+        constraint_rejections,
+        energy_rejections,
+        retired_cells,
     )
     payload = string(
         schema, '\n',
@@ -794,7 +795,10 @@ function _program_checkpoint_checksum(
         repeat, '\n',
         accepted, '\n',
         rejected, '\n',
-        null_attempts,
+        null_attempts, '\n',
+        constraint_rejections, '\n',
+        energy_rejections, '\n',
+        retired_cells,
     )
     return bytes2hex(SHA.sha256(codeunits(payload)))
 end
@@ -817,6 +821,9 @@ function program_checkpoint(runtime)
         runtime.accepted,
         runtime.rejected,
         runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
     )
     return ProgramCheckpoint(
         schema,
@@ -829,6 +836,9 @@ function program_checkpoint(runtime)
         runtime.accepted,
         runtime.rejected,
         runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
         checksum,
     )
 end
@@ -851,6 +861,9 @@ function restore_program_checkpoint(
         checkpoint.accepted,
         checkpoint.rejected,
         checkpoint.null_attempts,
+        checkpoint.constraint_rejections,
+        checkpoint.energy_rejections,
+        checkpoint.retired_cells,
     )
     expected == checkpoint.checksum ||
         throw(ArgumentError("checkpoint integrity checksum mismatch"))
@@ -883,6 +896,9 @@ function restore_program_checkpoint(
     runtime.accepted = checkpoint.accepted
     runtime.rejected = checkpoint.rejected
     runtime.null_attempts = checkpoint.null_attempts
+    runtime.constraint_rejections = checkpoint.constraint_rejections
+    runtime.energy_rejections = checkpoint.energy_rejections
+    runtime.retired_cells = checkpoint.retired_cells
     return runtime
 end
 
@@ -907,6 +923,9 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, A, F, H, S, R, D}
     accepted::Int
     rejected::Int
     null_attempts::Int
+    constraint_rejections::Int
+    energy_rejections::Int
+    retired_cells::Int
     settled::Bool
 end
 
@@ -1036,6 +1055,9 @@ function initialize_program(
         replica,
         repeat,
         Int(initial_mcs),
+        0,
+        0,
+        0,
         0,
         0,
         0,
@@ -1243,47 +1265,6 @@ function _contact_delta(
         )
     end
     return delta
-end
-
-function _connected_after_removal(
-        runtime::ProgramRuntime{T, N},
-        target::CartesianIndex{N},
-        owner::Int32,
-    ) where {T, N}
-    owner <= 0 && return true
-    kind = @inbounds runtime.cell_kinds[owner]
-    runtime.program.connectivity_kinds[kind] || return true
-    neighbors = CartesianIndex{N}[]
-    for direction in axes(runtime.program.proposal_offsets, 2)
-        candidate = _neighbor_index(
-            runtime.program, target, runtime.program.proposal_offsets, direction
-        )
-        candidate === nothing && continue
-        @inbounds runtime.ownership[candidate] == owner || continue
-        candidate == target || push!(neighbors, candidate)
-    end
-    length(neighbors) <= 1 && return true
-    visited = Set{CartesianIndex{N}}((first(neighbors),))
-    frontier = CartesianIndex{N}[first(neighbors)]
-    neighbor_set = Set(neighbors)
-    while !isempty(frontier)
-        current = pop!(frontier)
-        for direction in axes(runtime.program.proposal_offsets, 2)
-            candidate = _neighbor_index(
-                runtime.program,
-                current,
-                runtime.program.proposal_offsets,
-                direction,
-            )
-            candidate === nothing && continue
-            candidate == target && continue
-            candidate in neighbor_set || continue
-            candidate in visited && continue
-            push!(visited, candidate)
-            push!(frontier, candidate)
-        end
-    end
-    return length(visited) == length(neighbor_set)
 end
 
 function _local_activity_geomean(
@@ -1636,18 +1617,6 @@ function _accepted_copy_relationship_state(
     return staged
 end
 
-@inline function _relationship_allows_extinction(
-        runtime::ProgramRuntime, old_owner::Int32
-    )
-    old_owner <= 0 && return true
-    @inbounds runtime.volumes[old_owner] == 1 || return true
-    plan = runtime.program.relationships
-    state = runtime.relationships
-    (plan === nothing || state === nothing || plan.remove_with_endpoint) &&
-        return true
-    return _relationship_degree(state, old_owner) == 0
-end
-
 function _commit_copy!(
         runtime::ProgramRuntime{T, N},
         target::CartesianIndex{N},
@@ -1688,6 +1657,51 @@ end
     context.runtime.parameters
 @inline _compiled_evaluator_parameters(context::_ProposalEvaluationContext) =
     context.runtime.parameters
+@inline proposal_target_owner(context::_ProposalEvaluationContext) =
+    context.old_owner
+@inline proposal_target_kind(context::_ProposalEvaluationContext) =
+    _owner_kind(context.runtime, context.old_owner)
+
+@inline function proposal_relation_count(
+        context::_ProposalEvaluationContext,
+        relation_handle::Integer,
+    )
+    _, count = _contact_domain_columns(
+        context.runtime.program.descriptor_plan.domain_resources,
+        Int32(relation_handle),
+    )
+    return Int(count)
+end
+
+@inline function proposal_relation_neighbor_owner(
+        context::_ProposalEvaluationContext{R, CartesianIndex{N}},
+        relation_handle::Integer,
+        offset::NTuple{N, <:Integer},
+    ) where {R, N}
+    resources = context.runtime.program.descriptor_plan.domain_resources
+    start, count = _contact_domain_columns(resources, Int32(relation_handle))
+    column = Int32(0)
+    for candidate in start:(start + count - 1)
+        matches = true
+        for dimension in 1:N
+            matches &= @inbounds(resources.contact_offsets[dimension, candidate]) ==
+                       offset[dimension]
+        end
+        if matches
+            column = candidate
+            break
+        end
+    end
+    iszero(column) && return typemin(Int32)
+    neighbor = _neighbor_index(
+        context.runtime.program,
+        context.target,
+        resources.contact_offsets,
+        Int(column),
+    )
+    neighbor === nothing && return Int32(0)
+    return @inbounds context.runtime.ownership[neighbor]
+end
 
 @inline function _compiled_context_value(
         operation::ContextOperation{Identity},
@@ -1767,6 +1781,26 @@ end
         return zero(eltype(context.runtime.parameters))
     site = last(arguments)
     return @inbounds context.runtime.field[site]
+end
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:degree},
+        arguments,
+        context::_ProposalEvaluationContext,
+    )
+    relationship_handle = Int32(first(arguments))
+    owner = Int32(last(arguments))
+    owner <= 0 && return 0
+    slot = _relationship_domain_slot(
+        context.runtime.program.descriptor_plan.domain_resources,
+        relationship_handle,
+    )
+    slot == 1 || throw(ArgumentError(
+        "V1 runtime contains one relationship storage slot"
+    ))
+    state = context.runtime.relationships
+    state === nothing && return 0
+    return _relationship_degree(state, owner)
 end
 
 @inline function apply_resource_operation(
@@ -1915,10 +1949,6 @@ function _attempt_selected!(
     old_owner = @inbounds runtime.ownership[target]
     new_owner = @inbounds runtime.ownership[source]
     old_owner == new_owner && (runtime.null_attempts += 1; return false)
-    _connected_after_removal(runtime, target, old_owner) ||
-        (runtime.rejected += 1; return false)
-    _relationship_allows_extinction(runtime, old_owner) ||
-        (runtime.rejected += 1; return false)
 
     context = _ProposalEvaluationContext(
         runtime,
@@ -1937,8 +1967,11 @@ function _attempt_selected!(
     evaluation = fold_proposal_contributions(
         program.descriptor_plan, runtime.proposal_contributions
     )
-    evaluation.constraints_allowed ||
-        (runtime.rejected += 1; return false)
+    if !evaluation.constraints_allowed
+        runtime.constraint_rejections += 1
+        runtime.rejected += 1
+        return false
+    end
     temperature = compiled_scalar_value(program.temperature, runtime.parameters)
     log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
     accepted = log_ratio >= zero(T)
@@ -1959,6 +1992,7 @@ function _attempt_selected!(
         runtime.accepted += 1
         return true
     end
+    runtime.energy_rejections += 1
     runtime.rejected += 1
     return false
 end
@@ -2036,6 +2070,7 @@ function _retire_extinct_cells!(runtime::ProgramRuntime)
         @inbounds runtime.cell_kinds[cell] == 0 && continue
         @inbounds runtime.volumes[cell] == 0 || continue
         @inbounds runtime.cell_kinds[cell] = 0
+        runtime.retired_cells += 1
         _clear_retired_cell_state!(
             runtime.stored_states, runtime.program.cell_state_fields, cell
         )

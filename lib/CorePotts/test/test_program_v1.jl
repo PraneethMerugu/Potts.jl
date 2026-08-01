@@ -36,7 +36,6 @@ function test_program(
         [scalar(0), scalar(volume_target)],
         [scalar(0), scalar(volume_strength)],
         [scalar(0) scalar(4); scalar(4) scalar(1)],
-        falses(2),
         scalar(temperature),
         1,
         T[],
@@ -279,6 +278,10 @@ end
           CorePotts.program_snapshot(restored).ownership
     @test uninterrupted.accepted == restored.accepted
     @test uninterrupted.rejected == restored.rejected
+    @test uninterrupted.null_attempts == restored.null_attempts
+    @test uninterrupted.constraint_rejections == restored.constraint_rejections
+    @test uninterrupted.energy_rejections == restored.energy_rejections
+    @test uninterrupted.retired_cells == restored.retired_cells
 
     corrupted = CorePotts.ProgramCheckpoint(
         checkpoint.schema,
@@ -291,6 +294,9 @@ end
         checkpoint.accepted,
         checkpoint.rejected,
         checkpoint.null_attempts,
+        checkpoint.constraint_rejections,
+        checkpoint.energy_rejections,
+        checkpoint.retired_cells,
         "corrupt",
     )
     @test_throws ArgumentError CorePotts.restore_program_checkpoint(

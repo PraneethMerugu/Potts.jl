@@ -187,7 +187,12 @@ end
     built_in_terms = StatementSet((
         Lattice(
             (5, 5);
-            relations = (proposal = VonNeumann(), contact = Moore()),
+            relations = (
+                proposal = VonNeumann(),
+                contact = Moore(),
+                connectivity = Moore(),
+                connectivity_background = VonNeumann(),
+            ),
         ),
         endothelial,
         extracellular,

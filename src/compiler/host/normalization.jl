@@ -57,7 +57,8 @@ function _compiler_leaf_kind(value, completed::PottsSystem)
     startswith(text, "__potts_energy_cell__") && return :cell_anchor
     startswith(text, "__potts_energy_contact__") && return :contact_anchor
     startswith(text, "__potts_relationship__") && return :relationship_context
-    startswith(text, "__potts_relationship_set__") && return :relation
+    startswith(text, "__potts_relationship_set__") && return :relationship_set
+    startswith(text, "__potts_spatial_relation__") && return :spatial_relation
     startswith(text, "__potts_kind__") && return :kind
     startswith(text, "__potts_field__") && return :state
     startswith(text, "__potts_payload__") && return :relationship_payload
@@ -138,7 +139,8 @@ function _normalize_term!(
             :cell_anchor,
             :contact_anchor,
             :relationship_context,
-            :relation,
+            :relationship_set,
+            :spatial_relation,
             :kind,
             :relationship_payload,
         )

@@ -145,7 +145,7 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
     runtime = CorePotts.initialize_program(
         problem.executable.core_program,
         core_initial,
-        collect(problem.parameters.values),
+        _parameter_buffer(problem.parameters),
         problem.seed,
         problem.replica;
         repeat = problem.ensemble_repeat,
@@ -201,11 +201,18 @@ end
 
 function _integrator_stats(integrator::PottsIntegrator)
     runtime = integrator.runtime
+    candidate_attempts = runtime.accepted + runtime.null_attempts +
+                         runtime.constraint_rejections +
+                         runtime.energy_rejections
     return PottsStats(
         integrator.iterations,
+        candidate_attempts,
         runtime.accepted,
         runtime.rejected,
         runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
     )
 end
 
@@ -217,7 +224,7 @@ function _set_runtime_parameters!(integrator::PottsIntegrator, values)
         throw(ArgumentError("parameter updates require a settled MCS boundary"))
     parameters = _normalize_parameters(integrator.prob.executable, values)
     CorePotts.update_program_parameters!(
-        integrator.runtime, collect(parameters.values)
+        integrator.runtime, _parameter_buffer(parameters)
     )
     push!(integrator.parameter_history, integrator.t => parameters)
     return parameters

@@ -162,10 +162,57 @@ function _equation_process_rejection(statement, statements, system)
     return nothing
 end
 
+function _local_connectivity_rejection(statement, statements)
+    domains = filter(candidate -> candidate isa LatticeDomain, statements)
+    length(domains) == 1 || return (
+        "Merks local connectivity requires exactly one lattice domain"
+    )
+    shape = _statement_option(only(domains), :shape, ())
+    length(shape) == 2 || return (
+        "Merks local connectivity is qualified only for a two-dimensional lattice"
+    )
+    options = _statement_options(statement)
+    foreground_name = get(options, :foreground, nothing)
+    background_name = get(options, :background, nothing)
+    foreground = findall(candidate ->
+        candidate isa SpatialRelation &&
+        Symbol(statement_id(candidate)) === foreground_name,
+        statements,
+    )
+    background = findall(candidate ->
+        candidate isa SpatialRelation &&
+        Symbol(statement_id(candidate)) === background_name,
+        statements,
+    )
+    length(foreground) == 1 || return (
+        "Merks local connectivity foreground must name one SpatialRelation"
+    )
+    length(background) == 1 || return (
+        "Merks local connectivity background must name one SpatialRelation"
+    )
+    foreground_neighborhood = _statement_option(
+        statements[only(foreground)], :neighborhood, nothing
+    )
+    background_neighborhood = _statement_option(
+        statements[only(background)], :neighborhood, nothing
+    )
+    foreground_neighborhood isa Moore &&
+        foreground_neighborhood.radius == 1 || return (
+        "Merks local connectivity requires a radius-one Moore foreground"
+    )
+    background_neighborhood isa VonNeumann &&
+        background_neighborhood.radius == 1 || return (
+        "Merks local connectivity requires a radius-one VonNeumann background"
+    )
+    return nothing
+end
+
 function _statement_lowering_rejection(statement, statements, system)
     if statement isa Union{ProposalDrive, ProposalModifier}
         return nothing
     elseif statement isa ProposalConstraint
+        _statement_option(statement, :mechanism) === :local_connectivity &&
+            return _local_connectivity_rejection(statement, statements)
         return nothing
     elseif statement isa HamiltonianTerm
         mechanism = _statement_option(statement, :mechanism)

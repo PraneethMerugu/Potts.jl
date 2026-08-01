@@ -25,6 +25,10 @@ const _PHILOX_W32_1 = UInt32(0xbb67ae85)
 const _RNG_GENERATION_DOMAIN = UInt64(0xd2b74407b1ce6e93)
 const _F32_OPEN_SCALE = Float32(0x1.0p-24)
 
+"""Largest operation identity admitted by the versioned V1 RNG address."""
+rng_operation_limit(::Philox4x32x10V1 = Philox4x32x10V1()) =
+    _RNG_MAX_OPERATION
+
 struct RNGAddress
     stream::RNGStream
     mcs::UInt64

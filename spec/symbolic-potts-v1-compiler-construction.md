@@ -242,6 +242,21 @@ CorePotts MUST NOT contain:
 - a mechanism-name switch; or
 - a callback fallback for unknown descriptors.
 
+A mechanism-specific callable tag, evaluator operation identity, program field, capability bit, or
+descriptor-role subtype inside CorePotts is a mechanism branch even when dispatch replaces an
+explicit `if` statement. Moving named science from an engine loop into
+`ResourceOperation{:mechanism_name}` or an equivalent CorePotts tag does not satisfy this clause.
+CorePotts operation vocabulary MUST describe structural execution primitives only: proposal views,
+resource reads, bounded traversal, storage/workspace access, footprints, requests, transactions,
+adaptation, and canonical folding. PottsToolkit or an external module owns scientific callables
+composed over those primitives.
+
+This boundary is judged by replaceability, not naming. If an external package cannot express a
+new mechanism with the same shape of reads, traversal, contribution, rejection, or request using
+the public primitive vocabulary, the compiler is missing a primitive or the engine has absorbed
+scientific policy. Adding that missing primitive is valid only when its contract is mechanism-
+neutral and independently reusable; adding a renamed operation for the mechanism is not.
+
 CorePotts MUST own the universal descriptor and evaluation method for symbolically defined
 proposal terms. Downstream extensions MAY contribute only versioned operations, inert isbits
 occurrence/payload metadata, resource declarations, and qualified inspection metadata to that
@@ -933,7 +948,9 @@ Five fresh-context, read-only reviews are required:
   grouping, evaluator selection, and external lowering;
 - `R1.5Sequential` after G3 reviews descriptor-only proposal execution, role and acceptance
   semantics, finite transition authority, RNG addressing, rejection atomicity, tracker invariants,
-  checkpoint continuation, warm-path inference/allocation, and the external public fixture;
+  checkpoint continuation, warm-path inference/allocation, the external public fixture, and a
+  mechanism-leakage inventory of CorePotts types, fields, operation identities, dispatch methods,
+  capability flags, and executor branches;
 - `R2Execution` after G5 reviews footprints, deterministic checkerboard commit, relationship
   transactions, adaptation, GPU legality, and no fallback;
 - `R3Science` after G7 reviews paper/source-qualified equations, stage order, exact
@@ -1010,7 +1027,8 @@ Phase exit requires:
 
 1. all IR, layout, schedule, and transaction verifiers pass;
 2. CorePotts program/engine/proposal/checkpoint/capability paths contain no named biological
-   mechanism;
+   mechanism, including mechanism-specific callable tags or operation identities disguised as
+   generic descriptor machinery;
 3. no Symbolics, units, registry, dictionary, closure, or abstract descriptor collection reaches
    the executable;
 4. fixed-`G` specialization remains bounded as occurrences grow;

@@ -143,6 +143,10 @@ function operation_callable end
 function state_value end
 function workspace_value end
 function evaluator_parameters end
+function proposal_target_owner end
+function proposal_target_kind end
+function proposal_relation_count end
+function proposal_relation_neighbor_owner end
 function _compiled_evaluator_parameters end
 function _compiled_context_value end
 function _compiled_resource_operation end

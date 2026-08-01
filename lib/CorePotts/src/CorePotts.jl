@@ -44,6 +44,8 @@ public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
 public execute_operation, context_value
 public apply_resource_operation, operation_callable
 public state_value, workspace_value, evaluator_parameters
+public proposal_target_owner, proposal_target_kind
+public proposal_relation_count, proposal_relation_neighbor_owner
 public evaluate_expression, evaluate_static
 public evaluator_node_count
 public EvaluatorProbeContext
@@ -100,5 +102,6 @@ public ProposalEvaluation, evaluate_proposal_contributions!
 public fold_proposal_contributions
 public proposal_log_acceptance_ratio, proposal_acceptance_probability
 public proposal_acceptance_decision
+public rng_operation_limit
 
 end

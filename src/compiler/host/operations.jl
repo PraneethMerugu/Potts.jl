@@ -156,13 +156,22 @@ for operation in (is_extension, is_retraction, new_contact, lost_contact, linked
         )
 end
 
+operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
+    _transfer(
+        :merks_local_connectivity,
+        3,
+        :boolean,
+        :dimensionless;
+        locality = :finite_spatial,
+    )
+
 for operation in (
         cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, endpoint_a,
-        endpoint_b, degree,
+        endpoint_b,
     )
     identity = nameof(operation)
-    result_rule = operation in (endpoint_a, endpoint_b, degree) ? :integer : :real
-    locality = operation in (endpoint_a, endpoint_b, degree) ?
+    result_rule = operation in (endpoint_a, endpoint_b) ? :integer : :real
+    locality = operation in (endpoint_a, endpoint_b) ?
                :bounded_relationship : :owner_local
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
@@ -170,6 +179,12 @@ for operation in (
             locality = $(QuoteNode(locality)),
         )
 end
+
+operation_transfer(::typeof(degree), ::Int) =
+    _transfer(
+        :degree, 2, :integer, :declared;
+        locality = :bounded_relationship,
+    )
 
 for operation in (
         contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b,

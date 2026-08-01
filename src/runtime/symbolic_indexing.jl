@@ -68,13 +68,16 @@ SymbolicIndexingInterface.is_time_dependent(::PottsExecutable) = true
 SymbolicIndexingInterface.is_markovian(::PottsExecutable) = true
 
 SymbolicIndexingInterface.parameter_values(problem::PottsProblem) =
-    collect(problem.parameters.values)
+    _parameter_buffer(problem.parameters)
 SymbolicIndexingInterface.parameter_values(integrator::PottsIntegrator) =
     integrator.runtime.parameters
 SymbolicIndexingInterface.parameter_values(solution::PottsSolution) =
     isempty(solution.parameter_history) ?
-    collect(solution.prob.parameters.values) :
-    collect(last(solution.parameter_history).second)
+    _parameter_buffer(solution.prob.parameters) :
+    _parameter_buffer(
+        last(solution.parameter_history).second,
+        eltype(solution.prob.executable.core_program.parameter_defaults),
+    )
 
 struct PottsParameterSetter{I <: Tuple}
     indices::I
@@ -196,7 +199,7 @@ function _problem_saved_state(problem::PottsProblem)
     runtime = CorePotts.initialize_program(
         problem.executable.core_program,
         core_initial,
-        collect(problem.parameters.values),
+        _parameter_buffer(problem.parameters),
         problem.seed,
         problem.replica;
         repeat = problem.ensemble_repeat,

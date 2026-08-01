@@ -258,6 +258,7 @@ function _proposal_descriptor(
         state_handles,
         workspace_layout,
         workspace_handles,
+        draw_handles,
     ) where {T <: AbstractFloat}
     length(candidate.roots) == 1 || throw(ArgumentError(
         "a proposal descriptor requires exactly one expression root"
@@ -271,6 +272,7 @@ function _proposal_descriptor(
         manifest,
         T,
         state_handles,
+        draw_handles,
         cache,
     )
     evaluator = CorePotts.StaticEvaluator(expression)
@@ -282,7 +284,7 @@ function _proposal_descriptor(
     access = CorePotts.ResourceAccess(
         resolved_states,
         isempty(record.writes) ? () : resolved_states,
-        _descriptor_footprint(ir.facts.locality[root]),
+        _descriptor_footprint(ir, root, ir.facts.locality[root]),
     )
     context = DescriptorConstructionContext(
         access,

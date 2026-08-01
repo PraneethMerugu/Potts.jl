@@ -922,6 +922,98 @@ end
         stochastic_plan, Float64[0.5, -1, 1, 0]
     )
 
+    function stable_draw_model(include_earlier)
+        stable_cell = CellKind(:stable_draw_cell)
+        stable_medium = MediumKind(:stable_draw_medium)
+        stable_draw = draw(
+            Uniform(7.0, 8.0), DrawKey(:z_stable_draw)
+        )
+        expression = include_earlier ?
+                     draw(Uniform(3.0, 4.0), DrawKey(:a_added_draw)) +
+                     stable_draw : stable_draw
+        @named draw_identity_model = PottsSystem(statements = StatementSet((
+            Lattice((3, 3)),
+            stable_cell,
+            stable_medium,
+            ProposalDrive(:draw_identity_drive, expression),
+            Protocol(Sweep(); name = :main),
+        )))
+        return compile(
+            complete(draw_identity_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+    end
+    function compiled_draw_operations(expression, result = Dict{Float64, UInt16}())
+        expression isa CorePotts.OperationExpression || return result
+        if expression.operation isa CorePotts.ResourceOperation{:draw}
+            arguments = expression.arguments
+            result[Float64(arguments[2].value)] = UInt16(arguments[4].value)
+        end
+        for argument in expression.arguments
+            compiled_draw_operations(argument, result)
+        end
+        return result
+    end
+    function draw_operations(executable)
+        descriptor = only([
+            descriptor
+            for group in executable.core_program.descriptor_plan.groups
+            for descriptor in group.launch.instances
+            if executable.core_program.descriptor_plan.source_table[
+                descriptor.source_handle
+            ].local_id == StatementID(:draw_identity_drive)
+        ])
+        return compiled_draw_operations(descriptor.evaluator.expression)
+    end
+    stable_only = draw_operations(stable_draw_model(false))
+    with_unrelated_earlier = draw_operations(stable_draw_model(true))
+    @test stable_only[7.0] == with_unrelated_earlier[7.0]
+    @test with_unrelated_earlier[3.0] != with_unrelated_earlier[7.0]
+
+    collision_owner = Dict{UInt16, Symbol}()
+    colliding_keys = nothing
+    for index in 1:10_000
+        key = Symbol(:collision_draw_, index)
+        handle = PottsToolkit._stable_draw_operation(
+            (:draw_collision_model,), key
+        )
+        if haskey(collision_owner, handle)
+            colliding_keys = (collision_owner[handle], key)
+            break
+        end
+        collision_owner[handle] = key
+    end
+    @test colliding_keys !== nothing
+    first_collision, second_collision = colliding_keys
+    collision_cell = CellKind(:collision_cell)
+    collision_medium = MediumKind(:collision_medium)
+    collision_expression =
+        draw(Uniform(), DrawKey(first_collision)) +
+        draw(Uniform(), DrawKey(second_collision))
+    @named draw_collision_model = PottsSystem(statements = StatementSet((
+        Lattice((3, 3)),
+        collision_cell,
+        collision_medium,
+        ProposalDrive(:collision_drive, collision_expression),
+        Protocol(Sweep(); name = :main),
+    )))
+    collision_error = try
+        compile(
+            complete(draw_collision_model);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test collision_error isa PottsToolkit.PottsValidationError
+    @test only(collision_error.diagnostics).kind ===
+          :draw_operation_identity_collision
+
     @variables unsafe_state
     unsafe_kind = CellKind(:unsafe_kind)
     unsafe_site = SiteBinding(:unsafe_site)
