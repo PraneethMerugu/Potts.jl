@@ -1,6 +1,23 @@
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("fixtures/NeutralExternalTerms.jl")
 
+struct IncidentLocalGuardedVector{T, V <: AbstractVector{T}} <:
+        AbstractVector{T}
+    values::V
+    permitted::Int
+    accesses::Base.RefValue{Int}
+end
+
+Base.IndexStyle(::Type{<:IncidentLocalGuardedVector}) = IndexLinear()
+Base.size(values::IncidentLocalGuardedVector) = size(values.values)
+function Base.getindex(values::IncidentLocalGuardedVector, index::Int)
+    index == values.permitted || error(
+        "relationship lookup escaped its endpoint incident list"
+    )
+    values.accesses[] += 1
+    return @inbounds values.values[index]
+end
+
 function _g5_relationship_fixture(engine; seed = UInt64(5), initial_edges = nothing)
     @parameters g5_pair_weight = 1.25 g5_temperature = 1.5
     cell = CellKind(:g5_external_pair_cell)
@@ -107,4 +124,133 @@ end
     ).runtime
     CorePotts._execute_after_mcs_stage!(lifecycle_runtime)
     @test count(only(lifecycle_runtime.relationships).active) == 0
+end
+
+@testset "proposal relationship lookup is incident-local" begin
+    capacity = 1024
+    active = falses(capacity)
+    endpoint_a = zeros(Int32, capacity)
+    endpoint_b = zeros(Int32, capacity)
+    active[777] = true
+    endpoint_a[777] = Int32(1)
+    endpoint_b[777] = Int32(2)
+    active_accesses = Ref(0)
+    endpoint_a_accesses = Ref(0)
+    endpoint_b_accesses = Ref(0)
+    state = (
+        active = IncidentLocalGuardedVector(
+            active, 777, active_accesses
+        ),
+        endpoint_a = IncidentLocalGuardedVector(
+            endpoint_a, 777, endpoint_a_accesses
+        ),
+        endpoint_b = IncidentLocalGuardedVector(
+            endpoint_b, 777, endpoint_b_accesses
+        ),
+        degree = Int16[1, 1],
+        incident_edges = reshape(Int32[777, 777], 1, 2),
+    )
+    @test CorePotts._relationship_edge(state, Int32(1), Int32(2)) == 777
+    @test active_accesses[] == 1
+    @test endpoint_a_accesses[] == 1
+    @test endpoint_b_accesses[] == 1
+
+    endpoint_b[777] = Int32(3)
+    @test CorePotts._relationship_edge(state, Int32(1), Int32(2)) === nothing
+    @test active_accesses[] == 2
+    @test endpoint_a_accesses[] == 2
+    @test endpoint_b_accesses[] == 2
+end
+
+@testset "accepted ownership survives filtered relationship admission" begin
+    @parameters filtered_pair_weight = 0.0 filtered_temperature = 1.0e6
+    cell = CellKind(:filtered_pair_cell)
+    medium = MediumKind(:filtered_pair_medium)
+    proposal = ProposalContext(:filtered_pair_copy)
+    relationships = RelationshipState(
+        :filtered_pairs;
+        endpoints = Undirected(cell, cell),
+        payload = (score = filtered_pair_weight,),
+        capacity = 1,
+        maximum_degree = 1,
+        lifecycle = RemoveWithEndpoint(),
+    )
+    edge = RelationshipBinding(:filtered_edge, relationships)
+    @named model = PottsSystem(
+        statements = StatementSet((
+            Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+            cell,
+            medium,
+            relationships,
+            HamiltonianTerm(
+                :filtered_pair_energy;
+                domain = edges(relationships),
+                anchor = edge,
+                expression = filtered_pair_weight * edge.score,
+            ),
+            AcceptedCopy(
+                :request_filtered_pair,
+                Create(
+                    relationships,
+                    proposal.source_cell,
+                    proposal.target_cell;
+                    payload = (score = filtered_pair_weight,),
+                );
+                when = new_contact(
+                    proposal.source_cell, proposal.target_cell
+                ) & !linked(
+                    relationships,
+                    proposal.source_cell,
+                    proposal.target_cell,
+                ),
+            ),
+            Protocol(
+                Sweep(; temperature = filtered_temperature); name = :main
+            ),
+        )),
+        parameters = [filtered_pair_weight, filtered_temperature],
+    )
+    executable = compile(
+        complete(model);
+        engine = CheckerboardEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    labels = zeros(Int, 5, 5)
+    labels[2, 2] = 1
+    labels[2, 3] = 2
+    labels[2, 4] = 3
+    initial = PottsInitialState(
+        ownership = LabelledCells(
+            labels; cells = [cell, cell, cell], medium
+        ),
+        values = [
+            relationships => [(1, 2, (score = 0.0,))],
+        ],
+    )
+    filtered_run = nothing
+    for seed in UInt64(1):UInt64(64)
+        candidate = init(PottsProblem(
+            executable, initial, (0, 1); seed
+        ); save_start = false).runtime
+        ownership_before = copy(candidate.ownership)
+        CorePotts.advance_mcs!(candidate)
+        transaction = only(
+            candidate.stage_buffers.relationship_transactions
+        )
+        if transaction.filtered_total > 0
+            filtered_run = (; runtime = candidate, ownership_before)
+            break
+        end
+    end
+    @test filtered_run !== nothing
+    filtered_run = something(filtered_run)
+    runtime = filtered_run.runtime
+    ownership_before = filtered_run.ownership_before
+    transaction = only(runtime.stage_buffers.relationship_transactions)
+    @test runtime.settled
+    @test runtime.accepted > 0
+    @test runtime.ownership != ownership_before
+    @test transaction.filtered_total > 0
+    @test count(only(runtime.relationships).active) <= 1
 end

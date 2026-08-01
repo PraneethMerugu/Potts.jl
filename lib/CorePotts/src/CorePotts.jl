@@ -41,6 +41,8 @@ public program_tracker_values, program_tracker_value
 public tracker_plan_report
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest
+public RelationshipFailureDisposition, RelationshipFailureError
+public RelationshipFailureFilter
 public RetuneRelationshipRequest, apply_relationship_requests!
 public validate_relationship_request, apply_validated_relationship_request!
 public validate_relationship_integrity

@@ -282,6 +282,11 @@ end
 
 abstract type ProgramRelationshipRequest end
 
+@enum RelationshipFailureDisposition::UInt8 begin
+    RelationshipFailureError = 0x01
+    RelationshipFailureFilter = 0x02
+end
+
 struct CreateRelationshipRequest{P <: Tuple} <:
        ProgramRelationshipRequest
     endpoint_a::Int32
@@ -291,6 +296,7 @@ struct CreateRelationshipRequest{P <: Tuple} <:
     payload::P
     priority::Int32
     identity::UInt64
+    on_failure::RelationshipFailureDisposition
 end
 
 struct RemoveRelationshipRequest <: ProgramRelationshipRequest
@@ -315,6 +321,7 @@ function CreateRelationshipRequest(
         generation_b::Integer = 1,
         priority::Integer = 0,
         identity::Integer = 0,
+        on_failure::RelationshipFailureDisposition = RelationshipFailureError,
     )
     return CreateRelationshipRequest(
         Int32(endpoint_a),
@@ -324,6 +331,7 @@ function CreateRelationshipRequest(
         payload,
         Int32(priority),
         UInt64(identity),
+        on_failure,
     )
 end
 
@@ -346,6 +354,8 @@ mutable struct RelationshipTransactionBuffer{S, Q, V <: AbstractVector{Q}}
     staged::S
     requests::V
     count::Int32
+    filtered::Int32
+    filtered_total::UInt64
 end
 
 function RelationshipTransactionBuffer(
@@ -366,6 +376,8 @@ function RelationshipTransactionBuffer(
         copy(state),
         Vector{Q}(undef, capacity),
         Int32(0),
+        Int32(0),
+        UInt64(0),
     )
 end
 
@@ -375,6 +387,7 @@ end
     )
     copyto!(buffer.staged, state)
     buffer.count = 0
+    buffer.filtered = 0
     return buffer
 end
 
@@ -448,11 +461,23 @@ end
 
 function _relationship_edge(state, a::Int32, b::Int32)
     a, b = _canonical_endpoints(a, b)
-    return findfirst(eachindex(state.active)) do edge
-        @inbounds state.active[edge] &&
-            state.endpoint_a[edge] == a &&
-            state.endpoint_b[edge] == b
+    a == b && return nothing
+    (1 <= a <= length(state.degree) && 1 <= b <= length(state.degree)) ||
+        return nothing
+    degree_a = Int(@inbounds state.degree[Int(a)])
+    degree_b = Int(@inbounds state.degree[Int(b)])
+    endpoint = degree_a <= degree_b ? a : b
+    degree = min(degree_a, degree_b)
+    for position in 1:degree
+        edge = Int(@inbounds state.incident_edges[position, Int(endpoint)])
+        edge > 0 || continue
+        if @inbounds state.active[edge] &&
+                state.endpoint_a[edge] == a &&
+                state.endpoint_b[edge] == b
+            return edge
+        end
     end
+    return nothing
 end
 
 function _relationship_degree(state, endpoint::Int32)
@@ -507,21 +532,6 @@ function _remove_incident_edge!(
     return nothing
 end
 
-function _validate_relationship_endpoint(
-        endpoint::Int32,
-        generation::UInt32,
-        endpoint_status,
-        endpoint_generations,
-    )
-    1 <= endpoint <= length(endpoint_status) ||
-        throw(ArgumentError("relationship endpoint $endpoint is not an active cell"))
-    @inbounds !iszero(endpoint_status[endpoint]) ||
-        throw(ArgumentError("relationship endpoint $endpoint is not active"))
-    @inbounds generation == endpoint_generations[endpoint] ||
-        throw(ArgumentError("relationship endpoint generation is stale"))
-    return nothing
-end
-
 function _validate_relationship_payload(
         state::ProgramRelationshipState,
         payload::Tuple,
@@ -550,7 +560,14 @@ _request_sort_key(request::RemoveRelationshipRequest) =
     generations = request.endpoint_a == a ?
                   (request.generation_a, request.generation_b) :
                   (request.generation_b, request.generation_a)
-    return (a, b, generations..., request.payload, request.priority)
+    return (
+        a,
+        b,
+        generations...,
+        request.payload,
+        request.priority,
+        request.on_failure,
+    )
 end
 
 @inline _relationship_request_equivalent(
@@ -573,6 +590,91 @@ end
     ::ProgramRelationshipRequest, ::ProgramRelationshipRequest
 ) = false
 
+const _RELATIONSHIP_CREATE_APPLY = UInt8(0x01)
+const _RELATIONSHIP_CREATE_IDEMPOTENT = UInt8(0x02)
+const _RELATIONSHIP_CREATE_SELF_EDGE = UInt8(0x03)
+const _RELATIONSHIP_CREATE_INACTIVE_ENDPOINT = UInt8(0x04)
+const _RELATIONSHIP_CREATE_STALE_GENERATION = UInt8(0x05)
+const _RELATIONSHIP_CREATE_CONTRADICTORY = UInt8(0x06)
+const _RELATIONSHIP_CREATE_MAXIMUM_DEGREE = UInt8(0x07)
+const _RELATIONSHIP_CREATE_CAPACITY = UInt8(0x08)
+
+@inline function _relationship_endpoint_admission(
+        endpoint::Int32,
+        generation::UInt32,
+        endpoint_status,
+        endpoint_generations,
+    )
+    1 <= endpoint <= length(endpoint_status) ||
+        return _RELATIONSHIP_CREATE_INACTIVE_ENDPOINT
+    @inbounds !iszero(endpoint_status[endpoint]) ||
+        return _RELATIONSHIP_CREATE_INACTIVE_ENDPOINT
+    @inbounds generation == endpoint_generations[endpoint] ||
+        return _RELATIONSHIP_CREATE_STALE_GENERATION
+    return _RELATIONSHIP_CREATE_APPLY
+end
+
+function _relationship_create_admission(
+        state::ProgramRelationshipState,
+        endpoint_status,
+        endpoint_generations,
+        schema::RelationshipStoreSchema,
+        request::CreateRelationshipRequest,
+    )
+    _validate_relationship_payload(state, request.payload)
+    request.endpoint_a != request.endpoint_b ||
+        return _RELATIONSHIP_CREATE_SELF_EDGE
+    a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
+    generation_a, generation_b = request.endpoint_a == a ?
+        (request.generation_a, request.generation_b) :
+        (request.generation_b, request.generation_a)
+    admission = _relationship_endpoint_admission(
+        a, generation_a, endpoint_status, endpoint_generations
+    )
+    admission == _RELATIONSHIP_CREATE_APPLY || return admission
+    admission = _relationship_endpoint_admission(
+        b, generation_b, endpoint_status, endpoint_generations
+    )
+    admission == _RELATIONSHIP_CREATE_APPLY || return admission
+    existing = _relationship_edge(state, a, b)
+    if existing !== nothing
+        edge = Int(existing)
+        existing_generation_a = @inbounds state.generation_a[edge]
+        existing_generation_b = @inbounds state.generation_b[edge]
+        return existing_generation_a == generation_a &&
+               existing_generation_b == generation_b ?
+               _RELATIONSHIP_CREATE_IDEMPOTENT :
+               _RELATIONSHIP_CREATE_CONTRADICTORY
+    end
+    _relationship_degree(state, a) < schema.maximum_degree ||
+        return _RELATIONSHIP_CREATE_MAXIMUM_DEGREE
+    _relationship_degree(state, b) < schema.maximum_degree ||
+        return _RELATIONSHIP_CREATE_MAXIMUM_DEGREE
+    findfirst(!, state.active) === nothing &&
+        return _RELATIONSHIP_CREATE_CAPACITY
+    return _RELATIONSHIP_CREATE_APPLY
+end
+
+function _throw_relationship_create_admission(
+        admission::UInt8, request::CreateRelationshipRequest
+    )
+    admission == _RELATIONSHIP_CREATE_SELF_EDGE &&
+        throw(ArgumentError("a relationship cannot be a self-edge"))
+    admission == _RELATIONSHIP_CREATE_INACTIVE_ENDPOINT && throw(
+        ArgumentError("relationship request references an inactive endpoint")
+    )
+    admission == _RELATIONSHIP_CREATE_STALE_GENERATION &&
+        throw(ArgumentError("relationship endpoint generation is stale"))
+    admission == _RELATIONSHIP_CREATE_CONTRADICTORY && throw(ArgumentError(
+        "contradictory relationship creations target the same endpoints"
+    ))
+    admission == _RELATIONSHIP_CREATE_MAXIMUM_DEGREE &&
+        throw(ArgumentError("relationship maximum degree exceeded"))
+    admission == _RELATIONSHIP_CREATE_CAPACITY &&
+        throw(ArgumentError("relationship capacity exceeded"))
+    error("unknown relationship-create admission code $admission")
+end
+
 function validate_relationship_request(
         state::ProgramRelationshipState,
         endpoint_status,
@@ -580,37 +682,16 @@ function validate_relationship_request(
         schema::RelationshipStoreSchema,
         request::CreateRelationshipRequest,
     )
-    request.endpoint_a != request.endpoint_b ||
-        throw(ArgumentError("a relationship cannot be a self-edge"))
-    a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
-    generation_a, generation_b = request.endpoint_a == a ?
-        (request.generation_a, request.generation_b) :
-        (request.generation_b, request.generation_a)
-    _validate_relationship_endpoint(
-        a, generation_a, endpoint_status, endpoint_generations
+    admission = _relationship_create_admission(
+        state,
+        endpoint_status,
+        endpoint_generations,
+        schema,
+        request,
     )
-    _validate_relationship_endpoint(
-        b, generation_b, endpoint_status, endpoint_generations
-    )
-    _validate_relationship_payload(state, request.payload)
-    existing = _relationship_edge(state, a, b)
-    if existing !== nothing
-        edge = Int(existing)
-        existing_generation_a = @inbounds state.generation_a[edge]
-        existing_generation_b = @inbounds state.generation_b[edge]
-        existing_generation_a == generation_a &&
-            existing_generation_b == generation_b && return false
-        throw(ArgumentError(
-            "contradictory relationship creations target endpoints ($a, $b)"
-        ))
-    end
-    _relationship_degree(state, a) < schema.maximum_degree ||
-        throw(ArgumentError("relationship maximum degree exceeded for $a"))
-    _relationship_degree(state, b) < schema.maximum_degree ||
-        throw(ArgumentError("relationship maximum degree exceeded for $b"))
-    findfirst(!, state.active) === nothing &&
-        throw(ArgumentError("relationship capacity exceeded"))
-    return true
+    admission == _RELATIONSHIP_CREATE_APPLY && return true
+    admission == _RELATIONSHIP_CREATE_IDEMPOTENT && return false
+    _throw_relationship_create_admission(admission, request)
 end
 
 function validate_relationship_request(
@@ -746,13 +827,22 @@ function prepare_relationship_transaction!(
         end
         duplicate && continue
         if request isa CreateRelationshipRequest
-            validate_relationship_request(
+            admission = _relationship_create_admission(
                 staged,
                 endpoint_status,
                 endpoint_generations,
                 schema,
                 request,
-            ) || continue
+            )
+            admission == _RELATIONSHIP_CREATE_IDEMPOTENT && continue
+            if admission != _RELATIONSHIP_CREATE_APPLY
+                if request.on_failure == RelationshipFailureFilter
+                    buffer.filtered += Int32(1)
+                    buffer.filtered_total += UInt64(1)
+                    continue
+                end
+                _throw_relationship_create_admission(admission, request)
+            end
         else
             validate_relationship_request(
                 staged,

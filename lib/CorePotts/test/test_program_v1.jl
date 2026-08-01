@@ -555,6 +555,15 @@ end
 
 @testset "relationship transactions are atomic and canonical" begin
     scalar(value) = CorePotts.CompiledScalar(Float64(value))
+    function filtered_transaction(state, status, generations, schema, request)
+        buffer = CorePotts.RelationshipTransactionBuffer(state, 1)
+        CorePotts.reset_relationship_transaction!(buffer, state)
+        CorePotts.emit_relationship_request!(buffer, request)
+        CorePotts.prepare_relationship_transaction!(
+            buffer, status, generations, schema
+        )
+        return buffer
+    end
     @test_throws ArgumentError CorePotts.RelationshipStoreSchema(
         Int(typemax(Int32)) + 1, 1
     )
@@ -608,6 +617,76 @@ end
     @test CorePotts.validate_relationship_integrity(
         state, plan, Int16[2, 2], generations
     ) === state
+
+    capacity_schema = CorePotts.RelationshipStoreSchema(1, 2)
+    capacity_state = CorePotts.ProgramRelationshipState(Float64, 1, 3, 2, 0)
+    CorePotts.apply_relationship_requests!(
+        capacity_state,
+        Int16[2, 2, 2],
+        UInt32[1, 1, 1],
+        capacity_schema,
+        [CorePotts.CreateRelationshipRequest(1, 2; identity = 1)],
+    )
+    filtered_capacity = filtered_transaction(
+        capacity_state,
+        Int16[2, 2, 2],
+        UInt32[1, 1, 1],
+        capacity_schema,
+        CorePotts.CreateRelationshipRequest(
+            2,
+            3;
+            identity = 2,
+            on_failure = CorePotts.RelationshipFailureFilter,
+        ),
+    )
+    @test filtered_capacity.filtered == 1
+    @test filtered_capacity.filtered_total == 1
+    @test filtered_capacity.staged.active == capacity_state.active
+    @test filtered_capacity.staged.incident_edges ==
+          capacity_state.incident_edges
+
+    degree_schema = CorePotts.RelationshipStoreSchema(2, 1)
+    degree_state = CorePotts.ProgramRelationshipState(Float64, 2, 3, 1, 0)
+    CorePotts.apply_relationship_requests!(
+        degree_state,
+        Int16[2, 2, 2],
+        UInt32[1, 1, 1],
+        degree_schema,
+        [CorePotts.CreateRelationshipRequest(1, 2; identity = 1)],
+    )
+    filtered_degree = filtered_transaction(
+        degree_state,
+        Int16[2, 2, 2],
+        UInt32[1, 1, 1],
+        degree_schema,
+        CorePotts.CreateRelationshipRequest(
+            1,
+            3;
+            identity = 2,
+            on_failure = CorePotts.RelationshipFailureFilter,
+        ),
+    )
+    @test filtered_degree.filtered == 1
+    @test count(filtered_degree.staged.active) == 1
+    @test filtered_degree.staged.degree == Int16[1, 1, 0]
+
+    stale_state = CorePotts.ProgramRelationshipState(Float64, 2, 2, 2, 0)
+    filtered_stale = filtered_transaction(
+        stale_state,
+        Int16[2, 2],
+        UInt32[3, 5],
+        CorePotts.RelationshipStoreSchema(2, 2),
+        CorePotts.CreateRelationshipRequest(
+            1,
+            2;
+            generation_a = 2,
+            generation_b = 5,
+            identity = 3,
+            on_failure = CorePotts.RelationshipFailureFilter,
+        ),
+    )
+    @test filtered_stale.filtered == 1
+    @test iszero(count(filtered_stale.staged.active))
 
     invalid_incidence = copy(state)
     invalid_incidence.incident_edges[1, 1] = Int32(2)

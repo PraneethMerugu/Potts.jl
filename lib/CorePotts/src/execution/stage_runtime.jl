@@ -234,6 +234,7 @@ end
         generation_b,
         priority = effect.priority,
         identity = context.attempt,
+        on_failure = RelationshipFailureFilter,
     )
 end
 
