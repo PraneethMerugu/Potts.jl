@@ -565,3 +565,39 @@ end
     @test banks_by_representation(CorePotts.WorkspaceLayout(workspaces)) ==
           banks_by_representation(CorePotts.WorkspaceLayout(reverse(workspaces)))
 end
+
+@testset "relationship declarations grow data rather than specialization" begin
+    function repeated_relationship_program(count)
+        schema = CorePotts.RelationshipStoreSchema(1, 1)
+        return test_program(
+            CorePotts.SequentialProgramEngine();
+            relationships = ntuple(_ -> schema, count),
+        )
+    end
+    programs = map(repeated_relationship_program, (1, 32, 1024))
+    @test allequal(typeof(program.relationships) for program in programs)
+    @test allequal(typeof(program) for program in programs)
+    @test all(
+        length(program.relationships.banks) == 1 for program in programs
+    )
+
+    runtimes = map(programs) do program
+        initial = CorePotts.ProgramInitialState(
+            zeros(Int32, program.shape),
+            Int16[];
+            scalar_type = Float64,
+            relationships = fill(nothing, length(program.relationships)),
+        )
+        CorePotts.initialize_program(
+            program, initial, Float64[], UInt64(0x725), UInt32(1)
+        )
+    end
+    @test allequal(typeof(runtime.relationships) for runtime in runtimes)
+    @test allequal(
+        typeof(runtime.stage_buffers.relationship_transactions)
+        for runtime in runtimes
+    )
+    @test all(
+        length(runtime.relationships.banks) == 1 for runtime in runtimes
+    )
+end

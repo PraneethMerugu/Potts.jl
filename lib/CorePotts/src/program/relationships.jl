@@ -201,17 +201,19 @@ end
     return buffer
 end
 
-@generated function _call_relationship_slot(
+@generated function _call_relationship_bank(
         operation::F,
-        values::V,
+        banks::B,
+        bank::Int32,
         slot::Int32,
         arguments::A,
-    ) where {F, V <: Tuple, A <: Tuple}
+    ) where {F, B <: Tuple, A <: Tuple}
     branches = Expr(:block)
-    for index in 1:fieldcount(V)
+    for index in 1:fieldcount(B)
         push!(branches.args, quote
-            if slot == $(Int32(index))
-                return operation(getfield(values, $index), arguments...)
+            if bank == $(Int32(index))
+                values = getfield(banks, $index)
+                return operation(@inbounds(values[Int(slot)]), arguments...)
             end
         end)
     end
@@ -221,11 +223,27 @@ end
     return branches
 end
 
+@inline function _call_relationship_slot(
+        operation,
+        storage::RelationshipStorage,
+        relationship_slot::Int32,
+        arguments::Tuple,
+    )
+    location = _relationship_location(storage, Int(relationship_slot))
+    return _call_relationship_bank(
+        operation,
+        storage.banks,
+        location.bank,
+        location.slot,
+        arguments,
+    )
+end
+
 @inline _emit_relationship_request_at(buffer, request) =
     emit_relationship_request!(buffer, request)
 
 @inline function emit_relationship_request_at!(
-        buffers::Tuple,
+        buffers::RelationshipStorage,
         slot::Int32,
         request::ProgramRelationshipRequest,
     )
@@ -524,49 +542,126 @@ end
     return state
 end
 
-@inline _reset_relationship_transactions!(::Tuple{}, ::Tuple{}) = nothing
-@inline function _reset_relationship_transactions!(
-        buffers::Tuple,
-        states::Tuple,
+@inline _reset_relationship_state!(state, buffer) =
+    (reset_relationship_transaction!(buffer, state); nothing)
+
+@inline function _reset_relationship_buffer!(
+        buffer, states, relationship_slot
     )
-    reset_relationship_transaction!(first(buffers), first(states))
-    return _reset_relationship_transactions!(
-        Base.tail(buffers), Base.tail(states)
+    _call_relationship_slot(
+        _reset_relationship_state!,
+        states,
+        relationship_slot,
+        (buffer,),
     )
+    return nothing
 end
 
-@inline _prepare_relationship_transactions!(
-    ::Tuple{}, endpoint_status, endpoint_generations, ::Tuple{}
-) = nothing
-@inline function _prepare_relationship_transactions!(
-        buffers::Tuple,
+@inline function _reset_relationship_transactions!(
+        buffers::RelationshipStorage,
+        states::RelationshipStorage,
+    )
+    length(buffers) == length(states) || throw(ArgumentError(
+        "relationship transaction and state storage are misaligned"
+    ))
+    for relationship_slot in eachindex(buffers)
+        _call_relationship_slot(
+            _reset_relationship_buffer!,
+            buffers,
+            Int32(relationship_slot),
+            (states, Int32(relationship_slot)),
+        )
+    end
+    return nothing
+end
+
+@inline function _prepare_relationship_schema!(
+        schema,
+        buffer,
         endpoint_status,
         endpoint_generations,
-        schemas::Tuple,
     )
     prepare_relationship_transaction!(
-        first(buffers),
+        buffer,
         endpoint_status,
         endpoint_generations,
-        first(schemas),
+        schema,
     )
-    return _prepare_relationship_transactions!(
-        Base.tail(buffers),
-        endpoint_status,
-        endpoint_generations,
-        Base.tail(schemas),
-    )
+    return nothing
 end
 
-@inline _publish_relationship_transactions!(::Tuple{}, ::Tuple{}) = nothing
+@inline function _prepare_relationship_buffer!(
+        buffer,
+        endpoint_status,
+        endpoint_generations,
+        schemas,
+        relationship_slot,
+    )
+    _call_relationship_slot(
+        _prepare_relationship_schema!,
+        schemas,
+        relationship_slot,
+        (buffer, endpoint_status, endpoint_generations),
+    )
+    return nothing
+end
+
+@inline function _prepare_relationship_transactions!(
+        buffers::RelationshipStorage,
+        endpoint_status,
+        endpoint_generations,
+        schemas::RelationshipStorage,
+    )
+    length(buffers) == length(schemas) || throw(ArgumentError(
+        "relationship transaction and schema storage are misaligned"
+    ))
+    for relationship_slot in eachindex(buffers)
+        _call_relationship_slot(
+            _prepare_relationship_buffer!,
+            buffers,
+            Int32(relationship_slot),
+            (
+                endpoint_status,
+                endpoint_generations,
+                schemas,
+                Int32(relationship_slot),
+            ),
+        )
+    end
+    return nothing
+end
+
+@inline _publish_relationship_buffer!(buffer, state) =
+    (publish_relationship_transaction!(state, buffer); nothing)
+
+@inline function _publish_relationship_state!(
+        state, buffers, relationship_slot
+    )
+    _call_relationship_slot(
+        _publish_relationship_buffer!,
+        buffers,
+        relationship_slot,
+        (state,),
+    )
+    return nothing
+end
+
 @inline function _publish_relationship_transactions!(
-        states::Tuple,
-        buffers::Tuple,
+        states::RelationshipStorage,
+        buffers::RelationshipStorage,
     )
-    publish_relationship_transaction!(first(states), first(buffers))
-    return _publish_relationship_transactions!(
-        Base.tail(states), Base.tail(buffers)
-    )
+    length(states) == length(buffers) || throw(ArgumentError(
+        "relationship state and transaction storage are misaligned"
+    ))
+    for relationship_slot in eachindex(states)
+        _call_relationship_slot(
+            _publish_relationship_state!,
+            states,
+            Int32(relationship_slot),
+            (buffers, Int32(relationship_slot)),
+        )
+    end
+    return nothing
 end
 
 function apply_relationship_requests!(

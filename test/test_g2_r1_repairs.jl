@@ -635,3 +635,142 @@ end
     @test !isdefined(CorePotts, :descriptor_evaluate_proposal)
     @test !isdefined(PottsToolkit, :_lower_program_expression)
 end
+
+@testset "qualified source graph owns composed lowering" begin
+    @variables r1_composed_t r1_composed_state(r1_composed_t)
+    composed_cell = CellKind(:cell)
+    composed_medium = MediumKind(:medium)
+    composed_state = SiteState(
+        r1_composed_state;
+        name = :state,
+        owner = composed_cell,
+        initial = 0.0,
+        lifecycle = PreserveOnOwnershipChange(),
+    )
+    @named r1_child = PottsSystem(
+        statements = StatementSet((
+            Lattice(
+                (5, 5);
+                relations = (
+                    proposal = Moore(),
+                    contact = VonNeumann(),
+                ),
+            ),
+            composed_cell,
+            composed_medium,
+            composed_state,
+            ContactEnergy(
+                [(composed_cell ↔ composed_medium) => 1.0];
+                relation = :contact,
+            ),
+            Observation(:state_snapshot, r1_composed_state),
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [r1_composed_state],
+        independent_variables = [r1_composed_t],
+    )
+    direct = compile(
+        complete(r1_child);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @named r1_parent = PottsSystem()
+    composed = compile(
+        complete(compose(r1_parent, [r1_child]));
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+
+    @test size(direct.core_program.proposal_offsets, 2) == 8
+    @test size(composed.core_program.proposal_offsets, 2) == 8
+    @test direct.core_program.descriptor_plan.domain_resources.contact_counts ==
+          composed.core_program.descriptor_plan.domain_resources.contact_counts
+    @test 4 in composed.core_program.descriptor_plan.domain_resources.contact_counts
+    @test composed.reports.kinds == (:r1_child₊medium, :r1_child₊cell)
+    @test only(composed.observations).name === :r1_child₊state_snapshot
+
+    labels = zeros(Int32, 5, 5)
+    labels[3, 3] = 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(
+            labels;
+            cells = [composed_cell],
+            medium = composed_medium,
+        ),
+        values = [r1_composed_state => ones(5, 5)],
+    )
+    runtime = init(PottsProblem(
+        composed, initial, (0, 1); seed = 0x724
+    ); observables = (:r1_child₊state_snapshot,)).runtime
+    handle = only(composed.reports.states).handle
+    @test CorePotts.state_block(runtime.descriptor_state, handle).values ==
+          ones(5, 5)
+
+    @variables r1_left_state(r1_composed_t) r1_right_state(r1_composed_t)
+    left_cell = CellKind(:cell)
+    right_cell = CellKind(:cell)
+    @named left = PottsSystem(
+        statements = StatementSet((
+            left_cell,
+            SiteState(
+                r1_left_state;
+                name = :state,
+                owner = left_cell,
+                initial = 0.0,
+                lifecycle = PreserveOnOwnershipChange(),
+            ),
+        )),
+        unknowns = [r1_left_state],
+        independent_variables = [r1_composed_t],
+    )
+    @named right = PottsSystem(
+        statements = StatementSet((
+            right_cell,
+            SiteState(
+                r1_right_state;
+                name = :state,
+                owner = right_cell,
+                initial = 0.0,
+                lifecycle = PreserveOnOwnershipChange(),
+            ),
+        )),
+        unknowns = [r1_right_state],
+        independent_variables = [r1_composed_t],
+    )
+    sibling_medium = MediumKind(:medium)
+    @named sibling_root = PottsSystem(
+        statements = StatementSet((
+            Lattice((5, 5); relations = (proposal = VonNeumann(),)),
+            sibling_medium,
+            Protocol(Sweep(); name = :main),
+        )),
+        independent_variables = [r1_composed_t],
+    )
+    siblings = compile(
+        complete(compose(sibling_root, [left, right]));
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test siblings.reports.kinds == (:medium, :left₊cell, :right₊cell)
+    @test Set(entry.name for entry in siblings.reports.states) ==
+          Set((:left₊state, :right₊state))
+    ambiguous = PottsInitialState(
+        ownership = LabelledCells(
+            labels; cells = [:cell], medium = sibling_medium
+        ),
+    )
+    @test_throws ArgumentError PottsToolkit._core_initial_state(
+        siblings, ambiguous
+    )
+    qualified = PottsInitialState(
+        ownership = LabelledCells(
+            labels; cells = [:left₊cell], medium = sibling_medium
+        ),
+        values = [r1_left_state => fill(2.0, 5, 5)],
+    )
+    sibling_initial = PottsToolkit._core_initial_state(siblings, qualified)
+    @test sibling_initial.cell_kinds == Int16[2]
+end

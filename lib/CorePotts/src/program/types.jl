@@ -51,6 +51,80 @@ function RelationshipStoreSchema(
     )
 end
 
+struct RelationshipSlot
+    bank::Int32
+    slot::Int32
+end
+
+"""Representation-banked relationship values with value-level flat slots."""
+struct RelationshipStorage{
+        B <: Tuple,
+        S <: AbstractVector{RelationshipSlot},
+    }
+    banks::B
+    slots::S
+end
+
+function RelationshipStorage(values)
+    entries = collect(values)
+    representations = unique!(DataType[typeof(value) for value in entries])
+    sort!(representations; by = string)
+    bank_for = Dict(
+        representation => index
+        for (index, representation) in enumerate(representations)
+    )
+    banks = Any[
+        Vector{representation}() for representation in representations
+    ]
+    slots = Vector{RelationshipSlot}(undef, length(entries))
+    for (index, value) in enumerate(entries)
+        bank = bank_for[typeof(value)]
+        push!(banks[bank], value)
+        slots[index] = RelationshipSlot(bank, length(banks[bank]))
+    end
+    return RelationshipStorage(Tuple(banks), slots)
+end
+
+Base.length(storage::RelationshipStorage) = length(storage.slots)
+Base.isempty(storage::RelationshipStorage) = isempty(storage.slots)
+Base.firstindex(::RelationshipStorage) = 1
+Base.lastindex(storage::RelationshipStorage) = length(storage)
+Base.eachindex(storage::RelationshipStorage) = Base.OneTo(length(storage))
+
+@inline function _relationship_location(
+        storage::RelationshipStorage, index::Integer
+    )
+    return @inbounds storage.slots[index]
+end
+
+function Base.copy(storage::RelationshipStorage)
+    return RelationshipStorage(
+        map(bank -> map(copy, bank), storage.banks),
+        copy(storage.slots),
+    )
+end
+
+function _cold_relationship_bank_get(banks::Tuple, bank::Int, slot::Int)
+    isempty(banks) && throw(BoundsError(banks, bank))
+    bank == 1 && return @inbounds first(banks)[slot]
+    return _cold_relationship_bank_get(Base.tail(banks), bank - 1, slot)
+end
+
+function Base.getindex(storage::RelationshipStorage, index::Integer)
+    location = _relationship_location(storage, index)
+    return _cold_relationship_bank_get(
+        storage.banks, Int(location.bank), Int(location.slot)
+    )
+end
+
+function Base.iterate(storage::RelationshipStorage, state::Int = 1)
+    state > length(storage) && return nothing
+    return storage[state], state + 1
+end
+
+Adapt.@adapt_structure RelationshipSlot
+Adapt.@adapt_structure RelationshipStorage
+
 struct CompiledPottsProgram{
         T <: AbstractFloat,
         N,
@@ -111,11 +185,10 @@ function CompiledPottsProgram(
         throw(ArgumentError("the default medium must be a declared medium kind"))
     attempts_per_site > 0 ||
         throw(ArgumentError("attempts per site must be positive"))
-    relationships isa Tuple || throw(ArgumentError(
-        "compiled relationship schemas must be a tuple"
-    ))
+    relationship_storage = relationships isa RelationshipStorage ?
+                           relationships : RelationshipStorage(relationships)
     return CompiledPottsProgram{
-        T, N, E, B, typeof(relationships), D, SP,
+        T, N, E, B, typeof(relationship_storage), D, SP,
     }(
         shape,
         periodic,
@@ -126,7 +199,7 @@ function CompiledPottsProgram(
         temperature,
         Int32(attempts_per_site),
         copy(parameter_defaults),
-        relationships,
+        relationship_storage,
         descriptor_plan,
         stage_plan,
         engine,
@@ -135,11 +208,11 @@ function CompiledPottsProgram(
     )
 end
 
-struct ProgramInitialState{T <: AbstractFloat, N, R, D}
+struct ProgramInitialState{T <: AbstractFloat, N, D}
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
-    relationships::R
+    relationships::Vector{Any}
     descriptor_state::D
 end
 
@@ -168,12 +241,9 @@ function ProgramInitialState(
         throw(ArgumentError("cell generation table has the wrong length"))
     all(!iszero, generations) ||
         throw(ArgumentError("active cell generations must be positive"))
-    relationships isa Tuple || throw(ArgumentError(
-        "program relationship initial values must be a tuple aligned to schemas"
-    ))
-    relationship_values = deepcopy(relationships)
+    relationship_values = Any[deepcopy(value) for value in relationships]
     return ProgramInitialState{
-        T, N, typeof(relationship_values), typeof(descriptor_state),
+        T, N, typeof(descriptor_state),
     }(
         owned,
         kinds,

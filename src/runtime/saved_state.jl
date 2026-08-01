@@ -76,7 +76,8 @@ function _descriptor_saved_topology(executable, snapshot)
         "compiled topology declarations and runtime stores are misaligned"
     ))
     names = Tuple(entry.name for entry in entries)
-    return NamedTuple{names}(map(copy, snapshot.relationships))
+    values = Tuple(copy(state) for state in snapshot.relationships)
+    return NamedTuple{names}(values)
 end
 
 function _saved_state(

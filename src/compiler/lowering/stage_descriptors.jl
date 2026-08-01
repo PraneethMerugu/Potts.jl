@@ -274,8 +274,8 @@ function _relationship_create_stage_descriptor(
     endpoints isa Undirected || throw(ArgumentError(
         "V1 relationship creation currently requires Undirected endpoints"
     ))
-    kind_a = _compiled_kind_index(ir, _kind_name(endpoints.kind_a))
-    kind_b = _compiled_kind_index(ir, _kind_name(endpoints.kind_b))
+    kind_a = _compiled_kind_index(ir, record, endpoints.kind_a)
+    kind_b = _compiled_kind_index(ir, record, endpoints.kind_b)
     (kind_a === nothing || kind_b === nothing) && throw(ArgumentError(
         "relationship endpoint kind is not declared"
     ))
@@ -500,7 +500,7 @@ function _field_stage_descriptor(
     source_kind = if source_kind_value === nothing
         Int16(0)
     else
-        index = _compiled_kind_index(ir, _kind_name(source_kind_value))
+        index = _compiled_kind_index(ir, record, source_kind_value)
         index === nothing && throw(ArgumentError(
             "field source kind is not declared"
         ))

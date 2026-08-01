@@ -5,6 +5,22 @@ _manifest_identity(identity::QualifiedStatementID) = (
     local_id = Symbol(identity.local_id),
 )
 
+function _qualified_public_name(identity::QualifiedStatementID)
+    relative_path = length(identity.path) <= 1 ? () : identity.path[2:end]
+    parts = (relative_path..., Symbol(identity.local_id))
+    return Symbol(join(String.(parts), "₊"))
+end
+
+function _ordered_kind_records(records)
+    declarations = filter(
+        record -> record.kind in (:CellKind, :MediumKind), records
+    )
+    return sort(declarations; by = record -> (
+        record.kind === :MediumKind ? 0 : 1,
+        string(record.identity),
+    ))
+end
+
 _relationship_order_key(identity::QualifiedStatementID) = string(identity)
 _relationship_order_key(record::QualifiedStatement) =
     _relationship_order_key(record.identity)
@@ -215,11 +231,12 @@ end
 
 function _compiled_state_initial(
         completed::PottsSystem,
-        statement,
+        record::QualifiedStatement,
         manifest::ParameterManifest,
         ::Type{T},
     ) where {T <: AbstractFloat}
-    arguments = _statement_arguments(statement)
+    arguments = _record_arguments(record)
+    display_identity = record.identity
     declared = arguments.initial
     variable = arguments.variable
     initial_conditions = ModelingToolkitBase.initial_conditions(completed)
@@ -227,7 +244,7 @@ function _compiled_state_initial(
     if has_system_initial && declared !== nothing &&
             !isequal(initial_conditions[variable], declared)
         throw(ArgumentError(
-            "state `$(statement_id(statement))` has conflicting declaration and " *
+            "state `$display_identity` has conflicting declaration and " *
             "PottsSystem initial conditions"
         ))
     end
@@ -236,13 +253,13 @@ function _compiled_state_initial(
     reference = _reference_for(manifest.reference_units, value)
     converted = T(_numeric_value(value, reference))
     isfinite(converted) ||
-        throw(ArgumentError("state `$(statement_id(statement))` initial value must be finite"))
+        throw(ArgumentError("state `$display_identity` initial value must be finite"))
     return converted, reference
 end
 
 function _compiled_state_manifest(
         completed::PottsSystem,
-        statements,
+        records,
         activity_reference,
         manifest::ParameterManifest,
         state_layout::CorePotts.StateLayout,
@@ -250,44 +267,50 @@ function _compiled_state_manifest(
         ::Type{T},
     ) where {T <: AbstractFloat}
     result = NamedTuple[]
-    for statement in statements
-        statement isa Union{
-            SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
-        } || continue
-        arguments = _statement_arguments(statement)
+    for record in records
+        record.kind in (
+            :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
+            :HistoryState,
+        ) || continue
+        arguments = _record_arguments(record)
         haskey(arguments, :variable) || continue
-        role = statement isa FieldState ? :field :
-               statement isa HistoryState ? :history :
-               statement isa SiteState &&
+        role = record.kind === :FieldState ? :field :
+               record.kind === :HistoryState ? :history :
+               record.kind === :SiteState &&
                isequal(arguments.variable, activity_reference) ? :activity : :stored
-        storage = statement isa Union{SiteState, FieldState} ? :site :
-                  statement isa CellState ? :cell :
-                  statement isa MediumState ? :medium :
-                  statement isa ModelState ? :model : :history
+        storage = record.kind in (:SiteState, :FieldState) ? :site :
+                  record.kind === :CellState ? :cell :
+                  record.kind === :MediumState ? :medium :
+                  record.kind === :ModelState ? :model : :history
         initial, unit = _compiled_state_initial(
-            completed, statement, manifest, T
+            completed, record, manifest, T
         )
         state_shape = storage === :site ? shape :
                       storage === :cell ? :cells :
                       storage === :history ? (
                           shape...,
-                          Int(_numeric_value(_statement_option(statement, :depth, 1))),
+                          Int(_numeric_value(_statement_option(record, :depth, 1))),
                       ) : ()
+        identity = _qualified_resource_identity(record.identity)
         matching_entries = filter(
-            entry -> entry.schema.identity.name === Symbol(statement_id(statement)),
+            entry -> entry.schema.identity == identity,
             state_layout.entries,
         )
         length(matching_entries) == 1 || throw(ArgumentError(
-            "compiled state `$(statement_id(statement))` does not resolve to exactly " *
+            "compiled state `$(record.identity)` does not resolve to exactly " *
             "one canonical state-layout entry"
         ))
         layout_entry = only(matching_entries)
+        key = _symbolic_name(arguments.variable)
+        local_key = Symbol(last(split(String(key), '₊')))
         push!(result, (
-            key = _symbolic_name(arguments.variable),
-            name = Symbol(statement_id(statement)),
-            identity = layout_entry.schema.identity,
+            key,
+            local_key,
+            name = _qualified_public_name(record.identity),
+            local_name = Symbol(record.identity.local_id),
+            identity,
             handle = layout_entry.handle,
-            kind = statement_kind(statement),
+            kind = record.kind,
             role,
             storage,
             shape = state_shape,

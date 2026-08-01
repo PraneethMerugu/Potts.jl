@@ -383,6 +383,23 @@ function _stable_union(left, right)
     return result
 end
 
+"""Return the canonical flattened statement view used by host-only passes."""
+function _all_system_statements(
+        system::PottsSystem, namespace::Tuple = ()
+    )
+    result = AbstractPottsStatement[
+        _namespace_statement_for_lowering(statement, namespace)
+        for statement in statements(system)
+    ]
+    for child in getfield(system, :systems)
+        append!(
+            result,
+            _all_system_statements(child, (namespace..., nameof(child))),
+        )
+    end
+    return result
+end
+
 function ModelingToolkitBase.flatten(system::PottsSystem, args...)
     isempty(args) || throw(ArgumentError("PottsSystem flatten accepts no positional options"))
     _ensure_incomplete(system, "flatten")

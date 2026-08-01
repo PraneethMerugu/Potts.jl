@@ -296,7 +296,7 @@ struct StageEvaluation{T <: AbstractFloat}
     value::T
 end
 
-mutable struct StageRuntimeBuffers{T <: AbstractFloat, N, R <: Tuple}
+mutable struct StageRuntimeBuffers{T <: AbstractFloat, N, R}
     accepted_copy::Vector{StageEvaluation{T}}
     after_mcs::Vector{Array{T, N}}
     relationship_transactions::R
@@ -306,13 +306,14 @@ function allocate_stage_runtime_buffers(
         plan::StageExecutionPlan,
         ::Type{T},
         shape::NTuple{N, Int},
-        relationships::Tuple = (),
+        relationships::RelationshipStorage = RelationshipStorage(()),
     ) where {T <: AbstractFloat, N}
     accepted = fill(
         StageEvaluation(false, zero(T)), Int(plan.accepted_count)
     )
     after = [zeros(T, shape) for _ in 1:Int(plan.after_mcs_count)]
-    transactions = ntuple(length(relationships)) do store_slot
+    transactions = Any[]
+    for store_slot in eachindex(relationships)
         accepted_bound = sum((
             1
             for group in plan.accepted_copy
@@ -329,12 +330,13 @@ function allocate_stage_runtime_buffers(
             } &&
                descriptor.effect.relationship_slot == store_slot
         ); init = 0)
-        RelationshipTransactionBuffer(
+        push!(transactions, RelationshipTransactionBuffer(
             relationships[store_slot], max(accepted_bound, after_bound)
-        )
+        ))
     end
-    return StageRuntimeBuffers{T, N, typeof(transactions)}(
-        accepted, after, transactions
+    relationship_transactions = RelationshipStorage(transactions)
+    return StageRuntimeBuffers{T, N, typeof(relationship_transactions)}(
+        accepted, after, relationship_transactions
     )
 end
 

@@ -4,48 +4,29 @@ _statement_option(statement, name::Symbol, default = nothing) =
     haskey(_statement_options(statement), name) ?
     getproperty(_statement_options(statement), name) : default
 
-function _all_system_statements(
-        system::PottsSystem, namespace::Tuple = ()
-    )
-    result = AbstractPottsStatement[]
-    append!(
-        result,
-        (
-            _namespace_statement_for_lowering(statement, namespace)
-            for statement in statements(system)
-        ),
-    )
-    for child in getfield(system, :systems)
-        append!(
-            result,
-            _all_system_statements(
-                child, (namespace..., nameof(child))
-            ),
-        )
-    end
-    return result
-end
+_statement_option(record::QualifiedStatement, name::Symbol, default = nothing) =
+    get(_record_options(record), name, default)
 
-function _kind_name(kind::Union{CellKind, MediumKind})
-    return Symbol(statement_id(kind))
-end
-
-function _relation_offsets(statements, name::Symbol, dimensions::Int, fallback)
-    relation = findfirst(statement ->
-        statement isa SpatialRelation &&
-        Symbol(statement_id(statement)) === name, statements)
+function _relation_offsets(
+        source::FrozenSourceGraph,
+        domain::QualifiedStatement,
+        name::Symbol,
+        dimensions::Int,
+        fallback,
+    )
+    relation = _resource_record(source, domain, :SpatialRelation, name)
     relation === nothing && return _neighborhood_offsets(fallback, dimensions)
-    neighborhood = _statement_option(statements[relation], :neighborhood)
+    neighborhood = _statement_option(relation, :neighborhood)
     neighborhood isa Union{VonNeumann, Moore} || throw(ArgumentError(
         "relation `$name` must use VonNeumann or Moore in V1"
     ))
     return _neighborhood_offsets(neighborhood, dimensions)
 end
 
-function _lower_relationships(statements, manifest, ::Type{T}) where {
+function _lower_relationships(ir::AnalyzedTermIR, manifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    resources = _ordered_relationships(statements)
+    resources = _ordered_relationships(ir.source.records)
     return Tuple(
         begin
             capacity = _numeric_value(
@@ -88,30 +69,33 @@ function _token_suffix(value, prefix::AbstractString)
     return Symbol(name[(lastindex(prefix) + 1):end])
 end
 
-function _lower_observations(statements, kinds, state_layout)
+function _lower_observations(ir::AnalyzedTermIR, kinds, state_layout)
     manifest = NamedTuple[]
-    state_variables = Dict{Any, Symbol}()
-    for statement in statements
-        statement isa Union{
-            SiteState, CellState, MediumState, ModelState, FieldState,
-            HistoryState,
-        } || continue
-        arguments = _statement_arguments(statement)
+    records = ir.source.records
+    state_variables = Pair{QualifiedStatement, Any}[]
+    for record in records
+        record.kind in (
+            :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
+            :HistoryState,
+        ) || continue
+        arguments = _record_arguments(record)
         haskey(arguments, :variable) || continue
-        state_variables[arguments.variable] = Symbol(statement_id(statement))
+        push!(state_variables, record => arguments.variable)
     end
-    relationship_names = Symbol[
-        Symbol(statement_id(statement))
-        for statement in _ordered_relationships(statements)
-    ]
-    for statement in statements
-        statement isa Observation || continue
-        expression = _statement_arguments(statement).expression
-        name = Symbol(statement_id(statement))
-        if any(variable -> isequal(expression, variable), keys(state_variables))
-            state_name = state_variables[expression]
+    relationships = _ordered_relationships(records)
+    for record in records
+        record.kind === :Observation || continue
+        expression = _record_arguments(record).expression
+        name = _qualified_public_name(record.identity)
+        state_index = findfirst(
+            pair -> isequal(expression, last(pair)), state_variables
+        )
+        if state_index !== nothing
+            state_record = first(state_variables[state_index])
+            state_name = _qualified_public_name(state_record.identity)
+            identity = _qualified_resource_identity(state_record.identity)
             layout_entry = only(filter(
-                entry -> entry.schema.identity.name === state_name,
+                entry -> entry.schema.identity == identity,
                 state_layout.entries,
             ))
             push!(manifest, (
@@ -136,35 +120,55 @@ function _lower_observations(statements, kinds, state_layout)
             Any[]
         end
         if operation === occupancy && length(arguments) == 2
-            kind_name = _token_suffix(first(arguments), "__potts_kind__")
-            kind_name === nothing && throw(ArgumentError(
+            requested = _token_suffix(first(arguments), "__potts_kind__")
+            requested === nothing && throw(ArgumentError(
                 "observation `$name` has an invalid occupancy kind"
+            ))
+            declaration = _resource_record(
+                ir.source, record, :CellKind, requested
+            )
+            declaration === nothing && (declaration = _resource_record(
+                ir.source, record, :MediumKind, requested
+            ))
+            declaration === nothing && throw(ArgumentError(
+                "observation `$name` references an undeclared kind"
             ))
             push!(manifest, (
                 name,
                 kind = :occupied_sites,
                 evaluator = OccupiedSitesObservationEvaluator(
-                    Int16(kinds[kind_name])
+                    Int16(kinds[declaration.identity])
                 ),
             ))
         elseif operation in (neighbor_count, degree) && length(arguments) == 2
-            relationship_name = _token_suffix(
+            requested = _token_suffix(
                 first(arguments), "__potts_relationship_set__"
             )
-            relationship_name === nothing && throw(ArgumentError(
+            requested === nothing && throw(ArgumentError(
                 "observation `$name` has an unsupported neighbor-count source"
+            ))
+            relationship = _resource_record(
+                ir.source, record, :RelationshipState, requested
+            )
+            relationship === nothing && throw(ArgumentError(
+                "observation `$name` references an undeclared relationship state"
             ))
             endpoint = _numeric_value(last(arguments))
             endpoint isa Integer || isinteger(endpoint) ||
                 throw(ArgumentError("relationship degree endpoint must be integral"))
-            relationship_slot = findfirst(==(relationship_name), relationship_names)
+            relationship_slot = findfirst(
+                candidate -> candidate.identity == relationship.identity,
+                relationships,
+            )
             relationship_slot === nothing && throw(ArgumentError(
                 "observation `$name` references an undeclared relationship state"
             ))
             push!(manifest, (
                 name,
                 kind = :relationship_degree,
-                relationship_name,
+                relationship_name = _qualified_public_name(
+                    relationship.identity
+                ),
                 evaluator = RelationshipDegreeObservationEvaluator(
                     Int32(relationship_slot), Int32(endpoint)
                 ),
@@ -179,14 +183,14 @@ function _lower_observations(statements, kinds, state_layout)
     return Tuple(manifest)
 end
 
-function _protocol_settings(statements, manifest, ::Type{T}) where {
+function _protocol_settings(records, manifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
     attempts = 1
     temperature_value = one(T)
-    for statement in statements
-        statement isa Protocol || continue
-        for stage in _statement_arguments(statement).stages
+    for record in records
+        record.kind === :Protocol || continue
+        for stage in _record_arguments(record).stages
             stage isa SweepStage || continue
             attempts = stage.attempts.count
             if haskey(stage.options, :temperature)
@@ -198,7 +202,7 @@ function _protocol_settings(statements, manifest, ::Type{T}) where {
 end
 
 function _lower_core_program(
-        completed::PottsSystem,
+        ir::AnalyzedTermIR,
         engine::AbstractPottsEngine,
         backend::AbstractPottsBackend,
         ::Type{T},
@@ -207,8 +211,8 @@ function _lower_core_program(
         stage_plan::CorePotts.StageExecutionPlan,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
-    all_statements = _all_system_statements(completed)
-    domains = filter(statement -> statement isa LatticeDomain, all_statements)
+    records = ir.source.records
+    domains = filter(record -> record.kind === :LatticeDomain, records)
     length(domains) == 1 ||
         throw(ArgumentError("V1 compilation requires exactly one LatticeDomain"))
     domain = only(domains)
@@ -226,40 +230,33 @@ function _lower_core_program(
         throw(ArgumentError("unsupported V1 lattice boundary $(typeof(boundary))"))
     end
 
-    declarations = filter(
-        statement -> statement isa Union{CellKind, MediumKind}, all_statements
-    )
+    declarations = _ordered_kind_records(records)
     isempty(declarations) &&
         throw(ArgumentError("V1 compilation requires declared cell/medium kinds"))
-    sorted_declarations = sort(declarations; by = statement ->
-        (statement isa MediumKind ? 0 : 1, String(Symbol(statement_id(statement)))))
-    kinds = Dict{Symbol, Int}()
-    for (index, declaration) in enumerate(sorted_declarations)
-        name = _kind_name(declaration)
-        haskey(kinds, name) &&
-            throw(ArgumentError("duplicate kind `$name`"))
-        kinds[name] = index
-    end
-    media = filter(statement -> statement isa MediumKind, sorted_declarations)
+    kinds = Dict(
+        declaration.identity => index
+        for (index, declaration) in enumerate(declarations)
+    )
+    media = filter(record -> record.kind === :MediumKind, declarations)
     isempty(media) &&
         throw(ArgumentError("V1 compilation requires at least one MediumKind"))
-    medium_kind = kinds[_kind_name(first(media))]
+    medium_kind = kinds[first(media).identity]
     medium_kinds = falses(length(kinds))
     for declaration in media
-        medium_kinds[kinds[_kind_name(declaration)]] = true
+        medium_kinds[kinds[declaration.identity]] = true
     end
     count = length(kinds)
     defaults = _default_parameter_buffer(manifest, T)
     proposal_offsets = _relation_offsets(
-        all_statements, :proposal, dimensions, VonNeumann()
+        ir.source, domain, :proposal, dimensions, VonNeumann()
     )
     contact_offsets = _relation_offsets(
-        all_statements, :contact, dimensions, Moore()
+        ir.source, domain, :contact, dimensions, Moore()
     )
-    attempts, temperature = _protocol_settings(all_statements, manifest, T)
-    relationships = _lower_relationships(all_statements, manifest, T)
+    attempts, temperature = _protocol_settings(records, manifest, T)
+    relationships = _lower_relationships(ir, manifest, T)
     observation_manifest = _lower_observations(
-        all_statements, kinds, descriptor_plan.state_layout
+        ir, kinds, descriptor_plan.state_layout
     )
     core_engine = engine isa SequentialEngine ?
                   CorePotts.SequentialProgramEngine() :
@@ -275,7 +272,7 @@ function _lower_core_program(
         periodic,
         proposal_offsets,
         contact_offsets,
-        sort(collect(kinds); by = first),
+        Tuple((record.identity, kinds[record.identity]) for record in declarations),
     )
     return CorePotts.CompiledPottsProgram(
         shape,
@@ -293,6 +290,11 @@ function _lower_core_program(
         core_backend,
         program_fingerprint;
         medium_kinds,
-    ), Tuple(_kind_name(declaration) for declaration in sorted_declarations),
-       observation_manifest
+    ), Tuple((
+        identity = _manifest_identity(declaration.identity),
+        resource_identity = _qualified_resource_identity(declaration.identity),
+        name = _qualified_public_name(declaration.identity),
+        local_name = Symbol(declaration.identity.local_id),
+        kind = declaration.kind,
+    ) for declaration in declarations), observation_manifest
 end

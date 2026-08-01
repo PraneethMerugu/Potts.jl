@@ -1,7 +1,6 @@
 # CorePotts V1 program ownership map. Each included file owns one runtime layer;
 # this file deliberately contains no executable implementation.
 
-include("types.jl")
 include("relationships.jl")
 include("runtime.jl")
 include("../execution/program_rng.jl")

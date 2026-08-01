@@ -300,8 +300,9 @@ function _domain_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
     fact = candidate.energy_domain
     fact.kind === :sites && return CorePotts.SiteEnergyDomainPlan()
     if fact.kind === :cells
+        owner = ir.source.records[candidate.record]
         kind = _compiled_kind_index(
-            ir, Symbol(statement_id(fact.resource))
+            ir, owner, fact.resource
         )
         kind === nothing && throw(ArgumentError(
             "cell energy domain has no compiled kind index"

@@ -169,10 +169,21 @@ function _kind_symbol(kind)
 end
 
 function _kind_indices(executable::PottsExecutable)
-    return Dict(
-        kind => index
-        for (index, kind) in enumerate(executable.reports.kinds)
+    result = Dict(
+        kind => index for (index, kind) in enumerate(executable.reports.kinds)
     )
+    identities = executable.reports.kind_identities
+    local_counts = Dict{Symbol, Int}()
+    for entry in identities
+        local_counts[entry.local_name] = get(
+            local_counts, entry.local_name, 0
+        ) + 1
+    end
+    for (index, entry) in enumerate(identities)
+        local_counts[entry.local_name] == 1 || continue
+        result[entry.local_name] = index
+    end
+    return result
 end
 
 function _materialize_labelled(
@@ -370,13 +381,29 @@ end
 
 function _initial_value_map(executable::PottsExecutable, initial::PottsInitialState)
     result = Dict{Symbol, Any}()
+    entries = (
+        executable.reports.states...,
+        executable.reports.relationship_states...,
+    )
     for (key, value) in initial.values
         key_name = _state_name(key)
-        state_index = findfirst(
-            entry -> entry.key === key_name, executable.reports.states
+        matches = findall(
+            entry -> entry.name === key_name ||
+                     (haskey(entry, :key) && entry.key === key_name),
+            entries,
         )
-        name = state_index === nothing ?
-               key_name : executable.reports.states[state_index].name
+        if isempty(matches)
+            matches = findall(
+                entry -> entry.local_name === key_name ||
+                         (haskey(entry, :local_key) &&
+                          entry.local_key === key_name),
+                entries,
+            )
+        end
+        length(matches) <= 1 || throw(ArgumentError(
+            "initial state key `$key_name` is ambiguous; use its qualified name"
+        ))
+        name = isempty(matches) ? key_name : entries[only(matches)].name
         haskey(result, name) &&
             throw(ArgumentError("duplicate initial value for `$name`"))
         result[name] = _defensive_copy(value)
@@ -559,9 +586,9 @@ function _core_initial_state(
         throw(ArgumentError("unknown initial state value$(length(unknown) == 1 ? "" : "s"): " *
                             join(string.(sort!(collect(unknown))), ", ")))
     T = eltype(executable.core_program.parameter_defaults)
-    normalized_states = Dict{Symbol, Any}()
+    normalized_states = Dict{CorePotts.QualifiedResourceIdentity, Any}()
     for entry in executable.reports.states
-        normalized_states[entry.name] = _normalize_initial_state_entry(
+        normalized_states[entry.identity] = _normalize_initial_state_entry(
             entry,
             values,
             executable.core_program.shape,
@@ -571,14 +598,14 @@ function _core_initial_state(
     end
     descriptor_layout = executable.core_program.descriptor_plan.state_layout
     descriptor_initial_values = map(descriptor_layout.entries) do layout_entry
-        name = layout_entry.schema.identity.name
-        if haskey(normalized_states, name)
-            value = normalized_states[name]
+        identity = layout_entry.schema.identity
+        if haskey(normalized_states, identity)
+            value = normalized_states[identity]
             if value isa Tuple && all(item -> item isa AbstractArray, value)
                 shape = Tuple(layout_entry.schema.shape)
                 length(shape) > 1 && length(value) == last(shape) ||
                     throw(ArgumentError(
-                        "history state `$name` is incompatible with its descriptor layout"
+                        "history state `$identity` is incompatible with its descriptor layout"
                     ))
                 packed = Array{layout_entry.schema.element_type}(undef, shape)
                 for index in eachindex(value)

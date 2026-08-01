@@ -40,8 +40,8 @@ function _relationship_checkpoint_payload(state::ProgramRelationshipState)
     )
 end
 
-_relationship_checkpoint_payload(states::Tuple) =
-    join(map(_relationship_checkpoint_payload, states), "||")
+_relationship_checkpoint_payload(states::RelationshipStorage) =
+    join((_relationship_checkpoint_payload(state) for state in states), "||")
 
 function _program_checkpoint_checksum(
         schema,
@@ -152,7 +152,7 @@ function restore_program_checkpoint(
         checkpoint.snapshot.cell_kinds;
         scalar_type = eltype(program.parameter_defaults),
         cell_generations = checkpoint.snapshot.cell_generations,
-        relationships = ntuple(_ -> nothing, length(program.relationships)),
+        relationships = fill(nothing, length(program.relationships)),
         descriptor_state = checkpoint.snapshot.descriptor_state,
     )
     runtime = initialize_program(
@@ -166,7 +166,7 @@ function restore_program_checkpoint(
     )
     runtime.volumes == checkpoint.snapshot.volumes ||
         throw(ArgumentError("checkpoint logical volume invariant failed"))
-    runtime.relationships = map(copy, checkpoint.snapshot.relationships)
+    runtime.relationships = copy(checkpoint.snapshot.relationships)
     runtime.accepted = checkpoint.accepted
     runtime.rejected = checkpoint.rejected
     runtime.null_attempts = checkpoint.null_attempts
@@ -250,18 +250,19 @@ function initialize_program(
             "initial relationship values must align with compiled schemas"
         )
     )
-    relationships = map(
-        program.relationships,
-        initial.relationships,
-    ) do schema, entries
-        initialize_program_relationships(
+    relationship_values = Any[]
+    for relationship_slot in eachindex(program.relationships)
+        schema = program.relationships[relationship_slot]
+        entries = initial.relationships[relationship_slot]
+        push!(relationship_values, initialize_program_relationships(
             schema,
             initial.cell_kinds,
             initial.cell_generations,
             T.(parameters),
             entries,
-        )
+        ))
     end
+    relationships = RelationshipStorage(relationship_values)
     descriptor_state = if initial.descriptor_state === nothing
         allocate_auxiliary_state(program.descriptor_plan.state_layout)
     elseif initial.descriptor_state isa AuxiliaryState
@@ -316,7 +317,7 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     runtime.settled || throw(ArgumentError(
         "a program snapshot requires a settled complete-MCS boundary"
     ))
-    relationships = map(copy, runtime.relationships)
+    relationships = copy(runtime.relationships)
     descriptor_state = copy_auxiliary_state(
         runtime.program.descriptor_plan.state_layout,
         runtime.descriptor_state,

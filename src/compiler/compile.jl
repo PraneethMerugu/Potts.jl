@@ -46,7 +46,7 @@ function compile(
             for entry in manifest),
     )
     core_program, kinds, observation_manifest = _lower_core_program(
-        completed,
+        analyzed_ir,
         engine,
         backend,
         scalar_type,
@@ -69,17 +69,17 @@ function compile(
         )
         for record in inspect(completed, Schedule())
     ]
-    all_statements = _all_system_statements(completed)
-    activity_reference = let index = findfirst(statement ->
-            statement isa ProposalDrive &&
-            _statement_option(statement, :mechanism) === :activity,
-            all_statements)
+    records = analyzed_ir.source.records
+    activity_reference = let index = findfirst(record ->
+            record.kind === :ProposalDrive &&
+            _statement_option(record, :mechanism) === :activity,
+            records)
         index === nothing ? nothing :
-        _statement_option(all_statements[index], :activity)
+        _statement_option(records[index], :activity)
     end
     states = _compiled_state_manifest(
         completed,
-        all_statements,
+        records,
         activity_reference,
         manifest,
         descriptor_plan.state_layout,
@@ -89,8 +89,22 @@ function compile(
     relationship_states = Tuple(
         let
             payload = _statement_option(statement, :payload, NamedTuple())
+            endpoint_name = function (value)
+                declaration = _resource_record(
+                    analyzed_ir.source, statement, :CellKind, value
+                )
+                declaration === nothing && (declaration = _resource_record(
+                    analyzed_ir.source, statement, :MediumKind, value
+                ))
+                declaration === nothing && throw(ArgumentError(
+                    "relationship endpoint kind is not declared"
+                ))
+                return _qualified_public_name(declaration.identity)
+            end
             (
-                name = Symbol(statement_id(statement)),
+                name = _qualified_public_name(statement.identity),
+                local_name = Symbol(statement.identity.local_id),
+                identity = _qualified_resource_identity(statement.identity),
                 capacity = Int(_numeric_value(
                     _statement_option(statement, :capacity)
                 )),
@@ -102,8 +116,8 @@ function compile(
                     (
                         direction = endpoints isa Undirected ? :undirected :
                                     :directed,
-                        kind_a = _manifest_symbol(endpoints.kind_a),
-                        kind_b = _manifest_symbol(endpoints.kind_b),
+                        kind_a = endpoint_name(endpoints.kind_a),
+                        kind_b = endpoint_name(endpoints.kind_b),
                     )
                 end,
                 lifecycle = nameof(typeof(_statement_option(
@@ -115,9 +129,9 @@ function compile(
                 )),
             )
         end
-        for statement in _ordered_relationships(all_statements)
+        for statement in _ordered_relationships(records)
     )
-    time = _compiled_time_contract(all_statements)
+    time = _compiled_time_contract(records)
     external_io = _compiled_external_io(
         completed,
         manifest,
@@ -145,7 +159,8 @@ function compile(
             addressed_rng = true,
         ),
         checkpoint = (schema = v"1.0.0", logical_only = true),
-        kinds,
+        kinds = Tuple(entry.name for entry in kinds),
+        kind_identities = kinds,
         fingerprints = completion_fingerprints,
         states,
         relationship_states,

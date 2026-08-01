@@ -346,21 +346,23 @@ function _draw_handle_for_leaf(
     return get(handles, (node.source.path, identity), nothing)
 end
 
-function _compiled_kind_index(ir::AnalyzedTermIR, requested::Symbol)
-    declarations = filter(
-        record -> record.kind in (:CellKind, :MediumKind),
-        ir.source.records,
+function _compiled_kind_index(
+        ir::AnalyzedTermIR,
+        owner::QualifiedStatement,
+        requested,
     )
-    sort!(declarations; by = record -> (
-        record.kind === :MediumKind ? 0 : 1,
-        String(Symbol(record.identity.local_id)),
+    declaration = _resource_record(
+        ir.source, owner, :CellKind, requested
+    )
+    declaration === nothing && (declaration = _resource_record(
+        ir.source, owner, :MediumKind, requested
     ))
+    declaration === nothing && return nothing
+    declarations = _ordered_kind_records(ir.source.records)
     index = findfirst(
-        record -> Symbol(record.identity.local_id) === requested,
-        declarations,
+        record -> record.identity == declaration.identity, declarations
     )
-    index === nothing && return nothing
-    return Int16(index)
+    return index === nothing ? nothing : Int16(index)
 end
 
 function _compiled_kind_leaf(ir::AnalyzedTermIR, node::NormalizedTermNode)
@@ -369,8 +371,9 @@ function _compiled_kind_leaf(ir::AnalyzedTermIR, node::NormalizedTermNode)
     text = String(name)
     prefix = "__potts_kind__"
     startswith(text, prefix) || return nothing
+    owner = ir.source.records[Int(node.record)]
     return _compiled_kind_index(
-        ir, Symbol(text[(length(prefix) + 1):end])
+        ir, owner, Symbol(text[(length(prefix) + 1):end])
     )
 end
 
