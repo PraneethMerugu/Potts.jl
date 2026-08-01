@@ -123,10 +123,10 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Gate | State | Establishing evidence | Checkpoint | Review |
 |---|---|---|---|---|
 | G0 authority and recovery baseline | `passed` | branch/worktree inventory; specification validation; baseline execution | `0cc013ae8086` | none |
-| G1 host compiler facts | `reopened` | R1.5 proved declared connectivity semantics are absent from lowering and explicit draw identities are occurrence-set ordinals | `eb8a37a` | R1.5 returned G1 |
-| G2 descriptor/group/evaluator/state/workspace | `reopened` | prior boundary passed; must requalify repaired connectivity and draw-identity representations | `3e131d97e352` | R1.5 returned through G2 |
-| G3 sequential reference/finite transitions | `reopened` | candidate passed 305/305 focused tests but R1.5 found descriptor-authority, oracle, allocation, accounting, and seam defects | `d8f00c352230` | R1.5 returned G3 |
-| G4 checkerboard/first GPU witness | `pending` | blocked until R1.5 clears G3 | pending | none |
+| G1 host compiler facts | `passed` | eighth R1.5 cleared host facts, lowering authority, diagnostics, and extension admission | `a014c80707d9` | R1.5 passed |
+| G2 descriptor/group/evaluator/state/workspace | `passed` | eighth R1.5 cleared the single evaluator path, storage ownership, specialization, and backend-neutral external boundary | `a014c80707d9` | R1.5 passed |
+| G3 sequential reference/finite transitions | `passed` | eighth R1.5 cleared sequential authority, finite transitions, checkpoints, scientific ownership, and the fast/default/qualification partition | `a014c80707d9` | R1.5 passed |
+| G4 checkerboard/first GPU witness | `in_progress` | eighth R1.5 reported zero P0/P1 and admitted G4 entry | pending | none |
 | G5 trackers/relationships/lifecycle/checkpoint | `pending` | pending | pending | R2 |
 | G6 public integration spine | `pending` | pending | pending | none |
 | G7 proof-model reconstruction | `pending` | pending | pending | R3 |
@@ -138,7 +138,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | Review | State | Blocking findings | Nonblocking findings |
 |---|---|---|---|
 | R1 compiler | `passed` | none | none |
-| R1.5 sequential authority | `returned` | 1 P0; 2 P1 | 4 P2 |
+| R1.5 sequential authority | `passed` | none | 3 P2 |
 | R2 execution/concurrency/GPU | `pending` | none | none |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
@@ -1858,6 +1858,38 @@ classified it as a nonblocking G4 responsibility: give it a measured structural 
 or remove it before G4 closes. The eighth review must not manufacture a pre-G4 use merely to silence
 an import, but must confirm that this bounded disposition and the deferred compiler-file split do
 not conceal a P0/P1 boundary defect.
+
+### Eighth R1.5 result — passed
+
+The fresh independent read-only review of repair checkpoint
+`a014c80707d954009466a60c6aa3ac64210b371a` reported zero P0, zero P1, and three P2 findings. G4 is
+cleared to begin.
+
+The reviewer independently reproduced the repaired fast target at 74/74 in 1m41.9s and the real
+Apple Silicon Metal shared conformance witness with 32 `MtlArray` descriptors, device-backed
+state/workspace `BlockView`s, and value `17.5f0`. It confirmed that the fast target now uses the
+same registered external mechanism conformance body at the minimum legitimate descriptor count of
+one, while vendor launchers retain the 32-descriptor default.
+
+The review answered both terminal R1.5 questions affirmatively:
+
+1. exactly one production route exists from `compile` through descriptor-plan lowering,
+   `_static_evaluator`, compiler-owned `ProposalDescriptor`, and private
+   `_compiled_evaluate_static`; and
+2. every important compiler, runtime, scientific, statistical, checkpoint, and portability
+   guarantee now has a cheapest authoritative test owner, with additional witnesses protecting a
+   different boundary or independent oracle.
+
+The three nonblocking G4 obligations are explicit:
+
+- split `static_evaluators.jl` and `stage_descriptors.jl` by responsibility before substantial
+  checkerboard growth;
+- give AcceleratedKernels a measured structural bulk-algorithm role or remove it before G4 closes;
+  and
+- correct the compiler README's stage-descriptor/constraint include order. The order correction is
+  applied at G4 entry.
+
+CUDA and AMDGPU were not run and receive no hardware qualification claim.
 
 ## Prohibited record contents
 

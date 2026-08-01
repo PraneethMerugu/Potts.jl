@@ -45,11 +45,11 @@ lowering/domain_resources.jl
 lowering/proposal_descriptors.jl
     construct the universal proposal descriptor and occurrence groups
 
-lowering/constraints.jl
-    lower prelaunch parameter-domain constraints and assemble the plan
-
 lowering/stage_descriptors.jl
     lower accepted-copy and after-MCS effects into the closed stage taxonomy
+
+lowering/constraints.jl
+    lower prelaunch parameter-domain constraints and assemble the plan
 
 execution/boundary.jl
     validate that only concrete compiled data crosses into CorePotts
