@@ -305,6 +305,23 @@ function allocate_program_engine_workspace(
     return _allocate_checkerboard_workspace(state)
 end
 
+function _validate_gpu_descriptor_plan(plan::AbstractDescriptorEvaluationPlan)
+    for group in plan.groups
+        for descriptor in group.launch.instances
+            support = descriptor_support(descriptor)
+            support isa DescriptorSupport || throw(ArgumentError(
+                "descriptor support must be a DescriptorSupport value"
+            ))
+            support.gpu || throw(ArgumentError(
+                "descriptor source $(descriptor_source_handle(descriptor)) " *
+                "does not declare GPU support (reason code " *
+                "$(support.reason_code))"
+            ))
+        end
+    end
+    return nothing
+end
+
 function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     state = workspace.state
     state.program.stage_plan.accepted_count == 0 || throw(ArgumentError(
@@ -316,6 +333,7 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     isempty(state.program.ownership_change_handles) || throw(ArgumentError(
         "ownership-cleared checkerboard state is not qualified on device backends"
     ))
+    _validate_gpu_descriptor_plan(state.program.descriptor_plan)
     adapted = CheckerboardExecutionState(
         _checkerboard_kernel_program(state.program, to),
         Adapt.adapt(to, state.ownership),
@@ -515,94 +533,101 @@ function execute_checkerboard_mcs!(
     evaluate_kernel = _checkerboard_evaluate_kernel!(backend)
     commit_kernel = _checkerboard_commit_kernel!(backend)
     report_kernel = _checkerboard_report_kernel!(backend)
-    for color in 1:Int(plan.color_count)
-        color_size = Int(@inbounds workspace.color_sizes[color])
-        batch_size = color_size * Int(state.program.attempts_per_site)
-        candidate_kernel(
-            workspace.target_sites,
-            workspace.source_sites,
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.priorities,
-            workspace.semantic_ids,
-            workspace.dispositions,
-            state,
-            Int32(color);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        _clear_checkerboard_claims!(workspace)
-        claim_priority_kernel(
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.priorities,
-            workspace.dispositions,
-            workspace.cell_max_priority,
-            Int32(batch_size);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        claim_identity_kernel(
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.priorities,
-            workspace.semantic_ids,
-            workspace.dispositions,
-            workspace.cell_max_priority,
-            workspace.cell_min_identity,
-            Int32(batch_size);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        select_kernel(
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.priorities,
-            workspace.semantic_ids,
-            workspace.dispositions,
-            workspace.cell_max_priority,
-            workspace.cell_min_identity,
-            Int32(batch_size);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        evaluate_kernel(
-            workspace.contributions,
-            workspace.target_sites,
-            workspace.source_sites,
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.semantic_ids,
-            workspace.dispositions,
-            state,
-            Int32(color),
-            Int32(batch_size);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        staged_commit && _prepare_checkerboard_accepted_stage!(
-            workspace, state, color, batch_size
-        )
-        commit_kernel(
-            workspace.target_sites,
-            workspace.old_owners,
-            workspace.new_owners,
-            workspace.dispositions,
-            state,
-            Int32(batch_size);
-            ndrange = maximum_batch,
-        )
-        KernelAbstractions.synchronize(backend)
-        staged_commit && _publish_checkerboard_accepted_stage!(
-            workspace, state, color, batch_size
-        )
-        report_kernel(
-            workspace.report,
-            workspace.dispositions,
-            Int32(batch_size);
-            ndrange = 1,
-        )
-        KernelAbstractions.synchronize(backend)
+    # Attempts-per-site are semantic sweep rounds. Finish every color in one
+    # round before constructing candidates for the next round so a target is
+    # never represented by multiple concurrent candidates and later rounds
+    # observe the committed state of earlier rounds.
+    for attempt_round in 1:Int(state.program.attempts_per_site)
+        for color in 1:Int(plan.color_count)
+            color_size = Int(@inbounds workspace.color_sizes[color])
+            batch_size = color_size
+            candidate_kernel(
+                workspace.target_sites,
+                workspace.source_sites,
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.priorities,
+                workspace.semantic_ids,
+                workspace.dispositions,
+                state,
+                Int32(color),
+                Int32(attempt_round);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            _clear_checkerboard_claims!(workspace)
+            claim_priority_kernel(
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.priorities,
+                workspace.dispositions,
+                workspace.cell_max_priority,
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            claim_identity_kernel(
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.priorities,
+                workspace.semantic_ids,
+                workspace.dispositions,
+                workspace.cell_max_priority,
+                workspace.cell_min_identity,
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            select_kernel(
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.priorities,
+                workspace.semantic_ids,
+                workspace.dispositions,
+                workspace.cell_max_priority,
+                workspace.cell_min_identity,
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            evaluate_kernel(
+                workspace.contributions,
+                workspace.target_sites,
+                workspace.source_sites,
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.semantic_ids,
+                workspace.dispositions,
+                state,
+                Int32(color),
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            staged_commit && _prepare_checkerboard_accepted_stage!(
+                workspace, state, color, batch_size
+            )
+            commit_kernel(
+                workspace.target_sites,
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.dispositions,
+                state,
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
+            staged_commit && _publish_checkerboard_accepted_stage!(
+                workspace, state, color, batch_size
+            )
+            report_kernel(
+                workspace.report,
+                workspace.dispositions,
+                Int32(batch_size);
+                ndrange = 1,
+            )
+            KernelAbstractions.synchronize(backend)
+        end
     end
     return workspace
 end

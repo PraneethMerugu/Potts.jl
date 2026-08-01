@@ -98,6 +98,11 @@
     @test length(string(PottsToolkit.executable_fingerprint(executable))) == 64
     @test PottsToolkit.executable_fingerprint(executable) !=
           PottsToolkit.executable_fingerprint(checkerboard)
+    checkerboard_conflicts = CorePotts.checkerboard_plan_report(
+        checkerboard.core_program.checkerboard_plan
+    ).conflict_displacements
+    @test (-1, -1) in checkerboard_conflicts
+    @test (1, 1) in checkerboard_conflicts
     @test all(
         entry -> entry.default !== nothing,
         executable.parameter_manifest,

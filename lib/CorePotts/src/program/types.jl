@@ -192,16 +192,23 @@ function CompiledPottsProgram(
         throw(ArgumentError("attempts per site must be positive"))
     relationship_storage = relationships isa RelationshipStorage ?
                            relationships : RelationshipStorage(relationships)
-    resolved_checkerboard_plan = if checkerboard_plan === nothing
-        engine isa CheckerboardProgramEngine ? CheckerboardPlan(
-            shape, periodic, proposal_offsets
-        ) : NoCheckerboardPlan()
-    else
-        checkerboard_plan
-    end
+    checkerboard_plan === nothing && engine isa CheckerboardProgramEngine &&
+        throw(ArgumentError(
+            "checkerboard programs require a compiler-derived checkerboard plan"
+        ))
+    resolved_checkerboard_plan = checkerboard_plan === nothing ?
+                                 NoCheckerboardPlan() : checkerboard_plan
     resolved_checkerboard_plan isa AbstractCheckerboardPlan || throw(
         ArgumentError("checkerboard_plan has the wrong type")
     )
+    engine isa CheckerboardProgramEngine &&
+        !(resolved_checkerboard_plan isa CheckerboardPlan) && throw(
+            ArgumentError("checkerboard programs require a realized-domain plan")
+        )
+    engine isa SequentialProgramEngine &&
+        !(resolved_checkerboard_plan isa NoCheckerboardPlan) && throw(
+            ArgumentError("sequential programs cannot carry a checkerboard plan")
+        )
     return CompiledPottsProgram{
         T, N, E, B, typeof(relationship_storage), TP, D, SP,
         typeof(resolved_checkerboard_plan),

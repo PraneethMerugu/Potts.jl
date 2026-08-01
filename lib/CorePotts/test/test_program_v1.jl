@@ -15,6 +15,7 @@ function test_program(
         temperature = 3,
         descriptor_plan = empty_descriptor_plan(),
         stage_plan = CorePotts.StageExecutionPlan(),
+        attempts_per_site = 1,
         tracker_plan = CorePotts.TrackerExecutionPlan(
             (CorePotts.OwnershipCountTracker(),),
             "ownership-count-tracker-v1-test",
@@ -26,6 +27,9 @@ function test_program(
         1 -1 0 0
         0 0 1 -1
     ]
+    checkerboard_plan = engine isa CorePotts.CheckerboardProgramEngine ?
+        CorePotts.CheckerboardPlan((6, 6), (true, true), offsets) :
+        CorePotts.NoCheckerboardPlan()
     return CorePotts.CompiledPottsProgram(
         (6, 6),
         (true, true),
@@ -33,7 +37,7 @@ function test_program(
         2,
         1,
         scalar(temperature),
-        1,
+        attempts_per_site,
         T[],
         relationships,
         tracker_plan,
@@ -41,7 +45,8 @@ function test_program(
         stage_plan,
         engine,
         CorePotts.CPUProgramBackend(),
-        "core-program-v1-test",
+        "core-program-v1-test";
+        checkerboard_plan,
     )
 end
 
@@ -165,6 +170,32 @@ function test_initial()
     return CorePotts.ProgramInitialState(
         ownership, Int16[2]; scalar_type = Float64
     )
+end
+
+@testset "checkerboard attempts are ordered sweep rounds" begin
+    program = test_program(
+        CorePotts.CheckerboardProgramEngine(); attempts_per_site = 2
+    )
+    first = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xa77e), UInt32(1)
+    )
+    second = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xa77e), UInt32(1)
+    )
+    CorePotts.advance_mcs!(first)
+    CorePotts.advance_mcs!(second)
+    attempts = length(first.ownership) * Int(program.attempts_per_site)
+    @test first.accepted + first.rejected + first.null_attempts == attempts
+    @test CorePotts.program_snapshot(first).ownership ==
+          CorePotts.program_snapshot(second).ownership
+    @test CorePotts.program_tracker_values(first, Val(:cell_volume)) ==
+          CorePotts.program_tracker_values(second, Val(:cell_volume))
+    @test CorePotts.validate_tracker_state!(
+        program.tracker_plan,
+        first.trackers,
+        first.ownership,
+        first.cell_kinds,
+    ) === first.trackers
 end
 
 @testset "bounded histories are logical checkpoint state" begin
@@ -736,47 +767,53 @@ end
 end
 
 @testset "logical checkpoints preserve exact continuation" begin
-    program = test_program(CorePotts.SequentialProgramEngine())
-    uninterrupted = CorePotts.initialize_program(
-        program, test_initial(), Float64[], UInt64(0x55), UInt32(1)
-    )
-    for _ in 1:3
-        CorePotts.advance_mcs!(uninterrupted)
-    end
-    checkpoint = CorePotts.program_checkpoint(uninterrupted)
-    restored = CorePotts.restore_program_checkpoint(program, checkpoint)
-    for _ in 1:3
-        CorePotts.advance_mcs!(uninterrupted)
-        CorePotts.advance_mcs!(restored)
-    end
-    @test CorePotts.program_snapshot(uninterrupted).ownership ==
-          CorePotts.program_snapshot(restored).ownership
-    @test uninterrupted.accepted == restored.accepted
-    @test uninterrupted.rejected == restored.rejected
-    @test uninterrupted.null_attempts == restored.null_attempts
-    @test uninterrupted.constraint_rejections == restored.constraint_rejections
-    @test uninterrupted.energy_rejections == restored.energy_rejections
-    @test uninterrupted.retired_cells == restored.retired_cells
+    for engine in (
+            CorePotts.SequentialProgramEngine(),
+            CorePotts.CheckerboardProgramEngine(),
+        )
+        program = test_program(engine; attempts_per_site = 2)
+        uninterrupted = CorePotts.initialize_program(
+            program, test_initial(), Float64[], UInt64(0x55), UInt32(1)
+        )
+        for _ in 1:3
+            CorePotts.advance_mcs!(uninterrupted)
+        end
+        checkpoint = CorePotts.program_checkpoint(uninterrupted)
+        restored = CorePotts.restore_program_checkpoint(program, checkpoint)
+        for _ in 1:3
+            CorePotts.advance_mcs!(uninterrupted)
+            CorePotts.advance_mcs!(restored)
+        end
+        @test CorePotts.program_snapshot(uninterrupted).ownership ==
+              CorePotts.program_snapshot(restored).ownership
+        @test uninterrupted.accepted == restored.accepted
+        @test uninterrupted.rejected == restored.rejected
+        @test uninterrupted.null_attempts == restored.null_attempts
+        @test uninterrupted.constraint_rejections ==
+              restored.constraint_rejections
+        @test uninterrupted.energy_rejections == restored.energy_rejections
+        @test uninterrupted.retired_cells == restored.retired_cells
 
-    corrupted = CorePotts.ProgramCheckpoint(
-        checkpoint.schema,
-        checkpoint.program_fingerprint,
-        checkpoint.snapshot,
-        checkpoint.parameters,
-        checkpoint.seed,
-        checkpoint.replica,
-        checkpoint.repeat,
-        checkpoint.accepted,
-        checkpoint.rejected,
-        checkpoint.null_attempts,
-        checkpoint.constraint_rejections,
-        checkpoint.energy_rejections,
-        checkpoint.retired_cells,
-        "corrupt",
-    )
-    @test_throws ArgumentError CorePotts.restore_program_checkpoint(
-        program, corrupted
-    )
+        corrupted = CorePotts.ProgramCheckpoint(
+            checkpoint.schema,
+            checkpoint.program_fingerprint,
+            checkpoint.snapshot,
+            checkpoint.parameters,
+            checkpoint.seed,
+            checkpoint.replica,
+            checkpoint.repeat,
+            checkpoint.accepted,
+            checkpoint.rejected,
+            checkpoint.null_attempts,
+            checkpoint.constraint_rejections,
+            checkpoint.energy_rejections,
+            checkpoint.retired_cells,
+            "corrupt",
+        )
+        @test_throws ArgumentError CorePotts.restore_program_checkpoint(
+            program, corrupted
+        )
+    end
 end
 @testset "initialization uses the semantic RNG address" begin
     first_draw = CorePotts.initialization_bounded(

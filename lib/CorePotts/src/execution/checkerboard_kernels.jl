@@ -25,17 +25,15 @@ end
         dispositions,
         state,
         color::Int32,
+        attempt_round::Int32,
     )
     local_index = @index(Global, Linear)
     plan = state.program.checkerboard_plan
     first_index = @inbounds plan.color_offsets[Int(color)]
     stop_index = @inbounds plan.color_offsets[Int(color) + 1] - Int32(1)
     color_size = stop_index - first_index + Int32(1)
-    batch_size = color_size * state.program.attempts_per_site
-    if local_index <= batch_size
-        zero_based = Int32(local_index - 1)
-        site_offset = rem(zero_based, color_size)
-        attempt_round = div(zero_based, color_size) + Int32(1)
+    if local_index <= color_size
+        site_offset = Int32(local_index - 1)
         schedule_index = first_index + site_offset
         target_linear = @inbounds plan.sites[Int(schedule_index)]
         semantic_id = (attempt_round - Int32(1)) *

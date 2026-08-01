@@ -376,6 +376,38 @@ end
     )).instances)
     @test CorePotts.descriptor_support(cpu_only_descriptor).cpu
     @test !CorePotts.descriptor_support(cpu_only_descriptor).gpu
+    cpu_only_checkerboard = compile(
+        completed_cpu_only;
+        engine = CheckerboardEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    cpu_only_program = cpu_only_checkerboard.core_program
+    finite_kind = Int16(only(filter(
+        kind -> kind != cpu_only_program.medium_kind,
+        1:Int(cpu_only_program.kind_count),
+    )))
+    cpu_only_ownership = zeros(Int32, 3, 3)
+    cpu_only_ownership[2, 2] = Int32(1)
+    cpu_only_runtime = CorePotts.initialize_program(
+        cpu_only_program,
+        CorePotts.ProgramInitialState(
+            cpu_only_ownership, Int16[finite_kind]; scalar_type = Float64
+        ),
+        cpu_only_program.parameter_defaults,
+        UInt64(0xc0),
+        UInt32(1),
+    )
+    gpu_rejection = try
+        CorePotts.adapt_checkerboard_workspace(
+            DescriptorProbeAdaptor(), cpu_only_runtime.engine_workspace
+        )
+        nothing
+    catch error
+        error
+    end
+    @test gpu_rejection isa ArgumentError
+    @test occursin("does not declare GPU support", sprint(showerror, gpu_rejection))
 
     function site_model(
             count;

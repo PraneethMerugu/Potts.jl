@@ -206,6 +206,118 @@ function _protocol_settings(records, manifest, ::Type{T}) where {
     return attempts, _compiled_scalar(temperature_value, manifest, T)
 end
 
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        footprint::CorePotts.EmptyFootprint,
+        proposal_offsets,
+    ) where {N}
+    return values
+end
+
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        footprint::CorePotts.FiniteSpatialFootprint,
+        proposal_offsets,
+    ) where {N}
+    for offset in footprint.offsets
+        length(offset) == N || throw(ArgumentError(
+            "descriptor footprint has the wrong dimensionality"
+        ))
+        push!(values, ntuple(dimension -> Int(offset[dimension]), N))
+    end
+    return values
+end
+
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        ::CorePotts.ProposalContextFootprint,
+        proposal_offsets,
+    ) where {N}
+    for column in axes(proposal_offsets, 2)
+        push!(values, ntuple(
+            dimension -> Int(proposal_offsets[dimension, column]), N
+        ))
+    end
+    return values
+end
+
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        ::Union{
+            CorePotts.OwnerFootprint,
+            CorePotts.IncidentRelationshipFootprint,
+        },
+        proposal_offsets,
+    ) where {N}
+    # These conflicts are resolved over canonical owner/relationship claims,
+    # not by spatial coloring.
+    return values
+end
+
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        footprint::CorePotts.FootprintUnion,
+        proposal_offsets,
+    ) where {N}
+    for member in footprint.footprints
+        _append_checkerboard_offsets!(values, member, proposal_offsets)
+    end
+    return values
+end
+
+function _append_checkerboard_offsets!(
+        values::Vector{NTuple{N, Int}},
+        footprint::CorePotts.AbstractFootprint,
+        proposal_offsets,
+    ) where {N}
+    throw(ArgumentError(
+        "checkerboard compilation cannot prove footprint $(typeof(footprint))"
+    ))
+end
+
+function _checkerboard_conflict_displacements(
+        descriptor_plan::CorePotts.DescriptorExecutionPlan,
+        stage_plan::CorePotts.StageExecutionPlan,
+        proposal_offsets,
+        ::Val{N},
+    ) where {N}
+    values = NTuple{N, Int}[]
+
+    # Ownership proposals always read a source selected from this relation and
+    # write their target, even when the scientific descriptor plan is empty.
+    _append_checkerboard_offsets!(
+        values, CorePotts.ProposalContextFootprint(), proposal_offsets
+    )
+    for group in descriptor_plan.groups
+        for descriptor in group.launch.instances
+            _append_checkerboard_offsets!(
+                values,
+                CorePotts.descriptor_resource_access(descriptor).footprint,
+                proposal_offsets,
+            )
+        end
+    end
+    for group in stage_plan.accepted_copy
+        for descriptor in group.instances
+            _append_checkerboard_offsets!(
+                values,
+                CorePotts.descriptor_resource_access(descriptor).footprint,
+                proposal_offsets,
+            )
+        end
+    end
+    filter!(offset -> !all(iszero, offset), values)
+    sort!(unique!(values))
+    displacements = Matrix{Int16}(undef, N, length(values))
+    for (column, offset) in enumerate(values), dimension in 1:N
+        typemin(Int16) <= offset[dimension] <= typemax(Int16) || throw(
+            ArgumentError("checkerboard footprint displacement exceeds Int16")
+        )
+        displacements[dimension, column] = Int16(offset[dimension])
+    end
+    return displacements
+end
+
 function _lower_core_program(
         ir::AnalyzedTermIR,
         engine::AbstractPottsEngine,
@@ -277,6 +389,17 @@ function _lower_core_program(
         (CorePotts.OwnershipCountTracker(),),
         _sha256_hex("potts-tracker-plan-v1", :cell_volume),
     )
+    checkerboard_plan = if core_engine isa CorePotts.CheckerboardProgramEngine
+        conflicts = _checkerboard_conflict_displacements(
+            descriptor_plan,
+            stage_plan,
+            proposal_offsets,
+            Val(dimensions),
+        )
+        CorePotts.CheckerboardPlan(shape, periodic, conflicts)
+    else
+        CorePotts.NoCheckerboardPlan()
+    end
     program_fingerprint = _sha256_hex(
         "core-program-v1",
         fingerprint_seed,
@@ -291,6 +414,7 @@ function _lower_core_program(
         tracker_plan.fingerprint,
         descriptor_plan.fingerprint,
         stage_plan.fingerprint,
+        CorePotts.checkerboard_plan_report(checkerboard_plan),
     )
     return CorePotts.CompiledPottsProgram(
         shape,
@@ -309,6 +433,7 @@ function _lower_core_program(
         core_backend,
         program_fingerprint;
         medium_kinds,
+        checkerboard_plan,
     ), Tuple((
         identity = _manifest_identity(declaration.identity),
         resource_identity = _qualified_resource_identity(declaration.identity),
