@@ -12,7 +12,35 @@ struct OperationTransfer
     locality::Symbol
     cpu::Bool
     gpu::Bool
+    tracker_requirements::Tuple{Vararg{Symbol}}
 end
+
+OperationTransfer(
+    identity::Symbol,
+    schema_version::VersionNumber,
+    serialization_identity::String,
+    arity::UnitRange{Int},
+    result_rule::Symbol,
+    unit_rule::Symbol,
+    purity::Symbol,
+    totality::Symbol,
+    locality::Symbol,
+    cpu::Bool,
+    gpu::Bool,
+) = OperationTransfer(
+    identity,
+    schema_version,
+    serialization_identity,
+    arity,
+    result_rule,
+    unit_rule,
+    purity,
+    totality,
+    locality,
+    cpu,
+    gpu,
+    (),
+)
 
 OperationTransfer(
     identity::Symbol,
@@ -25,6 +53,7 @@ OperationTransfer(
     locality::Symbol,
     cpu::Bool,
     gpu::Bool,
+    tracker_requirements::Tuple{Vararg{Symbol}} = (),
 ) = OperationTransfer(
     identity,
     schema_version,
@@ -37,6 +66,7 @@ OperationTransfer(
     locality,
     cpu,
     gpu,
+    tracker_requirements,
 )
 
 function operation_transfer end
@@ -49,6 +79,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         locality = :scalar,
         cpu = true,
         gpu = true,
+        tracker_requirements = (),
     ) = OperationTransfer(
         identity,
         version,
@@ -61,6 +92,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         locality,
         cpu,
         gpu,
+        tracker_requirements,
     )
 
 for operation in (+, -, *, /, ^, max, min)
@@ -211,10 +243,14 @@ for operation in (
     result_rule = operation in (endpoint_a, endpoint_b) ? :integer : :real
     locality = operation in (endpoint_a, endpoint_b) ?
                :bounded_relationship : :owner_local
+    tracker_requirements = operation in (
+        cell_elongation, cell_center, unwrapped_center,
+    ) ? (:cell_moments,) : ()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), 1, $(QuoteNode(result_rule)), :declared;
             locality = $(QuoteNode(locality)),
+            tracker_requirements = $(QuoteNode(tracker_requirements)),
         )
 end
 

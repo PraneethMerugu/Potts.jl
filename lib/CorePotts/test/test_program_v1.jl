@@ -54,7 +54,11 @@ struct ExternalDoubleOccupancyTracker <: CorePotts.AbstractTrackerDescriptor end
 CorePotts.tracker_quantity(::ExternalDoubleOccupancyTracker) =
     Val(:external_double_occupancy)
 CorePotts.tracker_checkpoint_policy(::ExternalDoubleOccupancyTracker) =
-    :persist_logical_state
+    CorePotts.PersistTrackerCheckpoint()
+CorePotts.tracker_support(::ExternalDoubleOccupancyTracker) =
+    CorePotts.TrackerSupport(true, true, true, true)
+CorePotts.tracker_concurrency(::ExternalDoubleOccupancyTracker) =
+    CorePotts.ClaimedOwnerExclusiveTrackerConcurrency()
 CorePotts.tracker_inspection(::ExternalDoubleOccupancyTracker) = (
     quantity = :external_double_occupancy,
     source = :ownership,
@@ -88,6 +92,25 @@ end
     old_owner > 0 && (@inbounds values[Int(old_owner)] -= Int32(2))
     new_owner > 0 && (@inbounds values[Int(new_owner)] += Int32(2))
     return nothing
+end
+
+struct SingleSiteOwnershipProbe{A <: AbstractMatrix{Int32}} <:
+       AbstractMatrix{Int32}
+    values::A
+    permitted::CartesianIndex{2}
+    accesses::Base.RefValue{Int}
+end
+
+Base.IndexStyle(::Type{<:SingleSiteOwnershipProbe}) = IndexCartesian()
+Base.size(values::SingleSiteOwnershipProbe) = size(values.values)
+function Base.getindex(
+        values::SingleSiteOwnershipProbe, index::CartesianIndex{2}
+    )
+    index == values.permitted || error(
+        "proposal geometry escaped its target-local ownership access"
+    )
+    values.accesses[] += 1
+    return @inbounds values.values[index]
 end
 
 @testset "extinction retires a generation at the lifecycle boundary" begin
@@ -196,6 +219,77 @@ end
         first.ownership,
         first.cell_kinds,
     ) === first.trackers
+end
+
+@testset "cell moments provide local proposal geometry" begin
+    tracker_plan = CorePotts.TrackerExecutionPlan(
+        (
+            CorePotts.OwnershipCountTracker(),
+            CorePotts.CellMomentsTracker{2, Float64}(),
+        ),
+        "cell-moments-plan-v1-test",
+    )
+    program = test_program(
+        CorePotts.SequentialProgramEngine(); tracker_plan
+    )
+    runtime = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xc311), UInt32(1)
+    )
+    @test CorePotts._cell_center(runtime, Int32(1)) == (3.0, 3.0)
+    @test CorePotts._cell_length(runtime, Int32(1)) == 2.0
+    target = CartesianIndex(3, 3)
+    after_center = CorePotts._cell_center(
+        runtime,
+        Int32(1);
+        replaced_site = target,
+        replacement_owner = Int32(0),
+    )
+    @test all(isapprox.(after_center, (19 / 6, 19 / 6)))
+    @test @allocated(CorePotts._cell_center(
+        runtime,
+        Int32(1);
+        replaced_site = target,
+        replacement_owner = Int32(0),
+    )) == 0
+    accesses = Ref(0)
+    guarded = SingleSiteOwnershipProbe(
+        runtime.ownership, target, accesses
+    )
+    count, _, old_owner, changed = CorePotts._cell_moment_overlay(
+        program.tracker_plan,
+        runtime.trackers,
+        guarded,
+        Int32(1),
+        target,
+        Int32(0),
+    )
+    @test (count, old_owner, changed) == (3, Int32(1), true)
+    @test accesses[] == 1
+
+    checkpoint_value = CorePotts.program_checkpoint(runtime)
+    @test checkpoint_value.snapshot.trackers.values[1] isa Vector{Int32}
+    @test checkpoint_value.snapshot.trackers.values[2] === nothing
+    restored = CorePotts.restore_program_checkpoint(
+        program, checkpoint_value
+    )
+    @test CorePotts.program_tracker_values(
+        restored, Val(:cell_moments)
+    ) == CorePotts.program_tracker_values(runtime, Val(:cell_moments))
+
+    @inbounds runtime.ownership[target] = Int32(0)
+    CorePotts.commit_tracker_updates!(
+        runtime.trackers,
+        program.tracker_plan,
+        target,
+        Int32(1),
+        Int32(0),
+    )
+    @test CorePotts.validate_tracker_state!(
+        program.tracker_plan,
+        runtime.trackers,
+        runtime.ownership,
+        runtime.cell_kinds,
+    ) === runtime.trackers
 end
 
 @testset "bounded histories are logical checkpoint state" begin

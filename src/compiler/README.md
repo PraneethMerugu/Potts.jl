@@ -75,6 +75,9 @@ lowering/stage_plan.jl
 lowering/constraints.jl
     lower prelaunch parameter-domain constraints and assemble the plan
 
+lowering/trackers.jl
+    infer, validate, canonicalize, and fingerprint typed derived-state trackers
+
 execution/boundary.jl
     validate that only concrete compiled data crosses into CorePotts
 

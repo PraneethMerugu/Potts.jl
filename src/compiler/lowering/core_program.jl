@@ -385,10 +385,7 @@ function _lower_core_program(
                   CorePotts.SequentialProgramEngine() :
                   CorePotts.CheckerboardProgramEngine()
     core_backend = CorePotts.CPUProgramBackend()
-    tracker_plan = CorePotts.TrackerExecutionPlan(
-        (CorePotts.OwnershipCountTracker(),),
-        _sha256_hex("potts-tracker-plan-v1", :cell_volume),
-    )
+    tracker_plan = _lower_tracker_plan(ir, engine, T)
     checkerboard_plan = if core_engine isa CorePotts.CheckerboardProgramEngine
         conflicts = _checkerboard_conflict_displacements(
             descriptor_plan,

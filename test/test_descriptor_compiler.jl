@@ -523,6 +523,109 @@ end
 
     single = compile_site(1)
 
+    external_tracker_executable = compile(
+        complete(
+            site_model(1; identity_prefix = :external_tracker);
+            registry = fixture_registry,
+        );
+        engine = CheckerboardEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    external_tracker_plan = external_tracker_executable.core_program.tracker_plan
+    @test CorePotts.tracker_plan_report(external_tracker_plan).quantities ==
+          (:cell_volume, :external_double_occupancy)
+    tracker_program = external_tracker_executable.core_program
+    tracker_ownership = zeros(Int32, 4, 4)
+    tracker_ownership[2:3, 2:3] .= Int32(1)
+    tracker_finite_kind = Int16(only(filter(
+        kind -> kind != tracker_program.medium_kind,
+        1:Int(tracker_program.kind_count),
+    )))
+    tracker_initial = CorePotts.ProgramInitialState(
+        tracker_ownership,
+        Int16[tracker_finite_kind];
+        scalar_type = Float64,
+        descriptor_state = CorePotts.allocate_auxiliary_state(
+            tracker_program.descriptor_plan.state_layout,
+            (ones(Float64, 4, 4),),
+        ),
+    )
+    tracker_runtime = CorePotts.initialize_program(
+        tracker_program,
+        tracker_initial,
+        tracker_program.parameter_defaults,
+        UInt64(0x77),
+        UInt32(1),
+    )
+    CorePotts.advance_mcs!(tracker_runtime)
+    @test CorePotts.program_tracker_values(
+        tracker_runtime, Val(:external_double_occupancy)
+    ) == Int32(2) .* CorePotts.program_tracker_values(
+        tracker_runtime, Val(:cell_volume)
+    )
+    tracker_checkpoint = CorePotts.program_checkpoint(tracker_runtime)
+    @test tracker_checkpoint.snapshot.trackers.values[2] === nothing
+    tracker_restored = CorePotts.restore_program_checkpoint(
+        tracker_program, tracker_checkpoint
+    )
+    @test CorePotts.program_tracker_values(
+        tracker_restored, Val(:external_double_occupancy)
+    ) == CorePotts.program_tracker_values(
+        tracker_runtime, Val(:external_double_occupancy)
+    )
+
+    tracker_growth_plans = map((1, 32, 1024)) do count
+        descriptors = Any[CorePotts.OwnershipCountTracker()]
+        for _ in 1:count
+            PottsToolkit._append_tracker_requirement!(
+                descriptors,
+                NeutralExternalTerms.ExternalDoubleOccupancyTracker(),
+            )
+        end
+        CorePotts.TrackerExecutionPlan(
+            tuple(descriptors...), "external-tracker-growth"
+        )
+    end
+    @test all(plan -> length(plan.descriptors) == 2, tracker_growth_plans)
+    @test allequal(typeof(plan) for plan in tracker_growth_plans)
+    @test allequal(
+        typeof(CorePotts.tracker_kernel_plan(plan))
+        for plan in tracker_growth_plans
+    )
+
+    cpu_only_tracker_executable = compile(
+        complete(
+            site_model(1; identity_prefix = :external_cpu_tracker);
+            registry = fixture_registry,
+        );
+        engine = CheckerboardEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    cpu_only_tracker_program = cpu_only_tracker_executable.core_program
+    cpu_only_tracker_runtime = CorePotts.initialize_program(
+        cpu_only_tracker_program,
+        tracker_initial,
+        cpu_only_tracker_program.parameter_defaults,
+        UInt64(0x78),
+        UInt32(1),
+    )
+    tracker_gpu_rejection = try
+        CorePotts.adapt_checkerboard_workspace(
+            DescriptorProbeAdaptor(),
+            cpu_only_tracker_runtime.engine_workspace,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test tracker_gpu_rejection isa ArgumentError
+    @test occursin(
+        "does not declare GPU support",
+        sprint(showerror, tracker_gpu_rejection),
+    )
+
     single_plan = single.core_program.descriptor_plan
     group = only(single_plan.groups)
     launch = CorePotts.descriptor_launch(group)

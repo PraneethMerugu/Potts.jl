@@ -7,6 +7,7 @@ import CorePotts
 import PottsToolkit: operation_transfer, registered_descriptor_payload
 import PottsToolkit: registered_statement_lowering
 import PottsToolkit: registered_workspace_schemas
+import PottsToolkit: registered_tracker_requirements
 
 const SITE_SCHEMA = :external_weighted_site_term
 const PAIR_SCHEMA = :external_bounded_pair_term
@@ -89,6 +90,76 @@ end
 
 struct NameParameterizedPayload{Name}
     schema::UInt16
+end
+
+struct ExternalDoubleOccupancyTracker <: CorePotts.AbstractTrackerDescriptor end
+struct ExternalCpuOnlyTracker <: CorePotts.AbstractTrackerDescriptor end
+
+for (tracker_type, quantity, gpu) in (
+        (ExternalDoubleOccupancyTracker, :external_double_occupancy, true),
+        (ExternalCpuOnlyTracker, :external_cpu_only_tracker, false),
+    )
+    @eval begin
+        CorePotts.tracker_quantity(::$tracker_type) = Val{$(QuoteNode(quantity))}()
+        CorePotts.tracker_checkpoint_policy(::$tracker_type) =
+            CorePotts.ReconstructTrackerCheckpoint()
+        CorePotts.tracker_support(::$tracker_type) =
+            CorePotts.TrackerSupport(true, true, true, $gpu, $gpu ? 0 : 0x08)
+        CorePotts.tracker_concurrency(::$tracker_type) =
+            CorePotts.ClaimedOwnerExclusiveTrackerConcurrency()
+        CorePotts.tracker_inspection(::$tracker_type) = (
+            quantity = $(QuoteNode(quantity)),
+            source = :ownership,
+            relation = :identity,
+            domain = :cell,
+            storage = :dense_int32,
+            rebuild = :external_double_histogram,
+            proposal_update = :external_source_target_double_delta,
+            visibility = :accepted_commit,
+            concurrency = :claimed_owner_exclusive,
+            checkpoint = :reconstruct,
+            proposal_cost = :constant,
+            rebuild_cost = :lattice_linear,
+        )
+    end
+end
+
+function CorePotts.tracker_rebuild(
+        ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
+        ownership,
+        cell_kinds,
+    )
+    values = zeros(Int32, length(cell_kinds))
+    for owner in ownership
+        owner > 0 && (values[Int(owner)] += Int32(2))
+    end
+    return values
+end
+
+@inline function CorePotts.tracker_proposal_update!(
+        values,
+        ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
+        target,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    old_owner > 0 && (@inbounds values[Int(old_owner)] -= Int32(2))
+    new_owner > 0 && (@inbounds values[Int(new_owner)] += Int32(2))
+    return nothing
+end
+
+function registered_tracker_requirements(
+        ::Val{:lower_external_weighted_site_term},
+        source::PottsToolkit.DescriptorSource,
+        ::Type,
+        ::Tuple,
+    )
+    identity = string(source.identity.local_id)
+    startswith(identity, "external_tracker") &&
+        return (ExternalDoubleOccupancyTracker(),)
+    startswith(identity, "external_cpu_tracker") &&
+        return (ExternalCpuOnlyTracker(),)
+    return ()
 end
 
 for payload_type in (

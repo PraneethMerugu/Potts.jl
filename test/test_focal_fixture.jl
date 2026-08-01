@@ -94,6 +94,9 @@ end
     )
     @test checkerboard_executable.core_program.engine isa
           CorePotts.CheckerboardProgramEngine
+    @test CorePotts.tracker_plan_report(
+        checkerboard_executable.core_program.tracker_plan
+    ).quantities == (:cell_volume, :cell_moments)
     executable = compile(
         completed;
         engine = SequentialEngine(),

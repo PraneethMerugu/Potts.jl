@@ -110,7 +110,9 @@ function _checkerboard_kernel_program(program, to)
             end
         )
     end
-    tracker_kernel = tracker_kernel_plan(program.tracker_plan)
+    tracker_kernel = to === nothing ?
+                     tracker_kernel_plan(program.tracker_plan) :
+                     adapt_tracker_kernel_plan(to, program.tracker_plan)
     stage_kernel = stage_kernel_plan(program.stage_plan)
     return CheckerboardKernelProgram(
         program.shape,
@@ -122,7 +124,7 @@ function _checkerboard_kernel_program(program, to)
         program.attempts_per_site,
         to === nothing ? program.relationships :
         Adapt.adapt(to, program.relationships),
-        to === nothing ? tracker_kernel : Adapt.adapt(to, tracker_kernel),
+        tracker_kernel,
         adapt_descriptor_kernel_plan(to, program.descriptor_plan),
         to === nothing ? stage_kernel : Adapt.adapt(to, stage_kernel),
         to === nothing ? ownership_change_handles :

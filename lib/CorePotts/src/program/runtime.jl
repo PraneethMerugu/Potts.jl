@@ -104,7 +104,25 @@ function program_checkpoint(runtime)
         "a checkpoint requires a settled complete-MCS boundary"
     ))
     schema = v"1.0.0"
-    snapshot = program_snapshot(runtime)
+    logical_snapshot = program_snapshot(runtime)
+    trackers = encode_tracker_checkpoint(
+        runtime.program.tracker_plan, runtime.trackers
+    )
+    snapshot = ProgramSnapshot{
+        eltype(runtime.parameters),
+        ndims(runtime.ownership),
+        typeof(logical_snapshot.relationships),
+        typeof(logical_snapshot.descriptor_state),
+        typeof(trackers),
+    }(
+        logical_snapshot.mcs,
+        logical_snapshot.ownership,
+        logical_snapshot.cell_kinds,
+        logical_snapshot.cell_generations,
+        trackers,
+        logical_snapshot.relationships,
+        logical_snapshot.descriptor_state,
+    )
     parameters = copy(runtime.parameters)
     checksum = _program_checkpoint_checksum(
         schema,
@@ -180,13 +198,19 @@ function restore_program_checkpoint(
         repeat = checkpoint.repeat,
         initial_mcs = checkpoint.snapshot.mcs,
     )
-    validate_tracker_state!(
+    reconstructed_trackers = reconstruct_tracker_checkpoint(
         program.tracker_plan,
         checkpoint.snapshot.trackers,
         checkpoint.snapshot.ownership,
         checkpoint.snapshot.cell_kinds,
     )
-    runtime.trackers = copy_tracker_state(checkpoint.snapshot.trackers)
+    validate_tracker_state!(
+        program.tracker_plan,
+        reconstructed_trackers,
+        checkpoint.snapshot.ownership,
+        checkpoint.snapshot.cell_kinds,
+    )
+    runtime.trackers = reconstructed_trackers
     runtime.relationships = copy(checkpoint.snapshot.relationships)
     _validate_runtime_relationships!(runtime)
     runtime.stage_buffers = allocate_stage_runtime_buffers(

@@ -31,10 +31,18 @@ public CheckerboardWorkspace, adapt_checkerboard_workspace
 public execute_checkerboard_mcs!, copy_checkerboard_state!
 public RelationshipStoreSchema, CompiledPottsProgram
 public AbstractTrackerDescriptor, OwnershipCountTracker
-public TrackerExecutionPlan, TrackerState
+public CellMomentsTracker, CellMomentsState
+public TrackerExecutionPlan, TrackerKernelPlan, TrackerState
+public TrackerCheckpointState, tracker_kernel_plan, adapt_tracker_kernel_plan
+public AbstractTrackerCheckpointPolicy, PersistTrackerCheckpoint
+public ReconstructTrackerCheckpoint
+public AbstractTrackerConcurrency, ClaimedOwnerExclusiveTrackerConcurrency
+public TrackerSupport
 public tracker_quantity, tracker_rebuild, tracker_proposal_update!
-public tracker_checkpoint_policy, tracker_inspection
+public tracker_checkpoint_policy, tracker_inspection, tracker_support
+public tracker_concurrency, tracker_adapt
 public initialize_tracker_state, copy_tracker_state, copyto_tracker_state!
+public encode_tracker_checkpoint, reconstruct_tracker_checkpoint
 public commit_tracker_updates!
 public tracker_values, tracker_value, validate_tracker_state!
 public program_tracker_values, program_tracker_value

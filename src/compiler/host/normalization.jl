@@ -297,6 +297,12 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         return "unknown totality transfer rule $(transfer.totality)"
     transfer.locality in _LOCALITY_TRANSFER_RULES ||
         return "unknown locality transfer rule $(transfer.locality)"
+    all(requirement -> !isempty(String(requirement)),
+        transfer.tracker_requirements) ||
+        return "tracker requirement identities must be nonempty"
+    Tuple(sort!(unique!(collect(transfer.tracker_requirements)))) ==
+        transfer.tracker_requirements ||
+        return "tracker requirements must be unique and canonically ordered"
     transfer.cpu ||
         return "V1 operations must admit the CPU reference backend"
     return nothing

@@ -50,42 +50,44 @@ function _cell_center(
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
     ) where {T, N}
-    totals = zeros(T, N)
-    count = 0
-    for site in CartesianIndices(runtime.ownership)
-        owner = site == replaced_site ?
-                replacement_owner : @inbounds(runtime.ownership[site])
-        owner == cell || continue
-        coordinates = Tuple(site)
-        for dimension in 1:N
-            totals[dimension] += T(coordinates[dimension]) - T(0.5)
-        end
-        count += 1
-    end
-    count > 0 || return nothing
-    return ntuple(dimension -> totals[dimension] / T(count), N)
-end
-
-function _cell_center(
-        runtime::ProgramRuntime{T, 2},
-        cell::Int32;
-        replaced_site = nothing,
-        replacement_owner::Int32 = Int32(-1),
-    ) where {T}
-    first_total = zero(T)
-    second_total = zero(T)
-    count = 0
-    for site in CartesianIndices(runtime.ownership)
-        owner = site == replaced_site ?
-                replacement_owner : @inbounds(runtime.ownership[site])
-        owner == cell || continue
-        first_total += T(site[1]) - T(0.5)
-        second_total += T(site[2]) - T(0.5)
-        count += 1
-    end
+    cell > 0 || return nothing
+    count, moments, old_owner, changed = _cell_moment_overlay(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        runtime.ownership,
+        cell,
+        replaced_site,
+        replacement_owner,
+    )
     count > 0 || return nothing
     inverse = inv(T(count))
-    return first_total * inverse, second_total * inverse
+    return ntuple(N) do dimension
+        total = @inbounds moments.first[dimension, Int(cell)]
+        if changed
+            coordinate = T(replaced_site[dimension]) - T(0.5)
+            cell == old_owner && (total -= coordinate)
+            cell == replacement_owner && (total += coordinate)
+        end
+        total * inverse
+    end
+end
+
+@inline function _cell_moment_overlay(
+        plan,
+        trackers,
+        ownership,
+        cell::Int32,
+        replaced_site,
+        replacement_owner::Int32,
+    )
+    moments = tracker_values(plan, trackers, Val(:cell_moments))
+    count = Int(tracker_value(plan, trackers, Val(:cell_volume), cell))
+    old_owner = replaced_site === nothing ? Int32(-1) :
+                @inbounds(ownership[replaced_site])
+    changed = replaced_site !== nothing && old_owner != replacement_owner
+    changed && cell == old_owner && (count -= 1)
+    changed && cell == replacement_owner && (count += 1)
+    return count, moments, old_owner, changed
 end
 
 function _cell_shape_statistics(
@@ -94,72 +96,41 @@ function _cell_shape_statistics(
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
     ) where {T, N}
-    count = 0
-    totals = zeros(T, N)
-    quadratic = zeros(T, N, N)
-    for site in CartesianIndices(runtime.ownership)
-        owner = site == replaced_site ?
-                replacement_owner : @inbounds(runtime.ownership[site])
-        owner == cell || continue
-        coordinates = ntuple(
-            dimension -> T(Tuple(site)[dimension]) - T(0.5), N
-        )
-        for row in 1:N
-            totals[row] += coordinates[row]
-            for column in 1:N
-                quadratic[row, column] +=
-                    coordinates[row] * coordinates[column]
-            end
-        end
-        count += 1
-    end
-    count == 0 && return nothing
-    inverse = inv(T(count))
-    covariance = Matrix{T}(undef, N, N)
-    for row in 1:N, column in 1:N
-        covariance[row, column] =
-            quadratic[row, column] * inverse -
-            (totals[row] * inverse) * (totals[column] * inverse)
-    end
-    return count, totals .* inverse, covariance
-end
-
-function _cell_shape_statistics(
-        runtime::ProgramRuntime{T, 2},
-        cell::Int32;
-        replaced_site = nothing,
-        replacement_owner::Int32 = Int32(-1),
-    ) where {T}
-    first_total = zero(T)
-    second_total = zero(T)
-    first_squared = zero(T)
-    cross_product = zero(T)
-    second_squared = zero(T)
-    count = 0
-    for site in CartesianIndices(runtime.ownership)
-        owner = site == replaced_site ?
-                replacement_owner : @inbounds(runtime.ownership[site])
-        owner == cell || continue
-        first_coordinate = T(site[1]) - T(0.5)
-        second_coordinate = T(site[2]) - T(0.5)
-        first_total += first_coordinate
-        second_total += second_coordinate
-        first_squared += first_coordinate^2
-        cross_product += first_coordinate * second_coordinate
-        second_squared += second_coordinate^2
-        count += 1
-    end
-    count == 0 && return nothing
-    inverse = inv(T(count))
-    first_center = first_total * inverse
-    second_center = second_total * inverse
-    covariance = (
-        first_squared * inverse - first_center^2,
-        cross_product * inverse - first_center * second_center,
-        cross_product * inverse - first_center * second_center,
-        second_squared * inverse - second_center^2,
+    cell > 0 || return nothing
+    count, moments, old_owner, changed = _cell_moment_overlay(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        runtime.ownership,
+        cell,
+        replaced_site,
+        replacement_owner,
     )
-    return count, (first_center, second_center), covariance
+    count == 0 && return nothing
+    inverse = inv(T(count))
+    totals = ntuple(N) do dimension
+        total = @inbounds moments.first[dimension, Int(cell)]
+        if changed
+            coordinate = T(replaced_site[dimension]) - T(0.5)
+            cell == old_owner && (total -= coordinate)
+            cell == replacement_owner && (total += coordinate)
+        end
+        total
+    end
+    center = ntuple(dimension -> totals[dimension] * inverse, N)
+    covariance = ntuple(N * N) do slot
+        row = rem(slot - 1, N) + 1
+        column = div(slot - 1, N) + 1
+        quadratic = @inbounds moments.second[slot, Int(cell)]
+        if changed
+            first_coordinate = T(replaced_site[row]) - T(0.5)
+            second_coordinate = T(replaced_site[column]) - T(0.5)
+            product = first_coordinate * second_coordinate
+            cell == old_owner && (quadratic -= product)
+            cell == replacement_owner && (quadratic += product)
+        end
+        quadratic * inverse - center[row] * center[column]
+    end
+    return count, center, covariance
 end
 
 @inline function _maximum_covariance_eigenvalue(
@@ -178,8 +149,11 @@ end
     ) / T(2)
 end
 
-_maximum_covariance_eigenvalue(::Val, covariance::AbstractMatrix) =
-    maximum(eigen(Symmetric(covariance)).values)
+function _maximum_covariance_eigenvalue(::Val{N}, covariance) where {N}
+    throw(ArgumentError(
+        "V1 cell elongation is qualified only for two-dimensional lattices"
+    ))
+end
 
 function _cell_length(
         runtime::ProgramRuntime{T, N},

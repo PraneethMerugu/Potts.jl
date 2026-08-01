@@ -46,6 +46,7 @@ include("compiler/lowering/stage_grouping.jl")
 include("compiler/lowering/after_mcs_descriptors.jl")
 include("compiler/lowering/stage_plan.jl")
 include("compiler/lowering/constraints.jl")
+include("compiler/lowering/trackers.jl")
 include("compiler/execution/boundary.jl")
 include("compiler/lowering/core_program.jl")
 include("compiler/compile.jl")
@@ -112,6 +113,7 @@ public registered_statement_lowering
 public OperationTransfer, operation_transfer
 public DescriptorSource, DescriptorConstructionContext
 public registered_descriptor_payload, registered_workspace_schemas
+public registered_tracker_requirements
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError

@@ -50,6 +50,17 @@ registered_workspace_schemas(
     ::Val, ::DescriptorSource, ::Type, ::Tuple
 ) = ()
 
+"""
+    registered_tracker_requirements(::Val{lowering_identity}, source, scalar_type, lattice_shape)
+
+Declare typed derived-state trackers required by a registered descriptor
+family. Repeated requirements for the same scientific quantity are
+canonicalized by the compiler; the runtime executor remains mechanism-free.
+"""
+registered_tracker_requirements(
+    ::Val, ::DescriptorSource, ::Type, ::Tuple
+) = ()
+
 function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
