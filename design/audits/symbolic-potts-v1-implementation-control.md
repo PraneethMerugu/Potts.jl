@@ -2005,6 +2005,43 @@ relationship extensibility, hardcoded scientific-policy leakage, code and test D
 whether equivalent rigor can be retained with a cheaper everyday test partition. G6 cannot begin
 until R2 reports zero P0 and zero P1 findings.
 
+## First R2 result — returned
+
+The first independent R2 review returned checkpoint `083d3e0` with zero P0 findings, seven P1
+findings, and a focused set of missing P2 tests. G6 remains closed. The review found no biological
+mechanism hardcoding in CorePotts and confirmed the shared KernelAbstractions checkerboard path,
+immutable per-color snapshots, atomic relationship publication, occurrence-stable relationship
+storage, incident-local Hamiltonian evaluation, honest backend claims, and the absence of a host
+fallback. It nevertheless identified these release-blocking architectural defects:
+
+1. checkerboard coloring is still derived from proposal offsets rather than the compiler's
+   descriptor footprints;
+2. multiple attempts at one checkerboard target can arbitrate different owners and publish
+   concurrent writes to the same target;
+3. trackers are not admitted through the public compiler pipeline and their concurrency,
+   checkpoint, capability, and specialization contracts are incomplete;
+4. center and shape statistics scan the whole lattice in proposal-time paths instead of using
+   incrementally maintained sufficient statistics;
+5. accepted-copy relationship failures do not have an explicit deterministic filtered
+   disposition that preserves the already accepted ownership copy;
+6. proposal-time `linked` queries scan relationship capacity rather than an endpoint's bounded
+   incident list; and
+7. device adaptation does not reject descriptors or trackers whose declared GPU capability is
+   false before backend compilation.
+
+The repair starts at the earliest affected boundary, G4. Permanent focused tests must connect
+footprints to coloring; execute multiple attempts per site; reject CPU-only descriptor and tracker
+adaptation; cover tracker compiler admission, reconstruction policy, and bounded growth; prove
+filtered capacity, degree, and stale-generation relationship outcomes; count `linked` locality;
+exercise same-engine checkerboard checkpoint continuation; and cover small and non-workgroup-
+multiple boundary sizes. These tests belong in the shared CPU/backend conformance structure where
+applicable. They must not become a parallel evidence system.
+
+The reviewer also recommended keeping the everyday loop to CorePotts plus the shared G2/G4/G5 CPU
+conformance and focused architectural tests, reserving the complete root suite and available Metal
+qualification for merge gates. CUDA and AMDGPU remain future matrix environments. A fresh R2
+clearance with zero P0 and zero P1 findings is required after the repair.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
