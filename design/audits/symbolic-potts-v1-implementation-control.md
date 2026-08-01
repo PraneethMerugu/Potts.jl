@@ -1071,6 +1071,44 @@ constraints. Conversely, the connectivity implementation MUST be removable from 
 without changing CorePotts or weakening that external probe. This bidirectional check distinguishes
 a real constraint primitive from a connectivity engine with an extension-shaped API.
 
+#### Semantic DRYness and single-source audit
+
+R1.5 MUST audit code DRYness wherever duplication can create a second source of execution or
+scientific truth. This is not a line-count or abstraction-maximization exercise: small repeated
+plumbing is preferable to an opaque framework when it cannot drift semantically. A finding is
+blocking when two reachable implementations can disagree about the same contract, or when adding
+an extension requires copying and editing a built-in path instead of composing public primitives.
+
+The reviewer MUST trace and challenge duplication across:
+
+- symbolic-expression normalization, versioned operation resolution, evaluator construction, and
+  invocation. Compiler-synthesized expressions and stage effects must not create an alternate
+  lowering path;
+- request emission, canonical ordering, conflict arbitration, validation, and atomic commit.
+  Per-descriptor convenience paths must not duplicate or bypass the batch transaction;
+- sequential and backend-specific execution. Backends may specialize structural launch and memory
+  behavior but must not restate scientific semantics;
+- runtime initialization, snapshots, checkpoint reconstruction, saved-state projection, and
+  symbolic indexing. These must consume the same declared resource schema rather than maintain
+  parallel mechanism-shaped layouts;
+- Hamiltonian, drive, constraint, observation, and stage-effect traversal, grouping, capability,
+  and diagnostics. A new category member must extend one owned algebra rather than add mirrored
+  switch ladders across compiler and engine files;
+- neighborhood, ownership, topology, geometry, and relationship primitives. Built-ins and external
+  mechanisms must share the exact implementation rather than carry near-copies; and
+- CPU/GPU implementations, test oracles, and generated-code paths. An independent oracle may
+  deliberately duplicate mathematics for testing, but it must never be reachable production code.
+
+For each suspected duplicate, the reviewer records both call paths, identifies the authoritative
+owner, and applies a divergence probe using an edge case or external extension. The preferred
+repair removes the second semantic implementation or derives both representations from one frozen
+compiler fact. Clearance does not require deduplicating independent test oracles, backend launch
+plumbing, or short local code whose unification would obscure ownership or worsen inference.
+
+Severity follows consequence: P0 when reachable duplicates execute different declared science or
+break atomicity; P1 when duplication creates a bypass, inconsistent extension contract, or backend
+semantic fork; P2 for nonblocking organization or repeated plumbing with a bounded cleanup.
+
 Severity is assigned by reachability and consequence:
 
 - P0 when hardcoding makes an accepted model scientifically inert or executes different science
@@ -1209,11 +1247,12 @@ The candidate makes the following claims for the reviewer to challenge:
   inferred concrete result types.
 
 The review MUST NOT accept those claims from passing bundled fixtures. It must apply the engine-
-hardcoding protocol, primitive-legitimacy test, and additive/subtractive dependency-inversion
-probes above. In particular, it must trace every reachable `isa`, trait, symbol branch, resource
-operation, tuple position, slot convention, default, sentinel, descriptor role, capability field,
-checkpoint field, and backend branch from the sequential production entry point back to an
-explicit compiler fact or public structural contract.
+hardcoding protocol, primitive-legitimacy test, additive/subtractive dependency-inversion probes,
+and semantic DRYness/single-source audit above. In particular, it must trace every reachable `isa`,
+trait, symbol branch, resource operation, tuple position, slot convention, default, sentinel,
+descriptor role, capability field, checkpoint field, duplicated semantic implementation, and
+backend branch from the sequential production entry point back to an explicit compiler fact or
+public structural contract.
 
 The following are mandatory unresolved leads:
 
@@ -1253,6 +1292,42 @@ The Metal evidence qualifies the already admitted G2 descriptor boundary only. I
 that later relationship or stage effects execute on every GPU backend. Those paths must adapt,
 declare capability, fail closed where not admitted, and receive real backend-agnostic device
 qualification at the gate that first admits them.
+
+### Third R1.5 result — returned
+
+The fresh read-only review of audit-record checkpoint `cfcd1dc` returned the candidate with two P0,
+four P1, and one P2 findings. G4 remains stopped.
+
+The reviewer independently reproduced:
+
+- an advertised `cell_surface` Hamiltonian that completes and compiles but throws a `MethodError`
+  in production evaluation, with additional registered resource operations lacking context
+  implementations or fail-closed admission;
+- two accepted-copy relationship-create descriptors for the same endpoints being validated and
+  directly committed independently, producing duplicate edges instead of passing through the
+  canonical batch transaction;
+- the one-store/slot-one topology bound rejecting coexistence of bundled-style and unrelated
+  relationship declarations;
+- compiler-synthesized stage evaluators directly embedding callable objects rather than traversing
+  the sole versioned operation-transfer and callable-resolution path;
+- external declared `SiteState` observation lowering being rejected despite a structurally
+  reusable export evaluator; and
+- the specified public `Retune` relationship effect lacking a compiled stage descriptor and
+  executor path despite generic transaction support.
+
+The reviewer cleared role separation, executable Act energy, fail-closed unsupported chemotaxis,
+RNG identities, representation-bank canonicalization, normalized singleton callables,
+specialization-growth placement, generic ordinary saved-state naming, ownership/retirement within
+the representable topology bound, current checkpoint reconstruction, and backend-qualification
+placement. The focused G3 suite passed 602/602, but bundled-suite success did not override the
+negative probes.
+
+The nonblocking P2 identifies `lib/CorePotts/src/program/v1.jl` as a roughly 2,500-line ownership
+mixture that obscured the transaction bypass and retains a dead duplicated `contact_offsets`
+field. Repair returns to G1/G2 for operation admission, the sole evaluator route, and generic
+observation lowering; to G2/G3 for canonical batched topology transactions, multiple stores, and
+the complete create/remove/retune algebra; and then performs the semantic DRYness audit before a
+fresh R1.5 review.
 
 ## Prohibited record contents
 
