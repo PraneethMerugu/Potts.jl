@@ -936,6 +936,30 @@ although the proposal loop no longer calls them. R1.5 must determine which, if a
 reusable structural primitives, which are unreachable staged legacy, and which are blocking
 mechanism leakage. It must not infer clearance merely from descriptor-driven proposal energy.
 
+### Second R1.5 result — returned
+
+The fresh read-only review of exact audit-record checkpoint
+`4a6ec9959b44f7578ada388fe4abe62680b68901` returned G2/G3 with two P0 findings, one P1 finding,
+and no P2 findings:
+
+- `ActEnergy` lowers to a literal-zero drive, leaving its kind, activity, maximum, strength, and
+  reduction scientifically inert in proposal acceptance;
+- `Chemotaxis` lowers an unconditional field difference, leaving its declared cell kind,
+  responding-owner mode, and interpolation policy as metadata rather than executable semantics;
+  and
+- reachable CorePotts activity, field, history, relationship, observation, accepted-copy, and
+  after-MCS policy remains closed, while the declared generic request/stage hooks have no
+  production executor call sites. An external staged mechanism therefore still requires a
+  CorePotts edit.
+
+The reviewer independently passed the G2 descriptor suite 131/131, local Hamiltonian equivalence
+59/59, G2 adversarial boundaries 28/28, and repaired G3 sequential suite 558/558. It cleared the
+connectivity, endpoint-retirement, stable-draw, two-step-oracle, accounting, underflow, canonical
+evaluator, representation-bank, specialization-growth, folder-ownership, and fast/expensive-test
+repair questions. G4 remains stopped. The earliest repair boundary is G2/G3: make generic
+request/stage execution real, express Act and chemotaxis through that generic path, and remove or
+quarantine reachable named CorePotts policy before requesting another R1.5 review.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
