@@ -2171,6 +2171,42 @@ backend claims.
 Repair order is G1 footprint facts, G4 verification/order/workgroup qualification, G5 tracker
 contracts, then the localized P2s. A third fresh R2 with zero P0/P1 remains mandatory.
 
+## Third R2 candidate — repaired boundary
+
+The second R2 return was repaired in five bounded commits without opening G6:
+
+- `dff2802` replaces scalar locality assertions with a closed, compositional footprint algebra and
+  makes read and exclusive-write policies separate compiler facts. Checkerboard conflicts are
+  derived from exclusive writes rather than shared reads.
+- `13b8413` seals `CheckerboardPlan` construction behind canonical realized-domain verification,
+  includes site order in the inspected identity, and moves claim arbitration after proposal
+  evaluation so rejected proposals cannot suppress admissible conflicts.
+- `4ee5b8b` replaces tracker inspection assertions with a typed, closed contract. Extensions return
+  bounded proposal deltas that CorePotts applies; an independent recomputation path remains a test
+  oracle rather than a second production updater.
+- `b39147f` qualifies the real checkerboard launch boundary across workgroup sizes 32, 64, 128, and
+  256; actual ndranges 1, W-1, W, W+1, and a rectangular case; constraint and energy-rejection
+  branches; scalar-indexing prohibition; and the shared CPU/vendor harness.
+- `981f351` canonicalizes footprint unions by structural anchor and keeps relationship witnesses
+  bounded and compiler-derived.
+
+The four P2 repairs are included: checkerboard identity reports site order; specialization coverage
+compiles real 1/32/1,024 fixtures plus a parameter-only variant; device rejection reports qualified
+source provenance; and this record no longer repeats the obsolete CorePotts assertion count.
+
+Focused qualification before the full candidate run passed G1 host facts (62/62), G2 descriptor
+compilation (157/157), G3 sequential execution (629/629), compilation/inspection (44/44), the G5
+relationship runtime (20/20), incident-local access (8/8), filtered admission (6/6), and the complete
+CPU launch-boundary matrix. A Julia 1.12 Metal run passed G2, the primary checkerboard witness, all
+20 workgroup/range combinations with exact CPU/device parity, constraint and energy branches, and
+the relationship backend. CUDA and AMDGPU remain unclaimed future matrix rows.
+
+Final candidate qualification passed the full root package suite at 1,312/1,312 in 16m52.9s. The
+repeat Julia 1.12 Metal launcher then passed descriptor execution, primary checkerboard execution,
+all 20 workgroup/range combinations with exact CPU/device parity, constraint and energy branches,
+and relationship execution. This is still a candidate, not a clearance: a fresh read-only R2 must
+report zero P0/P1. G6 remains closed.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
