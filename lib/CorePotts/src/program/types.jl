@@ -201,10 +201,26 @@ function CompiledPottsProgram(
     resolved_checkerboard_plan isa AbstractCheckerboardPlan || throw(
         ArgumentError("checkerboard_plan has the wrong type")
     )
-    engine isa CheckerboardProgramEngine &&
-        !(resolved_checkerboard_plan isa CheckerboardPlan) && throw(
+    if engine isa CheckerboardProgramEngine
+        resolved_checkerboard_plan isa CheckerboardPlan || throw(
             ArgumentError("checkerboard programs require a realized-domain plan")
         )
+        resolved_checkerboard_plan.shape == shape || throw(ArgumentError(
+            "checkerboard plan shape does not match the compiled program"
+        ))
+        resolved_checkerboard_plan.periodic == periodic || throw(ArgumentError(
+            "checkerboard plan periodicity does not match the compiled program"
+        ))
+        resolved_checkerboard_plan = CheckerboardPlan(
+            resolved_checkerboard_plan.shape,
+            resolved_checkerboard_plan.periodic,
+            resolved_checkerboard_plan.sites,
+            resolved_checkerboard_plan.color_offsets,
+            resolved_checkerboard_plan.conflict_displacements,
+            resolved_checkerboard_plan.color_count,
+            resolved_checkerboard_plan.maximum_color_size,
+        )
+    end
     engine isa SequentialProgramEngine &&
         !(resolved_checkerboard_plan isa NoCheckerboardPlan) && throw(
             ArgumentError("sequential programs cannot carry a checkerboard plan")

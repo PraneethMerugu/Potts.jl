@@ -472,6 +472,72 @@ end
         odd_periodic.color_count,
         odd_periodic.maximum_color_size,
     )
+    supplied_sites = copy(odd_periodic.sites)
+    supplied_offsets = copy(odd_periodic.color_offsets)
+    supplied_displacements = copy(odd_periodic.conflict_displacements)
+    owned_plan = CorePotts.CheckerboardPlan(
+        odd_periodic.shape,
+        odd_periodic.periodic,
+        supplied_sites,
+        supplied_offsets,
+        supplied_displacements,
+        odd_periodic.color_count,
+        odd_periodic.maximum_color_size,
+    )
+    owned_report = CorePotts.checkerboard_plan_report(owned_plan)
+    reverse!(supplied_sites)
+    fill!(supplied_offsets, Int32(1))
+    fill!(supplied_displacements, Int16(0))
+    @test CorePotts.checkerboard_plan_report(owned_plan) == owned_report
+
+    checkerboard_program = test_program(CorePotts.CheckerboardProgramEngine())
+    function replace_checkerboard_plan(program, plan)
+        return CorePotts.CompiledPottsProgram(
+            program.shape,
+            program.periodic,
+            program.proposal_offsets,
+            program.kind_count,
+            program.medium_kind,
+            program.temperature,
+            program.attempts_per_site,
+            program.parameter_defaults,
+            program.relationships,
+            program.tracker_plan,
+            program.descriptor_plan,
+            program.stage_plan,
+            program.engine,
+            program.backend,
+            program.fingerprint;
+            medium_kinds = program.medium_kinds,
+            checkerboard_plan = plan,
+        )
+    end
+    @test_throws ArgumentError replace_checkerboard_plan(
+        checkerboard_program,
+        CorePotts.CheckerboardPlan(
+            (1, 1), (true, true), Int8[1 -1 0 0; 0 0 1 -1]
+        ),
+    )
+    @test_throws ArgumentError replace_checkerboard_plan(
+        checkerboard_program,
+        CorePotts.CheckerboardPlan(
+            checkerboard_program.shape,
+            (false, true),
+            checkerboard_program.proposal_offsets,
+        ),
+    )
+    supplied_plan = CorePotts.CheckerboardPlan(
+        checkerboard_program.shape,
+        checkerboard_program.periodic,
+        checkerboard_program.proposal_offsets,
+    )
+    rebound_program = replace_checkerboard_plan(
+        checkerboard_program, supplied_plan
+    )
+    original_schedule = copy(rebound_program.checkerboard_plan.sites)
+    reverse!(supplied_plan.sites)
+    @test rebound_program.checkerboard_plan.sites == original_schedule
+
     colors = Dict{Int32, Int}()
     for color in 1:Int(odd_periodic.color_count)
         first_index = Int(odd_periodic.color_offsets[color])

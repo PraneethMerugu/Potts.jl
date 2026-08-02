@@ -204,11 +204,7 @@ function CheckerboardPlan(
     return CheckerboardPlan(
         shape,
         periodic,
-        sites,
-        color_offsets,
-        conflict_displacements,
-        Int32(color_count),
-        Int32(maximum_color_size),
+        fields...,
         _VerifiedCheckerboardPlanToken(),
     )
 end

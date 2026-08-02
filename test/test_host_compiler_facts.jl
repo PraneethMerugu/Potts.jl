@@ -241,6 +241,33 @@ end
     @test built_in_candidates[:chemotaxis_endothelial].category === :drive
     @test built_in_candidates[:activity_endothelial].category === :drive
     @test built_in_candidates[:connectivity_endothelial].category === :constraint
+    activity_footprints = map(
+        built_in_candidates[:activity_endothelial].roots,
+    ) do root
+        PottsToolkit._materialize_footprint(
+            built_in_ir.facts.footprint[Int(root)]
+        )
+    end
+    activity_spatial = reduce(vcat, map(activity_footprints) do footprint
+        collect(PottsToolkit._collect_footprints(
+            footprint, PottsToolkit.SpatialFootprintFact
+        ))
+    end; init = PottsToolkit.SpatialFootprintFact[])
+    expected_moore = Tuple(sort([
+        (row, column)
+        for row in -1:1 for column in -1:1
+        if (row, column) != (0, 0)
+    ]))
+    @test any(
+        footprint -> footprint.anchor isa PottsToolkit.ProposalSourceAnchor &&
+                     footprint.offsets == expected_moore,
+        activity_spatial,
+    )
+    @test any(
+        footprint -> footprint.anchor isa PottsToolkit.ProposalTargetAnchor &&
+                     footprint.offsets == expected_moore,
+        activity_spatial,
+    )
     @test built_in_candidates[:contact_energy].affected_anchors ==
           PottsToolkit.AffectedAnchorFact(:incident_contacts, :contact_local, 8)
     @test built_in_candidates[:elastic_links].affected_anchors ==

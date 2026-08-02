@@ -2207,6 +2207,38 @@ all 20 workgroup/range combinations with exact CPU/device parity, constraint and
 and relationship execution. This is still a candidate, not a clearance: a fresh read-only R2 must
 report zero P0/P1. G6 remains closed.
 
+## Third R2 result — returned
+
+The independent review of exact clean commit `d0b05af` returned zero P0, one P1, two P2, and no P3
+findings. R2 did not clear and G6 remained closed. The single blocker was localized to preservation
+of the already-verified checkerboard plan: `CompiledPottsProgram` did not bind the plan's shape and
+periodicity to the program, and the public validated plan constructor retained caller-owned mutable
+arrays after comparing copies with canonical fields. Both adversarial paths were reproduced.
+
+The P2 findings were missing authoritative nonempty exclusive-footprint-to-color coverage and the
+CPU workgroup boundary matrix not being invoked by standard package CI. The owner accepted the first
+as part of this repair while leaving the second as nonblocking test-partition work. The R2 threshold
+remains unchanged at zero P0/P1.
+
+## Fourth R2 candidate — plan integrity repaired
+
+The program constructor now rejects checkerboard plans whose exact shape or periodicity differs from
+the compiled program, revalidates the canonical plan fields, and owns fresh plan storage. The public
+validated plan constructor stores the canonical fields it computed rather than caller buffers.
+Adversarial CorePotts tests cover mismatched shape, mismatched periodicity, post-construction mutation
+of supplied arrays, and mutation of the originally supplied plan after program construction.
+
+The accepted confidence test uses the production conflict reducer. Actual analyzed Act/Moore facts
+prove source- and target-anchor Minkowski materialization. A nonempty source/target exclusive write
+set proves compiler-derived nontrivial coloring; adding read-only and commutative accesses leaves the
+conflict set unchanged; and applying every conservative write in each color forward and backward
+proves collision freedom and order independence without a second engine or timing oracle.
+
+Qualification passed CorePotts, the fast compiler/runtime boundary at 230/230, G1 facts at 64/64,
+compilation/inspection at 74/74 after DRYing per-write assertions, the full root suite at 2,126/2,126
+before that assertion-only DRYing, and the complete Julia 1.12 Metal shared launcher. This remains a
+candidate pending fresh read-only R2 clearance. G6 remains closed.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,

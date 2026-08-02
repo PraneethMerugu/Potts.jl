@@ -103,6 +103,104 @@
     ).conflict_displacements
     @test isempty(checkerboard_conflicts)
     @test checkerboard.core_program.checkerboard_plan.color_count == 1
+
+    target_write = CorePotts.FiniteSpatialFootprint(
+        CorePotts.ProposalTargetFootprintAnchor(), ((0, 0),)
+    )
+    source_write = CorePotts.FiniteSpatialFootprint(
+        CorePotts.ProposalSourceFootprintAnchor(), ((0, 0),)
+    )
+    exclusive_access = CorePotts.ResourceAccess(
+        (),
+        (:external_neighborhood_state,),
+        CorePotts.EmptyFootprint(),
+        CorePotts.FootprintUnion((target_write, source_write)),
+        CorePotts.ExclusiveWriteAccess(),
+    )
+    read_only_access = CorePotts.ResourceAccess(
+        (:external_read_only_state,),
+        (),
+        CorePotts.FiniteSpatialFootprint(
+            CorePotts.ProposalSourceFootprintAnchor(),
+            ((-4, 0), (4, 0)),
+        ),
+        CorePotts.EmptyFootprint(),
+        CorePotts.NoWriteAccess(),
+    )
+    commutative_access = CorePotts.ResourceAccess(
+        (),
+        (:external_commutative_tracker,),
+        CorePotts.EmptyFootprint(),
+        source_write,
+        CorePotts.CommutativeIntegerWriteAccess(),
+    )
+    exclusive_conflicts = PottsToolkit._checkerboard_conflict_displacements(
+        CorePotts.ResourceAccess[exclusive_access],
+        executable.core_program.proposal_offsets,
+        Val(2),
+    )
+    policy_conflicts = PottsToolkit._checkerboard_conflict_displacements(
+        CorePotts.ResourceAccess[
+            read_only_access, commutative_access, exclusive_access,
+        ],
+        executable.core_program.proposal_offsets,
+        Val(2),
+    )
+    @test !isempty(exclusive_conflicts)
+    @test policy_conflicts == exclusive_conflicts
+    exclusive_plan = CorePotts.CheckerboardPlan(
+        executable.core_program.shape,
+        executable.core_program.periodic,
+        exclusive_conflicts,
+    )
+    @test exclusive_plan.color_count > 1
+
+    write_offsets = Tuple(unique((
+        (0, 0),
+        Tuple(
+            Tuple(executable.core_program.proposal_offsets[:, column])
+            for column in axes(executable.core_program.proposal_offsets, 2)
+        )...,
+    )))
+    function apply_color!(storage, plan, color, reverse_order)
+        first_index = Int(plan.color_offsets[color])
+        stop_index = Int(plan.color_offsets[color + 1]) - 1
+        scheduled = plan.sites[first_index:stop_index]
+        reverse_order && (scheduled = reverse(scheduled))
+        indices = CartesianIndices(size(storage))
+        collision_free = true
+        for site in scheduled
+            coordinates = Tuple(indices[Int(site)])
+            for offset in write_offsets
+                destination_index = CartesianIndex(ntuple(2) do dimension
+                    mod1(
+                        coordinates[dimension] + Int(offset[dimension]),
+                        size(storage, dimension),
+                    )
+                end)
+                collision_free &= storage[destination_index] == 0
+                storage[destination_index] = site
+            end
+        end
+        return storage, collision_free
+    end
+    for color in 1:Int(exclusive_plan.color_count)
+        forward, forward_collision_free = apply_color!(
+            zeros(Int32, executable.core_program.shape),
+            exclusive_plan,
+            color,
+            false,
+        )
+        backward, backward_collision_free = apply_color!(
+            zeros(Int32, executable.core_program.shape),
+            exclusive_plan,
+            color,
+            true,
+        )
+        @test forward_collision_free
+        @test backward_collision_free
+        @test forward == backward
+    end
     @test all(
         entry -> entry.default !== nothing,
         executable.parameter_manifest,

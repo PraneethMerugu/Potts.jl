@@ -293,33 +293,17 @@ function _append_exclusive_access!(
 end
 
 function _checkerboard_conflict_displacements(
-        descriptor_plan::CorePotts.DescriptorExecutionPlan,
-        stage_plan::CorePotts.StageExecutionPlan,
+        accesses::AbstractVector{<:CorePotts.ResourceAccess},
         proposal_offsets,
         ::Val{N},
     ) where {N}
     resources = Dict{Any, Vector{NTuple{N, Int}}}(
         :ownership => [ntuple(_ -> 0, N)]
     )
-    for group in descriptor_plan.groups
-        for descriptor in group.launch.instances
-            _append_exclusive_access!(
-                resources,
-                CorePotts.descriptor_resource_access(descriptor),
-                proposal_offsets,
-                Val(N),
-            )
-        end
-    end
-    for group in stage_plan.accepted_copy
-        for descriptor in group.instances
-            _append_exclusive_access!(
-                resources,
-                CorePotts.descriptor_resource_access(descriptor),
-                proposal_offsets,
-                Val(N),
-            )
-        end
+    for access in accesses
+        _append_exclusive_access!(
+            resources, access, proposal_offsets, Val(N)
+        )
     end
     displacements = NTuple{N, Int}[]
     for offsets in Base.values(resources)
@@ -340,6 +324,34 @@ function _checkerboard_conflict_displacements(
         matrix[dimension, column] = Int16(offset[dimension])
     end
     return matrix
+end
+
+function _checkerboard_conflict_displacements(
+        descriptor_plan::CorePotts.DescriptorExecutionPlan,
+        stage_plan::CorePotts.StageExecutionPlan,
+        proposal_offsets,
+        ::Val{N},
+    ) where {N}
+    accesses = CorePotts.ResourceAccess[]
+    for group in descriptor_plan.groups
+        for descriptor in group.launch.instances
+            push!(
+                accesses,
+                CorePotts.descriptor_resource_access(descriptor),
+            )
+        end
+    end
+    for group in stage_plan.accepted_copy
+        for descriptor in group.instances
+            push!(
+                accesses,
+                CorePotts.descriptor_resource_access(descriptor),
+            )
+        end
+    end
+    return _checkerboard_conflict_displacements(
+        accesses, proposal_offsets, Val(N)
+    )
 end
 
 function _lower_core_program(
