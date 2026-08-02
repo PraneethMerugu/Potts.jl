@@ -9,8 +9,17 @@ host/source_graph.jl
 host/operations.jl
     define the versioned operation-transfer authority
 
+host/normalized_payloads.jl
+    define the closed normalized leaf grammar and qualified binding identities
+
+host/operation_validation.jl
+    validate complete operation contracts and role/phase/backend legality
+
+host/operation_closure.jl
+    derive the minimal frozen per-model operation closure from proven dependencies
+
 host/normalization.jl
-    normalize symbolic expressions into the ordered term DAG
+    orchestrate symbolic normalization into the ordered term DAG
 
 host/energy_domains.jl
     prove conservative energy domains and finite affected-anchor plans
@@ -87,6 +96,23 @@ lowering/core_program.jl
 compile.jl
     orchestrate the passes and assemble the final executable/fingerprint
 ```
+
+Package-owned operation declarations live outside the compiler:
+
+```text
+operation_library/inventory.jl
+    own the literal package-level V1 vocabulary used by documentation and coverage audits
+
+operation_library/scientific.jl
+    admit named scientific operations through the same transfer contract as extensions
+
+operation_library/numerics.jl
+    admit numerical stage primitives such as explicit Euler
+```
+
+The package inventory is not embedded in completed models. Each completed graph freezes only its
+reachable operations and compiler-synthesized dependencies, including their complete schemas and
+concrete callable values.
 
 Only `compile.jl` orchestrates the complete pipeline. Host IR and registries never cross
 `execution/boundary.jl`. Registered scientific terms may contribute versioned operation callables,

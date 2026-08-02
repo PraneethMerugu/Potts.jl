@@ -1,6 +1,6 @@
 # Symbolic Potts V1 Architecture-Freeze Implementation Specification
 
-Status: implemented qualification candidate; AF-Q pending
+Status: implementation and local qualification complete; independent AF-Q review pending
 
 Date: 2026-08-02
 
@@ -182,3 +182,17 @@ After dependency-derived closure was implemented, the same package precompile co
 37 seconds. A warmed volume-only completion on the qualification Mac completed in about 4.8 ms,
 allocated 642,336 bytes, and froze three reachable operations. Its focused regression budget is
 2,000,000 bytes to allow ordinary Julia/version variance without accepting library-size scaling.
+
+## Local qualification evidence
+
+The exact candidate passed the following local qualification on the Apple Metal host:
+
+- focused architecture-freeze suite: 81/81 assertions;
+- root `Pkg.test`: 1,425/1,425 assertions in 19m01.7s;
+- literal package inventory audit: 65/65 operations; and
+- Metal descriptor, checkerboard, shape/workgroup, constraint, energy, and relationship-runtime
+  qualification.
+
+The root run first spent 361 seconds constructing and precompiling a newly resolved temporary test
+environment. That cold dependency setup is reported separately from the 19m01.7s test duration and
+from the warm completion measurements above.
