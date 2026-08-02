@@ -88,6 +88,12 @@ contract.
 A cell-addressed draw MUST use both the visible cell ID and the internal slot generation. Reusing a
 retired ID MUST NOT reuse the former cell's random identity.
 
+A model-domain lifecycle draw before destination allocation MUST use the qualified lifecycle rule,
+bounded occurrence identity, MCS, policy, and lexical draw identity. A destination-initialization
+draw MUST occur only for a surviving allocated request and MUST additionally include destination
+cell ID/generation and descendant role. Cell and model-lifecycle identities are distinct semantic
+entity kinds; they MUST NOT be encoded as disguised site identities.
+
 Compiled events, rules, properties, penalties, and other stochastic components MUST receive stable
 operation identities within the compiled model. Their mapping MUST be represented in the model
 fingerprint or provenance.
@@ -116,6 +122,7 @@ Independent named stream families MUST exist for at least:
 - Property inheritance
 - Conserved stochastic rounding
 - Stochastic type transitions
+- Lifecycle placement and binary partition
 - Ensemble trajectory derivation
 
 Built-in scientific code MUST NOT partition streams with undocumented numeric offsets. Adding,
@@ -145,6 +152,11 @@ draws remain auditable.
 A stochastic lifecycle trigger or division geometry declares its operation labels before lowering.
 Its device result remains a pure function of the pre-lifecycle snapshot and addressed draws; branch
 behavior MUST NOT shift random identities belonging to other targets or operations.
+
+Lifecycle filtering, conflict loss, declaration permutation, descriptor grouping, workgroup
+tuning, and backend launch decomposition MUST NOT shift unrelated addresses. If the current packed
+address cannot encode the admitted cell/model/occurrence domains injectively, the RNG contract
+version MUST change before support is claimed.
 
 Stochastic layout placement is addressed by stable layout-instance, provisional-entity, logical
 site or candidate, operation, invocation, and draw identities before runtime cell IDs exist.
@@ -433,6 +445,7 @@ An exact checkpoint MUST contain or identify:
 - Current integer MCS
 - Algorithm-defined semantic counters
 - Cell slot generations
+- Never-used/active/reusable slot status and cell-ID high-water mark
 - Complete biological and auxiliary state
 - Model and schema fingerprint
 - Algorithm and sampler identity

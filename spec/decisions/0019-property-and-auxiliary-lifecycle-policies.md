@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-07-19
 
+The closed Symbolic Potts V1 structural effects, pure lifecycle-policy ABI, policy resolution,
+immutable semantic before/planned-after views, and external conformance boundary are specified by
+CCV1-027 in the
+[compiler construction contract](../symbolic-potts-v1-compiler-construction.md). This decision
+continues to own schema-level biological, auxiliary, and derived-state lifecycle behavior.
+
 ## Context
 
 The future property schema already needs initialization, division, transition, and retirement

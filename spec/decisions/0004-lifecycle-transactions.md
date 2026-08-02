@@ -4,6 +4,13 @@ Status: Accepted
 
 Date: 2026-07-17
 
+Symbolic Potts V1 clarification: CCV1-027 in the
+[compiler construction contract](../symbolic-potts-v1-compiler-construction.md) supersedes the
+unconditional-retirement and retirement-time generation wording below. Each finite kind explicitly
+selects `RetireAtZero` or `ForbidExtinction`; the latter makes zero occupancy an invariant failure.
+Retirement preserves the consumed generation, which advances exactly once only when the slot is
+allocated to a new identity.
+
 ## Context
 
 Current lifecycle kernels allocate IDs through racing atomics, may partially handle capacity
@@ -20,12 +27,14 @@ Division validates geometry before ID allocation and aborts the complete valid b
 if fixed capacity is insufficient. The parent retains its ID and the child receives the lowest
 available ID. Derived state is recomputed; biological state follows schema inheritance.
 
-Progressive shrink death and immediate death are distinct. Any zero-volume finite cell is retired.
-Retirement resets all device state immediately. Retired IDs become reusable on the next MCS in
-ascending order and carry an incremented slot generation.
+Progressive shrink death and immediate death are distinct. Under `RetireAtZero`, a due ordinary
+lifecycle retirement resets schema-owned state before publication. A `ForbidExtinction` kind
+prevents normal final-site loss and treats any impossible zero-occupancy state as nonfilterable
+corruption. Retired IDs become reusable on the next MCS in ascending order; generation advances on
+the later allocation, not retirement.
 
-Each event owns its integer-MCS schedule. Stable GPU lifecycle actions are device executable; host
-actions are explicit synchronization boundaries.
+Each event owns its integer-MCS schedule. Stable V1 GPU lifecycle actions are device executable;
+host lifecycle actions are outside the V1/R2 support claim.
 
 ## Consequences
 

@@ -39,7 +39,7 @@ for multiple media and is not normative.
 
 ## Finite Cells
 
-A finite cell:
+A finite cell in a finalized or published state:
 
 - MUST have a positive public cell ID.
 - MUST own at least one lattice site while active.
@@ -47,6 +47,12 @@ A finite cell:
 - MUST occupy exactly one live storage slot.
 - MUST NOT appear in the reusable-slot collection while active.
 - MAY be disconnected unless a model explicitly applies a connectivity constraint.
+
+Symbolic Potts V1 permits only one bounded pre-publication exception: a zero-occupancy active
+identity whose resolved `RetireAtZero` transaction is due in the current lifecycle plan. It MUST be
+retired before publication. A `ForbidExtinction` identity reaching zero occupancy is a
+nonfilterable invariant failure, not an alternate retirement path. See CCV1-027 in the
+[compiler construction contract](symbolic-potts-v1-compiler-construction.md).
 
 Cell IDs are visible to users and MAY be used for selection and analysis. They are reusable storage
 handles rather than permanent lineage identities.
@@ -97,11 +103,15 @@ MUST raise a structured capacity error and MUST NOT partially commit the transac
 
 ## Slot Reuse
 
-After retirement, a finite-cell ID MAY be reused. Reusable IDs MUST be selected in deterministic
-ascending order.
+Compiled storage MUST distinguish never-used, active, and reusable slots, or encode exactly the
+same facts with a high-water mark and reusable collection. After retirement, a finite-cell ID MAY
+be reused beginning at the next MCS. Reusable IDs MUST be selected in deterministic ascending
+order before fresh IDs above the high-water mark.
 
-Every slot maintains an internal generation counter. Assigning a retired slot to a new cell MUST
-increment the counter. RNG streams for cell-specific behavior MUST distinguish different generations
+Every slot maintains an internal generation counter. A never-used slot has no live generation and
+its first identity receives generation one. Retirement preserves the consumed generation in the
+reusable slot. Assigning that slot to a new cell MUST increment the counter exactly once, after
+overflow preflight. RNG streams for cell-specific behavior MUST distinguish different generations
 of the same cell ID.
 
 Slot generation is not a public lineage identifier in specification version `0.2-draft`.
@@ -193,7 +203,8 @@ A conforming state MUST satisfy:
 
 1. Every site has exactly one valid owner.
 2. Every finite owner in the lattice is active.
-3. Every active finite cell owns at least one site.
+3. Every active finite cell in finalized or published state owns at least one site; the only
+   admitted pre-publication zero-occupancy transient is a due `RetireAtZero` transaction.
 4. Every active finite cell has exactly one valid cell type.
 5. No cell ID is both active and reusable.
 6. No reusable ID occurs more than once.
@@ -203,6 +214,8 @@ A conforming state MUST satisfy:
 10. Retired slots contain their schema-defined reset state.
 11. Medium-domain occupancy equals full lattice recomputation.
 12. No medium domain has finite-cell lifecycle or instance-property state.
+13. Never-used, active, and reusable slot states are distinguishable, and no ID retired in MCS `t`
+    is allocated again before MCS `t + 1`.
 
 The conformance suite MUST provide full-state validators for these invariants.
 

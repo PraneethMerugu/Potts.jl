@@ -4,8 +4,8 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade and audit-passed; implementation prohibited until the owner gives
-explicit send-off
+Status: implementation-grade through the cleared G5 surface and G5-L0 lifecycle-language
+boundaries; G5-L1 may begin, while R2/G6/proof-model work remains unauthorized
 
 ## Authority
 
@@ -16,6 +16,10 @@ It freezes the remaining compiler-construction decisions required by the
 It also incorporates the owner's accepted
 [quick confidence-test research](../design/audits/symbolic-potts-v1-quick-confidence-test-research.md)
 and [execution-control audit](../design/audits/symbolic-potts-v1-execution-control-audit.md).
+It also records LCI-R1-01 through LCI-R5-07 from the accepted
+[lifecycle-language owner interview](../design/audits/symbolic-potts-v1-lifecycle-language-owner-interview.md).
+CCV1-027 received fresh independent G5-L0 clearance in the
+[lifecycle-language rereview](../design/audits/symbolic-potts-v1-lifecycle-language-g5-l0-rereview.md).
 
 For compiler construction, descriptor execution, state/workspace layout, spatial planning,
 relationship transactions, backend qualification, and autonomous implementation order, authority
@@ -81,11 +85,17 @@ Completion MUST freeze a qualified source graph containing:
 - statement, equation, variable, parameter, relation, state, observation, protocol, and external
   IO references;
 - source/provenance chains;
-- canonical registry snapshot; and
+- minimal reachable frozen schema/callable closure; and
 - links needed for diagnostics, inspection, and symbolic indexing.
 
 Completion MUST NOT select an engine, backend, scalar type, device, layout, RNG seed, initial
 state, or solve interval.
+
+The package-level literal V1 operation inventory is separate documentation and audit data. A
+completed model stores only reachable symbolic operations, actually required compiler-synthesized
+operations, and used external operations. The closure freezes complete schemas and selected
+callables; unused operations MUST NOT scale per-model graph size. Analysis and lowering MUST NOT
+consult the live registry.
 
 Compilation MUST lower the frozen source graph into a private indexed `NormalizedTermGraph` or an
 equivalent private type. The graph MUST store model structure as host data rather than recursive
@@ -278,6 +288,11 @@ internal-looking metadata key is never authority by itself.
 Non-proposal stages MAY admit downstream scientific descriptors conforming to the same protocol
 only when their accepted stage specification requires distinct execution semantics. Such a
 descriptor MUST NOT create an alternate symbolic proposal-evaluator path.
+
+For CCV1-027 lifecycle, this allowance cannot admit a structural verb, imperative callback, or
+alternate trigger/policy evaluator. External lifecycle triggers, placement, binary partition, and
+state transforms MUST enter through CCV1-009's frozen operation-schema/callable route and lower into
+the compiler-owned lifecycle transaction descriptors.
 
 ## CCV1-007 — Descriptor grouping and specialization boundary
 
@@ -854,9 +869,11 @@ representation MUST return work to G2 or G4 and MUST NOT be accepted as a reduce
 
 - Implement generic tracker, incident-index, relationship, request, lifecycle, and checkpoint
   protocols.
+- Before cell-lifecycle implementation, clear G5-L0 against CCV1-027. Then implement the closed
+  cell-structure transaction language through bounded G5-L1--G5-L5 checkpoints without opening G6.
 - Pass the neutral external relationship fixture on sequential CPU and checkerboard CPU.
 - Pass incident-locality, bounded-request, canonical conflict, capacity, degree, generation,
-  rollback, lifecycle, checkpoint, and permutation properties.
+  failure-atomicity, lifecycle, checkpoint, and permutation properties.
 - Execute every applicable relationship kernel family on the functional GPU witness.
 - Complete the R2 execution/concurrency/GPU review and checkpoint the cleared execution boundary.
 
@@ -951,8 +968,9 @@ Five fresh-context, read-only reviews are required:
   checkpoint continuation, warm-path inference/allocation, the external public fixture, and a
   mechanism-leakage inventory of CorePotts types, fields, operation identities, dispatch methods,
   capability flags, and executor branches;
-- `R2Execution` after G5 reviews footprints, deterministic checkerboard commit, relationship
-  transactions, adaptation, GPU legality, and no fallback;
+- `R2Execution` after G5 reviews footprints, deterministic checkerboard commit, relationship and
+  cell-lifecycle transactions, adaptation, GPU legality, checkpoint continuation, external
+  extension equality, and no fallback;
 - `R3Science` after G7 reviews paper/source-qualified equations, stage order, exact
   microfixtures, and statistical calibration; and
 - `R4Terminal` after G9 reviews the public black-box flow, stale/private APIs, package loading,
@@ -1036,7 +1054,8 @@ Phase exit requires:
 6. local terms/trackers avoid unrelated whole-state scans;
 7. replay and stochastic divergence match declared scopes;
 8. both neutral downstream fixtures pass every required surface and the GPU witness;
-9. relationship/lifecycle ordering, capacity, generation, rollback, and integrity properties pass;
+9. relationship/lifecycle ordering, capacity, generation, failure-atomicity, and integrity
+   properties pass;
 10. focal, Wortel, and Merks run stochastically through complete visible public definitions;
 11. SciML, ModelingToolkit, equation, observation, ProcessBigraphs, Unitful, and in-scope
     MakiePotts integration gates pass;
@@ -1396,3 +1415,303 @@ equality, arbitrary-angle continuum isotropy, universal linear mean-squared disp
 finite-temperature short-run monotonic relaxation, early-time continuum-Gaussian equality for a
 discrete stencil, unqualified linear chemotaxis, or fluctuation-response identities without proven
 reversibility and equilibration.
+
+## CCV1-027 — Closed cell-lifecycle language and transaction boundary
+
+This clause is the V1 authority for compiled finite-cell creation, occupied removal, retirement,
+kind transition, and binary division. It supersedes lower-authority lifecycle text where that text
+implies unconditional executor retirement, generation advancement at retirement, open structural
+mutation verbs, a site-iterated event domain, host lifecycle fallback, or a second lifecycle clock.
+It does not broaden G6 or authorize proof-model migration.
+
+### Closed structural algebra and public surface
+
+`LifecycleProcess` is the sole public cell-lifecycle statement. Its stable V1 target domains are:
+
+- `cells(kind)`, over finite active `(cell_id, generation)` identities; and
+- `model()`, over exactly one qualified completed-model identity.
+
+Creation placement MAY evaluate bounded finite site expressions, but V1 does not admit a
+site-iterated lifecycle event domain or a general lifecycle query language. Qualified bindings and
+resource identities MUST be resolved before analysis; symbolic-name prefixes are capture syntax,
+not analysis authority.
+
+The public statement shape is:
+
+```julia
+LifecycleProcess(name; domain, anchor = nothing, expression, effects,
+                 phase = Lifecycle(), cadence = EveryMCS())
+```
+
+`expression` MUST be a dimensionless Boolean. `effects` contains exactly one structural effect for
+a cell-lifecycle statement. Model-domain `CreateCell` has required `placement`;
+cell-domain `RemoveCell` has required source and replacement medium; `Retire` has required source;
+`Transition` has required source and destination kind; and `Divide` has required source, geometry,
+relation, and side identity. State and relationship overrides are canonical tuples. Every effect
+contains its explicit priority and mandatory inadmissibility disposition. Compatible public
+constructor conveniences MUST normalize to these facts before completion.
+
+The closed cell-structure effect algebra is exactly:
+
+- `CreateCell`, `0 -> 1`;
+- `RemoveCell`, `1 -> 0`, transferring all owned sites to one declared medium;
+- `Retire`, `1 -> 0`, consuming an already empty identity;
+- `Transition`, `1 -> 1`, preserving identity and ownership while changing kind/state; and
+- `Divide`, `1 -> 2`, retaining the parent identity and allocating one daughter.
+
+A cell-targeting process contains exactly one structural effect. Kind mapping, state mapping, site
+ownership-change behavior, relationship consequences, priority, and inadmissibility disposition
+are policies within that effect, not coincident mutation verbs. The five effects lower to one
+closed cell-structure transaction IR. V1 excludes fusion, fragmentation, arbitrary M-to-N rewrite,
+recursive emission, dynamic structural registration, and imperative mutation callbacks.
+
+Every effect MUST carry explicit signed-`Int32` semantic priority and an explicit
+`FilterInadmissible()` or `ErrorOnInadmissible()` value. `on_inadmissible` is mandatory: omission
+MUST fail construction. Integrity failures are never filterable. Binary division MAY default both
+descendant kind mappings to concrete frozen `PreserveKind()` values; CorePotts MUST NOT infer any
+policy from missing runtime data.
+
+### Built-in V1 policy inventory and pure extension slots
+
+The complete built-in creation-placement inventory is `SeedAt(site_expression)` and
+`SeedStencil(site_expression, finite_offsets; relation)`. A registered external placement operation
+MAY occupy the same public `placement` field as a typed symbolic policy value and MUST satisfy the
+pure ABI below. Every selected site MUST be in bounds, available, and admissible in the common
+snapshot; partial placement, clipping, and declaration-order winners are forbidden. A stencil is
+finite compile-time data and connected under its bound relation.
+
+The complete built-in binary-partition inventory is `RandomPlane`,
+`PrincipalAxisPlane(:major|:minor)`, and `SpecifiedNormalPlane`, each with an explicit point and
+normal. A registered external binary-partition operation MAY occupy the same public `geometry`
+field as a typed symbolic policy value and MUST satisfy the pure ABI below. Side identity is
+`CanonicalSide()` or `StableRandomSide(draw_identity)`. One explicit finite relation validates both
+descendants. Their site sets MUST be nonempty, connected, disjoint, and exactly conserve the
+parent's sites. External placement/partition slots admit neither arbitrary callbacks nor new
+structural effects.
+
+Retained-parent and daughter kind mapping are independent typed values: `PreserveKind()` or
+`SetKind(kind)`. Both normalized values are frozen and inspectable. Omitting them at the public
+constructor realizes explicit `PreserveKind()` values for both descendants before completion;
+CorePotts never interprets a missing kind field.
+
+Authoritative cell-owned state uses separate creation, removal/retirement, transition, and division
+policies. V1 built-in families are:
+
+- creation: `InitializeFrom`, `Unsupported`;
+- removal/retirement: `RetireTo`, `Unsupported`;
+- transition: `Preserve`, `ResetTo`, `Transform`, `Unsupported`; and
+- division: `CopyToDaughters`, `PreserveParentResetDaughter`, `ResetBoth`,
+  `SplitConservatively`, `TransformDaughters`, `RedrawDaughters`, `Unsupported`.
+
+These are the complete built-in state-policy families. A registered pure state-transform operation
+enters as the symbolic expression inside an applicable initialization, transform, daughter-
+transform, or reset policy. A registered trigger operation enters
+`LifecycleProcess.expression`. Neither slot registers another structural effect or bypasses schema
+policy resolution.
+
+Resolution is `compatible explicit event override -> schema policy -> construction failure`.
+Custom and auxiliary state has no implicit clone, zero, reset, redraw, or conservation law.
+Derived trackers declare invalidation and repair/reconstruction rather than biological inheritance.
+Affected site-owned state explicitly uses `PreserveOnOwnershipChange()` or
+`ClearOnOwnershipChange()`. Fields are not rewritten merely because ownership changes. A missing
+reachable site-ownership law fails construction.
+
+Relationship consequences remain within the existing bounded relationship transaction protocol.
+Creation adds no incident relationship. Removal/retirement uses `RejectWhileLinked` or
+`RemoveIncident`; transition uses `PreserveCompatible`, `RemoveIncompatible`, or
+`RejectIncompatible`; division uses `RejectWhileLinked` or `RemoveIncident`. Daughter transfer is
+deferred. Every relationship schema resolves separate removal/retirement, transition, and division
+behavior; a missing reachable behavior fails construction. Effect-level relationship overrides MUST
+be canonical tuples before completion and fingerprinting; any scalar authoring convenience MUST
+normalize before it reaches frozen source.
+
+### Extinction invariant
+
+Every finite cell kind MUST resolve exactly one ordinary CPM extinction law:
+
+- `RetireAtZero`, which completion lowers to a qualified ordinary `LifecycleProcess` containing
+  `Retire`, its declared priority, and frozen `ErrorOnInadmissible()`; or
+- `ForbidExtinction`, which completion lowers to a generic proposal constraint preventing loss of
+  the final owned site.
+
+A medium kind cannot declare either law. There is no unconditional CorePotts scan and no
+undocumented global default. If an active `ForbidExtinction` identity nevertheless has zero
+occupancy at lifecycle planning, execution MUST report a nonfilterable invariant failure. It MUST
+NOT synthesize retirement. Only a due `RetireAtZero` transaction may consume the bounded
+pre-publication zero-occupancy transient. No finalized or published state may contain an active
+zero-volume cell.
+
+### Pure lifecycle-policy ABI and frozen closure
+
+External packages MAY register versioned pure trigger, placement, binary-partition, and
+state-transform operations. They MUST NOT register a structural mutation verb. Every such operation
+uses CCV1-009's sole symbolic-to-callable route and declares:
+
+- admitted lifecycle role and exact semantic input context;
+- concrete result type/shape, units, parameter domain, and totality;
+- purity, finite reads, footprints/emission, workspace, tracker, and relation requirements;
+- semantic RNG namespace, entity/occurrence identity, and lexical draw identities;
+- backend/numerical capabilities and one concrete device-valid callable; and
+- canonical serialization, validators, qualified provenance, and inspection metadata.
+
+Triggers return one Boolean per bound finite anchor. Placement returns one bounded finite site
+selection. Binary partition returns bounded region labels covering every source-owned site and
+supports proof of exact two-way conservation. State transforms return their declared fixed
+property value or parent/daughter result. These operations cannot mutate state, allocate identity,
+commit ownership, emit another structural verb, consult a live registry, or invoke an executor
+callback. Assertions MAY supply declared facts but MUST NOT substitute for compiler proof.
+
+The semantic context/result ABI is:
+
+| Role | Exact immutable semantic context | Result and mandatory validation |
+|---|---|---|
+| trigger | common snapshot, qualified domain anchor/identity, MCS, resolved parameters/resources, occurrence and addressed draws | one `Bool` for each finite bound anchor |
+| placement | common snapshot/topology, qualified model/rule occurrence, resolved site expression and relation, parameters/resources, addressed draws | fixed-capacity isbits site selection with declared maximum; prove uniqueness, bounds, availability, admissibility, and stencil connectivity |
+| binary partition | common snapshot, source ID/generation, canonical source-owned-site index, explicit relation, resolved point/normal/side, parameters/resources, addressed draws | one compact label per source site; prove exactly two nonempty connected regions and exact ownership conservation |
+| state transform | common snapshot, qualified state schema/source identity, old value, allocated destination identities/roles where required, semantic before/planned-after views, parameters/resources, addressed draws | one concrete schema value or fixed parent/daughter pair; validate type, units, domain, and declared conservation/initialization law |
+
+Concrete context/view layout is private. Partition evaluation MAY be pointwise over canonical source
+sites; whole-partition validation belongs to that same resolved policy plan and MUST NOT be a second
+production evaluator or a trusted extension callback.
+
+Completion freezes the minimal reachable schema closure: reachable symbolic operations, only the
+compiler-synthesized operations actually required by the model, and used external operations. It
+freezes complete schemas and selected concrete callable values. Analysis and lowering MUST never
+consult the live registry. Unused package vocabulary MUST NOT be copied into each normalized model.
+The package-level literal inventory remains separate for documentation and coverage audits.
+
+The freeze guarantees registry/schema/callable selection. It does not claim immunity from later
+Julia method additions or redefinitions. Julia, package, dependency, and compiler environment
+identity participates in executable compatibility, provenance, recompilation, and requalification.
+
+### Snapshot, planning, conflict, and publication law
+
+The ordinary order is:
+
+```text
+Proposal and AcceptedCopy commits
+    -> AfterMCS
+    -> RelationshipCommit
+    -> immutable PreLifecycleSnapshot
+    -> Lifecycle plan/evaluate/commit/publication
+    -> EquationStep
+    -> Observe
+    -> settled completed-MCS boundary
+```
+
+Every due trigger and pure policy reads the common snapshot. Newly created cells and daughters are
+ineligible until a later lifecycle invocation. V1 uses integer-MCS cadence only; MCS zero is
+initialization. After conflict resolution, a surviving request MAY receive immutable semantic
+before and planned-after views derived from the common snapshot and its validated plan. Those views
+cannot contain another request's result. Their concrete private representation is not public API.
+Mutation-and-rollback evaluation is forbidden.
+
+Exact duplicate requests are deduplicated. Request-local placement/partition and structural
+preconditions are planned from the common snapshot, exact finite write footprints are derived, and
+the explicit inadmissibility disposition is applied before biological conflict selection. An
+inadmissible high-priority request therefore cannot suppress a valid competing request. Incompatible
+identity, ownership, site, state, relationship, and topology write footprints of the remaining
+requests form compiler-derived conflict sets. The phase policy is `RejectLifecycleAmbiguity` or
+`StableLifecyclePriority`. Stable priority selects the unique greatest explicit priority; an equal
+greatest priority is an error. Declaration order, effect category, tuple order, ID, slot, group,
+launch order, and atomic arrival are not priority. Allocation-dependent state initialization and
+its draws occur only after winner selection.
+
+Expected snapshot-relative inadmissibility follows the effect's explicit disposition and produces a
+bounded diagnostic. Stale generation, illegal policy, invalid/nonfinite evaluator result,
+request/emission/workspace bound violation, generation overflow, analyzed-footprint violation,
+backend mismatch, and failed planned/post-commit invariant are nonfilterable. After filtering and
+conflict resolution, insufficient cell or relationship capacity aborts the complete valid batch.
+
+Commit is staged publication, not device-crash rollback: validate the complete plan and capacity;
+write authoritative ownership, identity, kind, state, relationship, and tracker/index updates in
+declared order; validate postconditions; then publish the completed boundary. A failure before
+publication exposes no partial scientific state. CorePotts executes resolved structural plans and
+contains no biological mechanism branch.
+
+### Identity, workspace, RNG, checkpoint, and status
+
+Cell storage distinguishes never-used, active, and reusable slots, or an exactly equivalent
+high-water representation. Allocation uses the common pre-lifecycle free pool, orders surviving
+requests by canonical request identity, selects reusable IDs ascending, then fresh IDs above the
+high-water mark, and preflights capacity and generation range before mutation. IDs retired in MCS
+`t` cannot be reused until MCS `t + 1`. A fresh identity receives generation one; a reused identity
+advances the consumed generation exactly once at allocation. Transition and the retained parent
+preserve identity/generation.
+
+Lifecycle request banks, compaction/sort/conflict storage, allocation plans, policy plans, tracker
+repair, relationship consequences, and status storage MUST have finite compiler-proven bounds and
+reusable backend-adaptable workspace. Statement names, resource names, IDs, generations,
+occurrences, slots, and capacities remain values. Only structural policy/evaluator/storage/plan
+classes may specialize.
+
+Lifecycle randomness extends the semantic address contract with honest cell and lifecycle/model
+entities. Cell draws include ID and generation. Model-domain creation uses qualified rule and
+bounded occurrence before allocation. Destination initialization occurs only for survivors and
+includes destination identity/generation, descendant role, policy, and lexical draw. Filtering,
+conflict loss, grouping, declaration permutation, and launch decomposition cannot shift unrelated
+draws. Address representation changes require an RNG contract-version change.
+
+Stable checkpoints occur only at finalized MCS zero or settled completed-MCS boundaries. They
+include ownership, slot status/high-water/reuse, kinds, generations, cell/auxiliary state,
+relationships and endpoint generations, reconstructible tracker facts, MCS, parameters, seed/RNG
+contract, frozen policy/stream identity, and executable fingerprint. Request queues, staging,
+workspace, and backend events reconstruct. Same-profile continuation reproduces uninterrupted
+lifecycle state and trace.
+
+The closed status translation is:
+
+| Failure class | Authority |
+|---|---|
+| filtered inadmissibility | device bounded diagnostic; no phase failure |
+| inadmissibility under `ErrorOnInadmissible` | device `LifecycleInadmissibilityFailure` |
+| static ambiguity, missing/illegal policy, prelaunch capability mismatch | host construction/admission diagnostic |
+| runtime conflict | device `LifecycleConflictFailure` |
+| cell/relationship capacity | device `CellCapacityFailure` / `RelationshipCapacityFailure` |
+| stale generation | device `StaleGenerationFailure` |
+| generation exhaustion | device `GenerationOverflowFailure` |
+| invalid/nonfinite evaluator | device `LifecycleEvaluatorFailure` |
+| bound or footprint violation | device `LifecycleFootprintFailure` |
+| planned/post-commit invariant failure | device `LifecycleInvariantFailure` |
+| backend execution failure/runtime capability loss | host-synthesized `LifecycleBackendFailure` with original cause |
+
+The host translates status once at the declared phase boundary. It cannot reinterpret device
+science or choose a different semantic offender.
+
+### Portability, ownership, conformance, and stop rule
+
+Sequential and checkerboard invoke one immutable engine-neutral lifecycle plan. KernelAbstractions
+is the portable kernel boundary; AcceleratedKernels or custom kernels may implement bounded
+compaction, scans, and sorting when they preserve the contract. GPU planning and commit perform no
+host scientific work, scalar indexing, or fallback. One explicit phase-end synchronization and
+bounded status transfer is permitted. The backend-neutral lifecycle harness MUST functionally run
+all five effects and every admitted built-in policy family on the selected real GPU witness.
+
+Compiler responsibilities remain visibly separated among public syntax, completion/normalization,
+analysis, lowering/inspection, CorePotts structural protocol, transaction runtime, shared
+state/workspace/tracker/relationship/RNG/checkpoint services, and tests. Exact private files and
+type names are not normative. Lifecycle work MUST NOT be placed in a mechanism-named module or
+recombined into a central catch-all executor.
+
+G5-L uses these bounded checkpoints:
+
+1. G5-L0: independent specification clearance; no implementation with a P0/P1 finding.
+2. G5-L1: syntax, schemas, qualified binding, frozen closure, analysis, diagnostics, inspection.
+3. G5-L2: transaction IR and complete sequential CPU reference.
+4. G5-L3: shared checkerboard CPU execution and deterministic bounded workspaces.
+5. G5-L4: real functional GPU witness and neutral downstream extension proof.
+6. G5-L5: fast/qualification profiles, source/performance audit, and R2 handoff.
+
+Required exit evidence covers exact compiler rejection and inspection; every effect/policy on CPU;
+snapshot, inadmissible-competitor, conflict, capacity, allocation, generation, failure atomicity,
+ownership and independent
+tracker/relationship recomputation; RNG/replay/checkpoint; sequential/checkerboard equivalence;
+one external module exercising trigger, placement, partition, and state transform with zero central
+executor edits; real GPU execution; and bounded allocation, locality, inference, specialization,
+workspace, and measured performance. Fast tests share fixtures with explicit expensive
+qualification rather than duplicating assertions or creating evidence-freshness bureaucracy.
+
+When G5-L and the existing G5 surface/relationship work pass, one fresh `R2Execution` reviews the
+whole boundary. If R2 clears, work MUST stop before G6 for owner review. Wortel, Merks, focal-model
+migration, polished docs, a second evaluator, a legacy oracle, a new CI evidence system, and broader
+lifecycle vocabulary are outside G5-L.

@@ -4,6 +4,11 @@ Status: Accepted
 
 Date: 2026-07-17
 
+The cell-lifecycle specialization of this decision is CCV1-027 in the
+[compiler construction contract](../symbolic-potts-v1-compiler-construction.md): lifecycle requests
+derive finite read/write/emission footprints, conflicts, semantic priorities, RNG addresses, and
+canonical allocation from one immutable pre-lifecycle snapshot.
+
 ## Context
 
 Reproducible random bits do not ensure a reproducible or scientifically correct trajectory.
