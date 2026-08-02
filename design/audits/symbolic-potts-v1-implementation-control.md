@@ -2091,7 +2091,7 @@ The repair claims the following for the reviewer to challenge rather than accept
 
 Qualification on the repaired candidate:
 
-- CorePotts passed 219/219 assertions, including tracker locality, external tracker execution and
+- CorePotts passed 215/215 assertions, including tracker locality, external tracker execution and
   reconstruction, relationship atomicity and filtering, checkpoint continuation, storage growth,
   and Aqua;
 - the fast compiler/runtime target passed 115/115 in 2m23.4s and now invokes the shared G2/G4/G5
@@ -2127,6 +2127,49 @@ The fresh R2 must rerun every original handoff question and explicitly audit:
   R1/R1.5; and
 - whether the backend-neutral harness is ready for a later CUDA/AMDGPU/Metal release matrix without
   vendor-specific semantic forks or unsupported claims.
+
+## Second R2 result — returned
+
+The fresh independent review of exact HEAD `67ca4eb` returned zero P0, five P1, four P2, and no P3
+findings. R2 does not clear and G6 remains closed. Independent qualification reproduced the fast
+target at 115/115, CorePotts at 215 assertions, and the complete Julia 1.12 Metal G2/G4/boundary/G5
+launcher with exact CPU/device parity. The worktree remained clean.
+
+The blocking findings return work to the earliest owning gates:
+
+1. **G1:** analyzed locality remains a symbolic scalar fact rather than the accepted closed,
+   compositional, anchor-aware, policy-aware footprint algebra. Lowering rediscovers spatial leaves
+   and coloring consumes descriptor footprints without distinguishing shared reads from exclusive
+   writes.
+2. **G4:** the public field constructor for `CheckerboardPlan` permits a fabricated unverified plan
+   whose report nevertheless claims the canonical realized greedy algorithm.
+3. **G4:** checkerboard claims and conflict selection run before constraint/Hamiltonian/drive/
+   modifier evaluation, so a later-rejected high-priority proposal can suppress a lower-priority
+   admissible conflict.
+4. **G5:** external tracker admission trusts an arbitrary inspection `NamedTuple` and concurrency
+   assertion, declares no typed independent-oracle contract, and hands the extension method its
+   entire tracker storage rather than a capability-bounded update surface.
+5. **G4:** the shared boundary harness varies lattice sizes but neither varies a real kernel
+   workgroup size nor proves `W-1/W/W+1` against the actual launch `ndrange`; it also does not make
+   scalar indexing fail or exercise constraint/energy-rejection branches in that suite.
+
+The nonblocking findings are also accepted for autonomous repair before the next candidate:
+
+- include canonical site order in checkerboard inspection/fingerprint authority;
+- compile real 1/32/1,024 structurally identical fixtures plus a parameter-only variant rather
+  than fabricating expanded descriptor plans for the decisive specialization test;
+- report qualified descriptor identity/provenance rather than an internal numeric source handle in
+  GPU rejection diagnostics; and
+- retain the corrected 215-assertion CorePotts count in this record.
+
+The reviewer independently cleared the prior attempts-per-site race, proposal-time geometry scans,
+relationship filtered disposition and accepted-copy preservation, incident-local `linked`, CPU-only
+device rejection, relationship atomic publication, mechanism-free CorePotts ownership, the single
+evaluator path, representation banks, vendor-suite DRYness, folder ownership, and restrained
+backend claims.
+
+Repair order is G1 footprint facts, G4 verification/order/workgroup qualification, G5 tracker
+contracts, then the localized P2s. A third fresh R2 with zero P0/P1 remains mandatory.
 
 ## Prohibited record contents
 
