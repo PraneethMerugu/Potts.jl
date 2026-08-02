@@ -1,6 +1,7 @@
 using AMDGPU
 
 AMDGPU.functional() || error("the selected AMDGPU witness is not functional")
+AMDGPU.allowscalar(false)
 
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")

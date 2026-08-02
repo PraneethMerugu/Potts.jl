@@ -1,6 +1,7 @@
 using CUDA
 
 CUDA.functional() || error("the selected CUDA witness is not functional")
+CUDA.allowscalar(false)
 
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")

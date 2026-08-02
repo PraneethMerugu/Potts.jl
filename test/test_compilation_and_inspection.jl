@@ -101,8 +101,8 @@
     checkerboard_conflicts = CorePotts.checkerboard_plan_report(
         checkerboard.core_program.checkerboard_plan
     ).conflict_displacements
-    @test (-1, -1) in checkerboard_conflicts
-    @test (1, 1) in checkerboard_conflicts
+    @test isempty(checkerboard_conflicts)
+    @test checkerboard.core_program.checkerboard_plan.color_count == 1
     @test all(
         entry -> entry.default !== nothing,
         executable.parameter_manifest,

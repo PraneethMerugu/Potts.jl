@@ -76,7 +76,7 @@ end
 end
 
 struct CheckerboardWorkspace{
-        S, C, E, T, O, N, P, D, M, I, R, Q, U, Z,
+        S, C, E, T, O, N, P, D, M, I, R, Q, U, Z, X,
     }
     state::S
     contributions::C
@@ -92,6 +92,7 @@ struct CheckerboardWorkspace{
     cell_min_identity::Q
     report::U
     color_sizes::Z
+    source_table::X
 end
 
 function _checkerboard_kernel_program(program, to)
@@ -209,6 +210,7 @@ function _allocate_checkerboard_workspace(
         color_sizes = _checkerboard_color_sizes(
             state.program.checkerboard_plan
         ),
+        source_table = (),
     )
     plan = state.program.checkerboard_plan
     plan isa CheckerboardPlan || error(
@@ -272,6 +274,7 @@ function _allocate_checkerboard_workspace(
         cell_min_identity,
         report,
         color_sizes,
+        source_table,
     )
 end
 
@@ -304,18 +307,26 @@ function allocate_program_engine_workspace(
         replica,
         repeat,
     )
-    return _allocate_checkerboard_workspace(state)
+    return _allocate_checkerboard_workspace(
+        state; source_table = program.descriptor_plan.source_table
+    )
 end
 
-function _validate_gpu_descriptor_plan(plan::AbstractDescriptorEvaluationPlan)
+function _validate_gpu_descriptor_plan(
+        plan::AbstractDescriptorEvaluationPlan, source_table
+    )
     for group in plan.groups
         for descriptor in group.launch.instances
             support = descriptor_support(descriptor)
             support isa DescriptorSupport || throw(ArgumentError(
                 "descriptor support must be a DescriptorSupport value"
             ))
+            source_handle = Int(descriptor_source_handle(descriptor))
+            qualified_source = 1 <= source_handle <= length(source_table) ?
+                repr(source_table[source_handle]) :
+                "<missing qualified source for handle $source_handle>"
             support.gpu || throw(ArgumentError(
-                "descriptor source $(descriptor_source_handle(descriptor)) " *
+                "descriptor source $qualified_source " *
                 "does not declare GPU support (reason code " *
                 "$(support.reason_code))"
             ))
@@ -335,7 +346,9 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     isempty(state.program.ownership_change_handles) || throw(ArgumentError(
         "ownership-cleared checkerboard state is not qualified on device backends"
     ))
-    _validate_gpu_descriptor_plan(state.program.descriptor_plan)
+    _validate_gpu_descriptor_plan(
+        state.program.descriptor_plan, workspace.source_table
+    )
     adapted = CheckerboardExecutionState(
         _checkerboard_kernel_program(state.program, to),
         Adapt.adapt(to, state.ownership),
@@ -353,7 +366,9 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
         state.mcs,
     )
     return _allocate_checkerboard_workspace(
-        adapted; color_sizes = workspace.color_sizes
+        adapted;
+        color_sizes = workspace.color_sizes,
+        source_table = workspace.source_table,
     )
 end
 
@@ -516,6 +531,8 @@ end
 function execute_checkerboard_mcs!(
         workspace::CheckerboardWorkspace,
         mcs::Integer = workspace.state.mcs,
+        ;
+        workgroup_size::Union{Nothing, Integer} = nothing,
     )
     state = _checkerboard_state_at_mcs(workspace.state, mcs)
     plan = state.program.checkerboard_plan
@@ -527,13 +544,17 @@ function execute_checkerboard_mcs!(
         )
     )
     _clear_checkerboard_bulk!(workspace)
-    maximum_batch = length(workspace.dispositions)
-    candidate_kernel = _checkerboard_candidates_kernel!(backend)
-    claim_priority_kernel = _checkerboard_claim_priorities_kernel!(backend)
-    claim_identity_kernel = _checkerboard_claim_identities_kernel!(backend)
-    select_kernel = _checkerboard_select_kernel!(backend)
-    evaluate_kernel = _checkerboard_evaluate_kernel!(backend)
-    commit_kernel = _checkerboard_commit_kernel!(backend)
+    workgroup_size === nothing || workgroup_size > 0 || throw(ArgumentError(
+        "checkerboard workgroup size must be positive"
+    ))
+    launch(kernel) = workgroup_size === nothing ? kernel(backend) :
+                     kernel(backend, Int(workgroup_size))
+    candidate_kernel = launch(_checkerboard_candidates_kernel!)
+    claim_priority_kernel = launch(_checkerboard_claim_priorities_kernel!)
+    claim_identity_kernel = launch(_checkerboard_claim_identities_kernel!)
+    select_kernel = launch(_checkerboard_select_kernel!)
+    evaluate_kernel = launch(_checkerboard_evaluate_kernel!)
+    commit_kernel = launch(_checkerboard_commit_kernel!)
     report_kernel = _checkerboard_report_kernel!(backend)
     # Attempts-per-site are semantic sweep rounds. Finish every color in one
     # round before constructing candidates for the next round so a target is
@@ -554,7 +575,7 @@ function execute_checkerboard_mcs!(
                 state,
                 Int32(color),
                 Int32(attempt_round);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             evaluate_kernel(
@@ -568,7 +589,7 @@ function execute_checkerboard_mcs!(
                 state,
                 Int32(color),
                 Int32(batch_size);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             _clear_checkerboard_claims!(workspace)
@@ -579,7 +600,7 @@ function execute_checkerboard_mcs!(
                 workspace.dispositions,
                 workspace.cell_max_priority,
                 Int32(batch_size);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             claim_identity_kernel(
@@ -591,7 +612,7 @@ function execute_checkerboard_mcs!(
                 workspace.cell_max_priority,
                 workspace.cell_min_identity,
                 Int32(batch_size);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             select_kernel(
@@ -603,7 +624,7 @@ function execute_checkerboard_mcs!(
                 workspace.cell_max_priority,
                 workspace.cell_min_identity,
                 Int32(batch_size);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             staged_commit && _prepare_checkerboard_accepted_stage!(
@@ -616,7 +637,7 @@ function execute_checkerboard_mcs!(
                 workspace.dispositions,
                 state,
                 Int32(batch_size);
-                ndrange = maximum_batch,
+                ndrange = batch_size,
             )
             KernelAbstractions.synchronize(backend)
             staged_commit && _publish_checkerboard_accepted_stage!(

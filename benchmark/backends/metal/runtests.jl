@@ -1,6 +1,7 @@
 using Metal
 
 Metal.functional() || error("the selected Metal witness is not functional")
+Metal.allowscalar(false)
 
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")

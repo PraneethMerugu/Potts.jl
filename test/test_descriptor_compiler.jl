@@ -3,27 +3,6 @@ struct DescriptorProbeAdaptor end
 include("fixtures/G2SpecializationFixtures.jl")
 using .G2SpecializationFixtures
 
-_replace_parameter_default(
-    expression::CorePotts.ParameterExpression,
-    default,
-) = CorePotts.ParameterExpression(default, expression.index)
-
-_replace_parameter_default(
-    expression::CorePotts.OperationExpression,
-    default,
-) = CorePotts.OperationExpression(
-    expression.operation,
-    map(
-        argument -> _replace_parameter_default(argument, default),
-        expression.arguments,
-    ),
-)
-
-_replace_parameter_default(
-    expression::CorePotts.AbstractStaticExpression,
-    default,
-) = expression
-
 CorePotts.Adapt.adapt_storage(
     ::DescriptorProbeAdaptor, values::AbstractArray
 ) = copy(values)
@@ -409,7 +388,9 @@ end
         error
     end
     @test gpu_rejection isa ArgumentError
-    @test occursin("does not declare GPU support", sprint(showerror, gpu_rejection))
+    gpu_rejection_message = sprint(showerror, gpu_rejection)
+    @test occursin("does not declare GPU support", gpu_rejection_message)
+    @test occursin("nested_cpu_only_energy", gpu_rejection_message)
 
     function site_model(
             count;
@@ -459,9 +440,13 @@ end
         return model
     end
 
-    compile_site(count; weight_default = 2.5) = compile(
+    compile_site(
+        count;
+        weight_default = 2.5,
+        identity_prefix = :external_site,
+    ) = compile(
         complete(
-            site_model(count; weight_default);
+            site_model(count; weight_default, identity_prefix);
             registry = fixture_registry,
         );
         engine = SequentialEngine(),
@@ -523,7 +508,12 @@ end
         specialization_diagnostic.actual,
     )
 
-    single = compile_site(1)
+    single = compile_site(1; identity_prefix = :external_tracker)
+    external_programs = (
+        single,
+        compile_site(32; identity_prefix = :external_tracker),
+        compile_site(1024; identity_prefix = :external_tracker),
+    )
 
     external_tracker_executable = compile(
         complete(
@@ -577,18 +567,10 @@ end
         tracker_runtime, Val(:external_double_occupancy)
     )
 
-    tracker_growth_plans = map((1, 32, 1024)) do count
-        descriptors = Any[CorePotts.OwnershipCountTracker()]
-        for _ in 1:count
-            PottsToolkit._append_tracker_requirement!(
-                descriptors,
-                NeutralExternalTerms.ExternalDoubleOccupancyTracker(),
-            )
-        end
-        CorePotts.TrackerExecutionPlan(
-            tuple(descriptors...), "external-tracker-growth"
-        )
-    end
+    tracker_growth_plans = map(
+        program -> program.core_program.tracker_plan,
+        external_programs,
+    )
     @test all(plan -> length(plan.descriptors) == 2, tracker_growth_plans)
     @test allequal(typeof(plan) for plan in tracker_growth_plans)
     @test allequal(
@@ -632,43 +614,14 @@ end
     group = only(single_plan.groups)
     launch = CorePotts.descriptor_launch(group)
     descriptor = only(launch.instances)
-    original_expression = descriptor.evaluator.expression
-    parameter_expression = _replace_parameter_default(
-        original_expression,
-        7.5,
+    external_reports = Tuple(
+        program.reports.descriptors for program in external_programs
     )
-    parameter_descriptor = CorePotts.ProposalDescriptor(
-        CorePotts.StaticEvaluator(parameter_expression),
-        descriptor.access,
-        descriptor.support,
-        descriptor.state_handles,
-        descriptor.workspace_handles,
-        descriptor.role,
-        descriptor.source_handle,
-        descriptor.payload,
+    repeated_report = external_reports[2]
+    stress_report = external_reports[3]
+    parameter_variant = compile_site(
+        32; weight_default = 7.5, identity_prefix = :external_tracker
     )
-    parameter_groups = PottsToolkit._descriptor_groups(
-        [parameter_descriptor]
-    )
-    function replicated_plan(count)
-        groups = PottsToolkit._descriptor_groups(
-            fill(descriptor, count)
-        )
-        return CorePotts.DescriptorExecutionPlan(
-            groups,
-            single_plan.state_layout,
-            single_plan.workspace_layout,
-            single_plan.constraints,
-            single_plan.source_table,
-            Int32(count),
-            single_plan.fingerprint,
-            single_plan.domain_resources,
-        )
-    end
-    repeated_plan = replicated_plan(32)
-    stress_plan = replicated_plan(1024)
-    repeated_report = CorePotts.descriptor_plan_report(repeated_plan)
-    stress_report = CorePotts.descriptor_plan_report(stress_plan)
 
     @test single.reports.descriptors.occurrences == 1
     @test single.reports.descriptors.groups == 1
@@ -683,32 +636,24 @@ end
           stress_report.evaluator_nodes
     @test repeated_report.group_splits ==
           stress_report.group_splits ==
-          CorePotts.descriptor_plan_report(
-              CorePotts.DescriptorExecutionPlan(
-                  parameter_groups,
-                  single_plan.state_layout,
-                  single_plan.workspace_layout,
-                  single_plan.constraints,
-                  single_plan.source_table,
-                  Int32(1),
-                  single_plan.fingerprint,
-                  single_plan.domain_resources,
-              ),
-          ).group_splits
+          parameter_variant.reports.descriptors.group_splits
     @test repeated_report.kernel_families ==
           stress_report.kernel_families ==
-          Tuple(
-              nameof(typeof(item.launch.strategy))
-              for item in parameter_groups
-          )
-    @test typeof(repeated_plan.groups[1].launch.instances) ===
-          typeof(single_plan.groups[1].launch.instances) ===
-          typeof(stress_plan.groups[1].launch.instances)
-    @test typeof(repeated_plan.groups) ===
-          typeof(single_plan.groups) ===
-          typeof(stress_plan.groups) ===
-          typeof(parameter_groups)
-    @test typeof(parameter_descriptor) === typeof(descriptor)
+          parameter_variant.reports.descriptors.kernel_families
+    @test allequal(typeof(program.core_program) for program in external_programs)
+    @test typeof(parameter_variant.core_program) ===
+          typeof(external_programs[2].core_program)
+    @test allequal(
+        typeof(only(program.core_program.descriptor_plan.groups).launch.instances)
+        for program in external_programs
+    )
+    @test allequal(
+        typeof(program.core_program.descriptor_plan.groups)
+        for program in (external_programs..., parameter_variant)
+    )
+    @test eltype(CorePotts.descriptor_launch(only(
+        parameter_variant.core_program.descriptor_plan.groups
+    )).instances) === typeof(descriptor)
     @test descriptor isa CorePotts.ProposalDescriptor
     @test descriptor.payload isa
           NeutralExternalTerms.ExternalWeightedSitePayload
@@ -958,32 +903,27 @@ end
 
     # Direct built-in terms use the same sole grouped boundary; no occurrence
     # tuple remains hidden in CompiledPottsProgram.
-    direct_one = G2SpecializationFixtures.compile_direct_model(1)
-    direct_plan = direct_one.core_program.descriptor_plan
-    direct_descriptor = only(CorePotts.descriptor_launch(
-        only(direct_plan.groups)
-    ).instances)
-    direct_report(count) = CorePotts.descriptor_plan_report(
-        CorePotts.DescriptorExecutionPlan(
-            PottsToolkit._descriptor_groups(fill(direct_descriptor, count)),
-            direct_plan.state_layout,
-            direct_plan.workspace_layout,
-            direct_plan.constraints,
-            direct_plan.source_table,
-            Int32(count),
-            direct_plan.fingerprint,
-            direct_plan.domain_resources,
-        )
+    direct_programs = map(
+        G2SpecializationFixtures.compile_direct_model,
+        (1, 32, 1024),
     )
-    direct_reports = (
-        direct_one.reports.descriptors,
-        direct_report(32),
-        direct_report(1024),
+    direct_one = first(direct_programs)
+    direct_reports = Tuple(
+        program.reports.descriptors for program in direct_programs
     )
     @test getfield.(direct_reports, :groups) == (1, 1, 1)
     @test getfield.(direct_reports, :occurrences) == (1, 32, 1024)
     @test allequal(getfield.(direct_reports, :group_splits))
     @test allequal(getfield.(direct_reports, :kernel_families))
+    @test allequal(typeof(program.core_program) for program in direct_programs)
+    parameter_only_variant =
+        G2SpecializationFixtures.compile_direct_model(32; weight_default = 7.5)
+    @test parameter_only_variant.reports.descriptors.group_splits ==
+          direct_reports[2].group_splits
+    @test parameter_only_variant.reports.descriptors.kernel_families ==
+          direct_reports[2].kernel_families
+    @test typeof(parameter_only_variant.core_program) ===
+          typeof(direct_programs[2].core_program)
     @test !hasproperty(direct_one.core_program, :proposal_energies)
     @test !hasproperty(direct_one.core_program, :proposal_drives)
     @test !hasproperty(direct_one.core_program, :proposal_constraints)
