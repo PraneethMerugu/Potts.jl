@@ -13,7 +13,34 @@ struct OperationTransfer
     cpu::Bool
     gpu::Bool
     tracker_requirements::Tuple{Vararg{Symbol}}
+    operand_rule::Symbol
+    allowed_roles::Tuple{Vararg{Symbol}}
+    allowed_phases::Tuple{Vararg{Symbol}}
+    required_context::Symbol
+    owner::Symbol
+    callable_identity::String
 end
+
+const _V1_OPERATION_ROLES = (
+    :hamiltonian,
+    :drive,
+    :constraint,
+    :modifier,
+    :process,
+    :observation,
+    :relationship,
+    :state,
+)
+const _V1_OPERATION_PHASES = (
+    :none,
+    :Proposal,
+    :AcceptedCopy,
+    :AfterMCS,
+    :RelationshipCommit,
+    :Lifecycle,
+    :EquationStep,
+    :Observe,
+)
 
 OperationTransfer(
     identity::Symbol,
@@ -40,6 +67,13 @@ OperationTransfer(
     cpu,
     gpu,
     (),
+    :any,
+    _V1_OPERATION_ROLES,
+    _V1_OPERATION_PHASES,
+    :any,
+    :external,
+    "CorePotts.operation_callable:" * String(identity) * ":" *
+        string(schema_version),
 )
 
 OperationTransfer(
@@ -67,6 +101,13 @@ OperationTransfer(
     cpu,
     gpu,
     tracker_requirements,
+    :any,
+    _V1_OPERATION_ROLES,
+    _V1_OPERATION_PHASES,
+    :any,
+    :external,
+    "CorePotts.operation_callable:" * String(identity) * ":" *
+        string(schema_version),
 )
 
 function operation_transfer end
@@ -80,6 +121,13 @@ _transfer(identity, arity, result_rule, unit_rule;
         cpu = true,
         gpu = true,
         tracker_requirements = (),
+        operand_rule = :any,
+        allowed_roles = _V1_OPERATION_ROLES,
+        allowed_phases = _V1_OPERATION_PHASES,
+        required_context = :any,
+        owner = :PottsToolkit,
+        callable_identity = "CorePotts.operation_callable:" * String(identity) * ":" *
+            string(version),
     ) = OperationTransfer(
         identity,
         version,
@@ -93,6 +141,12 @@ _transfer(identity, arity, result_rule, unit_rule;
         cpu,
         gpu,
         tracker_requirements,
+        operand_rule,
+        Tuple(allowed_roles),
+        Tuple(allowed_phases),
+        required_context,
+        owner,
+        String(callable_identity),
     )
 
 for operation in (+, -, *, /, ^, max, min)
@@ -111,9 +165,10 @@ for operation in (+, -, *, /, ^, max, min)
     else
         :minimum
     end
-    @eval operation_transfer(::typeof($operation), arity::Int) =
-        _transfer($(QuoteNode(identity)), arity == 1 ? 1 : (2:typemax(Int)),
-            :promote_numeric, :arithmetic)
+    admitted_arity = operation === (^) ? (2:2) : (1:typemax(Int))
+    @eval operation_transfer(::typeof($operation), ::Int) =
+        _transfer($(QuoteNode(identity)), $admitted_arity,
+            :promote_numeric, :arithmetic; operand_rule = :numeric)
 end
 
 for operation in (<, <=, >, >=, ==, !=)
@@ -130,16 +185,18 @@ for operation in (<, <=, >, >=, ==, !=)
     else
         :not_equal
     end
+    operand_rule = operation in (==, !=) ? :any : :numeric
     @eval operation_transfer(::typeof($operation), ::Int) =
-        _transfer($(QuoteNode(identity)), 2, :boolean, :comparison)
+        _transfer($(QuoteNode(identity)), 2, :boolean, :comparison;
+            operand_rule = $(QuoteNode(operand_rule)))
 end
 
 operation_transfer(::typeof(&), ::Int) =
-    _transfer(:and, 2, :boolean, :dimensionless)
+    _transfer(:and, 2, :boolean, :dimensionless; operand_rule = :boolean)
 operation_transfer(::typeof(|), ::Int) =
-    _transfer(:or, 2, :boolean, :dimensionless)
+    _transfer(:or, 2, :boolean, :dimensionless; operand_rule = :boolean)
 operation_transfer(::typeof(!), ::Int) =
-    _transfer(:not, 1, :boolean, :dimensionless)
+    _transfer(:not, 1, :boolean, :dimensionless; operand_rule = :boolean)
 operation_transfer(::typeof(ifelse), ::Int) =
     _transfer(:ifelse, 3, :branch_promote, :branch)
 
@@ -162,6 +219,7 @@ for operation in (abs, exp, log, sqrt)
             :preserve_numeric,
             $(QuoteNode(unit_rule));
             totality = $(QuoteNode(totality)),
+            operand_rule = :numeric,
         )
 end
 
@@ -193,41 +251,6 @@ for operation in (is_extension, is_retraction, new_contact, lost_contact, linked
         )
 end
 
-operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
-    _transfer(
-        :merks_local_connectivity,
-        3,
-        :boolean,
-        :dimensionless;
-        footprint_rule = NeighborhoodFootprintRule(
-            ProposalTargetNeighborhoodAnchor()
-        ),
-    )
-
-operation_transfer(::typeof(_potts_act_energy), ::Int) =
-    _transfer(
-        :act_energy,
-        5,
-        :real,
-        :declared;
-        footprint_rule = NeighborhoodFootprintRule(
-            ProposalSourceTargetNeighborhoodAnchor()
-        ),
-        gpu = false,
-    )
-
-operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
-    _transfer(
-        :explicit_field_euler,
-        7,
-        :real,
-        :declared;
-        footprint_rule = NeighborhoodFootprintRule(
-            IterationNeighborhoodAnchor()
-        ),
-        gpu = false,
-    )
-
 operation_transfer(::typeof(_potts_proposal_bound_state_value), ::Int) =
     _transfer(
         :proposal_bound_state_value,
@@ -235,6 +258,8 @@ operation_transfer(::typeof(_potts_proposal_bound_state_value), ::Int) =
         :real,
         :declared;
         footprint_rule = ProposalTargetFootprintRule(),
+        allowed_phases = (:Proposal, :AcceptedCopy),
+        required_context = :proposal,
     )
 
 operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
@@ -244,6 +269,8 @@ operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
         :real,
         :declared;
         footprint_rule = IterationSiteFootprintRule(),
+        allowed_phases = (:AfterMCS, :EquationStep, :Observe),
+        required_context = :iteration,
     )
 
 for operation in (

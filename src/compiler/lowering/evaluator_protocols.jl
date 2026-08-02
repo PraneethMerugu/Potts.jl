@@ -85,83 +85,66 @@ function _static_parameter(value, manifest::ParameterManifest, ::Type{T}) where 
     )
 end
 
-function _static_operation_callable(
-        identity::Symbol,
-        version::VersionNumber,
-        source::QualifiedStatementID,
-        provenance,
-    )
-    operation = try
-        CorePotts.operation_callable(
-            Val(identity), version
-        )
-    catch error
-        if error isa MethodError && error.f === CorePotts.operation_callable
-            throw(PottsValidationError(
-                :descriptor_lowering,
-                (PottsDiagnostic(
-                    :missing_concrete_operation_callable,
-                    source,
-                    String(identity),
-                    source.path,
-                    "a concrete public CorePotts operation callable",
-                    "$identity $version",
-                    (),
-                    provenance,
-                ),),
-            ))
-        end
-        rethrow(error)
-    end
+function _static_operation_callable(node::NormalizedTermNode)
+    operation = node.callable
+    operation === nothing && throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :missing_concrete_operation_callable,
+            node.source,
+            String(node.operation),
+            node.source.path,
+            "the concrete callable frozen during completion",
+            "nothing",
+            (),
+            UnknownSource(),
+        ),),
+    ))
     isbits(operation) || throw(PottsValidationError(
         :descriptor_lowering,
         (PottsDiagnostic(
             :device_illegal_operation_callable,
-            source,
-            String(identity),
-            source.path,
-            "an isbits concrete operation callable",
+            node.source,
+            String(node.operation),
+            node.source.path,
+            "an isbits callable frozen during completion",
             string(typeof(operation)),
             (),
-            provenance,
+            UnknownSource(),
         ),),
     ))
     return operation
 end
 
-_static_operation_callable(node::NormalizedTermNode) =
-    _static_operation_callable(
-        node.operation,
-        node.schema_version,
-        node.source,
-        UnknownSource(),
-    )
-
-function _compiler_operation_expression(
+function _compiler_synthesized_operation_expression(
+        graph::NormalizedTermGraph,
         operation,
         arguments::Tuple,
         record::QualifiedStatement,
+        ;
+        semantic_role::Symbol = _record_operation_role(record),
+        semantic_phase::Symbol = _record_operation_phase(record),
     )
-    transfer = try
-        operation_transfer(operation, length(arguments))
-    catch error
-        if error isa MethodError && error.f === operation_transfer
-            throw(PottsValidationError(
-                :descriptor_lowering,
-                (PottsDiagnostic(
-                    :missing_operation_transfer,
-                    record.identity,
-                    repr(operation),
-                    record.identity.path,
-                    "a versioned operation transfer rule",
-                    repr(operation),
-                    (),
-                    record.source,
-                ),),
-            ))
-        end
-        rethrow(error)
-    end
+    schema_index = findfirst(
+        schema -> schema.surface_operation === operation &&
+            schema.arity == length(arguments),
+        graph.operation_snapshot,
+    )
+    schema_index === nothing && throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :missing_frozen_operation_schema,
+            record.identity,
+            repr(operation),
+            record.identity.path,
+            "an operation schema frozen during completion",
+            "no matching frozen schema",
+            (),
+            record.source,
+        ),),
+    ))
+    schema = graph.operation_snapshot[schema_index]
+    transfer = schema.transfer
     reason = _operation_transfer_error(transfer, length(arguments))
     reason === nothing || throw(PottsValidationError(
         :descriptor_lowering,
@@ -176,12 +159,38 @@ function _compiler_operation_expression(
             record.source,
         ),),
     ))
-    callable = _static_operation_callable(
-        transfer.identity,
-        transfer.schema_version,
-        record.identity,
-        record.source,
-    )
+    role = semantic_role
+    phase = semantic_phase
+    role in transfer.allowed_roles && phase in transfer.allowed_phases &&
+        _operation_context_admitted(transfer.required_context, role, phase) ||
+        throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :illegal_operation_use,
+                record.identity,
+                String(transfer.identity),
+                record.identity.path,
+                "the frozen role, phase, and context contract",
+                "role=$(repr(role)), phase=$(repr(phase)), " *
+                "required_context=$(repr(transfer.required_context))",
+                (),
+                record.source,
+            ),),
+        ))
+    callable = schema.callable
+    isbits(callable) || throw(PottsValidationError(
+        :descriptor_lowering,
+        (PottsDiagnostic(
+            :device_illegal_operation_callable,
+            record.identity,
+            String(transfer.identity),
+            record.identity.path,
+            "an isbits callable frozen during completion",
+            string(typeof(callable)),
+            (),
+            record.source,
+        ),),
+    ))
     return _bounded_static_operation(callable, arguments)
 end
 

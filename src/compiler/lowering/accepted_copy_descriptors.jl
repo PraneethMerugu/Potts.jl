@@ -153,7 +153,8 @@ function _relationship_create_stage_descriptor(
         for name in keys(declared_payload)
     )
 
-    kind_condition = _compiler_operation_expression(
+    kind_condition = _compiler_synthesized_operation_expression(
+        ir.graph,
         _potts_relationship_endpoint_kinds,
         (
             endpoint_a.expression,
@@ -164,7 +165,8 @@ function _relationship_create_stage_descriptor(
         record,
     )
     compiled_condition = _static_evaluator(
-        _compiler_operation_expression(
+        _compiler_synthesized_operation_expression(
+            ir.graph,
             (&),
             (
             condition.expression,

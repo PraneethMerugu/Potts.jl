@@ -16,9 +16,9 @@ function _lower_static_node(
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
     expression = if node.payload_kind === :literal
-        _static_literal(node.payload, manifest, T)
+        _static_literal(node.payload.value, manifest, T)
     elseif node.payload_kind === :parameter
-        _static_parameter(node.payload, manifest, T)
+        _static_parameter(node.payload.value, manifest, T)
     elseif node.payload_kind in (:state, :variable)
         handle = _state_handle_for_leaf(ir, node, state_handles)
         handle === nothing && throw(PottsValidationError(
@@ -26,7 +26,7 @@ function _lower_static_node(
             (PottsDiagnostic(
                 :unresolved_state_handle,
                 node.source,
-                repr(node.payload),
+                repr(_normalized_payload_key(node.payload)),
                 node.source.path,
                 "one qualified state resource",
                 "no matching state block",
@@ -36,7 +36,8 @@ function _lower_static_node(
         ))
         state_expression = CorePotts.StateExpression(handle)
         state_binding === nothing ? state_expression :
-        _compiler_operation_expression(
+        _compiler_synthesized_operation_expression(
+            graph,
             state_binding isa CorePotts.ProposalTargetStageSite ?
                 _potts_proposal_bound_state_value :
                 _potts_iteration_bound_state_value,
@@ -51,7 +52,6 @@ function _lower_static_node(
         handle = _compiled_resource_leaf(
             ir,
             node,
-            "__potts_spatial_relation__",
             :SpatialRelation,
         )
         handle === nothing && throw(PottsValidationError(
@@ -59,7 +59,7 @@ function _lower_static_node(
             (PottsDiagnostic(
                 :unresolved_spatial_relation_handle,
                 node.source,
-                repr(node.payload),
+                repr(_normalized_payload_key(node.payload)),
                 node.source.path,
                 "a declared finite SpatialRelation",
                 "no matching spatial relation",
@@ -72,7 +72,6 @@ function _lower_static_node(
         handle = _compiled_resource_leaf(
             ir,
             node,
-            "__potts_relationship_set__",
             :RelationshipState,
         )
         handle === nothing && throw(PottsValidationError(
@@ -80,7 +79,7 @@ function _lower_static_node(
             (PottsDiagnostic(
                 :unresolved_relationship_handle,
                 node.source,
-                repr(node.payload),
+                repr(_normalized_payload_key(node.payload)),
                 node.source.path,
                 "a declared RelationshipState",
                 "no matching relationship resource",
@@ -90,18 +89,8 @@ function _lower_static_node(
         ))
         CorePotts.LiteralExpression(handle)
     elseif node.payload_kind === :relationship_payload
-        name = _try_symbolic_name(node.payload)
-        name === nothing && throw(ArgumentError(
-            "relationship payload selector has no symbolic identity"
-        ))
-        text = String(name)
-        prefix = "__potts_payload__"
-        startswith(text, prefix) || throw(ArgumentError(
-            "relationship payload selector has an invalid identity"
-        ))
-        selector = Symbol(text[(length(prefix) + 1):end])
         CorePotts.LiteralExpression(
-            _relationship_payload_slot(ir, node, selector)
+            _relationship_payload_slot(ir, node)
         )
     elseif node.payload_kind in (
             :site_anchor, :cell_anchor, :contact_anchor,
@@ -115,7 +104,7 @@ function _lower_static_node(
             (PottsDiagnostic(
                 :unresolved_kind_handle,
                 node.source,
-                repr(node.payload),
+                repr(_normalized_payload_key(node.payload)),
                 node.source.path,
                 "a declared value-level kind index",
                 "no matching cell or medium kind",
@@ -124,14 +113,14 @@ function _lower_static_node(
             ),),
         ))
         CorePotts.LiteralExpression(kind)
-    elseif node.payload_kind === :symbolic_leaf
+    elseif node.payload_kind === :draw
         draw_handle = _draw_handle_for_leaf(draw_handles, node)
         draw_handle === nothing ? throw(PottsValidationError(
             :descriptor_lowering,
             (PottsDiagnostic(
                 :unresolved_symbolic_leaf,
                 node.source,
-                repr(node.payload),
+                repr(_normalized_payload_key(node.payload)),
                 node.source.path,
                 "a parameter, context token, state handle, or RNG handle",
                 "unresolved symbolic leaf",

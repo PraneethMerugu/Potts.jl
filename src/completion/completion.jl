@@ -1,4 +1,4 @@
-struct CompletedPottsData{R, U, P, Q, V, S, C, F, D, G}
+struct CompletedPottsData{R, U, P, Q, V, S, C, F, D, G, N}
     registry::R
     reference_units::U
     parameter_roles::P
@@ -9,6 +9,7 @@ struct CompletedPottsData{R, U, P, Q, V, S, C, F, D, G}
     fingerprints::F
     diagnostics::D
     source_graph::G
+    normalized_graph::N
 end
 
 const _STRUCTURAL_OPTION_NAMES = Set((
@@ -1398,7 +1399,7 @@ function _complete_potts(
     # transfer semantics, serialization identity, and the concrete device tag.
     # Compilation may re-run normalization deterministically, but it may not
     # discover a missing downstream operation implementation for the first time.
-    _normalize_source_graph(source_graph, system)
+    normalized_graph = _normalize_source_graph(source_graph, system)
     return CompletedPottsData(
         registry,
         reference_units,
@@ -1410,5 +1411,6 @@ function _complete_potts(
         fingerprints,
         (),
         source_graph,
+        normalized_graph,
     )
 end

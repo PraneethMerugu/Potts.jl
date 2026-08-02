@@ -84,7 +84,8 @@ function _field_stage_descriptor(
         get(options, :secretion, zero(T)), manifest, T
     )
     value = _static_evaluator(
-        _compiler_operation_expression(
+        _compiler_synthesized_operation_expression(
+            ir.graph,
             _potts_explicit_field_euler,
             (
                 CorePotts.StateExpression(target),
@@ -96,6 +97,8 @@ function _field_stage_descriptor(
                 CorePotts.LiteralExpression(duration / T(substeps)),
             ),
             record,
+            semantic_role = :process,
+            semantic_phase = :AfterMCS,
         ),
         CorePotts.AbstractSiteStageEvaluationContext,
         record,

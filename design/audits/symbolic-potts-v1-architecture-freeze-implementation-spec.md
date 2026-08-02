@@ -1,6 +1,6 @@
 # Symbolic Potts V1 Architecture-Freeze Implementation Specification
 
-Status: accepted implementation authority; not yet implemented
+Status: implemented qualification candidate; AF-Q pending
 
 Date: 2026-08-02
 
@@ -158,3 +158,27 @@ review reports zero P0/P1. G6 remains closed until that result is recorded.
 This checkpoint passes only when all six tests and existing qualification are green, the literal
 operation inventory is complete, and an independent reviewer reports zero P0/P1 findings. Passing
 freezes the architecture for the next owner decision; it does not itself authorize G6.
+
+## Measured inventory-snapshot decision
+
+The package vocabulary and per-model closure are intentionally separate:
+
+- `_v1_builtin_operation_inventory()` materializes the package-level literal vocabulary for
+  documentation and coverage audits without embedding it in completed models.
+- `NormalizedTermGraph.operation_snapshot` contains only operations reachable from that model plus
+  compiler-synthesized operations proven reachable from its stages, effects, and distribution
+  families. Explicit Euler is included only for a resolved explicit field stage; relationship
+  endpoint predicates only for relationship creation; and distribution checks only for the used
+  family. Used external operations enter this same closure.
+
+This was measured as an architectural hypothesis on the standard precompile workload. Embedding the
+entire package inventory in every graph remained incomplete after 143 seconds and 153,610,031
+allocations. Restoring the minimal closure completed package precompilation in approximately 42
+seconds. An earlier 6.1-billion-allocation run was traced separately to accidentally serializing an
+open-ended `UnitRange` as an array; inventory reports now encode arity as scalar minimum/maximum
+bounds. The full-embedding result is therefore not conflated with that serialization defect.
+
+After dependency-derived closure was implemented, the same package precompile completed in about
+37 seconds. A warmed volume-only completion on the qualification Mac completed in about 4.8 ms,
+allocated 642,336 bytes, and froze three reachable operations. Its focused regression budget is
+2,000,000 bytes to allow ordinary Julia/version variance without accepting library-size scaling.

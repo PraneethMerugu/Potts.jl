@@ -45,7 +45,8 @@ function _draw_family_code(
     )
     family_node = graph.nodes[first(node.operands)]
     family_node.payload_kind === :literal &&
-        family_node.payload isa Integer || throw(PottsValidationError(
+        family_node.payload isa LiteralPayload &&
+        family_node.payload.value isa Integer || throw(PottsValidationError(
         :descriptor_lowering,
         (PottsDiagnostic(
             :nonliteral_draw_family,
@@ -53,12 +54,12 @@ function _draw_family_code(
             String(node.operation),
             node.source.path,
             "a statically known scalar distribution family",
-            repr(family_node.payload),
+            repr(_normalized_payload_key(family_node.payload)),
             (),
             UnknownSource(),
         ),),
     ))
-    return Int(family_node.payload)
+    return Int(family_node.payload.value)
 end
 
 function _draw_domain_constraints(
@@ -98,12 +99,14 @@ function _draw_domain_constraints(
     zero_expression = CorePotts.LiteralExpression(zero(T))
     one_expression = CorePotts.LiteralExpression(one(T))
     if family == 1
-        lower = _compiler_operation_expression(
+        lower = _compiler_synthesized_operation_expression(
+            ir.graph,
             (>=),
             (first_parameter, zero_expression),
             record,
         )
-        upper = _compiler_operation_expression(
+        upper = _compiler_synthesized_operation_expression(
+            ir.graph,
             (<=),
             (first_parameter, one_expression),
             record,
@@ -113,14 +116,16 @@ function _draw_domain_constraints(
             _parameter_constraint(upper, 0x03, node, record),
         )
     elseif family == 2
-        ordered = _compiler_operation_expression(
+        ordered = _compiler_synthesized_operation_expression(
+            ir.graph,
             (<),
             (first_parameter, second_parameter),
             record,
         )
         return (_parameter_constraint(ordered, 0x03, node, record),)
     elseif family == 3
-        positive = _compiler_operation_expression(
+        positive = _compiler_synthesized_operation_expression(
+            ir.graph,
             (>),
             (second_parameter, zero_expression),
             record,

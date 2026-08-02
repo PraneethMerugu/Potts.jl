@@ -24,6 +24,14 @@ function _canonical_value(value)
     value isa Pair && return string(
         _canonical_value(first(value)), "=>", _canonical_value(last(value))
     )
+    value isa AbstractRange && return string(
+        "Range(",
+        nameof(typeof(value)),
+        ",first=", _canonical_value(first(value)),
+        ",step=", _canonical_value(step(value)),
+        ",last=", _canonical_value(last(value)),
+        ")",
+    )
     value isa AbstractDict && return string(
         "{",
         join(

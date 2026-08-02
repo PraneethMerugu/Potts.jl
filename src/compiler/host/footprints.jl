@@ -33,14 +33,6 @@ function _host_neighborhood_offsets(neighborhood::Moore, dimensions::Int)
     return Tuple(sort!(unique!(collect(offsets))))
 end
 
-function _prefixed_symbol(value, prefix::String)
-    name = _try_symbolic_name(value)
-    name === nothing && return nothing
-    text = String(name)
-    startswith(text, prefix) || return nothing
-    return Symbol(text[(lastindex(prefix) + 1):end])
-end
-
 _zero_offsets(dimensions::Int) = (ntuple(_ -> 0, dimensions),)
 
 function _footprint_sort_key(footprint::AbstractAnalyzedFootprint)
@@ -137,46 +129,27 @@ function _without_operand_references(footprint)
     return _footprint_union(Tuple(members))
 end
 
-function _record_relationship_candidates(source, record)
-    candidates = QualifiedStatement[]
-    function consider(value)
-        resolved = _resource_record(source, record, :RelationshipState, value)
-        resolved === nothing || push!(candidates, resolved)
-        if value isa NamedTuple
-            foreach(consider, values(value))
-        elseif value isa Tuple || value isa AbstractArray
-            foreach(consider, value)
-        elseif value isa Pair
-            consider(first(value)); consider(last(value))
-        end
-        return nothing
-    end
-    consider(record.resources)
-    unique!(candidate -> candidate.identity, candidates)
-    return candidates
-end
-
 function _relationship_reference_fact(source, record, value; bound = false)
-    requested = if bound
-        arguments = _record_arguments(record)
-        domain = arguments isa NamedTuple && haskey(arguments, :domain) ?
-            arguments.domain : nothing
-        domain isa Edges || throw(ArgumentError(
-            "relationship anchor footprint requires a bounded edge domain"
-        ))
-        domain.relationship
+    resolved_identity = if value isa ResourceBindingPayload
+        value.identity
+    elseif value isa AnchorBindingPayload
+        value.resource
     else
-        _prefixed_symbol(value, "__potts_relationship_set__")
+        nothing
     end
-    relationship = requested === nothing ? nothing :
-        _resource_record(source, record, :RelationshipState, requested)
-    if relationship === nothing
-        candidates = _record_relationship_candidates(source, record)
-        length(candidates) == 1 || throw(ArgumentError(
-            "relationship footprint must resolve exactly one declared store"
-        ))
-        relationship = only(candidates)
-    end
+    resolved_identity === nothing && throw(ArgumentError(
+        bound ?
+        "relationship anchor footprint has no resolved qualified resource" :
+        "relationship footprint has no resolved qualified resource"
+    ))
+    index = findfirst(
+        candidate -> candidate.identity == resolved_identity,
+        source.records,
+    )
+    index === nothing && throw(ArgumentError(
+        "resolved relationship footprint resource is absent from the source graph"
+    ))
+    relationship = source.records[index]
     degree = get(_record_options(relationship), :maximum_degree, nothing)
     degree === nothing && return RelationshipReferenceFootprintFact(
         relationship.identity, Int32(-1)
@@ -192,24 +165,15 @@ end
 function _leaf_footprint(source, node, record, dimensions)
     kind = node.payload_kind
     if kind === :site_anchor
-        name = something(
-            _prefixed_symbol(node.payload, "__potts_energy_site__"),
-            :site,
-        )
+        name = node.payload.name
         return SpatialFootprintFact(
             BoundSiteAnchor(name), _zero_offsets(dimensions)
         )
     elseif kind === :cell_anchor
-        name = something(
-            _prefixed_symbol(node.payload, "__potts_energy_cell__"),
-            :cell,
-        )
+        name = node.payload.name
         return OwnerFootprintFact(name)
     elseif kind === :contact_anchor
-        name = something(
-            _prefixed_symbol(node.payload, "__potts_energy_contact__"),
-            :contact,
-        )
+        name = node.payload.name
         return ContactFootprintFact(name)
     elseif kind === :relationship_context
         return _relationship_reference_fact(
@@ -218,18 +182,17 @@ function _leaf_footprint(source, node, record, dimensions)
     elseif kind === :relationship_set
         return _relationship_reference_fact(source, record, node.payload)
     elseif kind === :spatial_relation
-        requested = _prefixed_symbol(
-            node.payload, "__potts_spatial_relation__"
-        )
-        requested === nothing && throw(ArgumentError(
-            "spatial-relation footprint token has no qualified identity"
+        node.payload isa ResourceBindingPayload || throw(ArgumentError(
+            "spatial-relation footprint has no resolved identity"
         ))
-        relation = _resource_record(
-            source, record, :SpatialRelation, requested
+        relation_index = findfirst(
+            candidate -> candidate.identity == node.payload.identity,
+            source.records,
         )
-        relation === nothing && throw(ArgumentError(
-            "spatial footprint relation `$requested` is undeclared"
+        relation_index === nothing && throw(ArgumentError(
+            "resolved spatial footprint relation is absent from the source graph"
         ))
+        relation = source.records[relation_index]
         neighborhood = get(_record_options(relation), :neighborhood, nothing)
         neighborhood isa Union{VonNeumann, Moore} || throw(ArgumentError(
             "spatial footprint relations require a closed finite neighborhood"

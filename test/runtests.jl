@@ -10,6 +10,7 @@ using ExplicitImports
     include("test_host_compiler_facts.jl")
     include("test_descriptor_compiler.jl")
     include("test_g2_r1_repairs.jl")
+    include("test_architecture_freeze.jl")
     include("test_g3_sequential_reference.jl")
     include("test_g5_relationship_runtime.jl")
     include("test_units_and_parameters.jl")

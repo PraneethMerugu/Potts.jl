@@ -34,6 +34,7 @@ struct DescriptorCandidate
     roots::Vector{Int32}
     energy_domain::Any
     affected_anchors::Any
+    affected_proof::Any
     structural_key::String
     provenance::Any
 end
@@ -44,6 +45,87 @@ struct AnalyzedTermIR
     facts::AnalyzedFactTable
     candidates::Vector{DescriptorCandidate}
     structural_key::String
+end
+
+function _record_operation_role(record::QualifiedStatement)
+    record.kind === :HamiltonianTerm && return :hamiltonian
+    record.kind === :ProposalDrive && return :drive
+    record.kind === :ProposalConstraint && return :constraint
+    record.kind === :ProposalModifier && return :modifier
+    record.kind === :Observation && return :observation
+    record.kind in (
+        :RelationshipProcess, :LifecycleProcess, :RelationshipState,
+    ) && return :relationship
+    record.kind in (
+        :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
+        :HistoryState,
+    ) && return :state
+    return :process
+end
+
+_record_operation_phase(record::QualifiedStatement) =
+    record.phase === nothing ? :none : nameof(typeof(record.phase))
+
+function _operation_context_admitted(
+        required::Symbol,
+        role::Symbol,
+        phase::Symbol,
+    )
+    required === :any && return true
+    required === :proposal && return phase in (:Proposal, :AcceptedCopy)
+    required === :hamiltonian && return role === :hamiltonian
+    required === :iteration && return phase in (
+        :AfterMCS, :EquationStep, :Observe,
+    )
+    required === :relationship && return role === :relationship
+    return false
+end
+
+function _operation_operand_admitted(rule::Symbol, types::Tuple)
+    rule === :any && return true
+    rule === :numeric && return all(type -> type <: Number, types)
+    rule === :boolean && return all(type -> type <: Bool, types)
+    rule === :integer && return all(type -> type <: Integer, types)
+    rule === :same_type && return isempty(types) || all(==(first(types)), types)
+    return false
+end
+
+function _validate_operation_use!(
+        node::NormalizedTermNode,
+        record::QualifiedStatement,
+        operand_types::Tuple,
+    )
+    transfer = node.transfer
+    transfer === nothing && return nothing
+    role = _record_operation_role(record)
+    phase = _record_operation_phase(record)
+    problem = if !(role in transfer.allowed_roles)
+        "role $(repr(role)) is not in $(repr(transfer.allowed_roles))"
+    elseif !(phase in transfer.allowed_phases)
+        "phase $(repr(phase)) is not in $(repr(transfer.allowed_phases))"
+    elseif !_operation_context_admitted(transfer.required_context, role, phase)
+        "required context $(repr(transfer.required_context)) is unavailable " *
+        "for role $(repr(role)) in phase $(repr(phase))"
+    elseif !_operation_operand_admitted(transfer.operand_rule, operand_types)
+        "operand types $(repr(operand_types)) violate rule " *
+        "$(repr(transfer.operand_rule))"
+    else
+        nothing
+    end
+    problem === nothing && return nothing
+    throw(PottsValidationError(
+        :analysis,
+        (PottsDiagnostic(
+            :illegal_operation_use,
+            record.identity,
+            String(transfer.identity),
+            record.identity.path,
+            "the frozen role, phase, context, and operand contract",
+            problem,
+            (),
+            record.source,
+        ),),
+    ))
 end
 
 function _hamiltonian_analysis_error(record, error)
@@ -115,9 +197,14 @@ function _analyze_term_graph(
         operand_indices = Int.(node.operands)
         operand_footprints = Any[footprint[item] for item in operand_indices]
         transfer = node.transfer
+        transfer === nothing || _validate_operation_use!(
+            node,
+            record,
+            Tuple(result_type[item] for item in operand_indices),
+        )
         result_type[index] = if node.payload_kind === :literal
-            typeof(node.payload)
-        elseif node.payload_kind in (:parameter, :variable, :state, :symbolic_leaf)
+            typeof(node.payload.value)
+        elseif node.payload_kind in (:parameter, :variable, :state)
             record.result_type === Nothing ? Real : record.result_type
         elseif node.payload_kind in (
                 :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
@@ -125,6 +212,8 @@ function _analyze_term_graph(
                 :relationship_payload,
             )
             Real
+        elseif node.payload_kind === :draw
+            Int
         elseif transfer.result_rule === :boolean
             Bool
         elseif transfer.result_rule === :integer
@@ -163,28 +252,7 @@ function _analyze_term_graph(
         )
         effect[index] = record.effect
         emission_bound[index] = record.bound
-        scientific_category[index] = if record.kind === :HamiltonianTerm
-            :hamiltonian
-        elseif record.kind === :ProposalDrive
-            :drive
-        elseif record.kind === :ProposalConstraint
-            :constraint
-        elseif record.kind === :ProposalModifier
-            :modifier
-        elseif record.kind in (
-                :RelationshipProcess, :LifecycleProcess, :RelationshipState,
-            )
-            :relationship
-        elseif record.kind in (
-                :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
-                :HistoryState,
-            )
-            :state
-        elseif record.kind === :Observation
-            :observation
-        else
-            :process
-        end
+        scientific_category[index] = _record_operation_role(record)
         stage[index] = record.phase
         dependencies[index] = record.ordering_dependencies
         rng_sites[index] = record.random_operations
@@ -295,14 +363,28 @@ function _analyze_term_graph(
         )
         record = source.records[record_index]
         category = scientific_category[Int(first(roots))]
-        energy_domain, affected_anchors = if category === :hamiltonian
+        energy_domain, affected_anchors, affected_proof = if category === :hamiltonian
             try
                 domain = _energy_domain_fact(source, record)
+                reads = _normalized_energy_anchor_reads(graph, roots)
+                forbidden = _normalized_hamiltonian_forbidden_dependency(
+                    graph, roots
+                )
+                forbidden === nothing || throw(ArgumentError(
+                    "Hamiltonian energy expressions cannot depend on " *
+                    "$(first(forbidden)) $(last(forbidden))"
+                ))
+                transition = CopyProposalTransition()
+                root_footprint = _footprint_union(Tuple(
+                    footprint[Int(root)] for root in roots
+                ))
                 affected = _affected_anchor_fact(
                     source,
                     record,
                     domain,
-                    locality[Int(first(roots))],
+                    reads,
+                    transition,
+                    root_footprint,
                 )
                 if record.provenance isa NamedTuple &&
                         haskey(record.provenance, :registered_affected_region)
@@ -312,13 +394,21 @@ function _analyze_term_graph(
                         "the compiler-proven class $(repr(affected.kind))"
                     ))
                 end
-                (domain, affected)
+                bound = ExpressionAnchorReadFact(
+                    domain.anchor_kind,
+                    domain.anchor_name,
+                    domain.resource_identity,
+                )
+                proof = AffectedAnchorProof(
+                    domain, bound, reads, transition, root_footprint
+                )
+                (domain, affected, proof)
             catch error
                 error isa PottsValidationError && rethrow(error)
                 throw(_hamiltonian_analysis_error(record, error))
             end
         else
-            (nothing, nothing)
+            (nothing, nothing, nothing)
         end
         push!(
             candidates,
@@ -329,14 +419,20 @@ function _analyze_term_graph(
                 roots,
                 energy_domain,
                 affected_anchors,
+                affected_proof,
                 _sha256_hex(
                     "potts-descriptor-candidate-v1",
                     record.lowering_identity,
                     Tuple(graph.nodes[root].structural_key for root in roots),
                     category,
                     energy_domain === nothing ? nothing :
-                    (energy_domain.kind, energy_domain.anchor_kind),
+                    (
+                        energy_domain.kind,
+                        energy_domain.resource_identity,
+                        energy_domain.anchor_kind,
+                    ),
                     affected_anchors,
+                    affected_proof,
                 ),
                 record.provenance,
             ),
@@ -366,8 +462,7 @@ end
 
 function _analyze_completed_system(completed::PottsSystem)
     data = _completion_data(completed)
-    graph = _normalize_source_graph(data.source_graph, completed)
-    return _analyze_term_graph(data.source_graph, graph)
+    return _analyze_term_graph(data.source_graph, data.normalized_graph)
 end
 
 function _compiler_analysis_report(ir::AnalyzedTermIR)
@@ -381,6 +476,8 @@ function _compiler_analysis_report(ir::AnalyzedTermIR)
         normalized = (
             nodes = length(ir.graph.nodes),
             roots = length(ir.graph.roots),
+            operations = length(ir.graph.operation_snapshot),
+            operation_inventory = _v1_operation_inventory(ir.graph),
             structural_key = ir.graph.structural_key,
         ),
         analyzed = (

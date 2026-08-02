@@ -68,12 +68,6 @@ function _lower_relationships(
     )
 end
 
-function _token_suffix(value, prefix::AbstractString)
-    name = String(Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(value))))
-    startswith(name, prefix) || return nothing
-    return Symbol(name[(lastindex(prefix) + 1):end])
-end
-
 function _lower_observations(
         ir::AnalyzedTermIR,
         kinds,
@@ -82,25 +76,28 @@ function _lower_observations(
     )
     manifest = NamedTuple[]
     records = ir.source.records
-    state_variables = Pair{QualifiedStatement, Any}[]
-    for record in records
-        record.kind in (
-            :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
-            :HistoryState,
-        ) || continue
-        arguments = _record_arguments(record)
-        haskey(arguments, :variable) || continue
-        push!(state_variables, record => arguments.variable)
-    end
-    for record in records
+    for (record_index, record) in enumerate(records)
         record.kind === :Observation || continue
-        expression = _record_arguments(record).expression
         name = _qualified_public_name(record.identity)
-        state_index = findfirst(
-            pair -> isequal(expression, last(pair)), state_variables
+        root_index = findfirst(
+            root -> root.record == record_index && root.role === :expression,
+            ir.graph.roots,
         )
-        if state_index !== nothing
-            state_record = first(state_variables[state_index])
+        root_index === nothing && throw(ArgumentError(
+            "observation `$name` has no normalized expression root"
+        ))
+        root = ir.graph.roots[root_index]
+        node = ir.graph.nodes[Int(root.node)]
+        if node.payload isa StateBindingPayload
+            state_identity = node.payload.identity
+            state_index = findfirst(
+                candidate -> candidate.identity == state_identity,
+                records,
+            )
+            state_index === nothing && throw(ArgumentError(
+                "observation `$name` references an unresolved state"
+            ))
+            state_record = records[state_index]
             state_name = _qualified_public_name(state_record.identity)
             identity = _qualified_resource_identity(state_record.identity)
             layout_entry = only(filter(
@@ -117,52 +114,43 @@ function _lower_observations(
             ))
             continue
         end
-        unwrapped = Symbolics.unwrap(expression)
-        operation = try
-            Symbolics.operation(unwrapped)
-        catch
-            nothing
-        end
-        arguments = try
-            Symbolics.arguments(unwrapped)
-        catch
-            Any[]
-        end
-        if operation === occupancy && length(arguments) == 2
-            requested = _token_suffix(first(arguments), "__potts_kind__")
-            requested === nothing && throw(ArgumentError(
-                "observation `$name` has an invalid occupancy kind"
+        if node.operation === :occupancy && length(node.operands) == 2
+            kind_node = ir.graph.nodes[Int(first(node.operands))]
+            kind_node.payload isa KindBindingPayload || throw(ArgumentError(
+                "observation `$name` has no resolved kind binding"
             ))
-            declaration = _resource_record(
-                ir.source, record, :CellKind, requested
-            )
-            declaration === nothing && (declaration = _resource_record(
-                ir.source, record, :MediumKind, requested
-            ))
-            declaration === nothing && throw(ArgumentError(
+            haskey(kinds, kind_node.payload.identity) || throw(ArgumentError(
                 "observation `$name` references an undeclared kind"
             ))
             push!(manifest, (
                 name,
                 kind = :occupied_sites,
                 evaluator = OccupiedSitesObservationEvaluator(
-                    Int16(kinds[declaration.identity])
+                    Int16(kinds[kind_node.payload.identity])
                 ),
             ))
-        elseif operation in (neighbor_count, degree) && length(arguments) == 2
-            requested = _token_suffix(
-                first(arguments), "__potts_relationship_set__"
+        elseif node.operation in (:neighbor_count, :degree) &&
+                length(node.operands) == 2
+            relationship_node = ir.graph.nodes[Int(first(node.operands))]
+            relationship_node.payload isa ResourceBindingPayload &&
+                relationship_node.payload.kind === :RelationshipState ||
+                throw(ArgumentError(
+                    "observation `$name` has no resolved relationship binding"
+                ))
+            relationship_index = findfirst(
+                candidate -> candidate.identity ==
+                    relationship_node.payload.identity,
+                records,
             )
-            requested === nothing && throw(ArgumentError(
-                "observation `$name` has an unsupported neighbor-count source"
-            ))
-            relationship = _resource_record(
-                ir.source, record, :RelationshipState, requested
-            )
-            relationship === nothing && throw(ArgumentError(
+            relationship_index === nothing && throw(ArgumentError(
                 "observation `$name` references an undeclared relationship state"
             ))
-            endpoint = _numeric_value(last(arguments))
+            relationship = records[relationship_index]
+            endpoint_node = ir.graph.nodes[Int(last(node.operands))]
+            endpoint_node.payload isa LiteralPayload || throw(ArgumentError(
+                "relationship degree endpoint must be a normalized literal"
+            ))
+            endpoint = _numeric_value(endpoint_node.payload.value)
             endpoint isa Integer || isinteger(endpoint) ||
                 throw(ArgumentError("relationship degree endpoint must be integral"))
             endpoint_policy = _relationship_endpoint_policy(
@@ -181,7 +169,7 @@ function _lower_observations(
         else
             throw(ArgumentError(
                 "no concrete V1 observation lowering exists for `$name`: " *
-                "$(repr(expression))"
+                "$(node.operation)"
             ))
         end
     end

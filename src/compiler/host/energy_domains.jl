@@ -3,6 +3,7 @@
 struct EnergyDomainFact
     kind::Symbol
     resource::Any
+    resource_identity::Union{Nothing, QualifiedStatementID}
     anchor_kind::Symbol
     anchor_name::Symbol
 end
@@ -11,6 +12,31 @@ struct AffectedAnchorFact
     kind::Symbol
     locality::Symbol
     maximum::Int
+end
+
+struct ExpressionAnchorReadFact
+    kind::Symbol
+    name::Symbol
+    resource::Union{Nothing, QualifiedStatementID}
+end
+
+struct CopyProposalTransition
+    resource::Symbol
+    target::Symbol
+    before::Symbol
+    after::Symbol
+end
+
+CopyProposalTransition() = CopyProposalTransition(
+    :ownership, :target_site, :old_owner, :new_owner
+)
+
+struct AffectedAnchorProof
+    domain::EnergyDomainFact
+    bound_anchor::ExpressionAnchorReadFact
+    reads::Tuple
+    transition::CopyProposalTransition
+    footprint::Any
 end
 
 _energy_anchor_kind(::SiteBinding) = :site
@@ -104,51 +130,84 @@ function _energy_domain_fact(
                 "relationship energy domain and bound edge use different relationships"
             ))
     end
+    resource = _energy_domain_resource(domain)
+    resource_kind = domain isa Sites ? :LatticeDomain :
+                    domain isa Cells ? :CellKind :
+                    domain isa Contacts ? :SpatialRelation :
+                    :RelationshipState
+    resource_record = _resource_record(source, record, resource_kind, resource)
     return EnergyDomainFact(
         _energy_domain_kind(domain),
-        _energy_domain_resource(domain),
+        resource,
+        resource_record === nothing ? nothing : resource_record.identity,
         _energy_anchor_kind(anchor),
         anchor.name,
     )
 end
 
-function _hamiltonian_forbidden_symbol(expression)
-    for variable in _collect_symbolics(expression)
-        name = _try_symbolic_name(variable)
-        name === nothing && continue
-        text = String(name)
-        startswith(text, "__potts_proposal__") &&
-            return (:proposal_context, name)
-        startswith(text, "__potts_draw__") &&
-            return (:stochastic_draw, name)
+function _normalized_energy_anchor_reads(
+        graph::NormalizedTermGraph,
+        roots::Vector{Int32},
+    )
+    reads = ExpressionAnchorReadFact[]
+    visited = Set{Int32}()
+    function visit(index::Int32)
+        index in visited && return
+        push!(visited, index)
+        node = graph.nodes[Int(index)]
+        if node.payload isa AnchorBindingPayload
+            kind = node.payload.kind === :site_anchor ? :site :
+                   node.payload.kind === :cell_anchor ? :cell :
+                   node.payload.kind === :contact_anchor ? :contact :
+                   :relationship
+            fact = ExpressionAnchorReadFact(
+                kind, node.payload.name, node.payload.resource
+            )
+            fact in reads || push!(reads, fact)
+        end
+        foreach(visit, node.operands)
+        return nothing
+    end
+    foreach(visit, roots)
+    return Tuple(reads)
+end
+
+function _normalized_hamiltonian_forbidden_dependency(
+        graph::NormalizedTermGraph,
+        roots::Vector{Int32},
+    )
+    visited = Set{Int32}()
+    function visit(index::Int32)
+        index in visited && return nothing
+        push!(visited, index)
+        node = graph.nodes[Int(index)]
+        node.payload isa ContextBindingPayload &&
+            node.payload.kind === :proposal &&
+            return (:proposal_context, node.payload.name)
+        node.payload isa DrawBindingPayload &&
+            return (:stochastic_draw, node.payload.identity)
+        for operand in node.operands
+            found = visit(operand)
+            found === nothing || return found
+        end
+        return nothing
+    end
+    for root in roots
+        found = visit(root)
+        found === nothing || return found
     end
     return nothing
 end
 
-function _energy_anchor_reads(expression)
-    result = Pair{Symbol, Symbol}[]
-    for variable in _collect_symbolics(expression)
-        name = _try_symbolic_name(variable)
-        name === nothing && continue
-        text = String(name)
-        for (prefix, kind) in (
-                "__potts_energy_site__" => :site,
-                "__potts_energy_cell__" => :cell,
-                "__potts_energy_contact__" => :contact,
-                "__potts_relationship__" => :relationship,
-            )
-            startswith(text, prefix) || continue
-            push!(result, kind => Symbol(text[(length(prefix) + 1):end]))
-            break
-        end
-    end
-    return Tuple(unique(result))
-end
-
-function _validate_energy_anchor_reads(arguments, domain::EnergyDomainFact)
-    reads = _energy_anchor_reads(arguments.expression)
-    all(read -> first(read) === domain.anchor_kind &&
-                last(read) === domain.anchor_name, reads) ||
+function _validate_normalized_energy_anchor_reads(
+        reads::Tuple,
+        domain::EnergyDomainFact,
+    )
+    all(read -> read.kind === domain.anchor_kind &&
+                read.name === domain.anchor_name &&
+                (read.resource === nothing ||
+                 domain.resource_identity === nothing ||
+                 read.resource == domain.resource_identity), reads) ||
         throw(ArgumentError(
             "Hamiltonian expression reads an energy anchor other than its bound anchor"
         ))
@@ -224,29 +283,37 @@ function _affected_anchor_fact(
         source::FrozenSourceGraph,
         record::QualifiedStatement,
         domain::EnergyDomainFact,
-        locality::Symbol,
+        reads::Tuple,
+        transition::CopyProposalTransition,
+        footprint,
     )
-    arguments = _record_arguments(record)
-    forbidden = _hamiltonian_forbidden_symbol(arguments.expression)
-    forbidden === nothing || throw(ArgumentError(
-        "Hamiltonian energy expressions cannot depend on $(first(forbidden)) " *
-        "$(last(forbidden))"
-    ))
     record.effect isa PureRead && isempty(record.writes) ||
         throw(ArgumentError("Hamiltonians must be immutable pure reads"))
     isempty(record.random_operations) ||
         throw(ArgumentError("Hamiltonians cannot contain random draws"))
-    _validate_energy_anchor_reads(arguments, domain)
+    _validate_normalized_energy_anchor_reads(reads, domain)
+    transition == CopyProposalTransition() || throw(ArgumentError(
+        "V1 Hamiltonians require the canonical ownership copy transition"
+    ))
 
-    if domain.kind === :sites && locality in (:scalar, :site_local)
+    locality = _footprint_locality(footprint)
+    members = _footprint_members(footprint)
+    site_proof = all(member -> member isa SpatialFootprintFact &&
+        member.anchor isa BoundSiteAnchor, members)
+    cell_proof = all(member -> member isa OwnerFootprintFact, members)
+    contact_proof = all(member -> member isa ContactFootprintFact, members)
+    relationship_proof = all(member -> member isa Union{
+        OwnerFootprintFact, IncidentRelationshipFootprintFact,
+    }, members)
+
+    if domain.kind === :sites && (isempty(members) || site_proof)
         return AffectedAnchorFact(:target_site, locality, 1)
-    elseif domain.kind === :cells && locality in (:scalar, :owner_local)
+    elseif domain.kind === :cells && (isempty(members) || cell_proof)
         return AffectedAnchorFact(:source_and_target_cells, locality, 2)
-    elseif domain.kind === :contacts && locality in (:scalar, :contact_local)
+    elseif domain.kind === :contacts && (isempty(members) || contact_proof)
         maximum = _contact_relation_bound(source, record, domain.resource)
         return AffectedAnchorFact(:incident_contacts, locality, maximum)
-    elseif domain.kind === :edges &&
-            locality in (:scalar, :owner_local, :bounded_relationship)
+    elseif domain.kind === :edges && (isempty(members) || relationship_proof)
         maximum = _relationship_incident_bound(source, record, domain.resource)
         return AffectedAnchorFact(:incident_relationships, locality, maximum)
     end

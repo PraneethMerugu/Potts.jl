@@ -28,6 +28,10 @@ operation_transfer(
     :boolean,
     :dimensionless;
     footprint_rule = InheritFootprintRule(),
+    allowed_roles = (:process, :relationship),
+    allowed_phases = (:AcceptedCopy,),
+    required_context = :proposal,
+    owner = :PottsToolkitRelationshipOperations,
 )
 
 function CorePotts.operation_callable(

@@ -1,48 +1,20 @@
 # Typed state, draw, kind, resource, and energy-anchor resolution.
 
-function _state_record_variable(record::QualifiedStatement)
-    record.kind in (
-        :SiteState,
-        :CellState,
-        :MediumState,
-        :ModelState,
-        :FieldState,
-        :HistoryState,
-    ) || return nothing
-    payload = record.normalized_payload
-    payload isa Tuple && !isempty(payload) || return nothing
-    arguments = first(payload)
-    arguments isa NamedTuple && haskey(arguments, :variable) ||
-        return nothing
-    return arguments.variable
-end
-
 function _state_handle_for_leaf(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
         handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
-    )
+)
+    if node.payload isa StateBindingPayload
+        return get(handles, node.payload.identity, nothing)
+    end
+    value = node.payload isa VariableBindingPayload ? node.payload.value : nothing
     for record in ir.source.records
         variable = _state_record_variable(record)
         variable === nothing && continue
-        isequal(variable, node.payload) || continue
+        isequal(variable, value) || continue
         haskey(handles, record.identity) || continue
         return handles[record.identity]
-    end
-    name = _try_symbolic_name(node.payload)
-    if name !== nothing
-        text = String(name)
-        for (prefix, kind) in (
-                "__potts_field__" => :FieldState,
-                "__potts_state__" => :SiteState,
-            )
-            startswith(text, prefix) || continue
-            requested = Symbol(text[(lastindex(prefix) + 1):end])
-            owner = ir.source.records[Int(node.record)]
-            record = _resource_record(ir.source, owner, kind, requested)
-            record === nothing && continue
-            haskey(handles, record.identity) && return handles[record.identity]
-        end
     end
     return nothing
 end
@@ -98,13 +70,8 @@ function _draw_handle_for_leaf(
         handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         node::NormalizedTermNode,
     )
-    name = _try_symbolic_name(node.payload)
-    name === nothing && return nothing
-    text = String(name)
-    prefix = "__potts_draw__"
-    startswith(text, prefix) || return nothing
-    identity = Symbol(text[(lastindex(prefix) + 1):end])
-    return get(handles, (node.source.path, identity), nothing)
+    node.payload isa DrawBindingPayload || return nothing
+    return get(handles, (node.payload.path, node.payload.identity), nothing)
 end
 
 function _compiled_kind_index(
@@ -127,33 +94,24 @@ function _compiled_kind_index(
 end
 
 function _compiled_kind_leaf(ir::AnalyzedTermIR, node::NormalizedTermNode)
-    name = _try_symbolic_name(node.payload)
-    name === nothing && return nothing
-    text = String(name)
-    prefix = "__potts_kind__"
-    startswith(text, prefix) || return nothing
-    owner = ir.source.records[Int(node.record)]
-    return _compiled_kind_index(
-        ir, owner, Symbol(text[(length(prefix) + 1):end])
+    node.payload isa KindBindingPayload || return nothing
+    declarations = _ordered_kind_records(ir.source.records)
+    index = findfirst(
+        record -> record.identity == node.payload.identity,
+        declarations,
     )
+    return index === nothing ? nothing : Int16(index)
 end
 
 function _compiled_resource_leaf(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
-        prefix::String,
         kind::Symbol,
     )
-    name = _try_symbolic_name(node.payload)
-    name === nothing && return nothing
-    text = String(name)
-    startswith(text, prefix) || return nothing
-    requested = Symbol(text[(lastindex(prefix) + 1):end])
-    owner = ir.source.records[Int(node.record)]
-    record = _resource_record(ir.source, owner, kind, requested)
-    record === nothing && return nothing
+    node.payload isa ResourceBindingPayload || return nothing
+    node.payload.kind === kind || return nothing
     handle = findfirst(
-        candidate -> candidate.identity == record.identity,
+        candidate -> candidate.identity == node.payload.identity,
         ir.source.records,
     )
     return handle === nothing ? nothing : Int32(handle)
@@ -162,27 +120,20 @@ end
 function _relationship_payload_slot(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
-        selector::Symbol,
     )
-    owner = ir.source.records[Int(node.record)]
-    declarations = filter(ir.source.records) do record
-        record.kind === :RelationshipState && record.identity in owner.resources
-    end
-    length(declarations) == 1 || throw(PottsValidationError(
-        :descriptor_lowering,
-        (PottsDiagnostic(
-            :ambiguous_relationship_payload,
-            node.source,
-            String(selector),
-            node.source.path,
-            "one relationship resource owning the payload selector",
-            "$(length(declarations)) matching relationship resources",
-            (),
-            owner.source,
-        ),),
+    node.payload isa RelationshipPayloadBindingPayload ||
+        throw(ArgumentError("relationship payload leaf is not resolved"))
+    selector = node.payload.selector
+    declaration_index = findfirst(
+        record -> record.identity == node.payload.identity,
+        ir.source.records,
+    )
+    declaration_index === nothing && throw(ArgumentError(
+        "resolved relationship payload owner is absent from the source graph"
     ))
+    declaration = ir.source.records[declaration_index]
     payload = get(
-        _record_options(only(declarations)), :payload, NamedTuple()
+        _record_options(declaration), :payload, NamedTuple()
     )
     payload isa NamedTuple || throw(ArgumentError(
         "relationship payload declaration must be a named tuple"
@@ -198,7 +149,7 @@ function _relationship_payload_slot(
             "one field declared by the relationship payload schema",
             join(String.(keys(payload)), ", "),
             (),
-            owner.source,
+            declaration.source,
         ),),
     ))
     return Int32(slot)
@@ -213,11 +164,9 @@ function _energy_anchor_expression(
                kind === :contact_anchor ? :energy_anchor_contact :
                kind === :relationship_context ? :energy_anchor_relationship :
                throw(ArgumentError("unsupported energy anchor leaf `$kind`"))
-    operation = _static_operation_callable(
-        identity,
-        node.schema_version,
-        node.source,
-        UnknownSource(),
-    )
+    operation = node.callable
+    operation === nothing && throw(ArgumentError(
+        "energy-anchor callable was not frozen during completion"
+    ))
     return CorePotts.ContextExpression(operation)
 end
