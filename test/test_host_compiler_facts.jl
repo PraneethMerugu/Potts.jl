@@ -307,7 +307,7 @@ end
     )
     proposal_error = analysis_failure(proposal_energy)
     @test proposal_error isa PottsToolkit.PottsValidationError
-    @test only(proposal_error.diagnostics).kind === :invalid_hamiltonian_domain
+    @test only(proposal_error.diagnostics).kind === :illegal_operation_use
 
     stochastic_energy = HamiltonianTerm(
         :stochastic_energy;
@@ -347,7 +347,7 @@ end
     ))
     @test unbounded_error isa PottsToolkit.PottsValidationError
     @test only(unbounded_error.diagnostics).kind ===
-          :invalid_footprint_transfer
+          :illegal_operation_use
 
     mismatched_domain_error = analysis_failure(HamiltonianTerm(
         :mismatched_domain;

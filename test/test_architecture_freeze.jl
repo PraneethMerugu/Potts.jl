@@ -114,6 +114,39 @@ using .ArchitectureFreezeFixtures
               PottsToolkit.QualifiedStatementID(
                   (:illegal_role_model,), StatementID(:illegal_role)
               )
+
+        @variables invalid_stage_state
+        stage_copy = ProposalContext(:stage_copy)
+        @named illegal_context_model = PottsSystem(
+            statements = StatementSet((
+                Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+                cell,
+                SiteState(
+                    invalid_stage_state;
+                    name = :invalid_stage_state,
+                    owner = cell,
+                    initial = 0.0,
+                ),
+                Synchronous(
+                    :illegal_context,
+                    Assign(invalid_stage_state, stage_copy.source_site),
+                ),
+                Protocol(Sweep(); name = :main),
+            )),
+            unknowns = [invalid_stage_state],
+        )
+        context_error = try
+            PottsToolkit._analyze_completed_system(
+                complete(illegal_context_model)
+            )
+            nothing
+        catch caught
+            caught
+        end
+        @test context_error isa PottsToolkit.PottsValidationError
+        @test context_error.stage === :analysis
+        @test only(context_error.diagnostics).kind === :illegal_operation_use
+        @test occursin("AfterMCS", only(context_error.diagnostics).actual)
     end
 
     @testset "qualified resource identity is authoritative" begin
@@ -167,6 +200,37 @@ using .ArchitectureFreezeFixtures
         @test :relationship_endpoint_kinds ∉ closure_identities
         @test :square_root ∉ closure_identities
         @test :act_energy ∉ closure_identities
+
+        invalid_cell = CellKind(:invalid_cell)
+        invalid_relations = PottsSystem(
+            name = :invalid_scientific_requirements,
+            statements = StatementSet((
+                Lattice(
+                    (3, 3);
+                    relations = (
+                        proposal = VonNeumann(),
+                        connectivity = VonNeumann(),
+                        connectivity_background = VonNeumann(),
+                    ),
+                ),
+                invalid_cell,
+                LocalConnectivity(invalid_cell),
+                Protocol(Sweep(); name = :main),
+            )),
+        )
+        requirement_error = try
+            PottsToolkit._analyze_completed_system(
+                complete(invalid_relations)
+            )
+            nothing
+        catch caught
+            caught
+        end
+        @test requirement_error isa PottsToolkit.PottsValidationError
+        @test requirement_error.stage === :analysis
+        @test only(requirement_error.diagnostics).kind ===
+              :illegal_operation_use
+        @test occursin("moore radius 1", only(requirement_error.diagnostics).actual)
     end
 
     @testset "per-model operation closure is dependency-derived" begin
@@ -397,6 +461,30 @@ using .ArchitectureFreezeFixtures
         @test rows[:act_energy].allowed_roles == (:drive,)
         @test rows[:explicit_field_euler].allowed_phases == (:AfterMCS,)
         @test :explicit_field_euler in keys(rows)
+
+        root = pkgdir(PottsToolkit)
+        central_sources = join((read(joinpath(root, path), String) for path in (
+            "src/compiler/host/coverage.jl",
+            "src/compiler/host/operation_closure.jl",
+            "src/compiler/lowering/after_mcs_descriptors.jl",
+            "src/compiler/compile.jl",
+        )), "\n")
+        for forbidden in (
+                "_potts_merks_local_connectivity",
+                "_potts_act_energy",
+                "_potts_explicit_field_euler",
+                "mechanism) === :activity",
+                "mechanism) === :local_connectivity",
+                "ExplicitDiffusion",
+            )
+            @test !occursin(forbidden, central_sources)
+        end
+        symbolic_surface = read(
+            joinpath(root, "src/symbolics/operations.jl"), String
+        )
+        @test !occursin("struct MerksLocalConnectivityCallable", symbolic_surface)
+        @test !occursin("struct ActEnergyCallable", symbolic_surface)
+        @test !occursin("struct ExplicitFieldEulerCallable", symbolic_surface)
     end
 
     @testset "external operation and completion snapshot are equal citizens" begin

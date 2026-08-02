@@ -17,5 +17,10 @@ for row in inventory
         "$(row.identity) has no concrete callable identity"
     )
 end
+for (operation, arity) in PottsToolkit._v1_builtin_operation_declarations()
+    transfer = PottsToolkit.operation_transfer(operation, arity)
+    reason = PottsToolkit._operation_transfer_error(transfer, arity)
+    reason === nothing || error("$(transfer.identity): $reason")
+end
 
 println("V1 operation inventory qualified: $(length(inventory)) operations")

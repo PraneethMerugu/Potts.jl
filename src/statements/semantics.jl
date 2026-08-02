@@ -304,6 +304,12 @@ function Chemotaxis(kind, field; strength,
         mode::AbstractChemotaxisMode = ExtensionsOnly(),
         sample::AbstractInterpolationPolicy = Nearest(),
         name::Symbol = Symbol(:chemotaxis_, Symbol(statement_id(kind))))
+    mode isa ExtensionsOnly || throw(ArgumentError(
+        "V1 Chemotaxis supports ExtensionsOnly()"
+    ))
+    sample isa Nearest || throw(ArgumentError(
+        "V1 Chemotaxis supports Nearest() sampling"
+    ))
     copy = ProposalContext(:copy)
     response = -strength * (
         field_value(field, copy.target_site) - field_value(field, copy.source_site)

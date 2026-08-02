@@ -218,7 +218,6 @@ function _compiled_external_io(
                 observation_index,
                 builtin,
                 source = parameter !== nothing ? :parameter :
-                         state !== nothing && state.role === :activity ? :activity :
                          state !== nothing && state.role === :field ? :field :
                          state !== nothing ? state.name :
                          observation !== nothing ? observation.name : builtin,
@@ -260,7 +259,6 @@ end
 function _compiled_state_manifest(
         completed::PottsSystem,
         records,
-        activity_reference,
         manifest::ParameterManifest,
         state_layout::CorePotts.StateLayout,
         shape,
@@ -276,8 +274,7 @@ function _compiled_state_manifest(
         haskey(arguments, :variable) || continue
         role = record.kind === :FieldState ? :field :
                record.kind === :HistoryState ? :history :
-               record.kind === :SiteState &&
-               isequal(arguments.variable, activity_reference) ? :activity : :stored
+               :stored
         storage = record.kind in (:SiteState, :FieldState) ? :site :
                   record.kind === :CellState ? :cell :
                   record.kind === :MediumState ? :medium :

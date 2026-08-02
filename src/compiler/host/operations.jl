@@ -1,5 +1,17 @@
 # Versioned authority for symbolic operations admitted to the normalized DAG.
 
+abstract type AbstractOperationSourceRequirement end
+
+struct LatticeRankRequirement <: AbstractOperationSourceRequirement
+    rank::Int
+end
+
+struct SpatialRelationRequirement <: AbstractOperationSourceRequirement
+    operand::Int
+    neighborhood::Symbol
+    radius::Int
+end
+
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
@@ -19,6 +31,7 @@ struct OperationTransfer
     required_context::Symbol
     owner::Symbol
     callable_identity::String
+    source_requirements::Tuple
 end
 
 const _V1_OPERATION_ROLES = (
@@ -74,6 +87,7 @@ OperationTransfer(
     :external,
     "CorePotts.operation_callable:" * String(identity) * ":" *
         string(schema_version),
+    (),
 )
 
 OperationTransfer(
@@ -108,6 +122,7 @@ OperationTransfer(
     :external,
     "CorePotts.operation_callable:" * String(identity) * ":" *
         string(schema_version),
+    (),
 )
 
 function operation_transfer end
@@ -128,6 +143,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         owner = :PottsToolkit,
         callable_identity = "CorePotts.operation_callable:" * String(identity) * ":" *
             string(version),
+        source_requirements = (),
     ) = OperationTransfer(
         identity,
         version,
@@ -147,7 +163,17 @@ _transfer(identity, arity, result_rule, unit_rule;
         required_context,
         owner,
         String(callable_identity),
+        Tuple(source_requirements),
     )
+
+function numerical_operation_requirements end
+numerical_operation_requirements(::Any) = ()
+
+function numerical_process_rejection end
+numerical_process_rejection(::Any, statement, statements, system) =
+    "V1 executable equation lowering does not admit the selected solver policy"
+
+function numerical_field_stage_descriptor end
 
 for operation in (+, -, *, /, ^, max, min)
     identity = if operation === (+)
@@ -198,7 +224,8 @@ operation_transfer(::typeof(|), ::Int) =
 operation_transfer(::typeof(!), ::Int) =
     _transfer(:not, 1, :boolean, :dimensionless; operand_rule = :boolean)
 operation_transfer(::typeof(ifelse), ::Int) =
-    _transfer(:ifelse, 3, :branch_promote, :branch)
+    _transfer(:ifelse, 3, :branch_promote, :branch;
+        operand_rule = :ifelse)
 
 for operation in (abs, exp, log, sqrt)
     identity = if operation === abs
@@ -235,6 +262,9 @@ for operation in (
         _transfer(
             $(QuoteNode(identity)), 1, :integer, :dimensionless;
             footprint_rule = $footprint_rule,
+            allowed_roles = (:drive, :constraint, :modifier, :process),
+            allowed_phases = (:Proposal, :AcceptedCopy),
+            required_context = :proposal,
         )
 end
 
@@ -248,6 +278,9 @@ for operation in (is_extension, is_retraction, new_contact, lost_contact, linked
         _transfer(
             $(QuoteNode(identity)), $arity, :boolean, :dimensionless;
             footprint_rule = $footprint_rule,
+            allowed_roles = (:drive, :constraint, :modifier, :process),
+            allowed_phases = (:Proposal, :AcceptedCopy),
+            required_context = :proposal,
         )
 end
 
@@ -349,4 +382,7 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
         purity = :semantic_rng,
         totality = :requires_prelaunch_validation,
         footprint_rule = InheritFootprintRule(),
+        allowed_roles = (:drive, :constraint, :modifier, :process),
+        allowed_phases = (:Proposal, :AcceptedCopy),
+        required_context = :proposal,
     )

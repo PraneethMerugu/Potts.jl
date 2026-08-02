@@ -119,6 +119,8 @@ export EquationComponent, process_component
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
 public OperationTransfer, operation_transfer
+public AbstractOperationSourceRequirement, LatticeRankRequirement
+public SpatialRelationRequirement
 public AbstractFootprintTransferRule, InheritFootprintRule
 public ProposalSourceFootprintRule, ProposalTargetFootprintRule
 public ProposalSourceTargetFootprintRule, IterationSiteFootprintRule

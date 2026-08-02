@@ -382,6 +382,7 @@ function _normalize_source_graph(
             schema.transfer.allowed_roles,
             schema.transfer.allowed_phases,
             schema.transfer.required_context,
+            schema.transfer.source_requirements,
             schema.transfer.callable_identity,
             string(typeof(schema.callable)),
         ) for schema in operation_snapshot),

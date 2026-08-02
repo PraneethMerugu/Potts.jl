@@ -68,8 +68,9 @@
         error
     end
     @test invalid_connectivity_error isa PottsToolkit.PottsValidationError
+    @test invalid_connectivity_error.stage === :analysis
     @test occursin(
-        "radius-one Moore foreground",
+        "operand 2 requires moore radius 1",
         sprint(showerror, invalid_connectivity_error),
     )
 

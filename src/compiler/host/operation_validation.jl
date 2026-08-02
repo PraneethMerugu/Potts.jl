@@ -22,7 +22,7 @@ const _TOTALITY_TRANSFER_RULES = Set((
     :total, :domain_checked, :requires_prelaunch_validation
 ))
 const _OPERAND_TRANSFER_RULES = Set((
-    :any, :numeric, :boolean, :integer, :same_type,
+    :any, :numeric, :boolean, :integer, :same_type, :ifelse,
 ))
 const _OPERATION_CONTEXT_RULES = Set((
     :any, :proposal, :hamiltonian, :iteration, :relationship,
@@ -69,6 +69,22 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
     Tuple(sort!(unique!(collect(transfer.tracker_requirements)))) ==
         transfer.tracker_requirements ||
         return "tracker requirements must be unique and canonically ordered"
+    all(requirement -> requirement isa AbstractOperationSourceRequirement,
+        transfer.source_requirements) ||
+        return "source requirements must use the closed requirement algebra"
+    for requirement in transfer.source_requirements
+        if requirement isa LatticeRankRequirement
+            requirement.rank > 0 ||
+                return "lattice-rank requirements must be positive"
+        elseif requirement isa SpatialRelationRequirement
+            1 <= requirement.operand <= arity ||
+                return "spatial-relation requirement operand is outside the operation arity"
+            requirement.neighborhood in (:von_neumann, :moore) ||
+                return "spatial-relation requirement uses an unknown neighborhood"
+            requirement.radius > 0 ||
+                return "spatial-relation requirement radius must be positive"
+        end
+    end
     transfer.cpu ||
         return "V1 operations must admit the CPU reference backend"
     return nothing

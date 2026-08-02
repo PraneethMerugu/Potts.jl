@@ -102,74 +102,33 @@ end
     chemo_field = FieldState(
         chemo_signal; name = :chemo_signal, initial = 0.0
     )
-    @named unsupported_retraction = PottsSystem(
-        statements = StatementSet((
-            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
-            endothelial,
-            extracellular,
-            chemo_field,
-            Chemotaxis(
-                endothelial,
-                chemo_field;
-                strength = 1.0,
-                mode = RetractionsOnly(),
-            ),
-            Protocol(Sweep(); name = :main),
-        )),
-        unknowns = [chemo_signal],
-        independent_variables = [t],
-    )
     retraction_error = try
-        compile(
-            complete(unsupported_retraction);
-            engine = SequentialEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float64,
-        )
-        nothing
-    catch caught
-        caught
-    end
-    @test retraction_error isa PottsToolkit.PottsValidationError
-    @test only(retraction_error.diagnostics).kind === :unsupported_v1_lowering
-    @test occursin(
-        "ExtensionsOnly", only(retraction_error.diagnostics).actual
-    )
-
-    @named unsupported_interpolation = PottsSystem(
-        statements = StatementSet((
-            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+        Chemotaxis(
             endothelial,
-            extracellular,
-            chemo_field,
-            Chemotaxis(
-                endothelial,
-                chemo_field;
-                strength = 1.0,
-                sample = Multilinear(),
-            ),
-            Protocol(Sweep(); name = :main),
-        )),
-        unknowns = [chemo_signal],
-        independent_variables = [t],
-    )
-    interpolation_error = try
-        compile(
-            complete(unsupported_interpolation);
-            engine = SequentialEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float64,
+            chemo_field;
+            strength = 1.0,
+            mode = RetractionsOnly(),
         )
         nothing
     catch caught
         caught
     end
-    @test interpolation_error isa PottsToolkit.PottsValidationError
-    @test only(interpolation_error.diagnostics).kind ===
-          :unsupported_v1_lowering
-    @test occursin(
-        "Nearest", only(interpolation_error.diagnostics).actual
-    )
+    @test retraction_error isa ArgumentError
+    @test occursin("ExtensionsOnly", sprint(showerror, retraction_error))
+
+    interpolation_error = try
+        Chemotaxis(
+            endothelial,
+            chemo_field;
+            strength = 1.0,
+            sample = Multilinear(),
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test interpolation_error isa ArgumentError
+    @test occursin("Nearest", sprint(showerror, interpolation_error))
 
     cell = CellBinding(:cell)
     @named unsupported_surface = PottsSystem(
@@ -198,8 +157,9 @@ end
         caught
     end
     @test surface_error isa PottsToolkit.PottsValidationError
+    @test surface_error.stage === :analysis
     @test only(surface_error.diagnostics).kind ===
-          :unsupported_operation_context
+          :illegal_operation_use
 
     @named same_science = PottsSystem(
         statements = model_statements,

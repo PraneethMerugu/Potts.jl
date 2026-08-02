@@ -77,17 +77,9 @@ function compile(
         for record in inspect(completed, Schedule())
     ]
     records = analyzed_ir.source.records
-    activity_reference = let index = findfirst(record ->
-            record.kind === :ProposalDrive &&
-            _statement_option(record, :mechanism) === :activity,
-            records)
-        index === nothing ? nothing :
-        _statement_option(records[index], :activity)
-    end
     states = _compiled_state_manifest(
         completed,
         records,
-        activity_reference,
         manifest,
         descriptor_plan.state_layout,
         core_program.shape,

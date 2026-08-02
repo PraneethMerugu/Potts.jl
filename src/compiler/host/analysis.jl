@@ -87,13 +87,79 @@ function _operation_operand_admitted(rule::Symbol, types::Tuple)
     rule === :boolean && return all(type -> type <: Bool, types)
     rule === :integer && return all(type -> type <: Integer, types)
     rule === :same_type && return isempty(types) || all(==(first(types)), types)
+    rule === :ifelse && return length(types) == 3 && types[1] <: Bool &&
+        promote_type(types[2], types[3]) !== Any
     return false
+end
+
+function _operation_evaluation_context(role::Symbol, phase::Symbol)
+    role === :hamiltonian &&
+        return CorePotts.AbstractHamiltonianEvaluationContext
+    # V1 observations lower through their closed observation manifest rather
+    # than the generic static-evaluator path.
+    role === :observation && return nothing
+    phase in (:Proposal, :AcceptedCopy) &&
+        return CorePotts.AbstractProposalEvaluationContext
+    phase in (:AfterMCS, :EquationStep) &&
+        return CorePotts.AbstractSiteStageEvaluationContext
+    phase in (:RelationshipCommit, :Lifecycle) &&
+        return CorePotts.AbstractRelationshipStageEvaluationContext
+    return nothing
+end
+
+function _source_requirement_problem(
+        transfer::OperationTransfer,
+        node::NormalizedTermNode,
+        graph::NormalizedTermGraph,
+        source::FrozenSourceGraph,
+    )
+    for requirement in transfer.source_requirements
+        if requirement isa LatticeRankRequirement
+            actual = length(_host_lattice_shape(source))
+            actual == requirement.rank || return(
+                "requires lattice rank $(requirement.rank), got $actual"
+            )
+        elseif requirement isa SpatialRelationRequirement
+            operand_node = graph.nodes[Int(node.operands[requirement.operand])]
+            payload = operand_node.payload
+            payload isa ResourceBindingPayload &&
+                payload.kind === :SpatialRelation || return(
+                "operand $(requirement.operand) must resolve to a SpatialRelation"
+            )
+            relation_index = findfirst(
+                record -> record.identity == payload.identity &&
+                    record.kind === :SpatialRelation,
+                source.records,
+            )
+            relation_index === nothing && return(
+                "operand $(requirement.operand) has no qualified SpatialRelation"
+            )
+            neighborhood = get(
+                _record_options(source.records[relation_index]),
+                :neighborhood,
+                nothing,
+            )
+            actual_kind = neighborhood isa Moore ? :moore :
+                          neighborhood isa VonNeumann ? :von_neumann : :unknown
+            actual_radius = hasproperty(neighborhood, :radius) ?
+                            neighborhood.radius : nothing
+            actual_kind === requirement.neighborhood &&
+                actual_radius == requirement.radius || return(
+                "operand $(requirement.operand) requires " *
+                "$(requirement.neighborhood) radius $(requirement.radius), got " *
+                "$(actual_kind) radius $(repr(actual_radius))"
+            )
+        end
+    end
+    return nothing
 end
 
 function _validate_operation_use!(
         node::NormalizedTermNode,
         record::QualifiedStatement,
         operand_types::Tuple,
+        graph::NormalizedTermGraph,
+        source::FrozenSourceGraph,
     )
     transfer = node.transfer
     transfer === nothing && return nothing
@@ -109,6 +175,14 @@ function _validate_operation_use!(
     elseif !_operation_operand_admitted(transfer.operand_rule, operand_types)
         "operand types $(repr(operand_types)) violate rule " *
         "$(repr(transfer.operand_rule))"
+    elseif (source_problem = _source_requirement_problem(
+                transfer, node, graph, source
+            )) !== nothing
+        source_problem
+    elseif (context = _operation_evaluation_context(role, phase)) !== nothing &&
+            !CorePotts.operation_context_supported(node.callable, context)
+        "frozen callable $(typeof(node.callable)) has no implementation for " *
+        "$(nameof(context))"
     else
         nothing
     end
@@ -121,6 +195,171 @@ function _validate_operation_use!(
             String(transfer.identity),
             record.identity.path,
             "the frozen role, phase, context, and operand contract",
+            problem,
+            (),
+            record.source,
+        ),),
+    ))
+end
+
+_is_unknown_unit(unit) = unit === :unknown
+_is_polymorphic_zero_unit(unit) = unit === :polymorphic_zero
+_unit_compatible(left, right) =
+    _is_unknown_unit(left) || _is_unknown_unit(right) ||
+    _is_polymorphic_zero_unit(left) || _is_polymorphic_zero_unit(right) ||
+    left == right
+
+function _declared_record_unit(record::QualifiedStatement)
+    isempty(record.units) && return :dimensionless
+    length(record.units) == 1 || return :unknown
+    return (:dimension, only(record.units).dimension)
+end
+
+function _normalized_leaf_unit(
+        node::NormalizedTermNode,
+        source::FrozenSourceGraph,
+    )
+    payload = node.payload
+    value = payload isa Union{LiteralPayload, ParameterBindingPayload} ?
+            payload.value : nothing
+    if value isa DynamicQuantities.UnionAbstractQuantity
+        return (:dimension, string(DynamicQuantities.dimension(value)))
+    elseif payload isa ParameterBindingPayload
+        default = try
+            ModelingToolkitBase.hasdefault(value) ?
+                ModelingToolkitBase.getdefault(value) : nothing
+        catch
+            nothing
+        end
+        default isa DynamicQuantities.UnionAbstractQuantity && return(
+            (:dimension, string(DynamicQuantities.dimension(default)))
+        )
+        default isa Number && return :dimensionless
+        return :unknown
+    elseif payload isa Union{StateBindingPayload, VariableBindingPayload}
+        index = findfirst(
+            record -> record.identity == payload.identity,
+            source.records,
+        )
+        return index === nothing ? :unknown :
+               _declared_record_unit(source.records[index])
+    elseif payload isa LiteralPayload
+        return value isa Number && iszero(value) ?
+               :polymorphic_zero : :dimensionless
+    elseif node.payload_kind in (
+            :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
+            :relationship_context, :relationship_set, :spatial_relation,
+            :kind, :relationship_payload, :draw,
+        )
+        return :dimensionless
+    end
+    return :unknown
+end
+
+function _common_unit(units::Tuple)
+    known = filter(
+        unit -> !_is_unknown_unit(unit) && !_is_polymorphic_zero_unit(unit),
+        units,
+    )
+    isempty(known) && return any(_is_unknown_unit, units) ?
+        :unknown : :dimensionless
+    first_unit = first(known)
+    all(unit -> unit == first_unit, known) || return nothing
+    return first_unit
+end
+
+function _operation_unit_result(
+        transfer::OperationTransfer,
+        operand_units::Tuple,
+        record::QualifiedStatement,
+    )
+    rule = transfer.unit_rule
+    if rule === :dimensionless
+        all(unit -> _unit_compatible(unit, :dimensionless), operand_units) ||
+            return (
+                nothing,
+                "requires dimensionless operands, got $(repr(operand_units))",
+            )
+        return (:dimensionless, nothing)
+    elseif rule === :comparison
+        common = _common_unit(operand_units)
+        common === nothing && return(
+            nothing,
+            "comparison operands have incompatible units $(repr(operand_units))",
+        )
+        return (:dimensionless, nothing)
+    elseif rule === :branch
+        length(operand_units) == 3 || return(
+            nothing, "branch unit rule requires three operands"
+        )
+        _unit_compatible(operand_units[1], :dimensionless) || return(
+            nothing, "branch condition must be dimensionless"
+        )
+        common = _common_unit((operand_units[2], operand_units[3]))
+        common === nothing && return(
+            nothing,
+            "branch values have incompatible units $(repr(operand_units[2:3]))",
+        )
+        return (common, nothing)
+    elseif rule === :unary
+        return (isempty(operand_units) ? :unknown : first(operand_units), nothing)
+    elseif rule === :arithmetic
+        identity = transfer.identity
+        if identity in (:add, :subtract, :maximum, :minimum)
+            common = _common_unit(operand_units)
+            common === nothing && return(
+                nothing,
+                "arithmetic operands have incompatible units $(repr(operand_units))",
+            )
+            return (common, nothing)
+        elseif any(_is_unknown_unit, operand_units)
+            return (:unknown, nothing)
+        elseif identity === :multiply
+            retained = filter(!=(:dimensionless), operand_units)
+            unit = isempty(retained) ? :dimensionless :
+                   length(retained) == 1 ? only(retained) :
+                   (:product, retained...)
+            return (unit, nothing)
+        elseif identity === :divide
+            length(operand_units) == 2 || return (:unknown, nothing)
+            unit = operand_units[2] === :dimensionless ? operand_units[1] :
+                   (:quotient, operand_units...)
+            return (unit, nothing)
+        elseif identity === :power
+            length(operand_units) == 2 || return (:unknown, nothing)
+            _unit_compatible(operand_units[2], :dimensionless) || return(
+                nothing, "power exponent must be dimensionless"
+            )
+            return (operand_units[1], nothing)
+        end
+        return (:unknown, nothing)
+    elseif rule === :declared
+        return (_declared_record_unit(record), nothing)
+    elseif rule === :distribution
+        parameters = length(operand_units) >= 3 ? operand_units[2:3] : operand_units
+        common = _common_unit(parameters)
+        return (common === nothing ? :unknown : common, nothing)
+    end
+    return (:unknown, "unsupported unit rule $(repr(rule))")
+end
+
+function _validated_operation_unit(
+        node::NormalizedTermNode,
+        operand_units::Tuple,
+        record::QualifiedStatement,
+    )
+    transfer = node.transfer
+    transfer === nothing && return :unknown
+    unit, problem = _operation_unit_result(transfer, operand_units, record)
+    problem === nothing && return unit
+    throw(PottsValidationError(
+        :analysis,
+        (PottsDiagnostic(
+            :illegal_operation_units,
+            record.identity,
+            String(transfer.identity),
+            record.identity.path,
+            "the frozen operation unit-transfer contract",
             problem,
             (),
             record.source,
@@ -201,6 +440,8 @@ function _analyze_term_graph(
             node,
             record,
             Tuple(result_type[item] for item in operand_indices),
+            graph,
+            source,
         )
         result_type[index] = if node.payload_kind === :literal
             typeof(node.payload.value)
@@ -229,7 +470,13 @@ function _analyze_term_graph(
         else
             Real
         end
-        units[index] = isempty(record.units) ? :dimensionless : record.units
+        units[index] = transfer === nothing ?
+            _normalized_leaf_unit(node, source) :
+            _validated_operation_unit(
+                node,
+                Tuple(units[item] for item in operand_indices),
+                record,
+            )
         parameter_role[index] = node.payload_kind === :parameter ? :runtime :
                                 node.payload_kind === :literal ? :literal : :none
         purity[index] = transfer === nothing ? :pure : transfer.purity

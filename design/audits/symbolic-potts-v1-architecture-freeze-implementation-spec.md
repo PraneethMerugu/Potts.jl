@@ -54,7 +54,11 @@ operation registration
     -> analysis and lowering never consult the live registry again
 ```
 
-Late registration, method addition, or redefinition must not alter an already completed model.
+Late operation registration and changes to transfer/callable-resolution methods must not alter an
+already completed model: its complete schema and selected concrete callable value are frozen.
+Julia method tables themselves are process-global and mutable; redefining the call method of the
+already selected callable type is a code change outside this snapshot guarantee and requires a new
+completion/qualification cycle.
 
 Surface capture may encode bindings with private `__potts_*` tokens. Normalization resolves those
 tokens once to typed qualified binding/resource identities. Analysis, footprint derivation,
@@ -187,12 +191,12 @@ allocated 642,336 bytes, and froze three reachable operations. Its focused regre
 
 The exact candidate passed the following local qualification on the Apple Metal host:
 
-- focused architecture-freeze suite: 81/81 assertions;
-- root `Pkg.test`: 1,425/1,425 assertions in 19m01.7s;
+- focused architecture-freeze suite: 98/98 assertions;
+- root `Pkg.test`: 1,442/1,442 assertions in 19m03.2s;
 - literal package inventory audit: 65/65 operations; and
 - Metal descriptor, checkerboard, shape/workgroup, constraint, energy, and relationship-runtime
   qualification.
 
-The root run first spent 361 seconds constructing and precompiling a newly resolved temporary test
-environment. That cold dependency setup is reported separately from the 19m01.7s test duration and
+The root run first spent 50 seconds constructing and precompiling a newly resolved temporary test
+environment. That cold dependency setup is reported separately from the 19m03.2s test duration and
 from the warm completion measurements above.

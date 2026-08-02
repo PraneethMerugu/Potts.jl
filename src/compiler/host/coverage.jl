@@ -41,13 +41,6 @@ function _statement_by_id(statements, id)
     return index === nothing ? nothing : statements[index]
 end
 
-function _compiled_activity_declaration(statements)
-    index = findfirst(statement ->
-        statement isa ProposalDrive &&
-        _statement_option(statement, :mechanism) === :activity, statements)
-    return index === nothing ? nothing : statements[index]
-end
-
 function _compiled_relationship_declaration(statements, requested)
     resources = filter(statement -> statement isa RelationshipState, statements)
     matches = filter(
@@ -144,112 +137,14 @@ function _relationship_process_rejection(statement, statements)
 end
 
 function _equation_process_rejection(statement, statements, system)
-    arguments = _statement_arguments(statement)
     options = _statement_options(statement)
-    options.solver isa ExplicitDiffusion ||
-        return "V1 executable equation lowering currently requires ExplicitDiffusion"
-    fields = filter(candidate -> candidate isa FieldState, statements)
-    length(fields) == 1 ||
-        return "equation lowering requires exactly one FieldState"
-    variable = _statement_arguments(only(fields)).variable
-    length(arguments.writes) == 1 && isequal(only(arguments.writes), variable) ||
-        return "EquationProcess writes must identify the compiled FieldState"
-    isempty(arguments.equations) &&
-        return "EquationProcess requires at least one equation"
-    all(equation -> any(isequal(equation), ModelingToolkitBase.equations(system)),
-        arguments.equations) ||
-        return "EquationProcess equations must be present in PottsSystem.equations"
-    return nothing
-end
-
-function _local_connectivity_rejection(statement, statements)
-    domains = filter(candidate -> candidate isa LatticeDomain, statements)
-    length(domains) == 1 || return (
-        "Merks local connectivity requires exactly one lattice domain"
+    return numerical_process_rejection(
+        get(options, :solver, nothing), statement, statements, system
     )
-    shape = _statement_option(only(domains), :shape, ())
-    length(shape) == 2 || return (
-        "Merks local connectivity is qualified only for a two-dimensional lattice"
-    )
-    options = _statement_options(statement)
-    foreground_name = get(options, :foreground, nothing)
-    background_name = get(options, :background, nothing)
-    foreground = findall(candidate ->
-        candidate isa SpatialRelation &&
-        Symbol(statement_id(candidate)) === foreground_name,
-        statements,
-    )
-    background = findall(candidate ->
-        candidate isa SpatialRelation &&
-        Symbol(statement_id(candidate)) === background_name,
-        statements,
-    )
-    length(foreground) == 1 || return (
-        "Merks local connectivity foreground must name one SpatialRelation"
-    )
-    length(background) == 1 || return (
-        "Merks local connectivity background must name one SpatialRelation"
-    )
-    foreground_neighborhood = _statement_option(
-        statements[only(foreground)], :neighborhood, nothing
-    )
-    background_neighborhood = _statement_option(
-        statements[only(background)], :neighborhood, nothing
-    )
-    foreground_neighborhood isa Moore &&
-        foreground_neighborhood.radius == 1 || return (
-        "Merks local connectivity requires a radius-one Moore foreground"
-    )
-    background_neighborhood isa VonNeumann &&
-        background_neighborhood.radius == 1 || return (
-        "Merks local connectivity requires a radius-one VonNeumann background"
-    )
-    return nothing
-end
-
-function _activity_rejection(statement, statements)
-    relation_name = _statement_option(statement, :reduction, nothing)
-    relation_name isa Symbol || return (
-        "Act reduction must name one declared SpatialRelation"
-    )
-    relations = filter(candidate ->
-        candidate isa SpatialRelation &&
-        Symbol(statement_id(candidate)) === relation_name,
-        statements,
-    )
-    length(relations) == 1 || return (
-        "Act reduction must name one declared SpatialRelation"
-    )
-    neighborhood = _statement_option(only(relations), :neighborhood, nothing)
-    neighborhood isa Moore && neighborhood.radius == 1 || return (
-        "the qualified Act profile requires a radius-one Moore reduction"
-    )
-    return nothing
-end
-
-function _chemotaxis_rejection(statement)
-    _statement_option(statement, :mode, nothing) isa ExtensionsOnly || return (
-        "V1 chemotaxis currently qualifies ExtensionsOnly()"
-    )
-    _statement_option(statement, :sample, nothing) isa Nearest || return (
-        "V1 chemotaxis currently qualifies Nearest() sampling"
-    )
-    return nothing
 end
 
 function _statement_lowering_rejection(statement, statements, system)
-    if statement isa Union{ProposalDrive, ProposalModifier}
-        mechanism = _statement_option(statement, :mechanism, nothing)
-        mechanism === :activity && return _activity_rejection(
-            statement, statements
-        )
-        mechanism === :chemotaxis && return _chemotaxis_rejection(statement)
-        return nothing
-    elseif statement isa ProposalConstraint
-        _statement_option(statement, :mechanism) === :local_connectivity &&
-            return _local_connectivity_rejection(statement, statements)
-        return nothing
-    elseif statement isa SynchronousProcess
+    if statement isa SynchronousProcess
         return _synchronous_rejection(statement, statements)
     elseif statement isa AcceptedCopyProcess
         return _accepted_copy_rejection(statement, statements)
