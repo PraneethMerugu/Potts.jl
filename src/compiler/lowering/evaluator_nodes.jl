@@ -130,6 +130,22 @@ function _lower_static_node(
         )) : CorePotts.LiteralExpression(draw_handle)
     else
         operation = _static_operation_callable(node)
+        tracker_keys = _operation_tracker_keys(ir, node, T)
+        qualified_keys = filter(
+            key -> key isa CorePotts.QualifiedTrackerKey,
+            tracker_keys,
+        )
+        if !isempty(qualified_keys)
+            length(qualified_keys) == 1 || throw(ArgumentError(
+                "V1 operations admit at most one qualified tracker binding"
+            ))
+            key = only(qualified_keys)
+            operation = CorePotts.QualifiedTrackerOperation(
+                operation,
+                key.quantity,
+                key.source_handle,
+            )
+        end
         arguments = Tuple(
             _lower_static_node(
                 graph,

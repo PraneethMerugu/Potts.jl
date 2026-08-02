@@ -311,7 +311,7 @@ function _append_relation_tracker_conflicts!(
         resources::CorePotts.HamiltonianDomainResources,
         ::Val{N},
     ) where {N}
-    for descriptor in tracker_plan.descriptors
+    for descriptor in CorePotts.tracker_instances(tracker_plan)
         source = CorePotts.tracker_contract(descriptor).source
         source isa CorePotts.OwnershipRelationTrackerSource || continue
         offsets = CorePotts.relation_offsets(

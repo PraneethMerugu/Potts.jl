@@ -131,7 +131,7 @@ end
     @test occursin("Nearest", sprint(showerror, interpolation_error))
 
     cell = CellBinding(:cell)
-    @named unsupported_surface = PottsSystem(
+    @named missing_surface_relation = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3); relations = (proposal = VonNeumann(),)),
             endothelial,
@@ -145,9 +145,9 @@ end
             Protocol(Sweep(); name = :main),
         )),
     )
-    surface_error = try
+    surface_relation_error = try
         compile(
-            complete(unsupported_surface);
+            complete(missing_surface_relation);
             engine = SequentialEngine(),
             backend = CPUBackend(),
             scalar_type = Float64,
@@ -156,10 +156,14 @@ end
     catch caught
         caught
     end
-    @test surface_error isa PottsToolkit.PottsValidationError
-    @test surface_error.stage === :analysis
-    @test only(surface_error.diagnostics).kind ===
+    @test surface_relation_error isa PottsToolkit.PottsValidationError
+    @test surface_relation_error.stage === :analysis
+    @test only(surface_relation_error.diagnostics).kind ===
           :illegal_operation_use
+    @test occursin(
+        "SpatialRelation named :surface",
+        only(surface_relation_error.diagnostics).actual,
+    )
 
     @named same_science = PottsSystem(
         statements = model_statements,

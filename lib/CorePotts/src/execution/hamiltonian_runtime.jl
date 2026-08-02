@@ -81,20 +81,53 @@ end
     return value
 end
 
-@inline _view_surface(view::BeforeProposalView, cell::Int32) =
-    cell <= 0 ? 0 : program_tracker_value(
-        view.runtime, Val(:cell_surface), cell
+@inline function tracker_operation_value(
+        context::HamiltonianEvaluationContext,
+        key,
+        cell::Int32,
     )
-
-@inline function _view_surface(view::AfterProposalView, cell::Int32)
     cell <= 0 && return 0
+    view = context.view
     runtime = view.runtime
+    view isa BeforeProposalView && return program_tracker_value(
+        runtime, key, cell
+    )
     source = tracker_source_view(runtime.program, runtime.ownership)
     return tracker_value_after(
         runtime.program.tracker_plan,
         runtime.trackers,
         source,
-        Val(:cell_surface),
+        key,
+        cell,
+        view.target,
+        view.old_owner,
+        view.new_owner,
+    )
+end
+
+@inline function tracker_operation_value(
+        context::HamiltonianEvaluationContext,
+        quantity::Val{:cell_surface},
+        source_handle::Int32,
+        cell::Int32,
+    )
+    cell <= 0 && return 0
+    view = context.view
+    runtime = view.runtime
+    view isa BeforeProposalView && return qualified_tracker_value(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        quantity,
+        source_handle,
+        cell,
+    )
+    source = tracker_source_view(runtime.program, runtime.ownership)
+    return tracker_value_after(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        source,
+        quantity,
+        source_handle,
         cell,
         view.target,
         view.old_owner,
@@ -116,8 +149,35 @@ end
         arguments,
         context::HamiltonianEvaluationContext,
     )
-    return _view_surface(context.view, Int32(only(arguments)))
+    throw(ArgumentError(
+        "cell_surface requires a compiler-bound tracker resource"
+    ))
 end
+
+@inline qualified_tracker_operation_call(
+    ::ResourceOperation{:cell_surface},
+    arguments::Tuple,
+    context::HamiltonianEvaluationContext,
+    quantity::Val,
+    source_handle::Int32,
+) = tracker_operation_value(
+    context,
+    quantity,
+    source_handle,
+    Int32(only(arguments)),
+)
+
+@inline _compiled_qualified_tracker_operation(
+    operation::QualifiedTrackerOperation,
+    arguments::Tuple,
+    context::HamiltonianEvaluationContext,
+) = qualified_tracker_operation_call(
+    operation.operation,
+    arguments,
+    context,
+    operation.quantity,
+    operation.source_handle,
+)
 
 @inline function apply_resource_operation(
         ::ResourceOperation{:occupancy},

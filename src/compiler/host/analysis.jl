@@ -25,6 +25,7 @@ struct AnalyzedFactTable
     engine_admission::Vector{Any}
     backend_admission::Vector{Any}
     source_chain::Vector{Any}
+    source_bindings::Vector{Any}
 end
 
 struct DescriptorCandidate
@@ -172,6 +173,39 @@ function _source_requirement_problem(
         end
     end
     return nothing
+end
+
+function _resolved_operation_source_bindings(
+        transfer::OperationTransfer,
+        node::NormalizedTermNode,
+        graph::NormalizedTermGraph,
+        source::FrozenSourceGraph,
+    )
+    bindings = OperationSourceBinding[]
+    for (requirement_index, requirement) in
+            enumerate(transfer.source_requirements)
+        identity = if requirement isa SpatialRelationRequirement
+            payload = graph.nodes[
+                Int(node.operands[requirement.operand])
+            ].payload
+            payload isa ResourceBindingPayload ? payload.identity : nothing
+        elseif requirement isa NamedSpatialRelationRequirement
+            relation = _resource_record(
+                source,
+                source.records[Int(node.record)],
+                :SpatialRelation,
+                requirement.name,
+            )
+            relation === nothing ? nothing : relation.identity
+        else
+            nothing
+        end
+        identity === nothing && continue
+        push!(bindings, OperationSourceBinding(
+            Int16(requirement_index), :SpatialRelation, identity
+        ))
+    end
+    return Tuple(bindings)
 end
 
 function _validate_operation_use!(
@@ -579,6 +613,7 @@ function _analyze_term_graph(
     engine_admission = Any[() for _ in 1:count]
     backend_admission = Any[() for _ in 1:count]
     source_chain = Any[() for _ in 1:count]
+    source_bindings = Any[() for _ in 1:count]
 
     dimensions = length(_host_lattice_shape(source))
     for node in graph.nodes
@@ -701,6 +736,10 @@ function _analyze_term_graph(
             source = record.source,
             provenance = record.provenance,
         )
+        source_bindings[index] = transfer === nothing ? () :
+            _resolved_operation_source_bindings(
+                transfer, node, graph, source
+            )
     end
 
     facts = AnalyzedFactTable(
@@ -728,6 +767,7 @@ function _analyze_term_graph(
         engine_admission,
         backend_admission,
         source_chain,
+        source_bindings,
     )
     candidates = DescriptorCandidate[]
     roots_by_record = Dict{Int32, Vector{Int32}}()

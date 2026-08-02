@@ -214,9 +214,17 @@ end
 struct ContextOperation{Identity} <: AbstractContextualOperation end
 struct ResourceOperation{Identity} <: AbstractContextualOperation end
 
+"""Concrete callable plus one qualified value-level tracker binding."""
+struct QualifiedTrackerOperation{O, Q <: Val} <: AbstractContextualOperation
+    operation::O
+    quantity::Q
+    source_handle::Int32
+end
+
 function context_value end
 function apply_resource_operation end
 function operation_callable end
+function qualified_tracker_operation_call end
 function operation_context_supported end
 function state_value end
 function workspace_value end
@@ -238,6 +246,7 @@ function relation_neighbor_site end
 function _compiled_evaluator_parameters end
 function _compiled_context_value end
 function _compiled_resource_operation end
+function _compiled_qualified_tracker_operation end
 
 # Ordinary Julia callables carry no evaluator-context dependency. Contextual
 # callables must prove support explicitly; ResourceOperation and ContextOperation
@@ -441,6 +450,9 @@ end
     operation::ResourceOperation, arguments::Tuple, context
 ) = _compiled_resource_operation(operation, arguments, context)
 @inline _compiled_execute_operation(
+    operation::QualifiedTrackerOperation, arguments::Tuple, context
+) = _compiled_qualified_tracker_operation(operation, arguments, context)
+@inline _compiled_execute_operation(
     operation::AbstractContextualOperation, arguments::Tuple, context
 ) = operation(arguments, context)
 @inline _compiled_execute_operation(
@@ -458,6 +470,21 @@ end
     operation::ResourceOperation
 )(arguments::Tuple, context) =
     apply_resource_operation(operation, arguments, context)
+@inline (
+    operation::QualifiedTrackerOperation
+)(arguments::Tuple, context) =
+    qualified_tracker_operation_call(
+        operation.operation,
+        arguments,
+        context,
+        operation.quantity,
+        operation.source_handle,
+    )
+
+operation_context_supported(
+    operation::QualifiedTrackerOperation,
+    context::Type{<:AbstractEvaluatorExecutionContext},
+) = operation_context_supported(operation.operation, context)
 
 struct EvaluatorProbeContext{P, V, S, W} <:
        AbstractProbeEvaluationContext

@@ -1,67 +1,127 @@
-# Compiler-owned inference and admission of generic derived-state trackers.
+# Compiler-owned resolution and admission of public tracker requirements.
 
-function _normalized_graph_tracker_requirements(ir::AnalyzedTermIR)
-    requirements = Symbol[]
-    for node in ir.graph.nodes
-        transfer = node.transfer
-        transfer === nothing && continue
-        append!(requirements, transfer.tracker_requirements)
+function _operation_tracker_context(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+    )
+    bindings = map(ir.facts.source_bindings[Int(node.identity)]) do binding
+        handle = findfirst(
+            record -> record.identity == binding.identity,
+            ir.source.records,
+        )
+        handle === nothing && error(
+            "analyzed operation source binding has no runtime handle"
+        )
+        record = ir.source.records[handle]
+        metadata = if binding.kind === :SpatialRelation
+            neighborhood = get(
+                _record_options(record), :neighborhood, nothing
+            )
+            offsets = neighborhood isa Union{VonNeumann, Moore} ?
+                _host_neighborhood_offsets(neighborhood, length(_lattice_shape(ir))) :
+                throw(ArgumentError(
+                    "operation tracker binding requires a finite V1 neighborhood"
+                ))
+            (
+                neighborhood,
+                maximum_neighbors = Int16(length(offsets)),
+            )
+        else
+            NamedTuple()
+        end
+        ResolvedOperationSourceBinding(
+            binding.requirement_index,
+            binding.kind,
+            binding.identity,
+            Int32(handle),
+            metadata,
+        )
     end
-    sort!(unique!(requirements))
-    return requirements
+    record = ir.source.records[Int(node.record)]
+    return OperationTrackerContext(
+        node.operation,
+        node.transfer.schema_version,
+        _descriptor_source(record),
+        bindings,
+    )
 end
 
-function _builtin_tracker_requirement(
-        ::Val{:cell_moments}, ir, shape, ::Type{T}
+function registered_operation_tracker_requirements(
+        ::Val{:cell_moments},
+        context::OperationTrackerContext,
+        ::Type{T},
+        shape::Tuple,
     ) where {T <: AbstractFloat}
-    return CorePotts.CellMomentsTracker{length(shape), T}()
+    return (CorePotts.CellMomentsTracker{length(shape), T}(),)
 end
 
-function _builtin_tracker_requirement(
-        ::Val{:cell_surface}, ir, shape, ::Type{T}
+function registered_operation_tracker_requirements(
+        ::Val{:cell_surface},
+        context::OperationTrackerContext,
+        ::Type{T},
+        shape::Tuple,
     ) where {T <: AbstractFloat}
-    relations = QualifiedStatement[]
-    for node in ir.graph.nodes
-        node.operation === :cell_surface || continue
-        owner = ir.source.records[Int(node.record)]
-        relation = _resource_record(
-            ir.source, owner, :SpatialRelation, :surface
-        )
-        relation === nothing && error(
-            "analyzed cell_surface operation lost its required relation"
-        )
-        any(existing -> existing.identity == relation.identity, relations) ||
-            push!(relations, relation)
-    end
+    relations = filter(
+        binding -> binding.kind === :SpatialRelation,
+        context.bindings,
+    )
     length(relations) == 1 || throw(ArgumentError(
-        "V1 cell_surface operations must resolve to one qualified surface relation"
+        "cell_surface requires one analyzed qualified spatial relation binding"
     ))
     relation = only(relations)
-    handle = findfirst(
-        candidate -> candidate.identity == relation.identity,
-        ir.source.records,
-    )
-    handle === nothing && error("resolved surface relation has no source handle")
-    neighborhood = get(_record_options(relation), :neighborhood, nothing)
-    offsets = neighborhood isa VonNeumann ?
-              _host_neighborhood_offsets(neighborhood, length(shape)) :
-              neighborhood isa Moore ?
-              _host_neighborhood_offsets(neighborhood, length(shape)) :
-              throw(ArgumentError(
-                  "surface tracker requires a finite V1 neighborhood"
-              ))
-    0 < length(offsets) <= typemax(Int16) || throw(ArgumentError(
+    maximum_neighbors = relation.metadata.maximum_neighbors
+    maximum_neighbors > 0 || throw(ArgumentError(
         "surface relation degree exceeds the V1 tracker bound"
     ))
-    return CorePotts.CellSurfaceTracker(Int32(handle), Int16(length(offsets)))
+    return (CorePotts.CellSurfaceTracker(
+        relation.handle, maximum_neighbors
+    ),)
 end
 
-function _builtin_tracker_requirement(
-        ::Val{Identity}, ir, shape, ::Type{T}
-    ) where {Identity, T <: AbstractFloat}
+function registered_operation_tracker_requirements(
+        ::Val{Identity},
+        context::OperationTrackerContext,
+        ::Type,
+        ::Tuple,
+    ) where {Identity}
     throw(ArgumentError(
-        "no V1 tracker descriptor exists for operation requirement `$Identity`"
+        "no registered tracker constructor exists for operation requirement " *
+        repr(Identity)
     ))
+end
+
+function _operation_tracker_descriptors(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    transfer = node.transfer
+    transfer === nothing && return ()
+    isempty(transfer.tracker_requirements) && return ()
+    context = _operation_tracker_context(ir, node)
+    shape = _lattice_shape(ir)
+    descriptors = ()
+    for requirement in transfer.tracker_requirements
+        resolved = registered_operation_tracker_requirements(
+            Val(requirement), context, T, shape
+        )
+        resolved isa Tuple || throw(ArgumentError(
+            "registered operation tracker requirements must return a tuple"
+        ))
+        descriptors = (descriptors..., resolved...)
+    end
+    return descriptors
+end
+
+function _operation_tracker_keys(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    return map(
+        CorePotts.tracker_quantity,
+        _operation_tracker_descriptors(ir, node, T),
+    )
 end
 
 function _append_tracker_requirement!(descriptors, descriptor)
@@ -72,10 +132,11 @@ function _append_tracker_requirement!(descriptors, descriptor)
     contract isa CorePotts.TrackerContract || throw(ArgumentError(
         "registered trackers must provide a closed TrackerContract"
     ))
-    quantity = contract.quantity
+    quantity = CorePotts.tracker_quantity(descriptor)
     index = findfirst(
-        existing -> typeof(CorePotts.tracker_contract(existing).quantity) ===
-                    typeof(quantity),
+        existing -> isequal(
+            CorePotts.tracker_quantity(existing), quantity
+        ),
         descriptors,
     )
     if index === nothing
@@ -104,6 +165,32 @@ function _validate_tracker_engine_support(descriptor, engine)
     return descriptor
 end
 
+function _group_tracker_instances(ordered::Tuple)
+    grouped = Any[]
+    scalar_groups = Dict{DataType, Int}()
+    for descriptor in ordered
+        key = CorePotts.tracker_quantity(descriptor)
+        storage = CorePotts.tracker_contract(descriptor).storage
+        if key isa CorePotts.QualifiedTrackerKey &&
+                storage isa CorePotts.DenseOwnerScalarStorage
+            descriptor_type = typeof(descriptor)
+            index = get(scalar_groups, descriptor_type, 0)
+            if index == 0
+                push!(grouped, CorePotts.DenseScalarTrackerGroup(
+                    descriptor_type[descriptor]
+                ))
+                scalar_groups[descriptor_type] = length(grouped)
+            else
+                push!(grouped[index].descriptors, descriptor)
+                push!(grouped[index].source_handles, key.source_handle)
+            end
+        else
+            push!(grouped, descriptor)
+        end
+    end
+    return Tuple(grouped)
+end
+
 function _lower_tracker_plan(
         ir::AnalyzedTermIR,
         engine::AbstractPottsEngine,
@@ -123,11 +210,10 @@ function _lower_tracker_plan(
             "V1 cell elongation is qualified only for two-dimensional lattices"
         ))
     end
-    for requirement in _normalized_graph_tracker_requirements(ir)
-        _append_tracker_requirement!(
-            descriptors,
-            _builtin_tracker_requirement(Val(requirement), ir, shape, T),
-        )
+    for node in ir.graph.nodes
+        for descriptor in _operation_tracker_descriptors(ir, node, T)
+            _append_tracker_requirement!(descriptors, descriptor)
+        end
     end
 
     for candidate in ir.candidates
@@ -157,9 +243,11 @@ function _lower_tracker_plan(
     )
     fingerprint = _sha256_hex(
         "potts-tracker-plan-v2",
-        map(descriptor -> CorePotts.tracker_contract(descriptor).quantity, ordered),
+        map(CorePotts.tracker_quantity, ordered),
         map(CorePotts.tracker_inspection, ordered),
         map(CorePotts.tracker_contract, ordered),
     )
-    return CorePotts.TrackerExecutionPlan(ordered, fingerprint)
+    return CorePotts.TrackerExecutionPlan(
+        _group_tracker_instances(ordered), fingerprint
+    )
 end

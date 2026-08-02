@@ -4,6 +4,9 @@ using ModelingToolkitBase
 
 import CorePotts
 
+isdefined(@__MODULE__, :G5ExternalSurfaceOperation) ||
+    include("../fixtures/G5ExternalSurfaceOperation.jl")
+
 function _g5_surface_backend_fixture()
     cell = CellKind(:surface_backend_cell)
     medium = MediumKind(:surface_backend_medium)
@@ -23,7 +26,11 @@ function _g5_surface_backend_fixture()
             :surface_backend_energy;
             domain = cells(cell),
             anchor,
-            expression = 0.5f0 * (cell_surface(anchor) - 12.0f0)^2,
+            expression = 0.5f0 * (
+                G5ExternalSurfaceOperation.external_cell_surface(
+                    anchor_value(anchor)
+                ) - 12.0f0
+            )^2,
         ),
         Protocol(Sweep(; temperature = 2.0f0); name = :main),
     )))
@@ -52,6 +59,12 @@ function run_g5_surface_execution(
     )
     executable, initial = _g5_surface_backend_fixture()
     program = executable.core_program
+    surface_descriptor = only(filter(
+        descriptor -> CorePotts.tracker_inspection(descriptor).quantity ===
+                      :cell_surface,
+        CorePotts.tracker_instances(program.tracker_plan),
+    ))
+    surface_key = CorePotts.tracker_quantity(surface_descriptor)
     seed = UInt64(0x5fa)
     replica = UInt32(2)
     cpu_runtime = CorePotts.initialize_program(
@@ -75,7 +88,7 @@ function run_g5_surface_execution(
     )
 
     @test device_runtime.ownership == cpu_runtime.ownership
-    for quantity in (Val(:cell_volume), Val(:cell_surface))
+    for quantity in (Val(:cell_volume), surface_key)
         @test CorePotts.program_tracker_values(device_runtime, quantity) ==
               CorePotts.program_tracker_values(cpu_runtime, quantity)
     end
@@ -100,9 +113,9 @@ function run_g5_surface_execution(
         cpu_runtime.energy_rejections,
     )
     surface_values = CorePotts.tracker_values(
-        device_workspace.state.program.tracker_plan,
+        program.tracker_plan,
         device_workspace.state.trackers,
-        Val(:cell_surface),
+        surface_key,
     )
     @test CorePotts.KernelAbstractions.get_backend(surface_values) ==
           CorePotts.KernelAbstractions.get_backend(
@@ -115,7 +128,7 @@ function run_g5_surface_execution(
         colors = Int(program.checkerboard_plan.color_count),
         accepted = cpu_runtime.accepted,
         surface = Tuple(CorePotts.program_tracker_values(
-            cpu_runtime, Val(:cell_surface)
+            cpu_runtime, surface_key
         )),
     )
 end

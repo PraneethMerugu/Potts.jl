@@ -61,6 +61,33 @@ registered_tracker_requirements(
     ::Val, ::DescriptorSource, ::Type, ::Tuple
 ) = ()
 
+"""Public, resolved resource binding supplied to operation tracker hooks."""
+struct ResolvedOperationSourceBinding{M}
+    requirement_index::Int16
+    kind::Symbol
+    identity::QualifiedStatementID
+    handle::Int32
+    metadata::M
+end
+
+"""Closed host context for constructing trackers required by one operation."""
+struct OperationTrackerContext{S <: DescriptorSource, B <: Tuple}
+    operation::Symbol
+    schema_version::VersionNumber
+    source::S
+    bindings::B
+end
+
+"""
+    registered_operation_tracker_requirements(::Val{requirement}, context,
+                                               scalar_type, lattice_shape)
+
+Construct typed tracker descriptors for one operation-level requirement. The
+compiler supplies only analyzed qualified bindings and value-level handles;
+private compiler IR is never exposed to extensions.
+"""
+function registered_operation_tracker_requirements end
+
 function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }

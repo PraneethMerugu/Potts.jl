@@ -48,7 +48,7 @@ public AbstractTrackerCost, ConstantTrackerCost
 public DimensionSquaredTrackerCost, BoundedNeighborhoodTrackerCost
 public LatticeLinearTrackerCost
 public TrackerSupport
-public TrackerContract, AbstractTrackerDelta, OwnerScalarDelta
+public TrackerContract, QualifiedTrackerKey, AbstractTrackerDelta, OwnerScalarDelta
 public SourceTargetScalarDelta, OwnerMomentsDelta
 public tracker_contract, tracker_quantity, tracker_rebuild, tracker_recompute
 public tracker_proposal_delta
@@ -59,6 +59,7 @@ public encode_tracker_checkpoint, reconstruct_tracker_checkpoint
 public commit_tracker_updates!
 public tracker_values, tracker_value, validate_tracker_state!
 public tracker_value_after
+public tracker_operation_value
 public program_tracker_values, program_tracker_value
 public tracker_plan_report
 public ProgramRelationshipState, ProgramRelationshipRequest
@@ -88,6 +89,7 @@ public OperationExpression
 public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
 public execute_operation, context_value
 public apply_resource_operation, operation_callable, operation_context_supported
+public qualified_tracker_operation_call
 public state_value, workspace_value, evaluator_parameters
 public proposal_source_site, proposal_target_site, proposal_source_owner
 public proposal_target_owner, proposal_target_kind

@@ -134,6 +134,8 @@ public NeighborhoodFootprintRule
 public DescriptorSource, DescriptorConstructionContext
 public registered_descriptor_payload, registered_workspace_schemas
 public registered_tracker_requirements
+public ResolvedOperationSourceBinding, OperationTrackerContext
+public registered_operation_tracker_requirements
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ExecutableFingerprint, PottsDiagnostic, PottsValidationError

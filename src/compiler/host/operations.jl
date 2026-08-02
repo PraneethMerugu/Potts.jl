@@ -17,6 +17,13 @@ struct NamedSpatialRelationRequirement <: AbstractOperationSourceRequirement
     name::Symbol
 end
 
+"""Qualified resource identity proven for one operation source requirement."""
+struct OperationSourceBinding
+    requirement_index::Int16
+    kind::Symbol
+    identity::QualifiedStatementID
+end
+
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
