@@ -436,6 +436,11 @@ end
                 program.checkerboard_plan
             )
             @test plan_report.algorithm === :canonical_realized_greedy_v1
+            @test plan_report.shape == program.shape
+            @test plan_report.periodic == program.periodic
+            @test plan_report.site_order == Tuple(
+                program.checkerboard_plan.sites
+            )
             @test plan_report.site_count == prod(program.shape)
             @test plan_report.color_count >= 2
             @test first.engine_workspace isa CorePotts.CheckerboardWorkspace
@@ -454,6 +459,22 @@ end
         (3, 3),
         (true, true),
         Int8[1 -1 0 0; 0 0 1 -1],
+    )
+    @test_throws ArgumentError CorePotts.CheckerboardPlan(
+        odd_periodic.shape,
+        odd_periodic.periodic,
+        reverse(copy(odd_periodic.sites)),
+        copy(odd_periodic.color_offsets),
+        copy(odd_periodic.conflict_displacements),
+        odd_periodic.color_count,
+        odd_periodic.maximum_color_size,
+    )
+    @test_throws MethodError CorePotts.CheckerboardPlan(
+        copy(odd_periodic.sites),
+        copy(odd_periodic.color_offsets),
+        copy(odd_periodic.conflict_displacements),
+        odd_periodic.color_count,
+        odd_periodic.maximum_color_size,
     )
     colors = Dict{Int32, Int}()
     for color in 1:Int(odd_periodic.color_count)
@@ -550,6 +571,61 @@ end
     end
     @test CorePotts.program_snapshot(first).ownership !=
           CorePotts.program_snapshot(other_replica).ownership
+end
+
+@testset "checkerboard evaluates before owner arbitration" begin
+    backend = CorePotts.KernelAbstractions.CPU()
+    old_owners = Int32[1, 1]
+    new_owners = Int32[2, 3]
+    priorities = UInt32[typemax(UInt32), 1]
+    semantic_ids = Int32[1, 2]
+    dispositions = UInt8[
+        CorePotts._PROGRAM_CHECKERBOARD_CONSTRAINT,
+        CorePotts._PROGRAM_CHECKERBOARD_ACCEPTED,
+    ]
+    maximums = zeros(UInt32, 3)
+    identities = fill(typemax(UInt32), 3)
+    claim_priority = CorePotts._checkerboard_claim_priorities_kernel!(backend)
+    claim_identity = CorePotts._checkerboard_claim_identities_kernel!(backend)
+    select = CorePotts._checkerboard_select_kernel!(backend)
+    claim_priority(
+        old_owners,
+        new_owners,
+        priorities,
+        dispositions,
+        maximums,
+        Int32(2);
+        ndrange = 2,
+    )
+    CorePotts.KernelAbstractions.synchronize(backend)
+    claim_identity(
+        old_owners,
+        new_owners,
+        priorities,
+        semantic_ids,
+        dispositions,
+        maximums,
+        identities,
+        Int32(2);
+        ndrange = 2,
+    )
+    CorePotts.KernelAbstractions.synchronize(backend)
+    select(
+        old_owners,
+        new_owners,
+        priorities,
+        semantic_ids,
+        dispositions,
+        maximums,
+        identities,
+        Int32(2);
+        ndrange = 2,
+    )
+    CorePotts.KernelAbstractions.synchronize(backend)
+    @test dispositions == UInt8[
+        CorePotts._PROGRAM_CHECKERBOARD_CONSTRAINT,
+        CorePotts._PROGRAM_CHECKERBOARD_ACCEPTED,
+    ]
 end
 
 @testset "owned runtime barriers remain inferred and bounded" begin

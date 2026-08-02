@@ -4,16 +4,46 @@ abstract type AbstractCheckerboardPlan end
 
 struct NoCheckerboardPlan <: AbstractCheckerboardPlan end
 
+struct _VerifiedCheckerboardPlanToken end
+
 struct CheckerboardPlan{
+        N,
         S <: AbstractVector{Int32},
         O <: AbstractVector{Int32},
         D <: AbstractMatrix{Int16},
     } <: AbstractCheckerboardPlan
+    shape::NTuple{N, Int}
+    periodic::NTuple{N, Bool}
     sites::S
     color_offsets::O
     conflict_displacements::D
     color_count::Int32
     maximum_color_size::Int32
+    function CheckerboardPlan(
+            shape::NTuple{N, Int},
+            periodic::NTuple{N, Bool},
+            sites::S,
+            color_offsets::O,
+            conflict_displacements::D,
+            color_count::Int32,
+            maximum_color_size::Int32,
+            ::_VerifiedCheckerboardPlanToken,
+        ) where {
+            N,
+            S <: AbstractVector{Int32},
+            O <: AbstractVector{Int32},
+            D <: AbstractMatrix{Int16},
+        }
+        return new{N, S, O, D}(
+            shape,
+            periodic,
+            sites,
+            color_offsets,
+            conflict_displacements,
+            color_count,
+            maximum_color_size,
+        )
+    end
 end
 
 function _canonical_conflict_displacements(
@@ -70,7 +100,7 @@ end
     return linear[CartesianIndex(neighbor)]
 end
 
-function CheckerboardPlan(
+function _canonical_checkerboard_fields(
         shape::NTuple{N, Int},
         periodic::NTuple{N, Bool},
         displacements::AbstractMatrix{<:Integer},
@@ -129,7 +159,7 @@ function CheckerboardPlan(
     length(sites) == site_count || error(
         "checkerboard coloring did not schedule every site exactly once"
     )
-    return CheckerboardPlan(
+    return (
         sites,
         offsets,
         canonical,
@@ -138,9 +168,56 @@ function CheckerboardPlan(
     )
 end
 
+function CheckerboardPlan(
+        shape::NTuple{N, Int},
+        periodic::NTuple{N, Bool},
+        displacements::AbstractMatrix{<:Integer},
+    ) where {N}
+    fields = _canonical_checkerboard_fields(shape, periodic, displacements)
+    return CheckerboardPlan(
+        shape, periodic, fields..., _VerifiedCheckerboardPlanToken()
+    )
+end
+
+function CheckerboardPlan(
+        shape::NTuple{N, Int},
+        periodic::NTuple{N, Bool},
+        sites::AbstractVector{Int32},
+        color_offsets::AbstractVector{Int32},
+        conflict_displacements::AbstractMatrix{Int16},
+        color_count::Integer,
+        maximum_color_size::Integer,
+    ) where {N}
+    fields = _canonical_checkerboard_fields(
+        shape, periodic, conflict_displacements
+    )
+    supplied = (
+        collect(sites),
+        collect(color_offsets),
+        Matrix(conflict_displacements),
+        Int32(color_count),
+        Int32(maximum_color_size),
+    )
+    all(map(isequal, supplied, fields)) || throw(ArgumentError(
+        "checkerboard plan fields are not the canonical verified coloring"
+    ))
+    return CheckerboardPlan(
+        shape,
+        periodic,
+        sites,
+        color_offsets,
+        conflict_displacements,
+        Int32(color_count),
+        Int32(maximum_color_size),
+        _VerifiedCheckerboardPlanToken(),
+    )
+end
+
 function checkerboard_plan_report(plan::CheckerboardPlan)
     return (
         algorithm = :canonical_realized_greedy_v1,
+        shape = plan.shape,
+        periodic = plan.periodic,
         color_count = Int(plan.color_count),
         maximum_color_size = Int(plan.maximum_color_size),
         site_count = length(plan.sites),
@@ -148,9 +225,21 @@ function checkerboard_plan_report(plan::CheckerboardPlan)
             Tuple(plan.conflict_displacements[:, column])
             for column in axes(plan.conflict_displacements, 2)
         ),
+        site_order = Tuple(plan.sites),
     )
 end
 
 checkerboard_plan_report(::NoCheckerboardPlan) = nothing
 
-Adapt.@adapt_structure CheckerboardPlan
+function Adapt.adapt_structure(to, plan::CheckerboardPlan)
+    return CheckerboardPlan(
+        plan.shape,
+        plan.periodic,
+        Adapt.adapt(to, plan.sites),
+        Adapt.adapt(to, plan.color_offsets),
+        Adapt.adapt(to, plan.conflict_displacements),
+        plan.color_count,
+        plan.maximum_color_size,
+        _VerifiedCheckerboardPlanToken(),
+    )
+end

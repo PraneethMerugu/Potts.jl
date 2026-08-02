@@ -89,7 +89,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_PENDING)
+            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         old_owner = @inbounds old_owners[index]
         new_owner = @inbounds new_owners[index]
@@ -124,7 +124,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_PENDING)
+            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
         old_owner = @inbounds old_owners[index]
@@ -166,7 +166,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_PENDING)
+            @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
         old_owner = @inbounds old_owners[index]

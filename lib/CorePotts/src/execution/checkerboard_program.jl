@@ -557,6 +557,20 @@ function execute_checkerboard_mcs!(
                 ndrange = maximum_batch,
             )
             KernelAbstractions.synchronize(backend)
+            evaluate_kernel(
+                workspace.contributions,
+                workspace.target_sites,
+                workspace.source_sites,
+                workspace.old_owners,
+                workspace.new_owners,
+                workspace.semantic_ids,
+                workspace.dispositions,
+                state,
+                Int32(color),
+                Int32(batch_size);
+                ndrange = maximum_batch,
+            )
+            KernelAbstractions.synchronize(backend)
             _clear_checkerboard_claims!(workspace)
             claim_priority_kernel(
                 workspace.old_owners,
@@ -588,20 +602,6 @@ function execute_checkerboard_mcs!(
                 workspace.dispositions,
                 workspace.cell_max_priority,
                 workspace.cell_min_identity,
-                Int32(batch_size);
-                ndrange = maximum_batch,
-            )
-            KernelAbstractions.synchronize(backend)
-            evaluate_kernel(
-                workspace.contributions,
-                workspace.target_sites,
-                workspace.source_sites,
-                workspace.old_owners,
-                workspace.new_owners,
-                workspace.semantic_ids,
-                workspace.dispositions,
-                state,
-                Int32(color),
                 Int32(batch_size);
                 ndrange = maximum_batch,
             )
