@@ -29,12 +29,13 @@ function _append_tracker_requirement!(descriptors, descriptor)
     descriptor isa CorePotts.AbstractTrackerDescriptor || throw(ArgumentError(
         "registered tracker requirements must be AbstractTrackerDescriptor values"
     ))
-    quantity = CorePotts.tracker_quantity(descriptor)
-    quantity isa Val || throw(ArgumentError(
-        "registered tracker quantities must be Val identities"
+    contract = CorePotts.tracker_contract(descriptor)
+    contract isa CorePotts.TrackerContract || throw(ArgumentError(
+        "registered trackers must provide a closed TrackerContract"
     ))
+    quantity = contract.quantity
     index = findfirst(
-        existing -> typeof(CorePotts.tracker_quantity(existing)) ===
+        existing -> typeof(CorePotts.tracker_contract(existing).quantity) ===
                     typeof(quantity),
         descriptors,
     )
@@ -50,14 +51,12 @@ function _append_tracker_requirement!(descriptors, descriptor)
 end
 
 function _validate_tracker_engine_support(descriptor, engine)
-    support = CorePotts.tracker_support(descriptor)
-    support isa CorePotts.TrackerSupport || throw(ArgumentError(
-        "tracker_support must return CorePotts.TrackerSupport"
-    ))
+    contract = CorePotts.tracker_contract(descriptor)
+    support = contract.support
     admitted = engine isa SequentialEngine ?
                support.sequential : support.checkerboard
     admitted || throw(ArgumentError(
-        "tracker $(CorePotts.tracker_quantity(descriptor)) does not support " *
+        "tracker $(contract.quantity) does not support " *
         "$(nameof(typeof(engine))) (reason code $(support.reason_code))"
     ))
     support.cpu || throw(ArgumentError(
@@ -119,11 +118,9 @@ function _lower_tracker_plan(
     )
     fingerprint = _sha256_hex(
         "potts-tracker-plan-v2",
-        map(CorePotts.tracker_quantity, ordered),
+        map(descriptor -> CorePotts.tracker_contract(descriptor).quantity, ordered),
         map(CorePotts.tracker_inspection, ordered),
-        map(CorePotts.tracker_support, ordered),
-        map(CorePotts.tracker_concurrency, ordered),
-        map(CorePotts.tracker_checkpoint_policy, ordered),
+        map(CorePotts.tracker_contract, ordered),
     )
     return CorePotts.TrackerExecutionPlan(ordered, fingerprint)
 end

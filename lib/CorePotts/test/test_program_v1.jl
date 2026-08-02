@@ -51,27 +51,18 @@ function test_program(
 end
 
 struct ExternalDoubleOccupancyTracker <: CorePotts.AbstractTrackerDescriptor end
-CorePotts.tracker_quantity(::ExternalDoubleOccupancyTracker) =
-    Val(:external_double_occupancy)
-CorePotts.tracker_checkpoint_policy(::ExternalDoubleOccupancyTracker) =
-    CorePotts.PersistTrackerCheckpoint()
-CorePotts.tracker_support(::ExternalDoubleOccupancyTracker) =
-    CorePotts.TrackerSupport(true, true, true, true)
-CorePotts.tracker_concurrency(::ExternalDoubleOccupancyTracker) =
-    CorePotts.ClaimedOwnerExclusiveTrackerConcurrency()
-CorePotts.tracker_inspection(::ExternalDoubleOccupancyTracker) = (
-    quantity = :external_double_occupancy,
-    source = :ownership,
-    relation = :identity,
-    domain = :cell,
-    storage = :dense_int32,
-    rebuild = :external_double_histogram,
-    proposal_update = :external_source_target_double_delta,
-    visibility = :accepted_commit,
-    concurrency = :claimed_owner_exclusive,
-    checkpoint = :persist_logical_state,
-    proposal_cost = :constant,
-    rebuild_cost = :lattice_linear,
+CorePotts.tracker_contract(::ExternalDoubleOccupancyTracker) =
+    CorePotts.TrackerContract(
+    Val(:external_double_occupancy),
+    CorePotts.OwnershipTrackerSource(),
+    CorePotts.DenseOwnerScalarStorage{Int32}(),
+    CorePotts.AcceptedCommitTrackerVisibility(),
+    CorePotts.ClaimedOwnerExclusiveTrackerConcurrency(),
+    CorePotts.SourceTargetOwnerUpdateBound(),
+    CorePotts.PersistTrackerCheckpoint(),
+    CorePotts.TrackerSupport(true, true, true, true),
+    CorePotts.ConstantTrackerCost(),
+    CorePotts.LatticeLinearTrackerCost(),
 )
 function CorePotts.tracker_rebuild(
         ::ExternalDoubleOccupancyTracker, ownership, cell_kinds
@@ -82,17 +73,22 @@ function CorePotts.tracker_rebuild(
     end
     return values
 end
-@inline function CorePotts.tracker_proposal_update!(
-        values,
+function CorePotts.tracker_recompute(
+        ::ExternalDoubleOccupancyTracker, ownership, cell_kinds
+    )
+    values = fill(Int32(0), length(cell_kinds))
+    for index in eachindex(ownership)
+        owner = ownership[index]
+        owner > 0 && (values[Int(owner)] += Int32(2))
+    end
+    return values
+end
+@inline CorePotts.tracker_proposal_delta(
         ::ExternalDoubleOccupancyTracker,
         target,
         old_owner::Int32,
         new_owner::Int32,
-    )
-    old_owner > 0 && (@inbounds values[Int(old_owner)] -= Int32(2))
-    new_owner > 0 && (@inbounds values[Int(new_owner)] += Int32(2))
-    return nothing
-end
+    ) = CorePotts.OwnerScalarDelta(Int32(2))
 
 struct SingleSiteOwnershipProbe{A <: AbstractMatrix{Int32}} <:
        AbstractMatrix{Int32}
@@ -661,6 +657,25 @@ end
 end
 
 @testset "external trackers use the generic execution path" begin
+    @test !isdefined(CorePotts, :tracker_proposal_update!)
+    external_descriptor = ExternalDoubleOccupancyTracker()
+    external_contract = CorePotts.tracker_contract(external_descriptor)
+    @test external_contract isa CorePotts.TrackerContract
+    @test external_contract.storage isa
+          CorePotts.DenseOwnerScalarStorage{Int32}
+    @test external_contract.update_bound isa
+          CorePotts.SourceTargetOwnerUpdateBound
+    @test CorePotts.tracker_proposal_delta(
+        external_descriptor,
+        CartesianIndex(1, 1),
+        Int32(1),
+        Int32(2),
+    ) === CorePotts.OwnerScalarDelta(Int32(2))
+    @test CorePotts.tracker_recompute(
+        external_descriptor, test_initial().ownership, Int16[2]
+    ) == CorePotts.tracker_rebuild(
+        external_descriptor, test_initial().ownership, Int16[2]
+    )
     plan = CorePotts.TrackerExecutionPlan(
         (
             CorePotts.OwnershipCountTracker(),

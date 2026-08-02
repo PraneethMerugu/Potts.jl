@@ -97,29 +97,22 @@ struct ExternalCpuOnlyTracker <: CorePotts.AbstractTrackerDescriptor end
 
 for (tracker_type, quantity, gpu) in (
         (ExternalDoubleOccupancyTracker, :external_double_occupancy, true),
-        (ExternalCpuOnlyTracker, :external_cpu_only_tracker, false),
-    )
+    (ExternalCpuOnlyTracker, :external_cpu_only_tracker, false),
+)
     @eval begin
-        CorePotts.tracker_quantity(::$tracker_type) = Val{$(QuoteNode(quantity))}()
-        CorePotts.tracker_checkpoint_policy(::$tracker_type) =
-            CorePotts.ReconstructTrackerCheckpoint()
-        CorePotts.tracker_support(::$tracker_type) =
-            CorePotts.TrackerSupport(true, true, true, $gpu, $gpu ? 0 : 0x08)
-        CorePotts.tracker_concurrency(::$tracker_type) =
-            CorePotts.ClaimedOwnerExclusiveTrackerConcurrency()
-        CorePotts.tracker_inspection(::$tracker_type) = (
-            quantity = $(QuoteNode(quantity)),
-            source = :ownership,
-            relation = :identity,
-            domain = :cell,
-            storage = :dense_int32,
-            rebuild = :external_double_histogram,
-            proposal_update = :external_source_target_double_delta,
-            visibility = :accepted_commit,
-            concurrency = :claimed_owner_exclusive,
-            checkpoint = :reconstruct,
-            proposal_cost = :constant,
-            rebuild_cost = :lattice_linear,
+        CorePotts.tracker_contract(::$tracker_type) = CorePotts.TrackerContract(
+            Val{$(QuoteNode(quantity))}(),
+            CorePotts.OwnershipTrackerSource(),
+            CorePotts.DenseOwnerScalarStorage{Int32}(),
+            CorePotts.AcceptedCommitTrackerVisibility(),
+            CorePotts.ClaimedOwnerExclusiveTrackerConcurrency(),
+            CorePotts.SourceTargetOwnerUpdateBound(),
+            CorePotts.ReconstructTrackerCheckpoint(),
+            CorePotts.TrackerSupport(
+                true, true, true, $gpu, $gpu ? 0 : 0x08
+            ),
+            CorePotts.ConstantTrackerCost(),
+            CorePotts.LatticeLinearTrackerCost(),
         )
     end
 end
@@ -136,17 +129,25 @@ function CorePotts.tracker_rebuild(
     return values
 end
 
-@inline function CorePotts.tracker_proposal_update!(
-        values,
+function CorePotts.tracker_recompute(
+        ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
+        ownership,
+        cell_kinds,
+    )
+    values = fill(Int32(0), length(cell_kinds))
+    for index in eachindex(ownership)
+        owner = ownership[index]
+        owner > 0 && (values[Int(owner)] += Int32(2))
+    end
+    return values
+end
+
+@inline CorePotts.tracker_proposal_delta(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
         target,
         old_owner::Int32,
         new_owner::Int32,
-    )
-    old_owner > 0 && (@inbounds values[Int(old_owner)] -= Int32(2))
-    new_owner > 0 && (@inbounds values[Int(new_owner)] += Int32(2))
-    return nothing
-end
+    ) = CorePotts.OwnerScalarDelta(Int32(2))
 
 function registered_tracker_requirements(
         ::Val{:lower_external_weighted_site_term},

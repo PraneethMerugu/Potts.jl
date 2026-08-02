@@ -37,8 +37,18 @@ public TrackerCheckpointState, tracker_kernel_plan, adapt_tracker_kernel_plan
 public AbstractTrackerCheckpointPolicy, PersistTrackerCheckpoint
 public ReconstructTrackerCheckpoint
 public AbstractTrackerConcurrency, ClaimedOwnerExclusiveTrackerConcurrency
+public AbstractTrackerSource, OwnershipTrackerSource
+public AbstractTrackerStorage, DenseOwnerScalarStorage
+public DenseOwnerMomentsStorage
+public AbstractTrackerVisibility, AcceptedCommitTrackerVisibility
+public AbstractTrackerUpdateBound, SourceTargetOwnerUpdateBound
+public AbstractTrackerCost, ConstantTrackerCost
+public DimensionSquaredTrackerCost, LatticeLinearTrackerCost
 public TrackerSupport
-public tracker_quantity, tracker_rebuild, tracker_proposal_update!
+public TrackerContract, AbstractTrackerDelta, OwnerScalarDelta
+public OwnerMomentsDelta
+public tracker_contract, tracker_quantity, tracker_rebuild, tracker_recompute
+public tracker_proposal_delta
 public tracker_checkpoint_policy, tracker_inspection, tracker_support
 public tracker_concurrency, tracker_adapt
 public initialize_tracker_state, copy_tracker_state, copyto_tracker_state!
