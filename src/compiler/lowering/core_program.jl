@@ -206,73 +206,90 @@ function _protocol_settings(records, manifest, ::Type{T}) where {
     return attempts, _compiled_scalar(temperature_value, manifest, T)
 end
 
-function _append_checkerboard_offsets!(
+function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
-        footprint::CorePotts.EmptyFootprint,
+        ::CorePotts.EmptyFootprint,
         proposal_offsets,
     ) where {N}
     return values
 end
 
-function _append_checkerboard_offsets!(
+function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
         footprint::CorePotts.FiniteSpatialFootprint,
         proposal_offsets,
     ) where {N}
-    for offset in footprint.offsets
+    base_offsets = if footprint.anchor isa
+            CorePotts.ProposalTargetFootprintAnchor
+        (ntuple(_ -> 0, N),)
+    elseif footprint.anchor isa CorePotts.ProposalSourceFootprintAnchor
+        Tuple(
+            ntuple(dimension -> Int(proposal_offsets[dimension, column]), N)
+            for column in axes(proposal_offsets, 2)
+        )
+    else
+        throw(ArgumentError(
+            "checkerboard exclusive writes require a proposal source/target anchor"
+        ))
+    end
+    for base in base_offsets, offset in footprint.offsets
         length(offset) == N || throw(ArgumentError(
-            "descriptor footprint has the wrong dimensionality"
+            "exclusive write footprint has the wrong dimensionality"
         ))
-        push!(values, ntuple(dimension -> Int(offset[dimension]), N))
-    end
-    return values
-end
-
-function _append_checkerboard_offsets!(
-        values::Vector{NTuple{N, Int}},
-        ::CorePotts.ProposalContextFootprint,
-        proposal_offsets,
-    ) where {N}
-    for column in axes(proposal_offsets, 2)
         push!(values, ntuple(
-            dimension -> Int(proposal_offsets[dimension, column]), N
+            dimension -> base[dimension] + Int(offset[dimension]), N
         ))
     end
     return values
 end
 
-function _append_checkerboard_offsets!(
-        values::Vector{NTuple{N, Int}},
-        ::Union{
-            CorePotts.OwnerFootprint,
-            CorePotts.IncidentRelationshipFootprint,
-        },
-        proposal_offsets,
-    ) where {N}
-    # These conflicts are resolved over canonical owner/relationship claims,
-    # not by spatial coloring.
-    return values
-end
-
-function _append_checkerboard_offsets!(
+function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
         footprint::CorePotts.FootprintUnion,
         proposal_offsets,
     ) where {N}
     for member in footprint.footprints
-        _append_checkerboard_offsets!(values, member, proposal_offsets)
+        _append_relative_write_offsets!(values, member, proposal_offsets)
     end
     return values
 end
 
-function _append_checkerboard_offsets!(
+function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
         footprint::CorePotts.AbstractFootprint,
         proposal_offsets,
     ) where {N}
     throw(ArgumentError(
-        "checkerboard compilation cannot prove footprint $(typeof(footprint))"
+        "checkerboard cannot prove exclusive write footprint $(typeof(footprint))"
     ))
+end
+
+function _append_exclusive_access!(
+        resources,
+        access::CorePotts.ResourceAccess,
+        proposal_offsets,
+        ::Val{N},
+    ) where {N}
+    policy = access.write_policy
+    policy isa CorePotts.NoWriteAccess && return resources
+    policy isa Union{
+        CorePotts.CommutativeIntegerWriteAccess,
+        CorePotts.DeferredRequestWriteAccess,
+    } && return resources
+    policy isa CorePotts.ExclusiveWriteAccess || throw(ArgumentError(
+        "checkerboard encountered an unknown write-access policy"
+    ))
+    offsets = NTuple{N, Int}[]
+    _append_relative_write_offsets!(
+        offsets, access.write_footprint, proposal_offsets
+    )
+    isempty(offsets) && throw(ArgumentError(
+        "checkerboard exclusive write access has no finite spatial offsets"
+    ))
+    for resource in access.writes
+        append!(get!(resources, resource, NTuple{N, Int}[]), offsets)
+    end
+    return resources
 end
 
 function _checkerboard_conflict_displacements(
@@ -281,41 +298,48 @@ function _checkerboard_conflict_displacements(
         proposal_offsets,
         ::Val{N},
     ) where {N}
-    values = NTuple{N, Int}[]
-
-    # Ownership proposals always read a source selected from this relation and
-    # write their target, even when the scientific descriptor plan is empty.
-    _append_checkerboard_offsets!(
-        values, CorePotts.ProposalContextFootprint(), proposal_offsets
+    resources = Dict{Any, Vector{NTuple{N, Int}}}(
+        :ownership => [ntuple(_ -> 0, N)]
     )
     for group in descriptor_plan.groups
         for descriptor in group.launch.instances
-            _append_checkerboard_offsets!(
-                values,
-                CorePotts.descriptor_resource_access(descriptor).footprint,
+            _append_exclusive_access!(
+                resources,
+                CorePotts.descriptor_resource_access(descriptor),
                 proposal_offsets,
+                Val(N),
             )
         end
     end
     for group in stage_plan.accepted_copy
         for descriptor in group.instances
-            _append_checkerboard_offsets!(
-                values,
-                CorePotts.descriptor_resource_access(descriptor).footprint,
+            _append_exclusive_access!(
+                resources,
+                CorePotts.descriptor_resource_access(descriptor),
                 proposal_offsets,
+                Val(N),
             )
         end
     end
-    filter!(offset -> !all(iszero, offset), values)
-    sort!(unique!(values))
-    displacements = Matrix{Int16}(undef, N, length(values))
-    for (column, offset) in enumerate(values), dimension in 1:N
+    displacements = NTuple{N, Int}[]
+    for offsets in Base.values(resources)
+        sort!(unique!(offsets))
+        for left in offsets, right in offsets
+            push!(displacements, ntuple(
+                dimension -> left[dimension] - right[dimension], N
+            ))
+        end
+    end
+    filter!(offset -> !all(iszero, offset), displacements)
+    sort!(unique!(displacements))
+    matrix = Matrix{Int16}(undef, N, length(displacements))
+    for (column, offset) in enumerate(displacements), dimension in 1:N
         typemin(Int16) <= offset[dimension] <= typemax(Int16) || throw(
             ArgumentError("checkerboard footprint displacement exceeds Int16")
         )
-        displacements[dimension, column] = Int16(offset[dimension])
+        matrix[dimension, column] = Int16(offset[dimension])
     end
-    return displacements
+    return matrix
 end
 
 function _lower_core_program(

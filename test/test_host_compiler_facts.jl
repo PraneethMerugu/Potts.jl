@@ -20,7 +20,7 @@ function PottsToolkit.operation_transfer(
         :dimensionless,
         :pure,
         :total,
-        :scalar,
+        PottsToolkit.InheritFootprintRule(),
         true,
         true,
     )
@@ -320,7 +320,7 @@ end
     ))
     @test unbounded_error isa PottsToolkit.PottsValidationError
     @test only(unbounded_error.diagnostics).kind ===
-          :invalid_hamiltonian_domain
+          :invalid_footprint_transfer
 
     mismatched_domain_error = analysis_failure(HamiltonianTerm(
         :mismatched_domain;

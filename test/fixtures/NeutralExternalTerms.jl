@@ -37,7 +37,7 @@ operation_transfer(::typeof(external_site_value), ::Int) =
         :declared,
         :pure,
         :total,
-        :site_local,
+        PottsToolkit.InheritFootprintRule(),
         true,
         true,
     )
@@ -58,7 +58,7 @@ operation_transfer(::typeof(external_cpu_only_value), ::Int) =
         :unary,
         :pure,
         :total,
-        :scalar,
+        PottsToolkit.InheritFootprintRule(),
         true,
         false,
     )

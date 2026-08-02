@@ -86,8 +86,10 @@ function _relationship_process_stage_descriptor(
         CorePotts.AfterMCSStage(),
         CorePotts.ResourceAccess(
             reads,
-            (),
+            (store_slot,),
             CorePotts.IncidentRelationshipFootprint(maximum_degree),
+            CorePotts.EmptyFootprint(),
+            CorePotts.DeferredRequestWriteAccess(),
         ),
         _stage_support(ir, record_index),
         record_index,

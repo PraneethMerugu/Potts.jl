@@ -9,7 +9,7 @@ struct OperationTransfer
     unit_rule::Symbol
     purity::Symbol
     totality::Symbol
-    locality::Symbol
+    footprint_rule::AbstractFootprintTransferRule
     cpu::Bool
     gpu::Bool
     tracker_requirements::Tuple{Vararg{Symbol}}
@@ -24,7 +24,7 @@ OperationTransfer(
     unit_rule::Symbol,
     purity::Symbol,
     totality::Symbol,
-    locality::Symbol,
+    footprint_rule::AbstractFootprintTransferRule,
     cpu::Bool,
     gpu::Bool,
 ) = OperationTransfer(
@@ -36,7 +36,7 @@ OperationTransfer(
     unit_rule,
     purity,
     totality,
-    locality,
+    footprint_rule,
     cpu,
     gpu,
     (),
@@ -50,7 +50,7 @@ OperationTransfer(
     unit_rule::Symbol,
     purity::Symbol,
     totality::Symbol,
-    locality::Symbol,
+    footprint_rule::AbstractFootprintTransferRule,
     cpu::Bool,
     gpu::Bool,
     tracker_requirements::Tuple{Vararg{Symbol}} = (),
@@ -63,7 +63,7 @@ OperationTransfer(
     unit_rule,
     purity,
     totality,
-    locality,
+    footprint_rule,
     cpu,
     gpu,
     tracker_requirements,
@@ -76,7 +76,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         serialization_identity = "potts-operation:" * String(identity) * ":v1",
         purity = :pure,
         totality = :total,
-        locality = :scalar,
+        footprint_rule = InheritFootprintRule(),
         cpu = true,
         gpu = true,
         tracker_requirements = (),
@@ -89,7 +89,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         unit_rule,
         purity,
         totality,
-        locality,
+        footprint_rule,
         cpu,
         gpu,
         tracker_requirements,
@@ -170,21 +170,26 @@ for operation in (
         target_kind,
     )
     identity = nameof(operation)
+    footprint_rule = operation in (source_site, source_cell, source_kind) ?
+                     ProposalSourceFootprintRule() :
+                     ProposalTargetFootprintRule()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), 1, :integer, :dimensionless;
-            locality = :proposal_context,
+            footprint_rule = $footprint_rule,
         )
 end
 
 for operation in (is_extension, is_retraction, new_contact, lost_contact, linked)
     identity = nameof(operation)
     arity = operation === linked ? 3 : operation in (new_contact, lost_contact) ? 2 : 1
-    locality = operation === linked ? :bounded_relationship : :proposal_context
+    footprint_rule = operation === linked ?
+        IncidentRelationshipFootprintRule() :
+        ProposalSourceTargetFootprintRule()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), $arity, :boolean, :dimensionless;
-            locality = $(QuoteNode(locality)),
+            footprint_rule = $footprint_rule,
         )
 end
 
@@ -194,7 +199,9 @@ operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
         3,
         :boolean,
         :dimensionless;
-        locality = :finite_spatial,
+        footprint_rule = NeighborhoodFootprintRule(
+            ProposalTargetNeighborhoodAnchor()
+        ),
     )
 
 operation_transfer(::typeof(_potts_act_energy), ::Int) =
@@ -203,7 +210,9 @@ operation_transfer(::typeof(_potts_act_energy), ::Int) =
         5,
         :real,
         :declared;
-        locality = :finite_spatial,
+        footprint_rule = NeighborhoodFootprintRule(
+            ProposalSourceTargetNeighborhoodAnchor()
+        ),
         gpu = false,
     )
 
@@ -213,7 +222,9 @@ operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
         7,
         :real,
         :declared;
-        locality = :finite_spatial,
+        footprint_rule = NeighborhoodFootprintRule(
+            IterationNeighborhoodAnchor()
+        ),
         gpu = false,
     )
 
@@ -223,7 +234,7 @@ operation_transfer(::typeof(_potts_proposal_bound_state_value), ::Int) =
         1,
         :real,
         :declared;
-        locality = :site_local,
+        footprint_rule = ProposalTargetFootprintRule(),
     )
 
 operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
@@ -232,7 +243,7 @@ operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
         1,
         :real,
         :declared;
-        locality = :site_local,
+        footprint_rule = IterationSiteFootprintRule(),
     )
 
 for operation in (
@@ -241,15 +252,16 @@ for operation in (
     )
     identity = nameof(operation)
     result_rule = operation in (endpoint_a, endpoint_b) ? :integer : :real
-    locality = operation in (endpoint_a, endpoint_b) ?
-               :bounded_relationship : :owner_local
+    footprint_rule = operation in (endpoint_a, endpoint_b) ?
+                     IncidentRelationshipFootprintRule() :
+                     OwnerFootprintRule()
     tracker_requirements = operation in (
         cell_elongation, cell_center, unwrapped_center,
     ) ? (:cell_moments,) : ()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), 1, $(QuoteNode(result_rule)), :declared;
-            locality = $(QuoteNode(locality)),
+            footprint_rule = $footprint_rule,
             tracker_requirements = $(QuoteNode(tracker_requirements)),
         )
 end
@@ -257,7 +269,7 @@ end
 operation_transfer(::typeof(degree), ::Int) =
     _transfer(
         :degree, 2, :integer, :declared;
-        locality = :bounded_relationship,
+        footprint_rule = IncidentRelationshipFootprintRule(),
     )
 
 for operation in (
@@ -267,14 +279,14 @@ for operation in (
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), 1, :integer, :dimensionless;
-            locality = :contact_local,
+            footprint_rule = ContactFootprintRule(),
         )
 end
 
 operation_transfer(::typeof(occupancy), ::Int) =
     _transfer(
         :occupancy, 2, :real, :declared;
-        locality = :site_local,
+        footprint_rule = InheritFootprintRule(),
     )
 
 for operation in (
@@ -284,12 +296,23 @@ for operation in (
     )
     identity = nameof(operation)
     result_rule = operation === neighbor_count ? :integer : :real
-    locality = operation in (edge_payload, lag) ?
-               :bounded_relationship : :finite_spatial
+    footprint_rule = if operation in (edge_payload, lag)
+        IncidentRelationshipFootprintRule()
+    elseif operation in (
+            neighbor_count, neighbor_sum, neighbor_mean, neighbor_geomean,
+        )
+        NeighborhoodFootprintRule(OperandNeighborhoodAnchors())
+    elseif operation === laplacian
+        NeighborhoodFootprintRule(IterationNeighborhoodAnchor())
+    elseif operation in (contact_measure, boundary_measure)
+        ContactFootprintRule()
+    else
+        InheritFootprintRule()
+    end
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
             $(QuoteNode(identity)), 2, $(QuoteNode(result_rule)), :declared;
-            locality = $(QuoteNode(locality)),
+            footprint_rule = $footprint_rule,
         )
 end
 
@@ -298,5 +321,5 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
         :draw, 4, :real, :distribution;
         purity = :semantic_rng,
         totality = :requires_prelaunch_validation,
-        locality = :proposal_context,
+        footprint_rule = InheritFootprintRule(),
     )

@@ -189,6 +189,8 @@ end
             (handle,),
             (),
             CorePotts.EmptyFootprint(),
+            CorePotts.EmptyFootprint(),
+            CorePotts.NoWriteAccess(),
         )
         descriptor = CorePotts.ProposalDescriptor(
             evaluator,
@@ -915,7 +917,10 @@ end
 
     opaque = OpaqueDescriptor(
         CorePotts.StaticEvaluator(CorePotts.LiteralExpression(2.0)),
-        CorePotts.ResourceAccess((), (), CorePotts.EmptyFootprint()),
+        CorePotts.ResourceAccess(
+            (), (), CorePotts.EmptyFootprint(), CorePotts.EmptyFootprint(),
+            CorePotts.NoWriteAccess(),
+        ),
         CorePotts.DescriptorSupport(true, true, true, true),
         CorePotts.HamiltonianRole(),
         Int32(1),

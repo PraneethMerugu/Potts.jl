@@ -9,6 +9,7 @@ struct AnalyzedFactTable
     totality::Vector{Symbol}
     reads::Vector{Any}
     writes::Vector{Any}
+    footprint::Vector{Any}
     locality::Vector{Symbol}
     affected_region::Vector{Any}
     effect::Vector{Any}
@@ -45,14 +46,6 @@ struct AnalyzedTermIR
     structural_key::String
 end
 
-_join_locality(values) =
-    :bounded_relationship in values ? :bounded_relationship :
-    :finite_spatial in values ? :finite_spatial :
-    :owner_local in values ? :owner_local :
-    :contact_local in values ? :contact_local :
-    :site_local in values ? :site_local :
-    :proposal_context in values ? :proposal_context : :scalar
-
 function _hamiltonian_analysis_error(record, error)
     return PottsValidationError(
         :analysis,
@@ -62,6 +55,22 @@ function _hamiltonian_analysis_error(record, error)
             repr(first(record.normalized_payload).expression),
             record.identity.path,
             "a conservative energy expression with a compiler-proven finite affected-anchor plan",
+            sprint(showerror, error),
+            (),
+            record.source,
+        ),),
+    )
+end
+
+function _footprint_analysis_error(record, node, error)
+    return PottsValidationError(
+        :analysis,
+        (PottsDiagnostic(
+            :invalid_footprint_transfer,
+            record.identity,
+            string(node.operation),
+            record.identity.path,
+            "a closed, compositional, fully resolved footprint fact",
             sprint(showerror, error),
             (),
             record.source,
@@ -82,6 +91,7 @@ function _analyze_term_graph(
     totality = fill(:total, count)
     reads = Any[() for _ in 1:count]
     writes = Any[() for _ in 1:count]
+    footprint = Any[EmptyAnalyzedFootprint() for _ in 1:count]
     locality = fill(:scalar, count)
     affected_region = Any[() for _ in 1:count]
     effect = Any[PureRead() for _ in 1:count]
@@ -98,11 +108,12 @@ function _analyze_term_graph(
     backend_admission = Any[() for _ in 1:count]
     source_chain = Any[() for _ in 1:count]
 
+    dimensions = length(_host_lattice_shape(source))
     for node in graph.nodes
         index = Int(node.identity)
         record = source.records[node.record]
         operand_indices = Int.(node.operands)
-        operand_locality = Symbol[locality[item] for item in operand_indices]
+        operand_footprints = Any[footprint[item] for item in operand_indices]
         transfer = node.transfer
         result_type[index] = if node.payload_kind === :literal
             typeof(node.payload)
@@ -136,13 +147,17 @@ function _analyze_term_graph(
         totality[index] = transfer === nothing ? :total : transfer.totality
         reads[index] = record.reads
         writes[index] = record.writes
-        locality[index] = transfer === nothing ?
-                          _join_locality(operand_locality) :
-                          _join_locality((
-                              operand_locality..., transfer.locality
-                          ))
+        footprint[index] = try
+            _analyzed_footprint(
+                source, node, record, operand_footprints, dimensions
+            )
+        catch error
+            throw(_footprint_analysis_error(record, node, error))
+        end
+        locality[index] = _footprint_locality(footprint[index])
         affected_region[index] = (
             locality = locality[index],
+            footprint = footprint[index],
             resources = record.resources,
             bound = record.bound,
         )
@@ -177,7 +192,8 @@ function _analyze_term_graph(
                                      !isempty(record.reads) ||
                                      !isempty(record.writes)
         workspace_participation[index] = !(record.effect isa PureRead) ||
-                                         locality[index] !== :scalar
+                                         !(footprint[index] isa
+                                           EmptyAnalyzedFootprint)
         adaptation_participation[index] =
             state_participation[index] || workspace_participation[index]
         checkpoint_participation[index] = record.persistence === :logical
@@ -228,6 +244,7 @@ function _analyze_term_graph(
         totality,
         reads,
         writes,
+        footprint,
         locality,
         affected_region,
         effect,
@@ -247,6 +264,30 @@ function _analyze_term_graph(
     candidates = DescriptorCandidate[]
     roots_by_record = Dict{Int32, Vector{Int32}}()
     for root in graph.roots
+        root_footprint = footprint[Int(root.node)]
+        if _footprint_has_unresolved_reference(root_footprint)
+            node = graph.nodes[Int(root.node)]
+            record = source.records[Int(root.record)]
+            throw(_footprint_analysis_error(
+                record,
+                node,
+                ArgumentError(
+                    "root footprint retains an unconsumed relation/resource reference"
+                ),
+            ))
+        end
+        record = source.records[Int(root.record)]
+        if record.kind !== :HamiltonianTerm &&
+                _footprint_has_unbounded_relationship(root_footprint)
+            node = graph.nodes[Int(root.node)]
+            throw(_footprint_analysis_error(
+                record,
+                node,
+                ArgumentError(
+                    "relationship footprint requires a bounded maximum_degree"
+                ),
+            ))
+        end
         push!(get!(roots_by_record, root.record, Int32[]), root.node)
     end
     for (record_index, roots) in sort!(
@@ -311,6 +352,7 @@ function _analyze_term_graph(
             parameter_role[index],
             purity[index],
             totality[index],
+            footprint[index],
             locality[index],
             emission_bound[index].maximum,
             emission_bound[index].basis,

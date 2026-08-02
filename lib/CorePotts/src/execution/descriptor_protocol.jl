@@ -2,22 +2,89 @@
 
 abstract type AbstractFootprint end
 struct EmptyFootprint <: AbstractFootprint end
+abstract type AbstractSpatialFootprintAnchor end
+struct ProposalSourceFootprintAnchor <: AbstractSpatialFootprintAnchor end
+struct ProposalTargetFootprintAnchor <: AbstractSpatialFootprintAnchor end
+struct IterationSiteFootprintAnchor <: AbstractSpatialFootprintAnchor end
+struct BoundSiteFootprintAnchor <: AbstractSpatialFootprintAnchor
+    slot::Int32
+end
 struct ProposalContextFootprint <: AbstractFootprint end
 struct OwnerFootprint <: AbstractFootprint end
-struct FiniteSpatialFootprint{O} <: AbstractFootprint
+struct ContactFootprint <: AbstractFootprint end
+struct FiniteSpatialFootprint{
+        A <: AbstractSpatialFootprintAnchor,
+        O,
+    } <: AbstractFootprint
+    anchor::A
     offsets::O
 end
+
+BoundSiteFootprintAnchor(slot::Integer) =
+    BoundSiteFootprintAnchor(Int32(slot))
 struct IncidentRelationshipFootprint <: AbstractFootprint
     maximum_degree::Int32
 end
 struct FootprintUnion{F <: Tuple} <: AbstractFootprint
     footprints::F
 end
+struct FootprintMinkowski{
+        L <: AbstractFootprint,
+        R <: AbstractFootprint,
+    } <: AbstractFootprint
+    left::L
+    right::R
+end
 
-struct ResourceAccess{R, W, F <: AbstractFootprint}
+abstract type AbstractWriteAccessPolicy end
+struct NoWriteAccess <: AbstractWriteAccessPolicy end
+struct ExclusiveWriteAccess <: AbstractWriteAccessPolicy end
+struct CommutativeIntegerWriteAccess <: AbstractWriteAccessPolicy end
+struct DeferredRequestWriteAccess <: AbstractWriteAccessPolicy end
+
+struct ResourceAccess{
+        R,
+        W,
+        F <: AbstractFootprint,
+        X <: AbstractFootprint,
+        P <: AbstractWriteAccessPolicy,
+    }
     reads::R
     writes::W
     footprint::F
+    write_footprint::X
+    write_policy::P
+    function ResourceAccess(
+            reads::R,
+            writes::W,
+            footprint::F,
+            write_footprint::X,
+            write_policy::P,
+        ) where {
+            R,
+            W,
+            F <: AbstractFootprint,
+            X <: AbstractFootprint,
+            P <: AbstractWriteAccessPolicy,
+        }
+        isempty(writes) == (write_policy isa NoWriteAccess) || throw(
+            ArgumentError(
+                "resource writes and the closed write policy disagree"
+            )
+        )
+        isempty(writes) && !(write_footprint isa EmptyFootprint) && throw(
+            ArgumentError(
+                "read-only resource access cannot carry a write footprint"
+            )
+        )
+        !isempty(writes) && write_policy isa ExclusiveWriteAccess &&
+            write_footprint isa EmptyFootprint && throw(ArgumentError(
+                "exclusive resource writes require a finite write footprint"
+            ))
+        return new{R, W, F, X, P}(
+            reads, writes, footprint, write_footprint, write_policy
+        )
+    end
 end
 
 struct DescriptorSupport

@@ -48,15 +48,18 @@ function _stage_descriptor(
     target = _stage_state_handle(ir, record, effect.target, state_handles)
     reads = _record_state_handles(ir, record, state_handles)
     target in reads || (reads = (reads..., target))
-    footprint = stage isa CorePotts.AcceptedCopyStage ?
-                CorePotts.ProposalContextFootprint() :
-                CorePotts.FiniteSpatialFootprint(())
     return CorePotts.CompiledStageDescriptor(
         condition,
         value,
         CorePotts.SiteAssignmentEffect(target),
         stage,
-        CorePotts.ResourceAccess(reads, (target,), footprint),
+        CorePotts.ResourceAccess(
+            reads,
+            (target,),
+            _record_read_footprint(ir, record_index),
+            _site_write_footprint(ir, stage),
+            CorePotts.ExclusiveWriteAccess(),
+        ),
         _stage_support(ir, record_index),
         record_index,
         slot,
@@ -194,8 +197,10 @@ function _relationship_create_stage_descriptor(
         CorePotts.AcceptedCopyStage(),
         CorePotts.ResourceAccess(
             reads,
-            (),
-            CorePotts.ProposalContextFootprint(),
+            (store_slot,),
+            _record_read_footprint(ir, record_index),
+            CorePotts.EmptyFootprint(),
+            CorePotts.DeferredRequestWriteAccess(),
         ),
         _stage_support(ir, record_index),
         record_index,

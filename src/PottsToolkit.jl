@@ -21,9 +21,11 @@ include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/completion.jl")
 include("compiler/host/source_graph.jl")
+include("compiler/host/footprint_types.jl")
 include("compiler/host/operations.jl")
 include("compiler/host/normalization.jl")
 include("compiler/host/energy_domains.jl")
+include("compiler/host/footprints.jl")
 include("compiler/host/analysis.jl")
 include("compiler/execution/executable.jl")
 include("compiler/execution/observations.jl")
@@ -111,6 +113,15 @@ export EquationComponent, process_component
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
 public OperationTransfer, operation_transfer
+public AbstractFootprintTransferRule, InheritFootprintRule
+public ProposalSourceFootprintRule, ProposalTargetFootprintRule
+public ProposalSourceTargetFootprintRule, IterationSiteFootprintRule
+public OwnerFootprintRule
+public ContactFootprintRule, IncidentRelationshipFootprintRule
+public AbstractNeighborhoodAnchorRule, OperandNeighborhoodAnchors
+public ProposalTargetNeighborhoodAnchor
+public ProposalSourceTargetNeighborhoodAnchor, IterationNeighborhoodAnchor
+public NeighborhoodFootprintRule
 public DescriptorSource, DescriptorConstructionContext
 public registered_descriptor_payload, registered_workspace_schemas
 public registered_tracker_requirements

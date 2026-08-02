@@ -347,7 +347,15 @@ end
         CorePotts.ResourceAccess(
             (memory_entry.handle, signal_entry.handle),
             (memory_entry.handle,),
-            CorePotts.FiniteSpatialFootprint(()),
+            CorePotts.FiniteSpatialFootprint(
+                CorePotts.IterationSiteFootprintAnchor(),
+                (),
+            ),
+            CorePotts.FiniteSpatialFootprint(
+                CorePotts.IterationSiteFootprintAnchor(),
+                (ntuple(_ -> 0, 2),),
+            ),
+            CorePotts.ExclusiveWriteAccess(),
         ),
         CorePotts.DescriptorSupport(true, true, true, true),
         1,
@@ -1033,7 +1041,8 @@ struct ExternalSquareOperation <: CorePotts.AbstractContextualOperation end
     descriptor = CorePotts.ProposalDescriptor(
         evaluator,
         CorePotts.ResourceAccess(
-            (), (), CorePotts.EmptyFootprint()
+            (), (), CorePotts.EmptyFootprint(), CorePotts.EmptyFootprint(),
+            CorePotts.NoWriteAccess(),
         ),
         CorePotts.DescriptorSupport(true, true, true, true),
         1,

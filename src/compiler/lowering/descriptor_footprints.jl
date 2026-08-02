@@ -1,86 +1,109 @@
-# Closed descriptor footprints and backend/engine support.
+# Lower closed analyzed footprint facts into concrete CorePotts descriptors.
 
-function _reachable_term_nodes(graph::NormalizedTermGraph, root::Int32)
-    pending = Int32[root]
-    seen = Set{Int32}()
-    while !isempty(pending)
-        node = pop!(pending)
-        node in seen && continue
-        push!(seen, node)
-        append!(pending, graph.nodes[Int(node)].operands)
-    end
-    return sort!(collect(seen))
-end
-
-function _spatial_footprint_offsets(ir::AnalyzedTermIR, root::Int32)
-    offsets = Tuple[]
-    for index in _reachable_term_nodes(ir.graph, root)
-        node = ir.graph.nodes[Int(index)]
-        node.payload_kind === :spatial_relation || continue
-        name = _try_symbolic_name(node.payload)
-        name === nothing && continue
-        text = String(name)
-        prefix = "__potts_spatial_relation__"
-        startswith(text, prefix) || continue
-        requested = Symbol(text[(lastindex(prefix) + 1):end])
-        owner = ir.source.records[Int(node.record)]
-        record = _resource_record(ir.source, owner, :SpatialRelation, requested)
-        record === nothing && continue
-        neighborhood = get(_record_options(record), :neighborhood, nothing)
-        neighborhood isa Union{VonNeumann, Moore} || continue
-        matrix = _neighborhood_offsets(
-            neighborhood, length(_lattice_shape(ir))
-        )
-        for column in axes(matrix, 2)
-            push!(offsets, Tuple(matrix[:, column]))
-        end
-    end
-    sort!(unique!(offsets))
-    return Tuple(offsets)
-end
-
-function _relationship_footprint_degree(ir::AnalyzedTermIR, root::Int32)
-    maximum_degree = 0
-    for index in _reachable_term_nodes(ir.graph, root)
-        node = ir.graph.nodes[Int(index)]
-        node.payload_kind === :relationship_set || continue
-        name = _try_symbolic_name(node.payload)
-        name === nothing && continue
-        text = String(name)
-        prefix = "__potts_relationship_set__"
-        startswith(text, prefix) || continue
-        requested = Symbol(text[(lastindex(prefix) + 1):end])
-        owner = ir.source.records[Int(node.record)]
-        record = _resource_record(ir.source, owner, :RelationshipState, requested)
-        record === nothing && continue
-        maximum_degree = max(
-            maximum_degree,
-            Int(_numeric_value(get(
-                _record_options(record), :maximum_degree, 0
-            ))),
-        )
-    end
-    return Int32(maximum_degree)
-end
-
-function _descriptor_footprint(
-        ir::AnalyzedTermIR, root::Int32, locality::Symbol
+function _minkowski_offsets(left::Tuple, right::Tuple)
+    isempty(left) && return ()
+    isempty(right) && return ()
+    dimensions = length(first(left))
+    all(offset -> length(offset) == dimensions, (left..., right...)) ||
+        throw(ArgumentError("Minkowski footprints have inconsistent dimensions"))
+    values = Tuple(
+        ntuple(dimension -> a[dimension] + b[dimension], dimensions)
+        for a in left for b in right
     )
-    locality === :scalar && return CorePotts.EmptyFootprint()
-    locality === :site_local && return CorePotts.FiniteSpatialFootprint(())
-    locality === :contact_local && return CorePotts.FiniteSpatialFootprint(())
-    locality === :proposal_context &&
-        return CorePotts.ProposalContextFootprint()
-    locality === :owner_local && return CorePotts.OwnerFootprint()
-    locality === :finite_spatial &&
-        return CorePotts.FiniteSpatialFootprint(
-            _spatial_footprint_offsets(ir, root)
-        )
-    locality === :bounded_relationship &&
-        return CorePotts.IncidentRelationshipFootprint(
-            _relationship_footprint_degree(ir, root)
-        )
-    throw(ArgumentError("unsupported descriptor locality `$locality`"))
+    return Tuple(sort!(unique!(collect(values))))
+end
+
+_materialize_footprint(fact::EmptyAnalyzedFootprint) = fact
+_materialize_footprint(fact::SpatialFootprintFact) = fact
+_materialize_footprint(fact::OwnerFootprintFact) = fact
+_materialize_footprint(fact::ContactFootprintFact) = fact
+_materialize_footprint(fact::IncidentRelationshipFootprintFact) = fact
+
+function _materialize_footprint(fact::FootprintMinkowskiFact)
+    left = _materialize_footprint(fact.left)
+    right = fact.right
+    left isa SpatialFootprintFact || throw(ArgumentError(
+        "a spatial Minkowski footprint requires a spatial anchor"
+    ))
+    right isa SpatialRelationFootprintFact || throw(ArgumentError(
+        "a spatial Minkowski footprint requires a finite relation"
+    ))
+    return SpatialFootprintFact(
+        left.anchor,
+        _minkowski_offsets(left.offsets, right.offsets),
+    )
+end
+
+function _materialize_footprint(fact::FootprintUnionFact)
+    return _footprint_union(Tuple(
+        _materialize_footprint(member) for member in fact.footprints
+    ))
+end
+
+_core_footprint_anchor(::ProposalSourceAnchor) =
+    CorePotts.ProposalSourceFootprintAnchor()
+_core_footprint_anchor(::ProposalTargetAnchor) =
+    CorePotts.ProposalTargetFootprintAnchor()
+_core_footprint_anchor(::IterationSiteAnchor) =
+    CorePotts.IterationSiteFootprintAnchor()
+_core_footprint_anchor(::BoundSiteAnchor, bound_slot::Integer) =
+    CorePotts.BoundSiteFootprintAnchor(bound_slot)
+_core_footprint_anchor(anchor, bound_slot::Integer) =
+    _core_footprint_anchor(anchor)
+
+_lower_footprint_fact(::EmptyAnalyzedFootprint, bound_slot = 0) =
+    CorePotts.EmptyFootprint()
+_lower_footprint_fact(::OwnerFootprintFact, bound_slot = 0) =
+    CorePotts.OwnerFootprint()
+_lower_footprint_fact(::ContactFootprintFact, bound_slot = 0) =
+    CorePotts.ContactFootprint()
+_lower_footprint_fact(fact::SpatialFootprintFact, bound_slot = 0) =
+    CorePotts.FiniteSpatialFootprint(
+        _core_footprint_anchor(fact.anchor, bound_slot), fact.offsets
+    )
+_lower_footprint_fact(fact::IncidentRelationshipFootprintFact, bound_slot = 0) =
+    CorePotts.IncidentRelationshipFootprint(fact.maximum_degree)
+_lower_footprint_fact(fact::FootprintUnionFact, bound_slot = 0) =
+    CorePotts.FootprintUnion(
+    Tuple(
+        _lower_footprint_fact(member, bound_slot)
+        for member in fact.footprints
+    )
+)
+
+function _descriptor_footprint(ir::AnalyzedTermIR, root::Int32)
+    fact = ir.facts.footprint[Int(root)]
+    _footprint_has_unresolved_reference(fact) && throw(ArgumentError(
+        "descriptor footprint retains an unresolved compiler reference"
+    ))
+    bound_slot = ir.graph.nodes[Int(root)].record
+    return _lower_footprint_fact(_materialize_footprint(fact), bound_slot)
+end
+
+function _record_read_footprint(ir::AnalyzedTermIR, record_index::Integer)
+    roots = Int32[
+        root.node for root in ir.graph.roots if root.record == record_index
+    ]
+    isempty(roots) && return CorePotts.EmptyFootprint()
+    fact = _footprint_union(Tuple(
+        ir.facts.footprint[Int(root)] for root in roots
+    ))
+    _footprint_has_unresolved_reference(fact) && throw(ArgumentError(
+        "record footprint retains an unresolved compiler reference"
+    ))
+    return _lower_footprint_fact(
+        _materialize_footprint(fact), Int32(record_index)
+    )
+end
+
+function _site_write_footprint(ir::AnalyzedTermIR, stage)
+    anchor = stage isa CorePotts.AcceptedCopyStage ?
+             CorePotts.ProposalTargetFootprintAnchor() :
+             CorePotts.IterationSiteFootprintAnchor()
+    dimensions = length(_lattice_shape(ir))
+    return CorePotts.FiniteSpatialFootprint(
+        anchor, (ntuple(_ -> 0, dimensions),)
+    )
 end
 
 function _descriptor_support(

@@ -286,8 +286,10 @@ function _proposal_descriptor(
     )
     access = CorePotts.ResourceAccess(
         resolved_states,
-        isempty(record.writes) ? () : resolved_states,
-        _descriptor_footprint(ir, root, ir.facts.locality[root]),
+        (),
+        _descriptor_footprint(ir, root),
+        CorePotts.EmptyFootprint(),
+        CorePotts.NoWriteAccess(),
     )
     context = DescriptorConstructionContext(
         access,
@@ -322,7 +324,7 @@ function _descriptor_group_key(descriptor::CorePotts.ProposalDescriptor)
     return (
         descriptor_type = typeof(descriptor),
         evaluator_type = typeof(descriptor.evaluator.expression),
-        footprint_type = typeof(descriptor.access.footprint),
+        access_type = typeof(descriptor.access),
         role_type = typeof(descriptor.role),
         stage = :proposal,
     )
@@ -372,7 +374,7 @@ function _descriptor_groups(descriptors)
         strategy = CorePotts.DescriptorKernelStrategy{
             descriptor_type,
             key.evaluator_type,
-            key.footprint_type,
+            key.access_type,
             key.role_type,
             Val{:proposal},
         }()
@@ -385,7 +387,13 @@ function _descriptor_groups(descriptors)
         split = (
             descriptor = nameof(descriptor_type),
             evaluator = nameof(key.evaluator_type),
-            footprint = nameof(key.footprint_type),
+            footprint = nameof(typeof(first(instances).access.footprint)),
+            write_footprint = nameof(
+                typeof(first(instances).access.write_footprint)
+            ),
+            write_policy = nameof(
+                typeof(first(instances).access.write_policy)
+            ),
             role = nameof(key.role_type),
             stage = key.stage,
         )

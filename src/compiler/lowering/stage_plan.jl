@@ -124,7 +124,14 @@ function _lower_stage_plan(
                 CorePotts.ResourceAccess(
                     (target, source),
                     (target,),
-                    CorePotts.FiniteSpatialFootprint(()),
+                    CorePotts.FiniteSpatialFootprint(
+                        CorePotts.IterationSiteFootprintAnchor(),
+                        (ntuple(_ -> 0, length(_lattice_shape(ir))),),
+                    ),
+                    _site_write_footprint(
+                        ir, CorePotts.AfterMCSStage()
+                    ),
+                    CorePotts.ExclusiveWriteAccess(),
                 ),
                 _stage_support(ir, record_index),
                 record_index,

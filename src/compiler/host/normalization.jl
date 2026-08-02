@@ -98,6 +98,11 @@ function _push_term_node!(
         operand_keys,
         payload_kind,
         payload_kind === :literal ? repr(payload) : _try_symbolic_name(payload),
+        transfer === nothing ? nothing : (
+            transfer.serialization_identity,
+            transfer.footprint_rule,
+            transfer.tracker_requirements,
+        ),
     )
     intern_key = _sha256_hex("potts-term-intern-v1", record, key)
     intern && haskey(builder.interned, intern_key) &&
@@ -268,16 +273,6 @@ const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
 const _TOTALITY_TRANSFER_RULES = Set((
     :total, :domain_checked, :requires_prelaunch_validation
 ))
-const _LOCALITY_TRANSFER_RULES = Set((
-    :scalar,
-    :proposal_context,
-    :site_local,
-    :contact_local,
-    :owner_local,
-    :finite_spatial,
-    :bounded_relationship,
-))
-
 function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
     isempty(String(transfer.identity)) &&
         return "operation identity must be nonempty"
@@ -295,8 +290,8 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         return "unknown purity transfer rule $(transfer.purity)"
     transfer.totality in _TOTALITY_TRANSFER_RULES ||
         return "unknown totality transfer rule $(transfer.totality)"
-    transfer.locality in _LOCALITY_TRANSFER_RULES ||
-        return "unknown locality transfer rule $(transfer.locality)"
+    transfer.footprint_rule isa AbstractFootprintTransferRule ||
+        return "operation footprint transfer must use the closed rule algebra"
     all(requirement -> !isempty(String(requirement)),
         transfer.tracker_requirements) ||
         return "tracker requirement identities must be nonempty"

@@ -51,6 +51,19 @@ function _field_stage_descriptor(
         candidate -> candidate.identity == relation.identity,
         ir.source.records,
     ))
+    neighborhood = get(_record_options(relation), :neighborhood, nothing)
+    neighborhood isa Union{VonNeumann, Moore} || throw(ArgumentError(
+        "field stencil must use a closed finite neighborhood"
+    ))
+    dimensions = length(_lattice_shape(ir))
+    relation_offsets = _neighborhood_offsets(neighborhood, dimensions)
+    read_offsets = Tuple(sort!(unique!([
+        ntuple(_ -> 0, dimensions),
+        (
+            Tuple(Int.(relation_offsets[:, column]))
+            for column in axes(relation_offsets, 2)
+        )...,
+    ])))
     source_kind_value = get(options, :source_kind, nothing)
     source_kind = if source_kind_value === nothing
         Int16(0)
@@ -99,7 +112,11 @@ function _field_stage_descriptor(
         CorePotts.ResourceAccess(
             (target,),
             (target,),
-            CorePotts.FiniteSpatialFootprint((Int32(relation_handle),)),
+            CorePotts.FiniteSpatialFootprint(
+                CorePotts.IterationSiteFootprintAnchor(), read_offsets
+            ),
+            _site_write_footprint(ir, CorePotts.AfterMCSStage()),
+            CorePotts.ExclusiveWriteAccess(),
         ),
         _stage_support(ir, process_index),
         process_index,
