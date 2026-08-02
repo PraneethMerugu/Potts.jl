@@ -6,6 +6,7 @@ AMDGPU.allowscalar(false)
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")
 include("../../../test/backend_conformance/g5_relationship_execution.jl")
+include("../../../test/backend_conformance/g5_surface_execution.jl")
 
 report = run_g2_descriptor_boundary(
     AMDGPU.ROCArray,
@@ -34,3 +35,10 @@ relationship_report = run_g5_relationship_execution(
     kernel_convert = AMDGPU.rocconvert,
 )
 println(relationship_report)
+
+surface_report = run_g5_surface_execution(
+    AMDGPU.ROCArray;
+    backend_name = :amdgpu,
+    kernel_convert = AMDGPU.rocconvert,
+)
+println(surface_report)

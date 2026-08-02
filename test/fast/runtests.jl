@@ -2,6 +2,7 @@ include("../setup.jl")
 include("../backend_conformance/g2_descriptor_boundary.jl")
 include("../backend_conformance/g4_checkerboard_execution.jl")
 include("../backend_conformance/g5_relationship_execution.jl")
+include("../backend_conformance/g5_surface_execution.jl")
 
 @testset "Symbolic Potts V1 fast compiler/runtime boundary" begin
     @testset "registered external descriptor boundary" begin
@@ -33,6 +34,16 @@ include("../backend_conformance/g5_relationship_execution.jl")
     end
     @testset "relationship CPU boundary conformance" begin
         report = run_g5_relationship_execution(
+            Array;
+            backend_name = :cpu,
+            kernel_convert = identity,
+            to_host = identity,
+            require_device_isbits = false,
+        )
+        @test report.backend === :cpu
+    end
+    @testset "surface CPU boundary conformance" begin
+        report = run_g5_surface_execution(
             Array;
             backend_name = :cpu,
             kernel_convert = identity,

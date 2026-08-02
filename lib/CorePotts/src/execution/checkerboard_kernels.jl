@@ -282,14 +282,16 @@ end
         )]
         old_owner = @inbounds old_owners[index]
         new_owner = @inbounds new_owners[index]
-        @inbounds state.ownership[target] = new_owner
+        source = tracker_source_view(state.program, state.ownership)
         commit_tracker_updates!(
             state.trackers,
             state.program.tracker_plan,
+            source,
             target,
             old_owner,
             new_owner,
         )
+        @inbounds state.ownership[target] = new_owner
     end
 end
 

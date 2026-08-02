@@ -203,12 +203,14 @@ function restore_program_checkpoint(
         checkpoint.snapshot.trackers,
         checkpoint.snapshot.ownership,
         checkpoint.snapshot.cell_kinds,
+        program,
     )
     validate_tracker_state!(
         program.tracker_plan,
         reconstructed_trackers,
         checkpoint.snapshot.ownership,
         checkpoint.snapshot.cell_kinds,
+        program,
     )
     runtime.trackers = reconstructed_trackers
     runtime.relationships = copy(checkpoint.snapshot.relationships)
@@ -311,7 +313,7 @@ function initialize_program(
     runtime_cell_kinds = copy(initial.cell_kinds)
     runtime_cell_generations = copy(initial.cell_generations)
     trackers = initialize_tracker_state(
-        program.tracker_plan, runtime_ownership, runtime_cell_kinds
+        program.tracker_plan, runtime_ownership, runtime_cell_kinds, program
     )
     volumes = tracker_values(
         program.tracker_plan, trackers, Val(:cell_volume)
@@ -420,6 +422,7 @@ function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
         runtime.trackers,
         runtime.ownership,
         runtime.cell_kinds,
+        runtime.program,
     )
     relationships = copy(runtime.relationships)
     descriptor_state = copy_auxiliary_state(

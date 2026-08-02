@@ -12,13 +12,52 @@ function _normalized_graph_tracker_requirements(ir::AnalyzedTermIR)
 end
 
 function _builtin_tracker_requirement(
-        ::Val{:cell_moments}, shape, ::Type{T}
+        ::Val{:cell_moments}, ir, shape, ::Type{T}
     ) where {T <: AbstractFloat}
     return CorePotts.CellMomentsTracker{length(shape), T}()
 end
 
 function _builtin_tracker_requirement(
-        ::Val{Identity}, shape, ::Type{T}
+        ::Val{:cell_surface}, ir, shape, ::Type{T}
+    ) where {T <: AbstractFloat}
+    relations = QualifiedStatement[]
+    for node in ir.graph.nodes
+        node.operation === :cell_surface || continue
+        owner = ir.source.records[Int(node.record)]
+        relation = _resource_record(
+            ir.source, owner, :SpatialRelation, :surface
+        )
+        relation === nothing && error(
+            "analyzed cell_surface operation lost its required relation"
+        )
+        any(existing -> existing.identity == relation.identity, relations) ||
+            push!(relations, relation)
+    end
+    length(relations) == 1 || throw(ArgumentError(
+        "V1 cell_surface operations must resolve to one qualified surface relation"
+    ))
+    relation = only(relations)
+    handle = findfirst(
+        candidate -> candidate.identity == relation.identity,
+        ir.source.records,
+    )
+    handle === nothing && error("resolved surface relation has no source handle")
+    neighborhood = get(_record_options(relation), :neighborhood, nothing)
+    offsets = neighborhood isa VonNeumann ?
+              _host_neighborhood_offsets(neighborhood, length(shape)) :
+              neighborhood isa Moore ?
+              _host_neighborhood_offsets(neighborhood, length(shape)) :
+              throw(ArgumentError(
+                  "surface tracker requires a finite V1 neighborhood"
+              ))
+    0 < length(offsets) <= typemax(Int16) || throw(ArgumentError(
+        "surface relation degree exceeds the V1 tracker bound"
+    ))
+    return CorePotts.CellSurfaceTracker(Int32(handle), Int16(length(offsets)))
+end
+
+function _builtin_tracker_requirement(
+        ::Val{Identity}, ir, shape, ::Type{T}
     ) where {Identity, T <: AbstractFloat}
     throw(ArgumentError(
         "no V1 tracker descriptor exists for operation requirement `$Identity`"
@@ -87,7 +126,7 @@ function _lower_tracker_plan(
     for requirement in _normalized_graph_tracker_requirements(ir)
         _append_tracker_requirement!(
             descriptors,
-            _builtin_tracker_requirement(Val(requirement), shape, T),
+            _builtin_tracker_requirement(Val(requirement), ir, shape, T),
         )
     end
 

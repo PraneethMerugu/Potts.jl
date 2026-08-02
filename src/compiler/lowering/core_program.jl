@@ -302,6 +302,36 @@ function _checkerboard_conflict_displacements(
             ))
         end
     end
+    return _conflict_displacement_matrix(displacements, Val(N))
+end
+
+function _append_relation_tracker_conflicts!(
+        displacements::Vector{NTuple{N, Int}},
+        tracker_plan,
+        resources::CorePotts.HamiltonianDomainResources,
+        ::Val{N},
+    ) where {N}
+    for descriptor in tracker_plan.descriptors
+        source = CorePotts.tracker_contract(descriptor).source
+        source isa CorePotts.OwnershipRelationTrackerSource || continue
+        offsets = CorePotts.relation_offsets(
+            resources, source.relation_handle
+        )
+        for column in axes(offsets, 2)
+            offset = ntuple(
+                dimension -> Int(offsets[dimension, column]),
+                N,
+            )
+            push!(displacements, offset)
+            push!(displacements, map(-, offset))
+        end
+    end
+    return displacements
+end
+
+function _conflict_displacement_matrix(
+        displacements::Vector{NTuple{N, Int}}, ::Val{N}
+    ) where {N}
     filter!(offset -> !all(iszero, offset), displacements)
     sort!(unique!(displacements))
     matrix = Matrix{Int16}(undef, N, length(displacements))
@@ -317,6 +347,7 @@ end
 function _checkerboard_conflict_displacements(
         descriptor_plan::CorePotts.DescriptorExecutionPlan,
         stage_plan::CorePotts.StageExecutionPlan,
+        tracker_plan,
         proposal_offsets,
         ::Val{N},
     ) where {N}
@@ -337,9 +368,20 @@ function _checkerboard_conflict_displacements(
             )
         end
     end
-    return _checkerboard_conflict_displacements(
+    base = _checkerboard_conflict_displacements(
         accesses, proposal_offsets, Val(N)
     )
+    displacements = NTuple{N, Int}[
+        ntuple(dimension -> Int(base[dimension, column]), N)
+        for column in axes(base, 2)
+    ]
+    _append_relation_tracker_conflicts!(
+        displacements,
+        tracker_plan,
+        descriptor_plan.domain_resources,
+        Val(N),
+    )
+    return _conflict_displacement_matrix(displacements, Val(N))
 end
 
 function _lower_core_program(
@@ -414,6 +456,7 @@ function _lower_core_program(
         conflicts = _checkerboard_conflict_displacements(
             descriptor_plan,
             stage_plan,
+            tracker_plan,
             proposal_offsets,
             Val(dimensions),
         )

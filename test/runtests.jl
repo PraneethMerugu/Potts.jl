@@ -13,6 +13,7 @@ using ExplicitImports
     include("test_architecture_freeze.jl")
     include("test_g3_sequential_reference.jl")
     include("test_g5_relationship_runtime.jl")
+    include("test_g5_surface_tracker.jl")
     include("test_units_and_parameters.jl")
     include("test_compilation_and_inspection.jl")
     include("test_initial_problem_remake.jl")

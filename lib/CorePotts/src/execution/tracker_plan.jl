@@ -16,6 +16,9 @@ struct ReconstructTrackerCheckpoint <: AbstractTrackerCheckpointPolicy end
 struct ClaimedOwnerExclusiveTrackerConcurrency <:
        AbstractTrackerConcurrency end
 struct OwnershipTrackerSource <: AbstractTrackerSource end
+struct OwnershipRelationTrackerSource <: AbstractTrackerSource
+    relation_handle::Int32
+end
 struct DenseOwnerScalarStorage{T} <: AbstractTrackerStorage end
 struct DenseOwnerMomentsStorage{N, T <: AbstractFloat} <:
        AbstractTrackerStorage end
@@ -23,6 +26,9 @@ struct AcceptedCommitTrackerVisibility <: AbstractTrackerVisibility end
 struct SourceTargetOwnerUpdateBound <: AbstractTrackerUpdateBound end
 struct ConstantTrackerCost <: AbstractTrackerCost end
 struct DimensionSquaredTrackerCost <: AbstractTrackerCost end
+struct BoundedNeighborhoodTrackerCost <: AbstractTrackerCost
+    maximum_neighbors::Int16
+end
 struct LatticeLinearTrackerCost <: AbstractTrackerCost end
 
 struct TrackerSupport
@@ -70,6 +76,12 @@ struct OwnerScalarDelta{T} <: AbstractTrackerDelta
     amount::T
 end
 
+"""Independent signed changes for the proposal's old and new finite owners."""
+struct SourceTargetScalarDelta{T} <: AbstractTrackerDelta
+    old_amount::T
+    new_amount::T
+end
+
 struct OwnerMomentsDelta{F <: Tuple, S <: Tuple} <: AbstractTrackerDelta
     first::F
     second::S
@@ -77,6 +89,12 @@ end
 
 """Exact finite-cell occupancy derived from authoritative lattice ownership."""
 struct OwnershipCountTracker <: AbstractTrackerDescriptor end
+
+"""Per-owner boundary-bond count over one compiler-bound spatial relation."""
+struct CellSurfaceTracker <: AbstractTrackerDescriptor
+    relation_handle::Int32
+    maximum_neighbors::Int16
+end
 
 """Coordinate first and second moments derived from lattice ownership."""
 struct CellMomentsTracker{N, T <: AbstractFloat} <:
@@ -97,6 +115,21 @@ function tracker_recompute end
 function tracker_proposal_delta end
 function tracker_adapt end
 
+"""Read-only tracker source shared by rebuild, proposal, and oracle paths."""
+struct TrackerSourceView{O, S, P, R}
+    ownership::O
+    shape::S
+    periodic::P
+    domain_resources::R
+end
+
+tracker_source_view(program, ownership) = TrackerSourceView(
+    ownership,
+    program.shape,
+    program.periodic,
+    program.descriptor_plan.domain_resources,
+)
+
 tracker_quantity(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).quantity
 tracker_checkpoint_policy(descriptor::AbstractTrackerDescriptor) =
@@ -116,9 +149,17 @@ function _validate_tracker_descriptor(descriptor::AbstractTrackerDescriptor)
     contract isa TrackerContract || throw(ArgumentError(
         "tracker_contract must return a closed TrackerContract"
     ))
-    contract.source isa OwnershipTrackerSource || throw(ArgumentError(
+    contract.source isa Union{
+        OwnershipTrackerSource,
+        OwnershipRelationTrackerSource,
+    } || throw(ArgumentError(
         "V1 trackers must derive from authoritative ownership"
     ))
+    if contract.source isa OwnershipRelationTrackerSource
+        contract.source.relation_handle > 0 || throw(ArgumentError(
+            "relation-aware trackers require a positive relation handle"
+        ))
+    end
     contract.storage isa Union{
         DenseOwnerScalarStorage,
         DenseOwnerMomentsStorage,
@@ -132,7 +173,13 @@ function _validate_tracker_descriptor(descriptor::AbstractTrackerDescriptor)
     contract.proposal_cost isa Union{
         ConstantTrackerCost,
         DimensionSquaredTrackerCost,
+        BoundedNeighborhoodTrackerCost,
     } || throw(ArgumentError("tracker proposal cost is not admitted in V1"))
+    if contract.proposal_cost isa BoundedNeighborhoodTrackerCost
+        contract.proposal_cost.maximum_neighbors > 0 || throw(ArgumentError(
+            "bounded-neighborhood tracker cost must be positive"
+        ))
+    end
     contract.rebuild_cost isa LatticeLinearTrackerCost || throw(
         ArgumentError("V1 tracker rebuilds must be lattice-linear")
     )
@@ -228,6 +275,19 @@ tracker_contract(::OwnershipCountTracker) = TrackerContract(
     LatticeLinearTrackerCost(),
 )
 
+tracker_contract(descriptor::CellSurfaceTracker) = TrackerContract(
+    Val(:cell_surface),
+    OwnershipRelationTrackerSource(descriptor.relation_handle),
+    DenseOwnerScalarStorage{Int32}(),
+    AcceptedCommitTrackerVisibility(),
+    ClaimedOwnerExclusiveTrackerConcurrency(),
+    SourceTargetOwnerUpdateBound(),
+    ReconstructTrackerCheckpoint(),
+    TrackerSupport(true, true, true, true),
+    BoundedNeighborhoodTrackerCost(descriptor.maximum_neighbors),
+    LatticeLinearTrackerCost(),
+)
+
 tracker_contract(::CellMomentsTracker{N, T}) where {N, T} = TrackerContract(
     Val(:cell_moments),
     OwnershipTrackerSource(),
@@ -243,6 +303,10 @@ tracker_contract(::CellMomentsTracker{N, T}) where {N, T} = TrackerContract(
 
 _tracker_quantity_symbol(::Val{Q}) where {Q} = Q
 _tracker_source_symbol(::OwnershipTrackerSource) = :ownership
+_tracker_source_symbol(source::OwnershipRelationTrackerSource) = (
+    state = :ownership,
+    relation_handle = source.relation_handle,
+)
 _tracker_visibility_symbol(::AcceptedCommitTrackerVisibility) =
     :accepted_commit
 _tracker_concurrency_symbol(::ClaimedOwnerExclusiveTrackerConcurrency) =
@@ -251,6 +315,10 @@ _tracker_checkpoint_symbol(::PersistTrackerCheckpoint) = :persist
 _tracker_checkpoint_symbol(::ReconstructTrackerCheckpoint) = :reconstruct
 _tracker_cost_symbol(::ConstantTrackerCost) = :constant
 _tracker_cost_symbol(::DimensionSquaredTrackerCost) = :dimension_squared
+_tracker_cost_symbol(cost::BoundedNeighborhoodTrackerCost) = (
+    class = :bounded_neighborhood,
+    maximum_neighbors = cost.maximum_neighbors,
+)
 _tracker_cost_symbol(::LatticeLinearTrackerCost) = :lattice_linear
 _tracker_storage_inspection(::DenseOwnerScalarStorage{T}) where {T} = (
     storage = Symbol(:dense_, lowercase(string(nameof(T)))),
@@ -279,21 +347,81 @@ end
 
 function tracker_rebuild(
         ::OwnershipCountTracker,
-        ownership,
+        source::TrackerSourceView,
         cell_kinds,
     )
     values = zeros(Int32, length(cell_kinds))
-    for owner in ownership
+    for owner in source.ownership
         owner > 0 && (values[Int(owner)] += Int32(1))
+    end
+    return values
+end
+
+
+@inline function _surface_neighbor(
+        descriptor::CellSurfaceTracker,
+        source::TrackerSourceView,
+        site,
+        direction::Int,
+    )
+    start, count = _contact_domain_columns(
+        source.domain_resources, descriptor.relation_handle
+    )
+    1 <= direction <= count || throw(BoundsError(1:count, direction))
+    return relation_neighbor_index(
+        source.shape,
+        source.periodic,
+        site,
+        source.domain_resources.contact_offsets,
+        start + direction - 1,
+    )
+end
+
+@inline function _surface_neighbor_is_duplicate(
+        descriptor::CellSurfaceTracker,
+        source::TrackerSourceView,
+        site,
+        neighbor,
+        direction::Int,
+    )
+    for prior in 1:(direction - 1)
+        _surface_neighbor(descriptor, source, site, prior) == neighbor &&
+            return true
+    end
+    return false
+end
+
+function tracker_rebuild(
+        descriptor::CellSurfaceTracker,
+        source::TrackerSourceView,
+        cell_kinds,
+    )
+    values = zeros(Int32, length(cell_kinds))
+    indices = CartesianIndices(source.ownership)
+    for linear_index in eachindex(source.ownership)
+        owner = @inbounds source.ownership[linear_index]
+        owner > 0 || continue
+        site = indices[linear_index]
+        for direction in 1:Int(descriptor.maximum_neighbors)
+            neighbor = _surface_neighbor(descriptor, source, site, direction)
+            neighbor === nothing && continue
+            neighbor == site && continue
+            _surface_neighbor_is_duplicate(
+                descriptor, source, site, neighbor, direction
+            ) && continue
+            @inbounds(source.ownership[neighbor]) == owner && continue
+            @inbounds values[Int(owner)] += Int32(1)
+        end
     end
     return values
 end
 
 function tracker_rebuild(
         ::CellMomentsTracker{N, T},
-        ownership,
+        source::TrackerSourceView,
         cell_kinds,
     ) where {N, T}
+    ownership = source.ownership
     ndims(ownership) == N || throw(ArgumentError(
         "cell-moment tracker dimensionality does not match ownership"
     ))
@@ -319,9 +447,10 @@ end
 
 function tracker_recompute(
         ::OwnershipCountTracker,
-        ownership,
+        source::TrackerSourceView,
         cell_kinds,
     )
+    ownership = source.ownership
     expected = fill(Int32(0), length(cell_kinds))
     for linear_index in eachindex(ownership)
         owner = @inbounds ownership[linear_index]
@@ -331,11 +460,37 @@ function tracker_recompute(
     return expected
 end
 
+
+function tracker_recompute(
+        descriptor::CellSurfaceTracker,
+        source::TrackerSourceView,
+        cell_kinds,
+    )
+    expected = fill(Int32(0), length(cell_kinds))
+    for site in CartesianIndices(source.ownership)
+        owner = @inbounds source.ownership[site]
+        owner > 0 || continue
+        boundary = Int32(0)
+        for direction in 1:Int(descriptor.maximum_neighbors)
+            neighbor = _surface_neighbor(descriptor, source, site, direction)
+            neighbor === nothing && continue
+            neighbor == site && continue
+            _surface_neighbor_is_duplicate(
+                descriptor, source, site, neighbor, direction
+            ) && continue
+            boundary += Int32(@inbounds(source.ownership[neighbor]) != owner)
+        end
+        @inbounds expected[Int(owner)] += boundary
+    end
+    return expected
+end
+
 function tracker_recompute(
         ::CellMomentsTracker{N, T},
-        ownership,
+        source::TrackerSourceView,
         cell_kinds,
     ) where {N, T}
+    ownership = source.ownership
     ndims(ownership) == N || throw(ArgumentError(
         "cell-moment oracle dimensionality does not match ownership"
     ))
@@ -361,6 +516,7 @@ end
 
 @inline tracker_proposal_delta(
     ::OwnershipCountTracker,
+    source::TrackerSourceView,
     target,
     old_owner::Int32,
     new_owner::Int32,
@@ -368,6 +524,7 @@ end
 
 @inline function tracker_proposal_delta(
         ::CellMomentsTracker{N, T},
+        source::TrackerSourceView,
         target::CartesianIndex{N},
         old_owner::Int32,
         new_owner::Int32,
@@ -381,6 +538,33 @@ end
         coordinates[row] * coordinates[column]
     end
     return OwnerMomentsDelta(coordinates, second)
+end
+
+
+@inline function tracker_proposal_delta(
+        descriptor::CellSurfaceTracker,
+        source::TrackerSourceView,
+        target,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    old_owner == new_owner && return SourceTargetScalarDelta(Int32(0), Int32(0))
+    old_amount = Int32(0)
+    new_amount = Int32(0)
+    for direction in 1:Int(descriptor.maximum_neighbors)
+        neighbor = _surface_neighbor(descriptor, source, target, direction)
+        neighbor === nothing && continue
+        neighbor == target && continue
+        _surface_neighbor_is_duplicate(
+            descriptor, source, target, neighbor, direction
+        ) && continue
+        neighbor_owner = @inbounds source.ownership[neighbor]
+        old_owner > 0 && (old_amount += neighbor_owner == old_owner ?
+            Int32(1) : Int32(-1))
+        new_owner > 0 && (new_amount += neighbor_owner == new_owner ?
+            Int32(-1) : Int32(1))
+    end
+    return SourceTargetScalarDelta(old_amount, new_amount)
 end
 
 function _validate_tracker_state(
@@ -415,6 +599,19 @@ end
     return nothing
 end
 
+
+@inline function _apply_tracker_delta!(
+        values::AbstractVector{T},
+        ::DenseOwnerScalarStorage{T},
+        delta::SourceTargetScalarDelta{T},
+        old_owner::Int32,
+        new_owner::Int32,
+    ) where {T}
+    old_owner > 0 && (@inbounds values[Int(old_owner)] += delta.old_amount)
+    new_owner > 0 && (@inbounds values[Int(new_owner)] += delta.new_amount)
+    return nothing
+end
+
 @inline function _apply_tracker_delta!(
         state::CellMomentsState{T},
         ::DenseOwnerMomentsStorage{N, T},
@@ -441,10 +638,13 @@ end
     return nothing
 end
 
-function initialize_tracker_state(plan::AbstractTrackerPlan, ownership, cell_kinds)
+function initialize_tracker_state(
+        plan::AbstractTrackerPlan, ownership, cell_kinds, program
+    )
+    source = tracker_source_view(program, ownership)
     return TrackerState(map(
         descriptor -> begin
-            value = tracker_rebuild(descriptor, ownership, cell_kinds)
+            value = tracker_rebuild(descriptor, source, cell_kinds)
             _validate_tracker_state(
                 tracker_contract(descriptor).storage,
                 value,
@@ -497,6 +697,7 @@ function _reconstruct_tracker_checkpoint(
         value,
         ownership,
         cell_kinds,
+        source,
     )
     value === nothing && throw(ArgumentError(
         "persisted tracker checkpoint state is missing"
@@ -510,11 +711,12 @@ function _reconstruct_tracker_checkpoint(
         value,
         ownership,
         cell_kinds,
+        source,
     )
     value === nothing || throw(ArgumentError(
         "reconstructed tracker checkpoint unexpectedly stored logical state"
     ))
-    rebuilt = tracker_rebuild(descriptor, ownership, cell_kinds)
+    rebuilt = tracker_rebuild(descriptor, source, cell_kinds)
     return _validate_tracker_state(
         tracker_contract(descriptor).storage,
         rebuilt,
@@ -527,10 +729,12 @@ function reconstruct_tracker_checkpoint(
         checkpoint::TrackerCheckpointState,
         ownership,
         cell_kinds,
+        program,
     )
     length(plan.descriptors) == length(checkpoint.values) || throw(
         ArgumentError("tracker checkpoint and plan are misaligned")
     )
+    source = tracker_source_view(program, ownership)
     return TrackerState(map(
         (descriptor, value) -> _reconstruct_tracker_checkpoint(
             descriptor,
@@ -538,6 +742,7 @@ function reconstruct_tracker_checkpoint(
             value,
             ownership,
             cell_kinds,
+            source,
         ),
         plan.descriptors,
         checkpoint.values,
@@ -554,12 +759,13 @@ function copyto_tracker_state!(
 end
 
 @inline _commit_tracker_updates!(
-    ::Tuple{}, ::Tuple{}, target, old_owner, new_owner
+    ::Tuple{}, ::Tuple{}, source, target, old_owner, new_owner
 ) = nothing
 
 @inline function _commit_tracker_updates!(
         descriptors::Tuple,
         values::Tuple,
+        source,
         target,
         old_owner,
         new_owner,
@@ -570,7 +776,7 @@ end
         ArgumentError("unsupported tracker update bound")
     )
     delta = tracker_proposal_delta(
-        descriptor, target, old_owner, new_owner
+        descriptor, source, target, old_owner, new_owner
     )
     delta isa AbstractTrackerDelta || throw(ArgumentError(
         "tracker proposal delta must satisfy the closed delta protocol"
@@ -581,6 +787,7 @@ end
     return _commit_tracker_updates!(
         Base.tail(descriptors),
         Base.tail(values),
+        source,
         target,
         old_owner,
         new_owner,
@@ -590,15 +797,101 @@ end
 @inline function commit_tracker_updates!(
         state::TrackerState,
         plan::AbstractTrackerPlan,
+        source::TrackerSourceView,
         target,
         old_owner::Int32,
         new_owner::Int32,
     )
     _commit_tracker_updates!(
-        plan.descriptors, state.values, target, old_owner, new_owner
+        plan.descriptors, state.values, source, target, old_owner, new_owner
     )
     return nothing
 end
+
+
+@inline function _scalar_value_after(
+        value,
+        delta::OwnerScalarDelta,
+        owner::Int32,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    owner == old_owner && (value -= delta.amount)
+    owner == new_owner && (value += delta.amount)
+    return value
+end
+
+@inline function _scalar_value_after(
+        value,
+        delta::SourceTargetScalarDelta,
+        owner::Int32,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    owner == old_owner && (value += delta.old_amount)
+    owner == new_owner && (value += delta.new_amount)
+    return value
+end
+
+@inline function _tracker_value_after(
+        quantity::Val,
+        descriptors::Tuple,
+        values::Tuple,
+        source::TrackerSourceView,
+        owner::Int32,
+        target,
+        old_owner::Int32,
+        new_owner::Int32,
+    )
+    descriptor = first(descriptors)
+    if tracker_contract(descriptor).quantity === quantity
+        owner <= 0 && return zero(eltype(first(values)))
+        value = @inbounds first(values)[Int(owner)]
+        delta = tracker_proposal_delta(
+            descriptor, source, target, old_owner, new_owner
+        )
+        return _scalar_value_after(
+            value, delta, owner, old_owner, new_owner
+        )
+    end
+    return _tracker_value_after(
+        quantity,
+        Base.tail(descriptors),
+        Base.tail(values),
+        source,
+        owner,
+        target,
+        old_owner,
+        new_owner,
+    )
+end
+
+
+@inline function _tracker_value_after(
+        ::Val{Q}, ::Tuple{}, ::Tuple{}, source, owner, target, old_owner, new_owner
+    ) where {Q}
+    throw(ArgumentError("compiled tracker quantity `$Q` is unavailable"))
+end
+
+@inline tracker_value_after(
+    plan::AbstractTrackerPlan,
+    state::TrackerState,
+    source::TrackerSourceView,
+    quantity::Val,
+    owner::Int32,
+    target,
+    old_owner::Int32,
+    new_owner::Int32,
+) = _tracker_value_after(
+    quantity,
+    plan.descriptors,
+    state.values,
+    source,
+    owner,
+    target,
+    old_owner,
+    new_owner,
+)
 
 @inline function _tracker_values(
         quantity::Val, descriptors::Tuple, values::Tuple
@@ -641,13 +934,15 @@ function validate_tracker_state!(
         state::TrackerState,
         ownership,
         cell_kinds,
+        program,
     )
     length(plan.descriptors) == length(state.values) || throw(ArgumentError(
         "tracker plan and runtime state are misaligned"
     ))
+    source = tracker_source_view(program, ownership)
     for index in eachindex(state.values)
         descriptor = plan.descriptors[index]
-        expected = tracker_recompute(descriptor, ownership, cell_kinds)
+        expected = tracker_recompute(descriptor, source, cell_kinds)
         _validate_tracker_state(
             tracker_contract(descriptor).storage,
             expected,
@@ -678,6 +973,7 @@ tracker_plan_report(plan::TrackerExecutionPlan) = (
 )
 
 Adapt.@adapt_structure OwnershipCountTracker
+Adapt.@adapt_structure CellSurfaceTracker
 Adapt.@adapt_structure CellMomentsTracker
 Adapt.@adapt_structure CellMomentsState
 Adapt.@adapt_structure TrackerExecutionPlan

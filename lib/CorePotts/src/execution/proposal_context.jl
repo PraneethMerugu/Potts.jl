@@ -6,19 +6,9 @@
         offsets::AbstractMatrix{Int8},
         direction::Int,
     ) where {N}
-    coords = Tuple(index)
-    candidate = ntuple(N) do dimension
-        value = coords[dimension] + Int(offsets[dimension, direction])
-        if program.periodic[dimension]
-            mod1(value, program.shape[dimension])
-        elseif 1 <= value <= program.shape[dimension]
-            value
-        else
-            0
-        end
-    end
-    any(iszero, candidate) && return nothing
-    return CartesianIndex(candidate)
+    return relation_neighbor_index(
+        program.shape, program.periodic, index, offsets, direction
+    )
 end
 
 @inline _owner_kind(runtime, owner::Int32) =
@@ -193,14 +183,16 @@ function _commit_copy!(
         new_owner::Int32,
         context,
     ) where {T, N}
-    @inbounds runtime.ownership[target] = new_owner
+    source = tracker_source_view(runtime.program, runtime.ownership)
     commit_tracker_updates!(
         runtime.trackers,
         runtime.program.tracker_plan,
+        source,
         target,
         old_owner,
         new_owner,
     )
+    @inbounds runtime.ownership[target] = new_owner
     old_owner == new_owner || _clear_ownership_changed_state!(
         runtime.program.descriptor_plan.state_layout,
         runtime.descriptor_state,

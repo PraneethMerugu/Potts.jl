@@ -147,7 +147,25 @@ function _source_requirement_problem(
                 actual_radius == requirement.radius || return(
                 "operand $(requirement.operand) requires " *
                 "$(requirement.neighborhood) radius $(requirement.radius), got " *
-                "$(actual_kind) radius $(repr(actual_radius))"
+                    "$(actual_kind) radius $(repr(actual_radius))"
+            )
+        elseif requirement isa NamedSpatialRelationRequirement
+            relation = _resource_record(
+                source,
+                source.records[Int(node.record)],
+                :SpatialRelation,
+                requirement.name,
+            )
+            relation === nothing && return(
+                "requires a lexically visible SpatialRelation named " *
+                repr(requirement.name)
+            )
+            neighborhood = get(
+                _record_options(relation), :neighborhood, nothing
+            )
+            neighborhood isa Union{VonNeumann, Moore} || return(
+                "relation $(repr(requirement.name)) must use a finite V1 " *
+                "VonNeumann or Moore neighborhood"
             )
         else
             return "unknown source requirement $(nameof(typeof(requirement)))"
@@ -207,7 +225,6 @@ end
 _is_unknown_unit(unit) = unit === :unknown
 _is_polymorphic_zero_unit(unit) = unit === :polymorphic_zero
 _unit_compatible(left, right) =
-    _is_unknown_unit(left) || _is_unknown_unit(right) ||
     _is_polymorphic_zero_unit(left) || _is_polymorphic_zero_unit(right) ||
     left == right
 
@@ -253,13 +270,22 @@ function _normalized_leaf_unit(
             _canonical_dimension(DynamicQuantities.dimension(default))
         )
         default isa Number && return :dimensionless
-        return :unknown
+        # Required parameters have no default from which to infer a dimension.
+        # Runtime parameter normalization deliberately admits only ordinary
+        # numbers for those entries, so their compiler-visible unit is
+        # dimensionless as well.
+        return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
     elseif payload isa Union{StateBindingPayload, VariableBindingPayload}
         index = findfirst(
             record -> record.identity == payload.identity,
             source.records,
         )
-        return index === nothing ? :unknown :
+        # A captured binding can be referenced by a semantic statement before
+        # it is materialized as an owned state record (for example, during
+        # host-only category analysis). Preserve its qualified identity as a
+        # unit variable: equal bindings can be proven equal, while the value
+        # cannot unify with a concrete or unrelated dimension.
+        return index === nothing ? (:binding_dimension, payload.identity) :
                _declared_record_unit(source.records[index])
     elseif payload isa LiteralPayload
         return value isa Number && iszero(value) ?
@@ -318,28 +344,56 @@ function _unit_power(unit, exponent::Rational)
     return ((:power, unit, exponent), nothing)
 end
 
-function _literal_unit_exponent(node::NormalizedTermNode, graph::NormalizedTermGraph)
+function _literal_integer_exponent(
+        node::NormalizedTermNode,
+        graph::NormalizedTermGraph,
+    )
     length(node.operands) == 2 || return nothing
     payload = graph.nodes[Int(node.operands[2])].payload
     payload isa LiteralPayload || return nothing
     value = payload.value
-    value isa Integer && return value // 1
-    value isa Rational && return value
+    value isa Integer && return value
+    value isa Rational && denominator(value) == 1 && return Int(numerator(value))
     value isa AbstractFloat && isinteger(value) &&
-        abs(value) <= typemax(Int) && return Int(value) // 1
+        abs(value) <= typemax(Int) && return Int(value)
     return nothing
 end
 
 function _common_unit(units::Tuple)
+    any(_is_unknown_unit, units) && return nothing
     known = filter(
-        unit -> !_is_unknown_unit(unit) && !_is_polymorphic_zero_unit(unit),
+        unit -> !_is_polymorphic_zero_unit(unit),
         units,
     )
-    isempty(known) && return any(_is_unknown_unit, units) ?
-        :unknown : :dimensionless
+    isempty(known) && return :dimensionless
     first_unit = first(known)
     all(unit -> unit == first_unit, known) || return nothing
     return first_unit
+end
+
+
+function _lattice_volume_unit(source::FrozenSourceGraph)
+    domains = filter(
+        record -> record.kind === :LatticeDomain, source.records
+    )
+    length(domains) == 1 || return(
+        nothing, "lattice-volume units require exactly one lattice domain"
+    )
+    spacing = get(_record_options(only(domains)), :spacing, nothing)
+    spacing isa Tuple && !isempty(spacing) || return(
+        nothing, "lattice-volume units require a nonempty spacing tuple"
+    )
+    unit = :dimensionless
+    for value in spacing
+        factor = value isa DynamicQuantities.UnionAbstractQuantity ?
+                 _canonical_dimension(DynamicQuantities.dimension(value)) :
+                 value isa Number ? :dimensionless : :unknown
+        _is_unknown_unit(factor) && return(
+            nothing, "lattice spacing has an unproven unit"
+        )
+        unit = _unit_product(unit, factor)
+    end
+    return (unit, nothing)
 end
 
 function _operation_unit_result(
@@ -348,8 +402,13 @@ function _operation_unit_result(
         record::QualifiedStatement,
         node::NormalizedTermNode,
         graph::NormalizedTermGraph,
+        source::FrozenSourceGraph,
     )
     rule = transfer.unit_rule
+    any(_is_unknown_unit, operand_units) && return (
+        nothing,
+        "cannot prove units for operands $(repr(operand_units))",
+    )
     if rule === :dimensionless
         all(unit -> _unit_compatible(unit, :dimensionless), operand_units) ||
             return (
@@ -405,13 +464,13 @@ function _operation_unit_result(
             _unit_compatible(operand_units[2], :dimensionless) || return(
                 nothing, "power exponent must be dimensionless"
             )
-            operand_units[1] === :dimensionless && return(:dimensionless, nothing)
-            exponent = _literal_unit_exponent(node, graph)
+            exponent = _literal_integer_exponent(node, graph)
             exponent === nothing && return(
                 nothing,
-                "a dimensional power requires a literal integer or rational exponent",
+                "V1 power requires a literal integer exponent; use sqrt for square roots",
             )
-            return _unit_power(operand_units[1], exponent)
+            operand_units[1] === :dimensionless && return(:dimensionless, nothing)
+            return _unit_power(operand_units[1], exponent // 1)
         end
         return (:unknown, nothing)
     elseif rule === :declared
@@ -419,7 +478,14 @@ function _operation_unit_result(
     elseif rule === :distribution
         parameters = length(operand_units) >= 3 ? operand_units[2:3] : operand_units
         common = _common_unit(parameters)
-        return (common === nothing ? :unknown : common, nothing)
+        common === nothing && return(
+            nothing,
+            "distribution parameters have incompatible or unproven units " *
+            repr(parameters),
+        )
+        return (common, nothing)
+    elseif rule === :lattice_volume
+        return _lattice_volume_unit(source)
     end
     return (:unknown, "unsupported unit rule $(repr(rule))")
 end
@@ -429,11 +495,12 @@ function _validated_operation_unit(
         operand_units::Tuple,
         record::QualifiedStatement,
         graph::NormalizedTermGraph,
+        source::FrozenSourceGraph,
     )
     transfer = node.transfer
     transfer === nothing && return :unknown
     unit, problem = _operation_unit_result(
-        transfer, operand_units, record, node, graph
+        transfer, operand_units, record, node, graph, source
     )
     problem === nothing && return unit
     throw(PottsValidationError(
@@ -561,6 +628,7 @@ function _analyze_term_graph(
                 Tuple(units[item] for item in operand_indices),
                 record,
                 graph,
+                source,
             )
         parameter_role[index] = node.payload_kind === :parameter ? :runtime :
                                 node.payload_kind === :literal ? :literal : :none
@@ -664,6 +732,23 @@ function _analyze_term_graph(
     candidates = DescriptorCandidate[]
     roots_by_record = Dict{Int32, Vector{Int32}}()
     for root in graph.roots
+        if _is_unknown_unit(units[Int(root.node)])
+            node = graph.nodes[Int(root.node)]
+            record = source.records[Int(root.record)]
+            throw(PottsValidationError(
+                :analysis,
+                (PottsDiagnostic(
+                    :illegal_operation_units,
+                    record.identity,
+                    String(node.operation),
+                    record.identity.path,
+                    "a compiler-proven root expression unit",
+                    "the root expression retains an unproven unit",
+                    (),
+                    record.source,
+                ),),
+            ))
+        end
         root_footprint = footprint[Int(root.node)]
         if _footprint_has_unresolved_reference(root_footprint)
             node = graph.nodes[Int(root.node)]

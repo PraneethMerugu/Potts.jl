@@ -81,12 +81,42 @@ end
     return value
 end
 
+@inline _view_surface(view::BeforeProposalView, cell::Int32) =
+    cell <= 0 ? 0 : program_tracker_value(
+        view.runtime, Val(:cell_surface), cell
+    )
+
+@inline function _view_surface(view::AfterProposalView, cell::Int32)
+    cell <= 0 && return 0
+    runtime = view.runtime
+    source = tracker_source_view(runtime.program, runtime.ownership)
+    return tracker_value_after(
+        runtime.program.tracker_plan,
+        runtime.trackers,
+        source,
+        Val(:cell_surface),
+        cell,
+        view.target,
+        view.old_owner,
+        view.new_owner,
+    )
+end
+
 @inline function apply_resource_operation(
         ::ResourceOperation{:cell_volume},
         arguments,
         context::HamiltonianEvaluationContext,
     )
     return _view_volume(context.view, Int32(only(arguments)))
+end
+
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:cell_surface},
+        arguments,
+        context::HamiltonianEvaluationContext,
+    )
+    return _view_surface(context.view, Int32(only(arguments)))
 end
 
 @inline function apply_resource_operation(

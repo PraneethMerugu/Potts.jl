@@ -119,9 +119,10 @@ end
 
 function CorePotts.tracker_rebuild(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        ownership,
+        source::CorePotts.TrackerSourceView,
         cell_kinds,
     )
+    ownership = source.ownership
     values = zeros(Int32, length(cell_kinds))
     for owner in ownership
         owner > 0 && (values[Int(owner)] += Int32(2))
@@ -131,9 +132,10 @@ end
 
 function CorePotts.tracker_recompute(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        ownership,
+        source::CorePotts.TrackerSourceView,
         cell_kinds,
     )
+    ownership = source.ownership
     values = fill(Int32(0), length(cell_kinds))
     for index in eachindex(ownership)
         owner = ownership[index]
@@ -144,6 +146,7 @@ end
 
 @inline CorePotts.tracker_proposal_delta(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
+        source::CorePotts.TrackerSourceView,
         target,
         old_owner::Int32,
         new_owner::Int32,

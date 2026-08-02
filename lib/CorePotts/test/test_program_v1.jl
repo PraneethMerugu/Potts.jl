@@ -65,26 +65,27 @@ CorePotts.tracker_contract(::ExternalDoubleOccupancyTracker) =
     CorePotts.LatticeLinearTrackerCost(),
 )
 function CorePotts.tracker_rebuild(
-        ::ExternalDoubleOccupancyTracker, ownership, cell_kinds
+        ::ExternalDoubleOccupancyTracker, source, cell_kinds
     )
     values = zeros(Int32, length(cell_kinds))
-    for owner in ownership
+    for owner in source.ownership
         owner > 0 && (values[Int(owner)] += Int32(2))
     end
     return values
 end
 function CorePotts.tracker_recompute(
-        ::ExternalDoubleOccupancyTracker, ownership, cell_kinds
+        ::ExternalDoubleOccupancyTracker, source, cell_kinds
     )
     values = fill(Int32(0), length(cell_kinds))
-    for index in eachindex(ownership)
-        owner = ownership[index]
+    for index in eachindex(source.ownership)
+        owner = source.ownership[index]
         owner > 0 && (values[Int(owner)] += Int32(2))
     end
     return values
 end
 @inline CorePotts.tracker_proposal_delta(
         ::ExternalDoubleOccupancyTracker,
+        source,
         target,
         old_owner::Int32,
         new_owner::Int32,
@@ -214,6 +215,7 @@ end
         first.trackers,
         first.ownership,
         first.cell_kinds,
+        program,
     ) === first.trackers
 end
 
@@ -272,19 +274,22 @@ end
         restored, Val(:cell_moments)
     ) == CorePotts.program_tracker_values(runtime, Val(:cell_moments))
 
-    @inbounds runtime.ownership[target] = Int32(0)
+    source = CorePotts.tracker_source_view(program, runtime.ownership)
     CorePotts.commit_tracker_updates!(
         runtime.trackers,
         program.tracker_plan,
+        source,
         target,
         Int32(1),
         Int32(0),
     )
+    @inbounds runtime.ownership[target] = Int32(0)
     @test CorePotts.validate_tracker_state!(
         program.tracker_plan,
         runtime.trackers,
         runtime.ownership,
         runtime.cell_kinds,
+        program,
     ) === runtime.trackers
 end
 
@@ -731,16 +736,21 @@ end
           CorePotts.DenseOwnerScalarStorage{Int32}
     @test external_contract.update_bound isa
           CorePotts.SourceTargetOwnerUpdateBound
+    probe_program = test_program(CorePotts.SequentialProgramEngine())
+    probe_source = CorePotts.tracker_source_view(
+        probe_program, test_initial().ownership
+    )
     @test CorePotts.tracker_proposal_delta(
         external_descriptor,
+        probe_source,
         CartesianIndex(1, 1),
         Int32(1),
         Int32(2),
     ) === CorePotts.OwnerScalarDelta(Int32(2))
     @test CorePotts.tracker_recompute(
-        external_descriptor, test_initial().ownership, Int16[2]
+        external_descriptor, probe_source, Int16[2]
     ) == CorePotts.tracker_rebuild(
-        external_descriptor, test_initial().ownership, Int16[2]
+        external_descriptor, probe_source, Int16[2]
     )
     plan = CorePotts.TrackerExecutionPlan(
         (
@@ -784,6 +794,7 @@ end
             runtime.trackers,
             runtime.ownership,
             runtime.cell_kinds,
+            program,
         ) === runtime.trackers
         corrupted_trackers = CorePotts.copy_tracker_state(runtime.trackers)
         corrupted_trackers.values[2][1] += Int32(1)
@@ -792,6 +803,7 @@ end
             corrupted_trackers,
             runtime.ownership,
             runtime.cell_kinds,
+            program,
         )
         restored = CorePotts.restore_program_checkpoint(
             program, CorePotts.program_checkpoint(runtime)
@@ -804,6 +816,9 @@ end
             Tuple{
                 typeof(runtime.trackers),
                 typeof(program.tracker_plan),
+                typeof(CorePotts.tracker_source_view(
+                    program, runtime.ownership
+                )),
                 CartesianIndex{2},
                 Int32,
                 Int32,

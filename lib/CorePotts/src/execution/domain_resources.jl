@@ -107,6 +107,15 @@ HamiltonianDomainResources(dimensions::Integer, source_count::Integer) =
     return start, count
 end
 
+"""Return a host-owned copy of one compiled spatial relation's offsets."""
+function relation_offsets(
+        resources::HamiltonianDomainResources,
+        handle::Int32,
+    )
+    start, count = _contact_domain_columns(resources, handle)
+    return resources.contact_offsets[:, start:(start + count - 1)]
+end
+
 @inline function _relationship_domain_slot(
         resources::HamiltonianDomainResources,
         handle::Int32,
@@ -135,4 +144,27 @@ function Adapt.adapt_structure(to, resources::HamiltonianDomainResources)
         slots,
         _ValidatedDomainResourceAdaptation(),
     )
+end
+
+"""Resolve one finite relation neighbor under the compiled boundary topology."""
+@inline function relation_neighbor_index(
+        shape::NTuple{N, Int},
+        periodic::NTuple{N, Bool},
+        index::CartesianIndex{N},
+        offsets::AbstractMatrix{Int8},
+        direction::Int,
+    ) where {N}
+    coordinates = Tuple(index)
+    candidate = ntuple(N) do dimension
+        value = coordinates[dimension] + Int(offsets[dimension, direction])
+        if periodic[dimension]
+            mod1(value, shape[dimension])
+        elseif 1 <= value <= shape[dimension]
+            value
+        else
+            0
+        end
+    end
+    any(iszero, candidate) && return nothing
+    return CartesianIndex(candidate)
 end

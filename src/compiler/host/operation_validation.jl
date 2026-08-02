@@ -17,6 +17,7 @@ const _UNIT_TRANSFER_RULES = Set((
     :square_root,
     :declared,
     :distribution,
+    :lattice_volume,
 ))
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
 const _TOTALITY_TRANSFER_RULES = Set((
@@ -84,6 +85,9 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
                 return "spatial-relation requirement uses an unknown neighborhood"
             requirement.radius > 0 ||
                 return "spatial-relation requirement radius must be positive"
+        elseif requirement isa NamedSpatialRelationRequirement
+            isempty(String(requirement.name)) &&
+                return "named spatial-relation requirements must be nonempty"
         else
             return "unknown source requirement $(nameof(typeof(requirement)))"
         end

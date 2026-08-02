@@ -12,6 +12,11 @@ struct SpatialRelationRequirement <: AbstractOperationSourceRequirement
     radius::Int
 end
 
+"""Require one lexically resolved spatial relation with a fixed local name."""
+struct NamedSpatialRelationRequirement <: AbstractOperationSourceRequirement
+    name::Symbol
+end
+
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
@@ -192,9 +197,12 @@ for operation in (+, -, *, /, ^, max, min)
         :minimum
     end
     admitted_arity = operation === (^) ? (2:2) : (1:typemax(Int))
+    totality = operation === (^) ? :domain_checked : :total
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer($(QuoteNode(identity)), $admitted_arity,
-            :promote_numeric, :arithmetic; operand_rule = :numeric)
+            :promote_numeric, :arithmetic;
+            totality = $(QuoteNode(totality)),
+            operand_rule = :numeric)
 end
 
 for operation in (<, <=, >, >=, ==, !=)
@@ -308,7 +316,7 @@ operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
     )
 
 for operation in (
-        cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, endpoint_a,
+        cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b,
     )
     identity = nameof(operation)
@@ -326,6 +334,31 @@ for operation in (
             tracker_requirements = $(QuoteNode(tracker_requirements)),
         )
 end
+
+
+operation_transfer(::typeof(cell_volume), ::Int) =
+    _transfer(
+        :cell_volume,
+        1,
+        :real,
+        :lattice_volume;
+        footprint_rule = OwnerFootprintRule(),
+    )
+
+
+operation_transfer(::typeof(cell_surface), ::Int) =
+    _transfer(
+        :cell_surface,
+        1,
+        :real,
+        :dimensionless;
+        footprint_rule = OwnerFootprintRule(),
+        tracker_requirements = (:cell_surface,),
+        allowed_roles = (:hamiltonian,),
+        allowed_phases = (:Proposal,),
+        required_context = :hamiltonian,
+        source_requirements = (NamedSpatialRelationRequirement(:surface),),
+    )
 
 operation_transfer(::typeof(degree), ::Int) =
     _transfer(

@@ -259,6 +259,75 @@ using .ArchitectureFreezeFixtures
         @test invalid_error isa PottsToolkit.PottsValidationError
         @test invalid_error.stage === :analysis
         @test only(invalid_error.diagnostics).kind === :illegal_operation_units
+
+        @parameters required_scale exponent = 2.0 time_parameter = 1.0u"s"
+        required_error = try
+            analyze_unit_expression(
+                :required_parameter_unit_model,
+                required_scale + length_parameter,
+            )
+            nothing
+        catch caught
+            caught
+        end
+        @test required_error isa PottsToolkit.PottsValidationError
+        @test only(required_error.diagnostics).kind === :illegal_operation_units
+
+        parameterized_power_error = try
+            model = PottsSystem(
+                name = :parameterized_power_model,
+                statements = StatementSet((
+                    Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+                    cell,
+                    medium,
+                    ProposalDrive(:unit_drive, length_parameter^exponent),
+                    Protocol(Sweep(); name = :main),
+                )),
+                parameters = [length_parameter, exponent],
+            )
+            PottsToolkit._analyze_completed_system(
+                complete(model; reference_units)
+            )
+            nothing
+        catch caught
+            caught
+        end
+        @test parameterized_power_error isa PottsToolkit.PottsValidationError
+        @test only(parameterized_power_error.diagnostics).kind ===
+              :illegal_operation_units
+
+        incompatible_normal_error = try
+            model = PottsSystem(
+                name = :incompatible_normal_model,
+                statements = StatementSet((
+                    Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+                    cell,
+                    medium,
+                    ProposalDrive(
+                        :unit_drive,
+                        draw(
+                            Normal(length_parameter, time_parameter),
+                            DrawKey(:bad_units),
+                        ),
+                    ),
+                    Protocol(Sweep(); name = :main),
+                )),
+                parameters = [length_parameter, time_parameter],
+            )
+            PottsToolkit._analyze_completed_system(complete(
+                model;
+                reference_units = ReferenceUnits(
+                    length = 1.0u"m",
+                    time = 1.0u"s",
+                ),
+            ))
+            nothing
+        catch caught
+            caught
+        end
+        @test incompatible_normal_error isa PottsToolkit.PottsValidationError
+        @test only(incompatible_normal_error.diagnostics).kind ===
+              :illegal_operation_units
     end
 
     @testset "qualified resource identity is authoritative" begin

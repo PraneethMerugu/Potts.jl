@@ -6,6 +6,7 @@ CUDA.allowscalar(false)
 include("../../../test/backend_conformance/g2_descriptor_boundary.jl")
 include("../../../test/backend_conformance/g4_checkerboard_execution.jl")
 include("../../../test/backend_conformance/g5_relationship_execution.jl")
+include("../../../test/backend_conformance/g5_surface_execution.jl")
 
 report = run_g2_descriptor_boundary(
     CUDA.CuArray,
@@ -34,3 +35,10 @@ relationship_report = run_g5_relationship_execution(
     kernel_convert = CUDA.cudaconvert,
 )
 println(relationship_report)
+
+surface_report = run_g5_surface_execution(
+    CUDA.CuArray;
+    backend_name = :cuda,
+    kernel_convert = CUDA.cudaconvert,
+)
+println(surface_report)

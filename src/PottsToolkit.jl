@@ -121,6 +121,7 @@ public registered_statement_lowering
 public OperationTransfer, operation_transfer
 public AbstractOperationSourceRequirement, LatticeRankRequirement
 public SpatialRelationRequirement
+public NamedSpatialRelationRequirement
 public AbstractFootprintTransferRule, InheritFootprintRule
 public ProposalSourceFootprintRule, ProposalTargetFootprintRule
 public ProposalSourceTargetFootprintRule, IterationSiteFootprintRule

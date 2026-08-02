@@ -183,6 +183,10 @@ function _domain_constraints(
             )
             continue
         end
+        # Unit/totality analysis admits `power` only after proving a literal
+        # integer exponent. The compiled floating-point evaluator is total for
+        # that closed case, so no runtime parameter predicate remains.
+        node.operation === :power && continue
         node.operation in (:logarithm, :square_root) || throw(
             PottsValidationError(
                 :descriptor_lowering,

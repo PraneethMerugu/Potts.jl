@@ -31,6 +31,7 @@ public CheckerboardWorkspace, adapt_checkerboard_workspace
 public execute_checkerboard_mcs!, copy_checkerboard_state!
 public RelationshipStoreSchema, CompiledPottsProgram
 public AbstractTrackerDescriptor, OwnershipCountTracker
+public CellSurfaceTracker
 public CellMomentsTracker, CellMomentsState
 public TrackerExecutionPlan, TrackerKernelPlan, TrackerState
 public TrackerCheckpointState, tracker_kernel_plan, adapt_tracker_kernel_plan
@@ -38,15 +39,17 @@ public AbstractTrackerCheckpointPolicy, PersistTrackerCheckpoint
 public ReconstructTrackerCheckpoint
 public AbstractTrackerConcurrency, ClaimedOwnerExclusiveTrackerConcurrency
 public AbstractTrackerSource, OwnershipTrackerSource
+public OwnershipRelationTrackerSource, TrackerSourceView, tracker_source_view
 public AbstractTrackerStorage, DenseOwnerScalarStorage
 public DenseOwnerMomentsStorage
 public AbstractTrackerVisibility, AcceptedCommitTrackerVisibility
 public AbstractTrackerUpdateBound, SourceTargetOwnerUpdateBound
 public AbstractTrackerCost, ConstantTrackerCost
-public DimensionSquaredTrackerCost, LatticeLinearTrackerCost
+public DimensionSquaredTrackerCost, BoundedNeighborhoodTrackerCost
+public LatticeLinearTrackerCost
 public TrackerSupport
 public TrackerContract, AbstractTrackerDelta, OwnerScalarDelta
-public OwnerMomentsDelta
+public SourceTargetScalarDelta, OwnerMomentsDelta
 public tracker_contract, tracker_quantity, tracker_rebuild, tracker_recompute
 public tracker_proposal_delta
 public tracker_checkpoint_policy, tracker_inspection, tracker_support
@@ -55,6 +58,7 @@ public initialize_tracker_state, copy_tracker_state, copyto_tracker_state!
 public encode_tracker_checkpoint, reconstruct_tracker_checkpoint
 public commit_tracker_updates!
 public tracker_values, tracker_value, validate_tracker_state!
+public tracker_value_after
 public program_tracker_values, program_tracker_value
 public tracker_plan_report
 public ProgramRelationshipState, ProgramRelationshipRequest
@@ -68,6 +72,7 @@ public initialize_program_relationships, relationship_payload
 public ProgramInitialState, ProgramSnapshot, ProgramRuntime
 public BeforeProposalView, AfterProposalView, CanonicalContactAnchor
 public HamiltonianEvaluationContext
+public relation_offsets, relation_neighbor_index
 public initialize_program, program_snapshot, advance_mcs!
 public initialization_bounded
 public update_program_parameters!
@@ -146,6 +151,7 @@ public AbstractAffectedAnchorPlan, TargetSiteAffectedPlan
 public SourceTargetCellsAffectedPlan, IncidentContactsAffectedPlan
 public IncidentRelationshipsAffectedPlan
 public HamiltonianDomainResources
+public relation_neighbor_index
 public ProposalDescriptor, DescriptorKernelStrategy, DescriptorLaunch
 public DescriptorGroup, descriptor_launch, adapt_descriptor_launch
 public ParameterDomainConstraint, ConstraintGroup, DescriptorExecutionPlan
