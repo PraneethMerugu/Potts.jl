@@ -27,7 +27,7 @@ operation_transfer(
     4,
     :boolean,
     :dimensionless;
-    locality = :proposal_context,
+    footprint_rule = InheritFootprintRule(),
 )
 
 function CorePotts.operation_callable(

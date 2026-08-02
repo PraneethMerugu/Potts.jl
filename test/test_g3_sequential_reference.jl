@@ -1013,9 +1013,15 @@ end
         ])
         @test CorePotts.descriptor_role(constraint_descriptor) isa
               CorePotts.ProposalConstraintRole
-        @test CorePotts.descriptor_resource_access(
+        constraint_footprint = CorePotts.descriptor_resource_access(
             constraint_descriptor
-        ).footprint == CorePotts.IncidentRelationshipFootprint(2)
+        ).footprint
+        @test constraint_footprint isa CorePotts.FootprintUnion
+        @test any(
+            footprint -> footprint ==
+                         CorePotts.IncidentRelationshipFootprint(2),
+            constraint_footprint.footprints,
+        )
 
         labels = zeros(Int, 4, 3)
         labels[2, 2] = 1

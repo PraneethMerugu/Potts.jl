@@ -80,6 +80,25 @@ function _footprint_union(footprints::Tuple)
         append!(members, _footprint_members(footprint))
     end
     isempty(members) && return EmptyAnalyzedFootprint()
+    spatial_anchors = Dict{String, AbstractAnalyzedSpatialAnchor}()
+    spatial_offsets = Dict{String, Vector{Tuple}}()
+    nonspatial = AbstractAnalyzedFootprint[]
+    for member in members
+        if member isa SpatialFootprintFact
+            key = repr(member.anchor)
+            spatial_anchors[key] = member.anchor
+            append!(get!(spatial_offsets, key, Tuple[]), member.offsets)
+        else
+            push!(nonspatial, member)
+        end
+    end
+    members = nonspatial
+    for key in sort!(collect(keys(spatial_anchors)))
+        push!(members, SpatialFootprintFact(
+            spatial_anchors[key],
+            Tuple(sort!(unique!(spatial_offsets[key]))),
+        ))
+    end
     unique_by_key = Dict{String, AbstractAnalyzedFootprint}()
     for member in members
         unique_by_key[_footprint_sort_key(member)] = member
