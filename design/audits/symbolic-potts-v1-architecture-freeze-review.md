@@ -1,8 +1,13 @@
 # Symbolic Potts V1 Architecture-Freeze Review
 
-Status: amended decision draft; final owner acceptance pending; no implementation authorized
+Status: owner accepted all seven recommendations; bounded architecture-hardening implementation authorized
 
 Date: 2026-08-02
+
+Owner decision: **accept AFI-001 through AFI-007 without amendment**. This authorizes only the
+bounded architecture-freeze implementation and qualification described here. G6, proof-model
+migration, wrappers, and documentation remain closed until the independent gate reports zero
+P0/P1 findings.
 
 R2 authority: exact clean commit `82e3df435b5b6d89f2e4f7ccfbd0a86424dfed99` passed with
 zero P0, zero P1, one nonblocking P2, and no P3 findings. G6 remains closed.
