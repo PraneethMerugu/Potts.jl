@@ -237,7 +237,8 @@ for operation in (abs, exp, log, sqrt)
     else
         :square_root
     end
-    unit_rule = operation in (exp, log) ? :dimensionless : :unary
+    unit_rule = operation in (exp, log) ? :dimensionless :
+                operation === sqrt ? :square_root : :unary
     totality = operation in (log, sqrt) ? :domain_checked : :total
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(

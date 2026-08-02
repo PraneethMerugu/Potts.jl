@@ -14,6 +14,7 @@ const _UNIT_TRANSFER_RULES = Set((
     :dimensionless,
     :branch,
     :unary,
+    :square_root,
     :declared,
     :distribution,
 ))
@@ -83,6 +84,8 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
                 return "spatial-relation requirement uses an unknown neighborhood"
             requirement.radius > 0 ||
                 return "spatial-relation requirement radius must be positive"
+        else
+            return "unknown source requirement $(nameof(typeof(requirement)))"
         end
     end
     transfer.cpu ||

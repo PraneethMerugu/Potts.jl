@@ -57,6 +57,29 @@ CorePotts.operation_callable(
 ) = frozen_generation[] == 1 ? FrozenExternalCallableV1() :
     FrozenExternalCallableV2()
 
+struct ImpossibleRequirement <: PottsToolkit.AbstractOperationSourceRequirement end
+
+function impossible_source_operation end
+Symbolics.@register_symbolic impossible_source_operation(x)::Real
+
+struct ImpossibleSourceCallable end
+@inline (::ImpossibleSourceCallable)(x) = x
+
+operation_transfer(::typeof(impossible_source_operation), ::Int) =
+    PottsToolkit._transfer(
+        :architecture_impossible_source,
+        1,
+        :preserve_numeric,
+        :unary;
+        operand_rule = :numeric,
+        owner = :ArchitectureFreezeFixtures,
+        source_requirements = (ImpossibleRequirement(),),
+    )
+
+CorePotts.operation_callable(
+    ::Val{:architecture_impossible_source}, ::VersionNumber
+) = ImpossibleSourceCallable()
+
 end
 
 using .ArchitectureFreezeFixtures
@@ -147,6 +170,95 @@ using .ArchitectureFreezeFixtures
         @test context_error.stage === :analysis
         @test only(context_error.diagnostics).kind === :illegal_operation_use
         @test occursin("AfterMCS", only(context_error.diagnostics).actual)
+
+        invalid_requirement = PottsToolkit.operation_transfer(
+            ArchitectureFreezeFixtures.impossible_source_operation, 1
+        )
+        @test occursin(
+            "unknown source requirement",
+            PottsToolkit._operation_transfer_error(invalid_requirement, 1),
+        )
+        impossible_expression =
+            ArchitectureFreezeFixtures.impossible_source_operation(
+                ProposalContext(:impossible_copy).source_site
+            )
+        @named impossible_source_model = PottsSystem(statements = StatementSet((
+            Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+            cell,
+            ProposalDrive(:impossible_source, impossible_expression),
+            Protocol(Sweep(); name = :main),
+        )))
+        requirement_error = try
+            complete(impossible_source_model)
+            nothing
+        catch caught
+            caught
+        end
+        @test requirement_error isa PottsToolkit.PottsValidationError
+        @test requirement_error.stage === :analysis
+        @test only(requirement_error.diagnostics).kind ===
+              :invalid_operation_transfer
+    end
+
+    @testset "unit transfer proves powers and roots" begin
+        @parameters begin
+            length_parameter = 2.0u"m"
+            area_parameter = 4.0u"m^2"
+        end
+        cell = CellKind(:unit_cell)
+        medium = MediumKind(:unit_medium)
+        reference_units = ReferenceUnits(
+            length = 1.0u"m",
+            area = 1.0u"m^2",
+        )
+
+        function analyze_unit_expression(name, expression)
+            model = PottsSystem(
+                name = name,
+                statements = StatementSet((
+                    Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+                    cell,
+                    medium,
+                    ProposalDrive(:unit_drive, expression),
+                    Protocol(Sweep(); name = :main),
+                )),
+                parameters = [length_parameter, area_parameter],
+            )
+            return PottsToolkit._analyze_completed_system(complete(
+                model; reference_units
+            ))
+        end
+
+        power_ir = analyze_unit_expression(
+            :unit_power_model, length_parameter^2 - area_parameter
+        )
+        power_node = only(filter(
+            node -> node.operation === :power, power_ir.graph.nodes
+        ))
+        @test power_ir.facts.units[Int(power_node.identity)] ==
+              DynamicQuantities.dimension(1.0u"m^2")
+
+        root_ir = analyze_unit_expression(
+            :unit_root_model, sqrt(area_parameter) - length_parameter
+        )
+        root_node = only(filter(
+            node -> node.operation === :square_root, root_ir.graph.nodes
+        ))
+        @test root_ir.facts.units[Int(root_node.identity)] ==
+              DynamicQuantities.dimension(1.0u"m")
+
+        invalid_error = try
+            analyze_unit_expression(
+                :invalid_unit_root_model,
+                sqrt(area_parameter) + area_parameter,
+            )
+            nothing
+        catch caught
+            caught
+        end
+        @test invalid_error isa PottsToolkit.PottsValidationError
+        @test invalid_error.stage === :analysis
+        @test only(invalid_error.diagnostics).kind === :illegal_operation_units
     end
 
     @testset "qualified resource identity is authoritative" begin

@@ -191,12 +191,12 @@ allocated 642,336 bytes, and froze three reachable operations. Its focused regre
 
 The exact candidate passed the following local qualification on the Apple Metal host:
 
-- focused architecture-freeze suite: 98/98 assertions;
-- root `Pkg.test`: 1,442/1,442 assertions in 19m03.2s;
+- focused architecture-freeze suite: 107/107 assertions;
+- root `Pkg.test`: 1,451/1,451 assertions in 17m38.7s;
 - literal package inventory audit: 65/65 operations; and
 - Metal descriptor, checkerboard, shape/workgroup, constraint, energy, and relationship-runtime
   qualification.
 
-The root run first spent 50 seconds constructing and precompiling a newly resolved temporary test
-environment. That cold dependency setup is reported separately from the 19m03.2s test duration and
+The root run first spent 47 seconds constructing and precompiling a newly resolved temporary test
+environment. That cold dependency setup is reported separately from the 17m38.7s test duration and
 from the warm completion measurements above.
