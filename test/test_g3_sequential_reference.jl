@@ -464,7 +464,7 @@ end
             scalar_type = Float64,
         )
         @test tracer_executable.core_program.stage_plan.accepted_count == 1
-        @test tracer_executable.core_program.stage_plan.after_mcs_count == 1
+        @test tracer_executable.core_program.stage_plan.after_mcs_scratch_count == 1
         labels = zeros(Int, 3, 3)
         labels[2, 2] = 1
         tracer_values = zeros(Float64, 3, 3)

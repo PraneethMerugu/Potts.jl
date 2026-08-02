@@ -20,6 +20,13 @@ checkerboard_report = run_g4_checkerboard_execution(
 )
 println(checkerboard_report)
 
+checkerboard_boundary_report = run_g4_checkerboard_boundary_sizes(
+    CUDA.CuArray;
+    backend_name = :cuda,
+    kernel_convert = CUDA.cudaconvert,
+)
+println(checkerboard_boundary_report)
+
 relationship_report = run_g5_relationship_execution(
     CUDA.CuArray;
     backend_name = :cuda,

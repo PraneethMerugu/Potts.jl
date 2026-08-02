@@ -79,6 +79,7 @@ function run_g5_relationship_execution(
         backend_name::Symbol,
         kernel_convert,
         to_host = Array,
+        require_device_isbits::Bool = true,
     )
     executable, initial = _g5_external_relationship_fixture()
     program = executable.core_program
@@ -98,7 +99,9 @@ function run_g5_relationship_execution(
     )
     relationship_bank = only(device_workspace.state.relationships.banks)
     @test relationship_bank isa CorePotts.PackedRelationshipBank
-    @test isbitstype(typeof(kernel_convert(device_workspace.state)))
+    if require_device_isbits
+        @test isbitstype(typeof(kernel_convert(device_workspace.state)))
+    end
 
     CorePotts.execute_checkerboard_mcs!(cpu_workspace, 0)
     CorePotts.execute_checkerboard_mcs!(device_workspace, 0)

@@ -20,6 +20,13 @@ checkerboard_report = run_g4_checkerboard_execution(
 )
 println(checkerboard_report)
 
+checkerboard_boundary_report = run_g4_checkerboard_boundary_sizes(
+    AMDGPU.ROCArray;
+    backend_name = :amdgpu,
+    kernel_convert = AMDGPU.rocconvert,
+)
+println(checkerboard_boundary_report)
+
 relationship_report = run_g5_relationship_execution(
     AMDGPU.ROCArray;
     backend_name = :amdgpu,

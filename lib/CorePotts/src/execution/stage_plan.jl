@@ -263,7 +263,7 @@ struct StageExecutionPlan{A <: Tuple, M <: Tuple}
     accepted_copy::A
     after_mcs::M
     accepted_count::Int32
-    after_mcs_count::Int32
+    after_mcs_scratch_count::Int32
     fingerprint::String
 end
 
@@ -272,7 +272,7 @@ struct StageKernelPlan{A <: Tuple, M <: Tuple}
     accepted_copy::A
     after_mcs::M
     accepted_count::Int32
-    after_mcs_count::Int32
+    after_mcs_scratch_count::Int32
 end
 
 
@@ -280,7 +280,7 @@ stage_kernel_plan(plan::StageExecutionPlan) = StageKernelPlan(
     plan.accepted_copy,
     plan.after_mcs,
     plan.accepted_count,
-    plan.after_mcs_count,
+    plan.after_mcs_scratch_count,
 )
 stage_kernel_plan(plan::StageKernelPlan) = plan
 
@@ -288,14 +288,14 @@ function StageExecutionPlan(
         accepted_copy::A,
         after_mcs::M,
         accepted_count::Integer,
-        after_mcs_count::Integer,
+        after_mcs_scratch_count::Integer,
         fingerprint,
     ) where {A <: Tuple, M <: Tuple}
     accepted_count >= 0 || throw(ArgumentError(
         "accepted-copy descriptor count cannot be negative"
     ))
-    after_mcs_count >= 0 || throw(ArgumentError(
-        "after-MCS descriptor count cannot be negative"
+    after_mcs_scratch_count >= 0 || throw(ArgumentError(
+        "after-MCS scratch-buffer count cannot be negative"
     ))
     actual_accepted = sum(
         length(group.instances) for group in accepted_copy; init = 0
@@ -307,7 +307,7 @@ function StageExecutionPlan(
         accepted_copy,
         after_mcs,
         Int32(accepted_count),
-        Int32(after_mcs_count),
+        Int32(after_mcs_scratch_count),
         String(fingerprint),
     )
 end
@@ -339,7 +339,9 @@ function allocate_stage_runtime_buffers(
     accepted = fill(
         StageEvaluation(false, zero(T)), Int(plan.accepted_count)
     )
-    after = [zeros(T, shape) for _ in 1:Int(plan.after_mcs_count)]
+    after = [
+        zeros(T, shape) for _ in 1:Int(plan.after_mcs_scratch_count)
+    ]
     transactions = Any[]
     for store_slot in eachindex(relationships)
         accepted_bound = sum((
