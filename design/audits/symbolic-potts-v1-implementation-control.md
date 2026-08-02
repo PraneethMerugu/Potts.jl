@@ -2042,6 +2042,92 @@ conformance and focused architectural tests, reserving the complete root suite a
 qualification for merge gates. CUDA and AMDGPU remain future matrix environments. A fresh R2
 clearance with zero P0 and zero P1 findings is required after the repair.
 
+## Repaired R2 candidate — awaiting independent review
+
+The repaired production boundary is represented by four bounded implementation checkpoints:
+
+- `35977b3`, which makes descriptor and stage footprints the compiler authority for checkerboard
+  conflicts, requires compiler-derived coloring at the CorePotts boundary, and executes multiple
+  attempts per site as ordered sweep rounds;
+- `ba62a9f`, which makes relationship failure disposition explicit and compiler-emitted, preserves
+  already accepted ownership copies when bounded relationship admission filters a request, and
+  makes `linked` incident-local;
+- `9441978`, which admits external trackers through the public compiler, gives trackers explicit
+  capability/concurrency/checkpoint/adaptation contracts, and replaces proposal-time whole-lattice
+  center/shape scans with incrementally maintained first and second moments; and
+- `a73e3a6`, which adds shared CPU/vendor workgroup-edge and realized-boundary conformance,
+  exercises an external GPU-capable tracker in the actual checkerboard kernel, puts the shared G4
+  and G5 CPU witnesses in the fast target, and names after-MCS scratch-buffer cardinality honestly.
+
+These checkpoints form one candidate; none is a clearance. G6 remains stopped until a fresh
+read-only R2 reports zero P0 and zero P1 findings.
+
+The repair claims the following for the reviewer to challenge rather than accept:
+
+1. coloring is derived from the proposal relation plus every descriptor/stage footprint, and a
+   direct CorePotts checkerboard program cannot silently supply a default policy;
+2. attempts-per-site rounds are sequential semantic rounds, while deterministic concurrency is
+   restricted to different targets within one compiler-proven color;
+3. a downstream module can register a new tracker requirement without editing PottsToolkit's
+   tracker compiler, CorePotts' executor, checkpoint code, or backend launcher;
+4. tracker quantity, support, concurrency, checkpoint policy, rebuild, proposal update,
+   adaptation, and inspection are descriptor-owned structural protocols; tracker names and
+   occurrence counts remain value-level;
+5. `CellMomentsTracker` supplies volume, first moments, and second moments through immutable
+   before/after overlays, so center and shape operations touch only the target ownership site and
+   tracked owner records on the proposal path;
+6. relationship link lookup scales with the smaller endpoint incident degree, and capacity,
+   degree, stale-generation, inactive-endpoint, and contradictory requests have explicit
+   nonthrowing filtered dispositions when the compiler selects that accepted-copy policy;
+7. checkerboard device adaptation rejects any CPU-only descriptor or tracker before kernel
+   compilation, while the real Metal path executes the externally defined GPU-capable tracker;
+8. one shared checkerboard harness owns CPU, Metal, CUDA, and AMDGPU semantics and covers logical
+   sizes `1`, `255`, `256`, `257`, and `17×19`, including accepted, rejected, and null branches;
+9. the fast target preserves the shared G2 external-descriptor, G4 checkerboard/tracker, and G5
+   immutable-relationship signals without duplicating a semantic fixture or vendor suite; and
+10. CorePotts remains mechanism-free: constraints, Hamiltonians, drives, trackers, lifecycle
+    effects, and relationship policies are compiled descriptors/protocols rather than named
+    biological executor branches.
+
+Qualification on the repaired candidate:
+
+- CorePotts passed 219/219 assertions, including tracker locality, external tracker execution and
+  reconstruction, relationship atomicity and filtering, checkpoint continuation, storage growth,
+  and Aqua;
+- the fast compiler/runtime target passed 115/115 in 2m23.4s and now invokes the shared G2/G4/G5
+  CPU conformance bodies;
+- ordinary root `Pkg.test()` passed 1,304/1,304 in 12m22.2s after fresh temporary-environment
+  resolution and precompilation of the Unitful, ModelingToolkit, and ProcessBigraphs extensions;
+- the shared Metal G2 descriptor witness retained 32 device descriptors and device-backed state
+  and workspace views with value `17.5f0`;
+- the shared Metal G4 external descriptor/tracker witness retained exact CPU/device ownership,
+  counters, volume, and external double-occupancy tracker parity; and
+- the shared Metal boundary suite passed at `1`, `255`, `256`, `257`, and `17×19`, followed by the
+  immutable incident-local G5 relationship witness with exact CPU/device parity.
+
+CUDA and AMDGPU invoke the identical expanded boundary harness from their repository-owned
+projects. They were not run on this Apple Silicon MacBook and receive no local hardware claim.
+Their role remains future release-matrix qualification.
+
+The fresh R2 must rerun every original handoff question and explicitly audit:
+
+- compiler-derived footprints, attempts-per-site ordering, and deterministic claim/commit safety;
+- external tracker admission, structural specialization, checkpoint policy, concurrent update
+  legality, real device adaptation, and the absence of proposal-time global scans;
+- relationship incident locality, bounded failure disposition, accepted-ownership preservation,
+  atomic publication, and device-read support boundaries;
+- whether any constraint, Hamiltonian role, drive, tracker, lifecycle, relationship, neighborhood,
+  Wortel, Merks, or focal policy is hardcoded into the engine instead of compiled around generic
+  primitives;
+- code DRYness and test DRYness, including whether every repeated compile/run has a distinct
+  boundary or independent-oracle guarantee and whether equivalent total rigor can be retained with
+  less everyday compute;
+- the one-production-evaluator-path, representation-bank, folder-ownership, generated-code,
+  specialization-growth, inference, allocation, diagnostics, and no-host-fallback invariants from
+  R1/R1.5; and
+- whether the backend-neutral harness is ready for a later CUDA/AMDGPU/Metal release matrix without
+  vendor-specific semantic forks or unsupported claims.
+
 ## Prohibited record contents
 
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
