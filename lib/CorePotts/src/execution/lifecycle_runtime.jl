@@ -1162,6 +1162,11 @@ function _record_lifecycle_failure!(workspace, error)
     end
     hasproperty(error, :anchor) &&
         (workspace.status_anchor = Int32(getproperty(error, :anchor)))
+    if error isa CellCapacityFailure
+        workspace.status_required = error.requested
+        workspace.status_available = error.available
+        workspace.status_maximum = error.max_cells
+    end
     return workspace
 end
 

@@ -3,6 +3,20 @@ if !isdefined(Main, :G5LifecycleOperations)
 end
 using .G5LifecycleOperations
 
+struct LifecycleProbeAdaptor end
+struct LifecycleProbeArray{T, N, A <: Array{T, N}} <: AbstractArray{T, N}
+    values::A
+end
+Base.size(values::LifecycleProbeArray) = size(values.values)
+Base.getindex(values::LifecycleProbeArray, indices...) =
+    getindex(values.values, indices...)
+Base.setindex!(values::LifecycleProbeArray, value, indices...) =
+    setindex!(values.values, value, indices...)
+Base.IndexStyle(::Type{<:LifecycleProbeArray}) = IndexLinear()
+CorePotts.Adapt.adapt_storage(
+    ::LifecycleProbeAdaptor, values::AbstractArray{T, N}
+) where {T, N} = LifecycleProbeArray(Array(values))
+
 function _g5_l2_runtime(executable, initial; seed = 0x51f3)
     problem = PottsProblem(executable, initial, (0, 1); seed)
     return init(problem).runtime
@@ -132,6 +146,12 @@ end
         backend = CPUBackend(),
         scalar_type = Float32,
     )
+    adapted_plan = CorePotts.Adapt.adapt(
+        LifecycleProbeAdaptor(), executable.core_program.lifecycle_plan
+    )
+    @test adapted_plan isa CorePotts.LifecycleExecutionPlan
+    @test adapted_plan.descriptors isa LifecycleProbeArray
+    @test adapted_plan.forbid_extinction isa LifecycleProbeArray
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     runtime = _g5_l2_runtime(
@@ -463,6 +483,9 @@ end
     @test error.max_cells == 1
     @test overflow.lifecycle_workspace.status ==
         CorePotts.LifecycleStatusCellCapacity
+    @test overflow.lifecycle_workspace.status_required == 2
+    @test overflow.lifecycle_workspace.status_available == 1
+    @test overflow.lifecycle_workspace.status_maximum == 1
     @test overflow.ownership == before.ownership
     @test overflow.cell_kinds == before.cell_kinds
     @test overflow.cell_generations == before.cell_generations

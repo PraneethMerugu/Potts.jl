@@ -123,6 +123,9 @@ mutable struct LifecycleWorkspace{
     status_source::Int32
     status_anchor::Int32
     status_detail::Int32
+    status_required::Int32
+    status_available::Int32
+    status_maximum::Int32
 end
 
 function allocate_lifecycle_workspace(
@@ -186,6 +189,9 @@ function allocate_lifecycle_workspace(
         Int32(0),
         Int32(0),
         Int32(0),
+        Int32(0),
+        Int32(0),
+        Int32(0),
     )
 end
 
@@ -202,6 +208,9 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     workspace.status_source = 0
     workspace.status_anchor = 0
     workspace.status_detail = 0
+    workspace.status_required = 0
+    workspace.status_available = 0
+    workspace.status_maximum = 0
     return workspace
 end
 

@@ -295,40 +295,53 @@ end
 struct LifecycleExecutionPlan{
         N,
         T <: AbstractFloat,
+        D <: AbstractVector{LifecycleDescriptor{N, T}},
         E <: LifecycleEvaluatorStorage,
         S <: LifecycleStateRuleStorage,
+        RR <: AbstractVector{LifecycleRelationshipRule},
         O <: Tuple,
+        SO <: AbstractVector{<:NTuple{N, Int16}},
+        R <: AbstractVector,
+        F <: AbstractVector{Bool},
     } <: AbstractLifecycleExecutionPlan
-    descriptors::Vector{LifecycleDescriptor{N, T}}
+    descriptors::D
     evaluators::E
     state_rules::S
-    relationship_rules::Vector{LifecycleRelationshipRule}
+    relationship_rules::RR
     ownership_rules::O
-    stencil_offsets::Vector{NTuple{N, Int16}}
-    relations::Vector{Matrix{Int8}}
+    stencil_offsets::SO
+    relations::R
     conflict_policy::LifecycleConflictCode
     cell_capacity::Int32
     maximum_requests::Int32
     maximum_placement_sites::Int32
-    forbid_extinction::BitVector
+    forbid_extinction::F
     fingerprint::String
 end
 
 function LifecycleExecutionPlan(
-        descriptors::Vector{LifecycleDescriptor{N, T}},
+        descriptors::D,
         evaluators,
         state_rules,
-        relationship_rules::Vector{LifecycleRelationshipRule},
+        relationship_rules::RR,
         ownership_rules::Tuple,
-        stencil_offsets::Vector{NTuple{N, Int16}},
-        relations::Vector{Matrix{Int8}},
+        stencil_offsets::SO,
+        relations::R,
         conflict_policy::LifecycleConflictCode,
         cell_capacity::Integer,
         maximum_requests::Integer,
         maximum_placement_sites::Integer,
-        forbid_extinction::BitVector,
+        forbid_extinction::F,
         fingerprint::AbstractString,
-    ) where {N, T <: AbstractFloat}
+    ) where {
+        N,
+        T <: AbstractFloat,
+        D <: AbstractVector{LifecycleDescriptor{N, T}},
+        RR <: AbstractVector{LifecycleRelationshipRule},
+        SO <: AbstractVector{<:NTuple{N, Int16}},
+        R <: AbstractVector,
+        F <: AbstractVector{Bool},
+    }
     cell_capacity > 0 || throw(ArgumentError(
         "lifecycle cell capacity must be positive"
     ))
@@ -348,7 +361,16 @@ function LifecycleExecutionPlan(
         "lifecycle extinction table cannot be empty"
     ))
     return LifecycleExecutionPlan{
-        N, T, typeof(evaluators), typeof(state_rules), typeof(ownership_rules),
+        N,
+        T,
+        D,
+        typeof(evaluators),
+        typeof(state_rules),
+        RR,
+        typeof(ownership_rules),
+        SO,
+        R,
+        F,
     }(
         descriptors,
         evaluators,
