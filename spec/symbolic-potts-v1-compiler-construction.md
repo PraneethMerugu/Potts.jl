@@ -4,8 +4,8 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade through the cleared G5 surface and G5-L0 lifecycle-language
-boundaries; G5-L1 may begin, while R2/G6/proof-model work remains unauthorized
+Status: implementation-grade through the cleared G5 surface and completed G5-L1 lifecycle-language
+boundary; G5-L2 may begin, while G5-L3/R2/G6/proof-model work remains unauthorized
 
 ## Authority
 
@@ -870,7 +870,8 @@ representation MUST return work to G2 or G4 and MUST NOT be accepted as a reduce
 - Implement generic tracker, incident-index, relationship, request, lifecycle, and checkpoint
   protocols.
 - Before cell-lifecycle implementation, clear G5-L0 against CCV1-027. Then implement the closed
-  cell-structure transaction language through bounded G5-L1--G5-L5 checkpoints without opening G6.
+  cell-structure transaction language through bounded G5-L1--G5-L5 checkpoints, including the
+  blocking G5-L2Q review, without opening G6.
 - Pass the neutral external relationship fixture on sequential CPU and checkerboard CPU.
 - Pass incident-locality, bounded-request, canonical conflict, capacity, degree, generation,
   failure-atomicity, lifecycle, checkpoint, and permutation properties.
@@ -1698,9 +1699,13 @@ G5-L uses these bounded checkpoints:
 1. G5-L0: independent specification clearance; no implementation with a P0/P1 finding.
 2. G5-L1: syntax, schemas, qualified binding, frozen closure, analysis, diagnostics, inspection.
 3. G5-L2: transaction IR and complete sequential CPU reference.
-4. G5-L3: shared checkerboard CPU execution and deterministic bounded workspaces.
-5. G5-L4: real functional GPU witness and neutral downstream extension proof.
-6. G5-L5: fast/qualification profiles, source/performance audit, and R2 handoff.
+4. G5-L2Q: one fresh-context code-quality, architecture-quality, and semantic/test-DRYness review
+   of the exact G5-L2 checkpoint, as specified by the
+   [G5-L2Q gate](../design/audits/symbolic-potts-v1-g5-l2-quality-gate.md). G5-L3 remains closed
+   until the review returns zero P0 and zero P1 findings.
+5. G5-L3: shared checkerboard CPU execution and deterministic bounded workspaces.
+6. G5-L4: real functional GPU witness and neutral downstream extension proof.
+7. G5-L5: fast/qualification profiles, source/performance audit, and R2 handoff.
 
 Required exit evidence covers exact compiler rejection and inspection; every effect/policy on CPU;
 snapshot, inadmissible-competitor, conflict, capacity, allocation, generation, failure atomicity,
@@ -1715,3 +1720,8 @@ When G5-L and the existing G5 surface/relationship work pass, one fresh `R2Execu
 whole boundary. If R2 clears, work MUST stop before G6 for owner review. Wortel, Merks, focal-model
 migration, polished docs, a second evaluator, a legacy oracle, a new CI evidence system, and broader
 lifecycle vocabulary are outside G5-L.
+
+G5-L2Q is deliberately narrower than R2. It reviews the complete sequential transaction runtime
+before concurrency can multiply a weak abstraction. It does not require checkerboard, GPU, long
+statistical, or documentation evidence. It MUST NOT create a second evidence system or reopen
+accepted lifecycle semantics. Clearance authorizes only G5-L3.

@@ -2244,3 +2244,22 @@ candidate pending fresh read-only R2 clearance. G6 remains closed.
 This record intentionally contains no freshness deadline, renewed attestation, copied CI log,
 expected-output archive, hardware ledger, manually renewed hash, duplicated vendor suite, or
 second semantic definition.
+
+## G5-L2Q quality gate — planned before sequential runtime work
+
+The owner requested one blocking quality review after G5-L2 and before G5-L3. The authoritative
+procedure is the
+[G5-L2Q Sequential Lifecycle Quality Gate](symbolic-potts-v1-g5-l2-quality-gate.md).
+
+The gate reviews the exact clean sequential-runtime checkpoint under one combined verdict with
+three mandatory lenses: code quality, architectural quality, and semantic/test DRYness. It must
+prove a single production transaction authority, mechanism-neutral CorePotts execution, qualified
+compiler-fact consumption, immutable snapshot and staged-publication boundaries, external-operation
+equality, concrete bounded warm paths, explicit folder/module ownership, and one cheapest test owner
+per failure signal while preserving independent recomputation oracles.
+
+This gate is intentionally cheaper and earlier than R2. It reruns the focused lifecycle/compiler
+and sequential transaction surface and inspects decisive inference/allocation evidence; it does not
+require a ceremonial second full package run, checkerboard, GPU hardware, long statistics,
+documentation, a freshness ledger, or a new CI framework. Zero P0 and zero P1 findings are required.
+A failure returns to the earliest G5-L1/L2 owner. A clear verdict opens G5-L3 only.
