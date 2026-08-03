@@ -267,8 +267,8 @@ operation_context_supported(
     ::Type{<:AbstractEvaluatorExecutionContext},
 ) = false
 
-# G5-L1 freezes semantic lifecycle callable admission without introducing the
-# lifecycle transaction runtime. Concrete G5-L2 contexts must still implement
+# Completion freezes semantic lifecycle callable admission without introducing
+# the lifecycle transaction runtime. Concrete execution contexts still implement
 # the corresponding resource operation before execution can qualify.
 for (identity, contexts) in (
         :cell_volume => (

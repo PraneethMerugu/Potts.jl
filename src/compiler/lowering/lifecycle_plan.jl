@@ -1,4 +1,4 @@
-# Lower analyzed G5 lifecycle facts into one mechanism-neutral CorePotts plan.
+# Lower analyzed lifecycle facts into one mechanism-neutral CorePotts plan.
 
 mutable struct _LifecycleRootCursor
     roots::Dict{Symbol, Vector{Int32}}

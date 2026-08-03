@@ -1,4 +1,4 @@
-# G5-L1 completion authority for the closed cell-lifecycle language.
+# Completion authority for the closed cell-lifecycle language.
 
 _cell_lifecycle_effect(value) = value isa AbstractCellLifecycleEffect
 _relationship_lifecycle_effect(value) = value isa Union{Create, Remove, Retune}

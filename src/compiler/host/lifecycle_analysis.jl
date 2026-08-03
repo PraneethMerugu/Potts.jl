@@ -1,5 +1,5 @@
-# G5-L1 analyzed lifecycle facts. These are host compiler data and do not
-# authorize or implement transaction execution.
+# Analyzed lifecycle facts are host compiler data and do not authorize or
+# implement transaction execution.
 
 struct LifecycleAnalysisFact
     source::QualifiedStatementID
