@@ -189,46 +189,14 @@ function _advance_sequential!(runtime::ProgramRuntime)
     return nothing
 end
 
-function _clear_retired_cell_state!(
-        layout::StateLayout,
-        state::AuxiliaryState,
-        cell::Integer,
-    )
-    for entry in layout.entries
-        entry.schema.domain === :cell || continue
-        values = state_block(state, entry.handle).values
-        1 <= cell <= length(values) || error(
-            "compiled cell-state block is incompatible with the cell table"
-        )
-        @inbounds values[cell] = zero(eltype(values))
-    end
-    return state
-end
-
-function _retire_extinct_cells!(runtime::ProgramRuntime)
-    volumes = program_tracker_values(runtime, Val(:cell_volume))
-    for cell in eachindex(runtime.cell_kinds)
-        @inbounds runtime.cell_kinds[cell] == 0 && continue
-        @inbounds volumes[cell] == 0 || continue
-        @inbounds runtime.cell_kinds[cell] = 0
-        generation = @inbounds runtime.cell_generations[cell]
-        generation < typemax(UInt32) || throw(OverflowError(
-            "cell generation overflow at lifecycle retirement"
-        ))
-        @inbounds runtime.cell_generations[cell] = generation + UInt32(1)
-        runtime.retired_cells += 1
-        _clear_retired_cell_state!(
-            runtime.program.descriptor_plan.state_layout,
-            runtime.descriptor_state,
-            cell,
-        )
-    end
-    return nothing
-end
-
 function _after_mcs!(runtime::ProgramRuntime{T, N}) where {T, N}
-    _retire_extinct_cells!(runtime)
-    _execute_after_mcs_stage!(runtime)
+    _execute_after_mcs_stage!(
+        runtime, runtime.program.stage_plan.before_lifecycle
+    )
+    execute_lifecycle!(runtime)
+    _execute_after_mcs_stage!(
+        runtime, runtime.program.stage_plan.after_lifecycle
+    )
     return nothing
 end
 

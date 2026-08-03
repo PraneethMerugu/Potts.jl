@@ -37,10 +37,20 @@ function compile(
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
     )
+    lifecycle_plan = _lower_lifecycle_plan(
+        analyzed_ir,
+        manifest,
+        scalar_type,
+        lowered_descriptors.state_handles,
+        lowered_descriptors.draw_handles,
+        descriptor_plan.state_layout,
+        relationship_endpoint_policies,
+    )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
     )
     _assert_concrete_core_boundary(stage_plan; path = "stage_plan")
+    _assert_concrete_core_boundary(lifecycle_plan; path = "lifecycle_plan")
     completion_fingerprint = completed_system_fingerprint(completed)
     seed = _sha256_hex(
         "potts-executable-seed-v1",
@@ -59,6 +69,7 @@ function compile(
         manifest,
         descriptor_plan,
         stage_plan,
+        lifecycle_plan,
         relationship_endpoint_policies,
         seed,
     )
@@ -131,6 +142,7 @@ function compile(
         capability,
         compiler = _compiler_analysis_report(analyzed_ir),
         descriptors = CorePotts.descriptor_plan_report(descriptor_plan),
+        lifecycle = CorePotts.lifecycle_plan_report(lifecycle_plan),
         storage,
         workspace,
         statements = statement_manifest,

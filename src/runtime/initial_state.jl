@@ -435,6 +435,7 @@ function _normalize_initial_state_entry(
         values,
         shape,
         cell_count,
+        cell_capacity,
         ::Type{T},
     ) where {T <: AbstractFloat}
     supplied = haskey(values, entry.name)
@@ -468,13 +469,18 @@ function _normalize_initial_state_entry(
             ))
         return map(item -> _convert_initial_scalar(entry, item, T), value)
     elseif entry.storage === :cell
-        !supplied && return fill(T(entry.initial), cell_count)
+        !supplied && return fill(T(entry.initial), cell_capacity)
         value = values[entry.name]
-        value isa AbstractVector && length(value) == cell_count ||
+        value isa AbstractVector && length(value) in (cell_count, cell_capacity) ||
             throw(ArgumentError(
-                "initial cell state `$(entry.name)` must have one value per cell"
+                "initial cell state `$(entry.name)` must have one value per " *
+                "active cell or one value per compiled cell slot"
             ))
-        return T[_convert_initial_scalar(entry, item, T) for item in value]
+        result = fill(T(entry.initial), cell_capacity)
+        for index in eachindex(value)
+            result[index] = _convert_initial_scalar(entry, value[index], T)
+        end
+        return result
     else
         !supplied && return T(entry.initial)
         value = values[entry.name]
@@ -617,6 +623,12 @@ function _core_initial_state(
         throw(ArgumentError("unknown initial state value$(length(unknown) == 1 ? "" : "s"): " *
                             join(string.(sort!(collect(unknown))), ", ")))
     T = eltype(executable.core_program.parameter_defaults)
+    lifecycle_plan = executable.core_program.lifecycle_plan
+    cell_capacity = lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+        Int(lifecycle_plan.cell_capacity) : length(cell_kinds)
+    length(cell_kinds) <= cell_capacity || throw(ArgumentError(
+        "initial finite-cell count exceeds compiled max_cells=$cell_capacity"
+    ))
     normalized_states = Dict{CorePotts.QualifiedResourceIdentity, Any}()
     for entry in executable.reports.states
         normalized_states[entry.identity] = _normalize_initial_state_entry(
@@ -624,6 +636,7 @@ function _core_initial_state(
             values,
             executable.core_program.shape,
             length(cell_kinds),
+            cell_capacity,
             T,
         )
     end

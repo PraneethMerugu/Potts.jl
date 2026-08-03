@@ -13,6 +13,59 @@
     )
 end
 
+@inline function _lifecycle_address(
+        stream::RNGStream,
+        runtime,
+        operation::Integer,
+        anchor::Integer,
+        generation::Integer,
+        occurrence::Integer;
+        destination::Bool = false,
+        draw::Integer = 0,
+    )
+    entity_kind = destination ? DestinationEntity :
+        anchor > 0 ? CellEntity : ModelEntity
+    return RNGAddress(
+        stream = stream,
+        mcs = runtime.mcs + 1,
+        operation = operation,
+        entity_kind = entity_kind,
+        entity = max(anchor, 0),
+        generation = generation,
+        invocation = occurrence,
+        draw = draw,
+    )
+end
+
+@inline function _lifecycle_uniform(
+        ::Type{T},
+        runtime,
+        stream::RNGStream,
+        operation,
+        anchor,
+        generation,
+        occurrence;
+        destination = false,
+        draw = 0,
+    ) where {T}
+    address = _lifecycle_address(
+        stream,
+        runtime,
+        operation,
+        anchor,
+        generation,
+        occurrence;
+        destination,
+        draw,
+    )
+    return uniform_open01(
+        T,
+        Philox4x32x10V1(),
+        _trajectory_seed(runtime.seed, runtime.replica, runtime.repeat),
+        address,
+    )
+end
+
 function initialization_bounded(
         seed::UInt64,
         replica::UInt32,

@@ -216,6 +216,20 @@ function _lower_tracker_plan(
         end
     end
 
+    lifecycle_moments = any(ir.source.records) do record
+        record.kind === :LifecycleProcess || return false
+        arguments = first(record.normalized_payload)
+        length(arguments.effects) == 1 || return false
+        effect = only(arguments.effects)
+        effect isa Divide || return false
+        geometry = effect.geometry
+        geometry isa PrincipalAxisPlane ||
+            hasproperty(geometry, :point) && geometry.point isa CellCentroid
+    end
+    lifecycle_moments && _append_tracker_requirement!(
+        descriptors, CorePotts.CellMomentsTracker{length(shape), T}()
+    )
+
     for candidate in ir.candidates
         candidate.category in (
             :hamiltonian, :drive, :constraint, :modifier,

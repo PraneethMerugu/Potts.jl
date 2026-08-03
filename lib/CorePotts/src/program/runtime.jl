@@ -236,6 +236,16 @@ function restore_program_checkpoint(
         runtime.replica,
         runtime.repeat,
     )
+    runtime.lifecycle_workspace = allocate_lifecycle_workspace(
+        program.lifecycle_plan,
+        program,
+        runtime.ownership,
+        runtime.cell_kinds,
+        runtime.cell_generations,
+        runtime.trackers,
+        runtime.relationships,
+        runtime.descriptor_state,
+    )
     runtime.accepted = checkpoint.accepted
     runtime.rejected = checkpoint.rejected
     runtime.null_attempts = checkpoint.null_attempts
@@ -251,7 +261,7 @@ function _accepted_copy_batch_bound(program::CompiledPottsProgram)
            Int(plan.maximum_color_size) * Int(program.attempts_per_site) : 1
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW, LW}
     program::P
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
@@ -262,6 +272,7 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW}
     proposal_contributions::Vector{ProposalEvaluation{T}}
     stage_buffers::SB
     engine_workspace::EW
+    lifecycle_workspace::LW
     parameters::Vector{T}
     seed::UInt64
     replica::UInt32
@@ -289,6 +300,12 @@ function initialize_program(
         throw(ArgumentError("initial ownership shape does not match the program"))
     length(parameters) == length(program.parameter_defaults) ||
         throw(ArgumentError("runtime parameter buffer has the wrong length"))
+    lifecycle_plan = program.lifecycle_plan
+    cell_capacity = lifecycle_plan isa LifecycleExecutionPlan ?
+        Int(lifecycle_plan.cell_capacity) : length(initial.cell_kinds)
+    length(initial.cell_kinds) <= cell_capacity || throw(ArgumentError(
+        "initial finite-cell count exceeds compiled max_cells=$cell_capacity"
+    ))
     maximum(initial.ownership; init = Int32(0)) <= length(initial.cell_kinds) ||
         throw(ArgumentError("initial ownership references an unknown cell label"))
     minimum(initial.ownership; init = Int32(0)) >= -program.kind_count ||
@@ -304,14 +321,24 @@ function initialize_program(
         throw(ArgumentError("a finite cell cannot use a medium kind"))
     length(initial.cell_generations) == length(initial.cell_kinds) ||
         throw(ArgumentError("initial cell generation table has the wrong length"))
-    all(!iszero, initial.cell_generations) ||
-        throw(ArgumentError("active cell generations must be positive"))
+    all(eachindex(initial.cell_kinds)) do index
+        @inbounds initial.cell_kinds[index] == 0 ||
+            !iszero(initial.cell_generations[index])
+    end || throw(ArgumentError("active cell generations must be positive"))
     initial_mcs >= 0 || throw(ArgumentError("initial MCS must be nonnegative"))
     repeat > 0 || throw(ArgumentError("ensemble repeat identity must be positive"))
 
     runtime_ownership = copy(initial.ownership)
-    runtime_cell_kinds = copy(initial.cell_kinds)
-    runtime_cell_generations = copy(initial.cell_generations)
+    runtime_cell_kinds = zeros(Int16, cell_capacity)
+    runtime_cell_generations = zeros(UInt32, cell_capacity)
+    copyto!(runtime_cell_kinds, 1, initial.cell_kinds, 1, length(initial.cell_kinds))
+    copyto!(
+        runtime_cell_generations,
+        1,
+        initial.cell_generations,
+        1,
+        length(initial.cell_generations),
+    )
     trackers = initialize_tracker_state(
         program.tracker_plan, runtime_ownership, runtime_cell_kinds, program
     )
@@ -337,8 +364,8 @@ function initialize_program(
         entries = initial.relationships[relationship_slot]
         push!(relationship_values, initialize_program_relationships(
             schema,
-            initial.cell_kinds,
-            initial.cell_generations,
+            runtime_cell_kinds,
+            runtime_cell_generations,
             T.(parameters),
             entries,
         ))
@@ -378,11 +405,22 @@ function initialize_program(
         replica,
         repeat,
     )
+    lifecycle_workspace = allocate_lifecycle_workspace(
+        program.lifecycle_plan,
+        program,
+        runtime_ownership,
+        runtime_cell_kinds,
+        runtime_cell_generations,
+        trackers,
+        relationships,
+        descriptor_state,
+    )
     return ProgramRuntime{
         T, N, typeof(program), typeof(relationships), typeof(trackers),
         typeof(descriptor_state),
         typeof(stage_buffers),
         typeof(engine_workspace),
+        typeof(lifecycle_workspace),
     }(
         program,
         runtime_ownership,
@@ -397,6 +435,7 @@ function initialize_program(
         ),
         stage_buffers,
         engine_workspace,
+        lifecycle_workspace,
         runtime_parameters,
         seed,
         replica,

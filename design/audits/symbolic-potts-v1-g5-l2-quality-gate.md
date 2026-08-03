@@ -41,6 +41,9 @@ The gate may start only when all of the following are true:
 - snapshot-relative planning, filtering, conflict resolution, capacity preflight, staged commit,
   publication, status translation, tracker repair, relationship consequences, and checkpoint
   reconstruction are implemented for the accepted G5-L2 scope;
+- one frozen `max_cells` value sizes all cell identity/state/transaction storage before execution;
+  the sequential path never resizes, and exhaustion returns `CellCapacityFailure` without partial
+  publication;
 - the focused lifecycle compiler and sequential transaction suites pass;
 - the ordinary package suite passes on the exact candidate, or every unrelated failure is
   reproduced and explicitly classified before review;
@@ -176,6 +179,10 @@ The gate reuses production tests and small adversarial fixtures. At minimum it M
 9. repeated value-level statements and capacities do not create unjustified structural
    specialization; and
 10. inspection and diagnostics report the same qualified transaction facts the executor consumes.
+
+The capacity probe MUST cover an exact-fit batch and a one-slot-overflow batch, prove that no CPU
+or GPU-facing storage grows after initialization, and prove that the overflow status is translated
+only after the prior published state remains bitwise unchanged.
 
 These probes SHOULD share fixtures with the existing G5-L1/L2 suites. The reviewer reruns the
 focused gate and independently inspects decisive IR/inference evidence. A second complete package

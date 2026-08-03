@@ -654,8 +654,10 @@ end
         )
         before_energy = 2.0 * (2.0 - 1.0)^2
         @test _r1_descriptor_delta(descriptor, context) == -before_energy
-        @test size(only(runtime.relationships).incident_edges) == (2, 2)
-        @test only(runtime.relationships).degree == Int16[1, 1]
+        @test size(only(runtime.relationships).incident_edges) ==
+            (2, length(runtime.cell_kinds))
+        @test only(runtime.relationships).degree[1:2] == Int16[1, 1]
+        @test all(iszero, only(runtime.relationships).degree[3:end])
     end
 
     @testset "relationship affected anchors are a canonical bounded union" begin

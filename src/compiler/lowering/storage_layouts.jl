@@ -26,13 +26,18 @@ function _state_layout(
         else
             0
         end
+        # Storage domain is a declaration-schema fact. `record.ownership` may
+        # instead hold a qualified biological owner (for example a SiteState
+        # owned by a CellKind), so it cannot authoritatively select layout.
         domain = record.kind === :HistoryState ? :history :
-                 record.ownership === :relationship ? :relationship :
-                 record.ownership === :cell ? :cell :
-                 record.ownership === :medium ? :medium :
-                 record.ownership === :model ? :model : :site
+                 record.kind === :RelationshipState ? :relationship :
+                 record.kind === :CellState ? :cell :
+                 record.kind === :MediumState ? :medium :
+                 record.kind === :ModelState ? :model : :site
         shape = if domain === :site && !isempty(lattice_shape)
             lattice_shape
+        elseif domain === :cell
+            (_cell_capacity(ir),)
         elseif domain === :history && record.shape isa Tuple &&
                 all(item -> item isa Integer && item > 0, record.shape)
             Tuple(Int.(record.shape))
@@ -81,6 +86,23 @@ function _state_layout(
         handles[record_identities[entry.schema.identity]] = entry.handle
     end
     return layout, handles
+end
+
+function _cell_capacity(ir::AnalyzedTermIR)
+    index = findfirst(record -> record.kind === :LatticeDomain, ir.source.records)
+    index === nothing && return 0
+    record = ir.source.records[index]
+    lattice_shape = record.shape isa Tuple ? record.shape : ()
+    maximum = get(_record_options(record), :max_cells, prod(lattice_shape; init = 1))
+    maximum = _numeric_value(maximum)
+    maximum isa Real && isinteger(maximum) || throw(ArgumentError(
+        "max_cells must be structurally resolved to an integer"
+    ))
+    capacity = Int(maximum)
+    0 < capacity <= prod(lattice_shape; init = 1) || throw(ArgumentError(
+        "max_cells must be between one and the number of lattice sites"
+    ))
+    return capacity
 end
 
 function _lattice_shape(ir::AnalyzedTermIR)

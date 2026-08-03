@@ -91,6 +91,12 @@ function _g5_surface_runtime(executable, ownership)
     )
 end
 
+function _g5_capacity_tracker_values(runtime, expected)
+    result = zeros(eltype(expected), length(runtime.cell_kinds))
+    copyto!(result, 1, expected, 1, length(expected))
+    return result
+end
+
 _g5_surface_offsets(::VonNeumann) = (
     (-1, 0), (0, -1), (0, 1), (1, 0),
 )
@@ -223,8 +229,12 @@ end
             tracked = CorePotts.program_tracker_values(
                 runtime, _g5_surface_key(executable)
             )
-            @test tracked == Int32[expected]
-            @test tracked == _g5_von_neumann_surface(ownership)
+            @test tracked == _g5_capacity_tracker_values(
+                runtime, Int32[expected]
+            )
+            @test tracked == _g5_capacity_tracker_values(
+                runtime, _g5_von_neumann_surface(ownership)
+            )
             @test CorePotts.validate_tracker_state!(
                 runtime.program.tracker_plan,
                 runtime.trackers,
@@ -242,7 +252,7 @@ end
         moore_runtime = _g5_surface_runtime(moore, single)
         @test CorePotts.program_tracker_values(
             moore_runtime, _g5_surface_key(moore)
-        ) == Int32[8]
+        ) == _g5_capacity_tracker_values(moore_runtime, Int32[8])
 
         periodic, _, _ = _g5_surface_model(
             SequentialEngine(); boundary = Periodic()
@@ -252,7 +262,7 @@ end
         seam_runtime = _g5_surface_runtime(periodic, seam)
         @test CorePotts.program_tracker_values(
             seam_runtime, _g5_surface_key(periodic)
-        ) == Int32[6]
+        ) == _g5_capacity_tracker_values(seam_runtime, Int32[6])
         @test _g5_von_neumann_surface(seam; periodic = true) == Int32[6]
     end
 
@@ -381,7 +391,7 @@ end
             UInt32(1),
         )
         tracked = Set(
-            only(CorePotts.program_tracker_values(runtime, key))
+            first(CorePotts.program_tracker_values(runtime, key))
             for key in keys
         )
         @test tracked == Set((Int32(4), Int32(8)))
@@ -508,10 +518,13 @@ end
             tracked = CorePotts.program_tracker_values(
                 candidate_runtime, _g5_surface_key(candidate)
             )
-            @test tracked == _g5_surface_oracle(
-                fixture.ownership,
-                candidate_offsets;
-                periodic = fixture.periodic,
+            @test tracked == _g5_capacity_tracker_values(
+                candidate_runtime,
+                _g5_surface_oracle(
+                    fixture.ownership,
+                    candidate_offsets;
+                    periodic = fixture.periodic,
+                ),
             )
         end
 
@@ -585,7 +598,7 @@ end
         concave[2:4, 2:4] .= 1
         concave[3, 3] = 0
         relaxation = _g5_surface_runtime(executable, concave)
-        perimeter_before = only(CorePotts.program_tracker_values(
+        perimeter_before = first(CorePotts.program_tracker_values(
             relaxation, _g5_surface_key(executable)
         ))
         @test CorePotts._attempt_selected!(
@@ -597,7 +610,7 @@ end
             Val(:scripted),
             0.5,
         )
-        perimeter_after = only(CorePotts.program_tracker_values(
+        perimeter_after = first(CorePotts.program_tracker_values(
             relaxation, _g5_surface_key(executable)
         ))
         @test (perimeter_before, perimeter_after) == (16, 12)
@@ -614,7 +627,9 @@ end
         )
         @test CorePotts.program_tracker_values(
             runtime, _g5_surface_key(executable)
-        ) == _g5_von_neumann_surface(runtime.ownership)
+        ) == _g5_capacity_tracker_values(
+            runtime, _g5_von_neumann_surface(runtime.ownership)
+        )
 
         saved = CorePotts.program_checkpoint(runtime)
         @test saved.snapshot.trackers.values[2] === nothing
@@ -642,6 +657,9 @@ end
             checkerboard.core_program,
             snapshot,
             _g5_surface_key(checkerboard),
-        ) == _g5_von_neumann_surface(checkerboard_runtime.ownership)
+        ) == _g5_capacity_tracker_values(
+            checkerboard_runtime,
+            _g5_von_neumann_surface(checkerboard_runtime.ownership),
+        )
     end
 end

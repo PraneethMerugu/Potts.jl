@@ -273,6 +273,7 @@ function _push_effect_expression_roots!(roots, role::Symbol, value)
 end
 
 function _push_lifecycle_expression_roots!(roots, role::Symbol, value)
+    value isa Symbol && return roots
     if value isa NamedTuple
         for name in keys(value)
             _push_lifecycle_expression_roots!(
@@ -287,6 +288,13 @@ function _push_lifecycle_expression_roots!(roots, role::Symbol, value)
         return roots
     elseif value isa Pair
         _push_lifecycle_expression_roots!(roots, role, last(value))
+        return roots
+    elseif value isa AbstractPottsDistribution
+        for field in fieldnames(typeof(value))
+            _push_lifecycle_expression_roots!(
+                roots, role, getfield(value, field)
+            )
+        end
         return roots
     elseif value isa AbstractLifecyclePolicy
         for field in fieldnames(typeof(value))

@@ -259,8 +259,10 @@ struct StageDescriptorGroup{D, V <: AbstractVector{D}}
     instances::V
 end
 
-struct StageExecutionPlan{A <: Tuple, M <: Tuple}
+struct StageExecutionPlan{A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
     accepted_copy::A
+    before_lifecycle::B
+    after_lifecycle::L
     after_mcs::M
     accepted_count::Int32
     after_mcs_scratch_count::Int32
@@ -268,8 +270,10 @@ struct StageExecutionPlan{A <: Tuple, M <: Tuple}
 end
 
 """Fingerprint-free stage plan used by checkerboard kernels."""
-struct StageKernelPlan{A <: Tuple, M <: Tuple}
+struct StageKernelPlan{A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
     accepted_copy::A
+    before_lifecycle::B
+    after_lifecycle::L
     after_mcs::M
     accepted_count::Int32
     after_mcs_scratch_count::Int32
@@ -278,6 +282,8 @@ end
 
 stage_kernel_plan(plan::StageExecutionPlan) = StageKernelPlan(
     plan.accepted_copy,
+    plan.before_lifecycle,
+    plan.after_lifecycle,
     plan.after_mcs,
     plan.accepted_count,
     plan.after_mcs_scratch_count,
@@ -286,11 +292,13 @@ stage_kernel_plan(plan::StageKernelPlan) = plan
 
 function StageExecutionPlan(
         accepted_copy::A,
+        before_lifecycle::B,
+        after_lifecycle::L,
         after_mcs::M,
         accepted_count::Integer,
         after_mcs_scratch_count::Integer,
         fingerprint,
-    ) where {A <: Tuple, M <: Tuple}
+    ) where {A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
     accepted_count >= 0 || throw(ArgumentError(
         "accepted-copy descriptor count cannot be negative"
     ))
@@ -303,8 +311,13 @@ function StageExecutionPlan(
     actual_accepted == accepted_count || throw(ArgumentError(
         "accepted-copy descriptor count does not match its groups"
     ))
-    return StageExecutionPlan{A, M}(
+    after_mcs == (before_lifecycle..., after_lifecycle...) || throw(
+        ArgumentError("after-MCS groups must preserve lifecycle-boundary order")
+    )
+    return StageExecutionPlan{A, B, L, M}(
         accepted_copy,
+        before_lifecycle,
+        after_lifecycle,
         after_mcs,
         Int32(accepted_count),
         Int32(after_mcs_scratch_count),
@@ -312,7 +325,28 @@ function StageExecutionPlan(
     )
 end
 
-StageExecutionPlan() = StageExecutionPlan((), (), 0, 0, "empty-stage-plan-v1")
+
+function StageExecutionPlan(
+        accepted_copy::A,
+        after_mcs::M,
+        accepted_count::Integer,
+        after_mcs_scratch_count::Integer,
+        fingerprint,
+    ) where {A <: Tuple, M <: Tuple}
+    return StageExecutionPlan(
+        accepted_copy,
+        after_mcs,
+        (),
+        after_mcs,
+        accepted_count,
+        after_mcs_scratch_count,
+        fingerprint,
+    )
+end
+
+StageExecutionPlan() = StageExecutionPlan(
+    (), (), (), (), 0, 0, "empty-stage-plan-v1"
+)
 
 struct StageEvaluation{T <: AbstractFloat}
     enabled::Bool

@@ -240,6 +240,22 @@ function copy_auxiliary_state(::StateLayout, state::AuxiliaryState)
     return AuxiliaryState(banks)
 end
 
+@inline _copyto_auxiliary_banks!(::Tuple{}, ::Tuple{}) = nothing
+@inline function _copyto_auxiliary_banks!(destination::Tuple, source::Tuple)
+    copyto!(first(destination).values, first(source).values)
+    return _copyto_auxiliary_banks!(Base.tail(destination), Base.tail(source))
+end
+
+function copyto_auxiliary_state!(
+        destination::AuxiliaryState, source::AuxiliaryState
+    )
+    length(destination.banks) == length(source.banks) || throw(ArgumentError(
+        "auxiliary states have incompatible bank layouts"
+    ))
+    _copyto_auxiliary_banks!(destination.banks, source.banks)
+    return destination
+end
+
 function allocate_runtime_workspaces(layout::WorkspaceLayout)
     blocks = map(
         entry -> allocate_workspace_block(entry.schema),

@@ -72,6 +72,10 @@ function _compiler_synthesized_operation_requirements(
             _push_operation_requirement!(
                 requirements, _potts_iteration_bound_state_value, 1
             )
+        elseif record.phase isa Lifecycle
+            _push_operation_requirement!(
+                requirements, _potts_lifecycle_bound_state_value, 1
+            )
         end
     end
 

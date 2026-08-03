@@ -160,13 +160,18 @@ function _lower_stage_plan(
         "V1 permits at most one synchronous assignment per state block"
     ))
     accepted_groups = _stage_descriptor_groups(accepted)
-    after_mcs = (
+    before_lifecycle = (
         after_mcs_assignments...,
-        after_mcs_iterated...,
         after_mcs_relationships...,
+    )
+    after_lifecycle = (
+        after_mcs_iterated...,
         after_mcs_commits...,
     )
-    after_groups = _stage_descriptor_groups(after_mcs)
+    after_mcs = (before_lifecycle..., after_lifecycle...)
+    before_groups = _stage_descriptor_groups(before_lifecycle)
+    lifecycle_after_groups = _stage_descriptor_groups(after_lifecycle)
+    after_groups = (before_groups..., lifecycle_after_groups...)
     fingerprint = _sha256_hex(
         "potts-stage-execution-plan-v1",
         Tuple((
@@ -178,6 +183,8 @@ function _lower_stage_plan(
     )
     return CorePotts.StageExecutionPlan(
         accepted_groups,
+        before_groups,
+        lifecycle_after_groups,
         after_groups,
         length(accepted),
         after_mcs_slot,

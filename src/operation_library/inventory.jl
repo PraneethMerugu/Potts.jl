@@ -15,6 +15,7 @@ function _v1_builtin_operation_declarations()
         (new_contact, 2), (lost_contact, 2), (linked, 3),
         (_potts_proposal_bound_state_value, 1),
         (_potts_iteration_bound_state_value, 1),
+        (_potts_lifecycle_bound_state_value, 1),
         (cell_volume, 1), (cell_surface, 1), (cell_elongation, 1),
         (cell_center, 1), (unwrapped_center, 1),
         (endpoint_a, 1), (endpoint_b, 1), (degree, 2),

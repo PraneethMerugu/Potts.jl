@@ -7,7 +7,12 @@ using Adapt
 using Atomix
 using KernelAbstractions
 
-const RNG_CONTRACT_VERSION = v"1.0.0"
+const RNG_CONTRACT_VERSION = v"1.1.0"
+
+# Declared before program/types.jl so the compiled program can own the generic
+# lifecycle boundary while its concrete plan is defined with the execution IR.
+abstract type AbstractLifecycleExecutionPlan end
+struct NoLifecycleExecutionPlan <: AbstractLifecycleExecutionPlan end
 
 include("rng/semantic.jl")
 include("execution/static_evaluator.jl")
@@ -20,6 +25,7 @@ include("execution/tracker_plan.jl")
 include("program/checkerboard_plan.jl")
 include("program/types.jl")
 include("execution/stage_plan.jl")
+include("execution/lifecycle_plan.jl")
 include("program/v1.jl")
 include("execution/hamiltonian_runtime.jl")
 
@@ -90,6 +96,7 @@ public AbstractLifecycleTriggerEvaluationContext
 public AbstractLifecyclePlacementEvaluationContext
 public AbstractLifecyclePartitionEvaluationContext
 public AbstractLifecycleStateTransformEvaluationContext
+public lifecycle_anchor, lifecycle_site, lifecycle_occurrence
 public LiteralExpression, ParameterExpression, ContextExpression, StateExpression
 public OperationExpression
 public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
@@ -119,6 +126,7 @@ public QualifiedResourceIdentity, StateLayout, WorkspaceLayout
 public DenseStateBlock, DenseWorkspaceBlock, BlockView, BlockBank
 public AuxiliaryState, RuntimeWorkspaces, StateCheckpointEntry
 public AuxiliaryStateCheckpoint, state_block, workspace_block
+public copyto_auxiliary_state!
 public state_schema_metadata, state_storage_class, allocate_state_block
 public validate_state_block, adapt_state_block, settled_state_export
 public encode_state_checkpoint, reconstruct_state_block, inspect_state_block
@@ -183,5 +191,49 @@ public StageEvaluation, StageRuntimeBuffers, allocate_stage_runtime_buffers
 public proposal_log_acceptance_ratio, proposal_acceptance_probability
 public proposal_acceptance_decision
 public rng_operation_limit
+public LifecycleDomainCode, ModelLifecycleDomain, CellKindLifecycleDomain
+public LifecycleCadenceCode, EveryMCSLifecycleCadence, AtMCSLifecycleCadence
+public PeriodicLifecycleCadence
+public LifecycleEffectCode, CreateCellLifecycleEffect, RemoveCellLifecycleEffect
+public RetireCellLifecycleEffect, TransitionCellLifecycleEffect
+public DivideCellLifecycleEffect
+public LifecycleInadmissibilityDisposition, FilterLifecycleInadmissible
+public ErrorLifecycleInadmissible
+public LifecycleConflictCode, RejectLifecycleConflicts
+public StablePriorityLifecycleConflicts
+public LifecyclePlacementCode, NoLifecyclePlacement, SeedAtLifecyclePlacement
+public SeedStencilLifecyclePlacement, ExternalLifecyclePlacement
+public LifecyclePartitionCode, NoLifecyclePartition
+public RandomPlaneLifecyclePartition, PrincipalMajorLifecyclePartition
+public PrincipalMinorLifecyclePartition, SpecifiedNormalLifecyclePartition
+public ExternalLifecyclePartition
+public LifecycleSideCode, CanonicalLifecycleSide, StableRandomLifecycleSide
+public LifecycleStateAction, InitializeLifecycleState
+public UnsupportedLifecycleState, RetireToLifecycleState, PreserveLifecycleState
+public ResetLifecycleState, TransformLifecycleState, CopyDaughtersLifecycleState
+public PreserveParentResetDaughterLifecycleState, ResetBothLifecycleState
+public SplitConservativelyLifecycleState, TransformDaughtersLifecycleState
+public RedrawDaughtersLifecycleState
+public LifecycleRoundingCode, ExactLifecycleRounding, FloorLifecycleRounding
+public CeilLifecycleRounding, NearestLifecycleRounding
+public LifecycleRelationshipAction, RejectWhileLinkedLifecycleRelationship
+public RemoveIncidentLifecycleRelationship, PreserveCompatibleLifecycleRelationship
+public RemoveIncompatibleLifecycleRelationship, RejectIncompatibleLifecycleRelationship
+public LifecycleOwnershipAction, PreserveLifecycleOwnershipState
+public ClearLifecycleOwnershipState
+public LifecycleEvaluatorStorage, evaluate_lifecycle
+public LifecycleStateRule, LifecycleStateRuleStorage, call_lifecycle_state_rule
+public LifecycleRelationshipRule, LifecycleOwnershipRule
+public AbstractLifecycleExecutionPlan, NoLifecycleExecutionPlan
+public LifecycleDescriptor, LifecycleExecutionPlan, lifecycle_plan_report
+public LifecycleBoundStateValueOperation, lifecycle_anchor
+public LifecycleStatusCode, AbstractLifecycleFailure
+public LifecycleInadmissibilityFailure, LifecycleConflictFailure
+public CellCapacityFailure, RelationshipCapacityFailure
+public StaleGenerationFailure, GenerationOverflowFailure
+public LifecycleEvaluatorFailure, LifecycleFootprintFailure
+public LifecycleInvariantFailure, LifecycleBackendFailure
+public NoLifecycleWorkspace, LifecycleWorkspace, allocate_lifecycle_workspace
+public execute_lifecycle!
 
 end

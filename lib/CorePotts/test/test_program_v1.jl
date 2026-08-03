@@ -110,7 +110,7 @@ function Base.getindex(
     return @inbounds values.values[index]
 end
 
-@testset "extinction retires a generation at the lifecycle boundary" begin
+@testset "executor does not infer an undeclared extinction mechanism" begin
     marker_schema = CorePotts.StateBlockSchema(
         CorePotts.QualifiedResourceIdentity((), :marker),
         v"1.0.0",
@@ -163,25 +163,21 @@ end
     )
     for _ in 1:8
         CorePotts.advance_mcs!(runtime)
-        iszero(runtime.cell_kinds[1]) && break
+        iszero(CorePotts.program_tracker_values(
+            runtime, Val(:cell_volume)
+        )[1]) && break
     end
     @test CorePotts.program_tracker_values(
         runtime, Val(:cell_volume)
     )[1] == 0
-    @test runtime.cell_kinds[1] == 0
-    @test runtime.cell_generations[1] == UInt32(2)
+    @test runtime.cell_kinds[1] == 2
+    @test runtime.cell_generations[1] == UInt32(1)
     @test CorePotts.state_block(
         runtime.descriptor_state, marker_handle
-    ).values[1] == 0
-    restored = CorePotts.restore_program_checkpoint(
+    ).values[1] == 7
+    @test_throws ArgumentError CorePotts.restore_program_checkpoint(
         program, CorePotts.program_checkpoint(runtime)
     )
-    @test restored.cell_kinds == runtime.cell_kinds
-    @test CorePotts.state_block(
-        restored.descriptor_state, marker_handle
-    ).values == CorePotts.state_block(
-        runtime.descriptor_state, marker_handle
-    ).values
 end
 
 function test_initial()
@@ -1128,12 +1124,9 @@ end
         uninterrupted = CorePotts.initialize_program(
             program, test_initial(), Float64[], UInt64(0x55), UInt32(1)
         )
-        for _ in 1:3
-            CorePotts.advance_mcs!(uninterrupted)
-        end
         checkpoint = CorePotts.program_checkpoint(uninterrupted)
         restored = CorePotts.restore_program_checkpoint(program, checkpoint)
-        for _ in 1:3
+        for _ in 1:6
             CorePotts.advance_mcs!(uninterrupted)
             CorePotts.advance_mcs!(restored)
         end

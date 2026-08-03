@@ -5,9 +5,19 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
     return (
         shape = program.shape,
         site_count,
+        max_cells = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+            Int(program.lifecycle_plan.cell_capacity) : nothing,
         ownership = (element = Int32, count = site_count),
-        cell_kind = Int16,
-        cell_generation = UInt32,
+        cell_kind = (
+            element = Int16,
+            count = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+                Int(program.lifecycle_plan.cell_capacity) : nothing,
+        ),
+        cell_generation = (
+            element = UInt32,
+            count = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+                Int(program.lifecycle_plan.cell_capacity) : nothing,
+        ),
         volume = Int,
         declared_state_blocks = Tuple(
             CorePotts.state_schema_metadata(entry.schema)
@@ -24,6 +34,34 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
 end
 
 function _workspace_report(program::CorePotts.CompiledPottsProgram)
+    lifecycle = if program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan
+        plan = program.lifecycle_plan
+        (
+            fixed_capacity = true,
+            cell_capacity = Int(plan.cell_capacity),
+            request_capacity = Int(plan.maximum_requests),
+            placement_capacity = Int(plan.maximum_placement_sites),
+            request_slots = Int(plan.maximum_requests),
+            planned_site_slots =
+                Int(plan.maximum_requests) * Int(plan.maximum_placement_sites),
+            partition_label_slots =
+                Int(plan.maximum_requests) * prod(program.shape),
+            free_cell_slots = Int(plan.cell_capacity),
+            resizes_during_execution = false,
+        )
+    else
+        (
+            fixed_capacity = true,
+            cell_capacity = 0,
+            request_capacity = 0,
+            placement_capacity = 0,
+            request_slots = 0,
+            planned_site_slots = 0,
+            partition_label_slots = 0,
+            free_cell_slots = 0,
+            resizes_during_execution = false,
+        )
+    end
     return (
         stage_site_scratch = sum((
             1
@@ -48,6 +86,7 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
                     CorePotts.RelationshipRetuneEffect,
                 }
             ); init = 0),
+        lifecycle,
         live_state_allocated = false,
     )
 end

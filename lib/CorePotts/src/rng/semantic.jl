@@ -9,11 +9,18 @@ struct Philox4x32x10V1 end
     ExplicitProposalDrawStream = 6
     InitializationStream = 7
     CheckerboardPriorityStream = 8
+    LifecycleTriggerStream = 9
+    LifecyclePlacementStream = 10
+    LifecyclePartitionStream = 11
+    LifecycleStateStream = 12
 end
 
 @enum RNGEntityKind::UInt8 begin
     GlobalEntity = 0
     SiteEntity = 1
+    ModelEntity = 2
+    CellEntity = 3
+    DestinationEntity = 4
 end
 
 const _RNG_MAX_MCS = UInt64(0x0000ffffffffffff)
@@ -58,8 +65,10 @@ struct RNGAddress
             throw(ArgumentError("RNG operation exceeds the V1 address domain"))
         draw <= _RNG_MAX_DRAW ||
             throw(ArgumentError("RNG draw exceeds the V1 address domain"))
-        entity_kind === SiteEntity || generation == 0 ||
-            throw(ArgumentError("only site addresses may carry a generation"))
+        entity_kind in (SiteEntity, CellEntity, DestinationEntity) ||
+            generation == 0 || throw(ArgumentError(
+                "only site, cell, or destination addresses may carry a generation"
+            ))
         return new(
             stream,
             mcs,

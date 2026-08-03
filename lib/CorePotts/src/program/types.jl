@@ -104,6 +104,18 @@ function Base.copy(storage::RelationshipStorage)
     )
 end
 
+function Base.copyto!(
+        destination::RelationshipStorage, source::RelationshipStorage
+    )
+    length(destination) == length(source) || throw(ArgumentError(
+        "relationship storages have incompatible slot counts"
+    ))
+    for slot in eachindex(destination)
+        copyto!(destination[slot], source[slot])
+    end
+    return destination
+end
+
 function _cold_relationship_bank_get(banks::Tuple, bank::Int, slot::Int)
     isempty(banks) && throw(BoundsError(banks, bank))
     bank == 1 && return @inbounds first(banks)[slot]
@@ -133,6 +145,7 @@ struct CompiledPottsProgram{
         TP,
         D,
         SP,
+        LP <: AbstractLifecycleExecutionPlan,
         CP <: AbstractCheckerboardPlan,
     }
     shape::NTuple{N, Int}
@@ -148,6 +161,7 @@ struct CompiledPottsProgram{
     tracker_plan::TP
     descriptor_plan::D
     stage_plan::SP
+    lifecycle_plan::LP
     checkerboard_plan::CP
     engine::E
     backend::B
@@ -171,6 +185,7 @@ function CompiledPottsProgram(
         backend::B,
         fingerprint::AbstractString;
         medium_kinds = nothing,
+        lifecycle_plan::AbstractLifecycleExecutionPlan = NoLifecycleExecutionPlan(),
         checkerboard_plan = nothing,
     ) where {T <: AbstractFloat, N, TP, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
@@ -227,6 +242,7 @@ function CompiledPottsProgram(
         )
     return CompiledPottsProgram{
         T, N, E, B, typeof(relationship_storage), TP, D, SP,
+        typeof(lifecycle_plan),
         typeof(resolved_checkerboard_plan),
     }(
         shape,
@@ -242,6 +258,7 @@ function CompiledPottsProgram(
         tracker_plan,
         descriptor_plan,
         stage_plan,
+        lifecycle_plan,
         resolved_checkerboard_plan,
         engine,
         backend,
@@ -280,8 +297,9 @@ function ProgramInitialState(
                   UInt32.(cell_generations)
     length(generations) == length(kinds) ||
         throw(ArgumentError("cell generation table has the wrong length"))
-    all(!iszero, generations) ||
-        throw(ArgumentError("active cell generations must be positive"))
+    all(eachindex(kinds)) do index
+        @inbounds kinds[index] == 0 || !iszero(generations[index])
+    end || throw(ArgumentError("active cell generations must be positive"))
     relationship_values = Any[deepcopy(value) for value in relationships]
     return ProgramInitialState{
         T, N, typeof(descriptor_state),

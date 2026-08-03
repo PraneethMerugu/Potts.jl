@@ -6,6 +6,52 @@ function _g5_lifecycle_diagnostic_kind(error)
     return only(error.diagnostics).kind
 end
 
+@testset "G5-L2 lifecycle structure does not specialize on counts or capacity" begin
+    function compiled_lifecycle_shape(count, max_cells)
+        cell = CellKind(:specialization_cell; extinction = RetireAtZero())
+        medium = MediumKind(:specialization_medium)
+        births = ntuple(count) do index
+            LifecycleProcess(
+                Symbol(:specialization_birth_, index);
+                domain = model(),
+                expression = true,
+                effects = (CreateCell(
+                    cell;
+                    placement = SeedAt(mod1(index, 32)),
+                    on_inadmissible = ErrorOnInadmissible(),
+                ),),
+            )
+        end
+        system = PottsSystem(
+            name = :LifecycleSpecialization,
+            statements = StatementSet((
+                Lattice((8, 4); max_cells),
+                cell,
+                medium,
+                births...,
+                Protocol(Sweep(); name = :main),
+            )),
+        )
+        return compile(
+            complete(system);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        ).core_program.lifecycle_plan
+    end
+
+    one = compiled_lifecycle_shape(1, 4)
+    different_capacity = compiled_lifecycle_shape(1, 32)
+    many = compiled_lifecycle_shape(4, 32)
+    @test typeof(one) === typeof(different_capacity) === typeof(many)
+    @test typeof(one.descriptors) === typeof(many.descriptors)
+    @test typeof(one.evaluators) === typeof(many.evaluators)
+    @test one.cell_capacity == 4
+    @test different_capacity.cell_capacity == many.cell_capacity == 32
+    @test length(one.descriptors) == 2
+    @test length(many.descriptors) == 5
+end
+
 function _g5_minimal_system(name, statements)
     return PottsSystem(
         name = name,
@@ -145,22 +191,20 @@ end
         PottsToolkit._v1_builtin_operation_inventory()
     )
 
-    compile_error = try
-        compile(
-            completed;
-            engine = SequentialEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float32,
-        )
-        nothing
-    catch error
-        error
-    end
-    @test compile_error isa PottsToolkit.PottsValidationError
-    @test all(
-        diagnostic -> occursin("G5-L2", diagnostic.actual),
-        compile_error.diagnostics,
+    executable = compile(
+        completed;
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
     )
+    @test executable isa PottsExecutable
+    @test executable.reports.lifecycle.descriptors == length(plans)
+    @test executable.reports.lifecycle.cell_capacity == 25
+    @test executable.reports.workspace.lifecycle.fixed_capacity
+    @test executable.reports.workspace.lifecycle.cell_capacity == 25
+    @test executable.reports.workspace.lifecycle.request_capacity ==
+        executable.reports.lifecycle.maximum_requests
+    @test !executable.reports.workspace.lifecycle.resizes_during_execution
 
     synthesized_only = complete(_g5_minimal_system(
         :SynthesizedExtinction,

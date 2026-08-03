@@ -14,6 +14,7 @@ end
 
 const _STRUCTURAL_OPTION_NAMES = Set((
     :shape,
+    :max_cells,
     :capacity,
     :maximum_degree,
     :substeps,

@@ -457,6 +457,24 @@ operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
         required_context = :iteration,
     )
 
+operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
+    _transfer(
+        :lifecycle_bound_state_value,
+        1,
+        :real,
+        :declared;
+        footprint_rule = OwnerFootprintRule(),
+        allowed_roles = (
+            :lifecycle_trigger,
+            :lifecycle_placement,
+            :lifecycle_partition,
+            :lifecycle_state_transform,
+        ),
+        allowed_phases = (:Lifecycle,),
+        required_context = :any,
+        owner = :PottsToolkitLifecycleCompiler,
+    )
+
 for operation in (
         cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b,

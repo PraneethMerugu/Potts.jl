@@ -206,13 +206,21 @@ function Lattice(shape::Tuple{Vararg{Integer}};
         name::Symbol = :lattice,
         spacing = ntuple(_ -> 1.0, length(shape)),
         boundary::AbstractBoundaryPolicy = Periodic(),
+        max_cells::Integer = prod(shape),
         relations = NamedTuple(),
     )
     all(>(0), shape) || throw(ArgumentError("lattice dimensions must be positive"))
     length(spacing) == length(shape) ||
         throw(ArgumentError("lattice spacing must match lattice dimensions"))
+    0 < max_cells <= prod(shape) || throw(ArgumentError(
+        "max_cells must be between one and the number of lattice sites"
+    ))
     domain = LatticeDomain(
-        name; shape = Tuple(Int.(shape)), spacing = Tuple(spacing), boundary
+        name;
+        shape = Tuple(Int.(shape)),
+        spacing = Tuple(spacing),
+        boundary,
+        max_cells = Int(max_cells),
     )
     relation_statements = AbstractPottsStatement[]
     for (relation_name, neighborhood) in pairs(relations)

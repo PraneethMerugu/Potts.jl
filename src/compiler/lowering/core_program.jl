@@ -392,6 +392,7 @@ function _lower_core_program(
         manifest::ParameterManifest,
         descriptor_plan::CorePotts.DescriptorExecutionPlan,
         stage_plan::CorePotts.StageExecutionPlan,
+        lifecycle_plan::CorePotts.AbstractLifecycleExecutionPlan,
         relationship_endpoint_policies,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
@@ -478,6 +479,7 @@ function _lower_core_program(
         tracker_plan.fingerprint,
         descriptor_plan.fingerprint,
         stage_plan.fingerprint,
+        CorePotts.lifecycle_plan_report(lifecycle_plan),
         CorePotts.checkerboard_plan_report(checkerboard_plan),
     )
     return CorePotts.CompiledPottsProgram(
@@ -497,6 +499,7 @@ function _lower_core_program(
         core_backend,
         program_fingerprint;
         medium_kinds,
+        lifecycle_plan,
         checkerboard_plan,
     ), Tuple((
         identity = _manifest_identity(declaration.identity),

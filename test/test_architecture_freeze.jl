@@ -725,7 +725,7 @@ using .ArchitectureFreezeFixtures
         declarations = PottsToolkit._v1_builtin_operation_declarations()
         surface_keys = [(nameof(operation), arity)
             for (operation, arity) in declarations]
-        @test length(declarations) == 65
+        @test length(declarations) == 66
         @test length(surface_keys) == length(unique(surface_keys))
         @test all(
             declaration -> hasmethod(

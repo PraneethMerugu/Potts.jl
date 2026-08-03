@@ -9,9 +9,7 @@ function _lower_static_node(
         state_handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
         draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         cache::Dict{Int32, CorePotts.AbstractStaticExpression},
-        state_binding::Union{
-            Nothing, CorePotts.AbstractStageSiteSelector,
-        } = nothing,
+        state_binding = nothing,
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
@@ -35,15 +33,29 @@ function _lower_static_node(
             ),),
         ))
         state_expression = CorePotts.StateExpression(handle)
-        state_binding === nothing ? state_expression :
-        _compiler_synthesized_operation_expression(
-            graph,
-            state_binding isa CorePotts.ProposalTargetStageSite ?
+        if state_binding === nothing
+            state_expression
+        else
+            operation = state_binding isa CorePotts.ProposalTargetStageSite ?
                 _potts_proposal_bound_state_value :
-                _potts_iteration_bound_state_value,
-            (state_expression,),
-            ir.source.records[node.record],
-        )
+                state_binding isa CorePotts.IterationStageSite ?
+                _potts_iteration_bound_state_value :
+                state_binding isa Symbol && startswith(
+                    String(state_binding), "lifecycle_"
+                ) ?
+                _potts_lifecycle_bound_state_value :
+                throw(ArgumentError("unsupported compiled state binding"))
+            _compiler_synthesized_operation_expression(
+                graph,
+                operation,
+                (state_expression,),
+                ir.source.records[node.record],
+                semantic_role = state_binding isa Symbol ? state_binding :
+                    _record_operation_role(ir.source.records[node.record]),
+                semantic_phase = state_binding isa Symbol ? :Lifecycle :
+                    _record_operation_phase(ir.source.records[node.record]),
+            )
+        end
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.

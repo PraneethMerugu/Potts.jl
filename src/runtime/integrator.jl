@@ -297,6 +297,7 @@ function stage_external_inputs!(integrator::PottsIntegrator, values)
                 Dict(state.name => value),
                 integrator.prob.executable.core_program.shape,
                 length(integrator.runtime.cell_kinds),
+                length(integrator.runtime.cell_kinds),
                 T,
             )
             target = CorePotts.state_block(

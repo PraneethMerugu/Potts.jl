@@ -642,24 +642,27 @@ function _apply_after_mcs_groups!(runtime, groups::Tuple)
     return _apply_after_mcs_groups!(runtime, Base.tail(groups))
 end
 
-function _execute_after_mcs_stage!(runtime::ProgramRuntime)
+function _execute_after_mcs_stage!(runtime::ProgramRuntime, groups)
     _reset_relationship_transactions!(
         runtime.stage_buffers.relationship_transactions,
         runtime.relationships,
     )
-    _emit_after_mcs_groups!(runtime, runtime.program.stage_plan.after_mcs)
+    _emit_after_mcs_groups!(runtime, groups)
     _prepare_relationship_transactions!(
         runtime.stage_buffers.relationship_transactions,
         runtime.cell_kinds,
         runtime.cell_generations,
         runtime.program.relationships,
     )
-    _apply_after_mcs_groups!(runtime, runtime.program.stage_plan.after_mcs)
+    _apply_after_mcs_groups!(runtime, groups)
     _publish_relationship_transactions!(
         runtime.relationships,
         runtime.stage_buffers.relationship_transactions,
     )
     return nothing
 end
+
+_execute_after_mcs_stage!(runtime::ProgramRuntime) =
+    _execute_after_mcs_stage!(runtime, runtime.program.stage_plan.after_mcs)
 
 """Log acceptance ratio for the conventional descriptor-driven V1 law."""

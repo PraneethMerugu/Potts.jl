@@ -55,7 +55,10 @@ CorePotts.operation_context_supported(
 
 @inline (::TriggerCallable)(arguments, context) = arguments[1] > 0
 @inline (::PlacementCallable)(arguments, context) = Int(arguments[1])
-@inline (::PartitionCallable)(arguments, context) = Int(arguments[1])
+@inline function (::PartitionCallable)(arguments, context)
+    site = CorePotts.lifecycle_site(context)
+    return site[1] <= 3 ? 1 : 2
+end
 @inline (::TransformCallable)(arguments, context) = arguments[1]
 @inline (::UnqualifiedPartitionCallable)(arguments, context) = Int(arguments[1])
 

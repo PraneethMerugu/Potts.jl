@@ -115,8 +115,10 @@ end
           (UInt32(1), UInt32(1))
     @test map(values -> values[edge], relationships.payload) ==
           (1.25, 0.0, 1.25)
-    @test relationships.degree == Int16[1, 1]
-    @test relationships.incident_edges[1, :] == Int32[edge, edge]
+    @test relationships.degree[1:2] == Int16[1, 1]
+    @test all(iszero, relationships.degree[3:end])
+    @test relationships.incident_edges[1, 1:2] == Int32[edge, edge]
+    @test all(iszero, relationships.incident_edges[:, 3:end])
 
     checkpoint_value = CorePotts.program_checkpoint(runtime)
     restored = CorePotts.restore_program_checkpoint(

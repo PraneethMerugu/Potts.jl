@@ -58,6 +58,7 @@ function _potts_merks_local_connectivity end
 function _potts_act_energy end
 function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
+function _potts_lifecycle_bound_state_value end
 function linked end
 
 Symbolics.@register_symbolic new_contact(x, y)::Bool

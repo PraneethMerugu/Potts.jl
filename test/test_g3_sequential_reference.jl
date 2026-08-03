@@ -191,9 +191,9 @@ end
             0.75,
         )
         @test retirement_runtime.retired_cells == 0
-        CorePotts._retire_extinct_cells!(retirement_runtime)
+        CorePotts.execute_lifecycle!(retirement_runtime)
         @test retirement_runtime.retired_cells == 1
-        @test only(retirement_runtime.cell_kinds) == 0
+        @test all(iszero, retirement_runtime.cell_kinds)
         @test_throws ArgumentError CorePotts.proposal_acceptance_decision(
             neutral, 1.0, 0.0
         )
@@ -570,10 +570,12 @@ end
             (runtime.ownership[index] == 1 ? 1 : 0) << (index - 1)
             for index in eachindex(runtime.ownership)
         )
-        tracker_matches(runtime) = isempty(_g3_volumes(runtime)) ?
-            count(>(0), runtime.ownership) == 0 :
-            only(_g3_volumes(runtime)) ==
-            count(==(Int32(1)), runtime.ownership)
+        function tracker_matches(runtime)
+            volumes = _g3_volumes(runtime)
+            return first(volumes) ==
+                count(==(Int32(1)), runtime.ownership) &&
+                all(iszero, @view volumes[2:end])
+        end
         directions = (-1, 1)
         function analytic_row(mask)
             row = zeros(Float64, 8)

@@ -174,7 +174,8 @@ end
           9.0f0
     saved = integrator.u
     @test saved[:site_marker] == reshape(Float32.(1:12), 4, 3)
-    @test saved[:cell_marker] == Float32[7]
+    @test saved[:cell_marker][1] == 7.0f0
+    @test all(==(2.0f0), saved[:cell_marker][2:end])
     @test saved[:medium_marker] == 3.0f0
     @test saved[:model_marker] == 9.0f0
     @test SymbolicIndexingInterface.getu(integrator, model_marker)(integrator) ==

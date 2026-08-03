@@ -1640,6 +1640,15 @@ high-water mark, and preflights capacity and generation range before mutation. I
 advances the consumed generation exactly once at allocation. Transition and the retained parent
 preserve identity/generation.
 
+Every compiled model has one positive, structurally resolved `max_cells` capacity, defaulting to
+the number of lattice sites and never exceeding that number. CPU and GPU identity tables,
+cell-owned state, allocation plans, and transaction workspaces are allocated to this fixed capacity
+before execution and MUST NOT resize. Initialization fails when its finite-cell identities exceed
+`max_cells`. If a complete surviving transaction batch needs more identities than the common
+pre-lifecycle free pool, execution reports `CellCapacityFailure` and gracefully terminates at the
+phase boundary with the previously published scientific state unchanged. Host allocation, dynamic
+growth, partial admission, and a CPU-only fallback are forbidden.
+
 Lifecycle request banks, compaction/sort/conflict storage, allocation plans, policy plans, tracker
 repair, relationship consequences, and status storage MUST have finite compiler-proven bounds and
 reusable backend-adaptable workspace. Statement names, resource names, IDs, generations,
