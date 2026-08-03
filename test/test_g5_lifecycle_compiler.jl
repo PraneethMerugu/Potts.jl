@@ -264,6 +264,50 @@ end
     @test _g5_lifecycle_diagnostic_kind(missing_state_policy) ===
         :missing_lifecycle_state_policy
 
+    unsupported_state = CellState(
+        :unsupported_state;
+        initial = 0.0,
+        creation = Unsupported(),
+        retirement = RetireTo(0.0),
+    )
+    unsupported_create = LifecycleProcess(
+        :unsupported_create;
+        domain = model(),
+        expression = true,
+        effects = (CreateCell(
+            cell;
+            placement = SeedAt(1),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+    )
+    unsupported_error = try
+        complete(_g5_minimal_system(
+            :UnsupportedState,
+            (cell, medium, unsupported_state, unsupported_create),
+        ))
+        nothing
+    catch error
+        error
+    end
+    @test _g5_lifecycle_diagnostic_kind(unsupported_error) ===
+        :unsupported_reachable_lifecycle_state
+
+    overridden_create = LifecycleProcess(
+        :overridden_create;
+        domain = model(),
+        expression = true,
+        effects = (CreateCell(
+            cell;
+            placement = SeedAt(1),
+            state = (unsupported_state => InitializeFrom(2.0),),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+    )
+    @test complete(_g5_minimal_system(
+        :OverriddenUnsupportedState,
+        (cell, medium, unsupported_state, overridden_create),
+    )) isa PottsSystem
+
     @test_throws UndefKeywordError CreateCell(cell; placement = SeedAt(1))
     @test_throws UndefKeywordError Retire(anchor)
 

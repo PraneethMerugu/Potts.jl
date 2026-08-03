@@ -206,6 +206,12 @@ function _resolve_cell_state_policies(statement, effect, visible)
             )
             source = :schema
         end
+        policy isa Unsupported && _throw_lifecycle_completion(
+            statement,
+            :unsupported_reachable_lifecycle_state,
+            "an explicit event override or executable CellState $(slot) policy for $(identity)",
+            "Unsupported() resolved from $(source)",
+        )
         push!(resolved, state => policy)
         push!(sources, identity => source)
         delete!(overrides, identity)
