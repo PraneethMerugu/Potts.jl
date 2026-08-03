@@ -129,70 +129,73 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
         end
         return true
     end
-    fill!(workspace.conflict_seen, false)
-    for seed in 1:count
-        @inbounds workspace.active[seed] || continue
-        @inbounds workspace.conflict_seen[seed] && continue
-        head = 1
-        tail = 1
-        workspace.canonical_order[1] = Int32(seed)
-        workspace.conflict_seen[seed] = true
-        while head <= tail
-            current = Int(@inbounds workspace.canonical_order[head])
-            head += 1
-            for candidate in 1:count
-                @inbounds workspace.active[candidate] || continue
-                @inbounds workspace.conflict_seen[candidate] && continue
-                _lifecycle_requests_conflict(
-                    runtime, plan, workspace, current, candidate
-                ) || continue
-                tail += 1
-                @inbounds begin
-                    workspace.canonical_order[tail] = Int32(candidate)
-                    workspace.conflict_seen[candidate] = true
-                end
-            end
-        end
-        best = 0
-        tied = 0
-        best_priority = typemin(Int32)
-        for position in 1:tail
-            candidate = Int(@inbounds workspace.canonical_order[position])
-            priority = @inbounds plan.descriptors[
-                Int(workspace.descriptor[candidate])
-            ].priority
-            if priority > best_priority
-                best = candidate
-                tied = 0
-                best_priority = priority
-            elseif priority == best_priority
-                if _lifecycle_request_key(plan, workspace, candidate) <
-                        _lifecycle_request_key(plan, workspace, best)
-                    tied = best
-                    best = candidate
-                elseif iszero(tied) || _lifecycle_request_key(
-                        plan, workspace, candidate
-                    ) < _lifecycle_request_key(plan, workspace, tied)
-                    tied = candidate
-                end
-            end
-        end
-        if !iszero(tied)
-            best_descriptor = @inbounds plan.descriptors[
-                Int(workspace.descriptor[best])
+    ordered_count = 0
+    for request in 1:count
+        @inbounds workspace.active[request] || continue
+        ordered_count += 1
+        workspace.canonical_order[ordered_count] = Int32(request)
+    end
+    for index in 2:ordered_count
+        request = Int(@inbounds workspace.canonical_order[index])
+        descriptor = @inbounds plan.descriptors[
+            Int(workspace.descriptor[request])
+        ]
+        key = _lifecycle_request_key(plan, workspace, request)
+        position = index
+        while position > 1
+            prior = Int(@inbounds workspace.canonical_order[position - 1])
+            prior_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[prior])
             ]
+            ordered_before = prior_descriptor.priority > descriptor.priority ||
+                (prior_descriptor.priority == descriptor.priority &&
+                 _lifecycle_request_key(plan, workspace, prior) < key)
+            ordered_before && break
+            @inbounds workspace.canonical_order[position] = Int32(prior)
+            position -= 1
+        end
+        @inbounds workspace.canonical_order[position] = Int32(request)
+    end
+    for position in 1:ordered_count
+        candidate = Int(@inbounds workspace.canonical_order[position])
+        candidate_descriptor = @inbounds plan.descriptors[
+            Int(workspace.descriptor[candidate])
+        ]
+        blocked = false
+        tied = 0
+        for selected in 1:count
+            @inbounds workspace.selected[selected] || continue
+            _lifecycle_requests_conflict(
+                runtime, plan, workspace, selected, candidate
+            ) || continue
+            selected_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[selected])
+            ]
+            if selected_descriptor.priority > candidate_descriptor.priority
+                blocked = true
+                break
+            end
+            if selected_descriptor.priority == candidate_descriptor.priority &&
+                    (iszero(tied) || _lifecycle_request_key(
+                        plan, workspace, selected
+                    ) < _lifecycle_request_key(plan, workspace, tied))
+                tied = selected
+            end
+        end
+        blocked && continue
+        if !iszero(tied)
             tied_descriptor = @inbounds plan.descriptors[
                 Int(workspace.descriptor[tied])
             ]
             return _set_lifecycle_status!(
                 workspace,
                 LifecycleStatusConflict;
-                source = best_descriptor.source_handle,
-                secondary_source = tied_descriptor.source_handle,
-                anchor = @inbounds(workspace.anchor[tied]),
+                source = tied_descriptor.source_handle,
+                secondary_source = candidate_descriptor.source_handle,
+                anchor = @inbounds(workspace.anchor[candidate]),
             )
         end
-        @inbounds workspace.selected[best] = true
+        @inbounds workspace.selected[candidate] = true
     end
     return true
 end

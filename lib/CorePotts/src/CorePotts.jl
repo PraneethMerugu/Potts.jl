@@ -232,7 +232,9 @@ public LifecycleStateRule, LifecycleStateRuleStorage, call_lifecycle_state_rule
 public LifecycleRelationshipRule, LifecycleOwnershipRule
 public AbstractLifecycleExecutionPlan, NoLifecycleExecutionPlan
 public LifecycleDescriptor, LifecycleExecutionPlan, lifecycle_plan_report
+public LifecycleRelationStorage, LifecycleRelationView, lifecycle_relation
 public LifecycleBoundStateValueOperation, lifecycle_anchor, lifecycle_site
+public LifecycleWorkspaceOperation
 public lifecycle_occurrence, lifecycle_source_identity, lifecycle_action_identity
 public lifecycle_workspace_capacity, lifecycle_workspace_value
 public set_lifecycle_workspace_value!

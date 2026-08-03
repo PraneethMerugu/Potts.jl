@@ -887,8 +887,8 @@ function copy_tracker_state(state::TrackerState)
     return TrackerState(map(copy, state.values))
 end
 
-_tracker_state_to_host(to_host, value::AbstractArray) = to_host(value)
-_tracker_state_to_host(to_host, value::CellMomentsState) = CellMomentsState(
+@inline _tracker_state_to_host(to_host, value::AbstractArray) = to_host(value)
+@inline _tracker_state_to_host(to_host, value::CellMomentsState) = CellMomentsState(
     to_host(value.first), to_host(value.second)
 )
 
@@ -977,7 +977,7 @@ function reconstruct_tracker_checkpoint(
     ))
 end
 
-function copyto_tracker_state!(
+@inline function copyto_tracker_state!(
         destination::TrackerState,
         source::TrackerState,
         to_host = identity,

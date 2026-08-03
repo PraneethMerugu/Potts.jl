@@ -3,16 +3,19 @@
 mutable struct _LifecycleRootCursor
     roots::Dict{Symbol, Vector{Int32}}
     positions::Dict{Symbol, Int}
+    operation_abis::Tuple
 end
 
-function _LifecycleRootCursor(ir::AnalyzedTermIR, record_index::Integer)
+function _LifecycleRootCursor(
+        ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple
+    )
     roots = Dict{Symbol, Vector{Int32}}()
     for root in ir.graph.roots
         root.record == record_index || continue
         root.role in _LIFECYCLE_ROOT_ROLES || continue
         push!(get!(roots, root.role, Int32[]), root.node)
     end
-    return _LifecycleRootCursor(roots, Dict{Symbol, Int}())
+    return _LifecycleRootCursor(roots, Dict{Symbol, Int}(), operation_abis)
 end
 
 function _next_lifecycle_root!(cursor::_LifecycleRootCursor, role::Symbol)
@@ -51,11 +54,25 @@ end
 
 function _lifecycle_role_workspace_maximum(fact, role::Symbol)
     maxima = Int[
-        item.abi.workspace_maximum
+        item.workspace_offset + item.abi.workspace_maximum
         for item in fact.operation_abis
-        if item.role === role && item.abi !== nothing
+        if item.role === role
     ]
     return isempty(maxima) ? 0 : maximum(maxima)
+end
+
+function _lifecycle_workspace_slices(
+        cursor::_LifecycleRootCursor, root::Int32, role::Symbol
+    )
+    slices = Dict{Int32, NamedTuple{(:offset, :maximum), Tuple{Int, Int}}}()
+    for item in cursor.operation_abis
+        item.root_node == root && item.role === role || continue
+        slices[item.node] = (
+            offset = item.workspace_offset,
+            maximum = item.abi.workspace_maximum,
+        )
+    end
+    return slices
 end
 
 function _lifecycle_evaluator!(
@@ -76,6 +93,7 @@ function _lifecycle_evaluator!(
         SymbolicIndexingInterface.NotSymbolic)
     expression = if always_root || symbolic
         root = _next_lifecycle_root!(cursor, role)
+        workspace_slices = _lifecycle_workspace_slices(cursor, root, role)
         _lower_static_node(
             ir.graph,
             ir,
@@ -86,6 +104,7 @@ function _lifecycle_evaluator!(
             draw_handles,
             Dict{Int32, CorePotts.AbstractStaticExpression}(),
             role,
+            workspace_slices,
         )
     else
         _static_literal(value, manifest, T)
@@ -460,7 +479,7 @@ function _lower_lifecycle_plan(
         effect = only(arguments.effects)
         _cell_lifecycle_effect(effect) || continue
         fact = facts_by_source[record.identity]
-        cursor = _LifecycleRootCursor(ir, record_index)
+        cursor = _LifecycleRootCursor(ir, record_index, fact.operation_abis)
         trigger = _lifecycle_evaluator!(
             evaluators,
             ir,
@@ -745,18 +764,6 @@ function _lower_lifecycle_plan(
         descriptors;
         init = 0,
     )
-    fingerprint = _sha256_hex(
-        "potts-lifecycle-plan-v1",
-        descriptors,
-        Tuple(_normalized_payload_key(node.payload) for node in ir.graph.nodes),
-        state_rules,
-        relationship_rules,
-        stencil_offsets,
-        relations,
-        protocol_policy,
-        cell_capacity,
-        forbid_extinction,
-    )
     return CorePotts.LifecycleExecutionPlan(
         descriptors,
         CorePotts.LifecycleEvaluatorStorage(evaluators),
@@ -774,13 +781,12 @@ function _lower_lifecycle_plan(
             ),
         ),
         stencil_offsets,
-        relations,
+        CorePotts.LifecycleRelationStorage(relations, Val(N)),
         protocol_policy,
         cell_capacity,
         maximum_requests,
         maximum_placement_sites,
         maximum_policy_workspace,
         forbid_extinction,
-        fingerprint,
     )
 end

@@ -10,6 +10,7 @@ function _lower_static_node(
         draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
         cache::Dict{Int32, CorePotts.AbstractStaticExpression},
         state_binding = nothing,
+        workspace_slices = nothing,
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
@@ -142,6 +143,12 @@ function _lower_static_node(
         )) : CorePotts.LiteralExpression(draw_handle)
     else
         operation = _static_operation_callable(node)
+        if workspace_slices !== nothing && haskey(workspace_slices, node_index)
+            slice = workspace_slices[node_index]
+            operation = CorePotts.LifecycleWorkspaceOperation(
+                operation, slice.offset, slice.maximum
+            )
+        end
         tracker_keys = _operation_tracker_keys(ir, node, T)
         qualified_keys = filter(
             key -> key isa CorePotts.QualifiedTrackerKey,
@@ -169,6 +176,7 @@ function _lower_static_node(
                 draw_handles,
                 cache,
                 state_binding,
+                workspace_slices,
             )
             for operand in node.operands
         )

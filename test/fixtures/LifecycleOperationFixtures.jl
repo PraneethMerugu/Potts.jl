@@ -85,8 +85,10 @@ end
 end
 @inline function (::PartitionCallable)(arguments, context)
     site = CorePotts.lifecycle_site(context)
-    CorePotts.set_lifecycle_workspace_value!(context, site[1], 1)
-    CorePotts.lifecycle_workspace_value(context, 1) == site[1] || return 0
+    index = site[1]
+    calls = CorePotts.lifecycle_workspace_value(context, index) + 1
+    CorePotts.set_lifecycle_workspace_value!(context, calls, index)
+    calls == 1 || return 0
     return site[1] <= 3 ? 1 : 2
 end
 @inline function (::TransformCallable)(arguments, context)
@@ -99,6 +101,9 @@ end
     CorePotts.lifecycle_before_state_value(context) ==
         CorePotts.lifecycle_planned_state_value(context) ||
         return oftype(arguments[1], NaN)
+    arguments[1] < 0 && return oftype(
+        CorePotts.lifecycle_workspace_value(context, 1), NaN
+    )
     CorePotts.set_lifecycle_workspace_value!(context, arguments[1], 1)
     return CorePotts.lifecycle_workspace_value(context, 1)
 end

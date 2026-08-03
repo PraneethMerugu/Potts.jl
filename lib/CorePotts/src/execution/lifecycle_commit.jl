@@ -2,26 +2,68 @@
 
 @inline function _stage_owner_change!(runtime, plan, workspace, linear, new_owner)
     old_owner = @inbounds workspace.staged_ownership[linear]
-    old_owner == new_owner && return nothing
+    old_owner == new_owner && return true
     site = CartesianIndices(runtime.program.shape)[linear]
     source = tracker_source_view(
         runtime.program, workspace.staged_ownership
     )
-    commit_tracker_updates!(
-        workspace.staged_trackers,
-        runtime.program.tracker_plan,
-        source,
-        site,
-        old_owner,
-        new_owner,
-    )
+    try
+        commit_tracker_updates!(
+            workspace.staged_trackers,
+            runtime.program.tracker_plan,
+            source,
+            site,
+            old_owner,
+            new_owner,
+        )
+    catch
+        return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            anchor = old_owner > 0 ? old_owner : new_owner,
+            detail = LifecycleDetailTrackerCommitInvalid,
+        )
+    end
     @inbounds workspace.staged_ownership[linear] = new_owner
     for rule in plan.ownership_rules
         rule.action === ClearLifecycleOwnershipState || continue
         values = state_block(workspace.staged_descriptor_state, rule.handle).values
         @inbounds values[linear] = zero(eltype(values))
     end
-    return nothing
+    return true
+end
+
+@inline function _coerce_lifecycle_state_value(
+        workspace, descriptor, anchor, values, value
+    )
+    converted = try
+        convert(eltype(values), value)
+    catch
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailStateValueInvalid,
+        )
+        return LifecycleEvaluationFailed()
+    end
+    finite = try
+        isfinite(converted)
+    catch
+        true
+    end
+    finite || begin
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailStateValueInvalid,
+        )
+        return LifecycleEvaluationFailed()
+    end
+    return converted
 end
 
 @inline function _state_rule_value(
@@ -47,6 +89,7 @@ end
         descriptor.source_identity,
         descriptor.action_identity,
         descriptor.state_workspace_maximum,
+        Int32(0),
         Int32(request),
         anchor,
         generation,
@@ -143,11 +186,19 @@ function _apply_lifecycle_state_rule!(
             source, destination, DestinationLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, value_a
+        )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
     elseif rule.action === RetireToLifecycleState
         value_a = _state_rule_value(
             runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, SourceLifecycleStateRole,
+        )
+        value_a isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
@@ -159,6 +210,10 @@ function _apply_lifecycle_state_rule!(
             source, destination, SourceLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, value_a
+        )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
     elseif rule.action === CopyDaughtersLifecycleState
         @inbounds values[destination] = values[source]
@@ -166,6 +221,10 @@ function _apply_lifecycle_state_rule!(
         value_a = _state_rule_value(
             runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, DaughterLifecycleStateRole,
+        )
+        value_a isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
@@ -180,6 +239,14 @@ function _apply_lifecycle_state_rule!(
             source, destination, DaughterLifecycleStateRole,
         )
         value_b isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, value_a
+        )
+        value_a isa LifecycleEvaluationFailed && return false
+        value_b = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, value_b
+        )
+        value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = value_a
             values[destination] = value_b
@@ -190,7 +257,12 @@ function _apply_lifecycle_state_rule!(
             source, destination, ParentLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
-        if !(isfinite(value_a) && zero(value_a) <= value_a <= one(value_a))
+        fraction_valid = try
+            isfinite(value_a) && zero(value_a) <= value_a <= one(value_a)
+        catch
+            false
+        end
+        if !fraction_valid
             return _set_lifecycle_status!(
                 workspace,
                 LifecycleStatusEvaluator;
@@ -209,6 +281,14 @@ function _apply_lifecycle_state_rule!(
                 rule.rounding === NearestLifecycleRounding ? round(parent) : parent
             daughter = old - parent
         end
+        parent = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, parent
+        )
+        parent isa LifecycleEvaluationFailed && return false
+        daughter = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, daughter
+        )
+        daughter isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = parent
             values[destination] = daughter
@@ -222,6 +302,14 @@ function _apply_lifecycle_state_rule!(
         value_b = _state_rule_value(
             runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
             source, destination, DaughterLifecycleStateRole,
+        )
+        value_b isa LifecycleEvaluationFailed && return false
+        value_a = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, value_a
+        )
+        value_a isa LifecycleEvaluationFailed && return false
+        value_b = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, value_b
         )
         value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
@@ -273,6 +361,14 @@ function _apply_lifecycle_state_rule!(
             destination,
             destination_generation,
             true,
+        )
+        daughter_value isa LifecycleEvaluationFailed && return false
+        parent_value = _coerce_lifecycle_state_value(
+            workspace, descriptor, source, values, parent_value
+        )
+        parent_value isa LifecycleEvaluationFailed && return false
+        daughter_value = _coerce_lifecycle_state_value(
+            workspace, descriptor, destination, values, daughter_value
         )
         daughter_value isa LifecycleEvaluationFailed && return false
         @inbounds begin
@@ -361,14 +457,24 @@ function _apply_lifecycle_relationship_rules!(
         rule = @inbounds plan.relationship_rules[
             Int(descriptor.relationship_rule_offset) + offset
         ]
-        _call_relationship_slot(
-            _apply_relationship_rule!,
-            workspace.staged_relationships,
-            rule.relationship_slot,
-            (runtime, workspace, descriptor, rule, Int(anchor)),
-        )
+        try
+            _call_relationship_slot(
+                _apply_relationship_rule!,
+                workspace.staged_relationships,
+                rule.relationship_slot,
+                (runtime, workspace, descriptor, rule, Int(anchor)),
+            )
+        catch
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                source = descriptor.source_handle,
+                anchor,
+                detail = LifecycleDetailRelationshipCommitInvalid,
+            )
+        end
     end
-    return nothing
+    return true
 end
 
 function _allocated_generation(runtime, slot)
@@ -388,7 +494,8 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
         end
         for position in 1:Int(workspace.planned_site_count[request])
             linear = Int(@inbounds workspace.planned_sites[position, request])
-            _stage_owner_change!(runtime, plan, workspace, linear, allocation)
+            _stage_owner_change!(runtime, plan, workspace, linear, allocation) ||
+                return -1
         end
         _apply_lifecycle_state_rules!(
             runtime, plan, workspace, descriptor, request, Int32(0), allocation
@@ -396,7 +503,7 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
     elseif descriptor.effect === RemoveCellLifecycleEffect
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
-        )
+        ) || return -1
         for position in _cell_site_range(workspace, anchor)
             linear = Int(@inbounds workspace.cell_sites[position])
             _stage_owner_change!(
@@ -405,7 +512,7 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
                 workspace,
                 linear,
                 -Int32(descriptor.replacement_medium),
-            )
+            ) || return -1
         end
         _apply_lifecycle_state_rules!(
             runtime, plan, workspace, descriptor, request, anchor, Int32(0)
@@ -414,7 +521,7 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
     elseif descriptor.effect === RetireCellLifecycleEffect
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
-        )
+        ) || return -1
         _apply_lifecycle_state_rules!(
             runtime, plan, workspace, descriptor, request, anchor, Int32(0)
         ) || return -1
@@ -423,7 +530,7 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
         @inbounds workspace.staged_cell_kinds[anchor] = descriptor.destination_kind
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
-        )
+        ) || return -1
         _apply_lifecycle_state_rules!(
             runtime, plan, workspace, descriptor, request, anchor, Int32(0)
         ) || return -1
@@ -438,26 +545,25 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
             workspace.staged_cell_kinds[allocation] = daughter_kind
             workspace.staged_cell_generations[allocation] = generation
         end
-        reason = _plan_division!(runtime, plan, workspace, request, descriptor)
-        reason === :status_failure && return -1
-        if reason !== :ok
+        if @inbounds(workspace.partition_owner[anchor]) != request
             _set_lifecycle_status!(
                 workspace,
                 LifecycleStatusInvariant;
                 source = descriptor.source_handle,
                 anchor,
-                detail = _lifecycle_detail_code(reason),
+                detail = LifecycleDetailDivisionPlanMissing,
             )
             return -1
         end
         for position in _cell_site_range(workspace, anchor)
             @inbounds workspace.partition_labels[position] == 2 || continue
             linear = Int(@inbounds workspace.cell_sites[position])
-            _stage_owner_change!(runtime, plan, workspace, linear, allocation)
+            _stage_owner_change!(runtime, plan, workspace, linear, allocation) ||
+                return -1
         end
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
-        )
+        ) || return -1
         _apply_lifecycle_state_rules!(
             runtime, plan, workspace, descriptor, request, anchor, allocation
         ) || return -1

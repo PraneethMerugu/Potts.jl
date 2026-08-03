@@ -322,6 +322,61 @@ struct LifecycleDescriptor{N, T <: AbstractFloat}
     compiler_synthesized::Bool
 end
 
+struct LifecycleRelationStorage{
+        N,
+        D <: AbstractVector{Int8},
+        O <: AbstractVector{Int32},
+    }
+    data::D
+    offsets::O
+    counts::O
+end
+
+function LifecycleRelationStorage(relations, ::Val{N}) where {N}
+    data = Int8[]
+    offsets = Int32[]
+    counts = Int32[]
+    for relation in relations
+        size(relation, 1) == N || throw(ArgumentError(
+            "lifecycle relation dimensionality does not match the lattice"
+        ))
+        push!(offsets, Int32(length(data) + 1))
+        push!(counts, Int32(size(relation, 2)))
+        append!(data, vec(relation))
+    end
+    return LifecycleRelationStorage{N, typeof(data), typeof(offsets)}(
+        data, offsets, counts
+    )
+end
+
+struct LifecycleRelationView{N, D <: AbstractVector{Int8}} <:
+       AbstractMatrix{Int8}
+    data::D
+    offset::Int32
+    count::Int32
+end
+
+Base.size(view::LifecycleRelationView{N}) where {N} = (N, Int(view.count))
+Base.IndexStyle(::Type{<:LifecycleRelationView}) = IndexCartesian()
+@inline function Base.getindex(
+        view::LifecycleRelationView{N}, dimension::Int, direction::Int
+    ) where {N}
+    @boundscheck checkbounds(view, dimension, direction)
+    index = Int(view.offset) + (direction - 1) * N + dimension - 1
+    return @inbounds view.data[index]
+end
+
+@inline function lifecycle_relation(
+        storage::LifecycleRelationStorage{N}, slot::Integer
+    ) where {N}
+    @boundscheck checkbounds(storage.offsets, slot)
+    return LifecycleRelationView{N, typeof(storage.data)}(
+        storage.data,
+        @inbounds(storage.offsets[slot]),
+        @inbounds(storage.counts[slot]),
+    )
+end
+
 struct LifecycleExecutionPlan{
         N,
         T <: AbstractFloat,
@@ -331,7 +386,7 @@ struct LifecycleExecutionPlan{
         RR <: AbstractVector{LifecycleRelationshipRule},
         O <: Tuple,
         SO <: AbstractVector{<:NTuple{N, Int16}},
-        R <: AbstractVector,
+        R <: LifecycleRelationStorage{N},
         F <: AbstractVector{Bool},
     } <: AbstractLifecycleExecutionPlan
     descriptors::D
@@ -347,7 +402,6 @@ struct LifecycleExecutionPlan{
     maximum_placement_sites::Int32
     maximum_policy_workspace::Int32
     forbid_extinction::F
-    fingerprint::String
 end
 
 function LifecycleExecutionPlan(
@@ -364,14 +418,13 @@ function LifecycleExecutionPlan(
         maximum_placement_sites::Integer,
         maximum_policy_workspace::Integer,
         forbid_extinction::F,
-        fingerprint::AbstractString,
     ) where {
         N,
         T <: AbstractFloat,
         D <: AbstractVector{LifecycleDescriptor{N, T}},
         RR <: AbstractVector{LifecycleRelationshipRule},
         SO <: AbstractVector{<:NTuple{N, Int16}},
-        R <: AbstractVector,
+        R <: LifecycleRelationStorage{N},
         F <: AbstractVector{Bool},
     }
     cell_capacity > 0 || throw(ArgumentError(
@@ -423,8 +476,28 @@ function LifecycleExecutionPlan(
         Int32(maximum_placement_sites),
         Int32(maximum_policy_workspace),
         forbid_extinction,
-        String(fingerprint),
     )
+end
+
+function _lifecycle_plan_fingerprint(plan::LifecycleExecutionPlan)
+    payload = (
+        plan.descriptors,
+        plan.evaluators,
+        plan.state_rules,
+        plan.relationship_rules,
+        plan.ownership_rules,
+        plan.stencil_offsets,
+        plan.relations.data,
+        plan.relations.offsets,
+        plan.relations.counts,
+        plan.conflict_policy,
+        plan.cell_capacity,
+        plan.maximum_requests,
+        plan.maximum_placement_sites,
+        plan.maximum_policy_workspace,
+        plan.forbid_extinction,
+    )
+    return bytes2hex(SHA.sha256(codeunits(repr(payload))))
 end
 
 function lifecycle_plan_report(plan::LifecycleExecutionPlan)
@@ -439,7 +512,7 @@ function lifecycle_plan_report(plan::LifecycleExecutionPlan)
         maximum_placement_sites = plan.maximum_placement_sites,
         maximum_policy_workspace = plan.maximum_policy_workspace,
         conflict_policy = Symbol(string(plan.conflict_policy)),
-        fingerprint = plan.fingerprint,
+        fingerprint = _lifecycle_plan_fingerprint(plan),
     )
 end
 
@@ -502,6 +575,19 @@ Adapt.@adapt_structure LifecycleRelationshipRule
 Adapt.@adapt_structure LifecycleOwnershipRule
 Adapt.@adapt_structure LifecycleSiteSelection
 Adapt.@adapt_structure LifecycleDescriptor
+function Adapt.adapt_structure(
+        to, storage::LifecycleRelationStorage{N}
+    ) where {N}
+    data = Adapt.adapt(to, storage.data)
+    offsets = Adapt.adapt(to, storage.offsets)
+    counts = Adapt.adapt(to, storage.counts)
+    typeof(offsets) === typeof(counts) || throw(ArgumentError(
+        "adapted lifecycle relation offsets and counts must share storage"
+    ))
+    return LifecycleRelationStorage{
+        N, typeof(data), typeof(offsets)
+    }(data, offsets, counts)
+end
 Adapt.@adapt_structure LifecycleExecutionPlan
 Adapt.@adapt_structure NoLifecycleExecutionPlan
 Adapt.@adapt_structure LifecycleBoundStateValueOperation

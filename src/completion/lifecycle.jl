@@ -63,11 +63,19 @@ function _validate_state_policies!(statement, effect, admitted)
         )
         if policy isa SplitConservatively
             fraction = policy.fraction
-            if fraction isa Number &&
-                    !(
-                        isfinite(fraction) &&
-                        zero(fraction) <= fraction <= one(fraction)
-                    )
+            dimensionless = if fraction isa DynamicQuantities.UnionAbstractQuantity
+                dimension = DynamicQuantities.dimension(fraction)
+                dimension == one(dimension)
+            else
+                true
+            end
+            in_bounds = try
+                isfinite(fraction) &&
+                    zero(fraction) <= fraction <= one(fraction)
+            catch
+                false
+            end
+            if fraction isa Number && !(dimensionless && in_bounds)
                 _throw_lifecycle_completion(
                     statement,
                     :invalid_lifecycle_split_fraction,

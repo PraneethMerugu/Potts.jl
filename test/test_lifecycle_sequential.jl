@@ -48,57 +48,79 @@ function _assert_lifecycle_recomputation(runtime)
     return nothing
 end
 
+function _lifecycle_relationship_values(storage)
+    return Tuple(begin
+        state = storage[slot]
+        (
+            active = copy(state.active),
+            endpoint_a = copy(state.endpoint_a),
+            endpoint_b = copy(state.endpoint_b),
+            generation_a = copy(state.generation_a),
+            generation_b = copy(state.generation_b),
+            payload = map(copy, state.payload),
+            degree = copy(state.degree),
+            incident_edges = copy(state.incident_edges),
+        )
+    end for slot in eachindex(storage))
+end
+
 @testset "conservative split fractions are construction-safe" begin
-    @variables t conserved(t)
-    cell = CellKind(:cell; extinction = RetireAtZero())
-    medium = MediumKind(:medium)
-    relation = SpatialRelation(:division; neighborhood = VonNeumann())
-    state = CellState(
-        conserved;
-        initial = 1.0,
-        retirement = RetireTo(0.0),
-        division = CopyToDaughters(),
-    )
-    anchor = CellBinding(:cell)
-    divide = LifecycleProcess(
-        :invalid_split;
-        domain = cells(cell),
-        anchor,
-        expression = true,
-        effects = (Divide(
-            anchor;
-            geometry = SpecifiedNormalPlane((1.0, 0.0)),
-            relation,
-            side = CanonicalSide(),
-            state = (
-                state => SplitConservatively(1.5; rounding = :exact),
-            ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
-        cadence = AtMCS(1),
-    )
-    system = PottsSystem(
-        name = :InvalidConservativeSplit,
-        statements = StatementSet((
-            Lattice((4, 4); max_cells = 2),
-            cell,
-            medium,
-            relation,
-            state,
-            divide,
-            Protocol(Sweep(); name = :main),
-        )),
-        unknowns = [conserved],
-        independent_variables = [t],
-    )
-    error = try
-        complete(system)
-        nothing
-    catch caught
-        caught
+    function split_error(fraction)
+        @variables t conserved(t)
+        cell = CellKind(:cell; extinction = RetireAtZero())
+        medium = MediumKind(:medium)
+        relation = SpatialRelation(:division; neighborhood = VonNeumann())
+        state = CellState(
+            conserved;
+            initial = 1.0,
+            retirement = RetireTo(0.0),
+            division = CopyToDaughters(),
+        )
+        anchor = CellBinding(:cell)
+        divide = LifecycleProcess(
+            :invalid_split;
+            domain = cells(cell),
+            anchor,
+            expression = true,
+            effects = (Divide(
+                anchor;
+                geometry = SpecifiedNormalPlane((1.0, 0.0)),
+                relation,
+                side = CanonicalSide(),
+                state = (
+                    state => SplitConservatively(fraction; rounding = :exact),
+                ),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),),
+            cadence = AtMCS(1),
+        )
+        system = PottsSystem(
+            name = :InvalidConservativeSplit,
+            statements = StatementSet((
+                Lattice((4, 4); max_cells = 2),
+                cell,
+                medium,
+                relation,
+                state,
+                divide,
+                Protocol(Sweep(); name = :main),
+            )),
+            unknowns = [conserved],
+            independent_variables = [t],
+        )
+        return try
+            complete(system)
+            nothing
+        catch caught
+            caught
+        end
     end
-    @test error isa PottsToolkit.PottsValidationError
-    @test only(error.diagnostics).kind === :invalid_lifecycle_split_fraction
+    for fraction in (1.5, 0.5u"μm")
+        error = split_error(fraction)
+        @test error isa PottsToolkit.PottsValidationError
+        @test only(error.diagnostics).kind ===
+            :invalid_lifecycle_split_fraction
+    end
 end
 
 @testset "frozen external lifecycle operations execute" begin
@@ -137,12 +159,29 @@ end
             placement = external_lifecycle_placement(Symbolics.Num(1)),
             state = (
                 state => InitializeFrom(
-                    external_lifecycle_transform(Symbolics.Num(4))
+                    external_lifecycle_transform(Symbolics.Num(2)) +
+                    external_lifecycle_transform(Symbolics.Num(3))
                 ),
             ),
             on_inadmissible = ErrorOnInadmissible(),
         ),),
         cadence = AtMCS(2),
+    )
+    invalid_create = LifecycleProcess(
+        :external_invalid_create;
+        domain = model(),
+        expression = external_lifecycle_trigger(Symbolics.Num(1)),
+        effects = (CreateCell(
+            cell;
+            placement = external_lifecycle_placement(Symbolics.Num(5)),
+            state = (
+                state => InitializeFrom(
+                    external_lifecycle_transform(Symbolics.Num(-1))
+                ),
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(3),
     )
     system = PottsSystem(
         name = :ExternalLifecycleExecution,
@@ -154,6 +193,7 @@ end
             state,
             divide,
             create,
+            invalid_create,
             Protocol(Sweep(); name = :main),
         )),
         unknowns = [external_state],
@@ -171,6 +211,12 @@ end
     @test adapted_plan isa CorePotts.LifecycleExecutionPlan
     @test adapted_plan.descriptors isa LifecycleProbeArray
     @test adapted_plan.forbid_extinction isa LifecycleProbeArray
+    @test adapted_plan.relations.data isa LifecycleProbeArray
+    @test adapted_plan.relations.offsets isa LifecycleProbeArray
+    @test !(:fingerprint in fieldnames(typeof(adapted_plan)))
+    @test maximum(
+        descriptor.state_workspace_maximum for descriptor in adapted_plan.descriptors
+    ) == 2
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     runtime = _lifecycle_runtime(
@@ -179,18 +225,64 @@ end
             labels; cells = [cell], medium
         )),
     )
+    adapted_workspace = CorePotts.Adapt.adapt(
+        LifecycleProbeAdaptor(), runtime.lifecycle_workspace
+    )
+    @test adapted_workspace.partition_labels isa LifecycleProbeArray
+    @test adapted_workspace.partition_scratch isa LifecycleProbeArray
+    @test adapted_workspace.policy_workspace isa LifecycleProbeArray
     lookups = LifecycleOperationFixtures.CALLABLE_LOOKUPS[]
     _execute_lifecycle_at!(runtime, 1)
     @test count(!iszero, runtime.cell_kinds) == 2
     @test sort(filter(!iszero, CorePotts.program_tracker_values(
         runtime, Val(:cell_volume)
     ))) == Int32[2, 2]
-    _execute_lifecycle_at!(runtime, 2)
+    saved = CorePotts.program_checkpoint(runtime)
+    resumed = CorePotts.restore_program_checkpoint(
+        executable.core_program, saved
+    )
+    measured = CorePotts.restore_program_checkpoint(
+        executable.core_program, saved
+    )
+    runtime.mcs = resumed.mcs = measured.mcs = 1
+    CorePotts.execute_lifecycle!(runtime)
+    @test @inferred(CorePotts.execute_lifecycle!(resumed)) === resumed
+    @test @allocated(CorePotts.execute_lifecycle!(measured)) == 0
+    runtime.mcs = resumed.mcs = measured.mcs = 2
     @test count(!iszero, runtime.cell_kinds) == 3
+    @test runtime.ownership == resumed.ownership == measured.ownership
+    @test runtime.cell_kinds == resumed.cell_kinds == measured.cell_kinds
+    @test runtime.cell_generations ==
+        resumed.cell_generations == measured.cell_generations
     state_handle = only(executable.reports.states).handle
     @test CorePotts.state_block(
         runtime.descriptor_state, state_handle
-    ).values[3] == 4
+    ).values[3] == 5
+    @test CorePotts.state_block(
+        runtime.descriptor_state, state_handle
+    ).values == CorePotts.state_block(
+        resumed.descriptor_state, state_handle
+    ).values
+    before_failure = CorePotts.program_snapshot(runtime)
+    failure = try
+        _execute_lifecycle_at!(runtime, 3)
+        nothing
+    catch error
+        error
+    end
+    @test failure isa CorePotts.LifecycleEvaluatorFailure
+    @test failure.reason === :nonfinite_result
+    @test runtime.ownership == before_failure.ownership
+    @test runtime.cell_kinds == before_failure.cell_kinds
+    @test runtime.cell_generations == before_failure.cell_generations
+    @test runtime.trackers.values == before_failure.trackers.values
+    @test CorePotts.state_block(
+        runtime.descriptor_state, state_handle
+    ).values == CorePotts.state_block(
+        before_failure.descriptor_state, state_handle
+    ).values
+    @test _lifecycle_relationship_values(runtime.relationships) ==
+        _lifecycle_relationship_values(before_failure.relationships)
     @test LifecycleOperationFixtures.CALLABLE_LOOKUPS[] == lookups
 end
 
@@ -477,7 +569,7 @@ end
     runtime = _lifecycle_runtime(executable, PottsInitialState(
         ownership = LabelledCells(labels; cells = fill(cell, 4), medium)
     ))
-    CorePotts.execute_lifecycle!(runtime)
+    @test @allocated(CorePotts.execute_lifecycle!(runtime)) == 0
     @test count(!iszero, runtime.cell_kinds) == 8
     @test all(>(0), CorePotts.program_tracker_values(
         runtime, Val(:cell_volume)
@@ -486,8 +578,22 @@ end
 end
 
 @testset "exact-fit and overflow capacity atomicity" begin
+    @variables capacity_time capacity_value(capacity_time)
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
+    state = CellState(
+        capacity_value;
+        initial = 0,
+        retirement = RetireTo(0),
+        division = CopyToDaughters(),
+    )
+    links = RelationshipState(
+        :capacity_links;
+        endpoints = Undirected(cell, cell),
+        capacity = 2,
+        maximum_degree = 2,
+        lifecycle = RejectEndpointRetirement(),
+    )
     births = ntuple(2) do index
         LifecycleProcess(
             Symbol(:birth_, index);
@@ -496,27 +602,36 @@ end
             effects = (CreateCell(
                 cell;
                 placement = SeedAt(index),
+                state = (state => InitializeFrom(index),),
                 on_inadmissible = ErrorOnInadmissible(),
             ),),
         )
     end
+    executables = Dict{Int, Any}()
     function capacity_executable(max_cells)
+        haskey(executables, max_cells) && return executables[max_cells]
         system = PottsSystem(
             name = Symbol(:Capacity_, max_cells),
             statements = StatementSet((
                 Lattice((3, 3); max_cells),
                 cell,
                 medium,
+                state,
+                links,
                 births...,
                 Protocol(Sweep(); name = :main),
             )),
+            unknowns = [capacity_value],
+            independent_variables = [capacity_time],
         )
-        return compile(
+        executable = compile(
             complete(system);
             engine = SequentialEngine(),
             backend = CPUBackend(),
             scalar_type = Float32,
         )
+        executables[max_cells] = executable
+        return executable
     end
     initial = PottsInitialState(ownership = LabelledCells(
         zeros(Int, 3, 3); cells = [], medium
@@ -583,6 +698,18 @@ end
     @test overflow.ownership == before.ownership
     @test overflow.cell_kinds == before.cell_kinds
     @test overflow.cell_generations == before.cell_generations
+    state_handle = only(filter(
+        entry -> entry.schema.identity.name === :capacity_value,
+        overflow.program.descriptor_plan.state_layout.entries,
+    )).handle
+    @test CorePotts.state_block(
+        overflow.descriptor_state, state_handle
+    ).values == CorePotts.state_block(
+        before.descriptor_state, state_handle
+    ).values
+    @test _lifecycle_relationship_values(overflow.relationships) ==
+        _lifecycle_relationship_values(before.relationships)
+    @test overflow.relationships.slots == before.relationships.slots
     @test CorePotts.program_tracker_values(overflow, Val(:cell_volume)) ==
         CorePotts.tracker_values(
             overflow.program.tracker_plan, before.trackers, Val(:cell_volume)
@@ -619,6 +746,44 @@ end
     @test generation_overflow.cell_kinds == generation_before.cell_kinds
     @test generation_overflow.cell_generations ==
         generation_before.cell_generations
+
+    footprint = _lifecycle_runtime(capacity_executable(1), initial)
+    footprint_before = CorePotts.program_snapshot(footprint)
+    footprint.lifecycle_workspace.descriptor = Int32[]
+    footprint_error = try
+        CorePotts.execute_lifecycle!(footprint)
+        nothing
+    catch caught
+        caught
+    end
+    @test footprint_error isa CorePotts.LifecycleFootprintFailure
+    @test footprint.lifecycle_workspace.status.detail ===
+        CorePotts.LifecycleDetailRequestBoundExceeded
+    @test footprint.ownership == footprint_before.ownership
+    @test footprint.cell_kinds == footprint_before.cell_kinds
+    @test footprint.cell_generations == footprint_before.cell_generations
+
+    invariant = _lifecycle_runtime(capacity_executable(1), initial)
+    invariant.ownership[1] = 2
+    invariant_before = (
+        ownership = copy(invariant.ownership),
+        cell_kinds = copy(invariant.cell_kinds),
+        cell_generations = copy(invariant.cell_generations),
+        trackers = deepcopy(invariant.trackers.values),
+    )
+    invariant_error = try
+        CorePotts.execute_lifecycle!(invariant)
+        nothing
+    catch caught
+        caught
+    end
+    @test invariant_error isa CorePotts.LifecycleInvariantFailure
+    @test invariant.lifecycle_workspace.status.detail ===
+        CorePotts.LifecycleDetailOwnershipExceedsCellCapacity
+    @test invariant.ownership == invariant_before.ownership
+    @test invariant.cell_kinds == invariant_before.cell_kinds
+    @test invariant.cell_generations == invariant_before.cell_generations
+    @test invariant.trackers.values == invariant_before.trackers
 end
 
 @testset "closed lifecycle status translation" begin
@@ -1174,6 +1339,10 @@ end
     ))
     CorePotts.execute_lifecycle!(runtime)
     @test count(runtime.lifecycle_workspace.filtered) == 1
+    filtered_request = only(findall(runtime.lifecycle_workspace.filtered))
+    @test runtime.lifecycle_workspace.filtered_detail[filtered_request] ===
+        CorePotts.LifecycleDetailPartitionEmptyDescendant
+    @test runtime.lifecycle_workspace.anchor[filtered_request] == 1
     destination_index = findfirst(
         entry -> entry.local_name === :filter_destination,
         executable.reports.kind_identities,
@@ -1252,6 +1421,69 @@ end
     @test first_runtime.lifecycle_workspace.status.code ==
         second_runtime.lifecycle_workspace.status.code ==
         CorePotts.LifecycleStatusSuccess
+end
+
+@testset "priority resolves direct conflicts without transitive suppression" begin
+    function chain_runtime(order)
+        cell = CellKind(:chain_cell; extinction = RetireAtZero())
+        medium = MediumKind(:chain_medium)
+        starts = (1, 2, 3)
+        priorities = (10, 0, 10)
+        names = (:chain_left, :chain_bridge, :chain_right)
+        births = ntuple(3) do index
+            LifecycleProcess(
+                names[index];
+                domain = model(),
+                expression = true,
+                effects = (CreateCell(
+                    cell;
+                    placement = external_lifecycle_placement(
+                        Symbolics.Num(starts[index])
+                    ),
+                    priority = priorities[index],
+                    on_inadmissible = ErrorOnInadmissible(),
+                ),),
+            )
+        end
+        system = PottsSystem(
+            name = :DirectConflictChain,
+            statements = StatementSet((
+                Lattice((2, 3); max_cells = 3),
+                cell,
+                medium,
+                (births[index] for index in order)...,
+                Protocol(
+                    Sweep();
+                    name = :main,
+                    lifecycle_conflicts = StableLifecyclePriority(),
+                ),
+            )),
+        )
+        executable = compile(
+            complete(system);
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+        initial = PottsInitialState(ownership = LabelledCells(
+            zeros(Int, 2, 3); cells = [], medium
+        ))
+        return executable, _lifecycle_runtime(executable, initial)
+    end
+
+    first_executable, first_runtime = chain_runtime((1, 2, 3))
+    second_executable, second_runtime = chain_runtime((3, 2, 1))
+    CorePotts.execute_lifecycle!(first_runtime)
+    CorePotts.execute_lifecycle!(second_runtime)
+    owners = vec(first_runtime.ownership)[1:4]
+    @test owners[1] == owners[2] > 0
+    @test owners[3] == owners[4] > 0
+    @test owners[1] != owners[3]
+    @test first_runtime.ownership == second_runtime.ownership
+    @test first_runtime.cell_kinds == second_runtime.cell_kinds
+    @test count(first_runtime.lifecycle_workspace.selected) == 2
+    @test first_executable.reports.lifecycle.fingerprint ==
+        second_executable.reports.lifecycle.fingerprint
 end
 
 @testset "conflict diagnostics are canonical under declaration permutation" begin

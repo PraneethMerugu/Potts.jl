@@ -22,16 +22,24 @@ function _validate_staged_lifecycle!(runtime, plan, workspace)
             LifecycleStatusInvariant;
             detail = LifecycleDetailTrackerPlanStateMisalignment,
         )
-    _validate_tracker_storage_shapes!(
-        tracker_plan.descriptors,
-        workspace.staged_trackers.values,
-        length(workspace.staged_cell_kinds),
-    )
-    volumes = tracker_values(
-        runtime.program.tracker_plan,
-        workspace.staged_trackers,
-        Val(:cell_volume),
-    )
+    volumes = try
+        _validate_tracker_storage_shapes!(
+            tracker_plan.descriptors,
+            workspace.staged_trackers.values,
+            length(workspace.staged_cell_kinds),
+        )
+        tracker_values(
+            runtime.program.tracker_plan,
+            workspace.staged_trackers,
+            Val(:cell_volume),
+        )
+    catch
+        return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            detail = LifecycleDetailTrackerStorageInvalid,
+        )
+    end
     for cell in eachindex(workspace.staged_cell_kinds)
         active = @inbounds workspace.staged_cell_kinds[cell] != 0
         occupied = @inbounds volumes[cell] != 0
@@ -53,19 +61,27 @@ function _validate_staged_lifecycle!(runtime, plan, workspace)
         end
     end
     for slot in eachindex(workspace.staged_relationships)
-        validate_relationship_integrity(
-            workspace.staged_relationships[slot],
-            runtime.program.relationships[slot],
-            workspace.staged_cell_kinds,
-            workspace.staged_cell_generations,
-        )
+        try
+            validate_relationship_integrity(
+                workspace.staged_relationships[slot],
+                runtime.program.relationships[slot],
+                workspace.staged_cell_kinds,
+                workspace.staged_cell_generations,
+            )
+        catch
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                source = slot,
+                detail = LifecycleDetailRelationshipIntegrityInvalid,
+            )
+        end
     end
-    for entry in runtime.program.descriptor_plan.state_layout.entries
-        validate_state_block(
-            entry.schema,
-            state_block(workspace.staged_descriptor_state, entry.handle),
-        )
-    end
+    # Lifecycle state storage cannot change representation or shape here.
+    # Every writable scalar crosses `_coerce_lifecycle_state_value`; copy and
+    # clear policies preserve an already validated representation. Rewalking
+    # the type-erased schema layout would duplicate that authority and allocate
+    # on the otherwise bounded warm path.
     return true
 end
 

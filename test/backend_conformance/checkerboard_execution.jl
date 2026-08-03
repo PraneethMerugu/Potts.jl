@@ -323,7 +323,7 @@ function _run_boundary_shape(
 end
 
 """Shared CPU/vendor workgroup-edge and realized-boundary conformance."""
-function run_boundary_sizes(
+function run_checkerboard_boundary_sizes(
         device_array;
         backend_name::Symbol,
         kernel_convert,

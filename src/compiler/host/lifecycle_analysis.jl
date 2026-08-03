@@ -232,25 +232,27 @@ function _require_contextual_lifecycle_abis!(record, graph, roots)
         lifecycle_state_transform = :state_transform,
     )
     for root in roots
-        node = graph.nodes[Int(root.node)]
-        transfer = node.transfer
-        transfer === nothing && continue
-        transfer.required_context === root.role || continue
         expected = getproperty(expected_roles, root.role)
-        abi = transfer.lifecycle_abi
-        abi !== nothing && abi.role === expected || throw(PottsValidationError(
-            :analysis,
-            (PottsDiagnostic(
-                :missing_lifecycle_policy_abi,
-                record.identity,
-                String(root.role),
-                record.identity.path,
-                "LifecycleOperationABI($(repr(expected))) on every contextual lifecycle root",
-                "operation $(node.operation) has no matching frozen lifecycle ABI",
-                (),
-                record.source,
-            ),),
-        ))
+        for index in _reachable_nodes(graph, Int32[root.node])
+            node = graph.nodes[Int(index)]
+            transfer = node.transfer
+            transfer === nothing && continue
+            transfer.required_context === root.role || continue
+            abi = transfer.lifecycle_abi
+            abi !== nothing && abi.role === expected || throw(PottsValidationError(
+                :analysis,
+                (PottsDiagnostic(
+                    :missing_lifecycle_policy_abi,
+                    record.identity,
+                    String(root.role),
+                    record.identity.path,
+                    "LifecycleOperationABI($(repr(expected))) on every reachable contextual operation",
+                    "operation $(node.operation) has no matching frozen lifecycle ABI",
+                    (),
+                    record.source,
+                ),),
+            ))
+        end
     end
     return nothing
 end
@@ -391,28 +393,39 @@ function _lifecycle_workspace_maximum(graph, nodes)
 end
 
 function _lifecycle_operation_abis(graph, roots)
-    return Tuple(begin
-        node = graph.nodes[Int(root.node)]
-        transfer = node.transfer
-        abi = transfer === nothing ? nothing : transfer.lifecycle_abi
-        (
-            role = root.role,
-            operation = node.operation,
-            schema_version = node.schema_version,
-            owner = transfer === nothing ? nothing : transfer.owner,
-            callable_identity = transfer === nothing ? nothing :
-                transfer.callable_identity,
-            abi = abi === nothing ? nothing : (
-                role = abi.role,
-                input_context = abi.input_context,
-                result_shape = abi.result_shape,
-                emission_maximum = abi.emission_maximum,
-                workspace_maximum = abi.workspace_maximum,
-                validator = abi.validator,
-                rng_entity = abi.rng_entity,
-            ),
-        )
-    end for root in roots)
+    result = NamedTuple[]
+    for root in roots
+        offset = 0
+        for index in sort!(_reachable_nodes(graph, Int32[root.node]))
+            node = graph.nodes[Int(index)]
+            transfer = node.transfer
+            transfer === nothing && continue
+            abi = transfer.lifecycle_abi
+            abi === nothing && continue
+            transfer.required_context === root.role || continue
+            push!(result, (
+                root_node = root.node,
+                node = Int32(index),
+                role = root.role,
+                operation = node.operation,
+                schema_version = node.schema_version,
+                owner = transfer.owner,
+                callable_identity = transfer.callable_identity,
+                workspace_offset = offset,
+                abi = (
+                    role = abi.role,
+                    input_context = abi.input_context,
+                    result_shape = abi.result_shape,
+                    emission_maximum = abi.emission_maximum,
+                    workspace_maximum = abi.workspace_maximum,
+                    validator = abi.validator,
+                    rng_entity = abi.rng_entity,
+                ),
+            ))
+            offset += abi.workspace_maximum
+        end
+    end
+    return Tuple(result)
 end
 
 function _analyze_lifecycle_records(source, graph, facts)

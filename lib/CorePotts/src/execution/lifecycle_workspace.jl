@@ -46,7 +46,12 @@ end
     LifecycleDetailTrackerPlanStateMisalignment = 0x001c
     LifecycleDetailActiveOccupancyMismatch = 0x001d
     LifecycleDetailForbiddenExtinction = 0x001e
-    LifecycleDetailDivisionReplanMismatch = 0x001f
+    LifecycleDetailDivisionPlanMissing = 0x001f
+    LifecycleDetailStateValueInvalid = 0x0020
+    LifecycleDetailTrackerStorageInvalid = 0x0021
+    LifecycleDetailRelationshipIntegrityInvalid = 0x0022
+    LifecycleDetailTrackerCommitInvalid = 0x0023
+    LifecycleDetailRelationshipCommitInvalid = 0x0024
 end
 
 """One fixed-size engine status; host exceptions are derived only at the boundary."""
@@ -156,8 +161,8 @@ function lifecycle_workspace_layout(
         request_slots = requests,
         planned_site_slots = requests * placements,
         partition_label_slots = Int(site_count),
-        cell_index_slots = 5 * cells,
-        site_index_slots = 5 * Int(site_count),
+        cell_index_slots = 6 * cells,
+        site_index_slots = 6 * Int(site_count),
         policy_workspace_slots = requests * policy,
         policy_workspace_capacity = policy,
         free_cell_slots = cells,
@@ -183,6 +188,7 @@ mutable struct LifecycleWorkspace{
         V32 <: AbstractVector{Int32},
         VU32 <: AbstractVector{UInt32},
         VB <: AbstractVector{Bool},
+        VS <: AbstractVector{LifecycleStatusDetailCode},
         M32 <: AbstractMatrix{Int32},
         V8 <: AbstractVector{UInt8},
         PW <: AbstractMatrix,
@@ -201,9 +207,12 @@ mutable struct LifecycleWorkspace{
     active::VB
     selected::VB
     filtered::VB
+    filtered_detail::VS
     planned_site_count::V32
     planned_sites::M32
     partition_labels::V8
+    partition_scratch::V8
+    partition_owner::V32
     cell_site_starts::V32
     cell_site_counts::V32
     cell_site_cursor::V32
@@ -243,6 +252,7 @@ function lifecycle_workspace_conforms(
         workspace.active,
         workspace.selected,
         workspace.filtered,
+        workspace.filtered_detail,
         workspace.planned_site_count,
         workspace.allocation,
         workspace.canonical_order,
@@ -254,9 +264,11 @@ function lifecycle_workspace_conforms(
         workspace.cell_site_cursor,
         workspace.free_slots,
         workspace.representative_site,
+        workspace.partition_owner,
     )
     site_vectors = (
         workspace.partition_labels,
+        workspace.partition_scratch,
         workspace.cell_sites,
         workspace.site_position,
         workspace.site_seen,
@@ -320,9 +332,12 @@ function allocate_lifecycle_workspace(
         zeros(Bool, request_bound),
         zeros(Bool, request_bound),
         zeros(Bool, request_bound),
+        fill(LifecycleDetailNone, request_bound),
         zeros(Int32, request_bound),
         zeros(Int32, placement_bound, request_bound),
         zeros(UInt8, site_count),
+        zeros(UInt8, site_count),
+        zeros(Int32, Int(plan.cell_capacity)),
         zeros(Int32, Int(plan.cell_capacity)),
         zeros(Int32, Int(plan.cell_capacity)),
         zeros(Int32, Int(plan.cell_capacity)),
@@ -351,7 +366,9 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     fill!(workspace.active, false)
     fill!(workspace.selected, false)
     fill!(workspace.filtered, false)
+    fill!(workspace.filtered_detail, LifecycleDetailNone)
     fill!(workspace.planned_site_count, 0)
+    fill!(workspace.partition_owner, 0)
     fill!(workspace.policy_workspace, zero(eltype(workspace.policy_workspace)))
     fill!(workspace.allocation, 0)
     fill!(workspace.conflict_seen, false)

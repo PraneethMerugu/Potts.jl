@@ -6,6 +6,7 @@ struct _LifecycleTriggerContext{R, I} <:
     source_identity::UInt64
     action_identity::UInt64
     workspace_maximum::Int32
+    workspace_offset::Int32
     workspace_slot::Int32
     anchor::Int32
     generation::UInt32
@@ -20,6 +21,7 @@ struct _LifecyclePlacementContext{R, I} <:
     source_identity::UInt64
     action_identity::UInt64
     workspace_maximum::Int32
+    workspace_offset::Int32
     workspace_slot::Int32
     anchor::Int32
     generation::UInt32
@@ -34,6 +36,7 @@ struct _LifecyclePartitionContext{R, I} <:
     source_identity::UInt64
     action_identity::UInt64
     workspace_maximum::Int32
+    workspace_offset::Int32
     workspace_slot::Int32
     anchor::Int32
     generation::UInt32
@@ -48,6 +51,7 @@ struct _LifecycleStateContext{R, I, H} <:
     source_identity::UInt64
     action_identity::UInt64
     workspace_maximum::Int32
+    workspace_offset::Int32
     workspace_slot::Int32
     anchor::Int32
     generation::UInt32
@@ -92,7 +96,7 @@ end
         (index, _lifecycle_workspace_column(context)),
     ))
     return @inbounds context.runtime.lifecycle_workspace.policy_workspace[
-        index, _lifecycle_workspace_column(context)
+        Int(context.workspace_offset) + index, _lifecycle_workspace_column(context)
     ]
 end
 
@@ -104,9 +108,124 @@ end
         (index, _lifecycle_workspace_column(context)),
     ))
     @inbounds context.runtime.lifecycle_workspace.policy_workspace[
-        index, _lifecycle_workspace_column(context)
+        Int(context.workspace_offset) + index, _lifecycle_workspace_column(context)
     ] = value
     return value
+end
+
+struct LifecycleWorkspaceOperation{F} <: AbstractContextualOperation
+    operation::F
+    offset::Int32
+    maximum::Int32
+end
+
+function LifecycleWorkspaceOperation(
+        operation, offset::Integer, maximum::Integer
+    )
+    0 <= offset <= typemax(Int32) || throw(ArgumentError(
+        "lifecycle workspace offset is outside Int32"
+    ))
+    0 <= maximum <= typemax(Int32) || throw(ArgumentError(
+        "lifecycle workspace maximum is outside Int32"
+    ))
+    return LifecycleWorkspaceOperation(
+        operation, Int32(offset), Int32(maximum)
+    )
+end
+
+operation_context_supported(
+    operation::LifecycleWorkspaceOperation,
+    context::Type{<:AbstractEvaluatorExecutionContext},
+) = operation_context_supported(operation.operation, context)
+
+function _lifecycle_workspace_slice(
+        context::_LifecycleTriggerContext, offset::Int32, maximum::Int32
+    )
+    return _LifecycleTriggerContext(
+        context.runtime,
+        context.source_identity,
+        context.action_identity,
+        maximum,
+        context.workspace_offset + offset,
+        context.workspace_slot,
+        context.anchor,
+        context.generation,
+        context.site,
+        context.occurrence,
+        context.operation,
+    )
+end
+
+function _lifecycle_workspace_slice(
+        context::_LifecyclePlacementContext, offset::Int32, maximum::Int32
+    )
+    return _LifecyclePlacementContext(
+        context.runtime,
+        context.source_identity,
+        context.action_identity,
+        maximum,
+        context.workspace_offset + offset,
+        context.workspace_slot,
+        context.anchor,
+        context.generation,
+        context.site,
+        context.occurrence,
+        context.operation,
+    )
+end
+
+
+function _lifecycle_workspace_slice(
+        context::_LifecyclePartitionContext, offset::Int32, maximum::Int32
+    )
+    return _LifecyclePartitionContext(
+        context.runtime,
+        context.source_identity,
+        context.action_identity,
+        maximum,
+        context.workspace_offset + offset,
+        context.workspace_slot,
+        context.anchor,
+        context.generation,
+        context.site,
+        context.occurrence,
+        context.operation,
+    )
+end
+
+function _lifecycle_workspace_slice(
+        context::_LifecycleStateContext, offset::Int32, maximum::Int32
+    )
+    return _LifecycleStateContext(
+        context.runtime,
+        context.source_identity,
+        context.action_identity,
+        maximum,
+        context.workspace_offset + offset,
+        context.workspace_slot,
+        context.anchor,
+        context.generation,
+        context.source,
+        context.source_generation,
+        context.destination,
+        context.destination_generation,
+        context.role,
+        context.state_identity,
+        context.state_handle,
+        context.site,
+        context.occurrence,
+        context.operation,
+    )
+end
+
+@inline function (operation::LifecycleWorkspaceOperation)(
+        arguments::Tuple,
+        context::AbstractEvaluatorExecutionContext,
+    )
+    sliced = _lifecycle_workspace_slice(
+        context, operation.offset, operation.maximum
+    )
+    return operation.operation(arguments, sliced)
 end
 
 @inline lifecycle_source_cell(context::_LifecycleStateContext) = context.source

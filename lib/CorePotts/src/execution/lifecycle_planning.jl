@@ -9,6 +9,7 @@ function _plan_creation!(runtime, plan, workspace, request, descriptor)
         descriptor.source_identity,
         descriptor.action_identity,
         descriptor.placement_workspace_maximum,
+        Int32(0),
         Int32(request),
         anchor,
         generation,
@@ -126,7 +127,7 @@ function _partition_connected(
     first_site = Int32(0)
     expected = 0
     for position in positions
-        @inbounds workspace.partition_labels[position] == label || continue
+        @inbounds workspace.partition_scratch[position] == label || continue
         expected += 1
         iszero(first_site) &&
             (first_site = @inbounds workspace.cell_sites[position])
@@ -137,7 +138,9 @@ function _partition_connected(
     workspace.site_queue[1] = first_site
     workspace.site_seen[first_site] = true
     visited = 0
-    relation = @inbounds plan.relations[Int(descriptor.relation_slot)]
+    relation = lifecycle_relation(
+        plan.relations, Int(descriptor.relation_slot)
+    )
     while head <= tail
         linear = Int(@inbounds workspace.site_queue[head])
         head += 1
@@ -158,7 +161,7 @@ function _partition_connected(
                 anchor,
                 detail = LifecycleDetailCellSiteIndexMissingOwnedSite,
             )
-            @inbounds workspace.partition_labels[position] == label || continue
+            @inbounds workspace.partition_scratch[position] == label || continue
             @inbounds workspace.site_seen[neighbor_linear] && continue
             tail += 1
             @inbounds begin
@@ -175,7 +178,7 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
     generation = @inbounds workspace.generation[request]
     positions = _cell_site_range(workspace, anchor)
     for position in positions
-        @inbounds workspace.partition_labels[position] = 0
+        @inbounds workspace.partition_scratch[position] = 0
     end
     external = descriptor.partition === ExternalLifecyclePartition
     center = external ? nothing : descriptor.point_from_centroid ?
@@ -194,6 +197,7 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
                 descriptor.source_identity,
                 descriptor.action_identity,
                 descriptor.partition_workspace_maximum,
+                Int32(0),
                 Int32(request),
                 anchor,
                 generation,
@@ -210,15 +214,16 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
             UInt8(value)
         else
             normal === nothing && return :partition_geometry_invalid
-            projection = sum(
-                (eltype(runtime.parameters)(site[dimension]) -
-                 eltype(runtime.parameters)(0.5) - center[dimension]) *
-                normal[dimension]
-                for dimension in eachindex(normal)
-            )
+            T = eltype(runtime.parameters)
+            projection = zero(T)
+            for dimension in eachindex(normal)
+                projection += (
+                    T(site[dimension]) - T(0.5) - center[dimension]
+                ) * normal[dimension]
+            end
             projection <= 0 ? UInt8(1) : UInt8(2)
         end
-        @inbounds workspace.partition_labels[position] = label
+        @inbounds workspace.partition_scratch[position] = label
         label == 1 ? (first_count += 1) : (second_count += 1)
     end
     first_count > 0 && second_count > 0 || return :partition_empty_descendant
@@ -234,10 +239,10 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
         ) < eltype(runtime.parameters)(0.5)
         if flip
             for position in positions
-                @inbounds workspace.partition_labels[position] == 1 ?
-                    (workspace.partition_labels[position] = 2) :
-                    workspace.partition_labels[position] == 2 &&
-                    (workspace.partition_labels[position] = 1)
+                @inbounds workspace.partition_scratch[position] == 1 ?
+                    (workspace.partition_scratch[position] = 2) :
+                    workspace.partition_scratch[position] == 2 &&
+                    (workspace.partition_scratch[position] = 1)
             end
         end
     end
@@ -251,6 +256,11 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
     )
     _lifecycle_succeeded(workspace) || return :status_failure
     daughter_connected || return :partition_daughter_disconnected
+    for position in positions
+        @inbounds workspace.partition_labels[position] =
+            workspace.partition_scratch[position]
+    end
+    @inbounds workspace.partition_owner[anchor] = Int32(request)
     return :ok
 end
 
@@ -339,7 +349,33 @@ function _plan_lifecycle_request!(runtime, plan, workspace, request)
 end
 
 function _filter_lifecycle_requests!(runtime, plan, workspace)
-    for request in 1:Int(workspace.request_count)
+    count = Int(workspace.request_count)
+    for request in 1:count
+        @inbounds workspace.canonical_order[request] = Int32(request)
+    end
+    for index in 2:count
+        request = Int(@inbounds workspace.canonical_order[index])
+        descriptor = @inbounds plan.descriptors[
+            Int(workspace.descriptor[request])
+        ]
+        key = _lifecycle_request_key(plan, workspace, request)
+        position = index
+        while position > 1
+            prior = Int(@inbounds workspace.canonical_order[position - 1])
+            prior_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[prior])
+            ]
+            ordered_before = prior_descriptor.priority < descriptor.priority ||
+                (prior_descriptor.priority == descriptor.priority &&
+                 _lifecycle_request_key(plan, workspace, prior) < key)
+            ordered_before && break
+            @inbounds workspace.canonical_order[position] = Int32(prior)
+            position -= 1
+        end
+        @inbounds workspace.canonical_order[position] = Int32(request)
+    end
+    for position in 1:count
+        request = Int(@inbounds workspace.canonical_order[position])
         @inbounds workspace.active[request] || continue
         descriptor = @inbounds plan.descriptors[
             Int(workspace.descriptor[request])
@@ -351,6 +387,8 @@ function _filter_lifecycle_requests!(runtime, plan, workspace)
             @inbounds begin
                 workspace.active[request] = false
                 workspace.filtered[request] = true
+                workspace.filtered_detail[request] =
+                    _lifecycle_detail_code(reason)
             end
         else
             return _set_lifecycle_status!(

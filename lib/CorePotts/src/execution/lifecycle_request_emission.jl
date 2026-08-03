@@ -34,7 +34,12 @@ const _LIFECYCLE_STATUS_DETAILS = (
     :tracker_plan_state_misalignment => LifecycleDetailTrackerPlanStateMisalignment,
     :active_occupancy_mismatch => LifecycleDetailActiveOccupancyMismatch,
     :forbidden_extinction => LifecycleDetailForbiddenExtinction,
-    :division_replan_mismatch => LifecycleDetailDivisionReplanMismatch,
+    :division_plan_missing => LifecycleDetailDivisionPlanMissing,
+    :state_value_invalid => LifecycleDetailStateValueInvalid,
+    :tracker_storage_invalid => LifecycleDetailTrackerStorageInvalid,
+    :relationship_integrity_invalid => LifecycleDetailRelationshipIntegrityInvalid,
+    :tracker_commit_invalid => LifecycleDetailTrackerCommitInvalid,
+    :relationship_commit_invalid => LifecycleDetailRelationshipCommitInvalid,
 )
 
 @inline function _lifecycle_detail_code(reason::Symbol)
@@ -226,6 +231,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                 descriptor.source_identity,
                 descriptor.action_identity,
                 descriptor.trigger_workspace_maximum,
+                Int32(0),
                 Int32(workspace.request_count + 1),
                 Int32(0),
                 UInt32(0),
@@ -266,6 +272,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                     descriptor.source_identity,
                     descriptor.action_identity,
                     descriptor.trigger_workspace_maximum,
+                    Int32(0),
                     Int32(workspace.request_count + 1),
                     Int32(cell),
                     generation,
@@ -319,4 +326,3 @@ end
     any(iszero, coordinates) && return 0
     return LinearIndices(program.shape)[CartesianIndex(coordinates)]
 end
-

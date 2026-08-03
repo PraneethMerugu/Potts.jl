@@ -4,12 +4,20 @@ _execute_lifecycle_status!(
     runtime, ::NoLifecycleExecutionPlan, ::NoLifecycleWorkspace
 ) = true
 
+@inline function _lifecycle_descriptor_due(plan, next_mcs)
+    for descriptor in plan.descriptors
+        _lifecycle_due(descriptor, next_mcs) && return true
+    end
+    return false
+end
+
 function _execute_lifecycle_status!(
         runtime,
         plan::LifecycleExecutionPlan,
         workspace::LifecycleWorkspace,
     )
     _reset_lifecycle_workspace!(workspace)
+    _lifecycle_descriptor_due(plan, runtime.mcs + 1) || return true
     _index_lifecycle_representative_sites!(runtime, workspace) || return false
     _emit_lifecycle_requests!(runtime, plan, workspace) || return false
     _filter_lifecycle_requests!(runtime, plan, workspace) || return false
