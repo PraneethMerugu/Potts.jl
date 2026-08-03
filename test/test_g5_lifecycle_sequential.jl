@@ -15,6 +15,59 @@ function _g5_l2_execute_at!(runtime, mcs)
     return runtime
 end
 
+@testset "G5-L2 conservative split fractions are construction-safe" begin
+    @variables t conserved(t)
+    cell = CellKind(:cell; extinction = RetireAtZero())
+    medium = MediumKind(:medium)
+    relation = SpatialRelation(:division; neighborhood = VonNeumann())
+    state = CellState(
+        conserved;
+        initial = 1.0,
+        retirement = RetireTo(0.0),
+        division = CopyToDaughters(),
+    )
+    anchor = CellBinding(:cell)
+    divide = LifecycleProcess(
+        :invalid_split;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Divide(
+            anchor;
+            geometry = SpecifiedNormalPlane((1.0, 0.0)),
+            relation,
+            side = CanonicalSide(),
+            state = (
+                state => SplitConservatively(1.5; rounding = :exact),
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    system = PottsSystem(
+        name = :InvalidConservativeSplit,
+        statements = StatementSet((
+            Lattice((4, 4); max_cells = 2),
+            cell,
+            medium,
+            relation,
+            state,
+            divide,
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [conserved],
+        independent_variables = [t],
+    )
+    error = try
+        complete(system)
+        nothing
+    catch caught
+        caught
+    end
+    @test error isa PottsToolkit.PottsValidationError
+    @test only(error.diagnostics).kind === :invalid_lifecycle_split_fraction
+end
+
 @testset "G5-L2 frozen external lifecycle operations execute" begin
     @variables t external_state(t)
     cell = CellKind(:cell; extinction = RetireAtZero())

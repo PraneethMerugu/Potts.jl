@@ -808,6 +808,12 @@ function _apply_lifecycle_state_rule!(
         value_a = _state_rule_value(
             runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
         )
+        (isfinite(value_a) && zero(value_a) <= value_a <= one(value_a)) ||
+            throw(LifecycleEvaluatorFailure(
+                descriptor.source_handle,
+                source,
+                :split_fraction_out_of_bounds,
+            ))
         old = @inbounds values[source]
         fraction = value_a
         parent = old * fraction

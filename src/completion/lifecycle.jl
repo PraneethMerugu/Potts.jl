@@ -61,6 +61,21 @@ function _validate_state_policies!(statement, effect, admitted)
             "one operation-compatible typed state policy",
             string(typeof(policy)),
         )
+        if policy isa SplitConservatively
+            fraction = policy.fraction
+            if fraction isa Number &&
+                    !(
+                        isfinite(fraction) &&
+                        zero(fraction) <= fraction <= one(fraction)
+                    )
+                _throw_lifecycle_completion(
+                    statement,
+                    :invalid_lifecycle_split_fraction,
+                    "a finite dimensionless fraction in [0, 1]",
+                    repr(fraction),
+                )
+            end
+        end
     end
     return nothing
 end
