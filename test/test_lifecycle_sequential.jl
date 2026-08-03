@@ -29,6 +29,25 @@ function _execute_lifecycle_at!(runtime, mcs)
     return runtime
 end
 
+function _assert_lifecycle_recomputation(runtime)
+    expected = zeros(Int, length(runtime.cell_kinds))
+    for owner in runtime.ownership
+        owner > 0 && (expected[owner] += 1)
+    end
+    tracked = CorePotts.program_tracker_values(runtime, Val(:cell_volume))
+    @test tracked == expected
+    @test map(!iszero, runtime.cell_kinds) == map(!iszero, expected)
+    for slot in eachindex(runtime.relationships)
+        @test CorePotts.validate_relationship_integrity(
+            runtime.relationships[slot],
+            runtime.program.relationships[slot],
+            runtime.cell_kinds,
+            runtime.cell_generations,
+        ) === runtime.relationships[slot]
+    end
+    return nothing
+end
+
 @testset "conservative split fractions are construction-safe" begin
     @variables t conserved(t)
     cell = CellKind(:cell; extinction = RetireAtZero())
@@ -336,10 +355,12 @@ end
     @test count(!iszero, runtime.cell_kinds) == 2
     @test runtime.cell_generations[1:2] == UInt32[1, 1]
     @test activity_values()[1:2] == Float32[1, 2]
+    _assert_lifecycle_recomputation(runtime)
 
     _execute_lifecycle_at!(runtime, 2)
     @test count(!iszero, runtime.cell_kinds) == 2
     @test activity_values()[1:2] == Float32[2, 3]
+    _assert_lifecycle_recomputation(runtime)
 
     _execute_lifecycle_at!(runtime, 3)
     @test count(!iszero, runtime.cell_kinds) == 4
@@ -347,18 +368,21 @@ end
         runtime, Val(:cell_volume)
     )) == 6
     @test sum(activity_values()[1:4]) == 5
+    _assert_lifecycle_recomputation(runtime)
 
     _execute_lifecycle_at!(runtime, 4)
     @test all(iszero, runtime.cell_kinds)
     @test all(runtime.ownership .<= 0)
     @test runtime.retired_cells == 4
     @test all(runtime.cell_generations[1:4] .== 1)
+    _assert_lifecycle_recomputation(runtime)
 
     _execute_lifecycle_at!(runtime, 5)
     @test runtime.cell_kinds[1] != 0
     @test runtime.cell_generations[1] == 2
     @test activity_values()[1] == 5
     @test count(!iszero, runtime.cell_kinds) == 1
+    _assert_lifecycle_recomputation(runtime)
 
     conflict_runtime = CorePotts.restore_program_checkpoint(
         executable.core_program, CorePotts.program_checkpoint(runtime)
@@ -399,6 +423,66 @@ end
     _execute_lifecycle_at!(retire_runtime, 6)
     @test retire_runtime.cell_kinds[1] == 0
     @test retire_runtime.cell_generations[1] == 2
+end
+
+@testset "built-in binary partition policies share one transaction path" begin
+    cell = CellKind(:partition_cell; extinction = RetireAtZero())
+    medium = MediumKind(:partition_medium)
+    relation = SpatialRelation(:partition_relation; neighborhood = VonNeumann())
+    anchor = CellBinding(:partition_anchor)
+    geometries = (
+        RandomPlane(draw = :partition_random),
+        PrincipalAxisPlane(:major),
+        PrincipalAxisPlane(:minor),
+        SpecifiedNormalPlane((1.0, 0.0)),
+    )
+    divisions = map(enumerate(geometries)) do (cell_id, geometry)
+        LifecycleProcess(
+            Symbol(:partition_policy_, cell_id);
+            domain = cells(cell),
+            anchor,
+            expression = anchor_value(anchor) == cell_id,
+            effects = (Divide(
+                anchor;
+                geometry,
+                relation,
+                side = CanonicalSide(),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),),
+            cadence = AtMCS(1),
+        )
+    end
+    system = PottsSystem(
+        name = :PartitionPolicyConformance,
+        statements = StatementSet((
+            Lattice((8, 8); max_cells = 8),
+            cell,
+            medium,
+            relation,
+            divisions...,
+            Protocol(Sweep(); name = :main),
+        )),
+    )
+    executable = compile(
+        complete(system);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
+    labels = zeros(Int, 8, 8)
+    labels[1:2, 1:2] .= 1
+    labels[1:2, 5:6] .= 2
+    labels[5:6, 1:2] .= 3
+    labels[5:6, 5:6] .= 4
+    runtime = _lifecycle_runtime(executable, PottsInitialState(
+        ownership = LabelledCells(labels; cells = fill(cell, 4), medium)
+    ))
+    CorePotts.execute_lifecycle!(runtime)
+    @test count(!iszero, runtime.cell_kinds) == 8
+    @test all(>(0), CorePotts.program_tracker_values(
+        runtime, Val(:cell_volume)
+    )[1:8])
+    _assert_lifecycle_recomputation(runtime)
 end
 
 @testset "exact-fit and overflow capacity atomicity" begin
@@ -537,6 +621,149 @@ end
         generation_before.cell_generations
 end
 
+@testset "closed lifecycle status translation" begin
+    @test isbitstype(CorePotts.LifecycleStatusPayload)
+    payload(code; source = 3, secondary = 4, anchor = 5,
+            detail = CorePotts.LifecycleDetailEvaluationError,
+            required = 6, available = 7, maximum = 8) =
+        CorePotts.LifecycleStatusPayload(
+            code,
+            Int32(source),
+            Int32(secondary),
+            Int32(anchor),
+            detail,
+            Int32(required),
+            Int32(available),
+            Int32(maximum),
+        )
+    cases = (
+        payload(CorePotts.LifecycleStatusInadmissible) =>
+            CorePotts.LifecycleInadmissibilityFailure,
+        payload(CorePotts.LifecycleStatusConflict) =>
+            CorePotts.LifecycleConflictFailure,
+        payload(CorePotts.LifecycleStatusCellCapacity) =>
+            CorePotts.CellCapacityFailure,
+        payload(CorePotts.LifecycleStatusRelationshipCapacity) =>
+            CorePotts.RelationshipCapacityFailure,
+        payload(CorePotts.LifecycleStatusStaleGeneration) =>
+            CorePotts.StaleGenerationFailure,
+        payload(CorePotts.LifecycleStatusGenerationOverflow) =>
+            CorePotts.GenerationOverflowFailure,
+        payload(CorePotts.LifecycleStatusEvaluator) =>
+            CorePotts.LifecycleEvaluatorFailure,
+        payload(CorePotts.LifecycleStatusFootprint) =>
+            CorePotts.LifecycleFootprintFailure,
+        payload(CorePotts.LifecycleStatusInvariant) =>
+            CorePotts.LifecycleInvariantFailure,
+        payload(CorePotts.LifecycleStatusBackend) =>
+            CorePotts.LifecycleBackendFailure,
+    )
+    for (status, expected) in cases
+        before = status
+        @test CorePotts._translate_lifecycle_status(status) isa expected
+        @test status == before
+    end
+    @test CorePotts._translate_lifecycle_status(
+        CorePotts.LifecycleStatusPayload()
+    ) === nothing
+end
+
+@testset "public MCS ordering and checkpoint continuation" begin
+    cell = CellKind(:continuation_cell; extinction = RetireAtZero())
+    destination = CellKind(:continuation_destination; extinction = RetireAtZero())
+    final_destination = CellKind(
+        :continuation_final_destination; extinction = RetireAtZero()
+    )
+    medium = MediumKind(:continuation_medium)
+    anchor = CellBinding(:continuation_anchor)
+    transition = LifecycleProcess(
+        :continuation_transition;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Transition(
+            anchor,
+            destination;
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    transition_again = LifecycleProcess(
+        :continuation_transition_again;
+        domain = cells(destination),
+        anchor,
+        expression = true,
+        effects = (Transition(
+            anchor,
+            final_destination;
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(2),
+    )
+    remove = LifecycleProcess(
+        :continuation_remove;
+        domain = cells(final_destination),
+        anchor,
+        expression = true,
+        effects = (RemoveCell(
+            anchor;
+            replacement = medium,
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(3),
+    )
+    executable = compile(
+        complete(PottsSystem(
+            name = :LifecycleContinuation,
+            statements = StatementSet((
+                Lattice((3, 3); max_cells = 1),
+                cell,
+                destination,
+                final_destination,
+                medium,
+                transition,
+                transition_again,
+                remove,
+                Protocol(Sweep(); name = :main),
+            )),
+        ));
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
+    initial = PottsInitialState(ownership = LabelledCells(
+        ones(Int, 3, 3); cells = [cell], medium
+    ))
+    uninterrupted = _lifecycle_runtime(executable, initial; seed = 0x9a)
+    CorePotts.advance_mcs!(uninterrupted)
+    @test uninterrupted.mcs == 1
+    @test count(!iszero, uninterrupted.cell_kinds) == 1
+    saved = CorePotts.program_checkpoint(uninterrupted)
+    resumed = CorePotts.restore_program_checkpoint(
+        executable.core_program, saved
+    )
+    for _ in 1:2
+        CorePotts.advance_mcs!(uninterrupted)
+        CorePotts.advance_mcs!(resumed)
+    end
+    uninterrupted_snapshot = CorePotts.program_snapshot(uninterrupted)
+    resumed_snapshot = CorePotts.program_snapshot(resumed)
+    @test uninterrupted.mcs == resumed.mcs == 3
+    @test uninterrupted_snapshot.ownership == resumed_snapshot.ownership
+    @test uninterrupted_snapshot.cell_kinds == resumed_snapshot.cell_kinds
+    @test uninterrupted_snapshot.cell_generations ==
+        resumed_snapshot.cell_generations
+    @test uninterrupted_snapshot.trackers.values ==
+        resumed_snapshot.trackers.values
+    @test uninterrupted_snapshot.relationships.banks ==
+        resumed_snapshot.relationships.banks
+    @test uninterrupted_snapshot.relationships.slots ==
+        resumed_snapshot.relationships.slots
+    @test uninterrupted.lifecycle_workspace.status.code ==
+        resumed.lifecycle_workspace.status.code ==
+        CorePotts.LifecycleStatusSuccess
+end
+
 @testset "lifecycle warm path is inferred and allocation-free" begin
     cell = CellKind(:allocation_cell; extinction = RetireAtZero())
     medium = MediumKind(:allocation_medium)
@@ -643,6 +870,100 @@ end
         runtime.cell_kinds,
         runtime.cell_generations,
     ) === only(runtime.relationships)
+end
+
+@testset "closed relationship policy families share transaction authority" begin
+    cell = CellKind(:policy_link_cell; extinction = RetireAtZero())
+    transitioned = CellKind(:policy_link_destination; extinction = RetireAtZero())
+    medium = MediumKind(:policy_link_medium)
+    links = RelationshipState(
+        :policy_links;
+        endpoints = Undirected(cell, cell),
+        capacity = 5,
+        maximum_degree = 1,
+        lifecycle = RejectEndpointRetirement(),
+    )
+    anchor = CellBinding(:policy_link_anchor)
+    policies = (
+        (1, RemoveCell(
+            anchor;
+            replacement = medium,
+            relationships = (links => RejectWhileLinked(),),
+            on_inadmissible = FilterInadmissible(),
+        )),
+        (3, RemoveCell(
+            anchor;
+            replacement = medium,
+            relationships = (links => RemoveIncident(),),
+            on_inadmissible = ErrorOnInadmissible(),
+        )),
+        (5, Transition(
+            anchor,
+            cell;
+            relationships = (links => PreserveCompatible(),),
+            on_inadmissible = ErrorOnInadmissible(),
+        )),
+        (7, Transition(
+            anchor,
+            transitioned;
+            relationships = (links => RemoveIncompatible(),),
+            on_inadmissible = ErrorOnInadmissible(),
+        )),
+        (9, Transition(
+            anchor,
+            transitioned;
+            relationships = (links => RejectIncompatible(),),
+            on_inadmissible = FilterInadmissible(),
+        )),
+    )
+    processes = map(policies) do (cell_id, effect)
+        LifecycleProcess(
+            Symbol(:relationship_policy_, cell_id);
+            domain = cells(cell),
+            anchor,
+            expression = anchor_value(anchor) == cell_id,
+            effects = (effect,),
+            cadence = AtMCS(1),
+        )
+    end
+    system = PottsSystem(
+        name = :RelationshipPolicyConformance,
+        statements = StatementSet((
+            Lattice((4, 4); max_cells = 10),
+            cell,
+            transitioned,
+            medium,
+            links,
+            processes...,
+            Protocol(Sweep(); name = :main),
+        )),
+    )
+    executable = compile(
+        complete(system);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
+    labels = zeros(Int, 4, 4)
+    labels[1:10] .= 1:10
+    runtime = _lifecycle_runtime(
+        executable,
+        PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = fill(cell, 10), medium
+            ),
+            values = [links => [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]],
+        ),
+    )
+    CorePotts.execute_lifecycle!(runtime)
+    @test count(only(runtime.relationships).active) == 3
+    @test runtime.cell_kinds[1] != 0
+    @test runtime.cell_kinds[3] == 0
+    @test runtime.cell_kinds[5] != 0
+    @test runtime.cell_kinds[7] != runtime.cell_kinds[5]
+    @test runtime.cell_kinds[9] == runtime.cell_kinds[5]
+    @test count(runtime.lifecycle_workspace.filtered) == 2
+    _assert_lifecycle_recomputation(runtime)
 end
 
 @testset "closed state-policy families and addressed redraw" begin
@@ -931,4 +1252,81 @@ end
     @test first_runtime.lifecycle_workspace.status.code ==
         second_runtime.lifecycle_workspace.status.code ==
         CorePotts.LifecycleStatusSuccess
+end
+
+@testset "conflict diagnostics are canonical under declaration permutation" begin
+    function conflicting_executable(reverse_order)
+        cell = CellKind(:canonical_conflict_cell; extinction = RetireAtZero())
+        medium = MediumKind(:canonical_conflict_medium)
+        birth_a = LifecycleProcess(
+            :canonical_conflict_a;
+            domain = model(),
+            expression = true,
+            effects = (CreateCell(
+                cell;
+                placement = SeedAt(1),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),),
+        )
+        birth_b = LifecycleProcess(
+            :canonical_conflict_b;
+            domain = model(),
+            expression = true,
+            effects = (CreateCell(
+                cell;
+                placement = SeedAt(1),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),),
+        )
+        births = reverse_order ? (birth_b, birth_a) : (birth_a, birth_b)
+        executable = compile(
+            complete(PottsSystem(
+                name = :CanonicalConflictPermutation,
+                statements = StatementSet((
+                    Lattice((3, 3); max_cells = 2),
+                    cell,
+                    medium,
+                    births...,
+                    Protocol(
+                        Sweep();
+                        name = :main,
+                        lifecycle_conflicts = RejectLifecycleAmbiguity(),
+                    ),
+                )),
+            ));
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+        initial = PottsInitialState(ownership = LabelledCells(
+            zeros(Int, 3, 3); cells = [], medium
+        ))
+        return executable, _lifecycle_runtime(executable, initial)
+    end
+    first_executable, first_runtime = conflicting_executable(false)
+    second_executable, second_runtime = conflicting_executable(true)
+    first_before = CorePotts.program_snapshot(first_runtime)
+    second_before = CorePotts.program_snapshot(second_runtime)
+    first_error = try
+        CorePotts.execute_lifecycle!(first_runtime)
+        nothing
+    catch error
+        error
+    end
+    second_error = try
+        CorePotts.execute_lifecycle!(second_runtime)
+        nothing
+    catch error
+        error
+    end
+    @test first_error isa CorePotts.LifecycleConflictFailure
+    @test second_error isa CorePotts.LifecycleConflictFailure
+    @test (first_error.first_source, first_error.second_source, first_error.anchor) ==
+        (second_error.first_source, second_error.second_source, second_error.anchor)
+    @test first_executable.reports.lifecycle.fingerprint ==
+        second_executable.reports.lifecycle.fingerprint
+    @test first_runtime.ownership == first_before.ownership
+    @test second_runtime.ownership == second_before.ownership
+    @test first_runtime.lifecycle_workspace.status ==
+        second_runtime.lifecycle_workspace.status
 end
