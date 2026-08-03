@@ -50,6 +50,24 @@ end
     @test different_capacity.cell_capacity == many.cell_capacity == 32
     @test length(one.descriptors) == 2
     @test length(many.descriptors) == 5
+
+    control = CorePotts.allocate_lifecycle_backend_control(
+        one, zeros(UInt32, 1), 32
+    )
+    @test control.counters[CorePotts._LIFECYCLE_CONTROL_ACTIVE_BANK] == 1
+    @test all(eachindex(control.counters)) do index
+        index == CorePotts._LIFECYCLE_CONTROL_ACTIVE_BANK ||
+            iszero(control.counters[index])
+    end
+    @test all(iszero, control.statistics)
+    @test all(iszero, control.request_scan)
+    @test all(iszero, control.request_scan_scratch)
+    @test all(
+        payload -> payload.code === CorePotts.LifecycleStatusSuccess,
+        control.candidate_status,
+    )
+    @test all(==(typemax(UInt64)), control.site_keys)
+    @test all(==(typemax(UInt64)), control.site_keys_scratch)
 end
 
 function _minimal_lifecycle_system(name, statements)
@@ -200,6 +218,17 @@ end
     @test executable isa PottsExecutable
     @test executable.reports.lifecycle.descriptors == length(plans)
     @test executable.reports.lifecycle.cell_capacity == 25
+    @test executable.reports.lifecycle.division_variants == 1
+    @test count_ones(
+        executable.core_program.lifecycle_plan.division_variant_mask
+    ) == 1
+    @test !iszero(
+        executable.core_program.lifecycle_plan.division_variant_mask &
+        CorePotts._lifecycle_division_variant_bit(
+            CorePotts.ExternalLifecyclePartition,
+            CorePotts.StableRandomLifecycleSide,
+        )
+    )
     @test executable.reports.workspace.lifecycle.allocation_model ===
         :fixed_preallocated
     @test executable.reports.workspace.lifecycle.cell_capacity == 25
@@ -217,12 +246,14 @@ end
             MediumKind(:background),
         ),
     ))
-    @test compile(
+    synthesized_executable = compile(
         synthesized_only;
         engine = SequentialEngine(),
         backend = CPUBackend(),
         scalar_type = Float32,
-    ) isa PottsExecutable
+    )
+    @test synthesized_executable isa PottsExecutable
+    @test synthesized_executable.reports.lifecycle.division_variants == 0
     @test only(inspect(synthesized_only, LifecyclePlans())).effect === :Retire
 
     missing_extinction = try

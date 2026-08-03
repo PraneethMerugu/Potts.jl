@@ -45,9 +45,10 @@ struct _LifecyclePartitionContext{R, I} <:
     operation::UInt16
 end
 
-struct _LifecycleStateContext{R, I, H} <:
+struct _LifecycleStateContext{R, P, I, H} <:
        AbstractLifecycleStateTransformEvaluationContext
     runtime::R
+    planned::P
     source_identity::UInt64
     action_identity::UInt64
     workspace_maximum::Int32
@@ -198,6 +199,7 @@ function _lifecycle_workspace_slice(
     )
     return _LifecycleStateContext(
         context.runtime,
+        context.planned,
         context.source_identity,
         context.action_identity,
         maximum,
@@ -254,14 +256,16 @@ end
         DestinationLifecycleStateRole, DaughterLifecycleStateRole,
     ) ? context.destination : context.source
     index > 0 || return zero(eltype(state_block(
-        context.runtime.lifecycle_workspace.staged_descriptor_state,
+        context.planned.descriptor_state,
         context.state_handle,
     ).values))
     return @inbounds state_block(
-        context.runtime.lifecycle_workspace.staged_descriptor_state,
+        context.planned.descriptor_state,
         context.state_handle,
     ).values[index]
 end
+@inline _lifecycle_value_runtime(context::_LifecycleContext) = context.runtime
+@inline _lifecycle_value_runtime(context::_LifecycleStateContext) = context.planned
 @inline evaluator_parameters(context::_LifecycleContext) = context.runtime.parameters
 @inline _compiled_evaluator_parameters(context::_LifecycleContext) =
     context.runtime.parameters
@@ -289,7 +293,9 @@ end
     )
     cell = Int32(only(arguments))
     cell <= 0 && return 0
-    return program_tracker_value(context.runtime, Val(:cell_volume), cell)
+    return program_tracker_value(
+        _lifecycle_value_runtime(context), Val(:cell_volume), cell
+    )
 end
 
 @inline function apply_resource_operation(
@@ -309,9 +315,10 @@ end
     )
     cell = Int32(only(arguments))
     cell <= 0 && return 0
+    runtime = _lifecycle_value_runtime(context)
     return qualified_tracker_value(
-        context.runtime.program.tracker_plan,
-        context.runtime.trackers,
+        runtime.program.tracker_plan,
+        runtime.trackers,
         quantity,
         source_handle,
         cell,
@@ -334,15 +341,15 @@ end
 
 @inline apply_resource_operation(
     ::ResourceOperation{:cell_center}, arguments, context::_LifecycleContext
-) = _cell_center(context.runtime, Int32(only(arguments)))
+) = _cell_center(_lifecycle_value_runtime(context), Int32(only(arguments)))
 
 @inline apply_resource_operation(
     ::ResourceOperation{:unwrapped_center}, arguments, context::_LifecycleContext
-) = _cell_center(context.runtime, Int32(only(arguments)))
+) = _cell_center(_lifecycle_value_runtime(context), Int32(only(arguments)))
 
 @inline apply_resource_operation(
     ::ResourceOperation{:cell_elongation}, arguments, context::_LifecycleContext
-) = _cell_length(context.runtime, Int32(only(arguments)))
+) = _cell_length(_lifecycle_value_runtime(context), Int32(only(arguments)))
 
 @inline function apply_resource_operation(
         ::ResourceOperation{:field_value}, arguments, context::_LifecycleContext
@@ -364,8 +371,9 @@ end
         ::ResourceOperation{:occupancy}, arguments, context::_LifecycleContext
     )
     kind = Int16(first(arguments))
-    owner = @inbounds context.runtime.ownership[last(arguments)]
-    return _owner_kind(context.runtime, owner) == kind
+    runtime = _lifecycle_value_runtime(context)
+    owner = @inbounds runtime.ownership[last(arguments)]
+    return _owner_kind(runtime, owner) == kind
 end
 
 @inline function apply_resource_operation(
@@ -374,12 +382,13 @@ end
     relationship_handle = Int32(first(arguments))
     endpoint = Int32(last(arguments))
     endpoint <= 0 && return 0
+    runtime = _lifecycle_value_runtime(context)
     slot = _relationship_domain_slot(
-        context.runtime.program.descriptor_plan.domain_resources,
+        runtime.program.descriptor_plan.domain_resources,
         relationship_handle,
     )
     return _call_relationship_slot(
-        _relationship_degree, context.runtime.relationships, slot, (endpoint,)
+        _relationship_degree, runtime.relationships, slot, (endpoint,)
     )
 end
 

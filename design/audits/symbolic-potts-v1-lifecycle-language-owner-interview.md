@@ -657,7 +657,7 @@ future-relevant lifecycle fact: ownership, slot status/high-water and reusable s
 generations, schema-owned cell state and histories, relationships with endpoint generations,
 trackers under their checkpoint policies, MCS, parameters, seed/RNG contract, lifecycle policy and
 stream identities, and the completed executable fingerprint. Replaceable request buffers, compaction
-scratch, sort/scan temporaries, and backend events are reconstructed.
+scratch, sort/scan temporaries, and ordered queued backend work are reconstructed.
 
 Diagnostics for filtered requests, conflicts, capacity failures, divisions, creations, removals,
 retirements, transitions, and reuse publish only with the transaction outcome. Counters that affect
@@ -834,7 +834,7 @@ publish only with a successful transaction; unbounded per-cell logging is exclud
 `inspect` reports lifecycle groups, effect/policy inventory, read/write/topology footprints, maximum
 requests, persistent and scratch memory, RNG namespaces, required trackers/relationships,
 checkpoint policy, kernel families, and backend support/rejection reasons. It does not expose live
-registries, backend events, or private compiler object layout.
+registries, ordered queued backend work, or private compiler object layout.
 
 **Option B — throw generic `ArgumentError` values.**
 

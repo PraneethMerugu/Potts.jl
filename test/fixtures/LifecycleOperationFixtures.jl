@@ -101,6 +101,8 @@ end
     CorePotts.lifecycle_before_state_value(context) ==
         CorePotts.lifecycle_planned_state_value(context) ||
         return oftype(arguments[1], NaN)
+    prior = CorePotts.lifecycle_workspace_value(context, 1)
+    arguments[1] == 3 && prior == 2 && return oftype(arguments[1], NaN)
     arguments[1] < 0 && return oftype(
         CorePotts.lifecycle_workspace_value(context, 1), NaN
     )

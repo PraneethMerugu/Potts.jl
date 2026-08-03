@@ -9,7 +9,19 @@ const _PROGRAM_CHECKERBOARD_ACCEPTED = UInt8(5)
 
 struct NoCheckerboardStageBuffers end
 
-struct CheckerboardKernelProgram{T, N, O, R, TP, D, S, H, C}
+mutable struct ProgramExecutionPosition
+    submitted_mcs::Int
+    drained_mcs::Int
+    committed_mcs::Int
+    materialized_mcs::Int
+    settlement_count::Int
+end
+
+ProgramExecutionPosition(initial_mcs::Integer = 0) = ProgramExecutionPosition(
+    Int(initial_mcs), Int(initial_mcs), Int(initial_mcs), Int(initial_mcs), 0
+)
+
+struct CheckerboardKernelProgram{T, N, O, R, TP, D, S, L, H, C}
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
     proposal_offsets::O
@@ -20,12 +32,13 @@ struct CheckerboardKernelProgram{T, N, O, R, TP, D, S, H, C}
     tracker_plan::TP
     descriptor_plan::D
     stage_plan::S
+    lifecycle_plan::L
     ownership_change_handles::H
     checkerboard_plan::C
 end
 
 struct CheckerboardExecutionState{
-        P, O, K, G, TS, R, D, W, S, A,
+        P, O, K, G, TS, R, D, W, S, L, C, A,
     }
     program::P
     ownership::O
@@ -36,6 +49,8 @@ struct CheckerboardExecutionState{
     descriptor_state::D
     descriptor_workspaces::W
     stage_buffers::S
+    lifecycle_workspace::L
+    lifecycle_control::C
     parameters::A
     seed::UInt64
     replica::UInt32
@@ -76,9 +91,10 @@ end
 end
 
 struct CheckerboardWorkspace{
-        S, C, E, T, O, N, P, D, M, I, R, Q, U, Z, X,
+        S, C, E, T, O, N, P, D, M, I, R, Q, U, Z, X, EP,
     }
     state::S
+    alternate_state::S
     contributions::C
     accepted_copy_evaluations::E
     target_sites::T
@@ -93,6 +109,77 @@ struct CheckerboardWorkspace{
     report::U
     color_sizes::Z
     source_table::X
+    execution::EP
+end
+
+@inline function _checkerboard_state_with_science(
+        state,
+        ownership,
+        cell_kinds,
+        cell_generations,
+        trackers,
+        relationships,
+        descriptor_state,
+        lifecycle_workspace,
+    )
+    return CheckerboardExecutionState(
+        state.program,
+        ownership,
+        cell_kinds,
+        cell_generations,
+        trackers,
+        relationships,
+        descriptor_state,
+        state.descriptor_workspaces,
+        state.stage_buffers,
+        lifecycle_workspace,
+        state.lifecycle_control,
+        state.parameters,
+        state.seed,
+        state.replica,
+        state.repeat,
+        state.mcs,
+    )
+end
+
+function _checkerboard_state_banks(state::CheckerboardExecutionState)
+    workspace = state.lifecycle_workspace
+    workspace isa LifecycleWorkspace || return state, state
+    primary_workspace = _lifecycle_workspace_with_staged_state(
+        workspace, state
+    )
+    primary = _checkerboard_state_with_science(
+        state,
+        state.ownership,
+        state.cell_kinds,
+        state.cell_generations,
+        state.trackers,
+        state.relationships,
+        state.descriptor_state,
+        primary_workspace,
+    )
+    secondary_science = (
+        ownership = workspace.staged_ownership,
+        cell_kinds = workspace.staged_cell_kinds,
+        cell_generations = workspace.staged_cell_generations,
+        trackers = workspace.staged_trackers,
+        relationships = workspace.staged_relationships,
+        descriptor_state = workspace.staged_descriptor_state,
+    )
+    secondary_workspace = _lifecycle_workspace_with_staged_state(
+        workspace, secondary_science
+    )
+    secondary = _checkerboard_state_with_science(
+        state,
+        secondary_science.ownership,
+        secondary_science.cell_kinds,
+        secondary_science.cell_generations,
+        secondary_science.trackers,
+        secondary_science.relationships,
+        secondary_science.descriptor_state,
+        secondary_workspace,
+    )
+    return primary, secondary
 end
 
 function _checkerboard_kernel_program(program, to)
@@ -128,6 +215,8 @@ function _checkerboard_kernel_program(program, to)
         tracker_kernel,
         adapt_descriptor_kernel_plan(to, program.descriptor_plan),
         to === nothing ? stage_kernel : Adapt.adapt(to, stage_kernel),
+        to === nothing ? program.lifecycle_plan :
+        Adapt.adapt(to, program.lifecycle_plan),
         to === nothing ? ownership_change_handles :
         Adapt.adapt(to, ownership_change_handles),
         to === nothing ? program.checkerboard_plan :
@@ -156,8 +245,22 @@ function _checkerboard_execution_state(
     descriptor_workspaces = allocate_runtime_workspaces(
         program.descriptor_plan.workspace_layout
     )
+    kernel_program = _checkerboard_kernel_program(program, to)
+    lifecycle_workspace = allocate_lifecycle_workspace(
+        program.lifecycle_plan,
+        program,
+        ownership,
+        cell_kinds,
+        cell_generations,
+        trackers,
+        relationships,
+        descriptor_state,
+    )
+    lifecycle_control = allocate_lifecycle_backend_control(
+        program.lifecycle_plan, parameters, length(ownership)
+    )
     return CheckerboardExecutionState(
-        _checkerboard_kernel_program(program, to),
+        kernel_program,
         _checkerboard_adapt(to, ownership),
         _checkerboard_adapt(to, cell_kinds),
         _checkerboard_adapt(to, cell_generations),
@@ -166,6 +269,8 @@ function _checkerboard_execution_state(
         _checkerboard_adapt(to, descriptor_state),
         _checkerboard_adapt(to, descriptor_workspaces),
         _checkerboard_adapt(to, stage_buffers),
+        _checkerboard_adapt(to, lifecycle_workspace),
+        _checkerboard_adapt(to, lifecycle_control),
         _checkerboard_adapt(to, parameters),
         UInt64(seed),
         UInt32(replica),
@@ -185,6 +290,8 @@ function _checkerboard_state_at_mcs(state::CheckerboardExecutionState, mcs)
         state.descriptor_state,
         state.descriptor_workspaces,
         state.stage_buffers,
+        state.lifecycle_workspace,
+        state.lifecycle_control,
         state.parameters,
         state.seed,
         state.replica,
@@ -211,7 +318,12 @@ function _allocate_checkerboard_workspace(
             state.program.checkerboard_plan
         ),
         source_table = (),
+        alternate_state = nothing,
+        execution = ProgramExecutionPosition(state.mcs),
     )
+    if alternate_state === nothing
+        state, alternate_state = _checkerboard_state_banks(state)
+    end
     plan = state.program.checkerboard_plan
     plan isa CheckerboardPlan || error(
         "checkerboard workspace requires a realized-domain plan"
@@ -261,6 +373,7 @@ function _allocate_checkerboard_workspace(
     report = _checkerboard_similar(state.parameters, UInt64, 5)
     return CheckerboardWorkspace(
         state,
+        alternate_state,
         contributions,
         accepted_copy_evaluations,
         target_sites,
@@ -275,6 +388,7 @@ function _allocate_checkerboard_workspace(
         report,
         color_sizes,
         source_table,
+        execution,
     )
 end
 
@@ -349,26 +463,102 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     _validate_gpu_descriptor_plan(
         state.program.descriptor_plan, workspace.source_table
     )
+    primary_science = (
+        ownership = Adapt.adapt(to, state.ownership),
+        cell_kinds = Adapt.adapt(to, state.cell_kinds),
+        cell_generations = Adapt.adapt(to, state.cell_generations),
+        trackers = Adapt.adapt(to, state.trackers),
+        relationships = Adapt.adapt(to, state.relationships),
+        descriptor_state = Adapt.adapt(to, state.descriptor_state),
+    )
+    execution = ProgramExecutionPosition(
+        workspace.execution.submitted_mcs,
+        workspace.execution.drained_mcs,
+        workspace.execution.committed_mcs,
+        workspace.execution.materialized_mcs,
+        workspace.execution.settlement_count,
+    )
+    if state.lifecycle_workspace isa NoLifecycleWorkspace
+        adapted = CheckerboardExecutionState(
+            _checkerboard_kernel_program(state.program, to),
+            primary_science.ownership,
+            primary_science.cell_kinds,
+            primary_science.cell_generations,
+            primary_science.trackers,
+            primary_science.relationships,
+            primary_science.descriptor_state,
+            Adapt.adapt(to, state.descriptor_workspaces),
+            NoCheckerboardStageBuffers(),
+            NoLifecycleWorkspace(),
+            NoLifecycleBackendControl(),
+            Adapt.adapt(to, state.parameters),
+            state.seed,
+            state.replica,
+            state.repeat,
+            state.mcs,
+        )
+        return _allocate_checkerboard_workspace(
+            adapted;
+            color_sizes = workspace.color_sizes,
+            source_table = workspace.source_table,
+            alternate_state = adapted,
+            execution,
+        )
+    end
+    shared_workspace = Adapt.adapt(
+        to,
+        _lifecycle_workspace_with_staged_state(
+            state.lifecycle_workspace, workspace.alternate_state
+        ),
+    )
+    secondary_science = (
+        ownership = shared_workspace.staged_ownership,
+        cell_kinds = shared_workspace.staged_cell_kinds,
+        cell_generations = shared_workspace.staged_cell_generations,
+        trackers = shared_workspace.staged_trackers,
+        relationships = shared_workspace.staged_relationships,
+        descriptor_state = shared_workspace.staged_descriptor_state,
+    )
+    primary_workspace = _lifecycle_workspace_with_staged_state(
+        shared_workspace, primary_science
+    )
+    secondary_workspace = _lifecycle_workspace_with_staged_state(
+        shared_workspace, secondary_science
+    )
     adapted = CheckerboardExecutionState(
         _checkerboard_kernel_program(state.program, to),
-        Adapt.adapt(to, state.ownership),
-        Adapt.adapt(to, state.cell_kinds),
-        Adapt.adapt(to, state.cell_generations),
-        Adapt.adapt(to, state.trackers),
-        Adapt.adapt(to, state.relationships),
-        Adapt.adapt(to, state.descriptor_state),
+        primary_science.ownership,
+        primary_science.cell_kinds,
+        primary_science.cell_generations,
+        primary_science.trackers,
+        primary_science.relationships,
+        primary_science.descriptor_state,
         Adapt.adapt(to, state.descriptor_workspaces),
         NoCheckerboardStageBuffers(),
+        primary_workspace,
+        Adapt.adapt(to, state.lifecycle_control),
         Adapt.adapt(to, state.parameters),
         state.seed,
         state.replica,
         state.repeat,
         state.mcs,
     )
+    alternate = _checkerboard_state_with_science(
+        adapted,
+        secondary_science.ownership,
+        secondary_science.cell_kinds,
+        secondary_science.cell_generations,
+        secondary_science.trackers,
+        secondary_science.relationships,
+        secondary_science.descriptor_state,
+        secondary_workspace,
+    )
     return _allocate_checkerboard_workspace(
         adapted;
         color_sizes = workspace.color_sizes,
         source_table = workspace.source_table,
+        alternate_state = alternate,
+        execution,
     )
 end
 
@@ -389,8 +579,9 @@ function _clear_checkerboard_bulk!(workspace::CheckerboardWorkspace)
     AcceleratedKernels.foreachindex(report, report_backend) do index
         @inbounds report[index] = UInt64(0)
     end
-    KernelAbstractions.synchronize(backend)
-    report_backend == backend || KernelAbstractions.synchronize(report_backend)
+    report_backend == backend || throw(ArgumentError(
+        "checkerboard report storage must share the execution backend"
+    ))
     return nothing
 end
 
@@ -531,10 +722,11 @@ end
 function execute_checkerboard_mcs!(
         workspace::CheckerboardWorkspace,
         mcs::Integer = workspace.state.mcs,
+        state_bank::CheckerboardExecutionState = workspace.state,
         ;
         workgroup_size::Union{Nothing, Integer} = nothing,
     )
-    state = _checkerboard_state_at_mcs(workspace.state, mcs)
+    state = _checkerboard_state_at_mcs(state_bank, mcs)
     plan = state.program.checkerboard_plan
     backend = KernelAbstractions.get_backend(workspace.dispositions)
     staged_commit = _checkerboard_requires_accepted_commit(state)
@@ -577,7 +769,6 @@ function execute_checkerboard_mcs!(
                 Int32(attempt_round);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             evaluate_kernel(
                 workspace.contributions,
                 workspace.target_sites,
@@ -591,7 +782,6 @@ function execute_checkerboard_mcs!(
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             _clear_checkerboard_claims!(workspace)
             claim_priority_kernel(
                 workspace.old_owners,
@@ -599,10 +789,10 @@ function execute_checkerboard_mcs!(
                 workspace.priorities,
                 workspace.dispositions,
                 workspace.cell_max_priority,
+                state,
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             claim_identity_kernel(
                 workspace.old_owners,
                 workspace.new_owners,
@@ -611,10 +801,10 @@ function execute_checkerboard_mcs!(
                 workspace.dispositions,
                 workspace.cell_max_priority,
                 workspace.cell_min_identity,
+                state,
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             select_kernel(
                 workspace.old_owners,
                 workspace.new_owners,
@@ -623,10 +813,10 @@ function execute_checkerboard_mcs!(
                 workspace.dispositions,
                 workspace.cell_max_priority,
                 workspace.cell_min_identity,
+                state,
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             staged_commit && _prepare_checkerboard_accepted_stage!(
                 workspace, state, color, batch_size
             )
@@ -639,20 +829,59 @@ function execute_checkerboard_mcs!(
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            KernelAbstractions.synchronize(backend)
             staged_commit && _publish_checkerboard_accepted_stage!(
                 workspace, state, color, batch_size
             )
             report_kernel(
                 workspace.report,
                 workspace.dispositions,
+                state,
                 Int32(batch_size);
                 ndrange = 1,
             )
-            KernelAbstractions.synchronize(backend)
         end
     end
     return workspace
+end
+
+@inline function _checkerboard_transaction_banks(
+        workspace::CheckerboardWorkspace, current_mcs::Integer
+    )
+    if iseven(current_mcs)
+        return workspace.state, workspace.alternate_state, Int32(2)
+    end
+    return workspace.alternate_state, workspace.state, Int32(1)
+end
+
+function enqueue_checkerboard_mcs!(
+        workspace::CheckerboardWorkspace,
+        current_mcs::Integer;
+        workgroup_size::Union{Nothing, Integer} = nothing,
+    )
+    current_mcs >= 0 || throw(ArgumentError(
+        "current MCS must be nonnegative"
+    ))
+    current_mcs == workspace.execution.submitted_mcs || throw(ArgumentError(
+        "checkerboard submission must be contiguous: expected current MCS " *
+        "$(workspace.execution.submitted_mcs), received $current_mcs"
+    ))
+    source, destination, destination_bank = _checkerboard_transaction_banks(
+        workspace, current_mcs
+    )
+    destination = _checkerboard_state_at_mcs(destination, current_mcs)
+    _enqueue_program_state_copy!(destination, source)
+    execute_checkerboard_mcs!(
+        workspace,
+        current_mcs,
+        destination;
+        workgroup_size,
+    )
+    enqueue_lifecycle_backend_index!(destination; workgroup_size)
+    _enqueue_program_bank_publication!(
+        destination, workspace.report, destination_bank, current_mcs + 1
+    )
+    workspace.execution.submitted_mcs = Int(current_mcs) + 1
+    return destination
 end
 
 function _clear_checkerboard_claims!(workspace::CheckerboardWorkspace)
@@ -665,33 +894,7 @@ function _clear_checkerboard_claims!(workspace::CheckerboardWorkspace)
             identities[index] = typemax(UInt32)
         end
     end
-    KernelAbstractions.synchronize(backend)
     return nothing
-end
-
-function _checkerboard_report(workspace::CheckerboardWorkspace, to_host = Array)
-    values = to_host(workspace.report)
-    return (
-        accepted = Int(values[1]),
-        rejected = Int(values[2]),
-        null_attempts = Int(values[3]),
-        constraint_rejections = Int(values[4]),
-        energy_rejections = Int(values[5]),
-    )
-end
-
-function copy_checkerboard_state!(runtime, workspace, to_host = Array)
-    copyto!(runtime.ownership, to_host(workspace.state.ownership))
-    copyto_tracker_state!(
-        runtime.trackers, workspace.state.trackers, to_host
-    )
-    report = _checkerboard_report(workspace, to_host)
-    runtime.accepted += report.accepted
-    runtime.rejected += report.rejected
-    runtime.null_attempts += report.null_attempts
-    runtime.constraint_rejections += report.constraint_rejections
-    runtime.energy_rejections += report.energy_rejections
-    return runtime
 end
 
 function _advance_checkerboard!(runtime::ProgramRuntime)
@@ -700,11 +903,11 @@ function _advance_checkerboard!(runtime::ProgramRuntime)
         "checkerboard runtime has no portable execution workspace"
     )
     execute_checkerboard_mcs!(workspace, runtime.mcs)
-    report = _checkerboard_report(workspace, identity)
-    runtime.accepted += report.accepted
-    runtime.rejected += report.rejected
-    runtime.null_attempts += report.null_attempts
-    runtime.constraint_rejections += report.constraint_rejections
-    runtime.energy_rejections += report.energy_rejections
+    values = workspace.report
+    runtime.accepted += Int(values[1])
+    runtime.rejected += Int(values[2])
+    runtime.null_attempts += Int(values[3])
+    runtime.constraint_rejections += Int(values[4])
+    runtime.energy_rejections += Int(values[5])
     return nothing
 end

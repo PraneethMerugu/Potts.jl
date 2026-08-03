@@ -4,7 +4,14 @@ Date: 2026-08-03
 
 Scope: the repaired sequential lifecycle candidate before the lifecycle quality-gate handoff
 
-Status: measured review; no GPU or checkerboard lifecycle qualification claim
+Status: sequential measurements retained; gate disposition superseded by the owner-required
+backend-residency contract on 2026-08-03
+
+The measurements below remain valid for the sequential reference. Their former conclusion that no
+GPU implementation was required before the current gate is withdrawn. Fully backend-resident
+schedule-through-publication execution, device status self-gating, and terminal-only host
+synchronization are now correctness requirements. This amendment does not convert unmeasured
+optional optimizations into requirements.
 
 ## Decision
 
@@ -17,7 +24,7 @@ bounded corrections found by measurement:
 3. remove a per-site generator allocation in plane partitioning and inline the shared tracker-copy
    boundary.
 
-No other optimization is required before the current gate. In particular, the measurements do not
+No other sequential optimization was justified by these measurements. In particular, they do not
 justify a persistent packed active-cell index, a conflict-index subsystem, transaction journals,
 copy-on-write state, Morton traversal, or selected-winner division re-evaluation.
 
@@ -227,12 +234,11 @@ hidden fallback, or policy re-evaluation on every claimed backend.
 - Keep the measured no-due cadence exit.
 - Keep zero warm allocation for state-bearing external operations and divisions.
 - Keep one-evaluation division planning and fixed selected-label storage.
-- Report the current GPU status honestly as adaptable storage plus host orchestration, not GPU
-  lifecycle execution.
+- Replace adaptable-storage-only host orchestration with the backend-resident transaction DAG in
+  the amended lifecycle contract.
+- Keep status and stop state on the backend and translate only at an explicit terminal boundary.
 - Run the focused correctness, inference, allocation, and artifact-inventory checks on the exact
   candidate.
-
-No additional performance implementation is essential before this gate.
 
 ### Measurement-only additions
 
@@ -249,8 +255,6 @@ No additional performance implementation is essential before this gate.
 - Lazy representative-site and full-segment CSR construction for due descriptors.
 - Anchor/site/relationship-edge stamping when real workloads repeatedly approach hundreds or
   thousands of simultaneous requests.
-- Backend scan/scatter CSR and transient active-cell compaction as part of the actual portable GPU
-  execution checkpoint.
 - Optional affected-range staging only if full-state copy becomes a material fraction of measured
   end-to-end MCS cost on representative workloads.
 

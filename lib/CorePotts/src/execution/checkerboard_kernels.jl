@@ -32,7 +32,8 @@ end
     first_index = @inbounds plan.color_offsets[Int(color)]
     stop_index = @inbounds plan.color_offsets[Int(color) + 1] - Int32(1)
     color_size = stop_index - first_index + Int32(1)
-    if local_index <= color_size
+    if local_index <= color_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace)
         site_offset = Int32(local_index - 1)
         schedule_index = first_index + site_offset
         target_linear = @inbounds plan.sites[Int(schedule_index)]
@@ -85,10 +86,12 @@ end
         priorities,
         dispositions,
         cell_max_priority,
+        state,
         batch_size::Int32,
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         old_owner = @inbounds old_owners[index]
@@ -120,10 +123,12 @@ end
         dispositions,
         cell_max_priority,
         cell_min_identity,
+        state,
         batch_size::Int32,
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
@@ -162,10 +167,12 @@ end
         dispositions,
         cell_max_priority,
         cell_min_identity,
+        state,
         batch_size::Int32,
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
@@ -214,6 +221,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_PENDING)
         target = CartesianIndices(state.ownership)[Int(
             @inbounds target_sites[index]
@@ -276,6 +284,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
+            _lifecycle_backend_open(state.lifecycle_workspace) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         target = CartesianIndices(state.ownership)[Int(
             @inbounds target_sites[index]
@@ -298,10 +307,11 @@ end
 @kernel function _checkerboard_report_kernel!(
         report,
         dispositions,
+        state,
         batch_size::Int32,
     )
     index = @index(Global, Linear)
-    if index == 1
+    if index == 1 && _lifecycle_backend_open(state.lifecycle_workspace)
         accepted = UInt64(0)
         rejected = UInt64(0)
         null_attempts = UInt64(0)

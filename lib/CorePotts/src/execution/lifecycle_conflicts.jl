@@ -63,9 +63,12 @@ function _lifecycle_requests_conflict(runtime, plan, workspace, left, right)
 end
 
 function _deduplicate_lifecycle_requests!(plan, workspace)
-    for right in 1:Int(workspace.request_count)
+    count = Int(lifecycle_request_count(workspace))
+    for right_position in 1:count
+        right = Int(@inbounds workspace.canonical_order[right_position])
         @inbounds workspace.active[right] || continue
-        for left in 1:(right - 1)
+        for left_position in 1:(right_position - 1)
+            left = Int(@inbounds workspace.canonical_order[left_position])
             @inbounds workspace.active[left] || continue
             _lifecycle_requests_equivalent(plan, workspace, left, right) || continue
             @inbounds workspace.active[right] = false
@@ -77,13 +80,15 @@ end
 
 function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
     _deduplicate_lifecycle_requests!(plan, workspace)
-    count = Int(workspace.request_count)
+    count = Int(lifecycle_request_count(workspace))
     if plan.conflict_policy === RejectLifecycleConflicts
         first_conflict = 0
         second_conflict = 0
-        for right in 1:count
+        for right_position in 1:count
+            right = Int(@inbounds workspace.canonical_order[right_position])
             @inbounds workspace.active[right] || continue
-            for left in 1:(right - 1)
+            for left_position in 1:(right_position - 1)
+                left = Int(@inbounds workspace.canonical_order[left_position])
                 @inbounds workspace.active[left] || continue
                 _lifecycle_requests_conflict(
                     runtime, plan, workspace, left, right
@@ -123,14 +128,16 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
                 anchor = @inbounds(workspace.anchor[second_conflict]),
             )
         end
-        for request in 1:count
+        for position in 1:count
+            request = Int(@inbounds workspace.canonical_order[position])
             @inbounds workspace.active[request] || continue
             @inbounds workspace.selected[request] = true
         end
         return true
     end
     ordered_count = 0
-    for request in 1:count
+    for position in 1:count
+        request = Int(@inbounds workspace.canonical_order[position])
         @inbounds workspace.active[request] || continue
         ordered_count += 1
         workspace.canonical_order[ordered_count] = Int32(request)
@@ -163,7 +170,8 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
         ]
         blocked = false
         tied = 0
-        for selected in 1:count
+        for selected_position in 1:ordered_count
+            selected = Int(@inbounds workspace.canonical_order[selected_position])
             @inbounds workspace.selected[selected] || continue
             _lifecycle_requests_conflict(
                 runtime, plan, workspace, selected, candidate
@@ -202,7 +210,9 @@ end
 
 function _sort_selected_requests!(plan, workspace)
     selected_count = 0
-    for request in 1:Int(workspace.request_count)
+    count = Int(lifecycle_request_count(workspace))
+    for position in 1:count
+        request = Int(@inbounds workspace.canonical_order[position])
         @inbounds workspace.selected[request] || continue
         selected_count += 1
         workspace.canonical_order[selected_count] = Int32(request)

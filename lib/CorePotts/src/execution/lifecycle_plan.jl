@@ -19,6 +19,9 @@ end
     DivideCellLifecycleEffect = 0x05
 end
 
+@inline _lifecycle_effect_bit(effect::LifecycleEffectCode) =
+    UInt8(1) << (UInt8(effect) - UInt8(1))
+
 @enum LifecycleInadmissibilityDisposition::UInt8 begin
     FilterLifecycleInadmissible = 0x01
     ErrorLifecycleInadmissible = 0x02
@@ -50,6 +53,15 @@ end
     StableRandomLifecycleSide = 0x02
 end
 
+@inline function _lifecycle_division_variant_bit(
+        partition::LifecyclePartitionCode, side::LifecycleSideCode
+    )
+    partition === NoLifecyclePartition && return UInt16(0)
+    partition_index = UInt16(partition) - UInt16(RandomPlaneLifecyclePartition)
+    side_index = UInt16(side) - UInt16(CanonicalLifecycleSide)
+    return UInt16(1) << (partition_index * UInt16(2) + side_index)
+end
+
 @enum LifecycleStateAction::UInt8 begin
     InitializeLifecycleState = 0x01
     UnsupportedLifecycleState = 0x02
@@ -64,6 +76,32 @@ end
     TransformDaughtersLifecycleState = 0x0b
     RedrawDaughtersLifecycleState = 0x0c
 end
+
+@inline _lifecycle_state_action_bit(action::LifecycleStateAction) =
+    UInt16(1) << (UInt16(action) - UInt16(1))
+@inline _lifecycle_state_action_value(::Val{Action}) where {Action} = Action
+@inline _lifecycle_state_action_value(::Val{:initialize}) =
+    InitializeLifecycleState
+@inline _lifecycle_state_action_value(::Val{:retire_to}) =
+    RetireToLifecycleState
+@inline _lifecycle_state_action_value(::Val{:preserve}) =
+    PreserveLifecycleState
+@inline _lifecycle_state_action_value(::Val{:reset}) =
+    ResetLifecycleState
+@inline _lifecycle_state_action_value(::Val{:transform}) =
+    TransformLifecycleState
+@inline _lifecycle_state_action_value(::Val{:copy_daughters}) =
+    CopyDaughtersLifecycleState
+@inline _lifecycle_state_action_value(::Val{:preserve_parent_reset_daughter}) =
+    PreserveParentResetDaughterLifecycleState
+@inline _lifecycle_state_action_value(::Val{:reset_both}) =
+    ResetBothLifecycleState
+@inline _lifecycle_state_action_value(::Val{:split_conservatively}) =
+    SplitConservativelyLifecycleState
+@inline _lifecycle_state_action_value(::Val{:transform_daughters}) =
+    TransformDaughtersLifecycleState
+@inline _lifecycle_state_action_value(::Val{:redraw_daughters}) =
+    RedrawDaughtersLifecycleState
 
 @enum LifecycleStateRoleCode::UInt8 begin
     SourceLifecycleStateRole = 0x01
@@ -201,6 +239,7 @@ end
 struct LifecycleStateRuleStorage{B <: Tuple, S <: AbstractVector{LifecycleStateRuleSlot}}
     banks::B
     slots::S
+    action_mask::UInt16
 end
 
 function LifecycleStateRuleStorage(values)
@@ -221,7 +260,11 @@ function LifecycleStateRuleStorage(values)
         push!(banks[bank], value)
         slots[index] = LifecycleStateRuleSlot(bank, length(banks[bank]))
     end
-    return LifecycleStateRuleStorage(Tuple(banks), slots)
+    action_mask = UInt16(0)
+    for rule in entries
+        action_mask |= _lifecycle_state_action_bit(rule.action)
+    end
+    return LifecycleStateRuleStorage(Tuple(banks), slots, action_mask)
 end
 
 Base.length(storage::LifecycleStateRuleStorage) = length(storage.slots)
@@ -397,6 +440,8 @@ struct LifecycleExecutionPlan{
     stencil_offsets::SO
     relations::R
     conflict_policy::LifecycleConflictCode
+    effect_mask::UInt8
+    division_variant_mask::UInt16
     cell_capacity::Int32
     maximum_requests::Int32
     maximum_placement_sites::Int32
@@ -451,6 +496,15 @@ function LifecycleExecutionPlan(
     length(forbid_extinction) > 0 || throw(ArgumentError(
         "lifecycle extinction table cannot be empty"
     ))
+    effect_mask = UInt8(0)
+    division_variant_mask = UInt16(0)
+    for descriptor in descriptors
+        effect_mask |= _lifecycle_effect_bit(descriptor.effect)
+        descriptor.effect === DivideCellLifecycleEffect &&
+            (division_variant_mask |= _lifecycle_division_variant_bit(
+                descriptor.partition, descriptor.side
+            ))
+    end
     return LifecycleExecutionPlan{
         N,
         T,
@@ -471,6 +525,8 @@ function LifecycleExecutionPlan(
         stencil_offsets,
         relations,
         conflict_policy,
+        effect_mask,
+        division_variant_mask,
         Int32(cell_capacity),
         Int32(maximum_requests),
         Int32(maximum_placement_sites),
@@ -491,6 +547,8 @@ function _lifecycle_plan_fingerprint(plan::LifecycleExecutionPlan)
         plan.relations.offsets,
         plan.relations.counts,
         plan.conflict_policy,
+        plan.effect_mask,
+        plan.division_variant_mask,
         plan.cell_capacity,
         plan.maximum_requests,
         plan.maximum_placement_sites,
@@ -505,6 +563,7 @@ function lifecycle_plan_report(plan::LifecycleExecutionPlan)
         descriptors = length(plan.descriptors),
         evaluators = length(plan.evaluators),
         state_rules = length(plan.state_rules),
+        state_actions = count_ones(plan.state_rules.action_mask),
         relationship_rules = length(plan.relationship_rules),
         ownership_rules = length(plan.ownership_rules),
         cell_capacity = plan.cell_capacity,
@@ -512,6 +571,7 @@ function lifecycle_plan_report(plan::LifecycleExecutionPlan)
         maximum_placement_sites = plan.maximum_placement_sites,
         maximum_policy_workspace = plan.maximum_policy_workspace,
         conflict_policy = Symbol(string(plan.conflict_policy)),
+        division_variants = count_ones(plan.division_variant_mask),
         fingerprint = _lifecycle_plan_fingerprint(plan),
     )
 end
@@ -520,6 +580,7 @@ lifecycle_plan_report(::NoLifecycleExecutionPlan) = (
     descriptors = 0,
     evaluators = 0,
     state_rules = 0,
+    state_actions = 0,
     relationship_rules = 0,
     ownership_rules = 0,
     cell_capacity = 0,
@@ -527,6 +588,7 @@ lifecycle_plan_report(::NoLifecycleExecutionPlan) = (
     maximum_placement_sites = 0,
     maximum_policy_workspace = 0,
     conflict_policy = :none,
+    division_variants = 0,
     fingerprint = "none",
 )
 

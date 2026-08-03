@@ -1,6 +1,79 @@
 # Source-local admissibility and immutable request planning.
 
-function _plan_creation!(runtime, plan, workspace, request, descriptor)
+abstract type _AbstractLifecyclePlanClass end
+struct _CreateLifecyclePlan <: _AbstractLifecyclePlanClass end
+struct _RetireLifecyclePlan <: _AbstractLifecyclePlanClass end
+struct _RemoveLifecyclePlan <: _AbstractLifecyclePlanClass end
+struct _TransitionLifecyclePlan <: _AbstractLifecyclePlanClass end
+struct _DivideLifecyclePlan <: _AbstractLifecyclePlanClass end
+
+abstract type _AbstractLifecyclePartitionPlan end
+struct _RandomPlanePartitionPlan <: _AbstractLifecyclePartitionPlan end
+struct _PrincipalMajorPartitionPlan <: _AbstractLifecyclePartitionPlan end
+struct _PrincipalMinorPartitionPlan <: _AbstractLifecyclePartitionPlan end
+struct _SpecifiedNormalPartitionPlan <: _AbstractLifecyclePartitionPlan end
+struct _ExternalPartitionPlan <: _AbstractLifecyclePartitionPlan end
+
+abstract type _AbstractLifecycleSidePlan end
+struct _CanonicalSidePlan <: _AbstractLifecycleSidePlan end
+struct _StableRandomSidePlan <: _AbstractLifecycleSidePlan end
+
+struct _DivideLifecycleVariantPlan{
+        P <: _AbstractLifecyclePartitionPlan,
+        S <: _AbstractLifecycleSidePlan,
+    } <: _AbstractLifecyclePlanClass
+    partition::P
+    side::S
+end
+
+@inline _lifecycle_plan_effect(::_CreateLifecyclePlan) =
+    CreateCellLifecycleEffect
+@inline _lifecycle_plan_effect(::_RetireLifecyclePlan) =
+    RetireCellLifecycleEffect
+@inline _lifecycle_plan_effect(::_RemoveLifecyclePlan) =
+    RemoveCellLifecycleEffect
+@inline _lifecycle_plan_effect(::_TransitionLifecyclePlan) =
+    TransitionCellLifecycleEffect
+@inline _lifecycle_plan_effect(::_DivideLifecyclePlan) =
+    DivideCellLifecycleEffect
+@inline _lifecycle_plan_effect(::_DivideLifecycleVariantPlan) =
+    DivideCellLifecycleEffect
+
+@inline _lifecycle_partition_code(::_RandomPlanePartitionPlan) =
+    RandomPlaneLifecyclePartition
+@inline _lifecycle_partition_code(::_PrincipalMajorPartitionPlan) =
+    PrincipalMajorLifecyclePartition
+@inline _lifecycle_partition_code(::_PrincipalMinorPartitionPlan) =
+    PrincipalMinorLifecyclePartition
+@inline _lifecycle_partition_code(::_SpecifiedNormalPartitionPlan) =
+    SpecifiedNormalLifecyclePartition
+@inline _lifecycle_partition_code(::_ExternalPartitionPlan) =
+    ExternalLifecyclePartition
+
+@inline _lifecycle_side_code(::_CanonicalSidePlan) = CanonicalLifecycleSide
+@inline _lifecycle_side_code(::_StableRandomSidePlan) =
+    StableRandomLifecycleSide
+
+@inline _lifecycle_plan_matches(descriptor, plan_class) =
+    descriptor.effect === _lifecycle_plan_effect(plan_class)
+@inline function _lifecycle_plan_matches(
+        descriptor, plan_class::_DivideLifecycleVariantPlan
+    )
+    return descriptor.effect === DivideCellLifecycleEffect &&
+           descriptor.partition === _lifecycle_partition_code(
+               plan_class.partition
+           ) &&
+           descriptor.side === _lifecycle_side_code(plan_class.side)
+end
+
+function _plan_creation!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+    )
     anchor = @inbounds workspace.anchor[request]
     generation = @inbounds workspace.generation[request]
     site = _lifecycle_context_site(runtime, workspace, anchor)
@@ -18,7 +91,7 @@ function _plan_creation!(runtime, plan, workspace, request, descriptor)
         UInt16(descriptor.source_handle),
     )
     result = _evaluate_lifecycle_checked(
-        plan, descriptor.placement_evaluator, context, descriptor, workspace
+        mode, plan, descriptor.placement_evaluator, context, descriptor, workspace
     )
     result isa LifecycleEvaluationFailed && return :status_failure
     external = descriptor.placement === ExternalLifecyclePlacement
@@ -76,41 +149,158 @@ function _plan_creation!(runtime, plan, workspace, request, descriptor)
     return :ok
 end
 
-@inline function _partition_normal(runtime, descriptor, anchor, generation)
+@inline _partition_normal(
+    runtime, descriptor, anchor, generation, ::_SpecifiedNormalPartitionPlan
+) = descriptor.normal
+
+@inline function _partition_normal(
+        runtime, descriptor, anchor, generation, ::_RandomPlanePartitionPlan
+    )
     T = eltype(runtime.parameters)
     N = length(runtime.program.shape)
-    if descriptor.partition === SpecifiedNormalLifecyclePartition
-        return descriptor.normal
-    elseif descriptor.partition === RandomPlaneLifecyclePartition
-        N == 2 || return nothing
-        draw = _lifecycle_uniform(
-            T,
+    N == 2 || return nothing
+    draw = _lifecycle_uniform(
+        T,
+        runtime,
+        LifecyclePartitionStream,
+        descriptor.geometry_draw,
+        anchor,
+        generation,
+        0,
+    )
+    angle = T(2pi) * draw
+    return (cos(angle), sin(angle))
+end
+
+@inline function _principal_partition_normal(
+        runtime, anchor, ::Val{Major}
+    ) where {Major}
+    T = eltype(runtime.parameters)
+    length(runtime.program.shape) == 2 || return nothing
+    statistics = _cell_shape_statistics(runtime, anchor)
+    statistics === nothing && return nothing
+    covariance = statistics[3]
+    a, b, d = covariance[1], covariance[2], covariance[4]
+    λmajor = _maximum_covariance_eigenvalue(Val(2), covariance)
+    λ = Major ? λmajor : a + d - λmajor
+    vector = abs(b) > eps(T) ? (b, λ - a) :
+        abs(a - λ) <= abs(d - λ) ? (one(T), zero(T)) :
+        (zero(T), one(T))
+    norm = sqrt(vector[1]^2 + vector[2]^2)
+    return (vector[1] / norm, vector[2] / norm)
+end
+
+@inline _partition_normal(
+    runtime, descriptor, anchor, generation, ::_PrincipalMajorPartitionPlan
+) = _principal_partition_normal(runtime, anchor, Val(true))
+@inline _partition_normal(
+    runtime, descriptor, anchor, generation, ::_PrincipalMinorPartitionPlan
+) = _principal_partition_normal(runtime, anchor, Val(false))
+
+function _label_division_sites!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor::LifecycleDescriptor{N, T},
+        partition_plan::_AbstractLifecyclePartitionPlan,
+    ) where {N, T}
+    anchor = @inbounds workspace.anchor[request]
+    generation = @inbounds workspace.generation[request]
+    positions = _cell_site_range(workspace, anchor)
+    center = descriptor.point_from_centroid ?
+        _cell_center(runtime, anchor) : descriptor.point
+    center === nothing && return :empty_source_cell
+    normal = _partition_normal(
+        runtime, descriptor, anchor, generation, partition_plan
+    )
+    normal === nothing && return :partition_geometry_invalid
+    center_value = center::NTuple{N, T}
+    normal_value = normal::NTuple{N, T}
+    for position in positions
+        linear = Int(@inbounds workspace.cell_sites[position])
+        site = CartesianIndices(runtime.program.shape)[linear]
+        projection = zero(T)
+        for dimension in 1:N
+            projection += (
+                T(site[dimension]) - T(0.5) - center_value[dimension]
+            ) * normal_value[dimension]
+        end
+        @inbounds workspace.partition_scratch[position] =
+            projection <= 0 ? UInt8(1) : UInt8(2)
+    end
+    return :ok
+end
+
+function _label_division_sites!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor::LifecycleDescriptor{N, T},
+        ::_ExternalPartitionPlan,
+    ) where {N, T}
+    anchor = @inbounds workspace.anchor[request]
+    generation = @inbounds workspace.generation[request]
+    positions = _cell_site_range(workspace, anchor)
+    for position in positions
+        linear = Int(@inbounds workspace.cell_sites[position])
+        site = CartesianIndices(runtime.program.shape)[linear]
+        context = _LifecyclePartitionContext(
             runtime,
-            LifecyclePartitionStream,
-            descriptor.geometry_draw,
+            descriptor.source_identity,
+            descriptor.action_identity,
+            descriptor.partition_workspace_maximum,
+            Int32(0),
+            Int32(request),
             anchor,
             generation,
-            0,
+            site,
+            Int32(0),
+            UInt16(descriptor.source_handle),
         )
-        angle = T(2pi) * draw
-        return (cos(angle), sin(angle))
-    elseif descriptor.partition in (
-            PrincipalMajorLifecyclePartition,
-            PrincipalMinorLifecyclePartition,
+        value = _evaluate_lifecycle_checked(
+            mode,
+            plan,
+            descriptor.partition_evaluator,
+            context,
+            descriptor,
+            workspace,
         )
-        N == 2 || return nothing
-        statistics = _cell_shape_statistics(runtime, anchor)
-        statistics === nothing && return nothing
-        covariance = statistics[3]
-        a, b, d = covariance[1], covariance[2], covariance[4]
-        λmajor = _maximum_covariance_eigenvalue(Val(2), covariance)
-        λ = descriptor.partition === PrincipalMajorLifecyclePartition ?
-            λmajor : a + d - λmajor
-        vector = abs(b) > eps(T) ? (b, λ - a) :
-            abs(a - λ) <= abs(d - λ) ? (one(T), zero(T)) :
-            (zero(T), one(T))
-        norm = sqrt(vector[1]^2 + vector[2]^2)
-        return (vector[1] / norm, vector[2] / norm)
+        value isa LifecycleEvaluationFailed && return :status_failure
+        value isa Integer && value in (1, 2) ||
+            return :partition_label_invalid
+        @inbounds workspace.partition_scratch[position] = UInt8(value)
+    end
+    return :ok
+end
+
+@inline _apply_division_side!(
+    runtime, workspace, request, descriptor, ::_CanonicalSidePlan
+) = nothing
+
+function _apply_division_side!(
+        runtime, workspace, request, descriptor, ::_StableRandomSidePlan
+    )
+    anchor = @inbounds workspace.anchor[request]
+    generation = @inbounds workspace.generation[request]
+    flip = _lifecycle_uniform(
+        eltype(runtime.parameters),
+        runtime,
+        LifecyclePartitionStream,
+        descriptor.side_draw,
+        anchor,
+        generation,
+        0,
+    ) < eltype(runtime.parameters)(0.5)
+    flip || return nothing
+    for position in _cell_site_range(workspace, anchor)
+        @inbounds workspace.partition_scratch[position] == 1 ?
+            (workspace.partition_scratch[position] = 2) :
+            workspace.partition_scratch[position] == 2 &&
+            (workspace.partition_scratch[position] = 1)
     end
     return nothing
 end
@@ -173,79 +363,56 @@ function _partition_connected(
     return visited == expected
 end
 
-function _plan_division!(runtime, plan, workspace, request, descriptor)
+@inline function _lifecycle_partition_plan(code::LifecyclePartitionCode)
+    code === RandomPlaneLifecyclePartition && return _RandomPlanePartitionPlan()
+    code === PrincipalMajorLifecyclePartition && return _PrincipalMajorPartitionPlan()
+    code === PrincipalMinorLifecyclePartition && return _PrincipalMinorPartitionPlan()
+    code === SpecifiedNormalLifecyclePartition && return _SpecifiedNormalPartitionPlan()
+    code === ExternalLifecyclePartition && return _ExternalPartitionPlan()
+    return nothing
+end
+
+@inline function _lifecycle_side_plan(code::LifecycleSideCode)
+    code === CanonicalLifecycleSide && return _CanonicalSidePlan()
+    code === StableRandomLifecycleSide && return _StableRandomSidePlan()
+    return nothing
+end
+
+function _plan_division!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        partition_plan::_AbstractLifecyclePartitionPlan,
+        side_plan::_AbstractLifecycleSidePlan,
+    )
     anchor = @inbounds workspace.anchor[request]
-    generation = @inbounds workspace.generation[request]
     positions = _cell_site_range(workspace, anchor)
     for position in positions
         @inbounds workspace.partition_scratch[position] = 0
     end
-    external = descriptor.partition === ExternalLifecyclePartition
-    center = external ? nothing : descriptor.point_from_centroid ?
-        _cell_center(runtime, anchor) : descriptor.point
-    !external && center === nothing && return :empty_source_cell
-    normal = external ? nothing :
-        _partition_normal(runtime, descriptor, anchor, generation)
+    reason = _label_division_sites!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        partition_plan,
+    )
+    reason === :ok || return reason
     first_count = 0
     second_count = 0
     for position in positions
-        linear = Int(@inbounds workspace.cell_sites[position])
-        site = CartesianIndices(runtime.program.shape)[linear]
-        label = if descriptor.partition === ExternalLifecyclePartition
-            context = _LifecyclePartitionContext(
-                runtime,
-                descriptor.source_identity,
-                descriptor.action_identity,
-                descriptor.partition_workspace_maximum,
-                Int32(0),
-                Int32(request),
-                anchor,
-                generation,
-                site,
-                Int32(0),
-                UInt16(descriptor.source_handle),
-            )
-            value = _evaluate_lifecycle_checked(
-                plan, descriptor.partition_evaluator, context, descriptor, workspace
-            )
-            value isa LifecycleEvaluationFailed && return :status_failure
-            value isa Integer && value in (1, 2) ||
-                return :partition_label_invalid
-            UInt8(value)
-        else
-            normal === nothing && return :partition_geometry_invalid
-            T = eltype(runtime.parameters)
-            projection = zero(T)
-            for dimension in eachindex(normal)
-                projection += (
-                    T(site[dimension]) - T(0.5) - center[dimension]
-                ) * normal[dimension]
-            end
-            projection <= 0 ? UInt8(1) : UInt8(2)
-        end
-        @inbounds workspace.partition_scratch[position] = label
+        label = @inbounds workspace.partition_scratch[position]
         label == 1 ? (first_count += 1) : (second_count += 1)
     end
     first_count > 0 && second_count > 0 || return :partition_empty_descendant
-    if descriptor.side === StableRandomLifecycleSide
-        flip = _lifecycle_uniform(
-            eltype(runtime.parameters),
-            runtime,
-            LifecyclePartitionStream,
-            descriptor.side_draw,
-            anchor,
-            generation,
-            0,
-        ) < eltype(runtime.parameters)(0.5)
-        if flip
-            for position in positions
-                @inbounds workspace.partition_scratch[position] == 1 ?
-                    (workspace.partition_scratch[position] = 2) :
-                    workspace.partition_scratch[position] == 2 &&
-                    (workspace.partition_scratch[position] = 1)
-            end
-        end
-    end
+    _apply_division_side!(
+        runtime, workspace, request, descriptor, side_plan
+    )
     parent_connected = _partition_connected(
         runtime, plan, workspace, request, descriptor, UInt8(1)
     )
@@ -262,6 +429,30 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
     end
     @inbounds workspace.partition_owner[anchor] = Int32(request)
     return :ok
+end
+
+function _plan_division!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+    )
+    partition_plan = _lifecycle_partition_plan(descriptor.partition)
+    partition_plan === nothing && return :partition_geometry_invalid
+    side_plan = _lifecycle_side_plan(descriptor.side)
+    side_plan === nothing && return :partition_geometry_invalid
+    return _plan_division!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        partition_plan,
+        side_plan,
+    )
 end
 
 @inline function _relationship_kinds_match(kind, other, rule)
@@ -312,7 +503,91 @@ function _lifecycle_relationships_admissible(
     return true
 end
 
-function _plan_lifecycle_request!(runtime, plan, workspace, request)
+@inline function _plan_lifecycle_effect!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        ::_CreateLifecyclePlan,
+    )
+    return _plan_creation!(
+        mode, runtime, plan, workspace, request, descriptor
+    )
+end
+
+@inline function _plan_lifecycle_effect!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        ::_RetireLifecyclePlan,
+    )
+    anchor = @inbounds workspace.anchor[request]
+    return program_tracker_value(runtime, Val(:cell_volume), anchor) == 0 ?
+        :ok : :retire_nonempty
+end
+
+@inline _plan_lifecycle_effect!(
+    mode, runtime, plan, workspace, request, descriptor, ::_RemoveLifecyclePlan
+) = :ok
+
+@inline _plan_lifecycle_effect!(
+    mode,
+    runtime,
+    plan,
+    workspace,
+    request,
+    descriptor,
+    ::_TransitionLifecyclePlan,
+) = :ok
+
+@inline function _plan_lifecycle_effect!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        ::_DivideLifecyclePlan,
+    )
+    return _plan_division!(
+        mode, runtime, plan, workspace, request, descriptor
+    )
+end
+
+@inline function _plan_lifecycle_effect!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        plan_class::_DivideLifecycleVariantPlan,
+    )
+    return _plan_division!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        plan_class.partition,
+        plan_class.side,
+    )
+end
+
+function _plan_lifecycle_request_effect!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+        plan_class::_AbstractLifecyclePlanClass,
+    )
     descriptor = @inbounds plan.descriptors[
         Int(workspace.descriptor[request])
     ]
@@ -328,31 +603,61 @@ function _plan_lifecycle_request!(runtime, plan, workspace, request)
             return :status_failure
         end
     end
-    reason = if descriptor.effect === CreateCellLifecycleEffect
-        _plan_creation!(runtime, plan, workspace, request, descriptor)
-    elseif descriptor.effect === RetireCellLifecycleEffect
-        program_tracker_value(runtime, Val(:cell_volume), anchor) == 0 ?
-            :ok : :retire_nonempty
-    elseif descriptor.effect === RemoveCellLifecycleEffect
-        :ok
-    elseif descriptor.effect === TransitionCellLifecycleEffect
-        :ok
-    elseif descriptor.effect === DivideCellLifecycleEffect
-        _plan_division!(runtime, plan, workspace, request, descriptor)
-    else
-        :unknown_effect
-    end
+    reason = _plan_lifecycle_effect!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
     reason === :ok && !_lifecycle_relationships_admissible(
         runtime, plan, descriptor, anchor
     ) && (reason = :relationship_policy_rejected)
     return reason
 end
 
-function _filter_lifecycle_requests!(runtime, plan, workspace)
-    count = Int(workspace.request_count)
+function _plan_lifecycle_request!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+    )
+    descriptor = @inbounds plan.descriptors[
+        Int(workspace.descriptor[request])
+    ]
+    plan_class = if descriptor.effect === CreateCellLifecycleEffect
+        _CreateLifecyclePlan()
+    elseif descriptor.effect === RetireCellLifecycleEffect
+        _RetireLifecyclePlan()
+    elseif descriptor.effect === RemoveCellLifecycleEffect
+        _RemoveLifecyclePlan()
+    elseif descriptor.effect === TransitionCellLifecycleEffect
+        _TransitionLifecyclePlan()
+    elseif descriptor.effect === DivideCellLifecycleEffect
+        _DivideLifecyclePlan()
+    else
+        return :unknown_effect
+    end
+    return _plan_lifecycle_request_effect!(
+        mode, runtime, plan, workspace, request, plan_class
+    )
+end
+
+@inline function _initialize_lifecycle_canonical_order!(
+        ::HostLifecycleExecution, workspace, count
+    )
     for request in 1:count
         @inbounds workspace.canonical_order[request] = Int32(request)
     end
+    return nothing
+end
+
+@inline _initialize_lifecycle_canonical_order!(
+    ::BackendLifecycleExecution, workspace, count
+) = nothing
+
+function _sort_lifecycle_requests!(
+        mode::AbstractLifecycleExecutionMode, runtime, plan, workspace
+    )
+    count = Int(lifecycle_request_count(workspace))
+    _initialize_lifecycle_canonical_order!(mode, workspace, count)
     for index in 2:count
         request = Int(@inbounds workspace.canonical_order[index])
         descriptor = @inbounds plan.descriptors[
@@ -374,13 +679,25 @@ function _filter_lifecycle_requests!(runtime, plan, workspace)
         end
         @inbounds workspace.canonical_order[position] = Int32(request)
     end
+    return count
+end
+
+function _plan_and_filter_lifecycle_requests!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        count::Integer,
+    )
     for position in 1:count
         request = Int(@inbounds workspace.canonical_order[position])
         @inbounds workspace.active[request] || continue
         descriptor = @inbounds plan.descriptors[
             Int(workspace.descriptor[request])
         ]
-        reason = _plan_lifecycle_request!(runtime, plan, workspace, request)
+        reason = _plan_lifecycle_request!(
+            mode, runtime, plan, workspace, request
+        )
         reason === :status_failure && return false
         reason === :ok && continue
         if descriptor.on_inadmissible === FilterLifecycleInadmissible
@@ -402,3 +719,17 @@ function _filter_lifecycle_requests!(runtime, plan, workspace)
     end
     return true
 end
+
+function _filter_lifecycle_requests!(
+        mode::AbstractLifecycleExecutionMode, runtime, plan, workspace
+    )
+    count = _sort_lifecycle_requests!(mode, runtime, plan, workspace)
+    return _plan_and_filter_lifecycle_requests!(
+        mode, runtime, plan, workspace, count
+    )
+end
+
+_filter_lifecycle_requests!(runtime, plan, workspace) =
+    _filter_lifecycle_requests!(
+        HostLifecycleExecution(), runtime, plan, workspace
+    )

@@ -34,7 +34,12 @@ public CPUProgramBackend, CompiledScalar, compiled_scalar_value
 public AbstractCheckerboardPlan, NoCheckerboardPlan, CheckerboardPlan
 public checkerboard_plan_report
 public CheckerboardWorkspace, adapt_checkerboard_workspace
-public execute_checkerboard_mcs!, copy_checkerboard_state!
+public execute_checkerboard_mcs!, enqueue_checkerboard_mcs!
+public ProgramExecutionPosition, ProgramSettlementReason
+public ProgramSettlementRequest, ProgramSettlementReceipt
+public settle_program!
+public LifecycleBackendControl, NoLifecycleBackendControl
+public allocate_lifecycle_backend_control, lifecycle_backend_status
 public RelationshipStoreSchema, CompiledPottsProgram
 public AbstractTrackerDescriptor, OwnershipCountTracker
 public CellSurfaceTracker
@@ -227,6 +232,7 @@ public ClearLifecycleOwnershipState
 public AbstractLifecycleSiteSelection, LifecycleSiteSelection
 public lifecycle_workspace_layout, lifecycle_workspace_conforms
 public LifecycleStatusPayload, LifecycleStatusCode, LifecycleStatusDetailCode
+public LifecycleExecutionStage
 public LifecycleEvaluatorStorage, evaluate_lifecycle
 public LifecycleStateRule, LifecycleStateRuleStorage, call_lifecycle_state_rule
 public LifecycleRelationshipRule, LifecycleOwnershipRule

@@ -80,7 +80,9 @@ function execute_lifecycle!(runtime)
     end
     backend_error === nothing || throw(LifecycleBackendFailure(backend_error))
     succeeded && return runtime
-    failure = _translate_lifecycle_status(runtime.lifecycle_workspace.status)
+    failure = _translate_lifecycle_status(
+        lifecycle_workspace_status(runtime.lifecycle_workspace)
+    )
     failure === nothing && return runtime
     throw(failure)
 end

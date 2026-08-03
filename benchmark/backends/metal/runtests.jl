@@ -7,6 +7,7 @@ include("../../../test/backend_conformance/descriptor_boundary.jl")
 include("../../../test/backend_conformance/checkerboard_execution.jl")
 include("../../../test/backend_conformance/relationship_execution.jl")
 include("../../../test/backend_conformance/surface_execution.jl")
+include("../../../test/backend_conformance/lifecycle_execution.jl")
 
 report = run_descriptor_boundary(
     Metal.MtlArray,
@@ -42,3 +43,24 @@ surface_report = run_surface_execution(
     kernel_convert = Metal.mtlconvert,
 )
 println(surface_report)
+
+lifecycle_report = run_lifecycle_execution(
+    Metal.MtlArray;
+    backend_name = :metal,
+    kernel_convert = Metal.mtlconvert,
+)
+println(lifecycle_report)
+
+lifecycle_mcs_report = run_lifecycle_mcs_execution(
+    Metal.MtlArray;
+    backend_name = :metal,
+    kernel_convert = Metal.mtlconvert,
+)
+println(lifecycle_mcs_report)
+
+lifecycle_capacity_report = run_lifecycle_capacity_failure(
+    Metal.MtlArray;
+    backend_name = :metal,
+    kernel_convert = Metal.mtlconvert,
+)
+println(lifecycle_capacity_report)

@@ -1456,7 +1456,7 @@ end
 Adapt.@adapt_structure OwnershipCountTracker
 Adapt.@adapt_structure CellSurfaceTracker
 Adapt.@adapt_structure DenseScalarTrackerGroup
-Adapt.@adapt_structure CellMomentsTracker
+Adapt.adapt_structure(to, descriptor::CellMomentsTracker) = descriptor
 Adapt.@adapt_structure CellMomentsState
 Adapt.@adapt_structure TrackerExecutionPlan
 Adapt.@adapt_structure TrackerKernelPlan

@@ -1,12 +1,41 @@
-# G5-L2Q Sequential Lifecycle Quality Gate
+# G5-L2Q Lifecycle Architecture and Residency Quality Gate
 
 Date: 2026-08-02
 
 Branch: `codex/symbolic-potts-v1`
 
-Placement: after G5-L2 and before G5-L3
+Placement: blocking the lifecycle execution boundary before any later handoff
 
-Status: owner-requested gate design; execution waits for a complete G5-L2 candidate
+Status: amended by owner on 2026-08-03; backend residency is a current-gate requirement
+
+## Owner amendment
+
+The original sequential-only scope is superseded. A candidate cannot clear while checkerboard or
+device execution omits lifecycle science, invokes a host lifecycle executor, polls device status,
+or synchronizes/transfers lifecycle data between stages or MCS steps. The same immutable plan and
+fixed-capacity transaction must execute through a statically enqueued KernelAbstractions and
+AcceleratedKernels DAG on CPU and a real GPU witness. Host synchronization and status translation
+are permitted only at an explicit terminal solve, observation, diagnostic, or checkpoint boundary.
+
+This amendment changes execution qualification, not the accepted lifecycle vocabulary. It does not
+authorize proof-model migration, documentation work, a second evaluator, or a general query or
+transaction language.
+
+The independent [asynchronous execution and settlement review](symbolic-potts-v1-asynchronous-execution-settlement-review.md)
+confirmed that this is a runtime-architecture correction rather than a local synchronization
+cleanup. The gate remains blocked until the candidate has whole-MCS two-bank atomicity, one sticky
+first-failure/cumulative control block, distinct submitted/drained/committed/materialized positions,
+one nonblocking CorePotts MCS submission path, one unbypassable CorePotts settlement authority, a
+complete device lifecycle path through publication, and an end-to-end CPU/Metal runtime witness.
+Exact MCS attribution is required for device-detected scientific failures; generic backend failures
+may report only an honest attribution interval.
+
+Because KernelAbstractions settlement drains all work already submitted to its ordered queue, the
+boundary scheduler must never enqueue past the next known host-visible boundary and a settlement
+request must target the current submitted position. The candidate must also compile and enqueue
+only lifecycle effect and policy classes reachable from the completed program. The real Metal
+witness must include bounded compilation of the reachable division planner; merely producing valid
+device IR is insufficient when the backend compiler cannot finish the production kernel.
 
 ## Purpose
 
@@ -103,6 +132,12 @@ The review MUST answer each question with code evidence.
     `G5`, `L2`, `R2`, or a numbered `Phase`? Phase labels belong only to specifications, audits,
     archived evidence, and development history; they must not leak into executable source or test
     vocabulary.
+14. Does backend lifecycle lowering include only compiler-reachable structural effect, partition,
+    and side-policy classes, without biological names, model identities, or unused policy branches
+    entering generated device code?
+15. Does the boundary scheduler stop submission at every known host-visible boundary, with every
+    settlement request targeting the runtime's current submitted position rather than pretending
+    that an earlier point in an already queued KA sequence can be settled independently?
 
 ## Lens B — code quality
 
@@ -188,6 +223,9 @@ The gate reuses production tests and small adversarial fixtures. At minimum it M
     `lib/CorePotts/test/` filenames and declared identifiers contains no milestone/phase label; any
     textual occurrence in executable source or tests is inspected and removed unless it describes
     an external scientific term rather than the development process.
+12. the smallest accepted division fixture compiles and executes on real Metal using only its
+    reachable structural partition and side-policy path; generated-code size and first compilation
+    are recorded separately from synchronized steady-state execution.
 
 The capacity probe MUST cover an exact-fit batch and a one-slot-overflow batch, prove that no CPU
 or GPU-facing storage grows after initialization, and prove that the overflow status is translated
@@ -215,21 +253,21 @@ G5-L2Q clears only with:
 - zero P1 findings;
 - every P2 assigned a bounded disposition and earliest owning checkpoint;
 - an explicit `Clear` verdict for all three lenses; and
-- confirmation that the candidate contains no G5-L3, G5-L4, G6, or proof-model work.
+- confirmation that the candidate contains no G6 or proof-model work.
 
 A blocker returns implementation to the earliest owning G5-L1 or G5-L2 boundary. Repairs receive
 focused regression tests and one fresh review of the repaired exact commit. They do not trigger a
 new interview or broader specification cycle unless the repair requires changing an accepted
 semantic decision.
 
-Clearance authorizes G5-L3 only. It does not clear R2, authorize GPU claims, open G6, or permit
-Wortel/Merks migration.
+Clearance authorizes only the remaining bounded lifecycle qualification work. It does not clear R2,
+open G6, or permit Wortel/Merks migration.
 
 ## Anti-expansion rules
 
-G5-L2Q MUST NOT require:
+G5-L2Q MUST NOT require, except where superseded by the owner amendment above:
 
-- checkerboard correctness, GPU execution, vendor hardware, or long performance benchmarks;
+- long performance benchmarks or more than one available real-GPU functional witness;
 - polished documentation, migration wrappers, compatibility aliases, or proof models;
 - arbitrary coverage percentages, file-size limits, type-count limits, or style-only rewrites;
 - a general transaction/query/effect language beyond CCV1-027;

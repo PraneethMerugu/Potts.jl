@@ -105,8 +105,8 @@ function run_relationship_execution(
 
     CorePotts.execute_checkerboard_mcs!(cpu_workspace, 0)
     CorePotts.execute_checkerboard_mcs!(device_workspace, 0)
-    CorePotts.copy_checkerboard_state!(cpu_runtime, cpu_workspace, identity)
-    CorePotts.copy_checkerboard_state!(
+    _observe_checkerboard_boundary!(cpu_runtime, cpu_workspace, identity)
+    _observe_checkerboard_boundary!(
         device_runtime, device_workspace, to_host
     )
 

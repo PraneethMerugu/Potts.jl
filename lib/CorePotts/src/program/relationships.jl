@@ -108,6 +108,14 @@ Base.length(values::PackedRelationshipVector) = Int(values.count)
     return @inbounds values.values[Int(values.offset) + index - 1]
 end
 
+@inline function Base.setindex!(
+        values::PackedRelationshipVector, value, index::Int
+    )
+    @boundscheck checkbounds(values, index)
+    @inbounds values.values[Int(values.offset) + index - 1] = value
+    return value
+end
+
 """Read-only column-major view into one packed incident-edge matrix."""
 struct PackedRelationshipMatrix{
         T,
@@ -128,6 +136,19 @@ Base.size(values::PackedRelationshipMatrix) =
     @boundscheck checkbounds(values, row, column)
     index = Int(values.offset) + row - 1 + (column - 1) * Int(values.rows)
     return @inbounds values.values[index]
+end
+
+@inline function Base.setindex!(
+        values::PackedRelationshipMatrix,
+        value,
+        row::Int,
+        column::Int,
+    )
+    @boundscheck checkbounds(values, row, column)
+    index = Int(values.offset) + row - 1 +
+            (column - 1) * Int(values.rows)
+    @inbounds values.values[index] = value
+    return value
 end
 
 """One isbits relationship-store view reconstructed from a packed bank."""
@@ -486,7 +507,7 @@ function _relationship_degree(state, endpoint::Int32)
 end
 
 function _insert_incident_edge!(
-        state::ProgramRelationshipState,
+        state,
         endpoint::Int32,
         edge::Int32,
     )
@@ -510,7 +531,7 @@ function _insert_incident_edge!(
 end
 
 function _remove_incident_edge!(
-        state::ProgramRelationshipState,
+        state,
         endpoint::Int32,
         edge::Int32,
     )
@@ -713,7 +734,7 @@ function validate_relationship_request(
 end
 
 function apply_validated_relationship_request!(
-        state::ProgramRelationshipState,
+        state,
         request::CreateRelationshipRequest,
     )
     a, b = _canonical_endpoints(request.endpoint_a, request.endpoint_b)
@@ -738,7 +759,7 @@ function apply_validated_relationship_request!(
 end
 
 function apply_validated_relationship_request!(
-        state::ProgramRelationshipState,
+        state,
         request::RemoveRelationshipRequest,
     )
     edge = request.edge
@@ -760,7 +781,7 @@ function apply_validated_relationship_request!(
 end
 
 function apply_validated_relationship_request!(
-        state::ProgramRelationshipState,
+        state,
         request::RetuneRelationshipRequest,
     )
     for payload_slot in eachindex(state.payload)

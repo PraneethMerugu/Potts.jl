@@ -60,6 +60,9 @@ end
         workspace,
         code::LifecycleStatusCode;
         source::Integer = 0,
+        action_identity::Integer = 0,
+        mcs::Integer = 0,
+        stage::LifecycleExecutionStage = LifecycleStageNone,
         secondary_source::Integer = 0,
         anchor::Integer = 0,
         detail::LifecycleStatusDetailCode = LifecycleDetailNone,
@@ -67,9 +70,12 @@ end
         available::Integer = 0,
         maximum::Integer = 0,
     )
-    workspace.status = LifecycleStatusPayload(
+    @inbounds workspace.status[1] = LifecycleStatusPayload(
         code,
+        Int32(mcs),
+        stage,
         Int32(source),
+        UInt64(action_identity),
         Int32(secondary_source),
         Int32(anchor),
         detail,
@@ -81,9 +87,13 @@ end
 end
 
 @inline _lifecycle_succeeded(workspace) =
-    workspace.status.code === LifecycleStatusSuccess
+    lifecycle_workspace_status(workspace).code === LifecycleStatusSuccess
 
 struct LifecycleEvaluationFailed end
+
+abstract type AbstractLifecycleExecutionMode end
+struct HostLifecycleExecution <: AbstractLifecycleExecutionMode end
+struct BackendLifecycleExecution <: AbstractLifecycleExecutionMode end
 
 @inline function _lifecycle_due(
         descriptor::LifecycleDescriptor, next_mcs::Int
@@ -160,6 +170,7 @@ end
 end
 
 function _evaluate_lifecycle_checked(
+        ::HostLifecycleExecution,
         plan,
         index::Integer,
         context,
@@ -191,6 +202,34 @@ function _evaluate_lifecycle_checked(
     end
 end
 
+@inline function _evaluate_lifecycle_checked(
+        ::BackendLifecycleExecution,
+        plan,
+        index::Integer,
+        context,
+        descriptor::LifecycleDescriptor,
+        workspace,
+    )
+    value = evaluate_lifecycle(plan.evaluators, index, context)
+    if value isa AbstractFloat && !isfinite(value)
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor = context.anchor,
+            detail = LifecycleDetailNonfiniteResult,
+        )
+        return LifecycleEvaluationFailed()
+    end
+    return value
+end
+
+@inline _evaluate_lifecycle_checked(
+    plan, index, context, descriptor, workspace
+) = _evaluate_lifecycle_checked(
+    HostLifecycleExecution(), plan, index, context, descriptor, workspace
+)
+
 function _emit_lifecycle_request!(
         workspace::LifecycleWorkspace,
         descriptor_index::Int,
@@ -198,7 +237,7 @@ function _emit_lifecycle_request!(
         anchor::Int32,
         generation::UInt32,
     )
-    index = Int(workspace.request_count) + 1
+    index = Int(lifecycle_request_count(workspace)) + 1
     if index > length(workspace.descriptor)
         _set_lifecycle_status!(
             workspace,
@@ -216,7 +255,7 @@ function _emit_lifecycle_request!(
         workspace.occurrence[index] = 0
         workspace.active[index] = true
     end
-    workspace.request_count = Int32(index)
+    set_lifecycle_request_count!(workspace, index)
     return index
 end
 
@@ -232,7 +271,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                 descriptor.action_identity,
                 descriptor.trigger_workspace_maximum,
                 Int32(0),
-                Int32(workspace.request_count + 1),
+                lifecycle_request_count(workspace) + Int32(1),
                 Int32(0),
                 UInt32(0),
                 _lifecycle_context_site(runtime, workspace, Int32(0)),
@@ -273,7 +312,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                     descriptor.action_identity,
                     descriptor.trigger_workspace_maximum,
                     Int32(0),
-                    Int32(workspace.request_count + 1),
+                    lifecycle_request_count(workspace) + Int32(1),
                     Int32(cell),
                     generation,
                     _lifecycle_context_site(runtime, workspace, Int32(cell)),

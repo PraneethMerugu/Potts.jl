@@ -361,6 +361,34 @@ may transfer only their declared payloads.
 Completion handles are asynchronous. The runtime waits only at declared semantic boundaries;
 engines own streams and local dependencies. Device-side validation must not allocate or transfer.
 
+For a CorePotts interval adapter, ProcessBigraphs chooses the macrostep boundary and requested port
+manifest but MUST NOT synchronize the CorePotts backend or access its storage directly. Operation
+staging validates and enqueues complete MCS transactions through the requested target. Completion
+requests the sole CorePotts settlement authority for only the status, counters, output ports, or
+checkpoint state declared by the invocation, then forms the candidate effects. The adapter MUST NOT
+materialize a complete lattice merely because one selected output is required.
+
+The current host reference candidate includes a full checkpoint continuation and therefore still
+requires full continuation materialization even when its effects expose only selected ports. A
+selected-only materialization claim requires an accepted continuation contract that can retain a
+qualified resident continuation handle or otherwise avoid the checkpoint copy; it is not inferred
+from the port manifest alone.
+
+The portable host component path settles selected outputs at each ProcessBigraph exchange. A
+different or incompatible backend creates one explicit transfer boundary. A same-backend component
+with a qualified compatible representation MAY enqueue its adapter/component kernel onto the same
+ordered KernelAbstractions queue without a host wait. This co-resident path remains separately
+qualified under a future device-native ProcessBigraph transaction protocol; the current host
+completion/validation/publication protocol is a host boundary. Co-residency is not part of the
+current GPU lifecycle qualification, does not weaken the host reference contract, and does not
+authorize a second CorePotts executor.
+
+Input staging settles any outstanding work once, validates the complete typed input transaction,
+and publishes it at the declared scientific boundary before further MCS submission. Checkpoint,
+statistics, and diagnostics are additional settlement visibility only when the invocation actually
+requests them. Direct backend synchronization, `Array(device_storage)`, collection, or scalar device
+indexing in ProcessBigraphs core or the adapter is forbidden.
+
 ### 7.3 Precision and reproducibility
 
 Float32 is the portable device profile. CPU Float64 is a separate declared profile. Fast math is a

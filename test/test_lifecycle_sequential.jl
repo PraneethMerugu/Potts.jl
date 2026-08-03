@@ -48,6 +48,43 @@ function _assert_lifecycle_recomputation(runtime)
     return nothing
 end
 
+function _lifecycle_workspace_slices(expression)
+    slices = Tuple{Int32, Int32}[]
+    if expression isa CorePotts.OperationExpression
+        operation = expression.operation
+        operation isa CorePotts.LifecycleWorkspaceOperation && push!(
+            slices, (operation.offset, operation.maximum)
+        )
+        for argument in expression.arguments
+            append!(slices, _lifecycle_workspace_slices(argument))
+        end
+    elseif expression isa CorePotts.ContextExpression
+        operation = expression.operation
+        operation isa CorePotts.LifecycleWorkspaceOperation && push!(
+            slices, (operation.offset, operation.maximum)
+        )
+    end
+    return slices
+end
+
+function _lifecycle_evaluator(storage, index)
+    location = storage.slots[Int(index)]
+    return storage.banks[Int(location.bank)][Int(location.slot)]
+end
+
+function _lifecycle_state_rule(storage, index)
+    location = storage.slots[Int(index)]
+    return storage.banks[Int(location.bank)][Int(location.slot)]
+end
+
+function _lifecycle_workspace_with(workspace, name::Symbol, replacement)
+    names = fieldnames(typeof(workspace))
+    values = ntuple(length(names)) do index
+        names[index] === name ? replacement : getfield(workspace, index)
+    end
+    return CorePotts.LifecycleWorkspace(values...)
+end
+
 function _lifecycle_relationship_values(storage)
     return Tuple(begin
         state = storage[slot]
@@ -217,6 +254,19 @@ end
     @test maximum(
         descriptor.state_workspace_maximum for descriptor in adapted_plan.descriptors
     ) == 2
+    two_slice_descriptor = only(filter(
+        descriptor -> descriptor.state_workspace_maximum == 2,
+        adapted_plan.descriptors,
+    ))
+    two_slice_rule = _lifecycle_state_rule(
+        adapted_plan.state_rules,
+        two_slice_descriptor.state_rule_offset,
+    )
+    two_slice_evaluator = _lifecycle_evaluator(
+        adapted_plan.evaluators, two_slice_rule.evaluator_a
+    )
+    @test sort(_lifecycle_workspace_slices(two_slice_evaluator.expression)) ==
+        [(Int32(0), Int32(1)), (Int32(1), Int32(1))]
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     runtime = _lifecycle_runtime(
@@ -231,6 +281,29 @@ end
     @test adapted_workspace.partition_labels isa LifecycleProbeArray
     @test adapted_workspace.partition_scratch isa LifecycleProbeArray
     @test adapted_workspace.policy_workspace isa LifecycleProbeArray
+
+    checkerboard_executable = compile(
+        complete(system);
+        engine = CheckerboardEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
+    checkerboard_runtime = _lifecycle_runtime(
+        checkerboard_executable,
+        PottsInitialState(ownership = LabelledCells(
+            labels; cells = [cell], medium
+        )),
+    )
+    backend_state = checkerboard_runtime.engine_workspace.state
+    CorePotts.enqueue_lifecycle_backend_index!(backend_state)
+    backend_lifecycle = backend_state.lifecycle_workspace
+    backend_status = CorePotts.lifecycle_backend_status(backend_lifecycle)
+    @test backend_status == CorePotts.LifecycleStatusPayload()
+    @test backend_lifecycle.cell_site_counts == Int32[4, 0, 0, 0]
+    @test backend_lifecycle.cell_sites[1:4] == Int32[14, 15, 16, 17]
+    @test count(backend_lifecycle.active) == 1
+    @test only(backend_lifecycle.anchor[backend_lifecycle.active]) == 1
+
     lookups = LifecycleOperationFixtures.CALLABLE_LOOKUPS[]
     _execute_lifecycle_at!(runtime, 1)
     @test count(!iszero, runtime.cell_kinds) == 2
@@ -561,6 +634,10 @@ end
         backend = CPUBackend(),
         scalar_type = Float32,
     )
+    @test executable.reports.lifecycle.division_variants == 4
+    @test count_ones(
+        executable.core_program.lifecycle_plan.division_variant_mask
+    ) == 4
     labels = zeros(Int, 8, 8)
     labels[1:2, 1:2] .= 1
     labels[1:2, 5:6] .= 2
@@ -641,12 +718,14 @@ end
     @test CorePotts.lifecycle_workspace_conforms(
         exact.lifecycle_workspace, exact.program.lifecycle_plan, site_count
     )
-    conforming_planned_sites = exact.lifecycle_workspace.planned_sites
-    exact.lifecycle_workspace.planned_sites = zeros(Int32, 1, 1)
+    conforming_workspace = exact.lifecycle_workspace
+    exact.lifecycle_workspace = _lifecycle_workspace_with(
+        conforming_workspace, :planned_sites, zeros(Int32, 1, 1)
+    )
     @test !CorePotts.lifecycle_workspace_conforms(
         exact.lifecycle_workspace, exact.program.lifecycle_plan, site_count
     )
-    exact.lifecycle_workspace.planned_sites = conforming_planned_sites
+    exact.lifecycle_workspace = conforming_workspace
     exact_cell_tables = (
         objectid(exact.cell_kinds),
         objectid(exact.cell_generations),
@@ -690,11 +769,14 @@ end
     end
     @test error isa CorePotts.CellCapacityFailure
     @test error.max_cells == 1
-    @test overflow.lifecycle_workspace.status.code ==
+    overflow_status = CorePotts.lifecycle_workspace_status(
+        overflow.lifecycle_workspace
+    )
+    @test overflow_status.code ==
         CorePotts.LifecycleStatusCellCapacity
-    @test overflow.lifecycle_workspace.status.required == 2
-    @test overflow.lifecycle_workspace.status.available == 1
-    @test overflow.lifecycle_workspace.status.maximum == 1
+    @test overflow_status.required == 2
+    @test overflow_status.available == 1
+    @test overflow_status.maximum == 1
     @test overflow.ownership == before.ownership
     @test overflow.cell_kinds == before.cell_kinds
     @test overflow.cell_generations == before.cell_generations
@@ -740,7 +822,9 @@ end
         caught
     end
     @test generation_error isa CorePotts.GenerationOverflowFailure
-    @test generation_overflow.lifecycle_workspace.status.code ==
+    @test CorePotts.lifecycle_workspace_status(
+        generation_overflow.lifecycle_workspace
+    ).code ==
         CorePotts.LifecycleStatusGenerationOverflow
     @test generation_overflow.ownership == generation_before.ownership
     @test generation_overflow.cell_kinds == generation_before.cell_kinds
@@ -749,7 +833,9 @@ end
 
     footprint = _lifecycle_runtime(capacity_executable(1), initial)
     footprint_before = CorePotts.program_snapshot(footprint)
-    footprint.lifecycle_workspace.descriptor = Int32[]
+    footprint.lifecycle_workspace = _lifecycle_workspace_with(
+        footprint.lifecycle_workspace, :descriptor, Int32[]
+    )
     footprint_error = try
         CorePotts.execute_lifecycle!(footprint)
         nothing
@@ -757,7 +843,9 @@ end
         caught
     end
     @test footprint_error isa CorePotts.LifecycleFootprintFailure
-    @test footprint.lifecycle_workspace.status.detail ===
+    @test CorePotts.lifecycle_workspace_status(
+        footprint.lifecycle_workspace
+    ).detail ===
         CorePotts.LifecycleDetailRequestBoundExceeded
     @test footprint.ownership == footprint_before.ownership
     @test footprint.cell_kinds == footprint_before.cell_kinds
@@ -778,7 +866,9 @@ end
         caught
     end
     @test invariant_error isa CorePotts.LifecycleInvariantFailure
-    @test invariant.lifecycle_workspace.status.detail ===
+    @test CorePotts.lifecycle_workspace_status(
+        invariant.lifecycle_workspace
+    ).detail ===
         CorePotts.LifecycleDetailOwnershipExceedsCellCapacity
     @test invariant.ownership == invariant_before.ownership
     @test invariant.cell_kinds == invariant_before.cell_kinds
@@ -924,8 +1014,11 @@ end
         resumed_snapshot.relationships.banks
     @test uninterrupted_snapshot.relationships.slots ==
         resumed_snapshot.relationships.slots
-    @test uninterrupted.lifecycle_workspace.status.code ==
-        resumed.lifecycle_workspace.status.code ==
+    @test CorePotts.lifecycle_workspace_status(
+        uninterrupted.lifecycle_workspace
+    ).code == CorePotts.lifecycle_workspace_status(
+        resumed.lifecycle_workspace
+    ).code ==
         CorePotts.LifecycleStatusSuccess
 end
 
@@ -1210,7 +1303,8 @@ end
                 states[3] => ResetBoth(3.0, 4.0),
                 states[4] => SplitConservatively(0.25; rounding = :exact),
                 states[5] => TransformDaughters(
-                    transform_value + 1.0, transform_value + 2.0
+                    cell_volume(anchor_value(anchor)),
+                    cell_volume(anchor_value(anchor)) + 10.0,
                 ),
                 states[6] => RedrawDaughters(
                     Uniform(6.0, 7.0),
@@ -1270,7 +1364,9 @@ end
     @test first_values[2][1:2] == [22.0, 2.0]
     @test first_values[3][1:2] == [3.0, 4.0]
     @test first_values[4][1:2] == [10.0, 30.0]
-    @test first_values[5][1:2] == [51.0, 52.0]
+    # State transforms see the immutable request-local planned-after tracker
+    # view: the four-site source has already become two two-site descendants.
+    @test first_values[5][1:2] == [2.0, 12.0]
     @test 6.0 < first_values[6][1] < 7.0
     @test 8.0 < first_values[6][2] < 9.0
     @test first_values[6][1:2] != other_values[6][1:2]
@@ -1418,8 +1514,11 @@ end
     @test first_runtime.cell_kinds == second_runtime.cell_kinds
     @test first_runtime.cell_generations == second_runtime.cell_generations
     @test first_runtime.trackers.values == second_runtime.trackers.values
-    @test first_runtime.lifecycle_workspace.status.code ==
-        second_runtime.lifecycle_workspace.status.code ==
+    @test CorePotts.lifecycle_workspace_status(
+        first_runtime.lifecycle_workspace
+    ).code == CorePotts.lifecycle_workspace_status(
+        second_runtime.lifecycle_workspace
+    ).code ==
         CorePotts.LifecycleStatusSuccess
 end
 
@@ -1559,6 +1658,9 @@ end
         second_executable.reports.lifecycle.fingerprint
     @test first_runtime.ownership == first_before.ownership
     @test second_runtime.ownership == second_before.ownership
-    @test first_runtime.lifecycle_workspace.status ==
-        second_runtime.lifecycle_workspace.status
+    @test CorePotts.lifecycle_workspace_status(
+        first_runtime.lifecycle_workspace
+    ) == CorePotts.lifecycle_workspace_status(
+        second_runtime.lifecycle_workspace
+    )
 end

@@ -1,11 +1,13 @@
 # Transaction-local state, relationship, tracker, and ownership commit logic.
 
-@inline function _stage_owner_change!(runtime, plan, workspace, linear, new_owner)
-    old_owner = @inbounds workspace.staged_ownership[linear]
-    old_owner == new_owner && return true
-    site = CartesianIndices(runtime.program.shape)[linear]
-    source = tracker_source_view(
-        runtime.program, workspace.staged_ownership
+@inline function _commit_lifecycle_tracker_updates!(
+        ::HostLifecycleExecution,
+        workspace,
+        runtime,
+        source,
+        site,
+        old_owner,
+        new_owner,
     )
     try
         commit_tracker_updates!(
@@ -17,6 +19,54 @@
             new_owner,
         )
     catch
+        return false
+    end
+    return true
+end
+
+@inline function _commit_lifecycle_tracker_updates!(
+        ::BackendLifecycleExecution,
+        workspace,
+        runtime,
+        source,
+        site,
+        old_owner,
+        new_owner,
+    )
+    commit_tracker_updates!(
+        workspace.staged_trackers,
+        runtime.program.tracker_plan,
+        source,
+        site,
+        old_owner,
+        new_owner,
+    )
+    return true
+end
+
+@inline function _stage_owner_change!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        linear,
+        new_owner,
+    )
+    old_owner = @inbounds workspace.staged_ownership[linear]
+    old_owner == new_owner && return true
+    site = CartesianIndices(runtime.program.shape)[linear]
+    source = tracker_source_view(
+        runtime.program, workspace.staged_ownership
+    )
+    if !_commit_lifecycle_tracker_updates!(
+            mode,
+            workspace,
+            runtime,
+            source,
+            site,
+            old_owner,
+            new_owner,
+        )
         return _set_lifecycle_status!(
             workspace,
             LifecycleStatusInvariant;
@@ -34,6 +84,7 @@
 end
 
 @inline function _coerce_lifecycle_state_value(
+        ::HostLifecycleExecution,
         workspace, descriptor, anchor, values, value
     )
     converted = try
@@ -66,7 +117,30 @@ end
     return converted
 end
 
+@inline function _coerce_lifecycle_state_value(
+        ::BackendLifecycleExecution,
+        workspace,
+        descriptor,
+        anchor,
+        values,
+        value,
+    )
+    converted = convert(eltype(values), value)
+    if converted isa AbstractFloat && !isfinite(converted)
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailStateValueInvalid,
+        )
+        return LifecycleEvaluationFailed()
+    end
+    return converted
+end
+
 @inline function _state_rule_value(
+        mode::AbstractLifecycleExecutionMode,
         runtime,
         plan,
         workspace,
@@ -84,8 +158,20 @@ end
         @inbounds(workspace.staged_cell_generations[destination]) : UInt32(0)
     anchor = source > 0 ? source : destination
     generation = source > 0 ? source_generation : destination_generation
+    planned = (
+        program = runtime.program,
+        ownership = workspace.staged_ownership,
+        cell_kinds = workspace.staged_cell_kinds,
+        cell_generations = workspace.staged_cell_generations,
+        trackers = workspace.staged_trackers,
+        relationships = workspace.staged_relationships,
+        descriptor_state = workspace.staged_descriptor_state,
+        parameters = runtime.parameters,
+        lifecycle_workspace = workspace,
+    )
     context = _LifecycleStateContext(
         runtime,
+        planned,
         descriptor.source_identity,
         descriptor.action_identity,
         descriptor.state_workspace_maximum,
@@ -105,7 +191,7 @@ end
         UInt16(descriptor.source_handle),
     )
     return _evaluate_lifecycle_checked(
-        plan, evaluator, context, descriptor, workspace
+        mode, plan, evaluator, context, descriptor, workspace
     )
 end
 
@@ -163,8 +249,23 @@ function _lifecycle_distribution_draw(
     return muladd(T(second_parameter), normal, T(first_parameter))
 end
 
-function _apply_lifecycle_state_rule!(
+@inline function _lifecycle_fraction_valid(
+        ::HostLifecycleExecution, value
+    )
+    return try
+        isfinite(value) && zero(value) <= value <= one(value)
+    catch
+        false
+    end
+end
+
+
+@inline _lifecycle_fraction_valid(::BackendLifecycleExecution, value) =
+    isfinite(value) && zero(value) <= value <= one(value)
+
+function _apply_lifecycle_state_rule_action!(
         rule,
+        mode::AbstractLifecycleExecutionMode,
         runtime,
         plan,
         workspace,
@@ -172,7 +273,10 @@ function _apply_lifecycle_state_rule!(
         request::Int,
         source::Int32,
         destination::Int32,
+        action_plan::Val,
     )
+    action = _lifecycle_state_action_value(action_plan)
+    rule.action === action || return true
     values = state_block(
         workspace.staged_descriptor_state, rule.handle
     ).values
@@ -180,88 +284,84 @@ function _apply_lifecycle_state_rule!(
         @inbounds(runtime.cell_generations[source]) : UInt32(0)
     destination_generation = destination > 0 ?
         @inbounds(workspace.staged_cell_generations[destination]) : UInt32(0)
-    if rule.action === InitializeLifecycleState
+    if action === InitializeLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, DestinationLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, value_a
+            mode, workspace, descriptor, destination, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
-    elseif rule.action === RetireToLifecycleState
+    elseif action === RetireToLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, SourceLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, value_a
+            mode, workspace, descriptor, source, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
-    elseif rule.action === PreserveLifecycleState
+    elseif action === PreserveLifecycleState
         nothing
-    elseif rule.action in (ResetLifecycleState, TransformLifecycleState)
+    elseif action in (ResetLifecycleState, TransformLifecycleState)
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, SourceLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, value_a
+            mode, workspace, descriptor, source, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
-    elseif rule.action === CopyDaughtersLifecycleState
+    elseif action === CopyDaughtersLifecycleState
         @inbounds values[destination] = values[source]
-    elseif rule.action === PreserveParentResetDaughterLifecycleState
+    elseif action === PreserveParentResetDaughterLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, DaughterLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, value_a
+            mode, workspace, descriptor, destination, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
-    elseif rule.action === ResetBothLifecycleState
+    elseif action === ResetBothLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, ParentLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
             source, destination, DaughterLifecycleStateRole,
         )
         value_b isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, value_a
+            mode, workspace, descriptor, source, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_b = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, value_b
+            mode, workspace, descriptor, destination, values, value_b
         )
         value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = value_a
             values[destination] = value_b
         end
-    elseif rule.action === SplitConservativelyLifecycleState
+    elseif action === SplitConservativelyLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, ParentLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
-        fraction_valid = try
-            isfinite(value_a) && zero(value_a) <= value_a <= one(value_a)
-        catch
-            false
-        end
+        fraction_valid = _lifecycle_fraction_valid(mode, value_a)
         if !fraction_valid
             return _set_lifecycle_status!(
                 workspace,
@@ -282,58 +382,58 @@ function _apply_lifecycle_state_rule!(
             daughter = old - parent
         end
         parent = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, parent
+            mode, workspace, descriptor, source, values, parent
         )
         parent isa LifecycleEvaluationFailed && return false
         daughter = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, daughter
+            mode, workspace, descriptor, destination, values, daughter
         )
         daughter isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = parent
             values[destination] = daughter
         end
-    elseif rule.action === TransformDaughtersLifecycleState
+    elseif action === TransformDaughtersLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, ParentLifecycleStateRole,
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
             source, destination, DaughterLifecycleStateRole,
         )
         value_b isa LifecycleEvaluationFailed && return false
         value_a = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, value_a
+            mode, workspace, descriptor, source, values, value_a
         )
         value_a isa LifecycleEvaluationFailed && return false
         value_b = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, value_b
+            mode, workspace, descriptor, destination, values, value_b
         )
         value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = value_a
             values[destination] = value_b
         end
-    elseif rule.action === RedrawDaughtersLifecycleState
+    elseif action === RedrawDaughtersLifecycleState
         first_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
             source, destination, ParentLifecycleStateRole,
         )
         first_a isa LifecycleEvaluationFailed && return false
         second_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
             source, destination, ParentLifecycleStateRole,
         )
         second_a isa LifecycleEvaluationFailed && return false
         first_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_c, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_c, request,
             source, destination, DaughterLifecycleStateRole,
         )
         first_b isa LifecycleEvaluationFailed && return false
         second_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule, rule.evaluator_d, request,
+            mode, runtime, plan, workspace, descriptor, rule, rule.evaluator_d, request,
             source, destination, DaughterLifecycleStateRole,
         )
         second_b isa LifecycleEvaluationFailed && return false
@@ -364,11 +464,11 @@ function _apply_lifecycle_state_rule!(
         )
         daughter_value isa LifecycleEvaluationFailed && return false
         parent_value = _coerce_lifecycle_state_value(
-            workspace, descriptor, source, values, parent_value
+            mode, workspace, descriptor, source, values, parent_value
         )
         parent_value isa LifecycleEvaluationFailed && return false
         daughter_value = _coerce_lifecycle_state_value(
-            workspace, descriptor, destination, values, daughter_value
+            mode, workspace, descriptor, destination, values, daughter_value
         )
         daughter_value isa LifecycleEvaluationFailed && return false
         @inbounds begin
@@ -387,8 +487,84 @@ function _apply_lifecycle_state_rule!(
     return true
 end
 
+function _apply_lifecycle_state_rule!(
+        rule,
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request::Int,
+        source::Int32,
+        destination::Int32,
+    )
+    action = rule.action
+    action === InitializeLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(InitializeLifecycleState),
+    )
+    action === RetireToLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(RetireToLifecycleState),
+    )
+    action === PreserveLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(PreserveLifecycleState),
+    )
+    action === ResetLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(ResetLifecycleState),
+    )
+    action === TransformLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(TransformLifecycleState),
+    )
+    action === CopyDaughtersLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(CopyDaughtersLifecycleState),
+    )
+    action === PreserveParentResetDaughterLifecycleState &&
+        return _apply_lifecycle_state_rule_action!(
+            rule, mode, runtime, plan, workspace, descriptor, request, source,
+            destination, Val(PreserveParentResetDaughterLifecycleState),
+        )
+    action === ResetBothLifecycleState && return _apply_lifecycle_state_rule_action!(
+        rule, mode, runtime, plan, workspace, descriptor, request, source,
+        destination, Val(ResetBothLifecycleState),
+    )
+    action === SplitConservativelyLifecycleState &&
+        return _apply_lifecycle_state_rule_action!(
+            rule, mode, runtime, plan, workspace, descriptor, request, source,
+            destination, Val(SplitConservativelyLifecycleState),
+        )
+    action === TransformDaughtersLifecycleState &&
+        return _apply_lifecycle_state_rule_action!(
+            rule, mode, runtime, plan, workspace, descriptor, request, source,
+            destination, Val(TransformDaughtersLifecycleState),
+        )
+    action === RedrawDaughtersLifecycleState &&
+        return _apply_lifecycle_state_rule_action!(
+            rule, mode, runtime, plan, workspace, descriptor, request, source,
+            destination, Val(RedrawDaughtersLifecycleState),
+        )
+    return _set_lifecycle_status!(
+        workspace,
+        LifecycleStatusInvariant;
+        source = descriptor.source_handle,
+        anchor = source,
+        detail = LifecycleDetailUnsupportedStatePolicy,
+    )
+end
+
 function _apply_lifecycle_state_rules!(
-        runtime, plan, workspace, descriptor, request, source, destination
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
     )
     for offset in 0:(Int(descriptor.state_rule_count) - 1)
         index = Int(descriptor.state_rule_offset) + offset
@@ -396,6 +572,7 @@ function _apply_lifecycle_state_rules!(
             _apply_lifecycle_state_rule!,
             plan.state_rules,
             index,
+            mode,
             runtime,
             plan,
             workspace,
@@ -403,6 +580,38 @@ function _apply_lifecycle_state_rules!(
             request,
             source,
             destination,
+        )
+        succeeded || return false
+    end
+    return true
+end
+
+function _apply_lifecycle_state_rules!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
+        action::Val,
+    )
+    for offset in 0:(Int(descriptor.state_rule_count) - 1)
+        index = Int(descriptor.state_rule_offset) + offset
+        succeeded = call_lifecycle_state_rule(
+            _apply_lifecycle_state_rule_action!,
+            plan.state_rules,
+            index,
+            mode,
+            runtime,
+            plan,
+            workspace,
+            descriptor,
+            request,
+            source,
+            destination,
+            action,
         )
         succeeded || return false
     end
@@ -451,20 +660,39 @@ function _apply_relationship_rule!(
 end
 
 function _apply_lifecycle_relationship_rules!(
-        runtime, plan, workspace, descriptor, anchor
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        anchor,
     )
     for offset in 0:(Int(descriptor.relationship_rule_count) - 1)
         rule = @inbounds plan.relationship_rules[
             Int(descriptor.relationship_rule_offset) + offset
         ]
-        try
+        succeeded = if mode isa HostLifecycleExecution
+            try
+                _call_relationship_slot(
+                    _apply_relationship_rule!,
+                    workspace.staged_relationships,
+                    rule.relationship_slot,
+                    (runtime, workspace, descriptor, rule, Int(anchor)),
+                )
+                true
+            catch
+                false
+            end
+        else
             _call_relationship_slot(
                 _apply_relationship_rule!,
                 workspace.staged_relationships,
                 rule.relationship_slot,
                 (runtime, workspace, descriptor, rule, Int(anchor)),
             )
-        catch
+            true
+        end
+        if !succeeded
             return _set_lifecycle_status!(
                 workspace,
                 LifecycleStatusInvariant;
@@ -482,93 +710,317 @@ function _allocated_generation(runtime, slot)
     return iszero(generation) ? UInt32(1) : generation + UInt32(1)
 end
 
-function _apply_lifecycle_request!(runtime, plan, workspace, request)
-    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+function _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor,
+        ::_CreateLifecyclePlan,
+    )
+    allocation = @inbounds workspace.allocation[request]
+    generation = _allocated_generation(runtime, allocation)
+    @inbounds begin
+        workspace.staged_cell_kinds[allocation] = descriptor.destination_kind
+        workspace.staged_cell_generations[allocation] = generation
+    end
+    for position in 1:Int(workspace.planned_site_count[request])
+        linear = Int(@inbounds workspace.planned_sites[position, request])
+        _stage_owner_change!(
+            mode, runtime, plan, workspace, linear, allocation
+        ) || return false
+    end
+    return true
+end
+
+function _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor,
+        ::_RemoveLifecyclePlan,
+    )
+    anchor = @inbounds workspace.anchor[request]
+    for position in _cell_site_range(workspace, anchor)
+        linear = Int(@inbounds workspace.cell_sites[position])
+        _stage_owner_change!(
+            mode,
+            runtime,
+            plan,
+            workspace,
+            linear,
+            -Int32(descriptor.replacement_medium),
+        ) || return false
+    end
+    return true
+end
+
+@inline _stage_lifecycle_effect_base!(
+    mode, runtime, plan, workspace, request, descriptor,
+    ::_RetireLifecyclePlan,
+) = true
+
+@inline function _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor,
+        ::_TransitionLifecyclePlan,
+    )
+    anchor = @inbounds workspace.anchor[request]
+    @inbounds workspace.staged_cell_kinds[anchor] = descriptor.destination_kind
+    return true
+end
+
+function _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor,
+        ::_DivideLifecyclePlan,
+    )
     anchor = @inbounds workspace.anchor[request]
     allocation = @inbounds workspace.allocation[request]
-    if descriptor.effect === CreateCellLifecycleEffect
-        generation = _allocated_generation(runtime, allocation)
-        @inbounds begin
-            workspace.staged_cell_kinds[allocation] = descriptor.destination_kind
-            workspace.staged_cell_generations[allocation] = generation
-        end
-        for position in 1:Int(workspace.planned_site_count[request])
-            linear = Int(@inbounds workspace.planned_sites[position, request])
-            _stage_owner_change!(runtime, plan, workspace, linear, allocation) ||
-                return -1
-        end
-        _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, request, Int32(0), allocation
-        ) || return -1
-    elseif descriptor.effect === RemoveCellLifecycleEffect
-        _apply_lifecycle_relationship_rules!(
-            runtime, plan, workspace, descriptor, anchor
-        ) || return -1
-        for position in _cell_site_range(workspace, anchor)
-            linear = Int(@inbounds workspace.cell_sites[position])
-            _stage_owner_change!(
-                runtime,
-                plan,
-                workspace,
-                linear,
-                -Int32(descriptor.replacement_medium),
-            ) || return -1
-        end
-        _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
-        ) || return -1
-        @inbounds workspace.staged_cell_kinds[anchor] = 0
-    elseif descriptor.effect === RetireCellLifecycleEffect
-        _apply_lifecycle_relationship_rules!(
-            runtime, plan, workspace, descriptor, anchor
-        ) || return -1
-        _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
-        ) || return -1
-        @inbounds workspace.staged_cell_kinds[anchor] = 0
-    elseif descriptor.effect === TransitionCellLifecycleEffect
-        @inbounds workspace.staged_cell_kinds[anchor] = descriptor.destination_kind
-        _apply_lifecycle_relationship_rules!(
-            runtime, plan, workspace, descriptor, anchor
-        ) || return -1
-        _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
-        ) || return -1
-    elseif descriptor.effect === DivideCellLifecycleEffect
-        generation = _allocated_generation(runtime, allocation)
-        parent_kind = descriptor.parent_kind == 0 ?
-            @inbounds(runtime.cell_kinds[anchor]) : descriptor.parent_kind
-        daughter_kind = descriptor.daughter_kind == 0 ?
-            @inbounds(runtime.cell_kinds[anchor]) : descriptor.daughter_kind
-        @inbounds begin
-            workspace.staged_cell_kinds[anchor] = parent_kind
-            workspace.staged_cell_kinds[allocation] = daughter_kind
-            workspace.staged_cell_generations[allocation] = generation
-        end
-        if @inbounds(workspace.partition_owner[anchor]) != request
-            _set_lifecycle_status!(
-                workspace,
-                LifecycleStatusInvariant;
-                source = descriptor.source_handle,
-                anchor,
-                detail = LifecycleDetailDivisionPlanMissing,
-            )
-            return -1
-        end
-        for position in _cell_site_range(workspace, anchor)
-            @inbounds workspace.partition_labels[position] == 2 || continue
-            linear = Int(@inbounds workspace.cell_sites[position])
-            _stage_owner_change!(runtime, plan, workspace, linear, allocation) ||
-                return -1
-        end
-        _apply_lifecycle_relationship_rules!(
-            runtime, plan, workspace, descriptor, anchor
-        ) || return -1
-        _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, request, anchor, allocation
-        ) || return -1
+    generation = _allocated_generation(runtime, allocation)
+    parent_kind = descriptor.parent_kind == 0 ?
+        @inbounds(runtime.cell_kinds[anchor]) : descriptor.parent_kind
+    daughter_kind = descriptor.daughter_kind == 0 ?
+        @inbounds(runtime.cell_kinds[anchor]) : descriptor.daughter_kind
+    @inbounds begin
+        workspace.staged_cell_kinds[anchor] = parent_kind
+        workspace.staged_cell_kinds[allocation] = daughter_kind
+        workspace.staged_cell_generations[allocation] = generation
     end
-    return descriptor.effect in (
-        RemoveCellLifecycleEffect, RetireCellLifecycleEffect
-    ) ? 1 : 0
+    if @inbounds(workspace.partition_owner[anchor]) != request
+        return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailDivisionPlanMissing,
+        )
+    end
+    for position in _cell_site_range(workspace, anchor)
+        @inbounds workspace.partition_labels[position] == 2 || continue
+        linear = Int(@inbounds workspace.cell_sites[position])
+        _stage_owner_change!(
+            mode, runtime, plan, workspace, linear, allocation
+        ) || return false
+    end
+    return true
 end
+
+@inline _apply_lifecycle_effect_relationships!(
+    mode, runtime, plan, workspace, request, descriptor,
+    ::_CreateLifecyclePlan,
+) = true
+
+@inline function _apply_lifecycle_effect_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+    return _apply_lifecycle_relationship_rules!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        @inbounds(workspace.anchor[request]),
+    )
+end
+
+@inline _apply_lifecycle_pre_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+) = true
+@inline _apply_lifecycle_pre_relationships!(
+    mode, runtime, plan, workspace, request, descriptor,
+    plan_class::_RemoveLifecyclePlan,
+) = _apply_lifecycle_effect_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+)
+@inline _apply_lifecycle_pre_relationships!(
+    mode, runtime, plan, workspace, request, descriptor,
+    plan_class::_RetireLifecyclePlan,
+) = _apply_lifecycle_effect_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+)
+
+@inline _apply_lifecycle_post_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+) = true
+@inline _apply_lifecycle_post_relationships!(
+    mode, runtime, plan, workspace, request, descriptor,
+    plan_class::_TransitionLifecyclePlan,
+) = _apply_lifecycle_effect_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+)
+@inline _apply_lifecycle_post_relationships!(
+    mode, runtime, plan, workspace, request, descriptor,
+    plan_class::_DivideLifecyclePlan,
+) = _apply_lifecycle_effect_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+)
+
+@inline _lifecycle_state_endpoints(
+    workspace, request, ::_CreateLifecyclePlan
+) = (Int32(0), @inbounds(workspace.allocation[request]))
+@inline _lifecycle_state_endpoints(
+    workspace, request, ::_RemoveLifecyclePlan
+) = (@inbounds(workspace.anchor[request]), Int32(0))
+@inline _lifecycle_state_endpoints(
+    workspace, request, ::_RetireLifecyclePlan
+) = (@inbounds(workspace.anchor[request]), Int32(0))
+@inline _lifecycle_state_endpoints(
+    workspace, request, ::_TransitionLifecyclePlan
+) = (@inbounds(workspace.anchor[request]), Int32(0))
+@inline _lifecycle_state_endpoints(
+    workspace, request, ::_DivideLifecyclePlan
+) = (
+    @inbounds(workspace.anchor[request]),
+    @inbounds(workspace.allocation[request]),
+)
+
+@inline function _apply_lifecycle_effect_state!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+    source, destination = _lifecycle_state_endpoints(
+        workspace, request, plan_class
+    )
+    return _apply_lifecycle_state_rules!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
+    )
+end
+
+@inline function _apply_lifecycle_effect_state!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class,
+        action::Val,
+    )
+    source, destination = _lifecycle_state_endpoints(
+        workspace, request, plan_class
+    )
+    return _apply_lifecycle_state_rules!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
+        action,
+    )
+end
+
+@inline _finalize_lifecycle_effect!(
+    workspace, request, descriptor, ::_CreateLifecyclePlan
+) = 0
+@inline _finalize_lifecycle_effect!(
+    workspace, request, descriptor, ::_TransitionLifecyclePlan
+) = 0
+@inline _finalize_lifecycle_effect!(
+    workspace, request, descriptor, ::_DivideLifecyclePlan
+) = 0
+@inline function _finalize_lifecycle_effect!(
+        workspace, request, descriptor, ::_RemoveLifecyclePlan
+    )
+    @inbounds workspace.staged_cell_kinds[workspace.anchor[request]] = 0
+    return 1
+end
+@inline function _finalize_lifecycle_effect!(
+        workspace, request, descriptor, ::_RetireLifecyclePlan
+    )
+    @inbounds workspace.staged_cell_kinds[workspace.anchor[request]] = 0
+    return 1
+end
+
+function _apply_lifecycle_request_effect!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+    _apply_lifecycle_pre_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    ) || return -1
+    _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    ) || return -1
+    _apply_lifecycle_post_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    ) || return -1
+    _apply_lifecycle_effect_state!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    ) || return -1
+    return _finalize_lifecycle_effect!(
+        workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _lifecycle_request_plan_class(descriptor)
+    descriptor.effect === CreateCellLifecycleEffect &&
+        return _CreateLifecyclePlan()
+    descriptor.effect === RemoveCellLifecycleEffect &&
+        return _RemoveLifecyclePlan()
+    descriptor.effect === RetireCellLifecycleEffect &&
+        return _RetireLifecyclePlan()
+    descriptor.effect === TransitionCellLifecycleEffect &&
+        return _TransitionLifecyclePlan()
+    descriptor.effect === DivideCellLifecycleEffect &&
+        return _DivideLifecyclePlan()
+    return nothing
+end
+
+function _apply_lifecycle_request!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        request,
+    )
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return -1
+    return _apply_lifecycle_request_effect!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _stage_lifecycle_request_structure!(
+        mode, runtime, plan, workspace, request
+    )
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return false
+    return _stage_lifecycle_effect_base!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _stage_lifecycle_request_relationships!(
+        mode, runtime, plan, workspace, request
+    )
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return false
+    _apply_lifecycle_pre_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    ) || return false
+    return _apply_lifecycle_post_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _stage_lifecycle_request_state!(
+        mode, runtime, plan, workspace, request
+    )
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return false
+    return _apply_lifecycle_effect_state!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _finalize_lifecycle_request!(plan, workspace, request)
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return -1
+    return _finalize_lifecycle_effect!(
+        workspace, request, descriptor, plan_class
+    )
+end
+
+_apply_lifecycle_request!(runtime, plan, workspace, request) =
+    _apply_lifecycle_request!(
+        HostLifecycleExecution(), runtime, plan, workspace, request
+    )

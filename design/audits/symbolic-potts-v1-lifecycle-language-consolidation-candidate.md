@@ -608,10 +608,12 @@ evaluation, compaction, conflicts, capacity, allocation, ownership, state, relat
 generations, trackers/indexes, status, and publication. Compile-only probes and immutable
 relationship reads are insufficient.
 
-GPU scalar indexing is disabled. No scientific lifecycle value transfers to the host for planning
-or commit. One explicit phase-end synchronization and bounded status transfer may report failure or
-publication. Checkpoint/snapshot transfer is a separate declared boundary. V1-L qualifies the
-accepted checkerboard GPU path; it does not introduce a sequential GPU algorithm claim.
+GPU scalar indexing is disabled. No scientific lifecycle value transfers to the host for planning,
+status polling, or commit. The complete schedule-through-publication DAG is enqueued in backend
+order without per-stage or per-MCS host synchronization. Device status self-gates later kernels;
+status translation and checkpoint/snapshot transfer occur only at an explicit terminal solve,
+observation, diagnostic, or checkpoint boundary. V1-L qualifies the accepted checkerboard GPU
+path; it does not introduce a sequential GPU algorithm claim.
 
 Metal may be the first functional witness. CUDA and AMDGPU environments inject only discovery,
 allocation, conversion, synchronization, capability facts, and error translation into the same
@@ -628,7 +630,8 @@ semantic error, not first atomic arrival.
 
 Inspection exposes lifecycle groups, effect/policy inventory, footprints, request bounds, memory,
 RNG namespaces, required trackers/relationships, checkpoint policy, kernels, backend support, and
-rejection reasons. It does not expose private IR layout, live registry, or backend events.
+rejection reasons. It does not expose private IR layout, live registry, or a nonexistent backend
+event graph.
 
 The closed device status categories are:
 
@@ -661,17 +664,19 @@ The public failure mapping is complete and source-aware:
 | capability mismatch known before launch | host compilation/admission diagnostic; no launch occurs |
 | backend execution failure or runtime capability loss | host-synthesized `LifecycleBackendFailure`, preserving backend cause |
 
-Device status is translated once at the declared phase boundary into the same stable
-`PottsDiagnostic` categories used by host failures. A host may synthesize a status only for a
-failure it alone can observe; it may not reinterpret a scientific device result or choose a
-different offender.
+Sticky device status is translated once through the sole CorePotts settlement authority at an
+explicit terminal solve, observation, diagnostic, or checkpoint boundary into the same stable
+`PottsDiagnostic` categories used by host failures. It includes the exact first failing MCS for
+device-detected scientific failures. A host may synthesize a status only for a failure it alone can
+observe; it may not reinterpret a scientific device result, choose a different offender, or assign
+an exact MCS to a generic backend failure known only within a bounded submission interval.
 
 Stable checkpoint capture remains limited to finalized MCS zero and the settled completed boundary
 after lifecycle, equation, and required observation publication. Future-relevant state includes
 ownership, slot status/high-water/reusable facts, kinds, generations, cell state/histories,
 relationships with endpoint generations, tracker checkpoint state, MCS, parameters, seed/RNG
 contract, compiled policy/stream identity, and executable fingerprint. Request queues, scan/sort
-temporaries, staging buffers, and backend events reconstruct.
+temporaries, staging buffers, and ordered backend work reconstruct.
 
 Exact same-profile continuation reproduces the uninterrupted lifecycle trajectory and trace. A
 failed lifecycle phase creates no checkpoint and recovers only from the preceding settled boundary.

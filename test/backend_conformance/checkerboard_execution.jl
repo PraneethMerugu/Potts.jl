@@ -5,6 +5,20 @@ using Symbolics
 
 import CorePotts
 
+function _observe_checkerboard_boundary!(runtime, workspace, to_host)
+    copyto!(runtime.ownership, to_host(workspace.state.ownership))
+    CorePotts.copyto_tracker_state!(
+        runtime.trackers, workspace.state.trackers, to_host
+    )
+    report = to_host(workspace.report)
+    runtime.accepted += Int(report[1])
+    runtime.rejected += Int(report[2])
+    runtime.null_attempts += Int(report[3])
+    runtime.constraint_rejections += Int(report[4])
+    runtime.energy_rejections += Int(report[5])
+    return runtime
+end
+
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("../fixtures/NeutralExternalTerms.jl")
 
@@ -100,8 +114,8 @@ function run_checkerboard_execution(
 
     CorePotts.execute_checkerboard_mcs!(cpu_workspace, 0)
     CorePotts.execute_checkerboard_mcs!(device_workspace, 0)
-    CorePotts.copy_checkerboard_state!(cpu_runtime, cpu_workspace, identity)
-    CorePotts.copy_checkerboard_state!(
+    _observe_checkerboard_boundary!(cpu_runtime, cpu_workspace, identity)
+    _observe_checkerboard_boundary!(
         device_runtime, device_workspace, to_host
     )
 
@@ -291,8 +305,8 @@ function _run_boundary_shape(
     CorePotts.execute_checkerboard_mcs!(
         device_workspace, 0; workgroup_size
     )
-    CorePotts.copy_checkerboard_state!(cpu_runtime, cpu_workspace, identity)
-    CorePotts.copy_checkerboard_state!(
+    _observe_checkerboard_boundary!(cpu_runtime, cpu_workspace, identity)
+    _observe_checkerboard_boundary!(
         device_runtime, device_workspace, to_host
     )
     @test device_runtime.ownership == cpu_runtime.ownership

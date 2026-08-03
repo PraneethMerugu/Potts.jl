@@ -35,11 +35,13 @@ end
 end
 
 function _cell_center(
-        runtime::ProgramRuntime{T, N},
+        runtime,
         cell::Int32;
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
-    ) where {T, N}
+    )
+    T = eltype(runtime.parameters)
+    N = length(runtime.program.shape)
     cell > 0 || return nothing
     count, moments, old_owner, changed = _cell_moment_overlay(
         runtime.program.tracker_plan,
@@ -81,11 +83,13 @@ end
 end
 
 function _cell_shape_statistics(
-        runtime::ProgramRuntime{T, N},
+        runtime,
         cell::Int32;
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
-    ) where {T, N}
+    )
+    T = eltype(runtime.parameters)
+    N = length(runtime.program.shape)
     cell > 0 || return nothing
     count, moments, old_owner, changed = _cell_moment_overlay(
         runtime.program.tracker_plan,

@@ -211,8 +211,15 @@ If capacity cannot accommodate the complete valid batch, the complete batch MUST
 mutation and a structured `CellCapacityError` MUST be raised. Committing only a deterministic subset
 is prohibited.
 
-A synchronization required to surface a capacity exception is permitted. Zero-sync execution MUST
-NOT leave a partially committed biological transaction.
+On a device backend, capacity failure is written once into the sticky device-resident lifecycle
+status with exact first failing MCS, source/action identity, required capacity, available capacity,
+and configured maximum. Every subsequently enqueued scientific kernel self-gates on that status;
+per-MCS scratch reset cannot clear it. Surfacing the public exception MUST NOT introduce a per-stage
+or per-MCS host synchronization or status transfer. Translation occurs only through the sole
+CorePotts settlement authority at an explicit terminal solve, observation, diagnostic, or
+checkpoint boundary. The complete MCS executes in the inactive fixed-capacity scientific-state
+bank, so capacity failure leaves the previously active bank unchanged even when later MCS launch
+sequences were already queued.
 
 ## Property Inheritance
 

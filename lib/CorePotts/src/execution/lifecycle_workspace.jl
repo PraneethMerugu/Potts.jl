@@ -54,10 +54,26 @@ end
     LifecycleDetailRelationshipCommitInvalid = 0x0024
 end
 
+@enum LifecycleExecutionStage::UInt8 begin
+    LifecycleStageNone = 0x00
+    LifecycleStageIndex = 0x01
+    LifecycleStageEmission = 0x02
+    LifecycleStagePlanning = 0x03
+    LifecycleStageSelection = 0x04
+    LifecycleStageStructure = 0x05
+    LifecycleStageRelationships = 0x06
+    LifecycleStageState = 0x07
+    LifecycleStageValidation = 0x08
+    LifecycleStagePublication = 0x09
+end
+
 """One fixed-size engine status; host exceptions are derived only at the boundary."""
 struct LifecycleStatusPayload
     code::LifecycleStatusCode
+    mcs::Int32
+    stage::LifecycleExecutionStage
     source::Int32
+    action_identity::UInt64
     secondary_source::Int32
     anchor::Int32
     detail::LifecycleStatusDetailCode
@@ -69,12 +85,38 @@ end
 LifecycleStatusPayload() = LifecycleStatusPayload(
     LifecycleStatusSuccess,
     Int32(0),
+    LifecycleStageNone,
+    Int32(0),
+    UInt64(0),
     Int32(0),
     Int32(0),
     LifecycleDetailNone,
     Int32(0),
     Int32(0),
     Int32(0),
+)
+
+LifecycleStatusPayload(
+    code::LifecycleStatusCode,
+    source::Int32,
+    secondary_source::Int32,
+    anchor::Int32,
+    detail::LifecycleStatusDetailCode,
+    required::Int32,
+    available::Int32,
+    maximum::Int32,
+) = LifecycleStatusPayload(
+    code,
+    Int32(0),
+    LifecycleStageNone,
+    source,
+    UInt64(0),
+    secondary_source,
+    anchor,
+    detail,
+    required,
+    available,
+    maximum,
 )
 
 abstract type AbstractLifecycleFailure <: Exception end
@@ -120,7 +162,11 @@ struct LifecycleInvariantFailure <: AbstractLifecycleFailure
 end
 struct LifecycleBackendFailure{E} <: AbstractLifecycleFailure
     cause::E
+    first_possible_mcs::Int
+    last_possible_mcs::Int
 end
+
+LifecycleBackendFailure(cause) = LifecycleBackendFailure(cause, 0, 0)
 
 function Base.showerror(io::IO, failure::CellCapacityFailure)
     print(
@@ -184,7 +230,7 @@ lifecycle_workspace_layout(::NoLifecycleExecutionPlan, site_count::Integer) = (
     free_cell_slots = 0,
 )
 
-mutable struct LifecycleWorkspace{
+struct LifecycleWorkspace{
         V32 <: AbstractVector{Int32},
         VU32 <: AbstractVector{UInt32},
         VB <: AbstractVector{Bool},
@@ -195,11 +241,12 @@ mutable struct LifecycleWorkspace{
         O <: AbstractArray{Int32},
         K <: AbstractVector{Int16},
         G <: AbstractVector{UInt32},
+        LS <: AbstractVector{LifecycleStatusPayload},
         TS,
         R,
         D,
     }
-    request_count::Int32
+    request_count::V32
     descriptor::V32
     anchor::V32
     generation::VU32
@@ -232,8 +279,19 @@ mutable struct LifecycleWorkspace{
     staged_trackers::TS
     staged_relationships::R
     staged_descriptor_state::D
-    status::LifecycleStatusPayload
+    status::LS
 end
+
+@inline lifecycle_request_count(workspace::LifecycleWorkspace) =
+    @inbounds workspace.request_count[1]
+
+@inline function set_lifecycle_request_count!(workspace::LifecycleWorkspace, value)
+    @inbounds workspace.request_count[1] = Int32(value)
+    return workspace
+end
+
+@inline lifecycle_workspace_status(workspace::LifecycleWorkspace) =
+    @inbounds workspace.status[1]
 
 function lifecycle_workspace_conforms(
         workspace::LifecycleWorkspace,
@@ -275,6 +333,8 @@ function lifecycle_workspace_conforms(
         workspace.site_queue,
     )
     return all(value -> length(value) == requests, request_vectors) &&
+        length(workspace.request_count) == 1 &&
+        length(workspace.status) == 1 &&
         all(value -> length(value) == cells, cell_vectors) &&
         all(value -> length(value) == sites, site_vectors) &&
         size(workspace.planned_sites) ==
@@ -324,7 +384,7 @@ function allocate_lifecycle_workspace(
     site_count = length(ownership)
     layout = lifecycle_workspace_layout(plan, site_count)
     return LifecycleWorkspace(
-        Int32(0),
+        zeros(Int32, 1),
         zeros(Int32, request_bound),
         zeros(Int32, request_bound),
         zeros(UInt32, request_bound),
@@ -357,12 +417,12 @@ function allocate_lifecycle_workspace(
         copy_tracker_state(trackers),
         copy(relationships),
         copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
-        LifecycleStatusPayload(),
+        LifecycleStatusPayload[LifecycleStatusPayload()],
     )
 end
 
 function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
-    workspace.request_count = 0
+    set_lifecycle_request_count!(workspace, 0)
     fill!(workspace.active, false)
     fill!(workspace.selected, false)
     fill!(workspace.filtered, false)
@@ -373,7 +433,7 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     fill!(workspace.allocation, 0)
     fill!(workspace.conflict_seen, false)
     fill!(workspace.representative_site, 0)
-    workspace.status = LifecycleStatusPayload()
+    @inbounds workspace.status[1] = LifecycleStatusPayload()
     return workspace
 end
 

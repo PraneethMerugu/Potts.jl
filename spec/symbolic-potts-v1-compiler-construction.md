@@ -1624,11 +1624,14 @@ request/emission/workspace bound violation, generation overflow, analyzed-footpr
 backend mismatch, and failed planned/post-commit invariant are nonfilterable. After filtering and
 conflict resolution, insufficient cell or relationship capacity aborts the complete valid batch.
 
-Commit is staged publication, not device-crash rollback: validate the complete plan and capacity;
-write authoritative ownership, identity, kind, state, relationship, and tracker/index updates in
-declared order; validate postconditions; then publish the completed boundary. A failure before
-publication exposes no partial scientific state. CorePotts executes resolved structural plans and
-contains no biological mechanism branch.
+Commit is staged publication, not device-crash rollback. The whole MCS, including proposal commit,
+ordered after-MCS stages, lifecycle effects, tracker/index changes, relationship changes, and final
+validation, executes against one inactive complete fixed-capacity scientific-state bank. The final
+status-gated publication operation changes the active-bank identity only after every stage has
+succeeded. A failure before publication leaves the previously active bank unchanged and exposes no
+partial scientific state. CorePotts executes resolved structural plans and contains no biological
+mechanism branch. Transaction journals, inverse effects, and copy-on-write state are not V1
+alternatives to this two-bank atomicity rule.
 
 ### Identity, workspace, RNG, checkpoint, and status
 
@@ -1666,7 +1669,7 @@ Stable checkpoints occur only at finalized MCS zero or settled completed-MCS bou
 include ownership, slot status/high-water/reuse, kinds, generations, cell/auxiliary state,
 relationships and endpoint generations, reconstructible tracker facts, MCS, parameters, seed/RNG
 contract, frozen policy/stream identity, and executable fingerprint. Request queues, staging,
-workspace, and backend events reconstruct. Same-profile continuation reproduces uninterrupted
+workspace, and ordered backend work reconstruct. Same-profile continuation reproduces uninterrupted
 lifecycle state and trace.
 
 The closed status translation is:
@@ -1685,17 +1688,97 @@ The closed status translation is:
 | planned/post-commit invariant failure | device `LifecycleInvariantFailure` |
 | backend execution failure/runtime capability loss | host-synthesized `LifecycleBackendFailure` with original cause |
 
-The host translates status once at the declared phase boundary. It cannot reinterpret device
-science or choose a different semantic offender.
+The sticky device status includes the exact first failing MCS, execution stage, qualified
+source/action identity, and bounded capacity/detail payload needed by the applicable scientific
+failure. Per-MCS scratch reset MUST NOT clear this status or cumulative runtime counters. Every
+later queued kernel and MCS self-gates after failure.
+
+The host translates device status only at an explicit terminal solve, observation, diagnostic, or
+checkpoint boundary. It cannot poll between lifecycle stages or MCS steps, reinterpret device
+science, or choose a different semantic offender. Device-detected scientific failures, including
+capacity exhaustion, report their exact first failing MCS. A generic backend/driver failure first
+surfaced by a later host synchronization reports the honest bounded attribution interval from the
+previously drained submission through the current submitted MCS; without backend event identities,
+the runtime MUST NOT invent an exact failing MCS.
+
+### Asynchronous submission and settlement law
+
+An MCS is a scientific ordering and transaction boundary, not inherently a host-synchronization
+boundary. KernelAbstractions 0.9 launches on one backend are implicitly ordered and expose no event
+or dependency DAG API. CorePotts therefore enqueues the complete kernel sequence for each MCS in
+scientific order and performs no host wait, status read, scalar indexing, or materialization inside
+an uninterrupted execution chunk.
+
+Runtime position uses value-level integer state equivalent to:
+
+- `submitted_mcs`: greatest complete MCS launch sequence accepted by the backend queue;
+- `drained_mcs`: greatest submission known to have finished after the sole host wait, including
+  status-gated no-op work after a scientific failure;
+- `committed_mcs`: greatest successfully published scientific-state bank and the authoritative
+  public scientific time; and
+- `materialized_mcs`: committed MCS represented by a complete coherent host mirror/snapshot.
+
+The current no-partial-transaction fact is separate and MUST NOT be overloaded as backend
+completion or host-mirror freshness. A partial status/counter read cannot advance
+`materialized_mcs`. When work is submitted through MCS 100 and a scientific failure occurs at MCS
+37, settlement records submission/drain through 100, committed state through 36, exact failure 37,
+and no host materialization newer than 36.
+
+CorePotts owns exactly one physical settlement operation. It alone may synchronize the execution
+backend, inspect sticky device status, transfer counters/status, optionally materialize the coherent
+active state bank, translate CorePotts failures, and return an immutable receipt. Program snapshots,
+CorePotts checkpoints, reports, and compatibility stepping delegate to this operation. They do not
+independently synchronize or convert device arrays.
+
+PottsToolkit owns the small semantic boundary scheduler. It decides when and what visibility is
+required for SciML stepping/solving, saving, host callbacks, checkpoints, SII, progress, statistics,
+explicit observations, and ProcessBigraph exchange, then requests CorePotts settlement. Its closed
+request targets the current submitted MCS and contains reason metadata, requested counters/small
+reductions, selected projections, whether a full snapshot is required, and whether host mutation
+follows. Reductions and selected projections are independent closed sets rather than a total
+visibility ordering. Coincident consumers combine by Boolean/set union and share one boundary;
+boundary occurrences and output identities remain values rather than types.
+
+Settlement drains the current ordered backend queue and cannot stop at an earlier submitted MCS.
+The scheduler therefore MUST NOT enqueue beyond its next known save, checkpoint, host callback,
+parameter/input update, ProcessBigraph exchange, progress, observation, or finalization boundary.
+Later work may already be queued beyond an unknown device scientific failure only because sticky
+status makes that work inert.
+
+CorePotts exposes one nonblocking internal enqueue path for a complete MCS. The synchronous
+compatibility advance path, public SciML `step!`, and chunked `solve!` MUST all use it rather than
+implementing another scientific executor. Runtime counters remain backend-resident and cumulative
+until settlement requests them.
+
+Queued MCS transactions cannot require a host read of the current bank identity. Each transaction
+selects its source and inactive destination from backend-resident control state or an equivalent
+deterministic value-level MCS rule while retaining access to both complete banks. Queue-ordered
+copies use the KernelAbstractions backend copy contract or qualified kernels; ordinary synchronous
+`copyto!`, `Array`, `collect`, scalar device reads, and backend-specific waits are confined to the
+sole settlement authority when host visibility actually requires them. Buffers used by an
+asynchronous backend copy remain alive until that settlement completes.
 
 ### Portability, ownership, conformance, and stop rule
 
 Sequential and checkerboard invoke one immutable engine-neutral lifecycle plan. KernelAbstractions
 is the portable kernel boundary; AcceleratedKernels or custom kernels may implement bounded
-compaction, scans, and sorting when they preserve the contract. GPU planning and commit perform no
-host scientific work, scalar indexing, or fallback. One explicit phase-end synchronization and
-bounded status transfer is permitted. The backend-neutral lifecycle harness MUST functionally run
-all five effects and every admitted built-in policy family on the selected real GPU witness.
+compaction, scans, and sorting when they preserve the contract. Device execution keeps the plan,
+workspace, cadence/MCS state, status, stop flag, active scientific state, and inactive staging state
+backend-resident. Planning, conflict resolution, allocation, validation, and publication perform
+no host scientific work, scalar indexing, status polling, fallback, per-stage synchronization, or
+per-MCS transfer. Ordered KernelAbstractions and AcceleratedKernels launches, separate kernels, and
+device-local barriers provide execution ordering; no returned event graph is introduced. Every
+kernel self-gates on device status. The backend-neutral lifecycle harness MUST functionally run all
+five effects and every admitted built-in policy family on the selected real GPU witness.
+
+Lifecycle launch generation includes only structural effect and policy classes reachable from the
+completed program. Unused create, retire, remove, transition, divide, partition, side, state, and
+relationship policy families MUST NOT be compiled or enqueued merely because they exist in the
+package vocabulary. The finite grouping key may contain only closed transaction structure; model
+names, statement names, source identities, occurrence counts, and biological mechanisms remain
+value-level. When one structural planner exceeds a qualified backend's compiler envelope, it is
+decomposed into smaller ordered kernels with request-local status followed by canonical reduction;
+backend-specific science or a host fallback is forbidden.
 
 Compiler responsibilities remain visibly separated among public syntax, completion/normalization,
 analysis, lowering/inspection, CorePotts structural protocol, transaction runtime, shared
@@ -1708,10 +1791,11 @@ G5-L uses these bounded checkpoints:
 1. G5-L0: independent specification clearance; no implementation with a P0/P1 finding.
 2. G5-L1: syntax, schemas, qualified binding, frozen closure, analysis, diagnostics, inspection.
 3. G5-L2: transaction IR and complete sequential CPU reference.
-4. G5-L2Q: one fresh-context code-quality, architecture-quality, and semantic/test-DRYness review
-   of the exact G5-L2 checkpoint, as specified by the
-   [G5-L2Q gate](../design/audits/symbolic-potts-v1-g5-l2-quality-gate.md). G5-L3 remains closed
-   until the review returns zero P0 and zero P1 findings.
+4. G5-L2Q: one fresh-context code-quality, architecture-quality, semantic/test-DRYness, and
+   backend-residency review, as specified by the
+   [amended G5-L2Q gate](../design/audits/symbolic-potts-v1-g5-l2-quality-gate.md). The gate remains
+   blocked until the shared checkerboard and real-GPU execution requirements below are present and
+   the review returns zero P0 and zero P1 findings.
 5. G5-L3: shared checkerboard CPU execution and deterministic bounded workspaces.
 6. G5-L4: real functional GPU witness and neutral downstream extension proof.
 7. G5-L5: fast/qualification profiles, source/performance audit, and R2 handoff.
@@ -1730,7 +1814,8 @@ whole boundary. If R2 clears, work MUST stop before G6 for owner review. Wortel,
 migration, polished docs, a second evaluator, a legacy oracle, a new CI evidence system, and broader
 lifecycle vocabulary are outside G5-L.
 
-G5-L2Q is deliberately narrower than R2. It reviews the complete sequential transaction runtime
-before concurrency can multiply a weak abstraction. It does not require checkerboard, GPU, long
-statistical, or documentation evidence. It MUST NOT create a second evidence system or reopen
-accepted lifecycle semantics. Clearance authorizes only G5-L3.
+G5-L2Q is deliberately narrower than R2 but, by the 2026-08-03 owner amendment, includes the
+complete backend-resident lifecycle execution boundary. It requires shared checkerboard CPU and
+one real-GPU functional witness, while excluding long statistical and documentation evidence. It
+MUST NOT create a second evidence system or reopen accepted lifecycle semantics. Clearance
+authorizes only the remaining bounded G5-L qualification work.

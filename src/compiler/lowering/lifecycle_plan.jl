@@ -28,16 +28,19 @@ function _next_lifecycle_root!(cursor::_LifecycleRootCursor, role::Symbol)
     return values[position]
 end
 
-function _next_lifecycle_abi(
-        cursor::_LifecycleRootCursor, ir::AnalyzedTermIR, role::Symbol
-    )
+function _next_lifecycle_abi(cursor::_LifecycleRootCursor, role::Symbol)
     values = get(cursor.roots, role, Int32[])
     position = get(cursor.positions, role, 0) + 1
     position <= length(values) || throw(ArgumentError(
         "normalized lifecycle root `$role` is missing at occurrence $position"
     ))
-    transfer = ir.graph.nodes[Int(values[position])].transfer
-    return transfer === nothing ? nothing : transfer.lifecycle_abi
+    root = values[position]
+    for item in cursor.operation_abis
+        item.root_node == root && item.node == root && item.role === role ||
+            continue
+        return item.abi
+    end
+    return nothing
 end
 
 function _lifecycle_context_type(role::Symbol)
@@ -542,9 +545,7 @@ function _lower_lifecycle_plan(
                 )
             else
                 placement = CorePotts.ExternalLifecyclePlacement
-                abi = _next_lifecycle_abi(
-                    cursor, ir, :lifecycle_placement
-                )
+                abi = _next_lifecycle_abi(cursor, :lifecycle_placement)
                 abi !== nothing && abi.role === :placement || throw(
                     ArgumentError(
                         "external lifecycle placement has no frozen placement ABI"
