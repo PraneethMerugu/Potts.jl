@@ -1,4 +1,4 @@
-module G5ExternalSurfaceOperation
+module ExternalSurfaceOperationFixture
 
 using PottsToolkit
 using Symbolics
@@ -20,9 +20,9 @@ CorePotts.operation_context_supported(
 
 operation_transfer(::typeof(external_cell_surface), ::Int) =
     PottsToolkit.OperationTransfer(
-        :g5_external_cell_surface,
+        :fixture_external_cell_surface,
         VERSION,
-        "g5-external-cell-surface-v1",
+        "external-cell-surface-v1",
         1:1,
         :real,
         :dimensionless,
@@ -31,18 +31,18 @@ operation_transfer(::typeof(external_cell_surface), ::Int) =
         PottsToolkit.OwnerFootprintRule(),
         true,
         true,
-        (:g5_external_cell_surface_tracker,),
+        (:fixture_external_cell_surface_tracker,),
         :any,
         (:hamiltonian,),
         (:Proposal,),
         :hamiltonian,
-        :G5ExternalSurfaceOperation,
-        "G5ExternalSurfaceOperation.ExternalCellSurfaceCallable",
+        :ExternalSurfaceOperationFixture,
+        "ExternalSurfaceOperationFixture.ExternalCellSurfaceCallable",
         (PottsToolkit.NamedSpatialRelationRequirement(:surface),),
     )
 
 CorePotts.operation_callable(
-    ::Val{:g5_external_cell_surface}, version::VersionNumber
+    ::Val{:fixture_external_cell_surface}, version::VersionNumber
 ) = version == VERSION ? ExternalCellSurfaceCallable() :
     throw(ArgumentError("unsupported external surface version $version"))
 
@@ -60,7 +60,7 @@ CorePotts.operation_callable(
 )
 
 function registered_operation_tracker_requirements(
-        ::Val{:g5_external_cell_surface_tracker},
+        ::Val{:fixture_external_cell_surface_tracker},
         context::PottsToolkit.OperationTrackerContext,
         ::Type,
         ::Tuple,

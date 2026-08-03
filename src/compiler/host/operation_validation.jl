@@ -7,6 +7,7 @@ const _RESULT_TRANSFER_RULES = Set((
     :preserve_numeric,
     :integer,
     :real,
+    :site_selection,
 ))
 const _UNIT_TRANSFER_RULES = Set((
     :arithmetic,
@@ -65,9 +66,10 @@ function _lifecycle_operation_abi_error(
         return "lifecycle role $(abi.role) requires result shape $expected_shape"
     abi.role === :trigger && transfer.result_rule !== :boolean &&
         return "lifecycle triggers must use the boolean result transfer"
-    abi.role in (:placement, :binary_partition) &&
-        transfer.result_rule !== :integer &&
-        return "lifecycle placement/partition operations must return integers"
+    abi.role === :placement && transfer.result_rule !== :site_selection &&
+        return "lifecycle placement operations must return bounded site selections"
+    abi.role === :binary_partition && transfer.result_rule !== :integer &&
+        return "lifecycle partition operations must return integer region labels"
     abi.role === :placement && abi.emission_maximum <= 0 &&
         return "lifecycle placement must declare a positive finite emission maximum"
     validator = abi.role === :trigger ? :trigger_boolean :

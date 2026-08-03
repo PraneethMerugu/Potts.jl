@@ -3,6 +3,10 @@
 struct _LifecycleTriggerContext{R, I} <:
        AbstractLifecycleTriggerEvaluationContext
     runtime::R
+    source_identity::UInt64
+    action_identity::UInt64
+    workspace_maximum::Int32
+    workspace_slot::Int32
     anchor::Int32
     generation::UInt32
     site::I
@@ -13,6 +17,10 @@ end
 struct _LifecyclePlacementContext{R, I} <:
        AbstractLifecyclePlacementEvaluationContext
     runtime::R
+    source_identity::UInt64
+    action_identity::UInt64
+    workspace_maximum::Int32
+    workspace_slot::Int32
     anchor::Int32
     generation::UInt32
     site::I
@@ -23,6 +31,10 @@ end
 struct _LifecyclePartitionContext{R, I} <:
        AbstractLifecyclePartitionEvaluationContext
     runtime::R
+    source_identity::UInt64
+    action_identity::UInt64
+    workspace_maximum::Int32
+    workspace_slot::Int32
     anchor::Int32
     generation::UInt32
     site::I
@@ -30,11 +42,22 @@ struct _LifecyclePartitionContext{R, I} <:
     operation::UInt16
 end
 
-struct _LifecycleStateContext{R, I} <:
+struct _LifecycleStateContext{R, I, H} <:
        AbstractLifecycleStateTransformEvaluationContext
     runtime::R
+    source_identity::UInt64
+    action_identity::UInt64
+    workspace_maximum::Int32
+    workspace_slot::Int32
     anchor::Int32
     generation::UInt32
+    source::Int32
+    source_generation::UInt32
+    destination::Int32
+    destination_generation::UInt32
+    role::LifecycleStateRoleCode
+    state_identity::UInt64
+    state_handle::H
     site::I
     occurrence::Int32
     operation::UInt16
@@ -50,6 +73,76 @@ const _LifecycleContext = Union{
 @inline lifecycle_anchor(context::_LifecycleContext) = context.anchor
 @inline lifecycle_site(context::_LifecycleContext) = context.site
 @inline lifecycle_occurrence(context::_LifecycleContext) = context.occurrence
+@inline lifecycle_source_identity(context::_LifecycleContext) =
+    context.source_identity
+@inline lifecycle_action_identity(context::_LifecycleContext) =
+    context.action_identity
+@inline lifecycle_workspace_capacity(context::_LifecycleContext) =
+    context.workspace_maximum
+
+@inline function _lifecycle_workspace_column(context::_LifecycleContext)
+    return Int(context.workspace_slot)
+end
+
+@inline function lifecycle_workspace_value(
+        context::_LifecycleContext, index::Integer
+    )
+    @boundscheck 1 <= index <= context.workspace_maximum || throw(BoundsError(
+        context.runtime.lifecycle_workspace.policy_workspace,
+        (index, _lifecycle_workspace_column(context)),
+    ))
+    return @inbounds context.runtime.lifecycle_workspace.policy_workspace[
+        index, _lifecycle_workspace_column(context)
+    ]
+end
+
+@inline function set_lifecycle_workspace_value!(
+        context::_LifecycleContext, value, index::Integer
+    )
+    @boundscheck 1 <= index <= context.workspace_maximum || throw(BoundsError(
+        context.runtime.lifecycle_workspace.policy_workspace,
+        (index, _lifecycle_workspace_column(context)),
+    ))
+    @inbounds context.runtime.lifecycle_workspace.policy_workspace[
+        index, _lifecycle_workspace_column(context)
+    ] = value
+    return value
+end
+
+@inline lifecycle_source_cell(context::_LifecycleStateContext) = context.source
+@inline lifecycle_source_generation(context::_LifecycleStateContext) =
+    context.source_generation
+@inline lifecycle_destination_cell(context::_LifecycleStateContext) =
+    context.destination
+@inline lifecycle_destination_generation(context::_LifecycleStateContext) =
+    context.destination_generation
+@inline lifecycle_state_role(context::_LifecycleStateContext) = context.role
+@inline lifecycle_state_identity(context::_LifecycleStateContext) =
+    context.state_identity
+
+@inline function lifecycle_before_state_value(context::_LifecycleStateContext)
+    index = context.source > 0 ? context.source : context.destination
+    index > 0 || return zero(eltype(state_block(
+        context.runtime.descriptor_state, context.state_handle
+    ).values))
+    return @inbounds state_block(
+        context.runtime.descriptor_state, context.state_handle
+    ).values[index]
+end
+
+@inline function lifecycle_planned_state_value(context::_LifecycleStateContext)
+    index = context.role in (
+        DestinationLifecycleStateRole, DaughterLifecycleStateRole,
+    ) ? context.destination : context.source
+    index > 0 || return zero(eltype(state_block(
+        context.runtime.lifecycle_workspace.staged_descriptor_state,
+        context.state_handle,
+    ).values))
+    return @inbounds state_block(
+        context.runtime.lifecycle_workspace.staged_descriptor_state,
+        context.state_handle,
+    ).values[index]
+end
 @inline evaluator_parameters(context::_LifecycleContext) = context.runtime.parameters
 @inline _compiled_evaluator_parameters(context::_LifecycleContext) =
     context.runtime.parameters
@@ -183,14 +276,22 @@ end
         context isa _LifecyclePlacementContext ? LifecyclePlacementStream :
         context isa _LifecyclePartitionContext ? LifecyclePartitionStream :
         LifecycleStateStream
+    destination_address = context isa _LifecycleStateContext &&
+        context.role in (
+            DestinationLifecycleStateRole, DaughterLifecycleStateRole,
+        )
+    address_anchor = destination_address ? context.destination : context.anchor
+    address_generation = destination_address ?
+        context.destination_generation : context.generation
     first_uniform = _lifecycle_uniform(
         T,
         context.runtime,
         stream,
         operation,
-        context.anchor,
-        context.generation,
+        address_anchor,
+        address_generation,
         context.occurrence;
+        destination = destination_address,
         draw = 0,
     )
     family == 1 && return first_uniform < first_parameter
@@ -204,9 +305,10 @@ end
             context.runtime,
             stream,
             operation,
-            context.anchor,
-            context.generation,
+            address_anchor,
+            address_generation,
             context.occurrence;
+            destination = destination_address,
             draw = 1,
         )
         normal = sqrt(-T(2) * log(first_uniform)) *

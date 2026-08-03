@@ -1,7 +1,7 @@
-if !isdefined(Main, :G5LifecycleOperations)
-    include("fixtures/G5LifecycleOperations.jl")
+if !isdefined(Main, :LifecycleOperationFixtures)
+    include("fixtures/LifecycleOperationFixtures.jl")
 end
-using .G5LifecycleOperations
+using .LifecycleOperationFixtures
 
 struct LifecycleProbeAdaptor end
 struct LifecycleProbeArray{T, N, A <: Array{T, N}} <: AbstractArray{T, N}
@@ -17,19 +17,19 @@ CorePotts.Adapt.adapt_storage(
     ::LifecycleProbeAdaptor, values::AbstractArray{T, N}
 ) where {T, N} = LifecycleProbeArray(Array(values))
 
-function _g5_l2_runtime(executable, initial; seed = 0x51f3)
+function _lifecycle_runtime(executable, initial; seed = 0x51f3)
     problem = PottsProblem(executable, initial, (0, 1); seed)
     return init(problem).runtime
 end
 
-function _g5_l2_execute_at!(runtime, mcs)
+function _execute_lifecycle_at!(runtime, mcs)
     runtime.mcs = mcs - 1
     CorePotts.execute_lifecycle!(runtime)
     runtime.mcs = mcs
     return runtime
 end
 
-@testset "G5-L2 conservative split fractions are construction-safe" begin
+@testset "conservative split fractions are construction-safe" begin
     @variables t conserved(t)
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
@@ -82,7 +82,7 @@ end
     @test only(error.diagnostics).kind === :invalid_lifecycle_split_fraction
 end
 
-@testset "G5-L2 frozen external lifecycle operations execute" begin
+@testset "frozen external lifecycle operations execute" begin
     @variables t external_state(t)
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
@@ -154,28 +154,28 @@ end
     @test adapted_plan.forbid_extinction isa LifecycleProbeArray
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
-    runtime = _g5_l2_runtime(
+    runtime = _lifecycle_runtime(
         executable,
         PottsInitialState(ownership = LabelledCells(
             labels; cells = [cell], medium
         )),
     )
-    lookups = G5LifecycleOperations.CALLABLE_LOOKUPS[]
-    _g5_l2_execute_at!(runtime, 1)
+    lookups = LifecycleOperationFixtures.CALLABLE_LOOKUPS[]
+    _execute_lifecycle_at!(runtime, 1)
     @test count(!iszero, runtime.cell_kinds) == 2
     @test sort(filter(!iszero, CorePotts.program_tracker_values(
         runtime, Val(:cell_volume)
     ))) == Int32[2, 2]
-    _g5_l2_execute_at!(runtime, 2)
+    _execute_lifecycle_at!(runtime, 2)
     @test count(!iszero, runtime.cell_kinds) == 3
     state_handle = only(executable.reports.states).handle
     @test CorePotts.state_block(
         runtime.descriptor_state, state_handle
     ).values[3] == 4
-    @test G5LifecycleOperations.CALLABLE_LOOKUPS[] == lookups
+    @test LifecycleOperationFixtures.CALLABLE_LOOKUPS[] == lookups
 end
 
-@testset "G5-L2 fixed-capacity sequential lifecycle transactions" begin
+@testset "fixed-capacity sequential lifecycle transactions" begin
     @variables t activity(t)
     cell = CellKind(:cell; extinction = RetireAtZero(priority = -20))
     daughter = CellKind(:daughter; extinction = RetireAtZero(priority = -20))
@@ -321,7 +321,7 @@ end
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium)
     )
-    runtime = _g5_l2_runtime(executable, initial)
+    runtime = _lifecycle_runtime(executable, initial)
     activity_handle = only(executable.reports.states).handle
     activity_values() = CorePotts.state_block(
         runtime.descriptor_state, activity_handle
@@ -332,29 +332,29 @@ end
     @test size(activity_values()) == (6,)
     @test runtime.lifecycle_workspace.planned_sites isa Matrix{Int32}
 
-    _g5_l2_execute_at!(runtime, 1)
+    _execute_lifecycle_at!(runtime, 1)
     @test count(!iszero, runtime.cell_kinds) == 2
     @test runtime.cell_generations[1:2] == UInt32[1, 1]
     @test activity_values()[1:2] == Float32[1, 2]
 
-    _g5_l2_execute_at!(runtime, 2)
+    _execute_lifecycle_at!(runtime, 2)
     @test count(!iszero, runtime.cell_kinds) == 2
     @test activity_values()[1:2] == Float32[2, 3]
 
-    _g5_l2_execute_at!(runtime, 3)
+    _execute_lifecycle_at!(runtime, 3)
     @test count(!iszero, runtime.cell_kinds) == 4
     @test sum(CorePotts.program_tracker_values(
         runtime, Val(:cell_volume)
     )) == 6
     @test sum(activity_values()[1:4]) == 5
 
-    _g5_l2_execute_at!(runtime, 4)
+    _execute_lifecycle_at!(runtime, 4)
     @test all(iszero, runtime.cell_kinds)
     @test all(runtime.ownership .<= 0)
     @test runtime.retired_cells == 4
     @test all(runtime.cell_generations[1:4] .== 1)
 
-    _g5_l2_execute_at!(runtime, 5)
+    _execute_lifecycle_at!(runtime, 5)
     @test runtime.cell_kinds[1] != 0
     @test runtime.cell_generations[1] == 2
     @test activity_values()[1] == 5
@@ -365,7 +365,7 @@ end
     )
     conflict_before = CorePotts.program_snapshot(conflict_runtime)
     conflict_error = try
-        _g5_l2_execute_at!(conflict_runtime, 7)
+        _execute_lifecycle_at!(conflict_runtime, 7)
         nothing
     catch error
         error
@@ -396,12 +396,12 @@ end
         Int32(0),
     )
     retire_runtime.ownership[site] = 0
-    _g5_l2_execute_at!(retire_runtime, 6)
+    _execute_lifecycle_at!(retire_runtime, 6)
     @test retire_runtime.cell_kinds[1] == 0
     @test retire_runtime.cell_generations[1] == 2
 end
 
-@testset "G5-L2 exact-fit and overflow capacity atomicity" begin
+@testset "exact-fit and overflow capacity atomicity" begin
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     births = ntuple(2) do index
@@ -437,7 +437,17 @@ end
     initial = PottsInitialState(ownership = LabelledCells(
         zeros(Int, 3, 3); cells = [], medium
     ))
-    exact = _g5_l2_runtime(capacity_executable(2), initial)
+    exact = _lifecycle_runtime(capacity_executable(2), initial)
+    site_count = length(exact.ownership)
+    @test CorePotts.lifecycle_workspace_conforms(
+        exact.lifecycle_workspace, exact.program.lifecycle_plan, site_count
+    )
+    conforming_planned_sites = exact.lifecycle_workspace.planned_sites
+    exact.lifecycle_workspace.planned_sites = zeros(Int32, 1, 1)
+    @test !CorePotts.lifecycle_workspace_conforms(
+        exact.lifecycle_workspace, exact.program.lifecycle_plan, site_count
+    )
+    exact.lifecycle_workspace.planned_sites = conforming_planned_sites
     exact_cell_tables = (
         objectid(exact.cell_kinds),
         objectid(exact.cell_generations),
@@ -471,7 +481,7 @@ end
         length(exact.lifecycle_workspace.free_slots),
     )
 
-    overflow = _g5_l2_runtime(capacity_executable(1), initial)
+    overflow = _lifecycle_runtime(capacity_executable(1), initial)
     before = CorePotts.program_snapshot(overflow)
     error = try
         CorePotts.execute_lifecycle!(overflow)
@@ -481,11 +491,11 @@ end
     end
     @test error isa CorePotts.CellCapacityFailure
     @test error.max_cells == 1
-    @test overflow.lifecycle_workspace.status ==
+    @test overflow.lifecycle_workspace.status.code ==
         CorePotts.LifecycleStatusCellCapacity
-    @test overflow.lifecycle_workspace.status_required == 2
-    @test overflow.lifecycle_workspace.status_available == 1
-    @test overflow.lifecycle_workspace.status_maximum == 1
+    @test overflow.lifecycle_workspace.status.required == 2
+    @test overflow.lifecycle_workspace.status.available == 1
+    @test overflow.lifecycle_workspace.status.maximum == 1
     @test overflow.ownership == before.ownership
     @test overflow.cell_kinds == before.cell_kinds
     @test overflow.cell_generations == before.cell_generations
@@ -501,7 +511,7 @@ end
         oversized_labels; cells = [cell, cell], medium
     ))
     initialization_error = try
-        _g5_l2_runtime(capacity_executable(1), oversized_initial)
+        _lifecycle_runtime(capacity_executable(1), oversized_initial)
         nothing
     catch caught
         caught
@@ -509,7 +519,7 @@ end
     @test initialization_error isa ArgumentError
     @test occursin("max_cells=1", sprint(showerror, initialization_error))
 
-    generation_overflow = _g5_l2_runtime(capacity_executable(2), initial)
+    generation_overflow = _lifecycle_runtime(capacity_executable(2), initial)
     generation_overflow.cell_generations[1] = typemax(UInt32)
     generation_before = CorePotts.program_snapshot(generation_overflow)
     generation_error = try
@@ -519,7 +529,7 @@ end
         caught
     end
     @test generation_error isa CorePotts.GenerationOverflowFailure
-    @test generation_overflow.lifecycle_workspace.status ==
+    @test generation_overflow.lifecycle_workspace.status.code ==
         CorePotts.LifecycleStatusGenerationOverflow
     @test generation_overflow.ownership == generation_before.ownership
     @test generation_overflow.cell_kinds == generation_before.cell_kinds
@@ -527,7 +537,7 @@ end
         generation_before.cell_generations
 end
 
-@testset "G5-L2 lifecycle warm path is inferred and allocation-free" begin
+@testset "lifecycle warm path is inferred and allocation-free" begin
     cell = CellKind(:allocation_cell; extinction = RetireAtZero())
     medium = MediumKind(:allocation_medium)
     birth = LifecycleProcess(
@@ -559,7 +569,7 @@ end
     initial = PottsInitialState(ownership = LabelledCells(
         zeros(Int, 3, 3); cells = [], medium
     ))
-    runtime() = _g5_l2_runtime(executable, initial; seed = 0x42)
+    runtime() = _lifecycle_runtime(executable, initial; seed = 0x42)
 
     CorePotts.execute_lifecycle!(runtime())
     inferred_runtime = runtime()
@@ -569,7 +579,7 @@ end
     @test @allocated(CorePotts.execute_lifecycle!(measured_runtime)) == 0
 end
 
-@testset "G5-L2 lifecycle relationship consequences" begin
+@testset "lifecycle relationship consequences" begin
     cell = CellKind(:linked_cell; extinction = RetireAtZero())
     transitioned = CellKind(:transitioned_cell; extinction = RetireAtZero())
     medium = MediumKind(:linked_medium)
@@ -614,7 +624,7 @@ end
     labels = zeros(Int, 4, 4)
     labels[2, 2] = 1
     labels[2, 3] = 2
-    runtime = _g5_l2_runtime(
+    runtime = _lifecycle_runtime(
         executable,
         PottsInitialState(
             ownership = LabelledCells(
@@ -635,7 +645,7 @@ end
     ) === only(runtime.relationships)
 end
 
-@testset "G5-L2 closed state-policy families and addressed redraw" begin
+@testset "closed state-policy families and addressed redraw" begin
     @variables t copy_value(t) preserve_reset(t) reset_both(t)
     @variables split_value(t) transform_value(t) redraw_value(t)
     cell = CellKind(:policy_cell; extinction = RetireAtZero())
@@ -754,10 +764,10 @@ end
         zeros(Int, 5, 5); cells = [], medium
     ))
     function policy_result(seed)
-        runtime = _g5_l2_runtime(executable, initial; seed)
-        _g5_l2_execute_at!(runtime, 1)
-        _g5_l2_execute_at!(runtime, 2)
-        _g5_l2_execute_at!(runtime, 3)
+        runtime = _lifecycle_runtime(executable, initial; seed)
+        _execute_lifecycle_at!(runtime, 1)
+        _execute_lifecycle_at!(runtime, 2)
+        _execute_lifecycle_at!(runtime, 3)
         return runtime, Tuple(
             copy(CorePotts.state_block(
                 runtime.descriptor_state, report.handle
@@ -781,7 +791,7 @@ end
     @test first_runtime.cell_generations == other_runtime.cell_generations
 end
 
-@testset "G5-L2 filters inadmissible competitors before priority" begin
+@testset "filters inadmissible competitors before priority" begin
     cell = CellKind(:filter_cell; extinction = RetireAtZero())
     destination = CellKind(:filter_destination; extinction = RetireAtZero())
     medium = MediumKind(:filter_medium)
@@ -838,7 +848,7 @@ end
     )
     labels = zeros(Int, 3, 3)
     labels[2, 2] = 1
-    runtime = _g5_l2_runtime(executable, PottsInitialState(
+    runtime = _lifecycle_runtime(executable, PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium)
     ))
     CorePotts.execute_lifecycle!(runtime)
@@ -850,7 +860,7 @@ end
     @test runtime.cell_kinds[1] == destination_index
 end
 
-@testset "G5-L2 lifecycle declaration permutation is semantically inert" begin
+@testset "lifecycle declaration permutation is semantically inert" begin
     function permutation_executable(reverse_order)
         cell = CellKind(:permutation_cell; extinction = RetireAtZero())
         medium = MediumKind(:permutation_medium)
@@ -897,13 +907,13 @@ end
         permutation_executable(false)
     second_executable, _, second_medium =
         permutation_executable(true)
-    first_runtime = _g5_l2_runtime(
+    first_runtime = _lifecycle_runtime(
         first_executable,
         PottsInitialState(ownership = LabelledCells(
             zeros(Int, 3, 3); cells = [], medium = first_medium
         )),
     )
-    second_runtime = _g5_l2_runtime(
+    second_runtime = _lifecycle_runtime(
         second_executable,
         PottsInitialState(ownership = LabelledCells(
             zeros(Int, 3, 3); cells = [], medium = second_medium
@@ -918,7 +928,7 @@ end
     @test first_runtime.cell_kinds == second_runtime.cell_kinds
     @test first_runtime.cell_generations == second_runtime.cell_generations
     @test first_runtime.trackers.values == second_runtime.trackers.values
-    @test first_runtime.lifecycle_workspace.status ==
-        second_runtime.lifecycle_workspace.status ==
+    @test first_runtime.lifecycle_workspace.status.code ==
+        second_runtime.lifecycle_workspace.status.code ==
         CorePotts.LifecycleStatusSuccess
 end

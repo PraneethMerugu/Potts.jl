@@ -2,6 +2,84 @@
 # calls this reference path directly; later engines reuse the same plan,
 # request ordering, status, and publication contracts.
 
+const _LIFECYCLE_STATUS_DETAILS = (
+    :none => LifecycleDetailNone,
+    :ownership_exceeds_cell_capacity => LifecycleDetailOwnershipExceedsCellCapacity,
+    :cell_site_index_exceeds_lattice => LifecycleDetailCellSiteIndexExceedsLattice,
+    :cell_site_index_missing_owned_site => LifecycleDetailCellSiteIndexMissingOwnedSite,
+    :nonfinite_result => LifecycleDetailNonfiniteResult,
+    :evaluation_error => LifecycleDetailEvaluationError,
+    :request_bound_exceeded => LifecycleDetailRequestBoundExceeded,
+    :trigger_not_boolean => LifecycleDetailTriggerNotBoolean,
+    :placement_selection_invalid => LifecycleDetailPlacementSelectionInvalid,
+    :placement_not_integral => LifecycleDetailPlacementNotIntegral,
+    :placement_out_of_bounds => LifecycleDetailPlacementOutOfBounds,
+    :placement_selection_empty => LifecycleDetailPlacementSelectionEmpty,
+    :placement_emission_bound_exceeded => LifecycleDetailPlacementEmissionBoundExceeded,
+    :placement_bound_exceeded => LifecycleDetailPlacementBoundExceeded,
+    :duplicate_placement_site => LifecycleDetailDuplicatePlacementSite,
+    :placement_site_unavailable => LifecycleDetailPlacementSiteUnavailable,
+    :empty_source_cell => LifecycleDetailEmptySourceCell,
+    :partition_label_invalid => LifecycleDetailPartitionLabelInvalid,
+    :partition_geometry_invalid => LifecycleDetailPartitionGeometryInvalid,
+    :partition_empty_descendant => LifecycleDetailPartitionEmptyDescendant,
+    :partition_parent_disconnected => LifecycleDetailPartitionParentDisconnected,
+    :partition_daughter_disconnected => LifecycleDetailPartitionDaughterDisconnected,
+    :retire_nonempty => LifecycleDetailRetireNonempty,
+    :unknown_effect => LifecycleDetailUnknownEffect,
+    :relationship_policy_rejected => LifecycleDetailRelationshipPolicyRejected,
+    :unknown_distribution => LifecycleDetailUnknownDistribution,
+    :split_fraction_out_of_bounds => LifecycleDetailSplitFractionOutOfBounds,
+    :unsupported_state_policy => LifecycleDetailUnsupportedStatePolicy,
+    :tracker_plan_state_misalignment => LifecycleDetailTrackerPlanStateMisalignment,
+    :active_occupancy_mismatch => LifecycleDetailActiveOccupancyMismatch,
+    :forbidden_extinction => LifecycleDetailForbiddenExtinction,
+    :division_replan_mismatch => LifecycleDetailDivisionReplanMismatch,
+)
+
+@inline function _lifecycle_detail_code(reason::Symbol)
+    for pair in _LIFECYCLE_STATUS_DETAILS
+        first(pair) === reason && return last(pair)
+    end
+    return LifecycleDetailNone
+end
+
+function _lifecycle_detail_symbol(detail::LifecycleStatusDetailCode)
+    for pair in _LIFECYCLE_STATUS_DETAILS
+        last(pair) === detail && return first(pair)
+    end
+    return :none
+end
+
+@inline function _set_lifecycle_status!(
+        workspace,
+        code::LifecycleStatusCode;
+        source::Integer = 0,
+        secondary_source::Integer = 0,
+        anchor::Integer = 0,
+        detail::LifecycleStatusDetailCode = LifecycleDetailNone,
+        required::Integer = 0,
+        available::Integer = 0,
+        maximum::Integer = 0,
+    )
+    workspace.status = LifecycleStatusPayload(
+        code,
+        Int32(source),
+        Int32(secondary_source),
+        Int32(anchor),
+        detail,
+        Int32(required),
+        Int32(available),
+        Int32(maximum),
+    )
+    return false
+end
+
+@inline _lifecycle_succeeded(workspace) =
+    workspace.status.code === LifecycleStatusSuccess
+
+struct LifecycleEvaluationFailed end
+
 @inline function _lifecycle_due(
         descriptor::LifecycleDescriptor, next_mcs::Int
     )
@@ -14,18 +92,59 @@
 end
 
 function _index_lifecycle_representative_sites!(runtime, workspace)
+    fill!(workspace.cell_site_counts, 0)
+    fill!(workspace.cell_site_starts, 0)
+    fill!(workspace.cell_site_cursor, 0)
+    fill!(workspace.site_position, 0)
     for linear in eachindex(runtime.ownership)
         owner = @inbounds runtime.ownership[linear]
         owner > 0 || continue
-        owner <= length(workspace.representative_site) || throw(
-            LifecycleInvariantFailure(
-                Int32(0), owner, :ownership_exceeds_cell_capacity
+        if owner > length(workspace.representative_site)
+            _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                anchor = owner,
+                detail = LifecycleDetailOwnershipExceedsCellCapacity,
             )
-        )
+            return false
+        end
         @inbounds iszero(workspace.representative_site[owner]) &&
             (workspace.representative_site[owner] = Int32(linear))
+        @inbounds workspace.cell_site_counts[owner] += Int32(1)
     end
-    return workspace
+    cursor = Int32(1)
+    for cell in eachindex(workspace.cell_site_counts)
+        @inbounds begin
+            workspace.cell_site_starts[cell] = cursor
+            workspace.cell_site_cursor[cell] = cursor
+            cursor += workspace.cell_site_counts[cell]
+        end
+    end
+    if cursor > length(runtime.ownership) + 1
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            detail = LifecycleDetailCellSiteIndexExceedsLattice,
+        )
+        return false
+    end
+    for linear in eachindex(runtime.ownership)
+        owner = @inbounds runtime.ownership[linear]
+        owner > 0 || continue
+        position = @inbounds workspace.cell_site_cursor[owner]
+        @inbounds begin
+            workspace.cell_sites[position] = Int32(linear)
+            workspace.site_position[linear] = position
+            workspace.cell_site_cursor[owner] = position + Int32(1)
+        end
+    end
+    return true
+end
+
+@inline function _cell_site_range(workspace, cell::Int32)
+    start = Int(@inbounds workspace.cell_site_starts[cell])
+    count = Int(@inbounds workspace.cell_site_counts[cell])
+    return start:(start + count - 1)
 end
 
 @inline function _lifecycle_context_site(runtime, workspace, anchor::Int32)
@@ -40,20 +159,30 @@ function _evaluate_lifecycle_checked(
         index::Integer,
         context,
         descriptor::LifecycleDescriptor,
+        workspace,
     )
     try
         value = evaluate_lifecycle(plan.evaluators, index, context)
         if value isa AbstractFloat && !isfinite(value)
-            throw(LifecycleEvaluatorFailure(
-                descriptor.source_handle, context.anchor, :nonfinite_result
-            ))
+            _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusEvaluator;
+                source = descriptor.source_handle,
+                anchor = context.anchor,
+                detail = LifecycleDetailNonfiniteResult,
+            )
+            return LifecycleEvaluationFailed()
         end
         return value
     catch error
-        error isa AbstractLifecycleFailure && rethrow()
-        throw(LifecycleEvaluatorFailure(
-            descriptor.source_handle, context.anchor, :evaluation_error
-        ))
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor = context.anchor,
+            detail = LifecycleDetailEvaluationError,
+        )
+        return LifecycleEvaluationFailed()
     end
 end
 
@@ -65,11 +194,16 @@ function _emit_lifecycle_request!(
         generation::UInt32,
     )
     index = Int(workspace.request_count) + 1
-    index <= length(workspace.descriptor) || throw(
-        LifecycleFootprintFailure(
-            descriptor.source_handle, anchor, :request_bound_exceeded
+    if index > length(workspace.descriptor)
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusFootprint;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailRequestBoundExceeded,
         )
-    )
+        return 0
+    end
     @inbounds begin
         workspace.descriptor[index] = Int32(descriptor_index)
         workspace.anchor[index] = anchor
@@ -89,6 +223,10 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
         if descriptor.domain === ModelLifecycleDomain
             context = _LifecycleTriggerContext(
                 runtime,
+                descriptor.source_identity,
+                descriptor.action_identity,
+                descriptor.trigger_workspace_maximum,
+                Int32(workspace.request_count + 1),
                 Int32(0),
                 UInt32(0),
                 _lifecycle_context_site(runtime, workspace, Int32(0)),
@@ -96,26 +234,39 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                 UInt16(descriptor.source_handle),
             )
             enabled = _evaluate_lifecycle_checked(
-                plan, descriptor.trigger_evaluator, context, descriptor
+                plan, descriptor.trigger_evaluator, context, descriptor, workspace
             )
-            enabled isa Bool || throw(LifecycleEvaluatorFailure(
-                descriptor.source_handle, 0, :trigger_not_boolean
-            ))
-            enabled && _emit_lifecycle_request!(
+            enabled isa LifecycleEvaluationFailed && return false
+            enabled isa Bool || return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusEvaluator;
+                source = descriptor.source_handle,
+                detail = LifecycleDetailTriggerNotBoolean,
+            )
+            if enabled
+                emitted = _emit_lifecycle_request!(
                 workspace,
                 descriptor_index,
                 descriptor,
                 Int32(0),
                 UInt32(0),
             )
+                iszero(emitted) && return false
+            end
         else
             for cell in eachindex(runtime.cell_kinds)
                 kind = @inbounds runtime.cell_kinds[cell]
                 kind == descriptor.domain_kind || continue
                 generation = @inbounds runtime.cell_generations[cell]
-                iszero(generation) && throw(StaleGenerationFailure(Int32(cell)))
+                iszero(generation) && return _set_lifecycle_status!(
+                    workspace, LifecycleStatusStaleGeneration; anchor = cell
+                )
                 context = _LifecycleTriggerContext(
                     runtime,
+                    descriptor.source_identity,
+                    descriptor.action_identity,
+                    descriptor.trigger_workspace_maximum,
+                    Int32(workspace.request_count + 1),
                     Int32(cell),
                     generation,
                     _lifecycle_context_site(runtime, workspace, Int32(cell)),
@@ -123,22 +274,30 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                     UInt16(descriptor.source_handle),
                 )
                 enabled = _evaluate_lifecycle_checked(
-                    plan, descriptor.trigger_evaluator, context, descriptor
+                    plan, descriptor.trigger_evaluator, context, descriptor, workspace
                 )
-                enabled isa Bool || throw(LifecycleEvaluatorFailure(
-                    descriptor.source_handle, Int32(cell), :trigger_not_boolean
-                ))
-                enabled && _emit_lifecycle_request!(
+                enabled isa LifecycleEvaluationFailed && return false
+                enabled isa Bool || return _set_lifecycle_status!(
+                    workspace,
+                    LifecycleStatusEvaluator;
+                    source = descriptor.source_handle,
+                    anchor = cell,
+                    detail = LifecycleDetailTriggerNotBoolean,
+                )
+                if enabled
+                    emitted = _emit_lifecycle_request!(
                     workspace,
                     descriptor_index,
                     descriptor,
                     Int32(cell),
                     generation,
                 )
+                    iszero(emitted) && return false
+                end
             end
         end
     end
-    return workspace
+    return true
 end
 
 @inline function _linear_neighbor(
@@ -167,27 +326,55 @@ function _plan_creation!(runtime, plan, workspace, request, descriptor)
     site = _lifecycle_context_site(runtime, workspace, anchor)
     context = _LifecyclePlacementContext(
         runtime,
+        descriptor.source_identity,
+        descriptor.action_identity,
+        descriptor.placement_workspace_maximum,
+        Int32(request),
         anchor,
         generation,
         site,
         Int32(0),
         UInt16(descriptor.source_handle),
     )
-    center = _evaluate_lifecycle_checked(
-        plan, descriptor.placement_evaluator, context, descriptor
+    result = _evaluate_lifecycle_checked(
+        plan, descriptor.placement_evaluator, context, descriptor, workspace
     )
-    center isa Integer || return :placement_not_integral
-    center = Int(center)
-    1 <= center <= length(runtime.ownership) || return :placement_out_of_bounds
-    count = descriptor.placement === SeedStencilLifecyclePlacement ?
+    result isa LifecycleEvaluationFailed && return :status_failure
+    external = descriptor.placement === ExternalLifecyclePlacement
+    selection = external && result isa LifecycleSiteSelection ? result : nothing
+    external && selection === nothing && return :placement_selection_invalid
+    !external && !(result isa Integer) && return :placement_not_integral
+    center = external ? 0 : Int(result)
+    !external && !(1 <= center <= length(runtime.ownership)) &&
+        return :placement_out_of_bounds
+    count = external ? Int(selection.count) :
+        descriptor.placement === SeedStencilLifecyclePlacement ?
         Int(descriptor.stencil_count) : 1
-    count <= size(workspace.planned_sites, 1) || throw(
-        LifecycleFootprintFailure(
-            descriptor.source_handle, anchor, :placement_bound_exceeded
+    count > 0 || return :placement_selection_empty
+    if count > descriptor.placement_maximum
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusFootprint;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailPlacementEmissionBoundExceeded,
         )
-    )
+        return :status_failure
+    end
+    if count > size(workspace.planned_sites, 1)
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusFootprint;
+            source = descriptor.source_handle,
+            anchor,
+            detail = LifecycleDetailPlacementBoundExceeded,
+        )
+        return :status_failure
+    end
     for position in 1:count
-        selected = if descriptor.placement === SeedStencilLifecyclePlacement
+        selected = if external
+            Int(@inbounds selection.sites[position])
+        elseif descriptor.placement === SeedStencilLifecyclePlacement
             offset_index = Int(descriptor.stencil_offset) + position - 1
             _linear_neighbor(
                 runtime.program, center, @inbounds(plan.stencil_offsets[offset_index])
@@ -250,13 +437,24 @@ end
 function _partition_connected(
         runtime, plan, workspace, request, descriptor, label::UInt8
     )
-    labels = view(workspace.partition_labels, :, request)
-    fill!(workspace.site_seen, false)
-    first_site = findfirst(==(label), labels)
-    first_site === nothing && return false
+    anchor = @inbounds workspace.anchor[request]
+    positions = _cell_site_range(workspace, anchor)
+    for position in positions
+        linear = Int(@inbounds workspace.cell_sites[position])
+        @inbounds workspace.site_seen[linear] = false
+    end
+    first_site = Int32(0)
+    expected = 0
+    for position in positions
+        @inbounds workspace.partition_labels[position] == label || continue
+        expected += 1
+        iszero(first_site) &&
+            (first_site = @inbounds workspace.cell_sites[position])
+    end
+    iszero(first_site) && return false
     head = 1
     tail = 1
-    workspace.site_queue[1] = Int32(first_site)
+    workspace.site_queue[1] = first_site
     workspace.site_seen[first_site] = true
     visited = 0
     relation = @inbounds plan.relations[Int(descriptor.relation_slot)]
@@ -271,7 +469,16 @@ function _partition_connected(
             )
             neighbor === nothing && continue
             neighbor_linear = LinearIndices(runtime.program.shape)[neighbor]
-            @inbounds labels[neighbor_linear] == label || continue
+            @inbounds runtime.ownership[neighbor_linear] == anchor || continue
+            position = Int(@inbounds workspace.site_position[neighbor_linear])
+            position > 0 || return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                source = descriptor.source_handle,
+                anchor,
+                detail = LifecycleDetailCellSiteIndexMissingOwnedSite,
+            )
+            @inbounds workspace.partition_labels[position] == label || continue
             @inbounds workspace.site_seen[neighbor_linear] && continue
             tail += 1
             @inbounds begin
@@ -280,14 +487,16 @@ function _partition_connected(
             end
         end
     end
-    return visited == count(==(label), labels)
+    return visited == expected
 end
 
 function _plan_division!(runtime, plan, workspace, request, descriptor)
     anchor = @inbounds workspace.anchor[request]
     generation = @inbounds workspace.generation[request]
-    labels = view(workspace.partition_labels, :, request)
-    fill!(labels, 0)
+    positions = _cell_site_range(workspace, anchor)
+    for position in positions
+        @inbounds workspace.partition_labels[position] = 0
+    end
     external = descriptor.partition === ExternalLifecyclePartition
     center = external ? nothing : descriptor.point_from_centroid ?
         _cell_center(runtime, anchor) : descriptor.point
@@ -296,12 +505,16 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
         _partition_normal(runtime, descriptor, anchor, generation)
     first_count = 0
     second_count = 0
-    for linear in eachindex(runtime.ownership)
-        @inbounds runtime.ownership[linear] == anchor || continue
+    for position in positions
+        linear = Int(@inbounds workspace.cell_sites[position])
         site = CartesianIndices(runtime.program.shape)[linear]
         label = if descriptor.partition === ExternalLifecyclePartition
             context = _LifecyclePartitionContext(
                 runtime,
+                descriptor.source_identity,
+                descriptor.action_identity,
+                descriptor.partition_workspace_maximum,
+                Int32(request),
                 anchor,
                 generation,
                 site,
@@ -309,8 +522,9 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
                 UInt16(descriptor.source_handle),
             )
             value = _evaluate_lifecycle_checked(
-                plan, descriptor.partition_evaluator, context, descriptor
+                plan, descriptor.partition_evaluator, context, descriptor, workspace
             )
+            value isa LifecycleEvaluationFailed && return :status_failure
             value isa Integer && value in (1, 2) ||
                 return :partition_label_invalid
             UInt8(value)
@@ -324,7 +538,7 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
             )
             projection <= 0 ? UInt8(1) : UInt8(2)
         end
-        @inbounds labels[linear] = label
+        @inbounds workspace.partition_labels[position] = label
         label == 1 ? (first_count += 1) : (second_count += 1)
     end
     first_count > 0 && second_count > 0 || return :partition_empty_descendant
@@ -339,18 +553,24 @@ function _plan_division!(runtime, plan, workspace, request, descriptor)
             0,
         ) < eltype(runtime.parameters)(0.5)
         if flip
-            for index in eachindex(labels)
-                @inbounds labels[index] == 1 ? (labels[index] = 2) :
-                    labels[index] == 2 && (labels[index] = 1)
+            for position in positions
+                @inbounds workspace.partition_labels[position] == 1 ?
+                    (workspace.partition_labels[position] = 2) :
+                    workspace.partition_labels[position] == 2 &&
+                    (workspace.partition_labels[position] = 1)
             end
         end
     end
-    _partition_connected(
+    parent_connected = _partition_connected(
         runtime, plan, workspace, request, descriptor, UInt8(1)
-    ) || return :partition_parent_disconnected
-    _partition_connected(
+    )
+    _lifecycle_succeeded(workspace) || return :status_failure
+    parent_connected || return :partition_parent_disconnected
+    daughter_connected = _partition_connected(
         runtime, plan, workspace, request, descriptor, UInt8(2)
-    ) || return :partition_daughter_disconnected
+    )
+    _lifecycle_succeeded(workspace) || return :status_failure
+    daughter_connected || return :partition_daughter_disconnected
     return :ok
 end
 
@@ -409,12 +629,14 @@ function _plan_lifecycle_request!(runtime, plan, workspace, request)
     anchor = @inbounds workspace.anchor[request]
     generation = @inbounds workspace.generation[request]
     if anchor > 0
-        1 <= anchor <= length(runtime.cell_kinds) ||
-            throw(StaleGenerationFailure(anchor))
-        @inbounds runtime.cell_generations[anchor] == generation ||
-            throw(StaleGenerationFailure(anchor))
-        @inbounds runtime.cell_kinds[anchor] != 0 ||
-            throw(StaleGenerationFailure(anchor))
+        if !(1 <= anchor <= length(runtime.cell_kinds)) ||
+                @inbounds(runtime.cell_generations[anchor]) != generation ||
+                @inbounds(runtime.cell_kinds[anchor]) == 0
+            _set_lifecycle_status!(
+                workspace, LifecycleStatusStaleGeneration; anchor
+            )
+            return :status_failure
+        end
     end
     reason = if descriptor.effect === CreateCellLifecycleEffect
         _plan_creation!(runtime, plan, workspace, request, descriptor)
@@ -443,6 +665,7 @@ function _filter_lifecycle_requests!(runtime, plan, workspace)
             Int(workspace.descriptor[request])
         ]
         reason = _plan_lifecycle_request!(runtime, plan, workspace, request)
+        reason === :status_failure && return false
         reason === :ok && continue
         if descriptor.on_inadmissible === FilterLifecycleInadmissible
             @inbounds begin
@@ -450,14 +673,16 @@ function _filter_lifecycle_requests!(runtime, plan, workspace)
                 workspace.filtered[request] = true
             end
         else
-            throw(LifecycleInadmissibilityFailure(
-                descriptor.source_handle,
-                @inbounds(workspace.anchor[request]),
-                reason,
-            ))
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInadmissible;
+                source = descriptor.source_handle,
+                anchor = @inbounds(workspace.anchor[request]),
+                detail = _lifecycle_detail_code(reason),
+            )
         end
     end
-    return workspace
+    return true
 end
 
 @inline function _lifecycle_request_key(plan, workspace, request)
@@ -539,6 +764,8 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
     _deduplicate_lifecycle_requests!(plan, workspace)
     count = Int(workspace.request_count)
     if plan.conflict_policy === RejectLifecycleConflicts
+        first_conflict = 0
+        second_conflict = 0
         for right in 1:count
             @inbounds workspace.active[right] || continue
             for left in 1:(right - 1)
@@ -546,15 +773,46 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
                 _lifecycle_requests_conflict(
                     runtime, plan, workspace, left, right
                 ) || continue
-                throw(LifecycleConflictFailure(
-                    plan.descriptors[Int(workspace.descriptor[left])].source_handle,
-                    plan.descriptors[Int(workspace.descriptor[right])].source_handle,
-                    workspace.anchor[right],
-                ))
+                left_key = _lifecycle_request_key(plan, workspace, left)
+                right_key = _lifecycle_request_key(plan, workspace, right)
+                candidate_first, candidate_second = left_key <= right_key ?
+                    (left, right) : (right, left)
+                if iszero(first_conflict) ||
+                        (_lifecycle_request_key(
+                            plan, workspace, candidate_first
+                        ), _lifecycle_request_key(
+                            plan, workspace, candidate_second
+                        )) <
+                        (_lifecycle_request_key(
+                            plan, workspace, first_conflict
+                        ), _lifecycle_request_key(
+                            plan, workspace, second_conflict
+                        ))
+                    first_conflict = candidate_first
+                    second_conflict = candidate_second
+                end
             end
-            @inbounds workspace.selected[right] = true
         end
-        return workspace
+        if !iszero(first_conflict)
+            first_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[first_conflict])
+            ]
+            second_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[second_conflict])
+            ]
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusConflict;
+                source = first_descriptor.source_handle,
+                secondary_source = second_descriptor.source_handle,
+                anchor = @inbounds(workspace.anchor[second_conflict]),
+            )
+        end
+        for request in 1:count
+            @inbounds workspace.active[request] || continue
+            @inbounds workspace.selected[request] = true
+        end
+        return true
     end
     fill!(workspace.conflict_seen, false)
     for seed in 1:count
@@ -564,9 +822,6 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
         tail = 1
         workspace.canonical_order[1] = Int32(seed)
         workspace.conflict_seen[seed] = true
-        best = seed
-        best_priority = plan.descriptors[Int(workspace.descriptor[seed])].priority
-        tied = false
         while head <= tail
             current = Int(@inbounds workspace.canonical_order[head])
             head += 1
@@ -581,26 +836,50 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
                     workspace.canonical_order[tail] = Int32(candidate)
                     workspace.conflict_seen[candidate] = true
                 end
-                priority = plan.descriptors[
-                    Int(workspace.descriptor[candidate])
-                ].priority
-                if priority > best_priority
+            end
+        end
+        best = 0
+        tied = 0
+        best_priority = typemin(Int32)
+        for position in 1:tail
+            candidate = Int(@inbounds workspace.canonical_order[position])
+            priority = @inbounds plan.descriptors[
+                Int(workspace.descriptor[candidate])
+            ].priority
+            if priority > best_priority
+                best = candidate
+                tied = 0
+                best_priority = priority
+            elseif priority == best_priority
+                if _lifecycle_request_key(plan, workspace, candidate) <
+                        _lifecycle_request_key(plan, workspace, best)
+                    tied = best
                     best = candidate
-                    best_priority = priority
-                    tied = false
-                elseif priority == best_priority
-                    tied = true
+                elseif iszero(tied) || _lifecycle_request_key(
+                        plan, workspace, candidate
+                    ) < _lifecycle_request_key(plan, workspace, tied)
+                    tied = candidate
                 end
             end
         end
-        tied && throw(LifecycleConflictFailure(
-            plan.descriptors[Int(workspace.descriptor[best])].source_handle,
-            plan.descriptors[Int(workspace.descriptor[seed])].source_handle,
-            workspace.anchor[seed],
-        ))
+        if !iszero(tied)
+            best_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[best])
+            ]
+            tied_descriptor = @inbounds plan.descriptors[
+                Int(workspace.descriptor[tied])
+            ]
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusConflict;
+                source = best_descriptor.source_handle,
+                secondary_source = tied_descriptor.source_handle,
+                anchor = @inbounds(workspace.anchor[tied]),
+            )
+        end
         @inbounds workspace.selected[best] = true
     end
-    return workspace
+    return true
 end
 
 function _sort_selected_requests!(plan, workspace)
@@ -652,9 +931,16 @@ function _preflight_lifecycle_capacity!(runtime, plan, workspace)
         free_count += 1
         workspace.free_slots[free_count] = Int32(cell)
     end
-    requested <= free_count || throw(CellCapacityFailure(
-        plan.cell_capacity, Int32(requested), Int32(free_count)
-    ))
+    if requested > free_count
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusCellCapacity;
+            required = requested,
+            available = free_count,
+            maximum = plan.cell_capacity,
+        )
+        return -1
+    end
     allocation_position = 0
     for position in 1:selected_count
         request = Int(@inbounds workspace.canonical_order[position])
@@ -663,7 +949,12 @@ function _preflight_lifecycle_capacity!(runtime, plan, workspace)
         allocation_position += 1
         slot = @inbounds workspace.free_slots[allocation_position]
         generation = @inbounds runtime.cell_generations[slot]
-        generation == typemax(UInt32) && throw(GenerationOverflowFailure(slot))
+        if generation == typemax(UInt32)
+            _set_lifecycle_status!(
+                workspace, LifecycleStatusGenerationOverflow; anchor = slot
+            )
+            return -1
+        end
         @inbounds workspace.allocation[request] = slot
     end
     return selected_count
@@ -694,21 +985,50 @@ end
 end
 
 @inline function _state_rule_value(
-        runtime, plan, workspace, descriptor, evaluator, anchor, generation
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        rule,
+        evaluator,
+        request,
+        source,
+        destination,
+        role,
     )
+    source_generation = source > 0 ?
+        @inbounds(runtime.cell_generations[source]) : UInt32(0)
+    destination_generation = destination > 0 ?
+        @inbounds(workspace.staged_cell_generations[destination]) : UInt32(0)
+    anchor = source > 0 ? source : destination
+    generation = source > 0 ? source_generation : destination_generation
     context = _LifecycleStateContext(
         runtime,
+        descriptor.source_identity,
+        descriptor.action_identity,
+        descriptor.state_workspace_maximum,
+        Int32(request),
         anchor,
         generation,
+        source,
+        source_generation,
+        destination,
+        destination_generation,
+        role,
+        rule.source_identity,
+        rule.handle,
         _lifecycle_context_site(runtime, workspace, anchor),
         Int32(0),
         UInt16(descriptor.source_handle),
     )
-    return _evaluate_lifecycle_checked(plan, evaluator, context, descriptor)
+    return _evaluate_lifecycle_checked(
+        plan, evaluator, context, descriptor, workspace
+    )
 end
 
 function _lifecycle_distribution_draw(
         runtime,
+        workspace,
         descriptor,
         family,
         first_parameter,
@@ -734,9 +1054,16 @@ function _lifecycle_distribution_draw(
     family == 2 && return muladd(
         first_uniform, T(second_parameter) - T(first_parameter), T(first_parameter)
     )
-    family == 3 || throw(LifecycleEvaluatorFailure(
-        descriptor.source_handle, destination, :unknown_distribution
-    ))
+    if family != 3
+        _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusEvaluator;
+            source = descriptor.source_handle,
+            anchor = destination,
+            detail = LifecycleDetailUnknownDistribution,
+        )
+        return LifecycleEvaluationFailed()
+    end
     iszero(second_parameter) && return T(first_parameter)
     second_uniform = _lifecycle_uniform(
         T,
@@ -759,6 +1086,7 @@ function _apply_lifecycle_state_rule!(
         plan,
         workspace,
         descriptor,
+        request::Int,
         source::Int32,
         destination::Int32,
     )
@@ -771,49 +1099,66 @@ function _apply_lifecycle_state_rule!(
         @inbounds(workspace.staged_cell_generations[destination]) : UInt32(0)
     if rule.action === InitializeLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, DestinationLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
     elseif rule.action === RetireToLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, SourceLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
     elseif rule.action === PreserveLifecycleState
         nothing
     elseif rule.action in (ResetLifecycleState, TransformLifecycleState)
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, SourceLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[source] = value_a
     elseif rule.action === CopyDaughtersLifecycleState
         @inbounds values[destination] = values[source]
     elseif rule.action === PreserveParentResetDaughterLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, DaughterLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         @inbounds values[destination] = value_a
     elseif rule.action === ResetBothLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, ParentLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         value_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_b, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            source, destination, DaughterLifecycleStateRole,
         )
+        value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = value_a
             values[destination] = value_b
         end
     elseif rule.action === SplitConservativelyLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, ParentLifecycleStateRole,
         )
-        (isfinite(value_a) && zero(value_a) <= value_a <= one(value_a)) ||
-            throw(LifecycleEvaluatorFailure(
-                descriptor.source_handle,
-                source,
-                :split_fraction_out_of_bounds,
-            ))
+        value_a isa LifecycleEvaluationFailed && return false
+        if !(isfinite(value_a) && zero(value_a) <= value_a <= one(value_a))
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusEvaluator;
+                source = descriptor.source_handle,
+                anchor = source,
+                detail = LifecycleDetailSplitFractionOutOfBounds,
+            )
+        end
         old = @inbounds values[source]
         fraction = value_a
         parent = old * fraction
@@ -830,66 +1175,88 @@ function _apply_lifecycle_state_rule!(
         end
     elseif rule.action === TransformDaughtersLifecycleState
         value_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, ParentLifecycleStateRole,
         )
+        value_a isa LifecycleEvaluationFailed && return false
         value_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_b, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            source, destination, DaughterLifecycleStateRole,
         )
+        value_b isa LifecycleEvaluationFailed && return false
         @inbounds begin
             values[source] = value_a
             values[destination] = value_b
         end
     elseif rule.action === RedrawDaughtersLifecycleState
         first_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_a, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_a, request,
+            source, destination, ParentLifecycleStateRole,
         )
+        first_a isa LifecycleEvaluationFailed && return false
         second_a = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_b, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_b, request,
+            source, destination, ParentLifecycleStateRole,
         )
+        second_a isa LifecycleEvaluationFailed && return false
         first_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_c, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_c, request,
+            source, destination, DaughterLifecycleStateRole,
         )
+        first_b isa LifecycleEvaluationFailed && return false
         second_b = _state_rule_value(
-            runtime, plan, workspace, descriptor, rule.evaluator_d, source, source_generation
+            runtime, plan, workspace, descriptor, rule, rule.evaluator_d, request,
+            source, destination, DaughterLifecycleStateRole,
         )
+        second_b isa LifecycleEvaluationFailed && return false
+        parent_value = _lifecycle_distribution_draw(
+            runtime,
+            workspace,
+            descriptor,
+            rule.parent_distribution,
+            first_a,
+            second_a,
+            rule.parent_draw,
+            source,
+            source_generation,
+            false,
+        )
+        parent_value isa LifecycleEvaluationFailed && return false
+        daughter_value = _lifecycle_distribution_draw(
+            runtime,
+            workspace,
+            descriptor,
+            rule.daughter_distribution,
+            first_b,
+            second_b,
+            rule.daughter_draw,
+            destination,
+            destination_generation,
+            true,
+        )
+        daughter_value isa LifecycleEvaluationFailed && return false
         @inbounds begin
-            values[source] = _lifecycle_distribution_draw(
-                runtime,
-                descriptor,
-                rule.parent_distribution,
-                first_a,
-                second_a,
-                rule.parent_draw,
-                source,
-                source_generation,
-                false,
-            )
-            values[destination] = _lifecycle_distribution_draw(
-                runtime,
-                descriptor,
-                rule.daughter_distribution,
-                first_b,
-                second_b,
-                rule.daughter_draw,
-                destination,
-                destination_generation,
-                true,
-            )
+            values[source] = parent_value
+            values[destination] = daughter_value
         end
     else
-        throw(LifecycleInvariantFailure(
-            descriptor.source_handle, source, :unsupported_state_policy
-        ))
+        return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            source = descriptor.source_handle,
+            anchor = source,
+            detail = LifecycleDetailUnsupportedStatePolicy,
+        )
     end
-    return nothing
+    return true
 end
 
 function _apply_lifecycle_state_rules!(
-        runtime, plan, workspace, descriptor, source, destination
+        runtime, plan, workspace, descriptor, request, source, destination
     )
     for offset in 0:(Int(descriptor.state_rule_count) - 1)
         index = Int(descriptor.state_rule_offset) + offset
-        call_lifecycle_state_rule(
+        succeeded = call_lifecycle_state_rule(
             _apply_lifecycle_state_rule!,
             plan.state_rules,
             index,
@@ -897,11 +1264,13 @@ function _apply_lifecycle_state_rules!(
             plan,
             workspace,
             descriptor,
+            request,
             source,
             destination,
         )
+        succeeded || return false
     end
-    return nothing
+    return true
 end
 
 function _remove_all_incident!(state, anchor)
@@ -982,14 +1351,14 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
             _stage_owner_change!(runtime, plan, workspace, linear, allocation)
         end
         _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, Int32(0), allocation
-        )
+            runtime, plan, workspace, descriptor, request, Int32(0), allocation
+        ) || return -1
     elseif descriptor.effect === RemoveCellLifecycleEffect
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
         )
-        for linear in eachindex(workspace.staged_ownership)
-            @inbounds workspace.staged_ownership[linear] == anchor || continue
+        for position in _cell_site_range(workspace, anchor)
+            linear = Int(@inbounds workspace.cell_sites[position])
             _stage_owner_change!(
                 runtime,
                 plan,
@@ -999,16 +1368,16 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
             )
         end
         _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, anchor, Int32(0)
-        )
+            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
+        ) || return -1
         @inbounds workspace.staged_cell_kinds[anchor] = 0
     elseif descriptor.effect === RetireCellLifecycleEffect
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
         )
         _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, anchor, Int32(0)
-        )
+            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
+        ) || return -1
         @inbounds workspace.staged_cell_kinds[anchor] = 0
     elseif descriptor.effect === TransitionCellLifecycleEffect
         @inbounds workspace.staged_cell_kinds[anchor] = descriptor.destination_kind
@@ -1016,8 +1385,8 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
             runtime, plan, workspace, descriptor, anchor
         )
         _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, anchor, Int32(0)
-        )
+            runtime, plan, workspace, descriptor, request, anchor, Int32(0)
+        ) || return -1
     elseif descriptor.effect === DivideCellLifecycleEffect
         generation = _allocated_generation(runtime, allocation)
         parent_kind = descriptor.parent_kind == 0 ?
@@ -1029,17 +1398,29 @@ function _apply_lifecycle_request!(runtime, plan, workspace, request)
             workspace.staged_cell_kinds[allocation] = daughter_kind
             workspace.staged_cell_generations[allocation] = generation
         end
-        labels = view(workspace.partition_labels, :, request)
-        for linear in eachindex(labels)
-            @inbounds labels[linear] == 2 || continue
+        reason = _plan_division!(runtime, plan, workspace, request, descriptor)
+        reason === :status_failure && return -1
+        if reason !== :ok
+            _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                source = descriptor.source_handle,
+                anchor,
+                detail = _lifecycle_detail_code(reason),
+            )
+            return -1
+        end
+        for position in _cell_site_range(workspace, anchor)
+            @inbounds workspace.partition_labels[position] == 2 || continue
+            linear = Int(@inbounds workspace.cell_sites[position])
             _stage_owner_change!(runtime, plan, workspace, linear, allocation)
         end
         _apply_lifecycle_relationship_rules!(
             runtime, plan, workspace, descriptor, anchor
         )
         _apply_lifecycle_state_rules!(
-            runtime, plan, workspace, descriptor, anchor, allocation
-        )
+            runtime, plan, workspace, descriptor, request, anchor, allocation
+        ) || return -1
     end
     return descriptor.effect in (
         RemoveCellLifecycleEffect, RetireCellLifecycleEffect
@@ -1063,9 +1444,11 @@ end
 function _validate_staged_lifecycle!(runtime, plan, workspace)
     tracker_plan = runtime.program.tracker_plan
     length(tracker_plan.descriptors) == length(workspace.staged_trackers.values) ||
-        throw(LifecycleInvariantFailure(
-            Int32(0), Int32(0), :tracker_plan_state_misalignment
-        ))
+        return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            detail = LifecycleDetailTrackerPlanStateMisalignment,
+        )
     _validate_tracker_storage_shapes!(
         tracker_plan.descriptors,
         workspace.staged_trackers.values,
@@ -1079,15 +1462,21 @@ function _validate_staged_lifecycle!(runtime, plan, workspace)
     for cell in eachindex(workspace.staged_cell_kinds)
         active = @inbounds workspace.staged_cell_kinds[cell] != 0
         occupied = @inbounds volumes[cell] != 0
-        active == occupied || throw(LifecycleInvariantFailure(
-            Int32(0), Int32(cell), :active_occupancy_mismatch
-        ))
+        active == occupied || return _set_lifecycle_status!(
+            workspace,
+            LifecycleStatusInvariant;
+            anchor = cell,
+            detail = LifecycleDetailActiveOccupancyMismatch,
+        )
         if active && @inbounds plan.forbid_extinction[
                 workspace.staged_cell_kinds[cell]
             ] && !occupied
-            throw(LifecycleInvariantFailure(
-                Int32(0), Int32(cell), :forbidden_extinction
-            ))
+            return _set_lifecycle_status!(
+                workspace,
+                LifecycleStatusInvariant;
+                anchor = cell,
+                detail = LifecycleDetailForbiddenExtinction,
+            )
         end
     end
     for slot in eachindex(workspace.staged_relationships)
@@ -1104,7 +1493,7 @@ function _validate_staged_lifecycle!(runtime, plan, workspace)
             state_block(workspace.staged_descriptor_state, entry.handle),
         )
     end
-    return workspace
+    return true
 end
 
 function _stage_lifecycle_transactions!(
@@ -1121,9 +1510,11 @@ function _stage_lifecycle_transactions!(
     retired = 0
     for position in 1:selected_count
         request = Int(@inbounds workspace.canonical_order[position])
-        retired += _apply_lifecycle_request!(runtime, plan, workspace, request)
+        result = _apply_lifecycle_request!(runtime, plan, workspace, request)
+        result < 0 && return -1
+        retired += result
     end
-    _validate_staged_lifecycle!(runtime, plan, workspace)
+    _validate_staged_lifecycle!(runtime, plan, workspace) || return -1
     return retired
 end
 
@@ -1140,64 +1531,79 @@ function _publish_lifecycle_transactions!(runtime, workspace, retired)
     return runtime
 end
 
-_execute_lifecycle!(runtime, ::NoLifecycleExecutionPlan, ::NoLifecycleWorkspace) =
-    runtime
+_execute_lifecycle_status!(
+    runtime, ::NoLifecycleExecutionPlan, ::NoLifecycleWorkspace
+) = true
 
-function _record_lifecycle_failure!(workspace, error)
-    workspace.status = error isa LifecycleInadmissibilityFailure ?
-        LifecycleStatusInadmissible :
-        error isa LifecycleConflictFailure ? LifecycleStatusConflict :
-        error isa CellCapacityFailure ? LifecycleStatusCellCapacity :
-        error isa RelationshipCapacityFailure ? LifecycleStatusRelationshipCapacity :
-        error isa StaleGenerationFailure ? LifecycleStatusStaleGeneration :
-        error isa GenerationOverflowFailure ? LifecycleStatusGenerationOverflow :
-        error isa LifecycleEvaluatorFailure ? LifecycleStatusEvaluator :
-        error isa LifecycleFootprintFailure ? LifecycleStatusFootprint :
-        error isa LifecycleInvariantFailure ? LifecycleStatusInvariant :
-        LifecycleStatusBackend
-    if hasproperty(error, :source)
-        workspace.status_source = Int32(getproperty(error, :source))
-    elseif hasproperty(error, :first_source)
-        workspace.status_source = Int32(getproperty(error, :first_source))
-    end
-    hasproperty(error, :anchor) &&
-        (workspace.status_anchor = Int32(getproperty(error, :anchor)))
-    if error isa CellCapacityFailure
-        workspace.status_required = error.requested
-        workspace.status_available = error.available
-        workspace.status_maximum = error.max_cells
-    end
-    return workspace
-end
-
-function _execute_lifecycle!(
+function _execute_lifecycle_status!(
         runtime,
         plan::LifecycleExecutionPlan,
         workspace::LifecycleWorkspace,
     )
     _reset_lifecycle_workspace!(workspace)
-    try
-        _index_lifecycle_representative_sites!(runtime, workspace)
-        _emit_lifecycle_requests!(runtime, plan, workspace)
-        _filter_lifecycle_requests!(runtime, plan, workspace)
-        _resolve_lifecycle_conflicts!(runtime, plan, workspace)
-        selected_count = _preflight_lifecycle_capacity!(runtime, plan, workspace)
-        iszero(selected_count) && return runtime
-        retired = _stage_lifecycle_transactions!(
-            runtime, plan, workspace, selected_count
-        )
-        _publish_lifecycle_transactions!(runtime, workspace, retired)
-        return runtime
-    catch error
-        translated = error isa AbstractLifecycleFailure ? error :
-            LifecycleBackendFailure(error)
-        _record_lifecycle_failure!(workspace, translated)
-        throw(translated)
-    end
+    _index_lifecycle_representative_sites!(runtime, workspace) || return false
+    _emit_lifecycle_requests!(runtime, plan, workspace) || return false
+    _filter_lifecycle_requests!(runtime, plan, workspace) || return false
+    _resolve_lifecycle_conflicts!(runtime, plan, workspace) || return false
+    selected_count = _preflight_lifecycle_capacity!(runtime, plan, workspace)
+    selected_count < 0 && return false
+    iszero(selected_count) && return true
+    retired = _stage_lifecycle_transactions!(
+        runtime, plan, workspace, selected_count
+    )
+    retired < 0 && return false
+    _publish_lifecycle_transactions!(runtime, workspace, retired)
+    return true
+end
+
+function _translate_lifecycle_status(status::LifecycleStatusPayload)
+    code = status.code
+    code === LifecycleStatusSuccess && return nothing
+    reason = _lifecycle_detail_symbol(status.detail)
+    code === LifecycleStatusInadmissible && return LifecycleInadmissibilityFailure(
+        status.source, status.anchor, reason
+    )
+    code === LifecycleStatusConflict && return LifecycleConflictFailure(
+        status.source, status.secondary_source, status.anchor
+    )
+    code === LifecycleStatusCellCapacity && return CellCapacityFailure(
+        status.maximum, status.required, status.available
+    )
+    code === LifecycleStatusRelationshipCapacity &&
+        return RelationshipCapacityFailure(status.source)
+    code === LifecycleStatusStaleGeneration &&
+        return StaleGenerationFailure(status.anchor)
+    code === LifecycleStatusGenerationOverflow &&
+        return GenerationOverflowFailure(status.anchor)
+    code === LifecycleStatusEvaluator && return LifecycleEvaluatorFailure(
+        status.source, status.anchor, reason
+    )
+    code === LifecycleStatusFootprint && return LifecycleFootprintFailure(
+        status.source, status.anchor, reason
+    )
+    code === LifecycleStatusInvariant && return LifecycleInvariantFailure(
+        status.source, status.anchor, reason
+    )
+    return LifecycleBackendFailure(nothing)
 end
 
 function execute_lifecycle!(runtime)
-    return _execute_lifecycle!(
-        runtime, runtime.program.lifecycle_plan, runtime.lifecycle_workspace
-    )
+    backend_error = nothing
+    succeeded = try
+        _execute_lifecycle_status!(
+            runtime, runtime.program.lifecycle_plan, runtime.lifecycle_workspace
+        )
+    catch error
+        backend_error = error
+        workspace = runtime.lifecycle_workspace
+        workspace isa LifecycleWorkspace && _set_lifecycle_status!(
+            workspace, LifecycleStatusBackend
+        )
+        false
+    end
+    backend_error === nothing || throw(LifecycleBackendFailure(backend_error))
+    succeeded && return runtime
+    failure = _translate_lifecycle_status(runtime.lifecycle_workspace.status)
+    failure === nothing && return runtime
+    throw(failure)
 end

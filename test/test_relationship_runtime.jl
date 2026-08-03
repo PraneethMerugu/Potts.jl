@@ -18,13 +18,13 @@ function Base.getindex(values::IncidentLocalGuardedVector, index::Int)
     return @inbounds values.values[index]
 end
 
-function _g5_relationship_fixture(engine; seed = UInt64(5), initial_edges = nothing)
-    @parameters g5_pair_weight = 1.25 g5_temperature = 1.5
-    cell = CellKind(:g5_external_pair_cell; extinction = RetireAtZero())
-    medium = MediumKind(:g5_external_pair_medium)
-    proposal = ProposalContext(:g5_external_pair_copy)
+function _relationship_fixture(engine; seed = UInt64(5), initial_edges = nothing)
+    @parameters fixture_pair_weight = 1.25 fixture_temperature = 1.5
+    cell = CellKind(:fixture_external_pair_cell; extinction = RetireAtZero())
+    medium = MediumKind(:fixture_external_pair_medium)
+    proposal = ProposalContext(:fixture_external_pair_copy)
     fixture = NeutralExternalTerms.bounded_pair_fixture(
-        cell, g5_pair_weight, proposal
+        cell, fixture_pair_weight, proposal
     )
     relationship = only(filter(
         statement -> statement isa RelationshipState,
@@ -39,9 +39,9 @@ function _g5_relationship_fixture(engine; seed = UInt64(5), initial_edges = noth
             cell,
             medium,
             fixture,
-            Protocol(Sweep(; temperature = g5_temperature); name = :main),
+            Protocol(Sweep(; temperature = fixture_temperature); name = :main),
         )),
-        parameters = [g5_pair_weight, g5_temperature],
+        parameters = [fixture_pair_weight, fixture_temperature],
     )
     completed = complete(model; registry = NeutralExternalTerms.registry())
     executable = compile(
@@ -64,8 +64,8 @@ function _g5_relationship_fixture(engine; seed = UInt64(5), initial_edges = noth
     return (; completed, executable, relationship, problem)
 end
 
-@testset "G5 generic relationship and lifecycle runtime" begin
-    fixture = _g5_relationship_fixture(
+@testset "generic relationship and lifecycle runtime" begin
+    fixture = _relationship_fixture(
         CheckerboardEngine(); seed = UInt64(1)
     )
     capabilities = inspect(fixture.completed, Capabilities())
@@ -132,7 +132,7 @@ end
     @test restored_relationships.degree == relationships.degree
     @test restored_relationships.incident_edges == relationships.incident_edges
 
-    lifecycle_fixture = _g5_relationship_fixture(
+    lifecycle_fixture = _relationship_fixture(
         CheckerboardEngine();
         seed = UInt64(6),
         initial_edges = [(

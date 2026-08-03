@@ -7,7 +7,7 @@ import CorePotts
 
 include("../fixtures/NeutralExternalTerms.jl")
 
-function _g2_external_site_model(count)
+function _external_site_model(count)
     @variables external_activity
     @parameters external_weight = 2.5
     endothelial = CellKind(:endothelial; extinction = RetireAtZero())
@@ -46,13 +46,13 @@ function _g2_external_site_model(count)
 end
 
 """
-    run_g2_descriptor_boundary(device_array, device_zeros; backend_name)
+    run_descriptor_boundary(device_array, device_zeros; backend_name)
 
-Run the shared G2 descriptor/state/workspace launch qualification against one
+Run the shared descriptor/state/workspace launch qualification against one
 backend adaptor. Vendor harnesses supply allocation only; the compiler,
 fixture, assertions, launch, and scientific expected value remain shared.
 """
-function run_g2_descriptor_boundary(
+function run_descriptor_boundary(
         device_array,
         device_zeros;
         backend_name::Symbol,
@@ -63,7 +63,7 @@ function run_g2_descriptor_boundary(
     ))
     executable = compile(
         complete(
-            _g2_external_site_model(descriptor_count);
+            _external_site_model(descriptor_count);
             registry = NeutralExternalTerms.registry(),
         );
         engine = SequentialEngine(),

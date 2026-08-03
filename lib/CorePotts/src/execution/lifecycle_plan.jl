@@ -65,6 +65,13 @@ end
     RedrawDaughtersLifecycleState = 0x0c
 end
 
+@enum LifecycleStateRoleCode::UInt8 begin
+    SourceLifecycleStateRole = 0x01
+    DestinationLifecycleStateRole = 0x02
+    ParentLifecycleStateRole = 0x03
+    DaughterLifecycleStateRole = 0x04
+end
+
 @enum LifecycleRoundingCode::UInt8 begin
     ExactLifecycleRounding = 0x00
     FloorLifecycleRounding = 0x01
@@ -83,6 +90,23 @@ end
 @enum LifecycleOwnershipAction::UInt8 begin
     PreserveLifecycleOwnershipState = 0x01
     ClearLifecycleOwnershipState = 0x02
+end
+
+"""Closed result category for fixed-capacity lifecycle placement policies."""
+abstract type AbstractLifecycleSiteSelection end
+
+"""Fixed-capacity, allocation-free result of a lifecycle placement policy."""
+struct LifecycleSiteSelection{M} <: AbstractLifecycleSiteSelection
+    sites::NTuple{M, Int32}
+    count::Int32
+    function LifecycleSiteSelection(
+            sites::NTuple{M, <:Integer}, count::Integer = M
+        ) where {M}
+        0 <= count <= M || throw(ArgumentError(
+            "lifecycle site-selection count must lie in 0:$M"
+        ))
+        return new{M}(Int32.(sites), Int32(count))
+    end
 end
 
 """Value-level reference into representation-banked lifecycle evaluators."""
@@ -155,6 +179,7 @@ end
 """One state-policy rule; state identity remains in the value-level handle."""
 struct LifecycleStateRule{H <: StateHandle, T <: AbstractFloat}
     handle::H
+    source_identity::UInt64
     action::LifecycleStateAction
     evaluator_a::Int32
     evaluator_b::Int32
@@ -272,6 +297,7 @@ struct LifecycleDescriptor{N, T <: AbstractFloat}
     replacement_medium::Int16
     placement::LifecyclePlacementCode
     placement_evaluator::Int32
+    placement_maximum::Int32
     stencil_offset::Int32
     stencil_count::Int32
     relation_slot::Int32
@@ -289,6 +315,10 @@ struct LifecycleDescriptor{N, T <: AbstractFloat}
     state_rule_count::Int32
     relationship_rule_offset::Int32
     relationship_rule_count::Int32
+    trigger_workspace_maximum::Int32
+    placement_workspace_maximum::Int32
+    partition_workspace_maximum::Int32
+    state_workspace_maximum::Int32
     compiler_synthesized::Bool
 end
 
@@ -315,6 +345,7 @@ struct LifecycleExecutionPlan{
     cell_capacity::Int32
     maximum_requests::Int32
     maximum_placement_sites::Int32
+    maximum_policy_workspace::Int32
     forbid_extinction::F
     fingerprint::String
 end
@@ -331,6 +362,7 @@ function LifecycleExecutionPlan(
         cell_capacity::Integer,
         maximum_requests::Integer,
         maximum_placement_sites::Integer,
+        maximum_policy_workspace::Integer,
         forbid_extinction::F,
         fingerprint::AbstractString,
     ) where {
@@ -356,6 +388,12 @@ function LifecycleExecutionPlan(
     ))
     maximum_placement_sites <= typemax(Int32) || throw(ArgumentError(
         "lifecycle placement-site bound exceeds Int32"
+    ))
+    maximum_policy_workspace >= 0 || throw(ArgumentError(
+        "lifecycle policy-workspace bound cannot be negative"
+    ))
+    maximum_policy_workspace <= typemax(Int32) || throw(ArgumentError(
+        "lifecycle policy-workspace bound exceeds Int32"
     ))
     length(forbid_extinction) > 0 || throw(ArgumentError(
         "lifecycle extinction table cannot be empty"
@@ -383,6 +421,7 @@ function LifecycleExecutionPlan(
         Int32(cell_capacity),
         Int32(maximum_requests),
         Int32(maximum_placement_sites),
+        Int32(maximum_policy_workspace),
         forbid_extinction,
         String(fingerprint),
     )
@@ -398,6 +437,7 @@ function lifecycle_plan_report(plan::LifecycleExecutionPlan)
         cell_capacity = plan.cell_capacity,
         maximum_requests = plan.maximum_requests,
         maximum_placement_sites = plan.maximum_placement_sites,
+        maximum_policy_workspace = plan.maximum_policy_workspace,
         conflict_policy = Symbol(string(plan.conflict_policy)),
         fingerprint = plan.fingerprint,
     )
@@ -412,6 +452,7 @@ lifecycle_plan_report(::NoLifecycleExecutionPlan) = (
     cell_capacity = 0,
     maximum_requests = 0,
     maximum_placement_sites = 0,
+    maximum_policy_workspace = 0,
     conflict_policy = :none,
     fingerprint = "none",
 )
@@ -459,6 +500,7 @@ Adapt.@adapt_structure LifecycleStateRuleSlot
 Adapt.@adapt_structure LifecycleStateRuleStorage
 Adapt.@adapt_structure LifecycleRelationshipRule
 Adapt.@adapt_structure LifecycleOwnershipRule
+Adapt.@adapt_structure LifecycleSiteSelection
 Adapt.@adapt_structure LifecycleDescriptor
 Adapt.@adapt_structure LifecycleExecutionPlan
 Adapt.@adapt_structure NoLifecycleExecutionPlan

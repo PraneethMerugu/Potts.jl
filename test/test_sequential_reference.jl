@@ -1,25 +1,25 @@
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("fixtures/NeutralExternalTerms.jl")
 
-struct G3CountingArray{T, N, A <: Array{T, N}} <: AbstractArray{T, N}
+struct CountingArray{T, N, A <: Array{T, N}} <: AbstractArray{T, N}
     data::A
     reads::Base.RefValue{Int}
 end
 
-G3CountingArray(data::Array{T, N}) where {T, N} =
-    G3CountingArray{T, N, typeof(data)}(data, Ref(0))
-Base.size(values::G3CountingArray) = size(values.data)
-Base.IndexStyle(::Type{<:G3CountingArray}) = IndexCartesian()
-@inline function Base.getindex(values::G3CountingArray, indices...)
+CountingArray(data::Array{T, N}) where {T, N} =
+    CountingArray{T, N, typeof(data)}(data, Ref(0))
+Base.size(values::CountingArray) = size(values.data)
+Base.IndexStyle(::Type{<:CountingArray}) = IndexCartesian()
+@inline function Base.getindex(values::CountingArray, indices...)
     values.reads[] += 1
     return @inbounds getindex(values.data, indices...)
 end
-@inline Base.setindex!(values::G3CountingArray, value, indices...) =
+@inline Base.setindex!(values::CountingArray, value, indices...) =
     @inbounds setindex!(values.data, value, indices...)
-Base.copy(values::G3CountingArray) =
-    G3CountingArray(copy(values.data), values.reads)
+Base.copy(values::CountingArray) =
+    CountingArray(copy(values.data), values.reads)
 
-function _g3_evaluate_proposal!(runtime, context)
+function _sequential_evaluate_proposal!(runtime, context)
     plan = runtime.program.descriptor_plan
     CorePotts.evaluate_proposal_contributions!(
         runtime.proposal_contributions, plan, context
@@ -29,7 +29,7 @@ function _g3_evaluate_proposal!(runtime, context)
     )
 end
 
-function _g3_scripted_attempt!(runtime, source, target, draw)
+function _sequential_scripted_attempt!(runtime, source, target, draw)
     return CorePotts._attempt_selected!(
         runtime,
         source,
@@ -41,33 +41,33 @@ function _g3_scripted_attempt!(runtime, source, target, draw)
     )
 end
 
-_g3_volumes(runtime) = CorePotts.program_tracker_values(
+_sequential_volumes(runtime) = CorePotts.program_tracker_values(
     runtime, Val(:cell_volume)
 )
 
-function _g3_role_model(; constraint = true, modifier = 0.25)
+function _sequential_role_model(; constraint = true, modifier = 0.25)
     @parameters weight = 3.0 drive = 0.5 temperature = 2.0
-    cell = CellKind(:g3_cell; extinction = RetireAtZero())
-    medium = MediumKind(:g3_medium)
-    anchor = SiteBinding(:g3_site)
-    proposal = ProposalContext(:g3_copy)
+    cell = CellKind(:sequential_cell; extinction = RetireAtZero())
+    medium = MediumKind(:sequential_medium)
+    anchor = SiteBinding(:sequential_site)
+    proposal = ProposalContext(:sequential_copy)
     @named model = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3); relations = (proposal = VonNeumann(),)),
             cell,
             medium,
             HamiltonianTerm(
-                :g3_site_energy;
+                :sequential_site_energy;
                 domain = sites(:lattice),
                 anchor,
                 expression = weight * occupancy(cell, anchor),
             ),
             ProposalDrive(
-                :g3_directional_drive,
+                :sequential_directional_drive,
                 ifelse(proposal.is_extension, drive, -drive),
             ),
-            ProposalConstraint(:g3_constraint, constraint),
-            ProposalModifier(:g3_modifier, modifier),
+            ProposalConstraint(:sequential_constraint, constraint),
+            ProposalModifier(:sequential_modifier, modifier),
             Protocol(Sweep(; temperature); name = :main),
         )),
         parameters = [weight, drive, temperature],
@@ -86,9 +86,9 @@ function _g3_role_model(; constraint = true, modifier = 0.25)
     return executable, initial
 end
 
-@testset "G3 descriptor-driven sequential reference" begin
+@testset "descriptor-driven sequential reference" begin
     @testset "scientific roles and acceptance seams" begin
-        executable, initial = _g3_role_model()
+        executable, initial = _sequential_role_model()
         problem = PottsProblem(executable, initial, (0, 1); seed = 0x301)
         runtime = init(problem).runtime
         context = CorePotts._ProposalEvaluationContext(
@@ -100,14 +100,14 @@ end
             1,
             0,
         )
-        evaluation = _g3_evaluate_proposal!(runtime, context)
+        evaluation = _sequential_evaluate_proposal!(runtime, context)
         @test evaluation == CorePotts.ProposalEvaluation(
             3.0, 0.5, 0.25, true
         )
-        _g3_evaluate_proposal!(runtime, context)
-        @test @allocated(_g3_evaluate_proposal!(runtime, context)) == 0
+        _sequential_evaluate_proposal!(runtime, context)
+        @test @allocated(_sequential_evaluate_proposal!(runtime, context)) == 0
         @test Core.Compiler.return_type(
-            _g3_evaluate_proposal!,
+            _sequential_evaluate_proposal!,
             Tuple{typeof(runtime), typeof(context)},
         ) === CorePotts.ProposalEvaluation{Float64}
 
@@ -174,7 +174,7 @@ end
 
         log_runtime = init(problem).runtime
         log_runtime.parameters .= (744.3, 0.0, 1.0)
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             log_runtime,
             CartesianIndex(2, 2),
             CartesianIndex(2, 3),
@@ -184,7 +184,7 @@ end
         @test log_runtime.energy_rejections == 0
 
         retirement_runtime = init(problem).runtime
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             retirement_runtime,
             CartesianIndex(2, 3),
             CartesianIndex(2, 2),
@@ -285,7 +285,7 @@ end
             1,
             0,
         )
-        act_evaluation = _g3_evaluate_proposal!(act_runtime, act_context)
+        act_evaluation = _sequential_evaluate_proposal!(act_runtime, act_context)
         @test act_evaluation.delta_h == 0.0
         @test act_evaluation.drive_energy ≈ -1.0
         @test act_evaluation.drive_log_bias == 0.0
@@ -305,7 +305,7 @@ end
             2,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             act_runtime, foreign_context
         ).drive_energy == 0.0
         retraction_context = CorePotts._ProposalEvaluationContext(
@@ -317,11 +317,11 @@ end
             3,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             act_runtime, retraction_context
         ).drive_energy == 0.0
-        _g3_evaluate_proposal!(act_runtime, act_context)
-        @test @allocated(_g3_evaluate_proposal!(
+        _sequential_evaluate_proposal!(act_runtime, act_context)
+        @test @allocated(_sequential_evaluate_proposal!(
             act_runtime, act_context
         )) == 0
 
@@ -388,7 +388,7 @@ end
             1,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             chemo_runtime, chemo_context
         ).drive_energy == -6.0
         chemo_foreign_context = CorePotts._ProposalEvaluationContext(
@@ -400,7 +400,7 @@ end
             2,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             chemo_runtime, chemo_foreign_context
         ).drive_energy == 0.0
         chemo_retraction_context = CorePotts._ProposalEvaluationContext(
@@ -412,11 +412,11 @@ end
             3,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             chemo_runtime, chemo_retraction_context
         ).drive_energy == 0.0
-        _g3_evaluate_proposal!(chemo_runtime, chemo_context)
-        @test @allocated(_g3_evaluate_proposal!(
+        _sequential_evaluate_proposal!(chemo_runtime, chemo_context)
+        @test @allocated(_sequential_evaluate_proposal!(
             chemo_runtime, chemo_context
         )) == 0
     end
@@ -486,7 +486,7 @@ end
         state_values = CorePotts.state_block(
             runtime.descriptor_state, state_handle
         ).values
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             runtime,
             CartesianIndex(2, 2),
             CartesianIndex(2, 3),
@@ -509,10 +509,10 @@ end
 
     @testset "complete finite one-attempt transition matrix" begin
         @parameters transition_weight = log(2.0) transition_temperature = 1.0
-        cell = CellKind(:g3_transition_cell; extinction = RetireAtZero())
-        medium = MediumKind(:g3_transition_medium)
-        anchor = SiteBinding(:g3_transition_site)
-        proposal = ProposalContext(:g3_transition_copy)
+        cell = CellKind(:sequential_transition_cell; extinction = RetireAtZero())
+        medium = MediumKind(:sequential_transition_medium)
+        anchor = SiteBinding(:sequential_transition_site)
+        proposal = ProposalContext(:sequential_transition_copy)
         @named transition_model = PottsSystem(
             statements = StatementSet((
                 Lattice(
@@ -523,13 +523,13 @@ end
                 cell,
                 medium,
                 HamiltonianTerm(
-                    :g3_transition_energy;
+                    :sequential_transition_energy;
                     domain = sites(:lattice),
                     anchor,
                     expression = transition_weight * occupancy(cell, anchor),
                 ),
                 ProposalConstraint(
-                    :g3_preserve_both_domains,
+                    :sequential_preserve_both_domains,
                     ifelse(
                         proposal.is_extension,
                         cell_volume(proposal.source_cell) < 2,
@@ -571,7 +571,7 @@ end
             for index in eachindex(runtime.ownership)
         )
         function tracker_matches(runtime)
-            volumes = _g3_volumes(runtime)
+            volumes = _sequential_volumes(runtime)
             return first(volumes) ==
                 count(==(Int32(1)), runtime.ownership) &&
                 all(iszero, @view volumes[2:end])
@@ -610,7 +610,7 @@ end
             target_index = CartesianIndex(target)
             if target_owner == source_owner
                 runtime = runtime_for(mask)
-                @test !_g3_scripted_attempt!(
+                @test !_sequential_scripted_attempt!(
                     runtime, source_index, target_index, 0.75
                 )
                 @test mask_of(runtime) == mask
@@ -622,7 +622,7 @@ end
             elseif source_owner == 1
                 allowed = count_ones(mask) < 2
                 accepted_runtime = runtime_for(mask)
-                @test _g3_scripted_attempt!(
+                @test _sequential_scripted_attempt!(
                     accepted_runtime,
                     source_index,
                     target_index,
@@ -637,7 +637,7 @@ end
                 @test accepted_runtime.rejected == Int(!allowed)
                 if allowed
                     rejected_runtime = runtime_for(mask)
-                    @test !_g3_scripted_attempt!(
+                    @test !_sequential_scripted_attempt!(
                         rejected_runtime, source_index, target_index, 0.5
                     )
                     @test mask_of(rejected_runtime) == mask
@@ -650,7 +650,7 @@ end
             else
                 runtime = runtime_for(mask)
                 allowed = count_ones(mask) > 1
-                @test _g3_scripted_attempt!(
+                @test _sequential_scripted_attempt!(
                     runtime, source_index, target_index, 0.75
                 ) == allowed
                 @test mask_of(runtime) == (allowed ?
@@ -724,7 +724,7 @@ end
             ),
         )
         for (branch_runtime, source, target, draw) in branch_cases
-            _g3_scripted_attempt!(branch_runtime, source, target, draw)
+            _sequential_scripted_attempt!(branch_runtime, source, target, draw)
             @test next_acceptance(branch_runtime) == reference_next_draw
         end
 
@@ -770,12 +770,12 @@ end
         allocation_runtime = runtime_for(1)
         source = CartesianIndex(1)
         target = CartesianIndex(2)
-        _g3_scripted_attempt!(allocation_runtime, source, target, 0.5)
+        _sequential_scripted_attempt!(allocation_runtime, source, target, 0.5)
         @test @allocated(
-            _g3_scripted_attempt!(allocation_runtime, source, target, 0.5)
+            _sequential_scripted_attempt!(allocation_runtime, source, target, 0.5)
         ) == 0
         @test Core.Compiler.return_type(
-            _g3_scripted_attempt!,
+            _sequential_scripted_attempt!,
             Tuple{
                 typeof(allocation_runtime),
                 typeof(source),
@@ -854,18 +854,18 @@ end
         function counted_external_proposal(shape)
             @variables counted_state
             @parameters counted_weight = 1.0
-            cell = CellKind(:g3_counted_cell; extinction = RetireAtZero())
-            medium = MediumKind(:g3_counted_medium)
-            anchor = SiteBinding(:g3_counted_anchor)
+            cell = CellKind(:sequential_counted_cell; extinction = RetireAtZero())
+            medium = MediumKind(:sequential_counted_medium)
+            anchor = SiteBinding(:sequential_counted_anchor)
             state = SiteState(
                 counted_state;
-                name = :g3_counted_state,
+                name = :sequential_counted_state,
                 initial = 1.0,
                 owner = cell,
                 lifecycle = PreserveOnOwnershipChange(),
             )
             term = NeutralExternalTerms.ExternalWeightedSiteTerm(
-                :g3_counted_energy,
+                :sequential_counted_energy,
                 counted_weight,
                 counted_state,
                 cell,
@@ -911,7 +911,7 @@ end
                 only(executable.core_program.descriptor_plan.groups).launch.state_handles
             )
             representation = CorePotts.handle_representation(handle)
-            counting = G3CountingArray(ones(Float64, shape))
+            counting = CountingArray(ones(Float64, shape))
             bank = CorePotts.BlockBank{
                 representation, typeof(counting),
             }(counting)
@@ -945,7 +945,7 @@ end
             ).values
             runtime_counting = parent(runtime_values)
             runtime_counting.reads[] = 0
-            evaluation = _g3_evaluate_proposal!(runtime, context)
+            evaluation = _sequential_evaluate_proposal!(runtime, context)
             return runtime_counting.reads[], evaluation
         end
 
@@ -957,7 +957,7 @@ end
     end
 
     @testset "constraint rejection is scientifically atomic" begin
-        executable, initial = _g3_role_model(; constraint = false, modifier = 0.0)
+        executable, initial = _sequential_role_model(; constraint = false, modifier = 0.0)
         problem = PottsProblem(executable, initial, (0, 3); seed = 0x302)
         initial_state = init(problem).u
         solution = solve(problem; save_everystep = true)
@@ -967,10 +967,10 @@ end
     end
 
     @testset "endpoint retirement is an ordinary compiled constraint" begin
-        cell = CellKind(:g3_linked_cell; extinction = RetireAtZero())
-        medium = MediumKind(:g3_linked_medium)
+        cell = CellKind(:sequential_linked_cell; extinction = RetireAtZero())
+        medium = MediumKind(:sequential_linked_medium)
         links = RelationshipState(
-            :g3_links;
+            :sequential_links;
             endpoints = Undirected(cell, cell),
             payload = (strength = 0.0, target = 1.0, maximum = 8.0),
             capacity = 8,
@@ -997,7 +997,7 @@ end
             statements(completed),
         ))
         @test Symbol(statement_id(derived)) ===
-              :__potts_endpoint_retirement_g3_links
+              :__potts_endpoint_retirement_sequential_links
         executable = compile(
             completed;
             engine = SequentialEngine(),
@@ -1051,22 +1051,22 @@ end
             1,
             0,
         )
-        linked_evaluation = _g3_evaluate_proposal!(
+        linked_evaluation = _sequential_evaluate_proposal!(
             linked_runtime, linked_context
         )
         @test !linked_evaluation.constraints_allowed
-        _g3_evaluate_proposal!(linked_runtime, linked_context)
+        _sequential_evaluate_proposal!(linked_runtime, linked_context)
         @test @allocated(
-            _g3_evaluate_proposal!(linked_runtime, linked_context)
+            _sequential_evaluate_proposal!(linked_runtime, linked_context)
         ) == 0
         before_ownership = copy(linked_runtime.ownership)
-        before_volumes = copy(_g3_volumes(linked_runtime))
+        before_volumes = copy(_sequential_volumes(linked_runtime))
         before_relationships = copy(only(linked_runtime.relationships))
-        @test !_g3_scripted_attempt!(
+        @test !_sequential_scripted_attempt!(
             linked_runtime, source, target, 0.5
         )
         @test linked_runtime.ownership == before_ownership
-        @test _g3_volumes(linked_runtime) == before_volumes
+        @test _sequential_volumes(linked_runtime) == before_volumes
         linked_relationships = only(linked_runtime.relationships)
         @test linked_relationships.active == before_relationships.active
         @test linked_relationships.endpoint_a ==
@@ -1092,33 +1092,33 @@ end
             1,
             0,
         )
-        @test _g3_evaluate_proposal!(
+        @test _sequential_evaluate_proposal!(
             unlinked_runtime, unlinked_context
         ).constraints_allowed
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             unlinked_runtime, source, target, 0.5
         )
         @test unlinked_runtime.ownership[target] == 0
-        @test _g3_volumes(unlinked_runtime)[1] == 0
+        @test _sequential_volumes(unlinked_runtime)[1] == 0
     end
 
     @testset "neutral external term uses public solve and checkpoint" begin
-        @variables g3_external_state
-        @parameters g3_external_weight = 1.25 temperature = 1.5
-        cell = CellKind(:g3_external_cell; extinction = RetireAtZero())
-        medium = MediumKind(:g3_external_medium)
-        anchor = SiteBinding(:g3_external_anchor)
+        @variables sequential_external_state
+        @parameters sequential_external_weight = 1.25 temperature = 1.5
+        cell = CellKind(:sequential_external_cell; extinction = RetireAtZero())
+        medium = MediumKind(:sequential_external_medium)
+        anchor = SiteBinding(:sequential_external_anchor)
         state = SiteState(
-            g3_external_state;
-            name = :g3_external_state,
+            sequential_external_state;
+            name = :sequential_external_state,
             initial = 1.0,
             owner = cell,
             lifecycle = PreserveOnOwnershipChange(),
         )
         term = NeutralExternalTerms.ExternalWeightedSiteTerm(
-            :g3_external_energy,
-            g3_external_weight,
-            g3_external_state,
+            :sequential_external_energy,
+            sequential_external_weight,
+            sequential_external_state,
             cell,
             anchor,
         )
@@ -1129,11 +1129,11 @@ end
                 medium,
                 state,
                 term,
-                Observation(:g3_external_state_snapshot, g3_external_state),
+                Observation(:sequential_external_state_snapshot, sequential_external_state),
                 Protocol(Sweep(; temperature); name = :main),
             )),
-            unknowns = [g3_external_state],
-            parameters = [g3_external_weight, temperature],
+            unknowns = [sequential_external_state],
+            parameters = [sequential_external_weight, temperature],
         )
         executable = compile(
             complete(model; registry = NeutralExternalTerms.registry());
@@ -1146,13 +1146,13 @@ end
         initial_values = reshape(collect(1.0:16.0), 4, 4)
         initial = PottsInitialState(
             ownership = LabelledCells(labels; cells = [cell], medium),
-            values = [g3_external_state => initial_values],
+            values = [sequential_external_state => initial_values],
         )
         problem = PottsProblem(executable, initial, (0, 3); seed = 0x303)
         uninterrupted = init(
             problem;
             save_everystep = true,
-            observables = (:g3_external_state_snapshot,),
+            observables = (:sequential_external_state_snapshot,),
         )
         step!(uninterrupted)
         saved = checkpoint(uninterrupted)
@@ -1161,19 +1161,19 @@ end
             problem;
             checkpoint = saved,
             save_everystep = true,
-            observables = (:g3_external_state_snapshot,),
+            observables = (:sequential_external_state_snapshot,),
         )
         continued_final = last(continued.u)
         resumed_final = last(resumed.u)
         @test continued_final.ownership == resumed_final.ownership
         @test continued_final.cell_kinds == resumed_final.cell_kinds
         @test continued_final.volumes == resumed_final.volumes
-        @test continued_final[:g3_external_state] ==
-              resumed_final[:g3_external_state]
-        @test continued_final[:g3_external_state_snapshot] ==
-              continued_final[:g3_external_state]
-        @test resumed_final[:g3_external_state_snapshot] ==
-              resumed_final[:g3_external_state]
+        @test continued_final[:sequential_external_state] ==
+              resumed_final[:sequential_external_state]
+        @test continued_final[:sequential_external_state_snapshot] ==
+              continued_final[:sequential_external_state]
+        @test resumed_final[:sequential_external_state_snapshot] ==
+              resumed_final[:sequential_external_state]
         @test continued.stats.accepted == resumed.stats.accepted
         @test continued.stats.rejected == resumed.stats.rejected
         @test continued.stats.null_attempts == resumed.stats.null_attempts
@@ -1197,9 +1197,9 @@ end
 
     @testset "external relationship policy uses generic topology effects" begin
         @parameters pair_weight = 1.25 temperature = 1.5
-        cell = CellKind(:g3_external_pair_cell; extinction = RetireAtZero())
-        medium = MediumKind(:g3_external_pair_medium)
-        proposal = ProposalContext(:g3_external_pair_copy)
+        cell = CellKind(:sequential_external_pair_cell; extinction = RetireAtZero())
+        medium = MediumKind(:sequential_external_pair_medium)
+        proposal = ProposalContext(:sequential_external_pair_copy)
         fixture = NeutralExternalTerms.bounded_pair_fixture(
             cell, pair_weight, proposal
         )
@@ -1207,7 +1207,7 @@ end
             statement -> statement isa RelationshipState,
             collect(fixture),
         ))
-        retune_edge = RelationshipBinding(:g3_retune_edge, relationship)
+        retune_edge = RelationshipBinding(:sequential_retune_edge, relationship)
         retune_process = LifecycleProcess(
             :retune_neutral_pairs;
             domain = edges(relationship),
@@ -1322,7 +1322,7 @@ end
             CorePotts._emit_accepted_copy_stage!,
             Tuple{typeof(runtime), typeof(create_context)},
         ) === typeof(runtime.stage_buffers.accepted_copy)
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             runtime, source, target, 0.5
         )
         runtime_relationships = only(runtime.relationships)
@@ -1388,11 +1388,11 @@ end
 
     @testset "multiple relationship stores remain independently addressable" begin
         @parameters multi_weight = 1.5 multi_temperature = 2.0
-        cell = CellKind(:g3_multi_cell; extinction = RetireAtZero())
-        medium = MediumKind(:g3_multi_medium)
-        proposal = ProposalContext(:g3_multi_copy)
+        cell = CellKind(:sequential_multi_cell; extinction = RetireAtZero())
+        medium = MediumKind(:sequential_multi_medium)
+        proposal = ProposalContext(:sequential_multi_copy)
         score_links = RelationshipState(
-            :g3_score_links;
+            :sequential_score_links;
             endpoints = Undirected(cell, cell),
             payload = (score = multi_weight,),
             capacity = 4,
@@ -1400,7 +1400,7 @@ end
             lifecycle = RemoveWithEndpoint(),
         )
         elastic_links = RelationshipState(
-            :g3_elastic_links;
+            :sequential_elastic_links;
             endpoints = Undirected(cell, cell),
             payload = (
                 stiffness = multi_weight,
@@ -1410,9 +1410,9 @@ end
             maximum_degree = 3,
             lifecycle = RemoveWithEndpoint(),
         )
-        score_edge = RelationshipBinding(:g3_multi_score_edge, score_links)
+        score_edge = RelationshipBinding(:sequential_multi_score_edge, score_links)
         retune_score = LifecycleProcess(
-            :g3_multi_retune_score;
+            :sequential_multi_retune_score;
             domain = edges(score_links),
             expression = score_edge.score > zero(multi_weight),
             effects = (Retune(
@@ -1465,8 +1465,8 @@ end
                     ),
                 ),
                 retune_score,
-                Observation(:g3_score_degree, degree(score_links, 1)),
-                Observation(:g3_elastic_degree, degree(elastic_links, 1)),
+                Observation(:sequential_score_degree, degree(score_links, 1)),
+                Observation(:sequential_elastic_degree, degree(elastic_links, 1)),
                 Protocol(Sweep(; temperature = multi_temperature); name = :main),
             )),
             parameters = [multi_weight, multi_temperature],
@@ -1481,7 +1481,7 @@ end
         @test length(executable.reports.relationship_states) == 2
         @test Tuple(
             entry.name for entry in executable.reports.relationship_states
-        ) == (:g3_elastic_links, :g3_score_links)
+        ) == (:sequential_elastic_links, :sequential_score_links)
         create_descriptors = [
             descriptor
             for group in executable.core_program.stage_plan.accepted_copy
@@ -1564,7 +1564,7 @@ end
             CorePotts._emit_accepted_copy_stage!,
             Tuple{typeof(integrator.runtime), typeof(create_context)},
         ) === typeof(integrator.runtime.stage_buffers.accepted_copy)
-        @test _g3_scripted_attempt!(
+        @test _sequential_scripted_attempt!(
             integrator.runtime, source, target, 0.5
         )
         elastic_state, score_state = integrator.runtime.relationships
@@ -1584,10 +1584,10 @@ end
             problem;
             checkpoint = saved,
             save_start = false,
-            observables = (:g3_score_degree, :g3_elastic_degree),
+            observables = (:sequential_score_degree, :sequential_elastic_degree),
         )
-        @test resumed.u[:g3_score_degree] == 1
-        @test resumed.u[:g3_elastic_degree] == 1
+        @test resumed.u[:sequential_score_degree] == 1
+        @test resumed.u[:sequential_elastic_degree] == 1
         @test resumed.runtime.relationships[1].payload == elastic_state.payload
         @test resumed.runtime.relationships[2].payload == score_state.payload
         @test resumed.runtime.relationships[1].active == elastic_state.active

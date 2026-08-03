@@ -210,7 +210,7 @@ canonical_value(fixture, occurrence, context) = _canonical_value(
     )
 
 # ---------------------------------------------------------------------------
-# The R1 operation-execution decision: tag baseline versus callable hybrid.
+# The operation-execution decision: tag baseline versus callable hybrid.
 
 struct TagExecution end
 struct CallableExecution end

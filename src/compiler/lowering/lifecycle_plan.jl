@@ -25,6 +25,18 @@ function _next_lifecycle_root!(cursor::_LifecycleRootCursor, role::Symbol)
     return values[position]
 end
 
+function _next_lifecycle_abi(
+        cursor::_LifecycleRootCursor, ir::AnalyzedTermIR, role::Symbol
+    )
+    values = get(cursor.roots, role, Int32[])
+    position = get(cursor.positions, role, 0) + 1
+    position <= length(values) || throw(ArgumentError(
+        "normalized lifecycle root `$role` is missing at occurrence $position"
+    ))
+    transfer = ir.graph.nodes[Int(values[position])].transfer
+    return transfer === nothing ? nothing : transfer.lifecycle_abi
+end
+
 function _lifecycle_context_type(role::Symbol)
     role === :lifecycle_trigger &&
         return CorePotts.AbstractLifecycleTriggerEvaluationContext
@@ -35,6 +47,15 @@ function _lifecycle_context_type(role::Symbol)
     role === :lifecycle_state_transform &&
         return CorePotts.AbstractLifecycleStateTransformEvaluationContext
     throw(ArgumentError("unsupported lifecycle evaluator role `$role`"))
+end
+
+function _lifecycle_role_workspace_maximum(fact, role::Symbol)
+    maxima = Int[
+        item.abi.workspace_maximum
+        for item in fact.operation_abis
+        if item.role === role && item.abi !== nothing
+    ]
+    return isempty(maxima) ? 0 : maximum(maxima)
 end
 
 function _lifecycle_evaluator!(
@@ -214,6 +235,10 @@ function _lifecycle_state_rule!(
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     handle = _stage_state_handle(ir, record, target, state_handles)
+    state_record = _resource_record(ir.source, record, :CellState, target)
+    state_record === nothing && throw(ArgumentError(
+        "lifecycle state rule does not resolve to a CellState"
+    ))
     action = CorePotts.UnsupportedLifecycleState
     evaluator_a = Int32(0)
     evaluator_b = Int32(0)
@@ -321,6 +346,7 @@ function _lifecycle_state_rule!(
     end
     push!(rules, CorePotts.LifecycleStateRule(
         handle,
+        _lifecycle_hash64(state_record.identity),
         action,
         evaluator_a,
         evaluator_b,
@@ -433,6 +459,7 @@ function _lower_lifecycle_plan(
         length(arguments.effects) == 1 || continue
         effect = only(arguments.effects)
         _cell_lifecycle_effect(effect) || continue
+        fact = facts_by_source[record.identity]
         cursor = _LifecycleRootCursor(ir, record_index)
         trigger = _lifecycle_evaluator!(
             evaluators,
@@ -462,6 +489,7 @@ function _lower_lifecycle_plan(
             _lifecycle_kind_index(ir, record, effect.replacement) : Int16(0)
         placement = CorePotts.NoLifecyclePlacement
         placement_evaluator = Int32(0)
+        placement_maximum = Int32(1)
         stencil_offset = Int32(length(stencil_offsets) + 1)
         stencil_count = Int32(0)
         relation_slot = Int32(0)
@@ -489,11 +517,21 @@ function _lower_lifecycle_plan(
                     ))
                 end
                 stencil_count = Int32(length(effect.placement.offsets))
+                placement_maximum = stencil_count
                 relation_slot = _lifecycle_relation!(
                     relations, ir, record, effect.placement.relation
                 )
             else
                 placement = CorePotts.ExternalLifecyclePlacement
+                abi = _next_lifecycle_abi(
+                    cursor, ir, :lifecycle_placement
+                )
+                abi !== nothing && abi.role === :placement || throw(
+                    ArgumentError(
+                        "external lifecycle placement has no frozen placement ABI"
+                    )
+                )
+                placement_maximum = Int32(abi.emission_maximum)
                 placement_evaluator = _lifecycle_evaluator!(
                     evaluators, ir, record_index, :lifecycle_placement,
                     effect.placement, cursor, manifest, T, state_handles, draw_handles,
@@ -596,6 +634,7 @@ function _lower_lifecycle_plan(
             destination_kind,
             replacement_medium,
             placement,
+            placement_maximum,
             stencil_count,
             relation_slot,
             partition,
@@ -607,6 +646,12 @@ function _lower_lifecycle_plan(
             daughter_kind,
             Tuple(state_rules[Int(state_offset):end]),
             Tuple(relationship_rules[Int(relationship_offset):end]),
+            _lifecycle_role_workspace_maximum(fact, :lifecycle_trigger),
+            _lifecycle_role_workspace_maximum(fact, :lifecycle_placement),
+            _lifecycle_role_workspace_maximum(fact, :lifecycle_partition),
+            _lifecycle_role_workspace_maximum(
+                fact, :lifecycle_state_transform
+            ),
             effect.priority,
             nameof(typeof(effect.on_inadmissible)),
         ))
@@ -627,6 +672,7 @@ function _lower_lifecycle_plan(
             replacement_medium,
             placement,
             placement_evaluator,
+            placement_maximum,
             stencil_offset,
             stencil_count,
             relation_slot,
@@ -644,6 +690,18 @@ function _lower_lifecycle_plan(
             Int32(length(state_rules) - Int(state_offset) + 1),
             relationship_offset,
             Int32(length(relationship_rules) - Int(relationship_offset) + 1),
+            Int32(_lifecycle_role_workspace_maximum(
+                fact, :lifecycle_trigger
+            )),
+            Int32(_lifecycle_role_workspace_maximum(
+                fact, :lifecycle_placement
+            )),
+            Int32(_lifecycle_role_workspace_maximum(
+                fact, :lifecycle_partition
+            )),
+            Int32(_lifecycle_role_workspace_maximum(
+                fact, :lifecycle_state_transform
+            )),
             get(options, :compiler_synthesized, nothing) !== nothing,
         ))
     end
@@ -673,9 +731,19 @@ function _lower_lifecycle_plan(
         init = 0,
     )
     maximum_placement_sites = maximum(
-        descriptor -> max(1, Int(descriptor.stencil_count)),
+        descriptor -> max(1, Int(descriptor.placement_maximum)),
         descriptors;
         init = 1,
+    )
+    maximum_policy_workspace = maximum(
+        descriptor -> maximum(Int.((
+            descriptor.trigger_workspace_maximum,
+            descriptor.placement_workspace_maximum,
+            descriptor.partition_workspace_maximum,
+            descriptor.state_workspace_maximum,
+        ))),
+        descriptors;
+        init = 0,
     )
     fingerprint = _sha256_hex(
         "potts-lifecycle-plan-v1",
@@ -711,6 +779,7 @@ function _lower_lifecycle_plan(
         cell_capacity,
         maximum_requests,
         maximum_placement_sites,
+        maximum_policy_workspace,
         forbid_extinction,
         fingerprint,
     )

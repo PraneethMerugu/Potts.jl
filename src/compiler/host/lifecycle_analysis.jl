@@ -224,6 +224,37 @@ function _require_external_policy_abi!(record, graph, roots, role, expected)
     ))
 end
 
+function _require_contextual_lifecycle_abis!(record, graph, roots)
+    expected_roles = (
+        lifecycle_trigger = :trigger,
+        lifecycle_placement = :placement,
+        lifecycle_partition = :binary_partition,
+        lifecycle_state_transform = :state_transform,
+    )
+    for root in roots
+        node = graph.nodes[Int(root.node)]
+        transfer = node.transfer
+        transfer === nothing && continue
+        transfer.required_context === root.role || continue
+        expected = getproperty(expected_roles, root.role)
+        abi = transfer.lifecycle_abi
+        abi !== nothing && abi.role === expected || throw(PottsValidationError(
+            :analysis,
+            (PottsDiagnostic(
+                :missing_lifecycle_policy_abi,
+                record.identity,
+                String(root.role),
+                record.identity.path,
+                "LifecycleOperationABI($(repr(expected))) on every contextual lifecycle root",
+                "operation $(node.operation) has no matching frozen lifecycle ABI",
+                (),
+                record.source,
+            ),),
+        ))
+    end
+    return nothing
+end
+
 function _validate_lifecycle_root_results!(record, graph, facts, roots)
     for root in roots
         index = Int(root.node)
@@ -256,7 +287,21 @@ function _validate_lifecycle_root_results!(record, graph, facts, roots)
                     record.source,
                 ),),
             ))
-        elseif root.role in (:lifecycle_placement, :lifecycle_partition)
+        elseif root.role === :lifecycle_placement
+            type <: CorePotts.AbstractLifecycleSiteSelection || throw(PottsValidationError(
+                :analysis,
+                (PottsDiagnostic(
+                    :invalid_lifecycle_policy_result,
+                    record.identity,
+                    String(root.role),
+                    record.identity.path,
+                    "a bounded lifecycle site-selection result",
+                    string(type),
+                    (),
+                    record.source,
+                ),),
+            ))
+        elseif root.role === :lifecycle_partition
             type <: Integer || throw(PottsValidationError(
                 :analysis,
                 (PottsDiagnostic(
@@ -264,7 +309,7 @@ function _validate_lifecycle_root_results!(record, graph, facts, roots)
                     record.identity,
                     String(root.role),
                     record.identity.path,
-                    "an integer site or region-label result",
+                    "an integer region-label result",
                     string(type),
                     (),
                     record.source,
@@ -380,6 +425,7 @@ function _analyze_lifecycle_records(source, graph, facts)
         _cell_lifecycle_effect(effect) || continue
         roots = _lifecycle_role_roots(graph, Int32(record_index))
         _validate_lifecycle_root_results!(record, graph, facts, roots)
+        _require_contextual_lifecycle_abis!(record, graph, roots)
         if effect isa CreateCell &&
                 !(effect.placement isa AbstractLifecyclePlacementPolicy)
             _require_external_policy_abi!(

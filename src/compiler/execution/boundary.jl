@@ -34,34 +34,9 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
 end
 
 function _workspace_report(program::CorePotts.CompiledPottsProgram)
-    lifecycle = if program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan
-        plan = program.lifecycle_plan
-        (
-            fixed_capacity = true,
-            cell_capacity = Int(plan.cell_capacity),
-            request_capacity = Int(plan.maximum_requests),
-            placement_capacity = Int(plan.maximum_placement_sites),
-            request_slots = Int(plan.maximum_requests),
-            planned_site_slots =
-                Int(plan.maximum_requests) * Int(plan.maximum_placement_sites),
-            partition_label_slots =
-                Int(plan.maximum_requests) * prod(program.shape),
-            free_cell_slots = Int(plan.cell_capacity),
-            resizes_during_execution = false,
-        )
-    else
-        (
-            fixed_capacity = true,
-            cell_capacity = 0,
-            request_capacity = 0,
-            placement_capacity = 0,
-            request_slots = 0,
-            planned_site_slots = 0,
-            partition_label_slots = 0,
-            free_cell_slots = 0,
-            resizes_during_execution = false,
-        )
-    end
+    lifecycle = CorePotts.lifecycle_workspace_layout(
+        program.lifecycle_plan, prod(program.shape)
+    )
     return (
         stage_site_scratch = sum((
             1

@@ -5,8 +5,8 @@ using Symbolics
 using InteractiveUtils
 import CorePotts
 
-include("../test/fixtures/G2SpecializationFixtures.jl")
-using .G2SpecializationFixtures
+include("../test/fixtures/DescriptorSpecializationFixtures.jl")
+using .DescriptorSpecializationFixtures
 include("../test/fixtures/NeutralExternalTerms.jl")
 using .NeutralExternalTerms
 
@@ -127,11 +127,11 @@ function compile_external_model(count::Integer)
     )
 end
 
-@testset "G2 full specialization-growth qualification" begin
-    one = G2SpecializationFixtures.compile_direct_model(1)
-    many = G2SpecializationFixtures.compile_direct_model(32)
-    stress = G2SpecializationFixtures.compile_direct_model(1024)
-    parameter_only = G2SpecializationFixtures.compile_direct_model(
+@testset "full specialization-growth qualification" begin
+    one = DescriptorSpecializationFixtures.compile_direct_model(1)
+    many = DescriptorSpecializationFixtures.compile_direct_model(32)
+    stress = DescriptorSpecializationFixtures.compile_direct_model(1024)
+    parameter_only = DescriptorSpecializationFixtures.compile_direct_model(
         32;
         weight_default = 7.0,
     )

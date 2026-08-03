@@ -25,6 +25,6 @@ evaluation, adaptation, grouping, source ownership, or resource selection. Hamil
 resources and auxiliary-state banks are explicit plan/runtime values and are required at plan
 construction.
 
-`program/v1.jl` is the surviving pre-consolidation runtime. G2 must not add generic symbolic
-execution to that file; G3 integrates the cleared descriptor boundary, and G8 removes the legacy
-mechanism-specific structures.
+`program/v1.jl` is the surviving pre-consolidation runtime. Generic symbolic execution belongs in
+the descriptor boundary, and the legacy mechanism-specific structures are removed only after the
+replacement passes the accepted compiler and execution gates.

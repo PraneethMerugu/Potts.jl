@@ -706,6 +706,8 @@ function _analyze_term_graph(
             Bool
         elseif transfer.result_rule === :integer
             Int
+        elseif transfer.result_rule === :site_selection
+            CorePotts.AbstractLifecycleSiteSelection
         elseif transfer.result_rule === :branch_promote && length(operand_indices) == 3
             promote_type(
                 result_type[operand_indices[2]],

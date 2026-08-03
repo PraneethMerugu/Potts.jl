@@ -1,28 +1,28 @@
-struct R1AdversarialPayload end
+struct AdversarialPayload end
 
-struct R1StaticOverrideOperation end
-@inline (::R1StaticOverrideOperation)(value) = value
+struct StaticOverrideOperation end
+@inline (::StaticOverrideOperation)(value) = value
 
-const R1StaticOverrideExpression = CorePotts.OperationExpression{
-    R1StaticOverrideOperation,
+const StaticOverrideExpression = CorePotts.OperationExpression{
+    StaticOverrideOperation,
     Tuple{CorePotts.LiteralExpression{Float64}},
 }
 
-@inline _r1_override_value(context, value) =
+@inline _boundary_override_value(context, value) =
     context isa CorePotts.HamiltonianEvaluationContext &&
     context.view isa CorePotts.AfterProposalView ? value : 0.0
 
 @inline CorePotts.evaluate_static(
-    ::CorePotts.StaticEvaluator{R1StaticOverrideExpression}, context
-) = _r1_override_value(context, 12345.0)
+    ::CorePotts.StaticEvaluator{StaticOverrideExpression}, context
+) = _boundary_override_value(context, 12345.0)
 
 @inline CorePotts.evaluate_expression(
-    ::R1StaticOverrideExpression, context
-) = _r1_override_value(context, 23456.0)
+    ::StaticOverrideExpression, context
+) = _boundary_override_value(context, 23456.0)
 
 @inline CorePotts.execute_operation(
-    ::R1StaticOverrideOperation, arguments::Tuple, context
-) = _r1_override_value(context, 34567.0)
+    ::StaticOverrideOperation, arguments::Tuple, context
+) = _boundary_override_value(context, 34567.0)
 
 @testset "relationship composition and endpoint contracts" begin
     relationship_a = CellKind(:a; extinction = RetireAtZero())
@@ -172,29 +172,29 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
     ))
 end
 
-struct R1PoisonedParameters <: AbstractVector{Float64}
+struct PoisonedParameters <: AbstractVector{Float64}
     values::Vector{Float64}
 end
 
-Base.IndexStyle(::Type{R1PoisonedParameters}) = IndexLinear()
-Base.size(parameters::R1PoisonedParameters) = size(parameters.values)
-Base.getindex(parameters::R1PoisonedParameters, index::Int) =
+Base.IndexStyle(::Type{PoisonedParameters}) = IndexLinear()
+Base.size(parameters::PoisonedParameters) = size(parameters.values)
+Base.getindex(parameters::PoisonedParameters, index::Int) =
     parameters.values[index]
 
 @inline CorePotts.evaluator_parameters(
-    context::CorePotts.EvaluatorProbeContext{R1PoisonedParameters, V, S, W}
+    context::CorePotts.EvaluatorProbeContext{PoisonedParameters, V, S, W}
 ) where {V, S, W} = fill(-1.0, length(context.parameters))
 
 function CorePotts.descriptor_adapt(
         to,
         ::CorePotts.ProposalDescriptor{
-            E, A, S, H, W, R, R1AdversarialPayload,
+            E, A, S, H, W, R, AdversarialPayload,
         },
     ) where {E, A, S, H, W, R}
     error("extension-owned descriptor adaptation entered production")
 end
 
-@inline function _r1_descriptor_delta(descriptor, context)
+@inline function _boundary_descriptor_delta(descriptor, context)
     return CorePotts._compiled_hamiltonian_delta(
         descriptor.evaluator,
         descriptor.role,
@@ -203,7 +203,7 @@ end
     )
 end
 
-function _r1_runtime(executable, ownership, cell_kinds; relationships = ())
+function _boundary_runtime(executable, ownership, cell_kinds; relationships = ())
     initial = CorePotts.ProgramInitialState(
         ownership,
         cell_kinds;
@@ -219,7 +219,7 @@ function _r1_runtime(executable, ownership, cell_kinds; relationships = ())
     )
 end
 
-function _r1_proposal_context(runtime, source, target, attempt = 1)
+function _boundary_proposal_context(runtime, source, target, attempt = 1)
     return CorePotts._ProposalEvaluationContext(
         runtime,
         source,
@@ -231,7 +231,7 @@ function _r1_proposal_context(runtime, source, target, attempt = 1)
     )
 end
 
-@testset "repaired G2 R1 adversarial boundaries" begin
+@testset "repaired compiler adversarial boundaries" begin
     @testset "contact Hamiltonians consume their bound relation" begin
         cell = CellKind(:relation_cell; extinction = RetireAtZero())
         medium = MediumKind(:relation_medium)
@@ -259,8 +259,8 @@ end
         )
         ownership = zeros(Int32, 5, 5)
         ownership[3, 3] = 1
-        runtime = _r1_runtime(executable, ownership, Int16[2])
-        context = _r1_proposal_context(
+        runtime = _boundary_runtime(executable, ownership, Int16[2])
+        context = _boundary_proposal_context(
             runtime, CartesianIndex(3, 3), CartesianIndex(3, 4)
         )
         plan = executable.core_program.descriptor_plan
@@ -388,7 +388,7 @@ end
             original.workspace_handles,
             original.role,
             original.source_handle,
-            R1AdversarialPayload(),
+            AdversarialPayload(),
         )
         groups = PottsToolkit._descriptor_groups([adversarial])
         adapted = CorePotts.adapt_descriptor_launch(
@@ -407,8 +407,8 @@ end
         )
         ownership = zeros(Int32, 3, 3)
         ownership[2, 2] = 1
-        runtime = _r1_runtime(executable, ownership, Int16[2])
-        context = _r1_proposal_context(
+        runtime = _boundary_runtime(executable, ownership, Int16[2])
+        context = _boundary_proposal_context(
             runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
         )
         contributions = zeros(Float64, length(adversarial_plan.source_table))
@@ -446,8 +446,8 @@ end
         )
         ownership = zeros(Int32, 3, 3)
         ownership[2, 2] = 1
-        runtime = _r1_runtime(executable, ownership, Int16[2])
-        proposal = _r1_proposal_context(
+        runtime = _boundary_runtime(executable, ownership, Int16[2])
+        proposal = _boundary_proposal_context(
             runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
         )
         role = only(only(
@@ -455,7 +455,7 @@ end
         ).launch.instances).role
         evaluator = CorePotts.StaticEvaluator(
             CorePotts.OperationExpression(
-                R1StaticOverrideOperation(),
+                StaticOverrideOperation(),
                 CorePotts.LiteralExpression(5.0),
             ),
         )
@@ -483,7 +483,7 @@ end
             evaluator.expression, after_context
         ) == 23456.0
         @test CorePotts.execute_operation(
-            R1StaticOverrideOperation(), (5.0,), after_context
+            StaticOverrideOperation(), (5.0,), after_context
         ) == 34567.0
         @test CorePotts._compiled_hamiltonian_delta(
             evaluator,
@@ -543,15 +543,15 @@ end
         ])
         ownership = zeros(Int32, 3, 3)
         ownership[2, 2] = 1
-        runtime = _r1_runtime(executable, ownership, Int16[2])
-        proposal = _r1_proposal_context(
+        runtime = _boundary_runtime(executable, ownership, Int16[2])
+        proposal = _boundary_proposal_context(
             runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
         )
-        @test _r1_descriptor_delta(descriptor, proposal) == 5.0
+        @test _boundary_descriptor_delta(descriptor, proposal) == 5.0
 
         constraint = only(only(plan.constraints).instances)
         public_probe = CorePotts.EvaluatorProbeContext(
-            R1PoisonedParameters(Float64[5.0, 2.0]), NamedTuple()
+            PoisonedParameters(Float64[5.0, 2.0]), NamedTuple()
         )
         @test CorePotts.evaluate_static(
             constraint.evaluator, public_probe
@@ -579,14 +579,14 @@ end
         )
         ownership = zeros(Int32, 3, 3)
         ownership[2, 2] = 1
-        runtime = _r1_runtime(executable, ownership, Int16[2])
-        context = _r1_proposal_context(
+        runtime = _boundary_runtime(executable, ownership, Int16[2])
+        context = _boundary_proposal_context(
             runtime, CartesianIndex(1, 2), CartesianIndex(2, 2)
         )
         descriptor = only(only(
             executable.core_program.descriptor_plan.groups
         ).launch.instances)
-        @test _r1_descriptor_delta(descriptor, context) == -3.0
+        @test _boundary_descriptor_delta(descriptor, context) == -3.0
     end
 
     @testset "relationship energies are total at endpoint extinction" begin
@@ -649,11 +649,11 @@ end
             for descriptor in group.launch.instances
             if descriptor.role isa CorePotts.HamiltonianRole
         ])
-        context = _r1_proposal_context(
+        context = _boundary_proposal_context(
             runtime, CartesianIndex(1, 2), CartesianIndex(2, 2)
         )
         before_energy = 2.0 * (2.0 - 1.0)^2
-        @test _r1_descriptor_delta(descriptor, context) == -before_energy
+        @test _boundary_descriptor_delta(descriptor, context) == -before_energy
         @test size(only(runtime.relationships).incident_edges) ==
             (2, length(runtime.cell_kinds))
         @test only(runtime.relationships).degree[1:2] == Int16[1, 1]
@@ -718,7 +718,7 @@ end
         descriptor = only(only(
             executable.core_program.descriptor_plan.groups
         ).launch.instances)
-        context = _r1_proposal_context(
+        context = _boundary_proposal_context(
             runtime, CartesianIndex(4, 2), CartesianIndex(3, 2)
         )
         function global_relationship_energy(labels)
@@ -747,14 +747,14 @@ end
         after[context.target] = context.new_owner
         expected = global_relationship_energy(after) -
                    global_relationship_energy(ownership)
-        @test _r1_descriptor_delta(descriptor, context) ≈ expected
+        @test _boundary_descriptor_delta(descriptor, context) ≈ expected
         @test descriptor.role.affected.maximum == 4
         @test only(runtime.relationships).incident_edges[:, 1] == Int32[1, 2]
         @test only(runtime.relationships).incident_edges[:, 2] == Int32[1, 3]
         @test only(runtime.relationships).incident_edges[:, 3] == Int32[2, 3]
-        _r1_descriptor_delta(descriptor, context)
+        _boundary_descriptor_delta(descriptor, context)
         @test @allocated(
-            _r1_descriptor_delta(descriptor, context)
+            _boundary_descriptor_delta(descriptor, context)
         ) == 0
     end
 
@@ -765,17 +765,17 @@ end
 end
 
 @testset "qualified source graph owns composed lowering" begin
-    @variables r1_composed_t r1_composed_state(r1_composed_t)
+    @variables boundary_composed_t boundary_composed_state(boundary_composed_t)
     composed_cell = CellKind(:cell; extinction = RetireAtZero())
     composed_medium = MediumKind(:medium)
     composed_state = SiteState(
-        r1_composed_state;
+        boundary_composed_state;
         name = :state,
         owner = composed_cell,
         initial = 0.0,
         lifecycle = PreserveOnOwnershipChange(),
     )
-    @named r1_child = PottsSystem(
+    @named boundary_child = PottsSystem(
         statements = StatementSet((
             Lattice(
                 (5, 5);
@@ -791,21 +791,21 @@ end
                 [(composed_cell ↔ composed_medium) => 1.0];
                 relation = :contact,
             ),
-            Observation(:state_snapshot, r1_composed_state),
+            Observation(:state_snapshot, boundary_composed_state),
             Protocol(Sweep(); name = :main),
         )),
-        unknowns = [r1_composed_state],
-        independent_variables = [r1_composed_t],
+        unknowns = [boundary_composed_state],
+        independent_variables = [boundary_composed_t],
     )
     direct = compile(
-        complete(r1_child);
+        complete(boundary_child);
         engine = SequentialEngine(),
         backend = CPUBackend(),
         scalar_type = Float64,
     )
-    @named r1_parent = PottsSystem()
+    @named boundary_parent = PottsSystem()
     composed = compile(
-        complete(compose(r1_parent, [r1_child]));
+        complete(compose(boundary_parent, [boundary_child]));
         engine = SequentialEngine(),
         backend = CPUBackend(),
         scalar_type = Float64,
@@ -816,8 +816,8 @@ end
     @test direct.core_program.descriptor_plan.domain_resources.contact_counts ==
           composed.core_program.descriptor_plan.domain_resources.contact_counts
     @test 4 in composed.core_program.descriptor_plan.domain_resources.contact_counts
-    @test composed.reports.kinds == (:r1_child₊medium, :r1_child₊cell)
-    @test only(composed.observations).name === :r1_child₊state_snapshot
+    @test composed.reports.kinds == (:boundary_child₊medium, :boundary_child₊cell)
+    @test only(composed.observations).name === :boundary_child₊state_snapshot
 
     labels = zeros(Int32, 5, 5)
     labels[3, 3] = 1
@@ -827,45 +827,45 @@ end
             cells = [composed_cell],
             medium = composed_medium,
         ),
-        values = [r1_composed_state => ones(5, 5)],
+        values = [boundary_composed_state => ones(5, 5)],
     )
     runtime = init(PottsProblem(
         composed, initial, (0, 1); seed = 0x724
-    ); observables = (:r1_child₊state_snapshot,)).runtime
+    ); observables = (:boundary_child₊state_snapshot,)).runtime
     handle = only(composed.reports.states).handle
     @test CorePotts.state_block(runtime.descriptor_state, handle).values ==
           ones(5, 5)
 
-    @variables r1_left_state(r1_composed_t) r1_right_state(r1_composed_t)
+    @variables boundary_left_state(boundary_composed_t) boundary_right_state(boundary_composed_t)
     left_cell = CellKind(:cell; extinction = RetireAtZero())
     right_cell = CellKind(:cell; extinction = RetireAtZero())
     @named left = PottsSystem(
         statements = StatementSet((
             left_cell,
             SiteState(
-                r1_left_state;
+                boundary_left_state;
                 name = :state,
                 owner = left_cell,
                 initial = 0.0,
                 lifecycle = PreserveOnOwnershipChange(),
             ),
         )),
-        unknowns = [r1_left_state],
-        independent_variables = [r1_composed_t],
+        unknowns = [boundary_left_state],
+        independent_variables = [boundary_composed_t],
     )
     @named right = PottsSystem(
         statements = StatementSet((
             right_cell,
             SiteState(
-                r1_right_state;
+                boundary_right_state;
                 name = :state,
                 owner = right_cell,
                 initial = 0.0,
                 lifecycle = PreserveOnOwnershipChange(),
             ),
         )),
-        unknowns = [r1_right_state],
-        independent_variables = [r1_composed_t],
+        unknowns = [boundary_right_state],
+        independent_variables = [boundary_composed_t],
     )
     sibling_medium = MediumKind(:medium)
     @named sibling_root = PottsSystem(
@@ -874,7 +874,7 @@ end
             sibling_medium,
             Protocol(Sweep(); name = :main),
         )),
-        independent_variables = [r1_composed_t],
+        independent_variables = [boundary_composed_t],
     )
     siblings = compile(
         complete(compose(sibling_root, [left, right]));
@@ -897,7 +897,7 @@ end
         ownership = LabelledCells(
             labels; cells = [:left₊cell], medium = sibling_medium
         ),
-        values = [r1_left_state => fill(2.0, 5, 5)],
+        values = [boundary_left_state => fill(2.0, 5, 5)],
     )
     sibling_initial = PottsToolkit._core_initial_state(siblings, qualified)
     @test sibling_initial.cell_kinds == Int16[2]

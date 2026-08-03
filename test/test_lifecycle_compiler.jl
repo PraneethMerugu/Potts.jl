@@ -1,12 +1,12 @@
-include("fixtures/G5LifecycleOperations.jl")
-using .G5LifecycleOperations
+include("fixtures/LifecycleOperationFixtures.jl")
+using .LifecycleOperationFixtures
 
-function _g5_lifecycle_diagnostic_kind(error)
+function _lifecycle_diagnostic_kind(error)
     error isa PottsToolkit.PottsValidationError || return nothing
     return only(error.diagnostics).kind
 end
 
-@testset "G5-L2 lifecycle structure does not specialize on counts or capacity" begin
+@testset "lifecycle structure does not specialize on counts or capacity" begin
     function compiled_lifecycle_shape(count, max_cells)
         cell = CellKind(:specialization_cell; extinction = RetireAtZero())
         medium = MediumKind(:specialization_medium)
@@ -52,7 +52,7 @@ end
     @test length(many.descriptors) == 5
 end
 
-function _g5_minimal_system(name, statements)
+function _minimal_lifecycle_system(name, statements)
     return PottsSystem(
         name = name,
         statements = StatementSet((
@@ -63,7 +63,7 @@ function _g5_minimal_system(name, statements)
     )
 end
 
-@testset "G5-L1 closed lifecycle compiler boundary" begin
+@testset "closed lifecycle compiler boundary" begin
     @variables t activity(t)
     cell = CellKind(:cell; extinction = RetireAtZero(priority = -3))
     daughter = CellKind(:daughter; extinction = ForbidExtinction())
@@ -126,16 +126,16 @@ end
             on_inadmissible = FilterInadmissible(),
         ),),
     )
-    completed = complete(_g5_minimal_system(
+    completed = complete(_minimal_lifecycle_system(
         :LifecycleCompiler,
         (cell, daughter, medium, relation, activity_state, create, transition, divide),
     ))
 
-    transfer_lookups = G5LifecycleOperations.TRANSFER_LOOKUPS[]
-    callable_lookups = G5LifecycleOperations.CALLABLE_LOOKUPS[]
+    transfer_lookups = LifecycleOperationFixtures.TRANSFER_LOOKUPS[]
+    callable_lookups = LifecycleOperationFixtures.CALLABLE_LOOKUPS[]
     plans = inspect(completed, LifecyclePlans())
-    @test G5LifecycleOperations.TRANSFER_LOOKUPS[] == transfer_lookups
-    @test G5LifecycleOperations.CALLABLE_LOOKUPS[] == callable_lookups
+    @test LifecycleOperationFixtures.TRANSFER_LOOKUPS[] == transfer_lookups
+    @test LifecycleOperationFixtures.CALLABLE_LOOKUPS[] == callable_lookups
 
     by_effect = Dict(plan.effect => plan for plan in plans)
     @test all(!plan.runtime_ready for plan in plans)
@@ -171,7 +171,7 @@ end
     @test Set(item.abi.role for item in external_abis) == Set((
         :trigger, :placement, :binary_partition, :state_transform,
     ))
-    @test all(item.owner === :G5LifecycleOperations for item in external_abis)
+    @test all(item.owner === :LifecycleOperationFixtures for item in external_abis)
     @test all(item.callable_identity !== nothing for item in external_abis)
 
     graph = PottsToolkit._completion_data(completed).normalized_graph
@@ -200,13 +200,17 @@ end
     @test executable isa PottsExecutable
     @test executable.reports.lifecycle.descriptors == length(plans)
     @test executable.reports.lifecycle.cell_capacity == 25
-    @test executable.reports.workspace.lifecycle.fixed_capacity
+    @test executable.reports.workspace.lifecycle.allocation_model ===
+        :fixed_preallocated
     @test executable.reports.workspace.lifecycle.cell_capacity == 25
     @test executable.reports.workspace.lifecycle.request_capacity ==
         executable.reports.lifecycle.maximum_requests
-    @test !executable.reports.workspace.lifecycle.resizes_during_execution
+    @test executable.reports.workspace.lifecycle.partition_label_slots ==
+        prod(executable.core_program.shape)
+    @test executable.reports.workspace.lifecycle.policy_workspace_slots ==
+        executable.reports.workspace.lifecycle.request_capacity * 8
 
-    synthesized_only = complete(_g5_minimal_system(
+    synthesized_only = complete(_minimal_lifecycle_system(
         :SynthesizedExtinction,
         (
             CellKind(:finite; extinction = RetireAtZero()),
@@ -222,7 +226,7 @@ end
     @test only(inspect(synthesized_only, LifecyclePlans())).effect === :Retire
 
     missing_extinction = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :MissingExtinction,
             (CellKind(:finite), MediumKind(:background)),
         ))
@@ -230,11 +234,11 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(missing_extinction) ===
+    @test _lifecycle_diagnostic_kind(missing_extinction) ===
         :missing_extinction_policy
 
     medium_extinction = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :MediumExtinction,
             (
                 CellKind(:finite; extinction = RetireAtZero()),
@@ -245,11 +249,11 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(medium_extinction) ===
+    @test _lifecycle_diagnostic_kind(medium_extinction) ===
         :medium_extinction_policy
 
     missing_state_policy = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :MissingStatePolicy,
             (
                 CellKind(:finite; extinction = RetireAtZero()),
@@ -261,7 +265,7 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(missing_state_policy) ===
+    @test _lifecycle_diagnostic_kind(missing_state_policy) ===
         :missing_lifecycle_state_policy
 
     unsupported_state = CellState(
@@ -281,7 +285,7 @@ end
         ),),
     )
     unsupported_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :UnsupportedState,
             (cell, medium, unsupported_state, unsupported_create),
         ))
@@ -289,7 +293,7 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(unsupported_error) ===
+    @test _lifecycle_diagnostic_kind(unsupported_error) ===
         :unsupported_reachable_lifecycle_state
 
     overridden_create = LifecycleProcess(
@@ -303,7 +307,7 @@ end
             on_inadmissible = ErrorOnInadmissible(),
         ),),
     )
-    @test complete(_g5_minimal_system(
+    @test complete(_minimal_lifecycle_system(
         :OverriddenUnsupportedState,
         (cell, medium, unsupported_state, overridden_create),
     )) isa PottsSystem
@@ -321,14 +325,14 @@ end
         ),),
     )
     numeric_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :NumericTrigger, (cell, medium, numeric_trigger)
         ))
         nothing
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(numeric_error) ===
+    @test _lifecycle_diagnostic_kind(numeric_error) ===
         :invalid_lifecycle_trigger_type
 
     site_domain = LifecycleProcess(
@@ -341,14 +345,14 @@ end
         ),),
     )
     domain_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :SiteDomain, (cell, medium, site_domain)
         ))
         nothing
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(domain_error) ===
+    @test _lifecycle_diagnostic_kind(domain_error) ===
         :illegal_lifecycle_domain
 
     zero_cadence = LifecycleProcess(
@@ -362,14 +366,14 @@ end
         cadence = AtMCS(0),
     )
     cadence_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :ZeroCadence, (cell, medium, zero_cadence)
         ))
         nothing
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(cadence_error) ===
+    @test _lifecycle_diagnostic_kind(cadence_error) ===
         :illegal_lifecycle_cadence
 
     missing_abi_divide = LifecycleProcess(
@@ -386,7 +390,7 @@ end
         ),),
     )
     missing_abi_error = try
-        inspect(complete(_g5_minimal_system(
+        inspect(complete(_minimal_lifecycle_system(
             :MissingPartitionABI,
             (cell, medium, relation, activity_state, missing_abi_divide),
         )), LifecyclePlans())
@@ -394,7 +398,56 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(missing_abi_error) ===
+    @test _lifecycle_diagnostic_kind(missing_abi_error) ===
+        :missing_lifecycle_policy_abi
+
+    missing_trigger_abi = LifecycleProcess(
+        :missing_trigger_abi;
+        domain = cells(cell),
+        anchor,
+        expression = external_unqualified_trigger(anchor_value(anchor)),
+        effects = (Retire(
+            anchor; on_inadmissible = ErrorOnInadmissible()
+        ),),
+    )
+    trigger_abi_error = try
+        inspect(complete(_minimal_lifecycle_system(
+            :MissingTriggerABI,
+            (cell, medium, activity_state, missing_trigger_abi),
+        )), LifecyclePlans())
+        nothing
+    catch error
+        error
+    end
+    @test _lifecycle_diagnostic_kind(trigger_abi_error) ===
+        :missing_lifecycle_policy_abi
+
+    missing_transform_abi = LifecycleProcess(
+        :missing_transform_abi;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Transition(
+            anchor,
+            daughter;
+            state = (
+                activity_state => Transform(
+                    external_unqualified_transform(activity)
+                ),
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+    )
+    transform_abi_error = try
+        inspect(complete(_minimal_lifecycle_system(
+            :MissingTransformABI,
+            (cell, daughter, medium, activity_state, missing_transform_abi),
+        )), LifecyclePlans())
+        nothing
+    catch error
+        error
+    end
+    @test _lifecycle_diagnostic_kind(transform_abi_error) ===
         :missing_lifecycle_policy_abi
 
     links = RelationshipState(
@@ -417,7 +470,7 @@ end
         ),),
     )
     relationship_policy_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :MissingRelationshipPolicy,
             (
                 cell,
@@ -432,7 +485,7 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(relationship_policy_error) ===
+    @test _lifecycle_diagnostic_kind(relationship_policy_error) ===
         :missing_lifecycle_relationship_policy
 
     edge = RelationshipBinding(:mixed_edge, links)
@@ -447,7 +500,7 @@ end
         ),
     )
     mixed_error = try
-        complete(_g5_minimal_system(
+        complete(_minimal_lifecycle_system(
             :MixedLifecycleEffects,
             (cell, medium, activity_state, links, mixed_effects),
         ))
@@ -455,7 +508,7 @@ end
     catch error
         error
     end
-    @test _g5_lifecycle_diagnostic_kind(mixed_error) ===
+    @test _lifecycle_diagnostic_kind(mixed_error) ===
         :illegal_lifecycle_effect_composition
 
     proposal = ProposalContext(:illegal_lifecycle_proposal)
@@ -469,7 +522,7 @@ end
         ),),
     )
     proposal_error = try
-        inspect(complete(_g5_minimal_system(
+        inspect(complete(_minimal_lifecycle_system(
             :ProposalTrigger, (cell, medium, proposal_trigger)
         )), LifecyclePlans())
         nothing

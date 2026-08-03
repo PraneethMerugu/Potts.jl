@@ -8,7 +8,7 @@ import CorePotts
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("../fixtures/NeutralExternalTerms.jl")
 
-function _g5_external_relationship_fixture()
+function _external_relationship_fixture()
     @parameters relationship_weight = 1.25
     cell = CellKind(:relationship_cell; extinction = RetireAtZero())
     medium = MediumKind(:relationship_medium)
@@ -66,7 +66,7 @@ function _g5_external_relationship_fixture()
 end
 
 """
-    run_g5_relationship_execution(
+    run_relationship_execution(
         device_array; backend_name, kernel_convert, to_host=Array
     )
 
@@ -74,14 +74,14 @@ Run an external incident-relationship Hamiltonian through the same checkerboard
 program on CPU and one vendor adaptor. Relationship mutation remains a staged
 host-qualified family; this witness qualifies immutable incident-local reads.
 """
-function run_g5_relationship_execution(
+function run_relationship_execution(
         device_array;
         backend_name::Symbol,
         kernel_convert,
         to_host = Array,
         require_device_isbits::Bool = true,
     )
-    executable, initial = _g5_external_relationship_fixture()
+    executable, initial = _external_relationship_fixture()
     program = executable.core_program
     parameters = program.parameter_defaults
     seed = UInt64(5)

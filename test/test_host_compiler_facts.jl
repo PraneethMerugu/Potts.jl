@@ -26,7 +26,7 @@ function PottsToolkit.operation_transfer(
     )
 end
 
-@testset "G1 host compiler facts" begin
+@testset "host compiler facts" begin
     @variables external_site_state
     @parameters site_weight = 2.0 pair_weight = 3.0
     endothelial = CellKind(:endothelial; extinction = RetireAtZero())

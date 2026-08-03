@@ -8,7 +8,7 @@ import CorePotts
 isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("../fixtures/NeutralExternalTerms.jl")
 
-function _g4_external_checkerboard_fixture()
+function _external_checkerboard_fixture()
     @variables checkerboard_activity
     @parameters checkerboard_weight = 0.25
     cell = CellKind(:checkerboard_cell; extinction = RetireAtZero())
@@ -62,7 +62,7 @@ function _g4_external_checkerboard_fixture()
 end
 
 """
-    run_g4_checkerboard_execution(
+    run_checkerboard_execution(
         device_array; backend_name, kernel_convert, to_host=Array
     )
 
@@ -70,14 +70,14 @@ Execute the same external-descriptor checkerboard MCS through the CPU and a
 backend adaptor. Vendor runners provide only storage adaptation; all semantic
 inputs and exact assertions remain shared.
 """
-function run_g4_checkerboard_execution(
+function run_checkerboard_execution(
         device_array;
         backend_name::Symbol,
         kernel_convert,
         to_host = Array,
         require_device_isbits::Bool = true,
     )
-    executable, initial = _g4_external_checkerboard_fixture()
+    executable, initial = _external_checkerboard_fixture()
     program = executable.core_program
     parameters = program.parameter_defaults
     # This fixed address exercises both a successful commit and rejection.
@@ -161,7 +161,7 @@ function run_g4_checkerboard_execution(
     )
 end
 
-function _g4_boundary_descriptor_plan(branch::Symbol)
+function _boundary_descriptor_plan(branch::Symbol)
     branch === :neutral && return CorePotts.DescriptorExecutionPlan(
         (),
         CorePotts.StateLayout(CorePotts.StateBlockSchema[]),
@@ -169,7 +169,7 @@ function _g4_boundary_descriptor_plan(branch::Symbol)
         (),
         Any[],
         0,
-        "g4-boundary-descriptor-plan",
+        "boundary-descriptor-plan",
         CorePotts.HamiltonianDomainResources(0, 0),
     )
     evaluator, role = if branch === :constraint
@@ -183,7 +183,7 @@ function _g4_boundary_descriptor_plan(branch::Symbol)
             CorePotts.ProposalEnergyDriveRole(),
         )
     else
-        throw(ArgumentError("unknown G4 boundary branch `$branch`"))
+        throw(ArgumentError("unknown checkerboard boundary branch `$branch`"))
     end
     access = CorePotts.ResourceAccess(
         (),
@@ -206,21 +206,21 @@ function _g4_boundary_descriptor_plan(branch::Symbol)
         CorePotts.StateLayout(CorePotts.StateBlockSchema[]),
         CorePotts.WorkspaceLayout(CorePotts.WorkspaceSchema[]),
         (),
-        Any[(path = (:g4_boundary,), local_id = branch)],
+        Any[(path = (:checkerboard_boundary,), local_id = branch)],
         1,
-        "g4-boundary-$branch-descriptor-plan",
+        "boundary-$branch-descriptor-plan",
         CorePotts.HamiltonianDomainResources(0, 0),
     )
 end
 
-function _g4_boundary_program(
+function _boundary_program(
         shape::NTuple{2, Int}; branch::Symbol = :neutral
     )
     offsets = Int8[1 -1 0 0; 0 0 1 -1]
-    descriptor_plan = _g4_boundary_descriptor_plan(branch)
+    descriptor_plan = _boundary_descriptor_plan(branch)
     tracker_plan = CorePotts.TrackerExecutionPlan(
         (CorePotts.OwnershipCountTracker(),),
-        "g4-boundary-tracker-plan",
+        "boundary-tracker-plan",
     )
     checkerboard_plan = CorePotts.CheckerboardPlan(
         shape, (true, true), zeros(Int8, 2, 0)
@@ -240,13 +240,13 @@ function _g4_boundary_program(
         CorePotts.StageExecutionPlan(),
         CorePotts.CheckerboardProgramEngine(),
         CorePotts.CPUProgramBackend(),
-        "g4-boundary-program-$(shape)";
+        "boundary-program-$(shape)";
         medium_kinds = Bool[true, false],
         checkerboard_plan,
     )
 end
 
-function _g4_boundary_initial(shape::NTuple{2, Int})
+function _boundary_initial(shape::NTuple{2, Int})
     ownership = zeros(Int32, shape)
     if prod(shape) == 1
         ownership[1] = Int32(1)
@@ -261,7 +261,7 @@ function _g4_boundary_initial(shape::NTuple{2, Int})
     )
 end
 
-function _run_g4_boundary_shape(
+function _run_boundary_shape(
         shape,
         device_array;
         kernel_convert,
@@ -270,8 +270,8 @@ function _run_g4_boundary_shape(
         workgroup_size,
         branch = :neutral,
     )
-    program = _g4_boundary_program(shape; branch)
-    initial = _g4_boundary_initial(shape)
+    program = _boundary_program(shape; branch)
+    initial = _boundary_initial(shape)
     cpu_runtime = CorePotts.initialize_program(
         program, initial, Float32[], UInt64(0xb04d), UInt32(1)
     )
@@ -323,7 +323,7 @@ function _run_g4_boundary_shape(
 end
 
 """Shared CPU/vendor workgroup-edge and realized-boundary conformance."""
-function run_g4_checkerboard_boundary_sizes(
+function run_boundary_sizes(
         device_array;
         backend_name::Symbol,
         kernel_convert,
@@ -334,7 +334,7 @@ function run_g4_checkerboard_boundary_sizes(
     workgroup_sizes = (32, 64, 128, 256)
     reports = map(Iterators.product(shapes, workgroup_sizes)) do entry
         shape, workgroup_size = entry
-        _run_g4_boundary_shape(
+        _run_boundary_shape(
             shape,
             device_array;
             kernel_convert,
@@ -348,7 +348,7 @@ function run_g4_checkerboard_boundary_sizes(
     @test any(report -> report.cpu_report[3] > 0, reports)
     @test Set(report.workgroup_size for report in reports) ==
           Set(workgroup_sizes)
-    constraint_report = _run_g4_boundary_shape(
+    constraint_report = _run_boundary_shape(
         (257, 1),
         device_array;
         kernel_convert,
@@ -357,7 +357,7 @@ function run_g4_checkerboard_boundary_sizes(
         workgroup_size = 64,
         branch = :constraint,
     )
-    energy_report = _run_g4_boundary_shape(
+    energy_report = _run_boundary_shape(
         (257, 1),
         device_array;
         kernel_convert,

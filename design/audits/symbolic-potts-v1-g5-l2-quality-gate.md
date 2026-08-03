@@ -98,10 +98,11 @@ The review MUST answer each question with code evidence.
     with no lifecycle catch-all file or dependency cycle becoming the de facto architecture?
 12. Has G5-L2 remained inside CCV1-027, without new lifecycle vocabulary, proof-model migration,
     G6 APIs, or device claims?
-13. Are production filenames, modules, types, functions, constants, fields, diagnostics, and
-    inspection objects free of implementation-phase labels such as `G5`, `L2`, `R2`, or a numbered
-    `Phase`? Phase labels belong only to specifications, audits, tests, and development history;
-    they must not leak into the library's production vocabulary or object model.
+13. Are library and test filenames, modules, types, functions, constants, fields, fixtures,
+    diagnostics, testsets, and inspection objects free of implementation-phase labels such as
+    `G5`, `L2`, `R2`, or a numbered `Phase`? Phase labels belong only to specifications, audits,
+    archived evidence, and development history; they must not leak into executable source or test
+    vocabulary.
 
 ## Lens B — code quality
 
@@ -183,10 +184,10 @@ The gate reuses production tests and small adversarial fixtures. At minimum it M
 9. repeated value-level statements and capacities do not create unjustified structural
    specialization; and
 10. inspection and diagnostics report the same qualified transaction facts the executor consumes.
-11. a case-insensitive inventory of `src/` and `lib/CorePotts/src/` filenames and declared
-    identifiers contains no milestone/phase label; any textual occurrence in production source is
-    inspected and removed unless it describes an external scientific term rather than the
-    development process.
+11. a case-insensitive inventory of `src/`, `lib/CorePotts/src/`, `test/`, and
+    `lib/CorePotts/test/` filenames and declared identifiers contains no milestone/phase label; any
+    textual occurrence in executable source or tests is inspected and removed unless it describes
+    an external scientific term rather than the development process.
 
 The capacity probe MUST cover an exact-fit batch and a one-slot-overflow batch, prove that no CPU
 or GPU-facing storage grows after initialization, and prove that the overflow status is translated

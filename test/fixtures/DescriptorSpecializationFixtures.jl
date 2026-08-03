@@ -1,4 +1,4 @@
-module G2SpecializationFixtures
+module DescriptorSpecializationFixtures
 
 using PottsToolkit
 using ModelingToolkitBase

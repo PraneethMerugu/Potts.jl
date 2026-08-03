@@ -4,10 +4,10 @@ using ModelingToolkitBase
 
 import CorePotts
 
-isdefined(@__MODULE__, :G5ExternalSurfaceOperation) ||
-    include("../fixtures/G5ExternalSurfaceOperation.jl")
+isdefined(@__MODULE__, :ExternalSurfaceOperationFixture) ||
+    include("../fixtures/ExternalSurfaceOperationFixture.jl")
 
-function _g5_surface_backend_fixture()
+function _surface_backend_fixture()
     cell = CellKind(:surface_backend_cell; extinction = RetireAtZero())
     medium = MediumKind(:surface_backend_medium)
     anchor = CellBinding(:surface_backend_anchor)
@@ -27,7 +27,7 @@ function _g5_surface_backend_fixture()
             domain = cells(cell),
             anchor,
             expression = 0.5f0 * (
-                G5ExternalSurfaceOperation.external_cell_surface(
+                ExternalSurfaceOperationFixture.external_cell_surface(
                     anchor_value(anchor)
                 ) - 12.0f0
             )^2,
@@ -50,14 +50,14 @@ function _g5_surface_backend_fixture()
 end
 
 """Backend-neutral surface evaluator/tracker/checkerboard qualification."""
-function run_g5_surface_execution(
+function run_surface_execution(
         device_array;
         backend_name::Symbol,
         kernel_convert,
         to_host = Array,
         require_device_isbits::Bool = true,
     )
-    executable, initial = _g5_surface_backend_fixture()
+    executable, initial = _surface_backend_fixture()
     program = executable.core_program
     surface_descriptor = only(filter(
         descriptor -> CorePotts.tracker_inspection(descriptor).quantity ===

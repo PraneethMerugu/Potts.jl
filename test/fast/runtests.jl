@@ -1,12 +1,12 @@
 include("../setup.jl")
-include("../backend_conformance/g2_descriptor_boundary.jl")
-include("../backend_conformance/g4_checkerboard_execution.jl")
-include("../backend_conformance/g5_relationship_execution.jl")
-include("../backend_conformance/g5_surface_execution.jl")
+include("../backend_conformance/descriptor_boundary.jl")
+include("../backend_conformance/checkerboard_execution.jl")
+include("../backend_conformance/relationship_execution.jl")
+include("../backend_conformance/surface_execution.jl")
 
 @testset "Symbolic Potts V1 fast compiler/runtime boundary" begin
     @testset "registered external descriptor boundary" begin
-        report = run_g2_descriptor_boundary(
+        report = run_descriptor_boundary(
             Array,
             zeros;
             backend_name = :cpu,
@@ -15,7 +15,7 @@ include("../backend_conformance/g5_surface_execution.jl")
         @test report.backend === :cpu
     end
     @testset "checkerboard CPU boundary conformance" begin
-        report = run_g4_checkerboard_execution(
+        report = run_checkerboard_execution(
             Array;
             backend_name = :cpu,
             kernel_convert = identity,
@@ -23,7 +23,7 @@ include("../backend_conformance/g5_surface_execution.jl")
             require_device_isbits = false,
         )
         @test report.backend === :cpu
-        boundary_report = run_g4_checkerboard_boundary_sizes(
+        boundary_report = run_checkerboard_boundary_sizes(
             Array;
             backend_name = :cpu,
             kernel_convert = identity,
@@ -33,7 +33,7 @@ include("../backend_conformance/g5_surface_execution.jl")
         @test boundary_report.backend === :cpu
     end
     @testset "relationship CPU boundary conformance" begin
-        report = run_g5_relationship_execution(
+        report = run_relationship_execution(
             Array;
             backend_name = :cpu,
             kernel_convert = identity,
@@ -43,7 +43,7 @@ include("../backend_conformance/g5_surface_execution.jl")
         @test report.backend === :cpu
     end
     @testset "surface CPU boundary conformance" begin
-        report = run_g5_surface_execution(
+        report = run_surface_execution(
             Array;
             backend_name = :cpu,
             kernel_convert = identity,
@@ -52,7 +52,7 @@ include("../backend_conformance/g5_surface_execution.jl")
         )
         @test report.backend === :cpu
     end
-    include("../test_g2_r1_repairs.jl")
-    include("../test_g5_lifecycle_compiler.jl")
+    include("../test_compiler_boundary_repairs.jl")
+    include("../test_lifecycle_compiler.jl")
     include("../test_checkpoint.jl")
 end

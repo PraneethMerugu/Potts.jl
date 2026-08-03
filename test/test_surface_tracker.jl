@@ -1,7 +1,7 @@
-isdefined(@__MODULE__, :G5ExternalSurfaceOperation) ||
-    include("fixtures/G5ExternalSurfaceOperation.jl")
+isdefined(@__MODULE__, :ExternalSurfaceOperationFixture) ||
+    include("fixtures/ExternalSurfaceOperationFixture.jl")
 
-function _g5_surface_model(
+function _surface_model(
         engine;
         neighborhood = VonNeumann(),
         boundary = Closed(),
@@ -49,7 +49,7 @@ function _g5_surface_model(
     return executable, cell, medium
 end
 
-function _g5_surface_child(name::Symbol, neighborhood)
+function _surface_child(name::Symbol, neighborhood)
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     anchor = CellBinding(:cell_anchor)
@@ -74,7 +74,7 @@ function _g5_surface_child(name::Symbol, neighborhood)
     return model
 end
 
-function _g5_surface_runtime(executable, ownership)
+function _surface_runtime(executable, ownership)
     finite_kind = only(findall(!, executable.core_program.medium_kinds))
     cell_count = maximum(ownership; init = 0)
     initial = CorePotts.ProgramInitialState(
@@ -91,23 +91,23 @@ function _g5_surface_runtime(executable, ownership)
     )
 end
 
-function _g5_capacity_tracker_values(runtime, expected)
+function _lifecycle_capacity_tracker_values(runtime, expected)
     result = zeros(eltype(expected), length(runtime.cell_kinds))
     copyto!(result, 1, expected, 1, length(expected))
     return result
 end
 
-_g5_surface_offsets(::VonNeumann) = (
+_surface_offsets(::VonNeumann) = (
     (-1, 0), (0, -1), (0, 1), (1, 0),
 )
 
-_g5_surface_offsets(::Moore) = Tuple(
+_surface_offsets(::Moore) = Tuple(
     (row, column)
     for row in -1:1 for column in -1:1
     if (row, column) != (0, 0)
 )
 
-function _g5_surface_oracle(ownership, offsets; periodic = false)
+function _surface_oracle(ownership, offsets; periodic = false)
     result = zeros(Int32, maximum(ownership; init = 0))
     rows, columns = size(ownership)
     for site in CartesianIndices(ownership)
@@ -133,12 +133,12 @@ function _g5_surface_oracle(ownership, offsets; periodic = false)
     return result
 end
 
-_g5_von_neumann_surface(ownership; periodic = false) =
-    _g5_surface_oracle(
-        ownership, _g5_surface_offsets(VonNeumann()); periodic
+_lifecycle_von_neumann_surface(ownership; periodic = false) =
+    _surface_oracle(
+        ownership, _surface_offsets(VonNeumann()); periodic
     )
 
-function _g5_surface_descriptor(executable)
+function _surface_descriptor(executable)
     return only([
         descriptor
         for group in executable.core_program.descriptor_plan.groups
@@ -147,17 +147,17 @@ function _g5_surface_descriptor(executable)
     ])
 end
 
-function _g5_surface_tracker(executable)
+function _surface_tracker(executable)
     return only(filter(
         item -> CorePotts.tracker_inspection(item).quantity === :cell_surface,
         CorePotts.tracker_instances(executable.core_program.tracker_plan),
     ))
 end
 
-_g5_surface_key(executable) =
-    CorePotts.tracker_quantity(_g5_surface_tracker(executable))
+_surface_key(executable) =
+    CorePotts.tracker_quantity(_surface_tracker(executable))
 
-function _g5_surface_context(runtime, source, target, attempt = 1)
+function _surface_context(runtime, source, target, attempt = 1)
     return CorePotts._ProposalEvaluationContext(
         runtime,
         source,
@@ -169,7 +169,7 @@ function _g5_surface_context(runtime, source, target, attempt = 1)
     )
 end
 
-@inline function _g5_surface_delta(descriptor, context)
+@inline function _surface_delta(descriptor, context)
     return CorePotts._compiled_hamiltonian_delta(
         descriptor.evaluator,
         descriptor.role,
@@ -178,18 +178,18 @@ end
     )
 end
 
-function _g5_global_surface_energy(
+function _lifecycle_global_surface_energy(
         ownership, offsets, target, strength; periodic = false
     )
-    perimeters = _g5_surface_oracle(ownership, offsets; periodic)
+    perimeters = _surface_oracle(ownership, offsets; periodic)
     return sum(perimeters; init = Int32(0)) do perimeter
         strength * (perimeter - target)^2
     end
 end
 
-@testset "G5 generic surface tracker" begin
+@testset "generic surface tracker" begin
     @testset "contract, initialization, and relation selection" begin
-        executable, _, _ = _g5_surface_model(SequentialEngine())
+        executable, _, _ = _surface_model(SequentialEngine())
         tracker_report = executable.reports.execution.trackers
         @test tracker_report.quantities == (:cell_volume, :cell_surface)
         surface_report = only(filter(
@@ -204,11 +204,11 @@ end
             maximum_neighbors = Int16(4),
         )
 
-        shifted, _, _ = _g5_surface_model(
+        shifted, _, _ = _surface_model(
             SequentialEngine(); prefix_relation = true
         )
-        surface_descriptor = _g5_surface_tracker(executable)
-        shifted_descriptor = _g5_surface_tracker(shifted)
+        surface_descriptor = _surface_tracker(executable)
+        shifted_descriptor = _surface_tracker(shifted)
         @test surface_descriptor.relation_handle !=
               shifted_descriptor.relation_handle
         @test typeof(surface_descriptor) === typeof(shifted_descriptor)
@@ -225,15 +225,15 @@ end
         for (sites, expected) in fixtures
             ownership = zeros(Int32, 5, 5)
             ownership[collect(sites)] .= 1
-            runtime = _g5_surface_runtime(executable, ownership)
+            runtime = _surface_runtime(executable, ownership)
             tracked = CorePotts.program_tracker_values(
-                runtime, _g5_surface_key(executable)
+                runtime, _surface_key(executable)
             )
-            @test tracked == _g5_capacity_tracker_values(
+            @test tracked == _lifecycle_capacity_tracker_values(
                 runtime, Int32[expected]
             )
-            @test tracked == _g5_capacity_tracker_values(
-                runtime, _g5_von_neumann_surface(ownership)
+            @test tracked == _lifecycle_capacity_tracker_values(
+                runtime, _lifecycle_von_neumann_surface(ownership)
             )
             @test CorePotts.validate_tracker_state!(
                 runtime.program.tracker_plan,
@@ -244,26 +244,26 @@ end
             ) === runtime.trackers
         end
 
-        moore, _, _ = _g5_surface_model(
+        moore, _, _ = _surface_model(
             SequentialEngine(); neighborhood = Moore()
         )
         single = zeros(Int32, 5, 5)
         single[3, 3] = 1
-        moore_runtime = _g5_surface_runtime(moore, single)
+        moore_runtime = _surface_runtime(moore, single)
         @test CorePotts.program_tracker_values(
-            moore_runtime, _g5_surface_key(moore)
-        ) == _g5_capacity_tracker_values(moore_runtime, Int32[8])
+            moore_runtime, _surface_key(moore)
+        ) == _lifecycle_capacity_tracker_values(moore_runtime, Int32[8])
 
-        periodic, _, _ = _g5_surface_model(
+        periodic, _, _ = _surface_model(
             SequentialEngine(); boundary = Periodic()
         )
         seam = zeros(Int32, 5, 5)
         seam[1, 3] = seam[5, 3] = 1
-        seam_runtime = _g5_surface_runtime(periodic, seam)
+        seam_runtime = _surface_runtime(periodic, seam)
         @test CorePotts.program_tracker_values(
-            seam_runtime, _g5_surface_key(periodic)
-        ) == _g5_capacity_tracker_values(seam_runtime, Int32[6])
-        @test _g5_von_neumann_surface(seam; periodic = true) == Int32[6]
+            seam_runtime, _surface_key(periodic)
+        ) == _lifecycle_capacity_tracker_values(seam_runtime, Int32[6])
+        @test _lifecycle_von_neumann_surface(seam; periodic = true) == Int32[6]
     end
 
     @testset "external operation receives the qualified tracker protocol" begin
@@ -287,7 +287,7 @@ end
                     domain = cells(cell),
                     anchor,
                     expression = (
-                        G5ExternalSurfaceOperation.external_cell_surface(
+                        ExternalSurfaceOperationFixture.external_cell_surface(
                             anchor_value(anchor)
                         ) -
                         8.0
@@ -302,26 +302,26 @@ end
             backend = CPUBackend(),
             scalar_type = Float64,
         )
-        tracker = _g5_surface_tracker(executable)
+        tracker = _surface_tracker(executable)
         @test tracker.maximum_neighbors == 8
         @test CorePotts.tracker_quantity(tracker).source_handle ==
               tracker.relation_handle
 
         ownership = zeros(Int32, 5, 5)
         ownership[2:3, 2:3] .= 1
-        runtime = _g5_surface_runtime(executable, ownership)
-        descriptor = _g5_surface_descriptor(executable)
-        context = _g5_surface_context(
+        runtime = _surface_runtime(executable, ownership)
+        descriptor = _surface_descriptor(executable)
+        context = _surface_context(
             runtime, CartesianIndex(1, 2), CartesianIndex(2, 2)
         )
         after = copy(ownership)
         after[context.target] = ownership[context.source]
-        offsets = _g5_surface_offsets(Moore())
-        @test _g5_surface_delta(descriptor, context) ==
-              _g5_global_surface_energy(after, offsets, 8.0, 1.0) -
-              _g5_global_surface_energy(ownership, offsets, 8.0, 1.0)
+        offsets = _surface_offsets(Moore())
+        @test _surface_delta(descriptor, context) ==
+              _lifecycle_global_surface_energy(after, offsets, 8.0, 1.0) -
+              _lifecycle_global_surface_energy(ownership, offsets, 8.0, 1.0)
         @test Core.Compiler.return_type(
-            _g5_surface_delta,
+            _surface_delta,
             Tuple{typeof(descriptor), typeof(context)},
         ) === Float64
     end
@@ -339,8 +339,8 @@ end
             )),
         )
         composed = compose(root, [
-            _g5_surface_child(:left, VonNeumann()),
-            _g5_surface_child(:right, Moore()),
+            _surface_child(:left, VonNeumann()),
+            _surface_child(:right, Moore()),
         ])
         executable = compile(
             complete(composed);
@@ -366,7 +366,7 @@ end
         @test allunique(keys)
         @test allequal(typeof.(keys))
 
-        single_executable, _, _ = _g5_surface_model(SequentialEngine())
+        single_executable, _, _ = _surface_model(SequentialEngine())
         @test typeof(single_executable.core_program.tracker_plan) ===
               typeof(executable.core_program.tracker_plan)
         @test typeof(CorePotts.tracker_kernel_plan(
@@ -424,13 +424,13 @@ end
     @testset "immutable local delta equals independent global energy" begin
         target = 8.0
         strength = 2.0
-        executable, _, _ = _g5_surface_model(
+        executable, _, _ = _surface_model(
             SequentialEngine(); target, strength
         )
         ownership = zeros(Int32, 5, 5)
         ownership[2:3, 2:3] .= 1
-        runtime = _g5_surface_runtime(executable, ownership)
-        descriptor = _g5_surface_descriptor(executable)
+        runtime = _surface_runtime(executable, ownership)
+        descriptor = _surface_descriptor(executable)
         offsets = (
             CartesianIndex(-1, 0), CartesianIndex(0, -1),
             CartesianIndex(0, 1), CartesianIndex(1, 0),
@@ -441,17 +441,17 @@ end
             checkbounds(Bool, ownership, source_site) || continue
             ownership[source_site] == ownership[target_site] && continue
             attempt += 1
-            context = _g5_surface_context(
+            context = _surface_context(
                 runtime, source_site, target_site, attempt
             )
             after = copy(ownership)
             after[target_site] = ownership[source_site]
-            expected = _g5_global_surface_energy(
+            expected = _lifecycle_global_surface_energy(
                 after, offsets, target, strength
-            ) - _g5_global_surface_energy(
+            ) - _lifecycle_global_surface_energy(
                 ownership, offsets, target, strength
             )
-            @test _g5_surface_delta(descriptor, context) == expected
+            @test _surface_delta(descriptor, context) == expected
         end
         @test attempt > 0
 
@@ -482,45 +482,45 @@ end
             ),
         )
         for fixture in cases
-            candidate, _, _ = _g5_surface_model(
+            candidate, _, _ = _surface_model(
                 SequentialEngine();
                 neighborhood = fixture.neighborhood,
                 boundary = fixture.boundary,
                 target,
                 strength,
             )
-            candidate_runtime = _g5_surface_runtime(
+            candidate_runtime = _surface_runtime(
                 candidate, fixture.ownership
             )
-            candidate_descriptor = _g5_surface_descriptor(candidate)
-            context = _g5_surface_context(
+            candidate_descriptor = _surface_descriptor(candidate)
+            context = _surface_context(
                 candidate_runtime,
                 fixture.source,
                 fixture.target_site,
             )
             after = copy(fixture.ownership)
             after[fixture.target_site] = fixture.ownership[fixture.source]
-            candidate_offsets = _g5_surface_offsets(fixture.neighborhood)
-            expected = _g5_global_surface_energy(
+            candidate_offsets = _surface_offsets(fixture.neighborhood)
+            expected = _lifecycle_global_surface_energy(
                 after,
                 candidate_offsets,
                 target,
                 strength;
                 periodic = fixture.periodic,
-            ) - _g5_global_surface_energy(
+            ) - _lifecycle_global_surface_energy(
                 fixture.ownership,
                 candidate_offsets,
                 target,
                 strength;
                 periodic = fixture.periodic,
             )
-            @test _g5_surface_delta(candidate_descriptor, context) == expected
+            @test _surface_delta(candidate_descriptor, context) == expected
             tracked = CorePotts.program_tracker_values(
-                candidate_runtime, _g5_surface_key(candidate)
+                candidate_runtime, _surface_key(candidate)
             )
-            @test tracked == _g5_capacity_tracker_values(
+            @test tracked == _lifecycle_capacity_tracker_values(
                 candidate_runtime,
-                _g5_surface_oracle(
+                _surface_oracle(
                     fixture.ownership,
                     candidate_offsets;
                     periodic = fixture.periodic,
@@ -528,19 +528,19 @@ end
             )
         end
 
-        context = _g5_surface_context(
+        context = _surface_context(
             runtime, CartesianIndex(2, 3), CartesianIndex(2, 4)
         )
-        _g5_surface_delta(descriptor, context)
-        @test @allocated(_g5_surface_delta(descriptor, context)) == 0
+        _surface_delta(descriptor, context)
+        @test @allocated(_surface_delta(descriptor, context)) == 0
         @test Core.Compiler.return_type(
-            _g5_surface_delta,
+            _surface_delta,
             Tuple{typeof(descriptor), typeof(context)},
         ) === Float64
         source_view = CorePotts.tracker_source_view(
             runtime.program, runtime.ownership
         )
-        surface_tracker = _g5_surface_tracker(executable)
+        surface_tracker = _surface_tracker(executable)
         @test Core.Compiler.return_type(
             CorePotts.tracker_proposal_delta,
             Tuple{
@@ -551,16 +551,16 @@ end
     end
 
     @testset "commit atomicity, reconstruction, and checkerboard exclusion" begin
-        executable, _, _ = _g5_surface_model(SequentialEngine())
+        executable, _, _ = _surface_model(SequentialEngine())
         ownership = zeros(Int32, 5, 5)
         ownership[2:3, 2:3] .= 1
-        runtime = _g5_surface_runtime(executable, ownership)
+        runtime = _surface_runtime(executable, ownership)
         before_ownership = copy(runtime.ownership)
         before_surface = copy(CorePotts.program_tracker_values(
-            runtime, _g5_surface_key(executable)
+            runtime, _surface_key(executable)
         ))
 
-        rejected = _g5_surface_context(
+        rejected = _surface_context(
             runtime, CartesianIndex(2, 3), CartesianIndex(2, 4)
         )
         @test !CorePotts._attempt_selected!(
@@ -574,10 +574,10 @@ end
         )
         @test runtime.ownership == before_ownership
         @test CorePotts.program_tracker_values(
-            runtime, _g5_surface_key(executable)
+            runtime, _surface_key(executable)
         ) == before_surface
 
-        noop = _g5_surface_context(
+        noop = _surface_context(
             runtime, CartesianIndex(2, 2), CartesianIndex(2, 3)
         )
         @test !CorePotts._attempt_selected!(
@@ -591,15 +591,15 @@ end
         )
         @test runtime.ownership == before_ownership
         @test CorePotts.program_tracker_values(
-            runtime, _g5_surface_key(executable)
+            runtime, _surface_key(executable)
         ) == before_surface
 
         concave = zeros(Int32, 5, 5)
         concave[2:4, 2:4] .= 1
         concave[3, 3] = 0
-        relaxation = _g5_surface_runtime(executable, concave)
+        relaxation = _surface_runtime(executable, concave)
         perimeter_before = first(CorePotts.program_tracker_values(
-            relaxation, _g5_surface_key(executable)
+            relaxation, _surface_key(executable)
         ))
         @test CorePotts._attempt_selected!(
             relaxation,
@@ -611,11 +611,11 @@ end
             0.5,
         )
         perimeter_after = first(CorePotts.program_tracker_values(
-            relaxation, _g5_surface_key(executable)
+            relaxation, _surface_key(executable)
         ))
         @test (perimeter_before, perimeter_after) == (16, 12)
 
-        accepted = _g5_surface_context(
+        accepted = _surface_context(
             runtime, CartesianIndex(1, 2), CartesianIndex(2, 2)
         )
         CorePotts._commit_copy!(
@@ -626,9 +626,9 @@ end
             accepted,
         )
         @test CorePotts.program_tracker_values(
-            runtime, _g5_surface_key(executable)
-        ) == _g5_capacity_tracker_values(
-            runtime, _g5_von_neumann_surface(runtime.ownership)
+            runtime, _surface_key(executable)
+        ) == _lifecycle_capacity_tracker_values(
+            runtime, _lifecycle_von_neumann_surface(runtime.ownership)
         )
 
         saved = CorePotts.program_checkpoint(runtime)
@@ -637,12 +637,12 @@ end
             runtime.program, saved
         )
         @test CorePotts.program_tracker_values(
-            restored, _g5_surface_key(executable)
+            restored, _surface_key(executable)
         ) == CorePotts.program_tracker_values(
-            runtime, _g5_surface_key(executable)
+            runtime, _surface_key(executable)
         )
 
-        checkerboard, _, _ = _g5_surface_model(CheckerboardEngine())
+        checkerboard, _, _ = _surface_model(CheckerboardEngine())
         conflicts = Set(
             Tuple(checkerboard.core_program.checkerboard_plan.conflict_displacements[:, column])
             for column in axes(
@@ -650,16 +650,16 @@ end
             )
         )
         @test Set(((-1, 0), (0, -1), (0, 1), (1, 0))) <= conflicts
-        checkerboard_runtime = _g5_surface_runtime(checkerboard, ownership)
+        checkerboard_runtime = _surface_runtime(checkerboard, ownership)
         CorePotts.advance_mcs!(checkerboard_runtime)
         snapshot = CorePotts.program_snapshot(checkerboard_runtime)
         @test CorePotts.program_tracker_values(
             checkerboard.core_program,
             snapshot,
-            _g5_surface_key(checkerboard),
-        ) == _g5_capacity_tracker_values(
+            _surface_key(checkerboard),
+        ) == _lifecycle_capacity_tracker_values(
             checkerboard_runtime,
-            _g5_von_neumann_surface(checkerboard_runtime.ownership),
+            _lifecycle_von_neumann_surface(checkerboard_runtime.ownership),
         )
     end
 end

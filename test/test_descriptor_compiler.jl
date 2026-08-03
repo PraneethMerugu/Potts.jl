@@ -1,7 +1,7 @@
 struct DescriptorProbeAdaptor end
 
-include("fixtures/G2SpecializationFixtures.jl")
-using .G2SpecializationFixtures
+include("fixtures/DescriptorSpecializationFixtures.jl")
+using .DescriptorSpecializationFixtures
 
 CorePotts.Adapt.adapt_storage(
     ::DescriptorProbeAdaptor, values::AbstractArray
@@ -47,7 +47,7 @@ function _hamiltonian_contribution_allocations(contributions, plan, context)
     )
 end
 
-@testset "G2 descriptor compiler boundary" begin
+@testset "descriptor compiler boundary" begin
     fixture_registry = NeutralExternalTerms.registry()
 
     function bank_state_schema(name, element_type, shape)
@@ -904,7 +904,7 @@ end
     # Direct built-in terms use the same sole grouped boundary; no occurrence
     # tuple remains hidden in CompiledPottsProgram.
     direct_programs = map(
-        G2SpecializationFixtures.compile_direct_model,
+        DescriptorSpecializationFixtures.compile_direct_model,
         (1, 32, 1024),
     )
     direct_one = first(direct_programs)
@@ -917,7 +917,9 @@ end
     @test allequal(getfield.(direct_reports, :kernel_families))
     @test allequal(typeof(program.core_program) for program in direct_programs)
     parameter_only_variant =
-        G2SpecializationFixtures.compile_direct_model(32; weight_default = 7.5)
+        DescriptorSpecializationFixtures.compile_direct_model(
+            32; weight_default = 7.5
+        )
     @test parameter_only_variant.reports.descriptors.group_splits ==
           direct_reports[2].group_splits
     @test parameter_only_variant.reports.descriptors.kernel_families ==
@@ -1146,7 +1148,7 @@ end
     @test !hasproperty(single.core_program.descriptor_plan, :relationships)
 end
 
-@testset "G2 local Hamiltonian equivalence" begin
+@testset "local Hamiltonian equivalence" begin
     cell = CellKind(:equivalence_cell; extinction = RetireAtZero())
     medium = MediumKind(:equivalence_medium)
     site = SiteBinding(:energy_site)

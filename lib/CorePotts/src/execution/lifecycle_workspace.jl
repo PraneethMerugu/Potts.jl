@@ -14,6 +14,64 @@
     LifecycleStatusBackend = 0x0a
 end
 
+@enum LifecycleStatusDetailCode::UInt16 begin
+    LifecycleDetailNone = 0x0000
+    LifecycleDetailOwnershipExceedsCellCapacity = 0x0001
+    LifecycleDetailCellSiteIndexExceedsLattice = 0x0002
+    LifecycleDetailCellSiteIndexMissingOwnedSite = 0x0003
+    LifecycleDetailNonfiniteResult = 0x0004
+    LifecycleDetailEvaluationError = 0x0005
+    LifecycleDetailRequestBoundExceeded = 0x0006
+    LifecycleDetailTriggerNotBoolean = 0x0007
+    LifecycleDetailPlacementSelectionInvalid = 0x0008
+    LifecycleDetailPlacementNotIntegral = 0x0009
+    LifecycleDetailPlacementOutOfBounds = 0x000a
+    LifecycleDetailPlacementSelectionEmpty = 0x000b
+    LifecycleDetailPlacementEmissionBoundExceeded = 0x000c
+    LifecycleDetailPlacementBoundExceeded = 0x000d
+    LifecycleDetailDuplicatePlacementSite = 0x000e
+    LifecycleDetailPlacementSiteUnavailable = 0x000f
+    LifecycleDetailEmptySourceCell = 0x0010
+    LifecycleDetailPartitionLabelInvalid = 0x0011
+    LifecycleDetailPartitionGeometryInvalid = 0x0012
+    LifecycleDetailPartitionEmptyDescendant = 0x0013
+    LifecycleDetailPartitionParentDisconnected = 0x0014
+    LifecycleDetailPartitionDaughterDisconnected = 0x0015
+    LifecycleDetailRetireNonempty = 0x0016
+    LifecycleDetailUnknownEffect = 0x0017
+    LifecycleDetailRelationshipPolicyRejected = 0x0018
+    LifecycleDetailUnknownDistribution = 0x0019
+    LifecycleDetailSplitFractionOutOfBounds = 0x001a
+    LifecycleDetailUnsupportedStatePolicy = 0x001b
+    LifecycleDetailTrackerPlanStateMisalignment = 0x001c
+    LifecycleDetailActiveOccupancyMismatch = 0x001d
+    LifecycleDetailForbiddenExtinction = 0x001e
+    LifecycleDetailDivisionReplanMismatch = 0x001f
+end
+
+"""One fixed-size engine status; host exceptions are derived only at the boundary."""
+struct LifecycleStatusPayload
+    code::LifecycleStatusCode
+    source::Int32
+    secondary_source::Int32
+    anchor::Int32
+    detail::LifecycleStatusDetailCode
+    required::Int32
+    available::Int32
+    maximum::Int32
+end
+
+LifecycleStatusPayload() = LifecycleStatusPayload(
+    LifecycleStatusSuccess,
+    Int32(0),
+    Int32(0),
+    Int32(0),
+    LifecycleDetailNone,
+    Int32(0),
+    Int32(0),
+    Int32(0),
+)
+
 abstract type AbstractLifecycleFailure <: Exception end
 
 struct LifecycleInadmissibilityFailure <: AbstractLifecycleFailure
@@ -82,12 +140,52 @@ end
 
 struct NoLifecycleWorkspace end
 
+function lifecycle_workspace_layout(
+        plan::LifecycleExecutionPlan, site_count::Integer
+    )
+    site_count >= 0 || throw(ArgumentError("site count must be nonnegative"))
+    requests = Int(plan.maximum_requests)
+    placements = Int(plan.maximum_placement_sites)
+    cells = Int(plan.cell_capacity)
+    policy = Int(plan.maximum_policy_workspace)
+    return (
+        allocation_model = :fixed_preallocated,
+        cell_capacity = cells,
+        request_capacity = requests,
+        placement_capacity = placements,
+        request_slots = requests,
+        planned_site_slots = requests * placements,
+        partition_label_slots = Int(site_count),
+        cell_index_slots = 5 * cells,
+        site_index_slots = 5 * Int(site_count),
+        policy_workspace_slots = requests * policy,
+        policy_workspace_capacity = policy,
+        free_cell_slots = cells,
+    )
+end
+
+lifecycle_workspace_layout(::NoLifecycleExecutionPlan, site_count::Integer) = (
+    allocation_model = :none,
+    cell_capacity = 0,
+    request_capacity = 0,
+    placement_capacity = 0,
+    request_slots = 0,
+    planned_site_slots = 0,
+    partition_label_slots = 0,
+    cell_index_slots = 0,
+    site_index_slots = 0,
+    policy_workspace_slots = 0,
+    policy_workspace_capacity = 0,
+    free_cell_slots = 0,
+)
+
 mutable struct LifecycleWorkspace{
         V32 <: AbstractVector{Int32},
         VU32 <: AbstractVector{UInt32},
         VB <: AbstractVector{Bool},
         M32 <: AbstractMatrix{Int32},
-        M8 <: AbstractMatrix{UInt8},
+        V8 <: AbstractVector{UInt8},
+        PW <: AbstractMatrix,
         O <: AbstractArray{Int32},
         K <: AbstractVector{Int16},
         G <: AbstractVector{UInt32},
@@ -105,7 +203,13 @@ mutable struct LifecycleWorkspace{
     filtered::VB
     planned_site_count::V32
     planned_sites::M32
-    partition_labels::M8
+    partition_labels::V8
+    cell_site_starts::V32
+    cell_site_counts::V32
+    cell_site_cursor::V32
+    cell_sites::V32
+    site_position::V32
+    policy_workspace::PW
     allocation::V32
     canonical_order::V32
     conflict_seen::VB
@@ -119,14 +223,60 @@ mutable struct LifecycleWorkspace{
     staged_trackers::TS
     staged_relationships::R
     staged_descriptor_state::D
-    status::LifecycleStatusCode
-    status_source::Int32
-    status_anchor::Int32
-    status_detail::Int32
-    status_required::Int32
-    status_available::Int32
-    status_maximum::Int32
+    status::LifecycleStatusPayload
 end
+
+function lifecycle_workspace_conforms(
+        workspace::LifecycleWorkspace,
+        plan::LifecycleExecutionPlan,
+        site_count::Integer,
+    )
+    layout = lifecycle_workspace_layout(plan, site_count)
+    requests = layout.request_capacity
+    cells = layout.cell_capacity
+    sites = Int(site_count)
+    request_vectors = (
+        workspace.descriptor,
+        workspace.anchor,
+        workspace.generation,
+        workspace.occurrence,
+        workspace.active,
+        workspace.selected,
+        workspace.filtered,
+        workspace.planned_site_count,
+        workspace.allocation,
+        workspace.canonical_order,
+        workspace.conflict_seen,
+    )
+    cell_vectors = (
+        workspace.cell_site_starts,
+        workspace.cell_site_counts,
+        workspace.cell_site_cursor,
+        workspace.free_slots,
+        workspace.representative_site,
+    )
+    site_vectors = (
+        workspace.partition_labels,
+        workspace.cell_sites,
+        workspace.site_position,
+        workspace.site_seen,
+        workspace.site_queue,
+    )
+    return all(value -> length(value) == requests, request_vectors) &&
+        all(value -> length(value) == cells, cell_vectors) &&
+        all(value -> length(value) == sites, site_vectors) &&
+        size(workspace.planned_sites) ==
+            (layout.placement_capacity, requests) &&
+        size(workspace.policy_workspace) ==
+            (layout.policy_workspace_capacity, requests) &&
+        length(workspace.staged_ownership) == sites &&
+        length(workspace.staged_cell_kinds) == cells &&
+        length(workspace.staged_cell_generations) == cells
+end
+
+lifecycle_workspace_conforms(
+    ::NoLifecycleWorkspace, ::NoLifecycleExecutionPlan, site_count::Integer
+) = site_count >= 0
 
 function allocate_lifecycle_workspace(
         ::NoLifecycleExecutionPlan,
@@ -160,6 +310,7 @@ function allocate_lifecycle_workspace(
     request_bound = Int(plan.maximum_requests)
     placement_bound = Int(plan.maximum_placement_sites)
     site_count = length(ownership)
+    layout = lifecycle_workspace_layout(plan, site_count)
     return LifecycleWorkspace(
         Int32(0),
         zeros(Int32, request_bound),
@@ -171,7 +322,13 @@ function allocate_lifecycle_workspace(
         zeros(Bool, request_bound),
         zeros(Int32, request_bound),
         zeros(Int32, placement_bound, request_bound),
-        zeros(UInt8, site_count, request_bound),
+        zeros(UInt8, site_count),
+        zeros(Int32, Int(plan.cell_capacity)),
+        zeros(Int32, Int(plan.cell_capacity)),
+        zeros(Int32, Int(plan.cell_capacity)),
+        zeros(Int32, site_count),
+        zeros(Int32, site_count),
+        zeros(T, layout.policy_workspace_capacity, request_bound),
         zeros(Int32, request_bound),
         zeros(Int32, request_bound),
         zeros(Bool, request_bound),
@@ -185,13 +342,7 @@ function allocate_lifecycle_workspace(
         copy_tracker_state(trackers),
         copy(relationships),
         copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
-        LifecycleStatusSuccess,
-        Int32(0),
-        Int32(0),
-        Int32(0),
-        Int32(0),
-        Int32(0),
-        Int32(0),
+        LifecycleStatusPayload(),
     )
 end
 
@@ -201,16 +352,11 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     fill!(workspace.selected, false)
     fill!(workspace.filtered, false)
     fill!(workspace.planned_site_count, 0)
+    fill!(workspace.policy_workspace, zero(eltype(workspace.policy_workspace)))
     fill!(workspace.allocation, 0)
     fill!(workspace.conflict_seen, false)
     fill!(workspace.representative_site, 0)
-    workspace.status = LifecycleStatusSuccess
-    workspace.status_source = 0
-    workspace.status_anchor = 0
-    workspace.status_detail = 0
-    workspace.status_required = 0
-    workspace.status_available = 0
-    workspace.status_maximum = 0
+    workspace.status = LifecycleStatusPayload()
     return workspace
 end
 
