@@ -1,6 +1,6 @@
 @testset "runtime, solution, and symbolic indexing" begin
     @parameters target=8.0 strength=2.0 temperature=4.0
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     @named source = PottsSystem(
         statements = StatementSet((
@@ -129,7 +129,7 @@ end
 
 @testset "declared stored-state schemas persist logically" begin
     @variables t site_marker(t) cell_marker(t) medium_marker(t) model_marker(t)
-    cell = CellKind(:stored_cell)
+    cell = CellKind(:stored_cell; extinction = RetireAtZero())
     medium = MediumKind(:stored_medium)
     @named stored = PottsSystem(
         statements = StatementSet((
@@ -137,7 +137,12 @@ end
             cell,
             medium,
             SiteState(site_marker; name = :site_marker, initial = 1.0),
-            CellState(cell_marker; name = :cell_marker, initial = 2.0),
+            CellState(
+                cell_marker;
+                name = :cell_marker,
+                initial = 2.0,
+                retirement = RetireTo(0.0),
+            ),
             MediumState(medium_marker; name = :medium_marker, initial = 3.0),
             ModelState(model_marker; name = :model_marker, initial = 4.0),
             Protocol(Sweep(); name = :main),

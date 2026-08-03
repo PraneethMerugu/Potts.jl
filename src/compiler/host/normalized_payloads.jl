@@ -186,6 +186,8 @@ function _bound_anchor_resource(
     domain = arguments.domain
     requested, resource_kind = if kind === :contact_anchor && domain isa Contacts
         (domain.relation, :SpatialRelation)
+    elseif kind === :cell_anchor && domain isa Cells
+        (domain.kind, :CellKind)
     elseif kind === :relationship_context && domain isa Edges
         (domain.relationship, :RelationshipState)
     else

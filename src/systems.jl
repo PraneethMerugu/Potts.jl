@@ -475,6 +475,7 @@ function ModelingToolkitBase.complete(
     )
     _throw_diagnostics(:completion, diagnostics)
     expanded_system = _expand_structural_policies(expanded_system)
+    _validate_lifecycle_conflicts!(_all_system_statements(expanded_system))
     _validate_completion_reference_units(expanded_system, reference_units)
     completion_data = _complete_potts(
         expanded_system,

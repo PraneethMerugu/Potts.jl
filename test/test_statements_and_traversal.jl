@@ -2,9 +2,10 @@
     @variables t x(t)
     @parameters k
     site_anchor = SiteBinding(:site_anchor)
+    cell_anchor = CellBinding(:cell_anchor)
 
     declarations = (
-        CellKind(:cell),
+        CellKind(:cell; extinction = RetireAtZero()),
         MediumKind(:medium),
         LatticeDomain(:lattice; shape = (8, 8)),
         SpatialRelation(:proposal; neighborhood = Moore()),
@@ -42,7 +43,12 @@
         ),
         LifecycleProcess(
             :lifecycle; domain = cells(declarations[1]),
-            effects = (Retire(:cell),), phase = Lifecycle(),
+            anchor = cell_anchor,
+            expression = cell_volume(anchor_value(cell_anchor)) == 0,
+            effects = (Retire(
+                cell_anchor; on_inadmissible = ErrorOnInadmissible()
+            ),),
+            phase = Lifecycle(),
         ),
     )
     tail = (
@@ -63,7 +69,7 @@
     @test all(statement -> statement isa AbstractPottsStatement, set)
 
     captured = @statements begin
-        CellKind(:captured_cell)
+        CellKind(:captured_cell; extinction = RetireAtZero())
         HamiltonianTerm(
             :captured_energy;
             domain = sites(:lattice),

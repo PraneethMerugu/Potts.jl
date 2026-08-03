@@ -4,7 +4,7 @@
         strength = 2.0e-12u"J"
         temperature = 4.0e-12u"J"
     end
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     @named dimensional = PottsSystem(
         statements = StatementSet((
@@ -105,7 +105,7 @@ end
 
 @testset "compiler-proven structural parameter roles" begin
     @parameters capacity = 4
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     links = RelationshipState(
         :links;
@@ -172,7 +172,7 @@ end
 
 @testset "completion owns reference-unit validation" begin
     @parameters target = 8.0u"μm^2" strength = 2.0
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     @named missing_anchor = PottsSystem(
         statements = StatementSet((

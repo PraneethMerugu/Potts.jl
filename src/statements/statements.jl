@@ -209,9 +209,14 @@ function Observation(id::Union{Symbol, StatementID}, expression;
     return Observation(_statement_core(id, (; expression), (; kwargs...), source))
 end
 
-function Protocol(id::Union{Symbol, StatementID}; stages = (), source = UnknownSource(), kwargs...)
+function Protocol(id::Union{Symbol, StatementID}; stages = (),
+        lifecycle_conflicts = RejectLifecycleAmbiguity(),
+        source = UnknownSource(), kwargs...)
     return Protocol(_statement_core(
-        id, (; stages = _defensive_tuple(stages)), (; kwargs...), source
+        id,
+        (; stages = _defensive_tuple(stages)),
+        (; lifecycle_conflicts, kwargs...),
+        source,
     ))
 end
 

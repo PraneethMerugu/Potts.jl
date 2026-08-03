@@ -3,7 +3,7 @@
 # initialization, and one-MCS solve paths without adding a precompile-only
 # package dependency.
 let
-    cell = CellKind(:precompile_cell)
+    cell = CellKind(:precompile_cell; extinction = RetireAtZero())
     medium = MediumKind(:precompile_medium)
     system = PottsSystem(
         name = :PottsPrecompileWorkload,

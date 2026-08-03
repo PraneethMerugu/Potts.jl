@@ -8,7 +8,7 @@ function direct_model(count::Integer; weight_default = 2.0)
     count > 0 || throw(ArgumentError("term count must be positive"))
     @parameters weight = weight_default
     site = SiteBinding(:site)
-    endothelial = CellKind(:endothelial)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     terms = AbstractPottsStatement[
         HamiltonianTerm(

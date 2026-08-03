@@ -8,7 +8,7 @@ isdefined(@__MODULE__, :G5ExternalSurfaceOperation) ||
     include("../fixtures/G5ExternalSurfaceOperation.jl")
 
 function _g5_surface_backend_fixture()
-    cell = CellKind(:surface_backend_cell)
+    cell = CellKind(:surface_backend_cell; extinction = RetireAtZero())
     medium = MediumKind(:surface_backend_medium)
     anchor = CellBinding(:surface_backend_anchor)
     @named model = PottsSystem(statements = StatementSet((

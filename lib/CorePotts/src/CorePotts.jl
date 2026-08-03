@@ -34,6 +34,7 @@ public AbstractTrackerDescriptor, OwnershipCountTracker
 public CellSurfaceTracker
 public CellMomentsTracker, CellMomentsState
 public TrackerExecutionPlan, TrackerKernelPlan, TrackerState
+public DenseScalarTrackerGroup
 public TrackerCheckpointState, tracker_kernel_plan, adapt_tracker_kernel_plan
 public AbstractTrackerCheckpointPolicy, PersistTrackerCheckpoint
 public ReconstructTrackerCheckpoint
@@ -62,6 +63,7 @@ public tracker_value_after
 public tracker_operation_value
 public program_tracker_values, program_tracker_value
 public tracker_plan_report
+public tracker_instances
 public ProgramRelationshipState, ProgramRelationshipRequest
 public CreateRelationshipRequest, RemoveRelationshipRequest
 public RelationshipFailureDisposition, RelationshipFailureError
@@ -84,12 +86,17 @@ public AbstractEvaluatorExecutionContext, AbstractProbeEvaluationContext
 public AbstractHamiltonianEvaluationContext, AbstractProposalEvaluationContext
 public AbstractSiteStageEvaluationContext
 public AbstractRelationshipStageEvaluationContext
+public AbstractLifecycleTriggerEvaluationContext
+public AbstractLifecyclePlacementEvaluationContext
+public AbstractLifecyclePartitionEvaluationContext
+public AbstractLifecycleStateTransformEvaluationContext
 public LiteralExpression, ParameterExpression, ContextExpression, StateExpression
 public OperationExpression
 public StaticEvaluator, OrderedFold, ContextOperation, ResourceOperation
 public execute_operation, context_value
 public apply_resource_operation, operation_callable, operation_context_supported
 public qualified_tracker_operation_call
+public QualifiedTrackerOperation
 public state_value, workspace_value, evaluator_parameters
 public proposal_source_site, proposal_target_site, proposal_source_owner
 public proposal_target_owner, proposal_target_kind

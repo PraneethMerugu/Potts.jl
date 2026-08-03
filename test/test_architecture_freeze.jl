@@ -89,7 +89,7 @@ using .ArchitectureFreezeFixtures
         malformed = PottsToolkit._potts_token(
             :__potts_field__missing_architecture_state
         )
-        cell = CellKind(:closed_leaf_cell)
+        cell = CellKind(:closed_leaf_cell; extinction = RetireAtZero())
         @named closed_leaf_model = PottsSystem(statements = StatementSet((
             Lattice((2, 2); relations = (proposal = VonNeumann(),)),
             cell,
@@ -111,7 +111,7 @@ using .ArchitectureFreezeFixtures
     end
 
     @testset "operation legality precedes lowering" begin
-        cell = CellKind(:role_cell)
+        cell = CellKind(:role_cell; extinction = RetireAtZero())
         proposal = ProposalContext(:copy)
         expression = ArchitectureFreezeFixtures.role_locked_operation(
             proposal.source_site
@@ -205,7 +205,7 @@ using .ArchitectureFreezeFixtures
             length_parameter = 2.0u"m"
             area_parameter = 4.0u"m^2"
         end
-        cell = CellKind(:unit_cell)
+        cell = CellKind(:unit_cell; extinction = RetireAtZero())
         medium = MediumKind(:unit_medium)
         reference_units = ReferenceUnits(
             length = 1.0u"m",
@@ -332,7 +332,7 @@ using .ArchitectureFreezeFixtures
 
     @testset "qualified resource identity is authoritative" begin
         function completed_connectivity(name)
-            cell = CellKind(:cell)
+            cell = CellKind(:cell; extinction = RetireAtZero())
             system = PottsSystem(
                 name = name,
                 statements = StatementSet((
@@ -382,7 +382,7 @@ using .ArchitectureFreezeFixtures
         @test :square_root ∉ closure_identities
         @test :act_energy ∉ closure_identities
 
-        invalid_cell = CellKind(:invalid_cell)
+        invalid_cell = CellKind(:invalid_cell; extinction = RetireAtZero())
         invalid_relations = PottsSystem(
             name = :invalid_scientific_requirements,
             statements = StatementSet((
@@ -415,7 +415,7 @@ using .ArchitectureFreezeFixtures
     end
 
     @testset "per-model operation closure is dependency-derived" begin
-        cell = CellKind(:closure_cell)
+        cell = CellKind(:closure_cell; extinction = RetireAtZero())
         medium = MediumKind(:closure_medium)
         @named volume_only = PottsSystem(statements = StatementSet((
             Lattice((2, 2)),
@@ -507,7 +507,7 @@ using .ArchitectureFreezeFixtures
     end
 
     @testset "affected-anchor plans consume first-class facts" begin
-        cell = CellKind(:proof_cell)
+        cell = CellKind(:proof_cell; extinction = RetireAtZero())
         medium = MediumKind(:proof_medium)
         site = SiteBinding(:site)
         relationship = RelationshipState(
@@ -562,7 +562,7 @@ using .ArchitectureFreezeFixtures
 
     @testset "named operations use admitted ownership layers" begin
         @variables t activity field(t)
-        cell = CellKind(:operation_cell)
+        cell = CellKind(:operation_cell; extinction = RetireAtZero())
         medium = MediumKind(:operation_medium)
         activity_state = SiteState(
             activity;
@@ -676,7 +676,7 @@ using .ArchitectureFreezeFixtures
         )
         @named frozen_external_model = PottsSystem(statements = StatementSet((
             Lattice((2, 2); relations = (proposal = VonNeumann(),)),
-            CellKind(:external_cell),
+            CellKind(:external_cell; extinction = RetireAtZero()),
             MediumKind(:external_medium),
             ProposalDrive(:external_drive, expression),
             Protocol(Sweep(); name = :main),

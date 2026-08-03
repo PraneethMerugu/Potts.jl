@@ -259,7 +259,7 @@ end
         @named bank_model = PottsSystem(
             statements = StatementSet((
                 Lattice((4, 4)),
-                CellKind(:bank_cell),
+                CellKind(:bank_cell; extinction = RetireAtZero()),
                 MediumKind(:bank_medium),
                 ordered...,
                 Protocol(Sweep(); name = :main),
@@ -312,7 +312,7 @@ end
     @named nested_cpu_only = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
-            CellKind(:cpu_only_cell),
+            CellKind(:cpu_only_cell; extinction = RetireAtZero()),
             MediumKind(:cpu_only_medium),
             HamiltonianTerm(
                 :nested_cpu_only_energy;
@@ -399,7 +399,7 @@ end
         )
         @variables external_activity
         @parameters external_weight = weight_default
-        endothelial = CellKind(:endothelial)
+        endothelial = CellKind(:endothelial; extinction = RetireAtZero())
         extracellular = MediumKind(:extracellular)
         site = SiteBinding(:site)
         activity = SiteState(
@@ -936,7 +936,7 @@ end
     @named constrained = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
-            CellKind(:cell),
+            CellKind(:cell; extinction = RetireAtZero()),
             MediumKind(:medium),
             HamiltonianTerm(
                 :validated_log;
@@ -971,7 +971,7 @@ end
     @named stochastic_domains = PottsSystem(
         statements = StatementSet((
             Lattice((3, 3)),
-            CellKind(:stochastic_cell),
+            CellKind(:stochastic_cell; extinction = RetireAtZero()),
             MediumKind(:stochastic_medium),
             ProposalDrive(:validated_draws, stochastic_expression),
             Protocol(Sweep(); name = :main),
@@ -1006,7 +1006,7 @@ end
     )
 
     function stable_draw_model(include_earlier)
-        stable_cell = CellKind(:stable_draw_cell)
+        stable_cell = CellKind(:stable_draw_cell; extinction = RetireAtZero())
         stable_medium = MediumKind(:stable_draw_medium)
         stable_draw = draw(
             Uniform(7.0, 8.0), DrawKey(:z_stable_draw)
@@ -1070,7 +1070,7 @@ end
     end
     @test colliding_keys !== nothing
     first_collision, second_collision = colliding_keys
-    collision_cell = CellKind(:collision_cell)
+    collision_cell = CellKind(:collision_cell; extinction = RetireAtZero())
     collision_medium = MediumKind(:collision_medium)
     collision_expression =
         draw(Uniform(), DrawKey(first_collision)) +
@@ -1098,7 +1098,7 @@ end
           :draw_operation_identity_collision
 
     @variables unsafe_state
-    unsafe_kind = CellKind(:unsafe_kind)
+    unsafe_kind = CellKind(:unsafe_kind; extinction = RetireAtZero())
     unsafe_site = SiteBinding(:unsafe_site)
     @named unsafe = PottsSystem(
         statements = StatementSet((
@@ -1147,7 +1147,7 @@ end
 end
 
 @testset "G2 local Hamiltonian equivalence" begin
-    cell = CellKind(:equivalence_cell)
+    cell = CellKind(:equivalence_cell; extinction = RetireAtZero())
     medium = MediumKind(:equivalence_medium)
     site = SiteBinding(:energy_site)
     @named equivalence = PottsSystem(statements = StatementSet((
@@ -1311,14 +1311,14 @@ end
         local_anchor = SiteBinding(anchor_name)
         @named structural = PottsSystem(statements = StatementSet((
             Lattice((3, 3)),
-            CellKind(:structural_cell),
+            CellKind(:structural_cell; extinction = RetireAtZero()),
             MediumKind(:structural_medium),
             HamiltonianTerm(
                 statement_name;
                 domain = sites(:lattice),
                 anchor = local_anchor,
                 expression = 2.0 * occupancy(
-                    CellKind(:structural_cell), local_anchor
+                    CellKind(:structural_cell; extinction = RetireAtZero()), local_anchor
                 ) + 7.0,
             ),
             Protocol(Sweep(); name = :structural_protocol),

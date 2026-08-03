@@ -10,7 +10,7 @@
         temperature = 18.0
     end
 
-    endothelial = CellKind(:endothelial)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     activity_state = SiteState(
         activity;

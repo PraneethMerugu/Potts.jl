@@ -15,6 +15,14 @@ abstract type AbstractSiteStageEvaluationContext <:
               AbstractEvaluatorExecutionContext end
 abstract type AbstractRelationshipStageEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+abstract type AbstractLifecycleTriggerEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractLifecyclePlacementEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractLifecyclePartitionEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
+abstract type AbstractLifecycleStateTransformEvaluationContext <:
+              AbstractEvaluatorExecutionContext end
 
 abstract type AbstractStorageRepresentation end
 
@@ -258,6 +266,74 @@ operation_context_supported(
     ::AbstractContextualOperation,
     ::Type{<:AbstractEvaluatorExecutionContext},
 ) = false
+
+# G5-L1 freezes semantic lifecycle callable admission without introducing the
+# lifecycle transaction runtime. Concrete G5-L2 contexts must still implement
+# the corresponding resource operation before execution can qualify.
+for (identity, contexts) in (
+        :cell_volume => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :cell_surface => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :cell_elongation => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :cell_center => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePlacementEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :unwrapped_center => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePlacementEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :field_value => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePlacementEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :history_value => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :degree => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :edge_payload => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+        :occupancy => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePlacementEvaluationContext,
+        ),
+        :draw => (
+            AbstractLifecycleTriggerEvaluationContext,
+            AbstractLifecyclePlacementEvaluationContext,
+            AbstractLifecyclePartitionEvaluationContext,
+            AbstractLifecycleStateTransformEvaluationContext,
+        ),
+    )
+    for context in contexts
+        @eval operation_context_supported(
+            ::ResourceOperation{$(QuoteNode(identity))},
+            ::Type{$context},
+        ) = true
+    end
+end
 
 for (identity, operation) in (
         :add => OrderedFold(+),

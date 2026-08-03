@@ -1,6 +1,6 @@
 @testset "compilation and inspection" begin
     @parameters target=9.0 strength=2.0 temperature=4.0
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     @named source = PottsSystem(
         statements = StatementSet((

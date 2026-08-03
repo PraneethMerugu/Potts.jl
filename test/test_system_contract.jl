@@ -9,7 +9,7 @@
     site_anchor = SiteBinding(:site_anchor)
     @named child = PottsSystem(
         statements = StatementSet((
-            CellKind(:cell),
+            CellKind(:cell; extinction = RetireAtZero()),
             HamiltonianTerm(
                 :energy;
                 domain = sites(:lattice),

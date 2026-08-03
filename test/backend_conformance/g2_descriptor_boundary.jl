@@ -10,7 +10,7 @@ include("../fixtures/NeutralExternalTerms.jl")
 function _g2_external_site_model(count)
     @variables external_activity
     @parameters external_weight = 2.5
-    endothelial = CellKind(:endothelial)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     site = SiteBinding(:energy_site)
     activity = SiteState(

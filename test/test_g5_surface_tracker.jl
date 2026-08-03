@@ -9,7 +9,7 @@ function _g5_surface_model(
         strength = 2.0,
         prefix_relation = false,
     )
-    cell = CellKind(:surface_cell)
+    cell = CellKind(:surface_cell; extinction = RetireAtZero())
     medium = MediumKind(:surface_medium)
     anchor = CellBinding(:surface_anchor)
     model = PottsSystem(
@@ -50,7 +50,7 @@ function _g5_surface_model(
 end
 
 function _g5_surface_child(name::Symbol, neighborhood)
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     anchor = CellBinding(:cell_anchor)
     model = PottsSystem(
@@ -257,7 +257,7 @@ end
     end
 
     @testset "external operation receives the qualified tracker protocol" begin
-        cell = CellKind(:external_surface_cell)
+        cell = CellKind(:external_surface_cell; extinction = RetireAtZero())
         medium = MediumKind(:external_surface_medium)
         anchor = CellBinding(:external_surface_anchor)
         model = PottsSystem(

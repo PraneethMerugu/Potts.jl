@@ -1,7 +1,7 @@
 @testset "initial state, problem, and remake" begin
     @variables t marker(t)
     @parameters target=8.0 strength temperature
-    cell = CellKind(:cell)
+    cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     @named source = PottsSystem(
         statements = StatementSet((

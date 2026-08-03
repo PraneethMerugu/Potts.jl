@@ -17,6 +17,8 @@ inspect(system::PottsSystem, ::RandomOperations) =
 inspect(system::PottsSystem, ::Schedule) = _completion_data(system).schedule
 inspect(system::PottsSystem, ::Capabilities) = _completion_data(system).capabilities
 inspect(system::PottsSystem, ::Fingerprints) = _completion_data(system).fingerprints
+inspect(system::PottsSystem, ::LifecyclePlans) =
+    _lifecycle_analysis_report(_analyze_completed_system(system))
 
 semantic_fingerprint(system::PottsSystem) = inspect(system, Fingerprints()).semantic
 completed_system_fingerprint(system::PottsSystem) =
@@ -69,3 +71,5 @@ inspect(executable::PottsExecutable, ::ReplayContract) = (
     replay = executable.reports.replay,
     checkpoint = executable.reports.checkpoint,
 )
+inspect(executable::PottsExecutable, ::LifecyclePlans) =
+    executable.reports.compiler.lifecycle

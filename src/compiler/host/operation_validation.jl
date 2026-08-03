@@ -28,7 +28,57 @@ const _OPERAND_TRANSFER_RULES = Set((
 ))
 const _OPERATION_CONTEXT_RULES = Set((
     :any, :proposal, :hamiltonian, :iteration, :relationship,
+    :lifecycle_trigger, :lifecycle_placement, :lifecycle_partition,
+    :lifecycle_state_transform,
 ))
+
+function _lifecycle_operation_abi_error(
+        transfer::OperationTransfer,
+        abi::LifecycleOperationABI,
+    )
+    abi.role in _LIFECYCLE_OPERATION_ROLES ||
+        return "unknown lifecycle operation role $(repr(abi.role))"
+    abi.input_context in _LIFECYCLE_INPUT_CONTEXTS ||
+        return "unknown lifecycle input context $(repr(abi.input_context))"
+    abi.result_shape in _LIFECYCLE_RESULT_SHAPES ||
+        return "unknown lifecycle result shape $(repr(abi.result_shape))"
+    abi.validator in _LIFECYCLE_VALIDATORS ||
+        return "unknown lifecycle validator $(repr(abi.validator))"
+    abi.rng_entity in _LIFECYCLE_RNG_ENTITIES ||
+        return "unknown lifecycle RNG entity $(repr(abi.rng_entity))"
+    abi.emission_maximum >= 0 ||
+        return "lifecycle emission maximum must be nonnegative"
+    abi.workspace_maximum >= 0 ||
+        return "lifecycle workspace maximum must be nonnegative"
+    role = abi.role === :binary_partition ? :lifecycle_partition :
+           Symbol(:lifecycle_, abi.role)
+    role in transfer.allowed_roles ||
+        return "lifecycle ABI role $role is absent from allowed_roles"
+    :Lifecycle in transfer.allowed_phases ||
+        return "lifecycle ABI operations must admit the Lifecycle phase"
+    transfer.required_context === abi.input_context ||
+        return "required_context must equal lifecycle ABI input_context"
+    expected_shape = abi.role === :trigger ? :scalar_boolean :
+                     abi.role === :placement ? :bounded_site_selection :
+                     abi.role === :binary_partition ? :site_region_label : nothing
+    expected_shape === nothing || abi.result_shape === expected_shape ||
+        return "lifecycle role $(abi.role) requires result shape $expected_shape"
+    abi.role === :trigger && transfer.result_rule !== :boolean &&
+        return "lifecycle triggers must use the boolean result transfer"
+    abi.role in (:placement, :binary_partition) &&
+        transfer.result_rule !== :integer &&
+        return "lifecycle placement/partition operations must return integers"
+    abi.role === :placement && abi.emission_maximum <= 0 &&
+        return "lifecycle placement must declare a positive finite emission maximum"
+    validator = abi.role === :trigger ? :trigger_boolean :
+                abi.role === :placement ? :placement_selection :
+                abi.role === :binary_partition ? :binary_partition :
+                :state_schema
+    abi.validator === validator ||
+        return "lifecycle role $(abi.role) requires validator $validator"
+    return nothing
+end
+
 function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
     isempty(String(transfer.identity)) &&
         return "operation identity must be nonempty"
@@ -91,6 +141,12 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         else
             return "unknown source requirement $(nameof(typeof(requirement)))"
         end
+    end
+    if transfer.lifecycle_abi !== nothing
+        problem = _lifecycle_operation_abi_error(
+            transfer, transfer.lifecycle_abi
+        )
+        problem === nothing || return problem
     end
     transfer.cpu ||
         return "V1 operations must admit the CPU reference backend"

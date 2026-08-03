@@ -4,7 +4,7 @@ using SciMLBase
 using Symbolics
 
 @parameters target = 4.0 strength = 1.0 temperature = 2.0
-cell = CellKind(:cell)
+cell = CellKind(:cell; extinction = RetireAtZero())
 medium = MediumKind(:medium)
 @named smoke = PottsSystem(
     statements = StatementSet((

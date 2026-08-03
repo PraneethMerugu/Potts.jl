@@ -11,7 +11,7 @@ isdefined(@__MODULE__, :NeutralExternalTerms) ||
 function _g4_external_checkerboard_fixture()
     @variables checkerboard_activity
     @parameters checkerboard_weight = 0.25
-    cell = CellKind(:checkerboard_cell)
+    cell = CellKind(:checkerboard_cell; extinction = RetireAtZero())
     medium = MediumKind(:checkerboard_medium)
     anchor = SiteBinding(:checkerboard_energy_site)
     activity = SiteState(

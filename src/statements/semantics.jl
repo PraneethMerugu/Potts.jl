@@ -53,12 +53,14 @@ struct IncidentEdges{R, C} <: AbstractIterationDomain
     relationship::R
     cell::C
 end
+struct ModelDomain <: AbstractIterationDomain end
 
 sites(domain) = Sites(domain)
 cells(kind) = Cells(kind)
 contacts(relation) = Contacts(relation)
 edges(relationship) = Edges(relationship)
 incident_edges(relationship, cell) = IncidentEdges(relationship, cell)
+model() = ModelDomain()
 
 function HamiltonianTerm(
         id::Union{Symbol, StatementID};
@@ -106,19 +108,6 @@ struct Retune{R, E, P, Q} <: AbstractPottsEffect
 end
 Retune(relationship, edge; payload, priority = 0) =
     Retune(relationship, edge, payload, priority)
-
-struct Transition{C, K} <: AbstractPottsEffect
-    cell::C
-    kind::K
-end
-struct Divide{C, P} <: AbstractPottsEffect
-    cell::C
-    policy::P
-end
-Divide(cell; policy = nothing) = Divide(cell, policy)
-struct Retire{C} <: AbstractPottsEffect
-    cell::C
-end
 
 abstract type AbstractBoundaryPolicy end
 struct Periodic <: AbstractBoundaryPolicy end

@@ -25,8 +25,8 @@ end
         temperature = 15.0
     end
 
-    endothelial = CellKind(:endothelial)
-    border = CellKind(:border)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
+    border = CellKind(:border; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     chemo_field = FieldState(
         chemoattractant;

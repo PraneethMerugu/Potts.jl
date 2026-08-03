@@ -101,3 +101,4 @@ struct StateSchema <: AbstractInspectionSelector end
 struct Observations <: AbstractInspectionSelector end
 struct ExternalIO <: AbstractInspectionSelector end
 struct ReplayContract <: AbstractInspectionSelector end
+struct LifecyclePlans <: AbstractInspectionSelector end

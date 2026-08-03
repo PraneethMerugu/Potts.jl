@@ -45,6 +45,7 @@ struct AnalyzedTermIR
     graph::NormalizedTermGraph
     facts::AnalyzedFactTable
     candidates::Vector{DescriptorCandidate}
+    lifecycle::Vector{LifecycleAnalysisFact}
     structural_key::String
 end
 
@@ -54,9 +55,13 @@ function _record_operation_role(record::QualifiedStatement)
     record.kind === :ProposalConstraint && return :constraint
     record.kind === :ProposalModifier && return :modifier
     record.kind === :Observation && return :observation
-    record.kind in (
-        :RelationshipProcess, :LifecycleProcess, :RelationshipState,
-    ) && return :relationship
+    if record.kind === :LifecycleProcess
+        arguments = first(record.normalized_payload)
+        any(_cell_lifecycle_effect, arguments.effects) && return :lifecycle
+        return :relationship
+    end
+    record.kind in (:RelationshipProcess, :RelationshipState) &&
+        return :relationship
     record.kind in (
         :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
         :HistoryState,
@@ -79,6 +84,11 @@ function _operation_context_admitted(
         :AfterMCS, :EquationStep, :Observe,
     )
     required === :relationship && return role === :relationship
+    required === :lifecycle_trigger && return role === :lifecycle_trigger
+    required === :lifecycle_placement && return role === :lifecycle_placement
+    required === :lifecycle_partition && return role === :lifecycle_partition
+    required === :lifecycle_state_transform &&
+        return role === :lifecycle_state_transform
     return false
 end
 
@@ -94,6 +104,15 @@ function _operation_operand_admitted(rule::Symbol, types::Tuple)
 end
 
 function _operation_evaluation_context(role::Symbol, phase::Symbol)
+    role === :lifecycle_trigger &&
+        return CorePotts.AbstractLifecycleTriggerEvaluationContext
+    role === :lifecycle_placement &&
+        return CorePotts.AbstractLifecyclePlacementEvaluationContext
+    role === :lifecycle_partition &&
+        return CorePotts.AbstractLifecyclePartitionEvaluationContext
+    role === :lifecycle_state_transform &&
+        return CorePotts.AbstractLifecycleStateTransformEvaluationContext
+    role === :lifecycle_priority && return nothing
     role === :hamiltonian &&
         return CorePotts.AbstractHamiltonianEvaluationContext
     # V1 observations lower through their closed observation manifest rather
@@ -106,6 +125,36 @@ function _operation_evaluation_context(role::Symbol, phase::Symbol)
     phase in (:RelationshipCommit, :Lifecycle) &&
         return CorePotts.AbstractRelationshipStageEvaluationContext
     return nothing
+end
+
+const _LIFECYCLE_ROOT_ROLES = (
+    :lifecycle_trigger,
+    :lifecycle_placement,
+    :lifecycle_partition,
+    :lifecycle_state_transform,
+    :lifecycle_priority,
+)
+
+function _node_operation_roles(
+        source::FrozenSourceGraph,
+        graph::NormalizedTermGraph,
+    )
+    roles = [Symbol[] for _ in graph.nodes]
+    function visit(index::Int32, role::Symbol)
+        bucket = roles[Int(index)]
+        role in bucket || push!(bucket, role)
+        for operand in graph.nodes[Int(index)].operands
+            visit(operand, role)
+        end
+        return nothing
+    end
+    for root in graph.roots
+        record = source.records[Int(root.record)]
+        role = root.role in _LIFECYCLE_ROOT_ROLES ? root.role :
+               _record_operation_role(record)
+        visit(root.node, role)
+    end
+    return Tuple(Tuple(sort!(bucket; by = String)) for bucket in roles)
 end
 
 function _source_requirement_problem(
@@ -214,12 +263,18 @@ function _validate_operation_use!(
         operand_types::Tuple,
         graph::NormalizedTermGraph,
         source::FrozenSourceGraph,
+        role::Symbol,
     )
     transfer = node.transfer
     transfer === nothing && return nothing
-    role = _record_operation_role(record)
     phase = _record_operation_phase(record)
-    problem = if !(role in transfer.allowed_roles)
+    abi_role = transfer.lifecycle_abi === nothing ? nothing :
+        transfer.lifecycle_abi.role === :binary_partition ?
+        :lifecycle_partition :
+        Symbol(:lifecycle_, transfer.lifecycle_abi.role)
+    problem = if abi_role !== nothing && role !== abi_role
+        "lifecycle ABI role $(repr(abi_role)) cannot execute as $(repr(role))"
+    elseif !(role in transfer.allowed_roles)
         "role $(repr(role)) is not in $(repr(transfer.allowed_roles))"
     elseif !(phase in transfer.allowed_phases)
         "phase $(repr(phase)) is not in $(repr(transfer.allowed_phases))"
@@ -614,6 +669,7 @@ function _analyze_term_graph(
     backend_admission = Any[() for _ in 1:count]
     source_chain = Any[() for _ in 1:count]
     source_bindings = Any[() for _ in 1:count]
+    operation_roles = _node_operation_roles(source, graph)
 
     dimensions = length(_host_lattice_shape(source))
     for node in graph.nodes
@@ -622,13 +678,18 @@ function _analyze_term_graph(
         operand_indices = Int.(node.operands)
         operand_footprints = Any[footprint[item] for item in operand_indices]
         transfer = node.transfer
-        transfer === nothing || _validate_operation_use!(
-            node,
-            record,
-            Tuple(result_type[item] for item in operand_indices),
-            graph,
-            source,
-        )
+        if transfer !== nothing
+            for role in operation_roles[index]
+                _validate_operation_use!(
+                    node,
+                    record,
+                    Tuple(result_type[item] for item in operand_indices),
+                    graph,
+                    source,
+                    role,
+                )
+            end
+        end
         result_type[index] = if node.payload_kind === :literal
             typeof(node.payload.value)
         elseif node.payload_kind in (:parameter, :variable, :state)
@@ -895,6 +956,7 @@ function _analyze_term_graph(
             ),
         )
     end
+    lifecycle = _analyze_lifecycle_records(source, graph, facts)
     key = _sha256_hex(
         "potts-analyzed-term-ir-v1",
         graph.structural_key,
@@ -913,8 +975,9 @@ function _analyze_term_graph(
             backend_admission[index],
         ) for index in eachindex(graph.nodes)),
         Tuple(candidate.structural_key for candidate in candidates),
+        Tuple(fact.structural_key for fact in lifecycle),
     )
-    return AnalyzedTermIR(source, graph, facts, candidates, key)
+    return AnalyzedTermIR(source, graph, facts, candidates, lifecycle, key)
 end
 
 function _analyze_completed_system(completed::PottsSystem)
@@ -939,10 +1002,12 @@ function _compiler_analysis_report(ir::AnalyzedTermIR)
         ),
         analyzed = (
             candidates = length(ir.candidates),
+            lifecycle = length(ir.lifecycle),
             structural_key = ir.structural_key,
             candidate_keys = String[
                 candidate.structural_key for candidate in ir.candidates
             ],
         ),
+        lifecycle = _lifecycle_analysis_report(ir),
     )
 end

@@ -53,5 +53,6 @@ include("../backend_conformance/g5_surface_execution.jl")
         @test report.backend === :cpu
     end
     include("../test_g2_r1_repairs.jl")
+    include("../test_g5_lifecycle_compiler.jl")
     include("../test_checkpoint.jl")
 end

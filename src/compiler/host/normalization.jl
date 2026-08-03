@@ -25,6 +25,7 @@ function _push_term_node!(
             transfer.serialization_identity,
             transfer.footprint_rule,
             transfer.tracker_requirements,
+            transfer.lifecycle_abi,
         ),
     )
     intern_key = _sha256_hex("potts-term-intern-v1", record, key)
@@ -271,12 +272,84 @@ function _push_effect_expression_roots!(roots, role::Symbol, value)
     return roots
 end
 
+function _push_lifecycle_expression_roots!(roots, role::Symbol, value)
+    if value isa NamedTuple
+        for name in keys(value)
+            _push_lifecycle_expression_roots!(
+                roots, role, getproperty(value, name)
+            )
+        end
+        return roots
+    elseif value isa Tuple || value isa AbstractArray
+        for item in value
+            _push_lifecycle_expression_roots!(roots, role, item)
+        end
+        return roots
+    elseif value isa Pair
+        _push_lifecycle_expression_roots!(roots, role, last(value))
+        return roots
+    elseif value isa AbstractLifecyclePolicy
+        for field in fieldnames(typeof(value))
+            _push_lifecycle_expression_roots!(
+                roots, role, getfield(value, field)
+            )
+        end
+        return roots
+    elseif value isa Union{
+            AbstractPottsStatement,
+            AbstractIterationDomain,
+            CellBinding,
+            SiteBinding,
+            ContactBinding,
+            RelationshipBinding,
+        }
+        return roots
+    end
+    symbolic = !(SymbolicIndexingInterface.symbolic_type(value) isa
+        SymbolicIndexingInterface.NotSymbolic)
+    symbolic && push!(roots, role => value)
+    return roots
+end
+
+function _cell_lifecycle_effects(record::QualifiedStatement)
+    record.kind === :LifecycleProcess || return ()
+    arguments = first(record.normalized_payload)
+    arguments isa NamedTuple && haskey(arguments, :effects) || return ()
+    return Tuple(filter(_cell_lifecycle_effect, arguments.effects))
+end
+
+function _push_cell_lifecycle_effect_roots!(roots, effect)
+    if effect isa CreateCell
+        _push_lifecycle_expression_roots!(
+            roots, :lifecycle_placement, effect.placement
+        )
+        _push_lifecycle_expression_roots!(
+            roots, :lifecycle_state_transform, effect.state
+        )
+    elseif effect isa RemoveCell || effect isa Retire || effect isa Transition
+        _push_lifecycle_expression_roots!(
+            roots, :lifecycle_state_transform, effect.state
+        )
+    elseif effect isa Divide
+        _push_lifecycle_expression_roots!(
+            roots, :lifecycle_partition, effect.geometry
+        )
+        _push_lifecycle_expression_roots!(
+            roots, :lifecycle_state_transform, effect.state
+        )
+    end
+    return roots
+end
+
 function _record_expression_roots(record::QualifiedStatement)
     arguments = first(record.normalized_payload)
     roots = Pair{Symbol, Any}[]
     arguments isa NamedTuple || return roots
-    haskey(arguments, :expression) && arguments.expression !== nothing &&
-        push!(roots, :expression => arguments.expression)
+    lifecycle_effects = _cell_lifecycle_effects(record)
+    if haskey(arguments, :expression) && arguments.expression !== nothing
+        role = isempty(lifecycle_effects) ? :expression : :lifecycle_trigger
+        push!(roots, role => arguments.expression)
+    end
     if haskey(arguments, :equations)
         for (index, equation) in enumerate(arguments.equations)
             push!(roots, Symbol(:equation_, index) => equation)
@@ -284,6 +357,10 @@ function _record_expression_roots(record::QualifiedStatement)
     end
     if haskey(arguments, :effects)
         for (effect_index, effect) in enumerate(arguments.effects)
+            if _cell_lifecycle_effect(effect)
+                _push_cell_lifecycle_effect_roots!(roots, effect)
+                continue
+            end
             for field in fieldnames(typeof(effect))
                 value = getfield(effect, field)
                 _push_effect_expression_roots!(
@@ -383,6 +460,7 @@ function _normalize_source_graph(
             schema.transfer.allowed_phases,
             schema.transfer.required_context,
             schema.transfer.source_requirements,
+            schema.transfer.lifecycle_abi,
             schema.transfer.callable_identity,
             string(typeof(schema.callable)),
         ) for schema in operation_snapshot),

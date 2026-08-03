@@ -25,8 +25,8 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
 ) = _r1_override_value(context, 34567.0)
 
 @testset "relationship composition and endpoint contracts" begin
-    relationship_a = CellKind(:a)
-    relationship_b = CellKind(:b)
+    relationship_a = CellKind(:a; extinction = RetireAtZero())
+    relationship_b = CellKind(:b; extinction = RetireAtZero())
     relationship_medium = MediumKind(:medium)
     relationship_links = RelationshipState(
         :links;
@@ -127,7 +127,7 @@ const R1StaticOverrideExpression = CorePotts.OperationExpression{
     @test only(directed_error.diagnostics).kind ===
           :unsupported_relationship_direction
 
-    sibling_a = CellKind(:a)
+    sibling_a = CellKind(:a; extinction = RetireAtZero())
     sibling_medium = MediumKind(:medium)
     @named left_relationships = PottsSystem(statements = StatementSet((
         RelationshipState(
@@ -233,7 +233,7 @@ end
 
 @testset "repaired G2 R1 adversarial boundaries" begin
     @testset "contact Hamiltonians consume their bound relation" begin
-        cell = CellKind(:relation_cell)
+        cell = CellKind(:relation_cell; extinction = RetireAtZero())
         medium = MediumKind(:relation_medium)
         @named relation_model = PottsSystem(statements = StatementSet((
             Lattice(
@@ -356,7 +356,7 @@ end
     end
 
     @testset "extension payloads cannot replace compiled evaluation" begin
-        cell = CellKind(:payload_cell)
+        cell = CellKind(:payload_cell; extinction = RetireAtZero())
         medium = MediumKind(:payload_medium)
         anchor = SiteBinding(:payload_site)
         @named payload_model = PottsSystem(statements = StatementSet((
@@ -421,7 +421,7 @@ end
     end
 
     @testset "public evaluator dispatch cannot replace production" begin
-        cell = CellKind(:closed_evaluator_cell)
+        cell = CellKind(:closed_evaluator_cell; extinction = RetireAtZero())
         medium = MediumKind(:closed_evaluator_medium)
         anchor = SiteBinding(:closed_evaluator_site)
         @named closed_evaluator_model = PottsSystem(
@@ -495,7 +495,7 @@ end
 
     @testset "public parameter access cannot replace production" begin
         @parameters closed_weight = 5.0 positive_scale = 2.0
-        cell = CellKind(:closed_parameter_cell)
+        cell = CellKind(:closed_parameter_cell; extinction = RetireAtZero())
         medium = MediumKind(:closed_parameter_medium)
         anchor = SiteBinding(:closed_parameter_site)
         @named closed_parameter_model = PottsSystem(
@@ -562,7 +562,7 @@ end
     end
 
     @testset "cell domains exclude extinct after-view anchors" begin
-        cell = CellKind(:extinct_cell)
+        cell = CellKind(:extinct_cell; extinction = RetireAtZero())
         medium = MediumKind(:extinct_medium)
         @named extinction_model = PottsSystem(statements = StatementSet((
             Lattice((3, 3); boundary = Closed()),
@@ -590,7 +590,7 @@ end
     end
 
     @testset "relationship energies are total at endpoint extinction" begin
-        cell = CellKind(:linked_cell)
+        cell = CellKind(:linked_cell; extinction = RetireAtZero())
         medium = MediumKind(:linked_medium)
         links = RelationshipState(
             :links;
@@ -659,7 +659,7 @@ end
     end
 
     @testset "relationship affected anchors are a canonical bounded union" begin
-        cell = CellKind(:union_cell)
+        cell = CellKind(:union_cell; extinction = RetireAtZero())
         medium = MediumKind(:union_medium)
         links = RelationshipState(
             :union_links;
@@ -764,7 +764,7 @@ end
 
 @testset "qualified source graph owns composed lowering" begin
     @variables r1_composed_t r1_composed_state(r1_composed_t)
-    composed_cell = CellKind(:cell)
+    composed_cell = CellKind(:cell; extinction = RetireAtZero())
     composed_medium = MediumKind(:medium)
     composed_state = SiteState(
         r1_composed_state;
@@ -835,8 +835,8 @@ end
           ones(5, 5)
 
     @variables r1_left_state(r1_composed_t) r1_right_state(r1_composed_t)
-    left_cell = CellKind(:cell)
-    right_cell = CellKind(:cell)
+    left_cell = CellKind(:cell; extinction = RetireAtZero())
+    right_cell = CellKind(:cell; extinction = RetireAtZero())
     @named left = PottsSystem(
         statements = StatementSet((
             left_cell,

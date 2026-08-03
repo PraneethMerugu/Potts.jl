@@ -10,7 +10,7 @@ isdefined(@__MODULE__, :NeutralExternalTerms) ||
 
 function _g5_external_relationship_fixture()
     @parameters relationship_weight = 1.25
-    cell = CellKind(:relationship_cell)
+    cell = CellKind(:relationship_cell; extinction = RetireAtZero())
     medium = MediumKind(:relationship_medium)
     relationships = RelationshipState(
         :external_relationships;

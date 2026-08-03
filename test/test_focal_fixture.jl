@@ -16,7 +16,7 @@ end
         Lbreak = 12.0
         temperature = 8.0
     end
-    endothelial = CellKind(:endothelial)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     focal_links = RelationshipState(
         :focal_links;

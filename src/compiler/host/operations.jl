@@ -24,6 +24,68 @@ struct OperationSourceBinding
     identity::QualifiedStatementID
 end
 
+const _LIFECYCLE_OPERATION_ROLES = (
+    :trigger, :placement, :binary_partition, :state_transform,
+)
+const _LIFECYCLE_INPUT_CONTEXTS = (
+    :lifecycle_trigger,
+    :lifecycle_placement,
+    :lifecycle_partition,
+    :lifecycle_state_transform,
+)
+const _LIFECYCLE_RESULT_SHAPES = (
+    :scalar_boolean,
+    :bounded_site_selection,
+    :site_region_label,
+    :state_value,
+    :state_pair,
+)
+const _LIFECYCLE_VALIDATORS = (
+    :trigger_boolean,
+    :placement_selection,
+    :binary_partition,
+    :state_schema,
+)
+const _LIFECYCLE_RNG_ENTITIES = (
+    :none, :bound_anchor, :model_occurrence, :cell_generation, :destination,
+)
+
+struct LifecycleOperationABI
+    role::Symbol
+    input_context::Symbol
+    result_shape::Symbol
+    emission_maximum::Int
+    workspace_maximum::Int
+    validator::Symbol
+    rng_entity::Symbol
+end
+
+function LifecycleOperationABI(
+        role::Symbol;
+        input_context,
+        result_shape,
+        emission_maximum::Integer = 0,
+        workspace_maximum::Integer = 0,
+        validator,
+        rng_entity = :none,
+    )
+    emission_maximum >= 0 || throw(ArgumentError(
+        "lifecycle operation emission_maximum must be nonnegative"
+    ))
+    workspace_maximum >= 0 || throw(ArgumentError(
+        "lifecycle operation workspace_maximum must be nonnegative"
+    ))
+    return LifecycleOperationABI(
+        role,
+        input_context,
+        result_shape,
+        Int(emission_maximum),
+        Int(workspace_maximum),
+        validator,
+        rng_entity,
+    )
+end
+
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
@@ -44,7 +106,53 @@ struct OperationTransfer
     owner::Symbol
     callable_identity::String
     source_requirements::Tuple
+    lifecycle_abi::Union{Nothing, LifecycleOperationABI}
 end
+
+# Preserve the established full positional construction contract while the
+# lifecycle ABI remains an optional schema extension.
+OperationTransfer(
+    identity::Symbol,
+    schema_version::VersionNumber,
+    serialization_identity::String,
+    arity::UnitRange{Int},
+    result_rule::Symbol,
+    unit_rule::Symbol,
+    purity::Symbol,
+    totality::Symbol,
+    footprint_rule::AbstractFootprintTransferRule,
+    cpu::Bool,
+    gpu::Bool,
+    tracker_requirements::Tuple{Vararg{Symbol}},
+    operand_rule::Symbol,
+    allowed_roles::Tuple{Vararg{Symbol}},
+    allowed_phases::Tuple{Vararg{Symbol}},
+    required_context::Symbol,
+    owner::Symbol,
+    callable_identity::String,
+    source_requirements::Tuple,
+) = OperationTransfer(
+    identity,
+    schema_version,
+    serialization_identity,
+    arity,
+    result_rule,
+    unit_rule,
+    purity,
+    totality,
+    footprint_rule,
+    cpu,
+    gpu,
+    tracker_requirements,
+    operand_rule,
+    allowed_roles,
+    allowed_phases,
+    required_context,
+    owner,
+    callable_identity,
+    source_requirements,
+    nothing,
+)
 
 const _V1_OPERATION_ROLES = (
     :hamiltonian,
@@ -54,6 +162,11 @@ const _V1_OPERATION_ROLES = (
     :process,
     :observation,
     :relationship,
+    :lifecycle_trigger,
+    :lifecycle_placement,
+    :lifecycle_partition,
+    :lifecycle_state_transform,
+    :lifecycle_priority,
     :state,
 )
 const _V1_OPERATION_PHASES = (
@@ -79,6 +192,17 @@ OperationTransfer(
     footprint_rule::AbstractFootprintTransferRule,
     cpu::Bool,
     gpu::Bool,
+    ;
+    tracker_requirements = (),
+    operand_rule = :any,
+    allowed_roles = _V1_OPERATION_ROLES,
+    allowed_phases = _V1_OPERATION_PHASES,
+    required_context = :any,
+    owner = :external,
+    callable_identity = "CorePotts.operation_callable:" * String(identity) *
+        ":" * string(schema_version),
+    source_requirements = (),
+    lifecycle_abi = nothing,
 ) = OperationTransfer(
     identity,
     schema_version,
@@ -91,15 +215,15 @@ OperationTransfer(
     footprint_rule,
     cpu,
     gpu,
-    (),
-    :any,
-    _V1_OPERATION_ROLES,
-    _V1_OPERATION_PHASES,
-    :any,
-    :external,
-    "CorePotts.operation_callable:" * String(identity) * ":" *
-        string(schema_version),
-    (),
+    Tuple(tracker_requirements),
+    operand_rule,
+    Tuple(allowed_roles),
+    Tuple(allowed_phases),
+    required_context,
+    owner,
+    String(callable_identity),
+    Tuple(source_requirements),
+    lifecycle_abi,
 )
 
 OperationTransfer(
@@ -113,7 +237,16 @@ OperationTransfer(
     footprint_rule::AbstractFootprintTransferRule,
     cpu::Bool,
     gpu::Bool,
-    tracker_requirements::Tuple{Vararg{Symbol}} = (),
+    tracker_requirements::Tuple{Vararg{Symbol}} = ();
+    operand_rule = :any,
+    allowed_roles = _V1_OPERATION_ROLES,
+    allowed_phases = _V1_OPERATION_PHASES,
+    required_context = :any,
+    owner = :external,
+    callable_identity = "CorePotts.operation_callable:" * String(identity) *
+        ":" * string(schema_version),
+    source_requirements = (),
+    lifecycle_abi = nothing,
 ) = OperationTransfer(
     identity,
     schema_version,
@@ -127,14 +260,14 @@ OperationTransfer(
     cpu,
     gpu,
     tracker_requirements,
-    :any,
-    _V1_OPERATION_ROLES,
-    _V1_OPERATION_PHASES,
-    :any,
-    :external,
-    "CorePotts.operation_callable:" * String(identity) * ":" *
-        string(schema_version),
-    (),
+    operand_rule,
+    Tuple(allowed_roles),
+    Tuple(allowed_phases),
+    required_context,
+    owner,
+    String(callable_identity),
+    Tuple(source_requirements),
+    lifecycle_abi,
 )
 
 function operation_transfer end
@@ -156,6 +289,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         callable_identity = "CorePotts.operation_callable:" * String(identity) * ":" *
             string(version),
         source_requirements = (),
+        lifecycle_abi = nothing,
     ) = OperationTransfer(
         identity,
         version,
@@ -176,6 +310,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         owner,
         String(callable_identity),
         Tuple(source_requirements),
+        lifecycle_abi,
     )
 
 function numerical_operation_requirements end
@@ -361,9 +496,13 @@ operation_transfer(::typeof(cell_surface), ::Int) =
         :dimensionless;
         footprint_rule = OwnerFootprintRule(),
         tracker_requirements = (:cell_surface,),
-        allowed_roles = (:hamiltonian,),
-        allowed_phases = (:Proposal,),
-        required_context = :hamiltonian,
+        allowed_roles = (
+            :hamiltonian,
+            :lifecycle_trigger,
+            :lifecycle_state_transform,
+        ),
+        allowed_phases = (:Proposal, :Lifecycle),
+        required_context = :any,
         source_requirements = (NamedSpatialRelationRequirement(:surface),),
     )
 
@@ -423,7 +562,16 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
         purity = :semantic_rng,
         totality = :requires_prelaunch_validation,
         footprint_rule = InheritFootprintRule(),
-        allowed_roles = (:drive, :constraint, :modifier, :process),
-        allowed_phases = (:Proposal, :AcceptedCopy),
-        required_context = :proposal,
+        allowed_roles = (
+            :drive,
+            :constraint,
+            :modifier,
+            :process,
+            :lifecycle_trigger,
+            :lifecycle_placement,
+            :lifecycle_partition,
+            :lifecycle_state_transform,
+        ),
+        allowed_phases = (:Proposal, :AcceptedCopy, :Lifecycle),
+        required_context = :any,
     )

@@ -17,7 +17,8 @@ function _collect_symbolics!(found, value)
         end
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         for field in fieldnames(typeof(value))
@@ -53,6 +54,8 @@ end
 _effect_writes(effect::Create) = (effect.relationship,)
 _effect_writes(effect::Remove) = (effect.relationship,)
 _effect_writes(effect::Retune) = (effect.relationship,)
+_effect_writes(::CreateCell) = ()
+_effect_writes(effect::RemoveCell) = _collect_symbolics(effect.cell)
 _effect_writes(effect::Transition) = (effect.cell,)
 _effect_writes(effect::Divide) = (effect.cell,)
 _effect_writes(effect::Retire) = (effect.cell,)
@@ -128,6 +131,7 @@ function _effect_bound(statement)
              arguments.domain : nothing
     domain isa Sites && return EffectBound(length(effects), :per_site)
     domain isa Cells && return EffectBound(length(effects), :per_cell)
+    domain isa ModelDomain && return EffectBound(length(effects), :per_model)
     domain isa Contacts && return EffectBound(length(effects), :per_contact)
     domain isa Edges && return EffectBound(length(effects), :per_edge)
     domain isa IncidentEdges && return EffectBound(length(effects), :per_incident_edge)
@@ -168,7 +172,8 @@ function _collect_draw_calls!(result, value)
         )
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         foreach(

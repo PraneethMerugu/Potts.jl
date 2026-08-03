@@ -47,7 +47,7 @@ _g3_volumes(runtime) = CorePotts.program_tracker_values(
 
 function _g3_role_model(; constraint = true, modifier = 0.25)
     @parameters weight = 3.0 drive = 0.5 temperature = 2.0
-    cell = CellKind(:g3_cell)
+    cell = CellKind(:g3_cell; extinction = RetireAtZero())
     medium = MediumKind(:g3_medium)
     anchor = SiteBinding(:g3_site)
     proposal = ProposalContext(:g3_copy)
@@ -217,8 +217,8 @@ end
 
     @testset "compiled Act and chemotaxis drives" begin
         @variables activity_drive_state
-        act_cell = CellKind(:act_cell)
-        foreign_cell = CellKind(:foreign_cell)
+        act_cell = CellKind(:act_cell; extinction = RetireAtZero())
+        foreign_cell = CellKind(:foreign_cell; extinction = RetireAtZero())
         act_medium = MediumKind(:act_medium)
         activity = SiteState(
             activity_drive_state;
@@ -326,8 +326,8 @@ end
         )) == 0
 
         @variables chemo_state
-        chemo_cell = CellKind(:chemo_cell)
-        nonresponding_cell = CellKind(:nonresponding_cell)
+        chemo_cell = CellKind(:chemo_cell; extinction = RetireAtZero())
+        nonresponding_cell = CellKind(:nonresponding_cell; extinction = RetireAtZero())
         chemo_medium = MediumKind(:chemo_medium)
         field = FieldState(
             chemo_state;
@@ -423,7 +423,7 @@ end
 
     @testset "external generic staged state effects" begin
         @variables external_tracer
-        tracer_cell = CellKind(:tracer_cell)
+        tracer_cell = CellKind(:tracer_cell; extinction = RetireAtZero())
         tracer_medium = MediumKind(:tracer_medium)
         tracer = SiteState(
             external_tracer;
@@ -509,7 +509,7 @@ end
 
     @testset "complete finite one-attempt transition matrix" begin
         @parameters transition_weight = log(2.0) transition_temperature = 1.0
-        cell = CellKind(:g3_transition_cell)
+        cell = CellKind(:g3_transition_cell; extinction = RetireAtZero())
         medium = MediumKind(:g3_transition_medium)
         anchor = SiteBinding(:g3_transition_site)
         proposal = ProposalContext(:g3_transition_copy)
@@ -852,7 +852,7 @@ end
         function counted_external_proposal(shape)
             @variables counted_state
             @parameters counted_weight = 1.0
-            cell = CellKind(:g3_counted_cell)
+            cell = CellKind(:g3_counted_cell; extinction = RetireAtZero())
             medium = MediumKind(:g3_counted_medium)
             anchor = SiteBinding(:g3_counted_anchor)
             state = SiteState(
@@ -965,7 +965,7 @@ end
     end
 
     @testset "endpoint retirement is an ordinary compiled constraint" begin
-        cell = CellKind(:g3_linked_cell)
+        cell = CellKind(:g3_linked_cell; extinction = RetireAtZero())
         medium = MediumKind(:g3_linked_medium)
         links = RelationshipState(
             :g3_links;
@@ -1103,7 +1103,7 @@ end
     @testset "neutral external term uses public solve and checkpoint" begin
         @variables g3_external_state
         @parameters g3_external_weight = 1.25 temperature = 1.5
-        cell = CellKind(:g3_external_cell)
+        cell = CellKind(:g3_external_cell; extinction = RetireAtZero())
         medium = MediumKind(:g3_external_medium)
         anchor = SiteBinding(:g3_external_anchor)
         state = SiteState(
@@ -1195,7 +1195,7 @@ end
 
     @testset "external relationship policy uses generic topology effects" begin
         @parameters pair_weight = 1.25 temperature = 1.5
-        cell = CellKind(:g3_external_pair_cell)
+        cell = CellKind(:g3_external_pair_cell; extinction = RetireAtZero())
         medium = MediumKind(:g3_external_pair_medium)
         proposal = ProposalContext(:g3_external_pair_copy)
         fixture = NeutralExternalTerms.bounded_pair_fixture(
@@ -1386,7 +1386,7 @@ end
 
     @testset "multiple relationship stores remain independently addressable" begin
         @parameters multi_weight = 1.5 multi_temperature = 2.0
-        cell = CellKind(:g3_multi_cell)
+        cell = CellKind(:g3_multi_cell; extinction = RetireAtZero())
         medium = MediumKind(:g3_multi_medium)
         proposal = ProposalContext(:g3_multi_copy)
         score_links = RelationshipState(

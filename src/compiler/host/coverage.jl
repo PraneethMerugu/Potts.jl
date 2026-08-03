@@ -136,6 +136,22 @@ function _relationship_process_rejection(statement, statements)
     return nothing
 end
 
+function _lifecycle_process_rejection(statement, statements)
+    options = _statement_options(statement)
+    if get(options, :compiler_synthesized, nothing) === :retire_at_zero
+        # G5-L1 records the explicit compiler fact while CorePotts retains its
+        # already-existing zero-volume retirement behavior. Transaction
+        # lowering begins at G5-L2.
+        return nothing
+    end
+    arguments = _statement_arguments(statement)
+    any(_cell_lifecycle_effect, arguments.effects) && return(
+        "cell-lifecycle transaction execution begins at G5-L2; G5-L1 " *
+        "only completes, normalizes, analyzes, and inspects lifecycle rules"
+    )
+    return _relationship_process_rejection(statement, statements)
+end
+
 function _equation_process_rejection(statement, statements, system)
     options = _statement_options(statement)
     return numerical_process_rejection(
@@ -148,7 +164,9 @@ function _statement_lowering_rejection(statement, statements, system)
         return _synchronous_rejection(statement, statements)
     elseif statement isa AcceptedCopyProcess
         return _accepted_copy_rejection(statement, statements)
-    elseif statement isa Union{RelationshipProcess, LifecycleProcess}
+    elseif statement isa LifecycleProcess
+        return _lifecycle_process_rejection(statement, statements)
+    elseif statement isa RelationshipProcess
         return _relationship_process_rejection(statement, statements)
     elseif statement isa EquationProcess
         return _equation_process_rejection(statement, statements, system)

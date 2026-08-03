@@ -16,7 +16,7 @@ end
 @testset "completion and diagnostics" begin
     @variables t activity(t)
     @parameters target strength maximum activity_strength
-    endothelial = CellKind(:endothelial)
+    endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     copy = ProposalContext(:copy)
 
@@ -71,7 +71,7 @@ end
     )
     completed = complete(wortel)
     records = inspect(completed, Statements())
-    @test length(records) == 13
+    @test length(records) == 14
     activity_record = only(filter(
         record -> record.lowering_identity === :lower_activity, records
     ))
@@ -188,7 +188,7 @@ end
     )
 
     @named invalid = PottsSystem(statements = StatementSet((
-        CellKind(:duplicate),
+        CellKind(:duplicate; extinction = RetireAtZero()),
         MediumKind(:duplicate),
     )))
     error = try

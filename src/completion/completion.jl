@@ -47,7 +47,8 @@ function _collect_quantities!(found, value)
         end
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         for field in fieldnames(typeof(value))
@@ -165,7 +166,8 @@ function _structural_parameter_variables!(found, value)
         foreach(item -> _structural_parameter_variables!(found, item), value)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         for field in fieldnames(typeof(value))
@@ -240,7 +242,8 @@ function _record_resources!(result, value, path)
         )
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         foreach(
@@ -857,17 +860,25 @@ function _endpoint_removal_process(relationship::RelationshipState)
     )
 end
 
-function _expand_structural_policies(system::PottsSystem)
+function _expand_structural_policies(
+        system::PottsSystem, inherited_declarations = ()
+    )
     expanded = AbstractPottsStatement[statements(system)...]
     for statement in statements(system)
-        statement isa RelationshipState || continue
-        lifecycle = _statement_option(
-            statement, :lifecycle, RejectEndpointRetirement()
-        )
-        derived = lifecycle isa RejectEndpointRetirement ?
-                  _endpoint_retirement_constraint(statement) :
-                  lifecycle isa RemoveWithEndpoint ?
-                  _endpoint_removal_process(statement) : nothing
+        statement isa MediumKind && _validate_medium_extinction!(statement)
+        derived = if statement isa CellKind
+            _cell_extinction_statement(statement)
+        elseif statement isa RelationshipState
+            lifecycle = _statement_option(
+                statement, :lifecycle, RejectEndpointRetirement()
+            )
+            lifecycle isa RejectEndpointRetirement ?
+                _endpoint_retirement_constraint(statement) :
+            lifecycle isa RemoveWithEndpoint ?
+                _endpoint_removal_process(statement) : nothing
+        else
+            nothing
+        end
         derived === nothing && continue
         existing = findfirst(
             candidate -> statement_id(candidate) == statement_id(derived),
@@ -875,6 +886,24 @@ function _expand_structural_policies(system::PottsSystem)
         )
         if existing === nothing
             push!(expanded, derived)
+        elseif begin
+                existing_options = _statement_options(expanded[existing])
+                derived_options = _statement_options(derived)
+                existing_marker = get(
+                    existing_options,
+                    :compiler_synthesized,
+                    get(existing_options, :derived_from, nothing),
+                )
+                derived_marker = get(
+                    derived_options,
+                    :compiler_synthesized,
+                    get(derived_options, :derived_from, nothing),
+                )
+                existing_marker !== nothing && existing_marker === derived_marker
+            end
+            # Recursive completion of an already structurally expanded child
+            # keeps the first resolved compiler-owned statement.
+            nothing
         elseif !isequal(expanded[existing], derived)
             throw(ArgumentError(
                 "relationship structural policy identity `" *
@@ -883,8 +912,19 @@ function _expand_structural_policies(system::PottsSystem)
             ))
         end
     end
+    local_declarations = Tuple(filter(statement -> statement isa Union{
+        CellState, SiteState, RelationshipState,
+    }, expanded))
+    visible = (inherited_declarations..., local_declarations...)
+    expanded = AbstractPottsStatement[
+        statement isa LifecycleProcess ?
+            _resolve_lifecycle_process(statement, visible) : statement
+        for statement in expanded
+    ]
+    foreach(statement -> statement isa LifecycleProcess &&
+        _validate_lifecycle_process!(statement), expanded)
     children = PottsSystem[
-        _expand_structural_policies(child)
+        _expand_structural_policies(child, visible)
         for child in getfield(system, :systems)
     ]
     return _rebuild(system; statements = StatementSet(expanded), systems = children)
@@ -953,7 +993,8 @@ function _namespace_reference_payload(value, names)
         )
     elseif value isa Union{
             AbstractPottsEffect, AbstractIterationDomain, AbstractBoundaryPolicy,
-            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
+            SweepStage, ObserveStage,
             SymmetricPair,
         }
         mapped = map(

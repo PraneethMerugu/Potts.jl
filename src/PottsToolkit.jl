@@ -14,11 +14,13 @@ include("symbolics/bindings.jl")
 include("symbolics/operations.jl")
 include("symbolics/distributions.jl")
 include("statements/semantics.jl")
+include("statements/lifecycle.jl")
 include("completion/qualified_ir.jl")
 include("completion/diagnostics.jl")
 include("systems.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
+include("completion/lifecycle.jl")
 include("completion/completion.jl")
 include("compiler/host/source_graph.jl")
 include("compiler/host/footprint_types.jl")
@@ -31,6 +33,7 @@ include("compiler/host/operation_closure.jl")
 include("compiler/host/normalization.jl")
 include("compiler/host/energy_domains.jl")
 include("compiler/host/footprints.jl")
+include("compiler/host/lifecycle_analysis.jl")
 include("compiler/host/analysis.jl")
 include("compiler/execution/executable.jl")
 include("compiler/execution/observations.jl")
@@ -100,8 +103,20 @@ export AbstractPottsDistribution, Bernoulli, Uniform, Normal, UnitVector, DrawKe
 export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
 export Proposal, AcceptedCopy, AfterMCS, RelationshipCommit, Lifecycle, EquationStep, Observe
 export Before, After, EveryMCS, AtMCS, Every
-export sites, cells, contacts, edges, incident_edges
-export Assign, Create, Remove, Retune, Transition, Divide, Retire
+export sites, cells, model, contacts, edges, incident_edges
+export Assign, Create, Remove, Retune
+export CreateCell, RemoveCell, Transition, Divide, Retire
+export SeedAt, SeedStencil, CellCentroid
+export RandomPlane, PrincipalAxisPlane, SpecifiedNormalPlane
+export CanonicalSide, StableRandomSide, PreserveKind, SetKind
+export InitializeFrom, Unsupported, RetireTo, Preserve, ResetTo, Transform
+export CopyToDaughters, PreserveParentResetDaughter, ResetBoth
+export SplitConservatively, TransformDaughters, RedrawDaughters
+export RejectWhileLinked, RemoveIncident, PreserveCompatible
+export RemoveIncompatible, RejectIncompatible
+export FilterInadmissible, ErrorOnInadmissible
+export RejectLifecycleAmbiguity, StableLifecyclePriority
+export RetireAtZero, ForbidExtinction
 export Periodic, Closed, FrozenBorder, VonNeumann, Moore
 export ClearOnOwnershipChange, PreserveOnOwnershipChange
 export Undirected, Directed, RemoveWithEndpoint, RejectEndpointRetirement
@@ -113,12 +128,13 @@ export ActEnergy, Synchronous, Sweep, SweepStage, ObserveStage
 export RelationshipEnergy, RelationshipConstraint, ↔
 export inspect, Statements, Variables, Effects, RandomOperations, Schedule
 export Capabilities, Fingerprints, StoragePlan, Kernels
+export LifecyclePlans
 export semantic_fingerprint, completed_system_fingerprint
 export EquationComponent, process_component
 
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
-public OperationTransfer, operation_transfer
+public OperationTransfer, LifecycleOperationABI, operation_transfer
 public AbstractOperationSourceRequirement, LatticeRankRequirement
 public SpatialRelationRequirement
 public NamedSpatialRelationRequirement

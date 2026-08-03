@@ -20,7 +20,7 @@ end
 
 function _g5_relationship_fixture(engine; seed = UInt64(5), initial_edges = nothing)
     @parameters g5_pair_weight = 1.25 g5_temperature = 1.5
-    cell = CellKind(:g5_external_pair_cell)
+    cell = CellKind(:g5_external_pair_cell; extinction = RetireAtZero())
     medium = MediumKind(:g5_external_pair_medium)
     proposal = ProposalContext(:g5_external_pair_copy)
     fixture = NeutralExternalTerms.bounded_pair_fixture(
@@ -184,7 +184,7 @@ end
 
 @testset "accepted ownership survives filtered relationship admission" begin
     @parameters filtered_pair_weight = 0.0 filtered_temperature = 1.0e6
-    cell = CellKind(:filtered_pair_cell)
+    cell = CellKind(:filtered_pair_cell; extinction = RetireAtZero())
     medium = MediumKind(:filtered_pair_medium)
     proposal = ProposalContext(:filtered_pair_copy)
     relationships = RelationshipState(
