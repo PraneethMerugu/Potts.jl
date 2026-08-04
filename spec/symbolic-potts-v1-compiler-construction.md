@@ -4,8 +4,8 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade through the complete G5-L lifecycle exit matrix; the owner-authorized
-whole-G5 R2 review is active, while G6 and proof-model work remain closed
+Status: implementation-grade through cleared R2 and the complete G5 execution boundary; work is
+stopped before G6 for owner review
 
 ## Authority
 
@@ -23,8 +23,8 @@ CCV1-027 received fresh independent G5-L0 clearance in the
 Its implementation and exit evidence are closed by the
 [G5-L exit audit](../design/audits/symbolic-potts-v1-g5-l-exit-audit.md). The owner subsequently
 authorized the fresh whole-G5
-[R2 execution review](../design/audits/symbolic-potts-v1-r2-execution-review-request.md); that
-review does not open G6.
+[R2 execution review](../design/audits/symbolic-potts-v1-r2-execution-review.md), which cleared with
+zero P0 and zero P1 findings. That clearance closes G5 but does not open G6.
 
 For compiler construction, descriptor execution, state/workspace layout, spatial planning,
 relationship transactions, backend qualification, and autonomous implementation order, authority

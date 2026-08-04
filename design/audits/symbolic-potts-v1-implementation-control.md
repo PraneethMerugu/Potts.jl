@@ -127,7 +127,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | G2 descriptor/group/evaluator/state/workspace | `passed` | eighth R1.5 cleared the single evaluator path, storage ownership, specialization, and backend-neutral external boundary | `a014c80707d9` | R1.5 passed |
 | G3 sequential reference/finite transitions | `passed` | eighth R1.5 cleared sequential authority, finite transitions, checkpoints, scientific ownership, and the fast/default/qualification partition | `a014c80707d9` | R1.5 passed |
 | G4 checkerboard/first GPU witness | `passed` | compiler-derived coloring; deterministic portable claim/evaluate/commit path; exact CPU/Metal shared-fixture parity | `498edf6` | R1.5 entry clearance |
-| G5 trackers/relationships/lifecycle/checkpoint | `in_progress` | generic surface/relationships and the complete G5-L exit matrix pass; fresh whole-G5 review is active | `b4b2628` lifecycle evidence | R2 in progress |
+| G5 trackers/relationships/lifecycle/checkpoint | `passed` | whole-G5 R2 cleared footprints, deterministic commit, trackers, relationships, lifecycle, checkpoints, external equality, adaptation, and no fallback | `5fc007d` reviewed candidate | R2 passed; 1 P2 |
 | G6 public integration spine | `pending` | pending | pending | none |
 | G7 proof-model reconstruction | `pending` | pending | pending | R3 |
 | G8 clean break/full integration | `pending` | pending | pending | none |
@@ -139,7 +139,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 |---|---|---|---|
 | R1 compiler | `passed` | none | none |
 | R1.5 sequential authority | `passed` | none | 3 P2 |
-| R2 execution/concurrency/GPU | `in_progress` | none | none |
+| R2 execution/concurrency/GPU | `passed` | none | 1 P2 |
 | R3 science | `pending` | none | none |
 | R4 terminal | `pending` | none | none |
 
@@ -2290,5 +2290,25 @@ settlement authority.
 This completes G5-L only. The owner subsequently authorized the fresh whole-boundary
 `R2Execution` handoff, recorded in
 [symbolic-potts-v1-r2-execution-review-request.md](symbolic-potts-v1-r2-execution-review-request.md).
-G5 remains `in_progress` until that review clears. G6, proof-model migration, documentation work,
-and new lifecycle vocabulary remain unauthorized.
+That review subsequently cleared and is recorded below. G6, proof-model migration, documentation
+work, and new lifecycle vocabulary remain unauthorized.
+
+## R2 execution clearance — stopped before G6
+
+The fresh independent whole-G5 review of exact clean candidate `5fc007d` returned zero P0, zero P1,
+one P2, and zero P3 findings. The verdict and full disposition are recorded in
+[symbolic-potts-v1-r2-execution-review.md](symbolic-potts-v1-r2-execution-review.md).
+
+All prior R2 blockers remain closed. The complete lifecycle boundary also cleared: typed
+mechanism-neutral execution, fixed-capacity storage, one immutable plan, backend-resident GPU work,
+one settlement authority, exact sticky device failure, canonical failure order, external-operation
+equality, checkpoint/replay, and no hidden host fallback.
+
+The sole P2 is test ownership. The authoritative CPU workgroup/boundary matrix is present in the
+fast and Metal profiles but is not invoked by ordinary root `Pkg.test`, which is the only test
+command in the ordinary CI workflow. This does not invalidate the exact evidence and remains a
+nonblocking G4-owned obligation before terminal qualification.
+
+R2 clearance completes G5. Work is stopped before G6 for owner review. No public-integration
+expansion, proof-model migration, documentation work, new lifecycle vocabulary, or broad compiler
+refactor is authorized by this checkpoint.
