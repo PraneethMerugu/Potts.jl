@@ -10,6 +10,58 @@ Scope: bounded evidence for the active lifecycle architecture review. This docum
 measurements and test ownership. It does not authorize another compiler refactor, remove a test,
 or turn timing into an ordinary CI assertion.
 
+## Canonical-failure repair requalification
+
+Date: 2026-08-04
+
+Repair implementation commit: `e22c660e41d358aad15d3e7c92db9b627ec04c96`
+
+The sole blocking semantic finding from the independent review was repaired without changing the
+evaluator architecture or broadening a kernel payload. Each selected request retains one fixed
+candidate-status slot plus one fixed `Int32` state-rule rank. Reachable state action/effect kernels
+record the earliest canonical state-rule failure for that request. One reduction after all
+reachable state launches then chooses the first failed request in the already-established
+canonical request order. The added rank buffer has the same fixed-capacity vector representation
+as existing lifecycle control storage; names, handles, slots, declaration order, and descriptor
+counts do not enter its type.
+
+The adversarial regression combines both dangerous orderings in one fixture:
+
+- a canonical-earlier Divide request fails in a later-launched action than a canonical-later Create
+  request; and
+- within the Divide request, its canonical-earlier `TransformDaughters` rule fails after a
+  reachable `ResetBoth` action has already launched.
+
+Both lifecycle declaration permutations compile to the same complete-program type and expose the
+same exact status. The test compares sequential and KernelAbstractions execution, checks the
+request-local winning state-rule rank, and proves that ownership, kinds, generations, trackers,
+relationships, and descriptor state remain unchanged after settlement.
+
+### Exact repair-candidate results
+
+| Boundary | Result | Measured cost |
+|---|---|---:|
+| source-change package precompile in fast process | CorePotts 2.733 s; PottsToolkit 39.947 s | 42.680 s |
+| fast developer profile | 469/469 assertions | 386.1 s test time; 437.34 s complete process |
+| CorePotts package tests | 223 functional assertions, bounds checking enabled | included in 38.01 s package-test process |
+| Aqua | 10/10 assertions | 9.8 s of the CorePotts process |
+| source-change precompile in Metal process | PottsToolkit 39.820 s; Metal extension 6.773 s | 46.593 s |
+| real Metal qualification | all backend reports green with scalar indexing disabled | 1,035.94 s complete process |
+| canonical failure on Metal | 2/2 permutations, selected counts `(2, 2)`, exact state-stage nonfinite failure at anchor 1 | included in qualification |
+
+The real Metal process is materially slower than the prior 668.15-second qualification. The
+current total includes 46.59 seconds of source-change package/extension precompilation, but that
+does not explain the full difference. The new fixture adds a distinct cold program containing
+Create/Initialize and Divide/ResetBoth/TransformDaughters failure paths and executes both
+declaration permutations. The run did not instrument every fixture independently, so the remaining
+delta must not be attributed wholly to that fixture or to an architectural specialization
+cross-product. Warm lifecycle execution remains governed by the earlier isolated measurements;
+this result is a qualification-cost finding for reviewer disposition.
+
+No test was removed or weakened. The existing cold/warm completion, lowering, generated-code,
+payload, specialization-growth, and per-owner fast-suite measurements below remain the applicable
+compiler evidence; they were not rerun after this local status-reduction repair.
+
 ## Disposition
 
 The reduced state-kernel payload is the established architectural direction. For the representative
@@ -19,13 +71,16 @@ from 6,405 to 1,003 characters, while the optimized typed IR for the combined ev
 and execution are short. The several-minute CPU and Metal profiles are dominated by cold Julia and
 backend compilation of distinct fixtures, not warm model execution.
 
-The exact candidate is not ready to clear, for one semantic reason independent of these timing
-results. An independent adversarial probe found that request-local state-action failures are reduced
-after every action/effect launch. A Create/Initialize failure can therefore be published before an
+The originally measured `63a3c4e` candidate was not ready to clear, for one semantic reason
+independent of these timing results. An independent adversarial probe found that request-local
+state-action failures are reduced after every action/effect launch. A Create/Initialize failure can
+therefore be published before an
 earlier canonical Divide/TransformDaughters failure. The sequential reference selects the canonical
 request. This violates the accepted rule that request-local failures reduce in canonical request
 order, never kernel launch order. The correction should remain local to state-stage status reduction
 and receive an exact regression; it does not justify redesigning the evaluator or launch payload.
+The requalification addendum above records that bounded correction and its test results; independent
+exact-commit rereview remains the clearance authority.
 
 ## Measurement boundaries
 
