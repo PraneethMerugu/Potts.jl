@@ -259,6 +259,8 @@ function enqueue_lifecycle_backend_index!(
         Val(:transform_daughters),
         Val(:redraw_daughters),
     )
+    state_runtime, state_descriptors, state_plan =
+        _lifecycle_state_launch_payload(state, workspace)
     for action_value in state_actions
         action = _lifecycle_state_action_value(action_value)
         for plan_class in effect_classes
@@ -275,16 +277,19 @@ function enqueue_lifecycle_backend_index!(
             ) && continue
             @debug "enqueue lifecycle state staging" plan_class action
             stage_state(
-                state,
+                state_runtime,
+                state_descriptors,
+                state_plan,
                 workspace,
                 control,
                 plan_class,
                 action_value;
-                ndrange = 1,
+                ndrange = length(workspace.selected),
             )
+            reduce_planning_status(workspace, control; ndrange = 1)
+            _enqueue_lifecycle_failure_stamp!(state, LifecycleStageState)
         end
     end
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageState)
     for plan_class in effect_classes
         iszero(
             effect_mask & _lifecycle_effect_bit(

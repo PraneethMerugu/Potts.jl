@@ -158,7 +158,14 @@ end
     candidate = ntuple(N) do dimension
         value = coordinates[dimension] + Int(offsets[dimension, direction])
         if periodic[dimension]
-            mod1(value, shape[dimension])
+            extent = shape[dimension]
+            while value < 1
+                value += extent
+            end
+            while value > extent
+                value -= extent
+            end
+            value
         elseif 1 <= value <= shape[dimension]
             value
         else

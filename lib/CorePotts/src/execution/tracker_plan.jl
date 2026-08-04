@@ -1355,16 +1355,24 @@ end
 end
 
 @inline function _tracker_values(
-        quantity,
+        key::QualifiedTrackerKey,
         descriptors::Tuple{G, Vararg},
         values::Tuple,
     ) where {G <: DenseScalarTrackerGroup}
     group = first(descriptors)
-    index = findfirst(
-        descriptor -> isequal(tracker_quantity(descriptor), quantity),
-        group.descriptors,
+    isequal(group.quantity, key.quantity) || return _tracker_values(
+        key, Base.tail(descriptors), Base.tail(values)
     )
+    index = findfirst(==(key.source_handle), group.source_handles)
     index === nothing || return view(first(values), :, index)
+    return _tracker_values(key, Base.tail(descriptors), Base.tail(values))
+end
+
+@inline function _tracker_values(
+        quantity,
+        descriptors::Tuple{G, Vararg},
+        values::Tuple,
+    ) where {G <: DenseScalarTrackerGroup}
     return _tracker_values(quantity, Base.tail(descriptors), Base.tail(values))
 end
 

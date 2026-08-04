@@ -22,6 +22,90 @@ end
 Adapt.@adapt_structure LifecycleBackendControl
 Adapt.@adapt_structure NoLifecycleBackendControl
 
+struct _LifecycleStateDescriptorPlan{R}
+    domain_resources::R
+end
+
+struct _LifecycleStateRelationshipPlan{R}
+    relationship_rules::R
+end
+
+struct _LifecycleStateProgram{N, TP, D, L}
+    shape::NTuple{N, Int}
+    periodic::NTuple{N, Bool}
+    medium_kind::Int16
+    tracker_plan::TP
+    descriptor_plan::D
+    lifecycle_plan::L
+end
+
+struct _LifecycleStateEvaluatorPlan{E, S}
+    evaluators::E
+    state_rules::S
+end
+
+struct _LifecycleStatePolicyWorkspace{P}
+    policy_workspace::P
+end
+
+struct _LifecycleStateRuntime{
+        P, O, K, G, T, R, D, W, A,
+    }
+    program::P
+    ownership::O
+    cell_kinds::K
+    cell_generations::G
+    trackers::T
+    relationships::R
+    descriptor_state::D
+    lifecycle_workspace::W
+    parameters::A
+    seed::UInt64
+    replica::UInt32
+    repeat::UInt32
+    mcs::Int
+end
+
+Adapt.@adapt_structure _LifecycleStateDescriptorPlan
+Adapt.@adapt_structure _LifecycleStateRelationshipPlan
+Adapt.@adapt_structure _LifecycleStateProgram
+Adapt.@adapt_structure _LifecycleStateEvaluatorPlan
+Adapt.@adapt_structure _LifecycleStatePolicyWorkspace
+Adapt.@adapt_structure _LifecycleStateRuntime
+
+function _lifecycle_state_launch_payload(state, workspace)
+    lifecycle = state.program.lifecycle_plan
+    program = _LifecycleStateProgram(
+        state.program.shape,
+        state.program.periodic,
+        state.program.medium_kind,
+        state.program.tracker_plan,
+        _LifecycleStateDescriptorPlan(
+            state.program.descriptor_plan.domain_resources
+        ),
+        _LifecycleStateRelationshipPlan(lifecycle.relationship_rules),
+    )
+    runtime = _LifecycleStateRuntime(
+        program,
+        state.ownership,
+        state.cell_kinds,
+        state.cell_generations,
+        state.trackers,
+        state.relationships,
+        state.descriptor_state,
+        _LifecycleStatePolicyWorkspace(workspace.policy_workspace),
+        state.parameters,
+        state.seed,
+        state.replica,
+        state.repeat,
+        state.mcs,
+    )
+    plan = _LifecycleStateEvaluatorPlan(
+        lifecycle.evaluators, lifecycle.state_rules
+    )
+    return runtime, lifecycle.descriptors, plan
+end
+
 struct _LifecycleStatusSlot{S} <: AbstractVector{LifecycleStatusPayload}
     values::S
     slot::Int32
@@ -61,6 +145,7 @@ end
         workspace.cell_site_cursor,
         workspace.cell_sites,
         workspace.site_position,
+        workspace.planned_site_request,
         workspace.policy_workspace,
         workspace.allocation,
         workspace.canonical_order,
@@ -102,6 +187,7 @@ end
         workspace.cell_site_cursor,
         workspace.cell_sites,
         workspace.site_position,
+        workspace.planned_site_request,
         workspace.policy_workspace,
         workspace.allocation,
         workspace.canonical_order,

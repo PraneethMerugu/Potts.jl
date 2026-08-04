@@ -46,6 +46,7 @@
         workspace.partition_scratch[index] = UInt8(0)
         workspace.cell_sites[index] = Int32(0)
         workspace.site_position[index] = Int32(0)
+        workspace.planned_site_request[index] = Int32(0)
         workspace.site_seen[index] = false
         workspace.site_queue[index] = Int32(0)
     end
@@ -412,33 +413,33 @@ end
 end
 
 @kernel function _stage_lifecycle_state_backend_kernel!(
-        state, workspace, control, plan_class, action
+        runtime, descriptors, plan, workspace, control, plan_class, action
     )
-    index = @index(Global, Linear)
-    if index == 1 && _lifecycle_backend_open(workspace) &&
-            _lifecycle_backend_due(control)
-        selected = Int(@inbounds control.counters[
-            _LIFECYCLE_CONTROL_SELECTED
-        ])
-        failed = false
-        for position in 1:selected
-            if !failed
-                request = Int(@inbounds workspace.canonical_order[position])
-                descriptor = @inbounds state.program.lifecycle_plan.descriptors[
-                    Int(workspace.descriptor[request])
-                ]
-                _lifecycle_plan_matches(descriptor, plan_class) || continue
-                failed = !_apply_lifecycle_effect_state!(
-                    BackendLifecycleExecution(),
-                    state,
-                    state.program.lifecycle_plan,
-                    workspace,
-                    request,
-                    descriptor,
-                    plan_class,
-                    action,
-                )
-            end
+    request = @index(Global, Linear)
+    if request <= length(workspace.selected) &&
+            _lifecycle_backend_open(workspace) &&
+            _lifecycle_backend_due(control) &&
+            @inbounds(workspace.selected[request])
+        descriptor = @inbounds descriptors[
+            Int(workspace.descriptor[request])
+        ]
+        if _lifecycle_plan_matches(descriptor, plan_class)
+            request_workspace = _lifecycle_workspace_with_status(
+                workspace,
+                _LifecycleStatusSlot(
+                    control.candidate_status, Int32(request)
+                ),
+            )
+            _apply_lifecycle_effect_state!(
+                BackendLifecycleExecution(),
+                runtime,
+                plan,
+                request_workspace,
+                request,
+                descriptor,
+                plan_class,
+                action,
+            )
         end
     end
 end

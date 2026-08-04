@@ -313,10 +313,8 @@ end
     request = Int(view.request)
     owner = @inbounds runtime.ownership[linear]
     if descriptor.effect === CreateCellLifecycleEffect
-        for position in 1:Int(@inbounds workspace.planned_site_count[request])
-            @inbounds(workspace.planned_sites[position, request]) == linear &&
-                return @inbounds workspace.allocation[request]
-        end
+        @inbounds(workspace.planned_site_request[linear]) == request &&
+            return @inbounds workspace.allocation[request]
     elseif descriptor.effect === RemoveCellLifecycleEffect
         anchor = @inbounds workspace.anchor[request]
         owner == anchor && return -Int32(descriptor.replacement_medium)
@@ -330,6 +328,69 @@ end
         end
     end
     return owner
+end
+
+@inline function _lifecycle_request_owns_cell(
+        view::_LifecycleRequestView, cell::Int32
+    )
+    workspace = view.workspace
+    request = Int(view.request)
+    descriptor = view.descriptor
+    anchor = @inbounds workspace.anchor[request]
+    allocation = @inbounds workspace.allocation[request]
+    descriptor.effect === CreateCellLifecycleEffect &&
+        return cell == allocation
+    descriptor.effect === DivideCellLifecycleEffect &&
+        return cell == anchor || cell == allocation
+    return cell == anchor
+end
+
+@inline function _lifecycle_request_change_count(view::_LifecycleRequestView)
+    workspace = view.workspace
+    request = Int(view.request)
+    effect = view.descriptor.effect
+    effect === CreateCellLifecycleEffect &&
+        return Int(@inbounds workspace.planned_site_count[request])
+    if effect in (RemoveCellLifecycleEffect, DivideCellLifecycleEffect)
+        anchor = @inbounds workspace.anchor[request]
+        return Int(@inbounds workspace.cell_site_counts[anchor])
+    end
+    return 0
+end
+
+@inline function _lifecycle_request_change(
+        view::_LifecycleRequestView, position::Int
+    )
+    runtime = view.runtime
+    workspace = view.workspace
+    request = Int(view.request)
+    descriptor = view.descriptor
+    if descriptor.effect === CreateCellLifecycleEffect
+        linear = Int(@inbounds workspace.planned_sites[position, request])
+        old_owner = @inbounds runtime.ownership[linear]
+        new_owner = @inbounds workspace.allocation[request]
+        return linear, old_owner, new_owner, old_owner != new_owner
+    end
+    anchor = @inbounds workspace.anchor[request]
+    offset = Int(@inbounds workspace.cell_site_starts[anchor]) + position - 1
+    linear = Int(@inbounds workspace.cell_sites[offset])
+    old_owner = @inbounds runtime.ownership[linear]
+    if descriptor.effect === RemoveCellLifecycleEffect
+        new_owner = -Int32(descriptor.replacement_medium)
+        return linear, old_owner, new_owner, old_owner != new_owner
+    end
+    changed = descriptor.effect === DivideCellLifecycleEffect &&
+              @inbounds(workspace.partition_owner[anchor]) == request &&
+              @inbounds(workspace.partition_labels[offset]) == 2
+    new_owner = changed ? @inbounds(workspace.allocation[request]) : old_owner
+    return linear, old_owner, new_owner, changed
+end
+
+@inline function _lifecycle_site_changed(
+        view::_LifecycleRequestView, linear::Int
+    )
+    return @inbounds(view.runtime.ownership[linear]) !=
+           _lifecycle_planned_owner(view, linear)
 end
 
 @inline function _lifecycle_planned_kind(
@@ -364,12 +425,14 @@ end
 
 function _lifecycle_planned_volume(view::_LifecycleRequestView, cell::Int32)
     cell > 0 || return Int32(0)
-    count = Int32(0)
-    for linear in eachindex(view.runtime.ownership)
-        _lifecycle_planned_owner(view, Int(linear)) == cell &&
-            (count += Int32(1))
-    end
-    return count
+    trackers = _lifecycle_request_owns_cell(view, cell) ?
+        view.workspace.staged_trackers : view.runtime.trackers
+    return tracker_value(
+        view.runtime.program.tracker_plan,
+        trackers,
+        Val(:cell_volume),
+        cell,
+    )
 end
 
 @inline program_tracker_value(
@@ -383,16 +446,53 @@ function _lifecycle_planned_surface(
     )
     cell > 0 || return Int32(0)
     resources = view.runtime.program.descriptor_plan.domain_resources
+    shape = view.runtime.program.shape
+    periodic = view.runtime.program.periodic
+    for dimension in eachindex(shape)
+        if shape[dimension] <= 0
+            _set_lifecycle_status!(
+                view.workspace,
+                LifecycleStatusInvariant;
+                source = source_handle,
+                anchor = cell,
+                detail = LifecycleDetailTrackerStorageInvalid,
+                required = Int32(dimension),
+                available = Int32(shape[dimension]),
+            )
+            return Int32(0)
+        end
+    end
+    if !(1 <= source_handle <= length(resources.contact_starts)) ||
+            @inbounds(resources.contact_starts[source_handle]) <= 0 ||
+            @inbounds(resources.contact_counts[source_handle]) <= 0
+        _set_lifecycle_status!(
+            view.workspace,
+            LifecycleStatusInvariant;
+            source = source_handle,
+            anchor = cell,
+            detail = LifecycleDetailTrackerStorageInvalid,
+        )
+        return Int32(0)
+    end
     start, count = _contact_domain_columns(resources, source_handle)
-    result = Int32(0)
+    result = qualified_tracker_value(
+        view.runtime.program.tracker_plan,
+        view.runtime.trackers,
+        Val(:cell_surface),
+        source_handle,
+        cell,
+    )
     indices = CartesianIndices(view.runtime.ownership)
-    for linear in eachindex(view.runtime.ownership)
-        _lifecycle_planned_owner(view, Int(linear)) == cell || continue
+    linear_indices = LinearIndices(view.runtime.ownership)
+    for position in 1:_lifecycle_request_change_count(view)
+        linear, old_owner, new_owner, changed =
+            _lifecycle_request_change(view, position)
+        changed || continue
         site = indices[linear]
         for direction in 1:count
             neighbor = relation_neighbor_index(
-                view.runtime.program.shape,
-                view.runtime.program.periodic,
+                shape,
+                periodic,
                 site,
                 resources.contact_offsets,
                 start + direction - 1,
@@ -402,8 +502,8 @@ function _lifecycle_planned_surface(
             duplicate = false
             for prior in 1:(direction - 1)
                 prior_neighbor = relation_neighbor_index(
-                    view.runtime.program.shape,
-                    view.runtime.program.periodic,
+                    shape,
+                    periodic,
                     site,
                     resources.contact_offsets,
                     start + prior - 1,
@@ -414,9 +514,42 @@ function _lifecycle_planned_surface(
                 end
             end
             duplicate && continue
-            neighbor_linear = LinearIndices(view.runtime.ownership)[neighbor]
-            _lifecycle_planned_owner(view, neighbor_linear) != cell &&
-                (result += Int32(1))
+            neighbor_linear = linear_indices[neighbor]
+            old_neighbor = @inbounds view.runtime.ownership[neighbor_linear]
+            new_neighbor = _lifecycle_planned_owner(view, neighbor_linear)
+            before = old_owner == cell && old_neighbor != cell
+            after = new_owner == cell && new_neighbor != cell
+            result += Int32(after) - Int32(before)
+
+            _lifecycle_site_changed(view, neighbor_linear) && continue
+            for reverse_direction in 1:count
+                reverse_neighbor = relation_neighbor_index(
+                    shape,
+                    periodic,
+                    neighbor,
+                    resources.contact_offsets,
+                    start + reverse_direction - 1,
+                )
+                reverse_neighbor == site || continue
+                reverse_duplicate = false
+                for prior in 1:(reverse_direction - 1)
+                    prior_neighbor = relation_neighbor_index(
+                        shape,
+                        periodic,
+                        neighbor,
+                        resources.contact_offsets,
+                        start + prior - 1,
+                    )
+                    if prior_neighbor == reverse_neighbor
+                        reverse_duplicate = true
+                        break
+                    end
+                end
+                reverse_duplicate && continue
+                reverse_before = old_neighbor == cell && old_owner != cell
+                reverse_after = old_neighbor == cell && new_owner != cell
+                result += Int32(reverse_after) - Int32(reverse_before)
+            end
         end
     end
     return result
@@ -457,33 +590,21 @@ function _lifecycle_planned_shape_statistics(
     )
     T = eltype(view.runtime.parameters)
     N = length(view.runtime.program.shape)
-    count = Int32(0)
-    first = ntuple(_ -> zero(T), N)
-    second = ntuple(_ -> zero(T), N * N)
-    indices = CartesianIndices(view.runtime.ownership)
-    for linear in eachindex(view.runtime.ownership)
-        _lifecycle_planned_owner(view, Int(linear)) == cell || continue
-        site = indices[linear]
-        coordinates = ntuple(
-            dimension -> T(site[dimension]) - T(0.5), N
-        )
-        count += Int32(1)
-        first = ntuple(N) do dimension
-            first[dimension] + coordinates[dimension]
-        end
-        second = ntuple(N * N) do slot
-            row = rem(slot - 1, N) + 1
-            column = div(slot - 1, N) + 1
-            second[slot] + coordinates[row] * coordinates[column]
-        end
-    end
+    trackers = _lifecycle_request_owns_cell(view, cell) ?
+        view.workspace.staged_trackers : view.runtime.trackers
+    plan = view.runtime.program.tracker_plan
+    count = Int32(tracker_value(plan, trackers, Val(:cell_volume), cell))
     iszero(count) && return nothing
+    moments = tracker_values(plan, trackers, Val(:cell_moments))
     inverse = inv(T(count))
-    center = ntuple(dimension -> first[dimension] * inverse, N)
+    center = ntuple(N) do dimension
+        @inbounds(moments.first[dimension, Int(cell)]) * inverse
+    end
     covariance = ntuple(N * N) do slot
         row = rem(slot - 1, N) + 1
         column = div(slot - 1, N) + 1
-        second[slot] * inverse - center[row] * center[column]
+        @inbounds(moments.second[slot, Int(cell)]) * inverse -
+            center[row] * center[column]
     end
     return count, center, covariance
 end

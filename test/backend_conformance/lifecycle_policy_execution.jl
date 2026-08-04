@@ -256,6 +256,84 @@ function run_lifecycle_state_policy_execution(
     return (backend = backend_name, boundaries = 4, active_cells = 0)
 end
 
+function _planned_tracker_completed_system()
+    @variables tracker_time planned_tracker_value(tracker_time)
+    cell = CellKind(:tracker_cell; extinction = RetireAtZero())
+    medium = MediumKind(:tracker_medium)
+    surface = SpatialRelation(:surface; neighborhood = VonNeumann())
+    state = CellState(
+        planned_tracker_value;
+        name = :planned_tracker_state,
+        initial = 0.0f0,
+        retirement = RetireTo(0.0f0),
+        division = CopyToDaughters(),
+    )
+    anchor = CellBinding(:tracker_anchor)
+    planned_value = cell_volume(anchor_value(anchor)) +
+                    cell_surface(anchor) + cell_elongation(anchor)
+    divide = LifecycleProcess(
+        :tracker_divide;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Divide(
+            anchor;
+            geometry = SpecifiedNormalPlane((1.0f0, 0.0f0)),
+            relation = surface,
+            side = CanonicalSide(),
+            state = (state => TransformDaughters(
+                planned_value, planned_value + 10.0f0
+            ),),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    system = PottsSystem(
+        name = :LifecyclePlannedTrackerFixture,
+        statements = StatementSet((
+            Lattice((6, 6); max_cells = 2),
+            cell,
+            medium,
+            surface,
+            state,
+            divide,
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [planned_tracker_value],
+        independent_variables = [tracker_time],
+    )
+    labels = zeros(Int, 6, 6)
+    labels[2:5, 3] .= 1
+    initial = PottsInitialState(ownership = LabelledCells(
+        labels; cells = [cell], medium
+    ))
+    return complete(system), initial
+end
+
+function run_lifecycle_planned_tracker_execution(
+        device_array;
+        backend_name::Symbol,
+        to_host = Array,
+    )
+    completed, initial = _planned_tracker_completed_system()
+    _, reference, _, workspace = _direct_lifecycle_runtimes(
+        completed, initial, device_array; seed = 0x91
+    )
+    _enqueue_direct_lifecycle_sequence!(reference, workspace, 1:1)
+    _assert_direct_lifecycle_equivalence(reference, workspace, to_host)
+    entry = only(reference.program.descriptor_plan.state_layout.entries)
+    values = CorePotts.state_block(
+        reference.descriptor_state, entry.handle
+    ).values
+    @test values[1] == 10.0f0
+    @test values[2] == 20.0f0
+    return (
+        backend = backend_name,
+        parent = values[1],
+        daughter = values[2],
+    )
+end
+
 function _partition_policy_completed_system()
     cell = CellKind(:partition_cell; extinction = RetireAtZero())
     medium = MediumKind(:partition_medium)

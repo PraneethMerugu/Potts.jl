@@ -76,6 +76,11 @@ state_policy_report = run_lifecycle_state_policy_execution(
 )
 println(state_policy_report)
 
+planned_tracker_report = run_lifecycle_planned_tracker_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(planned_tracker_report)
+
 partition_policy_report = run_lifecycle_partition_policy_execution(
     Metal.MtlArray; backend_name = :metal
 )

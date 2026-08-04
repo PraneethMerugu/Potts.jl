@@ -19,7 +19,7 @@ function lifecycle_workspace_layout(
         planned_site_slots = requests * placements,
         partition_label_slots = Int(site_count),
         cell_index_slots = 6 * cells,
-        site_index_slots = 6 * Int(site_count),
+        site_index_slots = 7 * Int(site_count),
         policy_workspace_slots = requests * policy,
         policy_workspace_capacity = policy,
         free_cell_slots = cells,
@@ -76,6 +76,7 @@ struct LifecycleWorkspace{
     cell_site_cursor::V32
     cell_sites::V32
     site_position::V32
+    planned_site_request::V32
     policy_workspace::PW
     allocation::V32
     canonical_order::V32
@@ -140,6 +141,7 @@ function lifecycle_workspace_conforms(
         workspace.partition_scratch,
         workspace.cell_sites,
         workspace.site_position,
+        workspace.planned_site_request,
         workspace.site_seen,
         workspace.site_queue,
     )
@@ -214,6 +216,7 @@ function allocate_lifecycle_workspace(
         zeros(Int32, Int(plan.cell_capacity)),
         zeros(Int32, site_count),
         zeros(Int32, site_count),
+        zeros(Int32, site_count),
         zeros(T, layout.policy_workspace_capacity, request_bound),
         zeros(Int32, request_bound),
         zeros(Int32, request_bound),
@@ -240,6 +243,7 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     fill!(workspace.filtered_detail, LifecycleDetailNone)
     fill!(workspace.planned_site_count, 0)
     fill!(workspace.partition_owner, 0)
+    fill!(workspace.planned_site_request, 0)
     fill!(workspace.policy_workspace, zero(eltype(workspace.policy_workspace)))
     fill!(workspace.allocation, 0)
     fill!(workspace.conflict_seen, false)

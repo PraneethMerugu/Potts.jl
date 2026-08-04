@@ -777,6 +777,7 @@ function _stage_lifecycle_effect_base!(
     end
     for position in 1:Int(workspace.planned_site_count[request])
         linear = Int(@inbounds workspace.planned_sites[position, request])
+        @inbounds workspace.planned_site_request[linear] = Int32(request)
         _stage_owner_change!(
             mode, runtime, plan, workspace, linear, allocation
         ) || return false
