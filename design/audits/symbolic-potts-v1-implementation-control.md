@@ -127,7 +127,7 @@ state identity without treating `activity(t)` or a field variable as an extensio
 | G2 descriptor/group/evaluator/state/workspace | `passed` | eighth R1.5 cleared the single evaluator path, storage ownership, specialization, and backend-neutral external boundary | `a014c80707d9` | R1.5 passed |
 | G3 sequential reference/finite transitions | `passed` | eighth R1.5 cleared sequential authority, finite transitions, checkpoints, scientific ownership, and the fast/default/qualification partition | `a014c80707d9` | R1.5 passed |
 | G4 checkerboard/first GPU witness | `passed` | compiler-derived coloring; deterministic portable claim/evaluate/commit path; exact CPU/Metal shared-fixture parity | `498edf6` | R1.5 entry clearance |
-| G5 trackers/relationships/lifecycle/checkpoint | `in_progress` | G4 qualified and checkpointed; accepted-copy/after-MCS lifecycle work opened | pending | R2 |
+| G5 trackers/relationships/lifecycle/checkpoint | `in_progress` | generic surface/relationships and the complete G5-L exit matrix pass; stopped at the owner-directed R2 boundary | `b4b2628` lifecycle evidence | R2 pending |
 | G6 public integration spine | `pending` | pending | pending | none |
 | G7 proof-model reconstruction | `pending` | pending | pending | R3 |
 | G8 clean break/full integration | `pending` | pending | pending | none |
@@ -2263,3 +2263,30 @@ and sequential transaction surface and inspects decisive inference/allocation ev
 require a ceremonial second full package run, checkerboard, GPU hardware, long statistics,
 documentation, a freshness ledger, or a new CI framework. Zero P0 and zero P1 findings are required.
 A failure returns to the earliest G5-L1/L2 owner. A clear verdict opens G5-L3 only.
+
+## G5-L exit boundary — complete, stopped before R2
+
+The amended backend-resident G5-L2Q was repaired and independently cleared at reviewed evidence
+commit `b4b2628`, with no P0--P3 findings. The exact implementation commit is `e22c660`. The final
+G5-L exit audit is recorded in
+[symbolic-potts-v1-g5-l-exit-audit.md](symbolic-potts-v1-g5-l-exit-audit.md).
+
+Exact qualification includes:
+
+- fast compiler/runtime coverage at 469/469;
+- CorePotts functional/bounds coverage at 223 assertions plus Aqua 10/10;
+- the sequential lifecycle property owner at 222/222;
+- a successful direct `SequentialEngine`/`CheckerboardEngine` CPU comparison;
+- the complete real Metal lifecycle and public-execution qualification with scalar indexing
+  disabled; and
+- bounded compilation, generated-code, specialization, allocation, workspace, source, and
+  guarantee-ownership audits.
+
+The exit audit maps all nine accepted lifecycle requirements to their authoritative tests and
+records the source audit: no biological mechanism identity in CorePotts, no executor-inferred
+retirement, no runtime resizing, no phase labels in executable source/tests, and one centralized
+settlement authority.
+
+This completes G5-L only. G5 remains `in_progress` because the owner explicitly stopped work before
+the fresh whole-boundary `R2Execution` handoff. R2, G6, proof-model migration, documentation work,
+and new lifecycle vocabulary remain unauthorized.
