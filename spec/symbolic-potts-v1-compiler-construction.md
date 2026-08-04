@@ -4,8 +4,8 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade through the complete G5-L lifecycle exit matrix; the implementation
-is R2-ready, while R2/G6/proof-model work remains unauthorized pending the owner-directed handoff
+Status: implementation-grade through the complete G5-L lifecycle exit matrix; the owner-authorized
+whole-G5 R2 review is active, while G6 and proof-model work remain closed
 
 ## Authority
 
@@ -21,8 +21,10 @@ It also records LCI-R1-01 through LCI-R5-07 from the accepted
 CCV1-027 received fresh independent G5-L0 clearance in the
 [lifecycle-language rereview](../design/audits/symbolic-potts-v1-lifecycle-language-g5-l0-rereview.md).
 Its implementation and exit evidence are closed by the
-[G5-L exit audit](../design/audits/symbolic-potts-v1-g5-l-exit-audit.md); the later whole-G5 R2
-review has deliberately not begun.
+[G5-L exit audit](../design/audits/symbolic-potts-v1-g5-l-exit-audit.md). The owner subsequently
+authorized the fresh whole-G5
+[R2 execution review](../design/audits/symbolic-potts-v1-r2-execution-review-request.md); that
+review does not open G6.
 
 For compiler construction, descriptor execution, state/workspace layout, spatial planning,
 relationship transactions, backend qualification, and autonomous implementation order, authority
