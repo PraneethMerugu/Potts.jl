@@ -12,8 +12,15 @@ function _validate_compilation_choices(
         throw(ArgumentError("compile requires a completed PottsSystem"))
     engine isa AbstractPottsEngine ||
         throw(ArgumentError("engine must be SequentialEngine() or CheckerboardEngine()"))
-    backend isa CPUBackend ||
-        throw(ArgumentError("V1 currently admits only CPUBackend()"))
+    backend isa AbstractPottsBackend || throw(ArgumentError(
+        "backend must be a PottsToolkit backend selector"
+    ))
+    engine isa SequentialEngine && !(backend isa CPUBackend) &&
+        throw(ArgumentError(
+            "SequentialEngine is the CPU semantic reference; accelerator " *
+            "backends require CheckerboardEngine()"
+        ))
+    _validate_backend_available(backend)
     scalar_type isa Type && scalar_type <: AbstractFloat ||
         throw(ArgumentError("scalar_type must be a concrete AbstractFloat type"))
     isconcretetype(scalar_type) ||

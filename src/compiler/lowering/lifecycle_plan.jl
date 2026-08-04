@@ -6,6 +6,13 @@ mutable struct _LifecycleRootCursor
     operation_abis::Tuple
 end
 
+mutable struct _LifecycleEvaluatorAccumulator
+    values::Vector{Any}
+    roles::Vector{Symbol}
+end
+
+_LifecycleEvaluatorAccumulator() = _LifecycleEvaluatorAccumulator(Any[], Symbol[])
+
 function _LifecycleRootCursor(
         ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple
     )
@@ -79,7 +86,7 @@ function _lifecycle_workspace_slices(
 end
 
 function _lifecycle_evaluator!(
-        evaluators::Vector{Any},
+        evaluators::_LifecycleEvaluatorAccumulator,
         ir::AnalyzedTermIR,
         record_index::Integer,
         role::Symbol,
@@ -117,8 +124,9 @@ function _lifecycle_evaluator!(
         _lifecycle_context_type(role),
         ir.source.records[record_index],
     )
-    push!(evaluators, evaluator)
-    return Int32(length(evaluators))
+    push!(evaluators.values, evaluator)
+    push!(evaluators.roles, role)
+    return Int32(length(evaluators.values))
 end
 
 function _lifecycle_hash64(value)
@@ -467,7 +475,7 @@ function _lower_lifecycle_plan(
     cell_capacity <= typemax(Int32) || throw(ArgumentError(
         "compiled cell capacity exceeds Int32"
     ))
-    evaluators = Any[]
+    evaluators = _LifecycleEvaluatorAccumulator()
     state_rules = Any[]
     relationship_rules = CorePotts.LifecycleRelationshipRule[]
     stencil_offsets = NTuple{N, Int16}[]
@@ -767,7 +775,7 @@ function _lower_lifecycle_plan(
     )
     return CorePotts.LifecycleExecutionPlan(
         descriptors,
-        CorePotts.LifecycleEvaluatorStorage(evaluators),
+        CorePotts.LifecycleEvaluatorStorage(evaluators.values, evaluators.roles),
         CorePotts.LifecycleStateRuleStorage(state_rules),
         relationship_rules,
         _lifecycle_ownership_rules(

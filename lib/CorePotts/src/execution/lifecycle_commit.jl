@@ -154,20 +154,22 @@ end
     )
     source_generation = source > 0 ?
         @inbounds(runtime.cell_generations[source]) : UInt32(0)
-    destination_generation = destination > 0 ?
-        @inbounds(workspace.staged_cell_generations[destination]) : UInt32(0)
+    destination_generation = if destination <= 0
+        UInt32(0)
+    elseif descriptor.effect in (
+            CreateCellLifecycleEffect, DivideCellLifecycleEffect,
+        )
+        _allocated_generation(runtime, destination)
+    else
+        @inbounds runtime.cell_generations[destination]
+    end
     anchor = source > 0 ? source : destination
     generation = source > 0 ? source_generation : destination_generation
-    planned = (
-        program = runtime.program,
-        ownership = workspace.staged_ownership,
-        cell_kinds = workspace.staged_cell_kinds,
-        cell_generations = workspace.staged_cell_generations,
-        trackers = workspace.staged_trackers,
-        relationships = workspace.staged_relationships,
-        descriptor_state = workspace.staged_descriptor_state,
-        parameters = runtime.parameters,
-        lifecycle_workspace = workspace,
+    planned = _LifecycleRequestView(
+        runtime,
+        workspace,
+        descriptor,
+        Int32(request),
     )
     context = _LifecycleStateContext(
         runtime,
@@ -195,19 +197,18 @@ end
     )
 end
 
-function _lifecycle_distribution_draw(
+@inline function _lifecycle_distribution_draw(
         runtime,
         workspace,
         descriptor,
-        family,
-        first_parameter,
-        second_parameter,
-        operation,
-        destination,
-        generation,
-        daughter,
-    )
-    T = eltype(runtime.parameters)
+        family::UInt8,
+        first_parameter::T,
+        second_parameter::T,
+        operation::UInt16,
+        destination::Int32,
+        generation::UInt32,
+        daughter::Bool,
+    ) where {T <: AbstractFloat}
     first_uniform = _lifecycle_uniform(
         T,
         runtime,
@@ -437,13 +438,14 @@ function _apply_lifecycle_state_rule_action!(
             source, destination, DaughterLifecycleStateRole,
         )
         second_b isa LifecycleEvaluationFailed && return false
+        T = eltype(runtime.parameters)
         parent_value = _lifecycle_distribution_draw(
             runtime,
             workspace,
             descriptor,
             rule.parent_distribution,
-            first_a,
-            second_a,
+            T(first_a),
+            T(second_a),
             rule.parent_draw,
             source,
             source_generation,
@@ -455,8 +457,8 @@ function _apply_lifecycle_state_rule_action!(
             workspace,
             descriptor,
             rule.daughter_distribution,
-            first_b,
-            second_b,
+            T(first_b),
+            T(second_b),
             rule.daughter_draw,
             destination,
             destination_generation,
@@ -659,6 +661,36 @@ function _apply_relationship_rule!(
     return state
 end
 
+function _apply_relationship_rule_action!(
+        state, runtime, workspace, descriptor, rule, anchor,
+        action_value::Val,
+    )
+    action = _lifecycle_relationship_action_value(action_value)
+    rule.action === action || return state
+    if action === RemoveIncidentLifecycleRelationship
+        return _remove_all_incident!(state, anchor)
+    end
+    destination_kind = descriptor.destination_kind
+    position = 1
+    while position <= @inbounds(state.degree[anchor])
+        edge = Int(@inbounds state.incident_edges[position, anchor])
+        other = @inbounds state.endpoint_a[edge] == anchor ?
+            state.endpoint_b[edge] : state.endpoint_a[edge]
+        other_kind = @inbounds workspace.staged_cell_kinds[other]
+        compatible = _relationship_kinds_match(
+            destination_kind, other_kind, rule
+        )
+        if !compatible
+            apply_validated_relationship_request!(
+                state, RemoveRelationshipRequest(edge)
+            )
+        else
+            position += 1
+        end
+    end
+    return state
+end
+
 function _apply_lifecycle_relationship_rules!(
         mode::AbstractLifecycleExecutionMode,
         runtime,
@@ -701,6 +733,29 @@ function _apply_lifecycle_relationship_rules!(
                 detail = LifecycleDetailRelationshipCommitInvalid,
             )
         end
+    end
+    return true
+end
+
+function _apply_lifecycle_relationship_rules!(
+        mode::AbstractLifecycleExecutionMode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        anchor,
+        action::Val,
+    )
+    for offset in 0:(Int(descriptor.relationship_rule_count) - 1)
+        rule = @inbounds plan.relationship_rules[
+            Int(descriptor.relationship_rule_offset) + offset
+        ]
+        _call_relationship_slot(
+            _apply_relationship_rule_action!,
+            workspace.staged_relationships,
+            rule.relationship_slot,
+            (runtime, workspace, descriptor, rule, Int(anchor), action),
+        )
     end
     return true
 end
@@ -815,6 +870,22 @@ end
     )
 end
 
+@inline function _apply_lifecycle_effect_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class,
+        action::Val,
+    )
+    plan_class isa _CreateLifecyclePlan && return true
+    return _apply_lifecycle_relationship_rules!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        @inbounds(workspace.anchor[request]),
+        action,
+    )
+end
+
 @inline _apply_lifecycle_pre_relationships!(
     mode, runtime, plan, workspace, request, descriptor, plan_class
 ) = true
@@ -840,6 +911,22 @@ end
 ) = _apply_lifecycle_effect_relationships!(
     mode, runtime, plan, workspace, request, descriptor, plan_class
 )
+
+@inline _apply_lifecycle_pre_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class,
+    action::Val,
+) = plan_class isa Union{_RemoveLifecyclePlan, _RetireLifecyclePlan} ?
+    _apply_lifecycle_effect_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class, action
+    ) : true
+
+@inline _apply_lifecycle_post_relationships!(
+    mode, runtime, plan, workspace, request, descriptor, plan_class,
+    action::Val,
+) = plan_class isa Union{_TransitionLifecyclePlan, _DivideLifecyclePlan} ?
+    _apply_lifecycle_effect_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class, action
+    ) : true
 @inline _apply_lifecycle_post_relationships!(
     mode, runtime, plan, workspace, request, descriptor,
     plan_class::_DivideLifecyclePlan,
@@ -997,6 +1084,20 @@ end
     ) || return false
     return _apply_lifecycle_post_relationships!(
         mode, runtime, plan, workspace, request, descriptor, plan_class
+    )
+end
+
+@inline function _stage_lifecycle_request_relationships!(
+        mode, runtime, plan, workspace, request, action::Val
+    )
+    descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
+    plan_class = _lifecycle_request_plan_class(descriptor)
+    plan_class === nothing && return false
+    _apply_lifecycle_pre_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class, action
+    ) || return false
+    return _apply_lifecycle_post_relationships!(
+        mode, runtime, plan, workspace, request, descriptor, plan_class, action
     )
 end
 

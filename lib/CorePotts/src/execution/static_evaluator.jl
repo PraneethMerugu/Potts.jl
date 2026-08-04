@@ -219,6 +219,20 @@ struct OrderedFold{F}
     operation::F
 end
 
+"""Comparison preserving the compiled floating-point profile for mixed integer/float inputs."""
+struct NumericComparison{F}
+    operation::F
+end
+
+@inline function (comparison::NumericComparison)(left, right)
+    if left isa Integer && right isa AbstractFloat
+        return comparison.operation(typeof(right)(left), right)
+    elseif left isa AbstractFloat && right isa Integer
+        return comparison.operation(left, typeof(left)(right))
+    end
+    return comparison.operation(left, right)
+end
+
 struct ContextOperation{Identity} <: AbstractContextualOperation end
 struct ResourceOperation{Identity} <: AbstractContextualOperation end
 
@@ -343,10 +357,10 @@ for (identity, operation) in (
         :power => (^),
         :maximum => OrderedFold(max),
         :minimum => OrderedFold(min),
-        :less => (<),
-        :less_equal => (<=),
-        :greater => (>),
-        :greater_equal => (>=),
+        :less => NumericComparison(<),
+        :less_equal => NumericComparison(<=),
+        :greater => NumericComparison(>),
+        :greater_equal => NumericComparison(>=),
         :equal => (==),
         :not_equal => (!=),
         :and => (&),

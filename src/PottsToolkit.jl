@@ -82,7 +82,8 @@ export EquationProcess, Observation, Protocol, RegisteredStatement
 export StatementRegistry, default_statement_registry, register_statement
 export statements, statement_id, statement_source, @statements
 export compose, extend, flatten, complete, iscomplete
-export compile, PottsExecutable, SequentialEngine, CheckerboardEngine, CPUBackend
+export compile, PottsExecutable, SequentialEngine, CheckerboardEngine
+export CPUBackend, MetalBackend, CUDABackend, ROCmBackend
 export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
 export SiteBinding, CellBinding, ContactBinding, RelationshipBinding

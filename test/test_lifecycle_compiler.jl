@@ -67,7 +67,6 @@ end
         control.candidate_status,
     )
     @test all(==(typemax(UInt64)), control.site_keys)
-    @test all(==(typemax(UInt64)), control.site_keys_scratch)
 end
 
 function _minimal_lifecycle_system(name, statements)

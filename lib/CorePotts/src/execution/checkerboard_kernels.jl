@@ -1,5 +1,33 @@
 # Backend-portable checkerboard candidate, claim, evaluation, and commit kernels.
 
+@kernel function _checkerboard_clear_mcs_kernel!(
+        maximums, identities, report, state
+    )
+    index = @index(Global, Linear)
+    if _lifecycle_backend_open(state.lifecycle_workspace)
+        if index <= length(maximums)
+            @inbounds begin
+                maximums[index] = UInt32(0)
+                identities[index] = typemax(UInt32)
+            end
+        end
+        index <= length(report) && (@inbounds report[index] = UInt64(0))
+    end
+end
+
+@kernel function _checkerboard_clear_claims_kernel!(
+        maximums, identities, state
+    )
+    index = @index(Global, Linear)
+    if index <= length(maximums) &&
+            _lifecycle_backend_open(state.lifecycle_workspace)
+        @inbounds begin
+            maximums[index] = UInt32(0)
+            identities[index] = typemax(UInt32)
+        end
+    end
+end
+
 @inline function _checkerboard_priority(state, semantic_id, color)
     address = _program_address(
         CheckerboardPriorityStream,
@@ -301,6 +329,11 @@ end
             new_owner,
         )
         @inbounds state.ownership[target] = new_owner
+        _clear_ownership_changed_handles!(
+            state.program.ownership_change_handles,
+            state.descriptor_state,
+            target,
+        )
     end
 end
 

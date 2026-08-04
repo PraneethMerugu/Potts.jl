@@ -22,6 +22,7 @@ mutable struct PottsIntegrator{P, R, S}
     iterations::Int
     terminated::Bool
     retcode::SciMLBase.ReturnCode.T
+    failure_report::Union{Nothing, CorePotts.ProgramFailureReport}
 end
 
 function _normalize_saveat(saveat, tspan)
@@ -136,6 +137,33 @@ function _save_due(integrator::PottsIntegrator)
     return false
 end
 
+function _request_integrator_settlement!(
+        integrator::PottsIntegrator,
+        reason::CorePotts.ProgramSettlementReason,
+    )
+    integrator.runtime.settled && return nothing
+    CorePotts.supports_queued_program_execution(integrator.runtime) ||
+        throw(ArgumentError(
+            "the unsettled runtime has no qualified settlement path"
+        ))
+    start_mcs = integrator.t
+    receipt = CorePotts.settle_program!(
+        integrator.runtime,
+        CorePotts.ProgramSettlementRequest(reason; full_snapshot = true),
+    )
+    failure_report = CorePotts.program_failure_report(integrator.runtime)
+    if failure_report === nothing
+        integrator.iterations += integrator.runtime.mcs - start_mcs
+    else
+        integrator.iterations += max(1, failure_report.mcs - start_mcs)
+        integrator.failure_report = failure_report
+        integrator.retcode = SciMLBase.ReturnCode.Failure
+    end
+    integrator.t = integrator.runtime.mcs
+    integrator.u = _current_saved_state(integrator)
+    return receipt
+end
+
 function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
     policy = _save_policy(problem; kwargs...)
     checkpoint === nothing ||
@@ -143,7 +171,7 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
     core_initial = _core_initial_state(
         problem.executable, problem.initial, problem.seed, problem.replica
     )
-    runtime = CorePotts.initialize_program(
+    host_runtime = CorePotts.initialize_program(
         problem.executable.core_program,
         core_initial,
         _parameter_buffer(problem.parameters),
@@ -151,6 +179,9 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
         problem.replica;
         repeat = problem.ensemble_repeat,
         initial_mcs = problem.tspan[1],
+    )
+    runtime = _adapt_runtime_backend(
+        problem.executable.core_program.backend, host_runtime
     )
     initial_snapshot = CorePotts.program_snapshot(runtime)
     initial_state = _saved_state(
@@ -173,6 +204,7 @@ function init(problem::PottsProblem; checkpoint = nothing, kwargs...)
         0,
         false,
         SciMLBase.ReturnCode.Default,
+        nothing,
     )
     policy.save_start && _save_current!(integrator)
     return integrator
@@ -181,6 +213,9 @@ end
 function step!(integrator::PottsIntegrator)
     integrator.terminated &&
         throw(ArgumentError("cannot step a terminated PottsIntegrator"))
+    integrator.retcode == SciMLBase.ReturnCode.Default || throw(ArgumentError(
+        "cannot step a PottsIntegrator after a terminal solver result"
+    ))
     integrator.t < integrator.prob.tspan[2] ||
         throw(ArgumentError("cannot advance beyond the PottsProblem horizon"))
     integrator.iterations < integrator.policy.maxiters || begin
@@ -188,12 +223,21 @@ function step!(integrator::PottsIntegrator)
         return integrator
     end
     CorePotts.advance_mcs!(integrator.runtime)
+    failure_report = CorePotts.program_failure_report(integrator.runtime)
+    if failure_report !== nothing
+        integrator.failure_report = failure_report
+        integrator.retcode = SciMLBase.ReturnCode.Failure
+        integrator.iterations += 1
+        return integrator
+    end
     integrator.t = integrator.runtime.mcs
     integrator.iterations += 1
     integrator.u = _current_saved_state(integrator)
     _save_due(integrator) && _save_current!(integrator)
     return integrator
 end
+
+SciMLBase.check_error(integrator::PottsIntegrator) = integrator.retcode
 
 function terminate!(integrator::PottsIntegrator)
     integrator.terminated = true
@@ -218,12 +262,17 @@ function _integrator_stats(integrator::PottsIntegrator)
     )
 end
 
-runtime_statistics(integrator::PottsIntegrator) =
-    _integrator_stats(integrator)
+function runtime_statistics(integrator::PottsIntegrator)
+    _request_integrator_settlement!(
+        integrator, CorePotts.StatisticsSettlement
+    )
+    return _integrator_stats(integrator)
+end
 
 function _set_runtime_parameters!(integrator::PottsIntegrator, values)
-    integrator.runtime.settled ||
-        throw(ArgumentError("parameter updates require a settled MCS boundary"))
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexMutationSettlement
+    )
     parameters = _normalize_parameters(integrator.prob.executable, values)
     CorePotts.update_program_parameters!(
         integrator.runtime, _parameter_buffer(parameters)
@@ -252,8 +301,9 @@ Validate and atomically publish one frozen set of compiled external inputs at a
 settled MCS boundary. This qualified hook exists for runtime adapters.
 """
 function stage_external_inputs!(integrator::PottsIntegrator, values)
-    integrator.runtime.settled ||
-        throw(ArgumentError("external inputs require a settled MCS boundary"))
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexMutationSettlement
+    )
     manifest = inspect(integrator.prob.executable, ExternalIO())
     supplied = _external_input_pairs(values)
     isempty(supplied) && return integrator
@@ -325,7 +375,9 @@ function stage_external_inputs!(integrator::PottsIntegrator, values)
 
     parameter_changed &&
         CorePotts.update_program_parameters!(integrator.runtime, parameters)
-    state_changed && (integrator.runtime.descriptor_state = descriptor_state)
+    state_changed && CorePotts.update_program_descriptor_state!(
+        integrator.runtime, descriptor_state
+    )
     if parameter_changed
         names = Tuple(
             entry.name

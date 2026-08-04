@@ -18,12 +18,12 @@ struct ProgramCheckpoint{S, P}
     seed::UInt64
     replica::UInt32
     repeat::UInt32
-    accepted::Int
-    rejected::Int
-    null_attempts::Int
-    constraint_rejections::Int
-    energy_rejections::Int
-    retired_cells::Int
+    accepted::UInt64
+    rejected::UInt64
+    null_attempts::UInt64
+    constraint_rejections::UInt64
+    energy_rejections::UInt64
+    retired_cells::UInt64
     checksum::String
 end
 
@@ -235,6 +235,7 @@ function restore_program_checkpoint(
         runtime.seed,
         runtime.replica,
         runtime.repeat,
+        checkpoint.snapshot.mcs,
     )
     runtime.lifecycle_workspace = allocate_lifecycle_workspace(
         program.lifecycle_plan,
@@ -252,6 +253,16 @@ function restore_program_checkpoint(
     runtime.constraint_rejections = checkpoint.constraint_rejections
     runtime.energy_rejections = checkpoint.energy_rejections
     runtime.retired_cells = checkpoint.retired_cells
+    runtime.engine_workspace isa CheckerboardWorkspace &&
+        initialize_program_execution_statistics!(
+            runtime.engine_workspace,
+            runtime.accepted,
+            runtime.rejected,
+            runtime.null_attempts,
+            runtime.constraint_rejections,
+            runtime.energy_rejections,
+            runtime.retired_cells,
+        )
     return runtime
 end
 
@@ -278,13 +289,14 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW, LW}
     replica::UInt32
     repeat::UInt32
     mcs::Int
-    accepted::Int
-    rejected::Int
-    null_attempts::Int
-    constraint_rejections::Int
-    energy_rejections::Int
-    retired_cells::Int
+    accepted::UInt64
+    rejected::UInt64
+    null_attempts::UInt64
+    constraint_rejections::UInt64
+    energy_rejections::UInt64
+    retired_cells::UInt64
     settled::Bool
+    failure_status::LifecycleStatusPayload
 end
 
 function initialize_program(
@@ -404,6 +416,7 @@ function initialize_program(
         seed,
         replica,
         repeat,
+        initial_mcs,
     )
     lifecycle_workspace = allocate_lifecycle_workspace(
         program.lifecycle_plan,
@@ -441,15 +454,70 @@ function initialize_program(
         replica,
         repeat,
         Int(initial_mcs),
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        UInt64(0),
+        UInt64(0),
+        UInt64(0),
+        UInt64(0),
+        UInt64(0),
+        UInt64(0),
         true,
+        LifecycleStatusPayload(),
     )
 end
+
+function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
+    runtime.settled || throw(ArgumentError(
+        "program runtime adaptation requires a settled boundary"
+    ))
+    runtime.engine_workspace isa CheckerboardWorkspace || throw(ArgumentError(
+        "only checkerboard runtimes have a portable accelerator execution path"
+    ))
+    engine_workspace = adapt_checkerboard_workspace(
+        to, runtime.engine_workspace
+    )
+    return ProgramRuntime{
+        T,
+        N,
+        typeof(runtime.program),
+        typeof(runtime.relationships),
+        typeof(runtime.trackers),
+        typeof(runtime.descriptor_state),
+        typeof(runtime.stage_buffers),
+        typeof(engine_workspace),
+        typeof(runtime.lifecycle_workspace),
+    }(
+        runtime.program,
+        runtime.ownership,
+        runtime.cell_kinds,
+        runtime.cell_generations,
+        runtime.trackers,
+        runtime.relationships,
+        runtime.descriptor_state,
+        runtime.proposal_contributions,
+        runtime.stage_buffers,
+        engine_workspace,
+        runtime.lifecycle_workspace,
+        runtime.parameters,
+        runtime.seed,
+        runtime.replica,
+        runtime.repeat,
+        runtime.mcs,
+        runtime.accepted,
+        runtime.rejected,
+        runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
+        runtime.settled,
+        runtime.failure_status,
+    )
+end
+
+@inline program_failed(runtime::ProgramRuntime) =
+    runtime.failure_status.code !== LifecycleStatusSuccess
+
+@inline program_failure_report(runtime::ProgramRuntime) =
+    program_failed(runtime) ? ProgramFailureReport(runtime.failure_status) : nothing
 
 function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
     runtime.settled || throw(ArgumentError(

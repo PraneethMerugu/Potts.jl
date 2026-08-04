@@ -10,6 +10,7 @@ struct PottsSolution{S, P, R, A, H} <:
     stats::PottsStats
     provenance::R
     parameter_history::H
+    failure_report::Union{Nothing, CorePotts.ProgramFailureReport}
 end
 
 function PottsSolution(
@@ -19,6 +20,7 @@ function PottsSolution(
         retcode,
         stats,
         parameter_history,
+        failure_report = nothing,
     ) where {S}
     frozen_parameter_history = Tuple(
         time => parameters.values
@@ -62,6 +64,7 @@ function PottsSolution(
         stats,
         provenance,
         frozen_parameter_history,
+        failure_report,
     )
 end
 
@@ -82,11 +85,69 @@ function (solution::PottsSolution)(mcs::Integer; idxs = nothing)
     return state[name]
 end
 
-function solve!(integrator::PottsIntegrator)
+function _next_queued_boundary(integrator::PottsIntegrator)
+    policy = integrator.policy
+    remaining_iterations = policy.maxiters - integrator.iterations
+    limit = min(
+        integrator.prob.tspan[2], integrator.t + remaining_iterations
+    )
+    policy.save_everystep && return min(limit, integrator.t + 1)
+    boundary = limit
+    for saved_time in policy.saveat
+        saved_time > integrator.t || continue
+        boundary = min(boundary, saved_time)
+        break
+    end
+    policy.progress && (boundary = min(
+        boundary, integrator.t + policy.progress_steps
+    ))
+    return boundary
+end
+
+function _queued_boundary_reason(integrator::PottsIntegrator, boundary::Int)
+    policy = integrator.policy
+    boundary in policy.saveat && return CorePotts.SaveSettlement
+    policy.save_everystep && return CorePotts.SaveSettlement
+    policy.progress && boundary < integrator.prob.tspan[2] &&
+        return CorePotts.ProgressSettlement
+    return CorePotts.FinalizationSettlement
+end
+
+function _advance_queued_boundary!(
+        integrator::PottsIntegrator, boundary::Int
+    )
+    CorePotts.enqueue_program_through!(integrator.runtime, boundary)
+    _request_integrator_settlement!(
+        integrator, _queued_boundary_reason(integrator, boundary)
+    )
+    failure_report = CorePotts.program_failure_report(integrator.runtime)
+    failure_report === nothing && _save_due(integrator) &&
+        _save_current!(integrator)
+    return integrator
+end
+
+function _solve_queued!(integrator::PottsIntegrator)
     while !integrator.terminated &&
+            integrator.retcode == SciMLBase.ReturnCode.Default &&
             integrator.t < integrator.prob.tspan[2] &&
             integrator.iterations < integrator.policy.maxiters
-        step!(integrator)
+        boundary = _next_queued_boundary(integrator)
+        boundary > integrator.t || break
+        _advance_queued_boundary!(integrator, boundary)
+    end
+    return integrator
+end
+
+function solve!(integrator::PottsIntegrator)
+    if CorePotts.supports_queued_program_execution(integrator.runtime)
+        _solve_queued!(integrator)
+    else
+        while !integrator.terminated &&
+                integrator.retcode == SciMLBase.ReturnCode.Default &&
+                integrator.t < integrator.prob.tspan[2] &&
+                integrator.iterations < integrator.policy.maxiters
+            step!(integrator)
+        end
     end
     if integrator.retcode == SciMLBase.ReturnCode.Default
         integrator.retcode = integrator.t == integrator.prob.tspan[2] ?
@@ -101,6 +162,7 @@ function solve!(integrator::PottsIntegrator)
         integrator.retcode,
         _integrator_stats(integrator),
         integrator.parameter_history,
+        integrator.failure_report,
     )
 end
 

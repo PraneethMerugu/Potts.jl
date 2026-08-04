@@ -34,25 +34,108 @@ struct ProgramSettlementReceipt{S, F}
     snapshot::S
 end
 
-@inline function _settlement_failure_is_expected(failure)
-    return failure isa Union{
-        LifecycleInadmissibilityFailure,
-        LifecycleConflictFailure,
-        CellCapacityFailure,
-        RelationshipCapacityFailure,
-        GenerationOverflowFailure,
-        LifecycleEvaluatorFailure,
-    }
+"""Immutable public detail for one expected device-reported scientific stop."""
+struct ProgramFailureReport
+    code::LifecycleStatusCode
+    mcs::Int
+    stage::LifecycleExecutionStage
+    source::Int32
+    action_identity::UInt64
+    secondary_source::Int32
+    anchor::Int32
+    detail::LifecycleStatusDetailCode
+    required::Int32
+    available::Int32
+    maximum::Int32
+end
+
+"""
+    update_program_parameters!(runtime, parameters)
+
+Publish one validated host parameter transaction at an already settled scientific boundary. The
+host mirror and every execution bank are updated together here so runtime adapters and indexing
+hooks do not acquire independent device-publication paths.
+"""
+function update_program_parameters!(
+        runtime::ProgramRuntime{T}, parameters::AbstractVector{<:Real}
+    ) where {T}
+    runtime.settled ||
+        throw(ArgumentError("parameter updates require a settled MCS boundary"))
+    length(parameters) == length(runtime.parameters) ||
+        throw(ArgumentError("runtime parameter buffer has the wrong length"))
+    replacement = T.(parameters)
+    all(isfinite, replacement) ||
+        throw(ArgumentError("runtime parameters must be finite"))
+    copyto!(runtime.parameters, replacement)
+    workspace = runtime.engine_workspace
+    if workspace isa CheckerboardWorkspace
+        primary = workspace.state.parameters
+        primary === runtime.parameters || copyto!(primary, replacement)
+        secondary = workspace.alternate_state.parameters
+        secondary === primary || secondary === runtime.parameters ||
+            copyto!(secondary, replacement)
+    end
+    return runtime
+end
+
+"""Publish one validated auxiliary-state transaction to the host mirror and both banks."""
+function update_program_descriptor_state!(
+        runtime::ProgramRuntime, descriptor_state::AuxiliaryState
+    )
+    runtime.settled || throw(ArgumentError(
+        "state updates require a settled MCS boundary"
+    ))
+    copyto_auxiliary_state!(runtime.descriptor_state, descriptor_state)
+    workspace = runtime.engine_workspace
+    if workspace isa CheckerboardWorkspace
+        primary = workspace.state.descriptor_state
+        primary === runtime.descriptor_state ||
+            copyto_auxiliary_state!(primary, descriptor_state)
+        secondary = workspace.alternate_state.descriptor_state
+        secondary === primary || secondary === runtime.descriptor_state ||
+            copyto_auxiliary_state!(secondary, descriptor_state)
+    end
+    return runtime
+end
+
+ProgramFailureReport(status::LifecycleStatusPayload) = ProgramFailureReport(
+    status.code,
+    Int(status.mcs),
+    status.stage,
+    status.source,
+    status.action_identity,
+    status.secondary_source,
+    status.anchor,
+    status.detail,
+    status.required,
+    status.available,
+    status.maximum,
+)
+
+@inline function lifecycle_status_is_expected(status::LifecycleStatusPayload)
+    status.code in (
+        LifecycleStatusInadmissible,
+        LifecycleStatusConflict,
+        LifecycleStatusCellCapacity,
+        LifecycleStatusRelationshipCapacity,
+        LifecycleStatusGenerationOverflow,
+    ) && return true
+    status.code === LifecycleStatusEvaluator || return false
+    return status.detail in (
+        LifecycleDetailNonfiniteResult,
+        LifecycleDetailSplitFractionOutOfBounds,
+        LifecycleDetailStateValueInvalid,
+    )
 end
 
 function _settlement_counters(values)
     return (
-        accepted = Int(values[_PROGRAM_STAT_ACCEPTED]),
-        rejected = Int(values[_PROGRAM_STAT_REJECTED]),
-        null_attempts = Int(values[_PROGRAM_STAT_NULL]),
-        constraint_rejections = Int(values[_PROGRAM_STAT_CONSTRAINT]),
-        energy_rejections = Int(values[_PROGRAM_STAT_ENERGY]),
-        retired_cells = Int(values[_PROGRAM_STAT_RETIRED]),
+        accepted = UInt64(values[_PROGRAM_STAT_ACCEPTED]),
+        rejected = UInt64(values[_PROGRAM_STAT_REJECTED]),
+        null_attempts = UInt64(values[_PROGRAM_STAT_NULL]),
+        constraint_rejections = UInt64(values[_PROGRAM_STAT_CONSTRAINT]),
+        energy_rejections = UInt64(values[_PROGRAM_STAT_ENERGY]),
+        retired_cells = UInt64(values[_PROGRAM_STAT_RETIRED]),
     )
 end
 
@@ -129,7 +212,7 @@ function settle_program!(
     execution.committed_mcs = committed
 
     failure = _translate_lifecycle_status(status)
-    if failure !== nothing && !_settlement_failure_is_expected(failure)
+    if failure !== nothing && !lifecycle_status_is_expected(status)
         throw(failure)
     end
     if failure === nothing && committed != submitted

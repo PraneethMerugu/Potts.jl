@@ -26,18 +26,27 @@ include("program/checkerboard_plan.jl")
 include("program/types.jl")
 include("execution/stage_plan.jl")
 include("execution/lifecycle_plan.jl")
+include("execution/lifecycle_status.jl")
 include("program/v1.jl")
 include("execution/hamiltonian_runtime.jl")
 
 public AbstractProgramEngine, SequentialProgramEngine, CheckerboardProgramEngine
-public CPUProgramBackend, CompiledScalar, compiled_scalar_value
+public CPUProgramBackend, AdaptedProgramBackend
+public CompiledScalar, compiled_scalar_value
 public AbstractCheckerboardPlan, NoCheckerboardPlan, CheckerboardPlan
 public checkerboard_plan_report
 public CheckerboardWorkspace, adapt_checkerboard_workspace
 public execute_checkerboard_mcs!, enqueue_checkerboard_mcs!
 public ProgramExecutionPosition, ProgramSettlementReason
 public ProgramSettlementRequest, ProgramSettlementReceipt
-public settle_program!
+public FinalizationSettlement, PublicStepSettlement, SaveSettlement
+public HostCallbackSettlement, CheckpointSettlement
+public IndexReadSettlement, IndexMutationSettlement
+public ComponentExchangeSettlement, ProgressSettlement
+public StatisticsSettlement, ObservationSettlement
+public supports_queued_program_execution
+public enqueue_program_mcs!, enqueue_program_through!, settle_program!
+public program_backend_name
 public LifecycleBackendControl, NoLifecycleBackendControl
 public allocate_lifecycle_backend_control, lifecycle_backend_status
 public RelationshipStoreSchema, CompiledPottsProgram
@@ -84,12 +93,14 @@ public validate_relationship_request, apply_validated_relationship_request!
 public validate_relationship_integrity
 public initialize_program_relationships, relationship_payload
 public ProgramInitialState, ProgramSnapshot, ProgramRuntime
+public ProgramFailureReport, program_failed, program_failure_report
 public BeforeProposalView, AfterProposalView, CanonicalContactAnchor
 public HamiltonianEvaluationContext
 public relation_offsets, relation_neighbor_index
 public initialize_program, program_snapshot, advance_mcs!
+public adapt_program_runtime
 public initialization_bounded
-public update_program_parameters!
+public update_program_parameters!, update_program_descriptor_state!
 public program_execution_report, program_capability_report
 public ProgramCheckpoint, program_checkpoint, restore_program_checkpoint
 public AbstractStaticExpression, AbstractContextualOperation

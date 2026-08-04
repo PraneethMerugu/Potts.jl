@@ -921,6 +921,43 @@ end
     @test CorePotts._translate_lifecycle_status(
         CorePotts.LifecycleStatusPayload()
     ) === nothing
+    for status in (
+            payload(CorePotts.LifecycleStatusInadmissible),
+            payload(CorePotts.LifecycleStatusConflict),
+            payload(CorePotts.LifecycleStatusCellCapacity),
+            payload(CorePotts.LifecycleStatusRelationshipCapacity),
+            payload(CorePotts.LifecycleStatusGenerationOverflow),
+            payload(
+                CorePotts.LifecycleStatusEvaluator;
+                detail = CorePotts.LifecycleDetailNonfiniteResult,
+            ),
+            payload(
+                CorePotts.LifecycleStatusEvaluator;
+                detail = CorePotts.LifecycleDetailSplitFractionOutOfBounds,
+            ),
+            payload(
+                CorePotts.LifecycleStatusEvaluator;
+                detail = CorePotts.LifecycleDetailStateValueInvalid,
+            ),
+        )
+        @test CorePotts.lifecycle_status_is_expected(status)
+    end
+    for status in (
+            payload(CorePotts.LifecycleStatusStaleGeneration),
+            payload(CorePotts.LifecycleStatusFootprint),
+            payload(CorePotts.LifecycleStatusInvariant),
+            payload(CorePotts.LifecycleStatusBackend),
+            payload(
+                CorePotts.LifecycleStatusEvaluator;
+                detail = CorePotts.LifecycleDetailEvaluationError,
+            ),
+            payload(
+                CorePotts.LifecycleStatusEvaluator;
+                detail = CorePotts.LifecycleDetailTriggerNotBoolean,
+            ),
+        )
+        @test !CorePotts.lifecycle_status_is_expected(status)
+    end
 end
 
 @testset "public MCS ordering and checkpoint continuation" begin
@@ -1371,6 +1408,94 @@ end
     @test 8.0 < first_values[6][2] < 9.0
     @test first_values[6][1:2] != other_values[6][1:2]
     @test first_runtime.cell_generations == other_runtime.cell_generations
+end
+
+@testset "state policies observe only their request-local planned result" begin
+    @variables t payload(t)
+    dividing = CellKind(:private_plan_dividing; extinction = RetireAtZero())
+    removed = CellKind(:private_plan_removed; extinction = RetireAtZero())
+    medium = MediumKind(:private_plan_medium)
+    relation = SpatialRelation(
+        :private_plan_division; neighborhood = VonNeumann()
+    )
+    state = CellState(
+        payload;
+        initial = 7.0,
+        retirement = RetireTo(0.0),
+        division = CopyToDaughters(),
+    )
+    anchor = CellBinding(:private_plan_anchor)
+    divide = LifecycleProcess(
+        :private_plan_divide;
+        domain = cells(dividing),
+        anchor,
+        expression = true,
+        effects = (Divide(
+            anchor;
+            geometry = SpecifiedNormalPlane((1.0, 0.0)),
+            relation,
+            side = CanonicalSide(),
+            state = (state => TransformDaughters(
+                cell_volume(Symbolics.Num(2)),
+                cell_volume(Symbolics.Num(2)),
+            ),),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    remove = LifecycleProcess(
+        :private_plan_remove;
+        domain = cells(removed),
+        anchor,
+        expression = true,
+        effects = (RemoveCell(
+            anchor;
+            replacement = medium,
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    system = PottsSystem(
+        name = :RequestPrivateLifecycleState,
+        statements = StatementSet((
+            Lattice((7, 7); max_cells = 3),
+            dividing,
+            removed,
+            medium,
+            relation,
+            state,
+            divide,
+            remove,
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [payload],
+        independent_variables = [t],
+    )
+    executable = compile(
+        complete(system);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    labels = zeros(Int, 7, 7)
+    labels[2:5, 2] .= 1
+    labels[2:3, 6] .= 2
+    runtime = _lifecycle_runtime(
+        executable,
+        PottsInitialState(ownership = LabelledCells(
+            labels; cells = [dividing, removed], medium
+        )),
+    )
+
+    CorePotts.execute_lifecycle!(runtime)
+
+    values = CorePotts.state_block(
+        runtime.descriptor_state, only(executable.reports.states).handle
+    ).values
+    @test values[1] == 2.0
+    @test values[2] == 0.0
+    @test values[3] == 2.0
+    @test CorePotts.program_tracker_value(runtime, Val(:cell_volume), 2) == 0
 end
 
 @testset "filters inadmissible competitors before priority" begin

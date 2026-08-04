@@ -20,6 +20,7 @@ function test_program(
             (CorePotts.OwnershipCountTracker(),),
             "ownership-count-tracker-v1-test",
         ),
+        ownership_change_handles = (),
     )
     T = Float64
     scalar(value) = CorePotts.CompiledScalar(T(value))
@@ -47,6 +48,7 @@ function test_program(
         CorePotts.CPUProgramBackend(),
         "core-program-v1-test";
         checkerboard_plan,
+        ownership_change_handles,
     )
 end
 
@@ -424,7 +426,7 @@ end
         @test first.mcs == 1
         @test first.settled
         report = CorePotts.program_execution_report(program)
-        @test report.backend === :CPUProgramBackend
+        @test report.backend === :CPUBackend
         @test report.numerical_policy.reductions === :deterministic
         @test report.trackers.quantities === (:cell_volume,)
         @test CorePotts.program_capability_report(program).trackers.count == 1
@@ -607,6 +609,9 @@ end
         test_program(
             CorePotts.CheckerboardProgramEngine();
             descriptor_plan = cleared_plan,
+            ownership_change_handles = (
+                only(cleared_layout.entries).handle,
+            ),
         ),
         cleared_initial,
         Float64[],
@@ -648,6 +653,13 @@ end
     ]
     maximums = zeros(UInt32, 3)
     identities = fill(typemax(UInt32), 3)
+    state = CorePotts.initialize_program(
+        test_program(CorePotts.CheckerboardProgramEngine()),
+        test_initial(),
+        Float64[],
+        UInt64(7),
+        UInt32(1),
+    ).engine_workspace.state
     claim_priority = CorePotts._checkerboard_claim_priorities_kernel!(backend)
     claim_identity = CorePotts._checkerboard_claim_identities_kernel!(backend)
     select = CorePotts._checkerboard_select_kernel!(backend)
@@ -657,6 +669,7 @@ end
         priorities,
         dispositions,
         maximums,
+        state,
         Int32(2);
         ndrange = 2,
     )
@@ -669,6 +682,7 @@ end
         dispositions,
         maximums,
         identities,
+        state,
         Int32(2);
         ndrange = 2,
     )
@@ -681,6 +695,7 @@ end
         dispositions,
         maximums,
         identities,
+        state,
         Int32(2);
         ndrange = 2,
     )
@@ -1227,6 +1242,12 @@ struct ExternalSquareOperation <: CorePotts.AbstractContextualOperation end
     kernel(output, descriptor, context; ndrange = length(output))
     CorePotts.KernelAbstractions.synchronize(backend)
     @test output == fill(10.0f0, 4)
+    greater_equal = CorePotts.operation_callable(
+        Val(:greater_equal), v"1.0.0"
+    )
+    @test greater_equal(Int64(4), 4.0f0)
+    @test !greater_equal(Int64(3), 4.0f0)
+    @test @inferred(greater_equal(Int64(4), 4.0f0)) === true
 end
 
 @testset "public storage layouts canonicalize representation banks" begin

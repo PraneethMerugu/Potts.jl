@@ -183,21 +183,7 @@ function _checkerboard_state_banks(state::CheckerboardExecutionState)
 end
 
 function _checkerboard_kernel_program(program, to)
-    ownership_change_handles = if program isa CheckerboardKernelProgram
-        program.ownership_change_handles
-    else
-        Tuple(
-            entry.handle
-            for entry in program.descriptor_plan.state_layout.entries
-            if begin
-                lifecycle = entry.schema.lifecycle
-                declared = lifecycle isa NamedTuple &&
-                           haskey(lifecycle, :declared) ?
-                           lifecycle.declared : nothing
-                declared === :ClearOnOwnershipChange
-            end
-        )
-    end
+    ownership_change_handles = program.ownership_change_handles
     tracker_kernel = to === nothing ?
                      tracker_kernel_plan(program.tracker_plan) :
                      adapt_tracker_kernel_plan(to, program.tracker_plan)
@@ -240,6 +226,7 @@ function _checkerboard_execution_state(
         seed,
         replica,
         repeat,
+        initial_mcs = 0,
         to = nothing,
     )
     descriptor_workspaces = allocate_runtime_workspaces(
@@ -259,6 +246,14 @@ function _checkerboard_execution_state(
     lifecycle_control = allocate_lifecycle_backend_control(
         program.lifecycle_plan, parameters, length(ownership)
     )
+    if lifecycle_control isa LifecycleBackendControl
+        @inbounds begin
+            lifecycle_control.counters[_LIFECYCLE_CONTROL_ACTIVE_BANK] =
+                iseven(initial_mcs) ? Int32(1) : Int32(2)
+            lifecycle_control.counters[_LIFECYCLE_CONTROL_COMMITTED_MCS] =
+                Int32(initial_mcs)
+        end
+    end
     return CheckerboardExecutionState(
         kernel_program,
         _checkerboard_adapt(to, ownership),
@@ -275,7 +270,7 @@ function _checkerboard_execution_state(
         UInt64(seed),
         UInt32(replica),
         UInt32(repeat),
-        0,
+        Int(initial_mcs),
     )
 end
 
@@ -405,8 +400,22 @@ function allocate_program_engine_workspace(
         seed,
         replica,
         repeat,
+        initial_mcs = 0,
     )
-    program.engine isa CheckerboardProgramEngine || return nothing
+    program.engine isa SequentialProgramEngine && return (
+        allocate_sequential_transaction_workspace(
+            program,
+            ownership,
+            cell_kinds,
+            cell_generations,
+            trackers,
+            relationships,
+            descriptor_state,
+        )
+    )
+    program.engine isa CheckerboardProgramEngine || error(
+        "unreachable program engine"
+    )
     state = _checkerboard_execution_state(
         program,
         ownership,
@@ -420,10 +429,39 @@ function allocate_program_engine_workspace(
         seed,
         replica,
         repeat,
+        initial_mcs,
     )
     return _allocate_checkerboard_workspace(
         state; source_table = program.descriptor_plan.source_table
     )
+end
+
+function initialize_program_execution_statistics!(
+        workspace::CheckerboardWorkspace,
+        accepted,
+        rejected,
+        null_attempts,
+        constraint_rejections,
+        energy_rejections,
+        retired_cells,
+    )
+    control = workspace.state.lifecycle_control
+    control isa NoLifecycleBackendControl && return workspace
+    values = (
+        accepted,
+        rejected,
+        null_attempts,
+        constraint_rejections,
+        energy_rejections,
+        retired_cells,
+    )
+    for (index, value) in enumerate(values)
+        value >= 0 || throw(ArgumentError(
+            "program execution statistics must be nonnegative"
+        ))
+        @inbounds control.statistics[index] = UInt64(value)
+    end
+    return workspace
 end
 
 function _validate_gpu_descriptor_plan(
@@ -456,9 +494,6 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
     ))
     isempty(state.program.stage_plan.after_mcs) || throw(ArgumentError(
         "after-MCS checkerboard stages are not qualified on device backends"
-    ))
-    isempty(state.program.ownership_change_handles) || throw(ArgumentError(
-        "ownership-cleared checkerboard state is not qualified on device backends"
     ))
     _validate_gpu_descriptor_plan(
         state.program.descriptor_plan, workspace.source_table
@@ -564,30 +599,27 @@ end
 
 include("checkerboard_kernels.jl")
 
-function _clear_checkerboard_bulk!(workspace::CheckerboardWorkspace)
+function _clear_checkerboard_bulk!(workspace::CheckerboardWorkspace, state)
     maximums = workspace.cell_max_priority
     identities = workspace.cell_min_identity
     backend = KernelAbstractions.get_backend(maximums)
-    AcceleratedKernels.foreachindex(maximums, backend) do index
-        @inbounds begin
-            maximums[index] = UInt32(0)
-            identities[index] = typemax(UInt32)
-        end
-    end
     report = workspace.report
     report_backend = KernelAbstractions.get_backend(report)
-    AcceleratedKernels.foreachindex(report, report_backend) do index
-        @inbounds report[index] = UInt64(0)
-    end
     report_backend == backend || throw(ArgumentError(
         "checkerboard report storage must share the execution backend"
     ))
+    _checkerboard_clear_mcs_kernel!(backend)(
+        maximums,
+        identities,
+        report,
+        state;
+        ndrange = max(length(maximums), length(report)),
+    )
     return nothing
 end
 
 function _checkerboard_requires_accepted_commit(state)
-    state.program.stage_plan.accepted_count > 0 && return true
-    return !isempty(state.program.ownership_change_handles)
+    return state.program.stage_plan.accepted_count > 0
 end
 
 @inline function _checkerboard_proposal_context(state, workspace, candidate, color)
@@ -735,7 +767,7 @@ function execute_checkerboard_mcs!(
             "accepted-copy checkerboard stages are not qualified on this backend"
         )
     )
-    _clear_checkerboard_bulk!(workspace)
+    _clear_checkerboard_bulk!(workspace, state)
     workgroup_size === nothing || workgroup_size > 0 || throw(ArgumentError(
         "checkerboard workgroup size must be positive"
     ))
@@ -782,7 +814,7 @@ function execute_checkerboard_mcs!(
                 Int32(batch_size);
                 ndrange = batch_size,
             )
-            _clear_checkerboard_claims!(workspace)
+            _clear_checkerboard_claims!(workspace, state)
             claim_priority_kernel(
                 workspace.old_owners,
                 workspace.new_owners,
@@ -884,16 +916,13 @@ function enqueue_checkerboard_mcs!(
     return destination
 end
 
-function _clear_checkerboard_claims!(workspace::CheckerboardWorkspace)
+function _clear_checkerboard_claims!(workspace::CheckerboardWorkspace, state)
     maximums = workspace.cell_max_priority
     identities = workspace.cell_min_identity
     backend = KernelAbstractions.get_backend(maximums)
-    AcceleratedKernels.foreachindex(maximums, backend) do index
-        @inbounds begin
-            maximums[index] = UInt32(0)
-            identities[index] = typemax(UInt32)
-        end
-    end
+    _checkerboard_clear_claims_kernel!(backend)(
+        maximums, identities, state; ndrange = length(maximums)
+    )
     return nothing
 end
 
@@ -904,10 +933,10 @@ function _advance_checkerboard!(runtime::ProgramRuntime)
     )
     execute_checkerboard_mcs!(workspace, runtime.mcs)
     values = workspace.report
-    runtime.accepted += Int(values[1])
-    runtime.rejected += Int(values[2])
-    runtime.null_attempts += Int(values[3])
-    runtime.constraint_rejections += Int(values[4])
-    runtime.energy_rejections += Int(values[5])
+    runtime.accepted += UInt64(values[1])
+    runtime.rejected += UInt64(values[2])
+    runtime.null_attempts += UInt64(values[3])
+    runtime.constraint_rejections += UInt64(values[4])
+    runtime.energy_rejections += UInt64(values[5])
     return nothing
 end

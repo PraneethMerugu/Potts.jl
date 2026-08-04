@@ -1,5 +1,36 @@
 # Proposal acceptance and the sequential/checkerboard program barriers.
 
+mutable struct SequentialTransactionWorkspace{O, K, G, TS, R, D}
+    ownership::O
+    cell_kinds::K
+    cell_generations::G
+    trackers::TS
+    relationships::R
+    descriptor_state::D
+end
+struct NoSequentialTransactionWorkspace end
+
+function allocate_sequential_transaction_workspace(
+        program,
+        ownership,
+        cell_kinds,
+        cell_generations,
+        trackers,
+        relationships,
+        descriptor_state,
+    )
+    program.lifecycle_plan isa NoLifecycleExecutionPlan &&
+        return NoSequentialTransactionWorkspace()
+    return SequentialTransactionWorkspace(
+        copy(ownership),
+        copy(cell_kinds),
+        copy(cell_generations),
+        copy_tracker_state(trackers),
+        copy(relationships),
+        copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
+    )
+end
+
 @inline function proposal_log_acceptance_ratio(
         evaluation::ProposalEvaluation{T},
         temperature::Real,
@@ -200,9 +231,291 @@ function _after_mcs!(runtime::ProgramRuntime{T, N}) where {T, N}
     return nothing
 end
 
+function _prepare_sequential_transaction!(runtime, workspace)
+    copyto!(workspace.ownership, runtime.ownership)
+    copyto!(workspace.cell_kinds, runtime.cell_kinds)
+    copyto!(workspace.cell_generations, runtime.cell_generations)
+    copyto_tracker_state!(workspace.trackers, runtime.trackers)
+    copyto!(workspace.relationships, runtime.relationships)
+    copyto_auxiliary_state!(workspace.descriptor_state, runtime.descriptor_state)
+    runtime.ownership, workspace.ownership = workspace.ownership, runtime.ownership
+    runtime.cell_kinds, workspace.cell_kinds =
+        workspace.cell_kinds, runtime.cell_kinds
+    runtime.cell_generations, workspace.cell_generations =
+        workspace.cell_generations, runtime.cell_generations
+    runtime.trackers, workspace.trackers = workspace.trackers, runtime.trackers
+    runtime.relationships, workspace.relationships =
+        workspace.relationships, runtime.relationships
+    runtime.descriptor_state, workspace.descriptor_state =
+        workspace.descriptor_state, runtime.descriptor_state
+    return runtime
+end
+
+function _restore_sequential_transaction!(runtime, workspace)
+    runtime.ownership, workspace.ownership = workspace.ownership, runtime.ownership
+    runtime.cell_kinds, workspace.cell_kinds =
+        workspace.cell_kinds, runtime.cell_kinds
+    runtime.cell_generations, workspace.cell_generations =
+        workspace.cell_generations, runtime.cell_generations
+    runtime.trackers, workspace.trackers = workspace.trackers, runtime.trackers
+    runtime.relationships, workspace.relationships =
+        workspace.relationships, runtime.relationships
+    runtime.descriptor_state, workspace.descriptor_state =
+        workspace.descriptor_state, runtime.descriptor_state
+    return runtime
+end
+
+@inline function _program_counter_snapshot(runtime)
+    return (
+        runtime.accepted,
+        runtime.rejected,
+        runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
+    )
+end
+
+@inline function _restore_program_counters!(runtime, values)
+    runtime.accepted = values[1]
+    runtime.rejected = values[2]
+    runtime.null_attempts = values[3]
+    runtime.constraint_rejections = values[4]
+    runtime.energy_rejections = values[5]
+    runtime.retired_cells = values[6]
+    return runtime
+end
+
+function _advance_sequential_transaction!(runtime::ProgramRuntime)
+    workspace = runtime.engine_workspace
+    workspace isa SequentialTransactionWorkspace || error(
+        "sequential runtime has no transaction workspace"
+    )
+    counters = _program_counter_snapshot(runtime)
+    _prepare_sequential_transaction!(runtime, workspace)
+    runtime.settled = false
+    try
+        _advance_sequential!(runtime)
+        _after_mcs!(runtime)
+    catch error
+        _restore_sequential_transaction!(runtime, workspace)
+        _restore_program_counters!(runtime, counters)
+        status = runtime.lifecycle_workspace isa LifecycleWorkspace ?
+            lifecycle_workspace_status(runtime.lifecycle_workspace) :
+            LifecycleStatusPayload()
+        if error isa AbstractLifecycleFailure &&
+                status.code !== LifecycleStatusSuccess
+            if lifecycle_status_is_expected(status)
+                runtime.failure_status = status
+                runtime.settled = true
+                return runtime
+            end
+        end
+        rethrow()
+    end
+    runtime.mcs += 1
+    runtime.failure_status = LifecycleStatusPayload()
+    runtime.settled = true
+    return runtime
+end
+
+function _publish_program_snapshot!(runtime::ProgramRuntime, snapshot)
+    copyto!(runtime.ownership, snapshot.ownership)
+    copyto!(runtime.cell_kinds, snapshot.cell_kinds)
+    copyto!(runtime.cell_generations, snapshot.cell_generations)
+    copyto_tracker_state!(runtime.trackers, snapshot.trackers)
+    copyto!(runtime.relationships, snapshot.relationships)
+    copyto_auxiliary_state!(runtime.descriptor_state, snapshot.descriptor_state)
+    runtime.mcs = snapshot.mcs
+    return runtime
+end
+
+function _publish_program_receipt!(runtime::ProgramRuntime, receipt)
+    receipt.snapshot === nothing && throw(LifecycleInvariantFailure(
+        Int32(0), Int32(receipt.committed_mcs), :missing_program_snapshot
+    ))
+    _publish_program_snapshot!(runtime, receipt.snapshot)
+    runtime.accepted = receipt.counters.accepted
+    runtime.rejected = receipt.counters.rejected
+    runtime.null_attempts = receipt.counters.null_attempts
+    runtime.constraint_rejections = receipt.counters.constraint_rejections
+    runtime.energy_rejections = receipt.counters.energy_rejections
+    runtime.retired_cells = receipt.counters.retired_cells
+    runtime.failure_status = receipt.status
+    runtime.settled = true
+    return runtime
+end
+
+@inline function supports_queued_program_execution(runtime::ProgramRuntime)
+    runtime.engine_workspace isa CheckerboardWorkspace || return false
+    runtime.program.lifecycle_plan isa LifecycleExecutionPlan || return false
+    return isempty(runtime.program.stage_plan.after_mcs)
+end
+
+function enqueue_program_mcs!(runtime::ProgramRuntime)
+    supports_queued_program_execution(runtime) || throw(ArgumentError(
+        "this program does not support queued whole-MCS execution"
+    ))
+    program_failed(runtime) && throw(ArgumentError(
+        "cannot enqueue a program runtime after a terminal scientific failure"
+    ))
+    workspace = runtime.engine_workspace
+    enqueue_checkerboard_mcs!(workspace, workspace.execution.submitted_mcs)
+    runtime.settled = false
+    return runtime
+end
+
+function enqueue_program_through!(
+        runtime::ProgramRuntime, target_mcs::Integer
+    )
+    supports_queued_program_execution(runtime) || throw(ArgumentError(
+        "this program does not support queued whole-MCS execution"
+    ))
+    workspace = runtime.engine_workspace
+    target = Int(target_mcs)
+    target >= workspace.execution.submitted_mcs || throw(ArgumentError(
+        "queued execution target precedes the submitted MCS"
+    ))
+    while workspace.execution.submitted_mcs < target
+        enqueue_program_mcs!(runtime)
+    end
+    return runtime
+end
+
+function settle_program!(
+        runtime::ProgramRuntime, request::ProgramSettlementRequest
+    )
+    supports_queued_program_execution(runtime) || throw(ArgumentError(
+        "this program does not support queued whole-MCS settlement"
+    ))
+    receipt = settle_program!(runtime.engine_workspace, request)
+    request.full_snapshot && _publish_program_receipt!(runtime, receipt)
+    return receipt
+end
+
+mutable struct _CheckerboardTransactionRuntime{
+        P, O, K, G, TS, R, D, S, L, A,
+    }
+    program::P
+    ownership::O
+    cell_kinds::K
+    cell_generations::G
+    trackers::TS
+    relationships::R
+    descriptor_state::D
+    stage_buffers::S
+    lifecycle_workspace::L
+    parameters::A
+    mcs::Int
+    retired_cells::UInt64
+end
+
+function _checkerboard_transaction_runtime(runtime, state, mcs)
+    return _CheckerboardTransactionRuntime(
+        runtime.program,
+        state.ownership,
+        state.cell_kinds,
+        state.cell_generations,
+        state.trackers,
+        state.relationships,
+        state.descriptor_state,
+        state.stage_buffers,
+        state.lifecycle_workspace,
+        state.parameters,
+        Int(mcs),
+        runtime.retired_cells,
+    )
+end
+
+function _advance_checkerboard_host_stage_transaction!(runtime::ProgramRuntime)
+    workspace = runtime.engine_workspace
+    current_mcs = workspace.execution.submitted_mcs
+    source, destination, destination_bank = _checkerboard_transaction_banks(
+        workspace, current_mcs
+    )
+    destination = _checkerboard_state_at_mcs(destination, current_mcs)
+    backend = KernelAbstractions.get_backend(destination.ownership)
+    backend isa KernelAbstractions.CPU || throw(ArgumentError(
+        "host after-MCS transaction execution requires the CPU backend"
+    ))
+    _enqueue_program_state_copy!(destination, source)
+    execute_checkerboard_mcs!(workspace, current_mcs, destination)
+    transaction = _checkerboard_transaction_runtime(
+        runtime, destination, current_mcs
+    )
+    succeeded = true
+    try
+        _execute_after_mcs_stage!(
+            transaction, runtime.program.stage_plan.before_lifecycle
+        )
+        execute_lifecycle!(transaction)
+        _execute_after_mcs_stage!(
+            transaction, runtime.program.stage_plan.after_lifecycle
+        )
+    catch error
+        status = lifecycle_workspace_status(
+            transaction.lifecycle_workspace
+        )
+        if error isa AbstractLifecycleFailure &&
+                status.code !== LifecycleStatusSuccess &&
+                lifecycle_status_is_expected(status)
+            succeeded = false
+        else
+            rethrow()
+        end
+    end
+    if succeeded
+        @inbounds destination.lifecycle_control.statistics[
+            _PROGRAM_STAT_RETIRED
+        ] = transaction.retired_cells
+    end
+    _enqueue_program_bank_publication!(
+        destination,
+        workspace.report,
+        destination_bank,
+        current_mcs + 1,
+    )
+    workspace.execution.submitted_mcs = current_mcs + 1
+    runtime.settled = false
+    receipt = settle_program!(
+        workspace,
+        ProgramSettlementRequest(PublicStepSettlement; full_snapshot = true),
+    )
+    _publish_program_receipt!(runtime, receipt)
+    return runtime
+end
+
+function _advance_checkerboard_transaction!(runtime::ProgramRuntime)
+    workspace = runtime.engine_workspace
+    workspace isa CheckerboardWorkspace || error(
+        "checkerboard runtime has no portable execution workspace"
+    )
+    isempty(runtime.program.stage_plan.after_mcs) ||
+        return _advance_checkerboard_host_stage_transaction!(runtime)
+    enqueue_program_mcs!(runtime)
+    receipt = settle_program!(
+        runtime,
+        ProgramSettlementRequest(PublicStepSettlement; full_snapshot = true),
+    )
+    receipt.snapshot === nothing && throw(LifecycleInvariantFailure(
+        Int32(0), Int32(receipt.committed_mcs), :missing_program_snapshot
+    ))
+    return runtime
+end
+
 function advance_mcs!(runtime::ProgramRuntime)
     runtime.settled ||
         throw(ArgumentError("cannot advance an unsettled program runtime"))
+    program_failed(runtime) && throw(ArgumentError(
+        "cannot advance a program runtime after a terminal scientific failure"
+    ))
+    if runtime.program.engine isa CheckerboardProgramEngine &&
+            runtime.program.lifecycle_plan isa LifecycleExecutionPlan
+        return _advance_checkerboard_transaction!(runtime)
+    end
+    runtime.program.engine isa SequentialProgramEngine &&
+            runtime.program.lifecycle_plan isa LifecycleExecutionPlan &&
+        return _advance_sequential_transaction!(runtime)
     runtime.settled = false
     if runtime.program.engine isa SequentialProgramEngine
         _advance_sequential!(runtime)
@@ -217,23 +530,12 @@ function advance_mcs!(runtime::ProgramRuntime)
     return runtime
 end
 
-function update_program_parameters!(
-        runtime::ProgramRuntime{T}, parameters::AbstractVector{<:Real}
-    ) where {T}
-    runtime.settled ||
-        throw(ArgumentError("parameter updates require a settled MCS boundary"))
-    length(parameters) == length(runtime.parameters) ||
-        throw(ArgumentError("runtime parameter buffer has the wrong length"))
-    replacement = T.(parameters)
-    all(isfinite, replacement) ||
-        throw(ArgumentError("runtime parameters must be finite"))
-    copyto!(runtime.parameters, replacement)
-    return runtime
-end
+@inline program_backend_name(::CPUProgramBackend) = :CPUBackend
+@inline program_backend_name(::AdaptedProgramBackend{Name}) where {Name} = Name
 
 program_execution_report(program::CompiledPottsProgram) = (
     engine = nameof(typeof(program.engine)),
-    backend = nameof(typeof(program.backend)),
+    backend = program_backend_name(program.backend),
     scalar_type = eltype(program.parameter_defaults),
     shape = program.shape,
     attempts_per_site = program.attempts_per_site,
@@ -250,6 +552,7 @@ program_capability_report(program::CompiledPottsProgram) = (
     sequential = program.engine isa SequentialProgramEngine,
     checkerboard = program.engine isa CheckerboardProgramEngine,
     cpu = program.backend isa CPUProgramBackend,
+    gpu = program.backend isa AdaptedProgramBackend,
     state_domains = Tuple(unique(
         entry.schema.domain
         for entry in program.descriptor_plan.state_layout.entries

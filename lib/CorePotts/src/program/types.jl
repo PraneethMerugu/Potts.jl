@@ -4,6 +4,7 @@ abstract type AbstractProgramEngine end
 struct SequentialProgramEngine <: AbstractProgramEngine end
 struct CheckerboardProgramEngine <: AbstractProgramEngine end
 struct CPUProgramBackend end
+struct AdaptedProgramBackend{Name} end
 
 struct CompiledScalar{T <: AbstractFloat}
     value::T
@@ -145,6 +146,7 @@ struct CompiledPottsProgram{
         TP,
         D,
         SP,
+        H <: Tuple,
         LP <: AbstractLifecycleExecutionPlan,
         CP <: AbstractCheckerboardPlan,
     }
@@ -161,6 +163,7 @@ struct CompiledPottsProgram{
     tracker_plan::TP
     descriptor_plan::D
     stage_plan::SP
+    ownership_change_handles::H
     lifecycle_plan::LP
     checkerboard_plan::CP
     engine::E
@@ -187,6 +190,7 @@ function CompiledPottsProgram(
         medium_kinds = nothing,
         lifecycle_plan::AbstractLifecycleExecutionPlan = NoLifecycleExecutionPlan(),
         checkerboard_plan = nothing,
+        ownership_change_handles::Tuple = (),
     ) where {T <: AbstractFloat, N, TP, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
@@ -242,6 +246,7 @@ function CompiledPottsProgram(
         )
     return CompiledPottsProgram{
         T, N, E, B, typeof(relationship_storage), TP, D, SP,
+        typeof(ownership_change_handles),
         typeof(lifecycle_plan),
         typeof(resolved_checkerboard_plan),
     }(
@@ -258,6 +263,7 @@ function CompiledPottsProgram(
         tracker_plan,
         descriptor_plan,
         stage_plan,
+        ownership_change_handles,
         lifecycle_plan,
         resolved_checkerboard_plan,
         engine,

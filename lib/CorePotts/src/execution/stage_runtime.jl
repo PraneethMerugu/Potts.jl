@@ -63,12 +63,12 @@ end
     )
 end
 @inline function apply_resource_operation(
-        ::ResourceOperation{:cell_volume},
+    ::ResourceOperation{:cell_volume},
         arguments,
         context::_RelationshipStageEvaluationContext,
     )
     owner = Int(only(arguments))
-    owner <= 0 && return 0
+    owner <= 0 && return Int32(0)
     return program_tracker_value(
         context.runtime, Val(:cell_volume), owner
     )
@@ -642,7 +642,7 @@ function _apply_after_mcs_groups!(runtime, groups::Tuple)
     return _apply_after_mcs_groups!(runtime, Base.tail(groups))
 end
 
-function _execute_after_mcs_stage!(runtime::ProgramRuntime, groups)
+function _execute_after_mcs_stage!(runtime, groups)
     _reset_relationship_transactions!(
         runtime.stage_buffers.relationship_transactions,
         runtime.relationships,
@@ -662,7 +662,7 @@ function _execute_after_mcs_stage!(runtime::ProgramRuntime, groups)
     return nothing
 end
 
-_execute_after_mcs_stage!(runtime::ProgramRuntime) =
+_execute_after_mcs_stage!(runtime) =
     _execute_after_mcs_stage!(runtime, runtime.program.stage_plan.after_mcs)
 
 """Log acceptance ratio for the conventional descriptor-driven V1 law."""

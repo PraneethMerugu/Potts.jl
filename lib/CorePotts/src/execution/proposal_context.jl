@@ -367,7 +367,7 @@ end
         context::_ProposalEvaluationContext,
     )
     owner = Int(only(arguments))
-    owner <= 0 && return 0
+    owner <= 0 && return Int32(0)
     return program_tracker_value(
         context.runtime, Val(:cell_volume), owner
     )
@@ -390,7 +390,7 @@ end
     )
     relationship_handle = Int32(first(arguments))
     owner = Int32(last(arguments))
-    owner <= 0 && return 0
+    owner <= 0 && return Int32(0)
     slot = _relationship_domain_slot(
         context.runtime.program.descriptor_plan.domain_resources,
         relationship_handle,

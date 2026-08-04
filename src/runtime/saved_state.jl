@@ -132,13 +132,13 @@ Base.propertynames(state::PottsSavedState) = (
 
 struct PottsStats
     steps::Int
-    candidate_attempts::Int
-    accepted::Int
-    rejected::Int
-    null_attempts::Int
-    constraint_rejections::Int
-    energy_rejections::Int
-    retired_cells::Int
+    candidate_attempts::UInt64
+    accepted::UInt64
+    rejected::UInt64
+    null_attempts::UInt64
+    constraint_rejections::UInt64
+    energy_rejections::UInt64
+    retired_cells::UInt64
 end
 
 Base.merge(left::PottsStats, right::PottsStats) = PottsStats(

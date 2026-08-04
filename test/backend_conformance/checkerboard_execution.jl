@@ -23,7 +23,7 @@ isdefined(@__MODULE__, :NeutralExternalTerms) ||
     include("../fixtures/NeutralExternalTerms.jl")
 
 function _external_checkerboard_fixture()
-    @variables checkerboard_activity
+    @variables checkerboard_activity checkerboard_memory
     @parameters checkerboard_weight = 0.25
     cell = CellKind(:checkerboard_cell; extinction = RetireAtZero())
     medium = MediumKind(:checkerboard_medium)
@@ -32,6 +32,13 @@ function _external_checkerboard_fixture()
         checkerboard_activity;
         name = :checkerboard_activity,
         initial = 1.0,
+        owner = cell,
+        lifecycle = ClearOnOwnershipChange(),
+    )
+    memory = SiteState(
+        checkerboard_memory;
+        name = :checkerboard_memory,
+        initial = 7.0,
         owner = cell,
         lifecycle = PreserveOnOwnershipChange(),
     )
@@ -52,10 +59,11 @@ function _external_checkerboard_fixture()
             cell,
             medium,
             activity,
+            memory,
             term,
             Protocol(Sweep(; temperature = 2.0); name = :main),
         )),
-        unknowns = [checkerboard_activity],
+        unknowns = [checkerboard_activity, checkerboard_memory],
         parameters = [checkerboard_weight],
     )
     executable = compile(
@@ -70,7 +78,7 @@ function _external_checkerboard_fixture()
         ownership = LabelledCells(labels; cells = [cell], medium),
         values = [checkerboard_activity => reshape(
             collect(Float32, 1:36), 6, 6
-        )],
+        ), checkerboard_memory => fill(7.0f0, 6, 6)],
     )
     return executable, PottsToolkit._core_initial_state(executable, initial)
 end
@@ -120,6 +128,19 @@ function run_checkerboard_execution(
     )
 
     @test device_runtime.ownership == cpu_runtime.ownership
+    device_state = CorePotts.Adapt.adapt(
+        Array, device_workspace.state.descriptor_state
+    )
+    cpu_state = cpu_workspace.state.descriptor_state
+    @test map(bank -> bank.values, device_state.banks) ==
+        map(bank -> bank.values, cpu_state.banks)
+    memory_handle = only(filter(
+        report -> report.name === :checkerboard_memory,
+        executable.reports.states,
+    )).handle
+    @test all(==(7.0f0), CorePotts.state_block(
+        cpu_state, memory_handle
+    ).values)
     @test CorePotts.program_tracker_values(
         device_runtime, Val(:cell_volume)
     ) == CorePotts.program_tracker_values(

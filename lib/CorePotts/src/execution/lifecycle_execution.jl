@@ -18,12 +18,30 @@ function _execute_lifecycle_status!(
     )
     _reset_lifecycle_workspace!(workspace)
     _lifecycle_descriptor_due(plan, runtime.mcs + 1) || return true
-    _index_lifecycle_representative_sites!(runtime, workspace) || return false
-    _emit_lifecycle_requests!(runtime, plan, workspace) || return false
-    _filter_lifecycle_requests!(runtime, plan, workspace) || return false
-    _resolve_lifecycle_conflicts!(runtime, plan, workspace) || return false
+    _index_lifecycle_representative_sites!(runtime, workspace) || return (
+        _stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageIndex
+        )
+    )
+    _emit_lifecycle_requests!(runtime, plan, workspace) || return (
+        _stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageEmission
+        )
+    )
+    _filter_lifecycle_requests!(runtime, plan, workspace) || return (
+        _stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStagePlanning
+        )
+    )
+    _resolve_lifecycle_conflicts!(runtime, plan, workspace) || return (
+        _stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageSelection
+        )
+    )
     selected_count = _preflight_lifecycle_capacity!(runtime, plan, workspace)
-    selected_count < 0 && return false
+    selected_count < 0 && return _stamp_host_lifecycle_failure!(
+        runtime, plan, workspace, LifecycleStageSelection
+    )
     iszero(selected_count) && return true
     retired = _stage_lifecycle_transactions!(
         runtime, plan, workspace, selected_count
@@ -31,6 +49,30 @@ function _execute_lifecycle_status!(
     retired < 0 && return false
     _publish_lifecycle_transactions!(runtime, workspace, retired)
     return true
+end
+
+function _stamp_host_lifecycle_failure!(runtime, plan, workspace, stage)
+    status = lifecycle_workspace_status(workspace)
+    status.code === LifecycleStatusSuccess && return false
+    status.mcs != 0 && return false
+    descriptor = _lifecycle_failure_descriptor(plan, workspace, status)
+    source = descriptor === nothing ? status.source : descriptor.source_handle
+    action_identity = descriptor === nothing ? status.action_identity :
+                      descriptor.action_identity
+    @inbounds workspace.status[1] = LifecycleStatusPayload(
+        status.code,
+        Int32(runtime.mcs + 1),
+        stage,
+        source,
+        action_identity,
+        status.secondary_source,
+        status.anchor,
+        status.detail,
+        status.required,
+        status.available,
+        status.maximum,
+    )
+    return false
 end
 
 function _translate_lifecycle_status(status::LifecycleStatusPayload)

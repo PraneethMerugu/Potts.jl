@@ -27,9 +27,9 @@ function _checkpoint_checksum(
 end
 
 function checkpoint(integrator::PottsIntegrator)
-    integrator.runtime.settled || throw(ArgumentError(
-        "checkpoint capture requires a settled complete-MCS boundary"
-    ))
+    _request_integrator_settlement!(
+        integrator, CorePotts.CheckpointSettlement
+    )
     core = CorePotts.program_checkpoint(integrator.runtime)
     schema = v"1.0.0"
     fingerprint = executable_fingerprint(integrator.prob.executable)
@@ -82,8 +82,11 @@ function _init_from_checkpoint(
         policy::PottsSavePolicy,
     )
     _validate_checkpoint(problem, checkpoint_value)
-    runtime = CorePotts.restore_program_checkpoint(
+    host_runtime = CorePotts.restore_program_checkpoint(
         problem.executable.core_program, checkpoint_value.core
+    )
+    runtime = _adapt_runtime_backend(
+        problem.executable.core_program.backend, host_runtime
     )
     state = _saved_state(
         problem.executable,
@@ -109,6 +112,7 @@ function _init_from_checkpoint(
         0,
         false,
         SciMLBase.ReturnCode.Default,
+        nothing,
     )
     policy.save_start && _save_current!(integrator)
     return integrator

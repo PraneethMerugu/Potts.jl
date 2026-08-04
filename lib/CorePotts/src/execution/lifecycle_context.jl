@@ -68,6 +68,14 @@ struct _LifecycleStateContext{R, P, I, H} <:
     operation::UInt16
 end
 
+"""Read-only request-local planned view over one common lifecycle snapshot."""
+struct _LifecycleRequestView{R, W, D}
+    runtime::R
+    workspace::W
+    descriptor::D
+    request::Int32
+end
+
 const _LifecycleContext = Union{
     _LifecycleTriggerContext,
     _LifecyclePlacementContext,
@@ -255,12 +263,12 @@ end
     index = context.role in (
         DestinationLifecycleStateRole, DaughterLifecycleStateRole,
     ) ? context.destination : context.source
-    index > 0 || return zero(eltype(state_block(
-        context.planned.descriptor_state,
-        context.state_handle,
-    ).values))
+    values = state_block(
+        context.runtime.descriptor_state, context.state_handle
+    ).values
+    index > 0 || return zero(eltype(values))
     return @inbounds state_block(
-        context.planned.descriptor_state,
+        context.runtime.descriptor_state,
         context.state_handle,
     ).values[index]
 end
@@ -289,13 +297,129 @@ end
 end
 
 @inline function apply_resource_operation(
-        ::ResourceOperation{:cell_volume}, arguments, context::_LifecycleContext
-    )
+    ::ResourceOperation{:cell_volume}, arguments, context::_LifecycleContext
+)
     cell = Int32(only(arguments))
-    cell <= 0 && return 0
+    cell <= 0 && return Int32(0)
     return program_tracker_value(
         _lifecycle_value_runtime(context), Val(:cell_volume), cell
     )
+end
+
+@inline function _lifecycle_planned_owner(view::_LifecycleRequestView, linear::Int)
+    runtime = view.runtime
+    workspace = view.workspace
+    descriptor = view.descriptor
+    request = Int(view.request)
+    owner = @inbounds runtime.ownership[linear]
+    if descriptor.effect === CreateCellLifecycleEffect
+        for position in 1:Int(@inbounds workspace.planned_site_count[request])
+            @inbounds(workspace.planned_sites[position, request]) == linear &&
+                return @inbounds workspace.allocation[request]
+        end
+    elseif descriptor.effect === RemoveCellLifecycleEffect
+        anchor = @inbounds workspace.anchor[request]
+        owner == anchor && return -Int32(descriptor.replacement_medium)
+    elseif descriptor.effect === DivideCellLifecycleEffect
+        anchor = @inbounds workspace.anchor[request]
+        if owner == anchor &&
+                @inbounds(workspace.partition_owner[anchor]) == request
+            position = Int(@inbounds workspace.site_position[linear])
+            position > 0 && @inbounds(workspace.partition_labels[position]) == 2 &&
+                return @inbounds workspace.allocation[request]
+        end
+    end
+    return owner
+end
+
+@inline function _lifecycle_planned_kind(
+        view::_LifecycleRequestView, cell::Int32
+    )
+    cell > 0 || return view.runtime.program.medium_kind
+    descriptor = view.descriptor
+    workspace = view.workspace
+    request = Int(view.request)
+    anchor = @inbounds workspace.anchor[request]
+    allocation = @inbounds workspace.allocation[request]
+    if descriptor.effect === CreateCellLifecycleEffect && cell == allocation
+        return descriptor.destination_kind
+    elseif descriptor.effect in (
+            RetireCellLifecycleEffect, RemoveCellLifecycleEffect,
+        ) && cell == anchor
+        return Int16(0)
+    elseif descriptor.effect === TransitionCellLifecycleEffect && cell == anchor
+        return descriptor.destination_kind
+    elseif descriptor.effect === DivideCellLifecycleEffect
+        cell == anchor && return descriptor.parent_kind == 0 ?
+            @inbounds(view.runtime.cell_kinds[anchor]) : descriptor.parent_kind
+        cell == allocation && return descriptor.daughter_kind == 0 ?
+            @inbounds(view.runtime.cell_kinds[anchor]) : descriptor.daughter_kind
+    end
+    return @inbounds view.runtime.cell_kinds[cell]
+end
+
+@inline _owner_kind(view::_LifecycleRequestView, owner::Int32) =
+    owner > 0 ? _lifecycle_planned_kind(view, owner) :
+    owner == 0 ? view.runtime.program.medium_kind : Int16(-owner)
+
+function _lifecycle_planned_volume(view::_LifecycleRequestView, cell::Int32)
+    cell > 0 || return Int32(0)
+    count = Int32(0)
+    for linear in eachindex(view.runtime.ownership)
+        _lifecycle_planned_owner(view, Int(linear)) == cell &&
+            (count += Int32(1))
+    end
+    return count
+end
+
+@inline program_tracker_value(
+    view::_LifecycleRequestView, ::Val{:cell_volume}, cell::Integer
+) = _lifecycle_planned_volume(view, Int32(cell))
+
+function _lifecycle_planned_surface(
+        view::_LifecycleRequestView,
+        source_handle::Int32,
+        cell::Int32,
+    )
+    cell > 0 || return Int32(0)
+    resources = view.runtime.program.descriptor_plan.domain_resources
+    start, count = _contact_domain_columns(resources, source_handle)
+    result = Int32(0)
+    indices = CartesianIndices(view.runtime.ownership)
+    for linear in eachindex(view.runtime.ownership)
+        _lifecycle_planned_owner(view, Int(linear)) == cell || continue
+        site = indices[linear]
+        for direction in 1:count
+            neighbor = relation_neighbor_index(
+                view.runtime.program.shape,
+                view.runtime.program.periodic,
+                site,
+                resources.contact_offsets,
+                start + direction - 1,
+            )
+            neighbor === nothing && continue
+            neighbor == site && continue
+            duplicate = false
+            for prior in 1:(direction - 1)
+                prior_neighbor = relation_neighbor_index(
+                    view.runtime.program.shape,
+                    view.runtime.program.periodic,
+                    site,
+                    resources.contact_offsets,
+                    start + prior - 1,
+                )
+                if prior_neighbor == neighbor
+                    duplicate = true
+                    break
+                end
+            end
+            duplicate && continue
+            neighbor_linear = LinearIndices(view.runtime.ownership)[neighbor]
+            _lifecycle_planned_owner(view, neighbor_linear) != cell &&
+                (result += Int32(1))
+        end
+    end
+    return result
 end
 
 @inline function apply_resource_operation(
@@ -314,8 +438,11 @@ end
         source_handle::Int32,
     )
     cell = Int32(only(arguments))
-    cell <= 0 && return 0
+    cell <= 0 && return Int32(0)
     runtime = _lifecycle_value_runtime(context)
+    runtime isa _LifecycleRequestView && return _lifecycle_planned_surface(
+        runtime, source_handle, cell
+    )
     return qualified_tracker_value(
         runtime.program.tracker_plan,
         runtime.trackers,
@@ -323,6 +450,58 @@ end
         source_handle,
         cell,
     )
+end
+
+function _lifecycle_planned_shape_statistics(
+        view::_LifecycleRequestView, cell::Int32
+    )
+    T = eltype(view.runtime.parameters)
+    N = length(view.runtime.program.shape)
+    count = Int32(0)
+    first = ntuple(_ -> zero(T), N)
+    second = ntuple(_ -> zero(T), N * N)
+    indices = CartesianIndices(view.runtime.ownership)
+    for linear in eachindex(view.runtime.ownership)
+        _lifecycle_planned_owner(view, Int(linear)) == cell || continue
+        site = indices[linear]
+        coordinates = ntuple(
+            dimension -> T(site[dimension]) - T(0.5), N
+        )
+        count += Int32(1)
+        first = ntuple(N) do dimension
+            first[dimension] + coordinates[dimension]
+        end
+        second = ntuple(N * N) do slot
+            row = rem(slot - 1, N) + 1
+            column = div(slot - 1, N) + 1
+            second[slot] + coordinates[row] * coordinates[column]
+        end
+    end
+    iszero(count) && return nothing
+    inverse = inv(T(count))
+    center = ntuple(dimension -> first[dimension] * inverse, N)
+    covariance = ntuple(N * N) do slot
+        row = rem(slot - 1, N) + 1
+        column = div(slot - 1, N) + 1
+        second[slot] * inverse - center[row] * center[column]
+    end
+    return count, center, covariance
+end
+
+@inline function _cell_center(view::_LifecycleRequestView, cell::Int32)
+    statistics = _lifecycle_planned_shape_statistics(view, cell)
+    return statistics === nothing ? nothing : statistics[2]
+end
+
+@inline function _cell_length(view::_LifecycleRequestView, cell::Int32)
+    T = eltype(view.runtime.parameters)
+    statistics = _lifecycle_planned_shape_statistics(view, cell)
+    statistics === nothing && return zero(T)
+    covariance = statistics[3]
+    maximum_variance = _maximum_covariance_eigenvalue(
+        Val(length(view.runtime.program.shape)), covariance
+    )
+    return T(4) * sqrt(max(zero(T), maximum_variance))
 end
 
 @inline function _compiled_qualified_tracker_operation(
@@ -372,7 +551,10 @@ end
     )
     kind = Int16(first(arguments))
     runtime = _lifecycle_value_runtime(context)
-    owner = @inbounds runtime.ownership[last(arguments)]
+    owner = runtime isa _LifecycleRequestView ?
+        _lifecycle_planned_owner(
+            runtime, LinearIndices(runtime.runtime.ownership)[last(arguments)]
+        ) : @inbounds(runtime.ownership[last(arguments)])
     return _owner_kind(runtime, owner) == kind
 end
 
@@ -381,15 +563,70 @@ end
     )
     relationship_handle = Int32(first(arguments))
     endpoint = Int32(last(arguments))
-    endpoint <= 0 && return 0
+    endpoint <= 0 && return Int32(0)
     runtime = _lifecycle_value_runtime(context)
+    base_runtime = runtime isa _LifecycleRequestView ? runtime.runtime : runtime
     slot = _relationship_domain_slot(
-        runtime.program.descriptor_plan.domain_resources,
+        base_runtime.program.descriptor_plan.domain_resources,
         relationship_handle,
     )
+    runtime isa _LifecycleRequestView && return
+        _lifecycle_planned_relationship_degree(runtime, slot, endpoint)
     return _call_relationship_slot(
         _relationship_degree, runtime.relationships, slot, (endpoint,)
     )
+end
+
+@inline function _lifecycle_relationship_edge_survives(
+        view::_LifecycleRequestView, slot::Int32, edge::Int, state
+    )
+    workspace = view.workspace
+    descriptor = view.descriptor
+    request = Int(view.request)
+    anchor = @inbounds workspace.anchor[request]
+    a = @inbounds state.endpoint_a[edge]
+    b = @inbounds state.endpoint_b[edge]
+    (a == anchor || b == anchor) || return true
+    other = a == anchor ? b : a
+    plan = view.runtime.program.lifecycle_plan
+    for offset in 0:(Int(descriptor.relationship_rule_count) - 1)
+        rule = @inbounds plan.relationship_rules[
+            Int(descriptor.relationship_rule_offset) + offset
+        ]
+        rule.relationship_slot == slot || continue
+        rule.action === RemoveIncidentLifecycleRelationship && return false
+        if rule.action === RemoveIncompatibleLifecycleRelationship
+            other_kind = _lifecycle_planned_kind(view, other)
+            _relationship_kinds_match(
+                descriptor.destination_kind, other_kind, rule
+            ) || return false
+        end
+    end
+    return true
+end
+
+function _lifecycle_planned_relationship_degree(
+        view::_LifecycleRequestView, slot::Int32, endpoint::Int32
+    )
+    request = Int(view.request)
+    allocation = @inbounds view.workspace.allocation[request]
+    descriptor = view.descriptor
+    if endpoint == allocation && descriptor.effect in (
+            CreateCellLifecycleEffect, DivideCellLifecycleEffect,
+        )
+        return Int32(0)
+    end
+    state = view.runtime.relationships[Int(slot)]
+    result = Int32(0)
+    for edge in eachindex(state.active)
+        @inbounds state.active[edge] || continue
+        a = @inbounds state.endpoint_a[edge]
+        b = @inbounds state.endpoint_b[edge]
+        (a == endpoint || b == endpoint) || continue
+        _lifecycle_relationship_edge_survives(view, slot, edge, state) &&
+            (result += Int32(1))
+    end
+    return result
 end
 
 @inline function apply_resource_operation(

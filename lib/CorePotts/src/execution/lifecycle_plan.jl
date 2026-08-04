@@ -125,6 +125,14 @@ end
     RejectIncompatibleLifecycleRelationship = 0x05
 end
 
+@inline _lifecycle_relationship_action_bit(
+    action::LifecycleRelationshipAction
+) = UInt8(1) << (UInt8(action) - UInt8(1))
+@inline _lifecycle_relationship_action_value(::Val{:remove_incident}) =
+    RemoveIncidentLifecycleRelationship
+@inline _lifecycle_relationship_action_value(::Val{:remove_incompatible}) =
+    RemoveIncompatibleLifecycleRelationship
+
 @enum LifecycleOwnershipAction::UInt8 begin
     PreserveLifecycleOwnershipState = 0x01
     ClearLifecycleOwnershipState = 0x02
@@ -153,29 +161,62 @@ struct LifecycleEvaluatorSlot
     slot::Int32
 end
 
+"""One evaluator-representation bank admitted for exactly one lifecycle role."""
+struct LifecycleEvaluatorBank{
+        Role,
+        E,
+        A <: AbstractVector{E},
+    } <: AbstractVector{E}
+    values::A
+end
+
+function LifecycleEvaluatorBank(::Val{Role}, values::AbstractVector{E}) where {Role, E}
+    Role in (:lifecycle_trigger, :lifecycle_placement, :lifecycle_partition,
+        :lifecycle_state_transform) || throw(ArgumentError(
+        "unsupported lifecycle evaluator role `$Role`"
+    ))
+    return LifecycleEvaluatorBank{Role, E, typeof(values)}(values)
+end
+
+Base.size(bank::LifecycleEvaluatorBank) = size(bank.values)
+Base.getindex(bank::LifecycleEvaluatorBank, index::Int) = bank.values[index]
+Base.IndexStyle(::Type{<:LifecycleEvaluatorBank}) = IndexLinear()
+
 struct LifecycleEvaluatorStorage{B <: Tuple, S <: AbstractVector{LifecycleEvaluatorSlot}}
     banks::B
     slots::S
 end
 
-function LifecycleEvaluatorStorage(values)
+function LifecycleEvaluatorStorage(values, roles)
     entries = collect(values)
-    representations = unique!(DataType[typeof(value) for value in entries])
-    sort!(representations; by = string)
+    entry_roles = collect(Symbol, roles)
+    length(entries) == length(entry_roles) || throw(DimensionMismatch(
+        "lifecycle evaluators and roles must have equal lengths"
+    ))
+    representations = unique!([
+        (typeof(value), entry_roles[index])
+        for (index, value) in enumerate(entries)
+    ])
+    sort!(representations; by = value -> (string(first(value)), string(last(value))))
     bank_for = Dict(
         representation => index
         for (index, representation) in enumerate(representations)
     )
-    banks = Any[Vector{representation}() for representation in representations]
+    bank_values = Any[Vector{first(representation)}() for representation in representations]
     slots = Vector{LifecycleEvaluatorSlot}(undef, length(entries))
     for (index, value) in enumerate(entries)
         value isa StaticEvaluator || throw(ArgumentError(
             "lifecycle evaluator storage accepts only StaticEvaluator values"
         ))
-        bank = bank_for[typeof(value)]
-        push!(banks[bank], value)
-        slots[index] = LifecycleEvaluatorSlot(bank, length(banks[bank]))
+        key = (typeof(value), entry_roles[index])
+        bank = bank_for[key]
+        push!(bank_values[bank], value)
+        slots[index] = LifecycleEvaluatorSlot(bank, length(bank_values[bank]))
     end
+    banks = Any[
+        LifecycleEvaluatorBank(Val(last(representations[index])), values)
+        for (index, values) in enumerate(bank_values)
+    ]
     return LifecycleEvaluatorStorage(Tuple(banks), slots)
 end
 
@@ -185,13 +226,22 @@ Base.length(storage::LifecycleEvaluatorStorage) = length(storage.slots)
         banks::B,
         bank::Int32,
         slot::Int32,
-        context,
-    ) where {B <: Tuple}
+        context::C,
+    ) where {B <: Tuple, C}
     branches = Expr(:block)
     for index in 1:fieldcount(B)
+        bank_type = fieldtype(B, index)
+        role = bank_type.parameters[1]
+        admitted =
+            role === :lifecycle_trigger ? C <: AbstractLifecycleTriggerEvaluationContext :
+            role === :lifecycle_placement ? C <: AbstractLifecyclePlacementEvaluationContext :
+            role === :lifecycle_partition ? C <: AbstractLifecyclePartitionEvaluationContext :
+            role === :lifecycle_state_transform ? C <: AbstractLifecycleStateTransformEvaluationContext :
+            false
+        admitted || continue
         push!(branches.args, quote
             if bank == $(Int32(index))
-                evaluator = @inbounds getfield(banks, $index)[Int(slot)]
+                evaluator = @inbounds getfield(banks, $index).values[Int(slot)]
                 return _compiled_evaluate_static(evaluator, context)
             end
         end)
@@ -307,6 +357,8 @@ end
         arguments,
     )
 end
+
+@inline _lifecycle_state_rule_action(rule) = rule.action
 
 struct LifecycleRelationshipRule
     relationship_slot::Int32
@@ -442,6 +494,8 @@ struct LifecycleExecutionPlan{
     conflict_policy::LifecycleConflictCode
     effect_mask::UInt8
     division_variant_mask::UInt16
+    relationship_action_mask::UInt8
+    state_action_masks::NTuple{5, UInt16}
     cell_capacity::Int32
     maximum_requests::Int32
     maximum_placement_sites::Int32
@@ -498,12 +552,27 @@ function LifecycleExecutionPlan(
     ))
     effect_mask = UInt8(0)
     division_variant_mask = UInt16(0)
+    relationship_action_mask = UInt8(0)
+    state_action_masks = zeros(UInt16, 5)
     for descriptor in descriptors
         effect_mask |= _lifecycle_effect_bit(descriptor.effect)
         descriptor.effect === DivideCellLifecycleEffect &&
             (division_variant_mask |= _lifecycle_division_variant_bit(
                 descriptor.partition, descriptor.side
             ))
+        for offset in 0:(Int(descriptor.state_rule_count) - 1)
+            rule_index = Int(descriptor.state_rule_offset) + offset
+            action = call_lifecycle_state_rule(
+                _lifecycle_state_rule_action, state_rules, rule_index
+            )
+            state_action_masks[Int(descriptor.effect)] |=
+                _lifecycle_state_action_bit(action)
+        end
+    end
+    for rule in relationship_rules
+        relationship_action_mask |= _lifecycle_relationship_action_bit(
+            rule.action
+        )
     end
     return LifecycleExecutionPlan{
         N,
@@ -527,6 +596,8 @@ function LifecycleExecutionPlan(
         conflict_policy,
         effect_mask,
         division_variant_mask,
+        relationship_action_mask,
+        Tuple(state_action_masks),
         Int32(cell_capacity),
         Int32(maximum_requests),
         Int32(maximum_placement_sites),
@@ -549,6 +620,8 @@ function _lifecycle_plan_fingerprint(plan::LifecycleExecutionPlan)
         plan.conflict_policy,
         plan.effect_mask,
         plan.division_variant_mask,
+        plan.relationship_action_mask,
+        plan.state_action_masks,
         plan.cell_capacity,
         plan.maximum_requests,
         plan.maximum_placement_sites,
@@ -565,6 +638,8 @@ function lifecycle_plan_report(plan::LifecycleExecutionPlan)
         state_rules = length(plan.state_rules),
         state_actions = count_ones(plan.state_rules.action_mask),
         relationship_rules = length(plan.relationship_rules),
+        relationship_actions = count_ones(plan.relationship_action_mask),
+        state_action_pairs = sum(count_ones, plan.state_action_masks),
         ownership_rules = length(plan.ownership_rules),
         cell_capacity = plan.cell_capacity,
         maximum_requests = plan.maximum_requests,
@@ -582,6 +657,7 @@ lifecycle_plan_report(::NoLifecycleExecutionPlan) = (
     state_rules = 0,
     state_actions = 0,
     relationship_rules = 0,
+    relationship_actions = 0,
     ownership_rules = 0,
     cell_capacity = 0,
     maximum_requests = 0,
@@ -629,6 +705,11 @@ for context in (
 end
 
 Adapt.@adapt_structure LifecycleEvaluatorSlot
+function Adapt.adapt_structure(
+        to, bank::LifecycleEvaluatorBank{Role}
+    ) where {Role}
+    return LifecycleEvaluatorBank(Val(Role), Adapt.adapt(to, bank.values))
+end
 Adapt.@adapt_structure LifecycleEvaluatorStorage
 Adapt.@adapt_structure LifecycleStateRule
 Adapt.@adapt_structure LifecycleStateRuleSlot

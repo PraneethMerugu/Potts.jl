@@ -23,6 +23,41 @@ abstract type AbstractPottsBackend end
 """The qualified V1 host backend."""
 struct CPUBackend <: AbstractPottsBackend end
 
+"""Apple Metal accelerator selected through the optional Metal extension."""
+struct MetalBackend <: AbstractPottsBackend end
+
+"""NVIDIA accelerator selector reserved for the backend-neutral release matrix."""
+struct CUDABackend <: AbstractPottsBackend end
+
+"""AMD accelerator selector reserved for the backend-neutral release matrix."""
+struct ROCmBackend <: AbstractPottsBackend end
+
+_validate_backend_available(::CPUBackend) = nothing
+function _validate_backend_available(backend::AbstractPottsBackend)
+    throw(ArgumentError(
+        "$(nameof(typeof(backend))) requires its optional backend package and " *
+        "PottsToolkit extension"
+    ))
+end
+
+_core_program_backend(::CPUBackend) = CorePotts.CPUProgramBackend()
+_core_program_backend(::MetalBackend) =
+    CorePotts.AdaptedProgramBackend{:MetalBackend}()
+_core_program_backend(::CUDABackend) =
+    CorePotts.AdaptedProgramBackend{:CUDABackend}()
+_core_program_backend(::ROCmBackend) =
+    CorePotts.AdaptedProgramBackend{:ROCmBackend}()
+
+_adapt_runtime_backend(::CorePotts.CPUProgramBackend, runtime) = runtime
+function _adapt_runtime_backend(
+        backend::CorePotts.AdaptedProgramBackend, runtime
+    )
+    throw(ArgumentError(
+        "$(CorePotts.program_backend_name(backend)) runtime adaptation " *
+        "requires its optional PottsToolkit backend extension"
+    ))
+end
+
 struct ReferenceUnitDescriptor
     name::Symbol
     dimension::String

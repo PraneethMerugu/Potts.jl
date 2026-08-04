@@ -69,8 +69,14 @@ SymbolicIndexingInterface.is_markovian(::PottsExecutable) = true
 
 SymbolicIndexingInterface.parameter_values(problem::PottsProblem) =
     _parameter_buffer(problem.parameters)
-SymbolicIndexingInterface.parameter_values(integrator::PottsIntegrator) =
-    integrator.runtime.parameters
+function SymbolicIndexingInterface.parameter_values(
+        integrator::PottsIntegrator
+    )
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexReadSettlement
+    )
+    return integrator.runtime.parameters
+end
 SymbolicIndexingInterface.parameter_values(solution::PottsSolution) =
     isempty(solution.parameter_history) ?
     _parameter_buffer(solution.prob.parameters) :
@@ -114,8 +120,9 @@ end
 function (setter::PottsParameterSetter)(
         integrator::PottsIntegrator, values
     )
-    integrator.runtime.settled ||
-        throw(ArgumentError("parameter updates require a settled MCS boundary"))
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexMutationSettlement
+    )
     replacements = length(setter.indices) == 1 &&
                    !(values isa Tuple || values isa AbstractArray) ?
                    (values,) : Tuple(values)
@@ -151,8 +158,9 @@ end
 function SymbolicIndexingInterface.set_parameter!(
         integrator::PottsIntegrator, value, index
     )
-    integrator.runtime.settled ||
-        throw(ArgumentError("parameter updates require a settled MCS boundary"))
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexMutationSettlement
+    )
     1 <= index <= length(integrator.prob.executable.parameter_manifest) ||
         throw(BoundsError(integrator.runtime.parameters, index))
     entry = integrator.prob.executable.parameter_manifest[index]
@@ -216,12 +224,24 @@ end
 
 SymbolicIndexingInterface.state_values(problem::PottsProblem) =
     _state_values_for(problem.executable, _problem_saved_state(problem))
-SymbolicIndexingInterface.state_values(integrator::PottsIntegrator) =
-    _state_values_for(integrator.prob.executable, integrator.u)
+function SymbolicIndexingInterface.state_values(
+        integrator::PottsIntegrator
+    )
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexReadSettlement
+    )
+    return _state_values_for(integrator.prob.executable, integrator.u)
+end
 SymbolicIndexingInterface.state_values(solution::PottsSolution) =
     [_state_values_for(solution.prob.executable, saved) for saved in solution.u]
-SymbolicIndexingInterface.current_time(integrator::PottsIntegrator) =
-    integrator.t
+function SymbolicIndexingInterface.current_time(
+        integrator::PottsIntegrator
+    )
+    _request_integrator_settlement!(
+        integrator, CorePotts.IndexReadSettlement
+    )
+    return integrator.t
+end
 SymbolicIndexingInterface.current_time(problem::PottsProblem) =
     problem.tspan[1]
 SymbolicIndexingInterface.current_time(solution::PottsSolution) =

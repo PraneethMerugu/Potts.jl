@@ -77,7 +77,10 @@ end
     first_site = Int32(arguments[1])
     CorePotts.lifecycle_workspace_capacity(context) == 4 ||
         return CorePotts.LifecycleSiteSelection((Int32(0), Int32(0), Int32(0), Int32(0)), 0)
-    CorePotts.set_lifecycle_workspace_value!(context, first_site, 1)
+    workspace_zero = CorePotts.lifecycle_workspace_value(context, 1)
+    CorePotts.set_lifecycle_workspace_value!(
+        context, oftype(workspace_zero, first_site), 1
+    )
     stored = Int32(CorePotts.lifecycle_workspace_value(context, 1))
     return CorePotts.LifecycleSiteSelection(
         (stored, stored + Int32(1), Int32(0), Int32(0)), 2
@@ -86,27 +89,30 @@ end
 @inline function (::PartitionCallable)(arguments, context)
     site = CorePotts.lifecycle_site(context)
     index = site[1]
-    calls = CorePotts.lifecycle_workspace_value(context, index) + 1
+    previous = CorePotts.lifecycle_workspace_value(context, index)
+    calls = previous + one(previous)
     CorePotts.set_lifecycle_workspace_value!(context, calls, index)
     calls == 1 || return 0
     return site[1] <= 3 ? 1 : 2
 end
 @inline function (::TransformCallable)(arguments, context)
     CorePotts.lifecycle_state_role(context) ===
-        CorePotts.DestinationLifecycleStateRole || return oftype(arguments[1], NaN)
+        CorePotts.DestinationLifecycleStateRole || return Float32(NaN)
     CorePotts.lifecycle_destination_cell(context) > 0 ||
-        return oftype(arguments[1], NaN)
+        return Float32(NaN)
     CorePotts.lifecycle_source_cell(context) == 0 ||
-        return oftype(arguments[1], NaN)
+        return Float32(NaN)
     CorePotts.lifecycle_before_state_value(context) ==
         CorePotts.lifecycle_planned_state_value(context) ||
-        return oftype(arguments[1], NaN)
+        return Float32(NaN)
     prior = CorePotts.lifecycle_workspace_value(context, 1)
-    arguments[1] == 3 && prior == 2 && return oftype(arguments[1], NaN)
+    arguments[1] == 3 && prior == 2 && return Float32(NaN)
     arguments[1] < 0 && return oftype(
         CorePotts.lifecycle_workspace_value(context, 1), NaN
     )
-    CorePotts.set_lifecycle_workspace_value!(context, arguments[1], 1)
+    CorePotts.set_lifecycle_workspace_value!(
+        context, oftype(prior, arguments[1]), 1
+    )
     return CorePotts.lifecycle_workspace_value(context, 1)
 end
 @inline (::UnqualifiedPartitionCallable)(arguments, context) = Int(arguments[1])

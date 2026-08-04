@@ -70,10 +70,7 @@ function Base.copy(state::ProgramRelationshipState)
     )
 end
 
-function Base.copyto!(
-        destination::ProgramRelationshipState,
-        source::ProgramRelationshipState,
-    )
+function _copy_relationship_state_fields!(destination, source)
     length(destination.payload) == length(source.payload) || throw(
         ArgumentError("relationship states have incompatible payload schemas")
     )
@@ -88,6 +85,13 @@ function Base.copyto!(
     copyto!(destination.degree, source.degree)
     copyto!(destination.incident_edges, source.incident_edges)
     return destination
+end
+
+function Base.copyto!(
+        destination::ProgramRelationshipState,
+        source::ProgramRelationshipState,
+    )
+    return _copy_relationship_state_fields!(destination, source)
 end
 
 """Read-only offset view into one packed relationship vector."""
@@ -161,6 +165,13 @@ struct PackedRelationshipState{A, E, G, P, D, I}
     payload::P
     degree::D
     incident_edges::I
+end
+
+function Base.copyto!(
+        destination::ProgramRelationshipState,
+        source::PackedRelationshipState,
+    )
+    return _copy_relationship_state_fields!(destination, source)
 end
 
 """Occurrence-stable SoA bank used for read-only relationship kernels."""
@@ -502,7 +513,7 @@ function _relationship_edge(state, a::Int32, b::Int32)
 end
 
 function _relationship_degree(state, endpoint::Int32)
-    1 <= endpoint <= length(state.degree) || return 0
+    1 <= endpoint <= length(state.degree) || return Int32(0)
     return @inbounds state.degree[endpoint]
 end
 

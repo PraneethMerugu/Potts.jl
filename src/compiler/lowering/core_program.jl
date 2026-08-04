@@ -384,6 +384,19 @@ function _checkerboard_conflict_displacements(
     return _conflict_displacement_matrix(displacements, Val(N))
 end
 
+function _ownership_change_handles(descriptor_plan)
+    return Tuple(
+        entry.handle
+        for entry in descriptor_plan.state_layout.entries
+        if begin
+            lifecycle = entry.schema.lifecycle
+            declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
+                       lifecycle.declared : nothing
+            declared === :ClearOnOwnershipChange
+        end
+    )
+end
+
 function _lower_core_program(
         ir::AnalyzedTermIR,
         engine::AbstractPottsEngine,
@@ -451,7 +464,7 @@ function _lower_core_program(
     core_engine = engine isa SequentialEngine ?
                   CorePotts.SequentialProgramEngine() :
                   CorePotts.CheckerboardProgramEngine()
-    core_backend = CorePotts.CPUProgramBackend()
+    core_backend = _core_program_backend(backend)
     tracker_plan = _lower_tracker_plan(ir, engine, T)
     checkerboard_plan = if core_engine isa CorePotts.CheckerboardProgramEngine
         conflicts = _checkerboard_conflict_displacements(
@@ -465,6 +478,7 @@ function _lower_core_program(
     else
         CorePotts.NoCheckerboardPlan()
     end
+    ownership_change_handles = _ownership_change_handles(descriptor_plan)
     program_fingerprint = _sha256_hex(
         "core-program-v1",
         fingerprint_seed,
@@ -479,6 +493,7 @@ function _lower_core_program(
         tracker_plan.fingerprint,
         descriptor_plan.fingerprint,
         stage_plan.fingerprint,
+        ownership_change_handles,
         CorePotts.lifecycle_plan_report(lifecycle_plan),
         CorePotts.checkerboard_plan_report(checkerboard_plan),
     )
@@ -501,6 +516,7 @@ function _lower_core_program(
         medium_kinds,
         lifecycle_plan,
         checkerboard_plan,
+        ownership_change_handles,
     ), Tuple((
         identity = _manifest_identity(declaration.identity),
         resource_identity = _qualified_resource_identity(declaration.identity),

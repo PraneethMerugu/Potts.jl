@@ -8,6 +8,7 @@ include("../../../test/backend_conformance/checkerboard_execution.jl")
 include("../../../test/backend_conformance/relationship_execution.jl")
 include("../../../test/backend_conformance/surface_execution.jl")
 include("../../../test/backend_conformance/lifecycle_execution.jl")
+include("../../../test/backend_conformance/lifecycle_policy_execution.jl")
 
 report = run_descriptor_boundary(
     Metal.MtlArray,
@@ -64,3 +65,43 @@ lifecycle_capacity_report = run_lifecycle_capacity_failure(
     kernel_convert = Metal.mtlconvert,
 )
 println(lifecycle_capacity_report)
+
+public_lifecycle_report = run_public_device_lifecycle_execution(
+    PottsToolkit.MetalBackend()
+)
+println(public_lifecycle_report)
+
+state_policy_report = run_lifecycle_state_policy_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(state_policy_report)
+
+partition_policy_report = run_lifecycle_partition_policy_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(partition_policy_report)
+
+relationship_policy_report = run_lifecycle_relationship_policy_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(relationship_policy_report)
+
+retirement_report = run_lifecycle_retirement_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(retirement_report)
+
+forbid_extinction_report = run_forbid_extinction_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(forbid_extinction_report)
+
+external_lifecycle_report = run_external_lifecycle_operation_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(external_lifecycle_report)
+
+resolution_policy_report = run_lifecycle_resolution_policy_execution(
+    Metal.MtlArray; backend_name = :metal
+)
+println(resolution_policy_report)

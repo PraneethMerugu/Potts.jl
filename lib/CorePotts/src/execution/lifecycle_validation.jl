@@ -248,28 +248,40 @@ function _stage_lifecycle_transactions!(
         request = Int(@inbounds workspace.canonical_order[position])
         _stage_lifecycle_request_structure!(
             HostLifecycleExecution(), runtime, plan, workspace, request
-        ) || return -1
+        ) || return (_stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageStructure
+        ); -1)
     end
     for position in 1:selected_count
         request = Int(@inbounds workspace.canonical_order[position])
         _stage_lifecycle_request_relationships!(
             HostLifecycleExecution(), runtime, plan, workspace, request
-        ) || return -1
+        ) || return (_stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageRelationships
+        ); -1)
     end
     for position in 1:selected_count
         request = Int(@inbounds workspace.canonical_order[position])
         _stage_lifecycle_request_state!(
             HostLifecycleExecution(), runtime, plan, workspace, request
-        ) || return -1
+        ) || return (_stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageState
+        ); -1)
     end
     retired = 0
     for position in 1:selected_count
         request = Int(@inbounds workspace.canonical_order[position])
         result = _finalize_lifecycle_request!(plan, workspace, request)
-        result < 0 && return -1
+        result < 0 && return (_stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageValidation
+        ); -1)
         retired += result
     end
-    _validate_staged_lifecycle!(runtime, plan, workspace) || return -1
+    _validate_staged_lifecycle!(runtime, plan, workspace) || return (
+        _stamp_host_lifecycle_failure!(
+            runtime, plan, workspace, LifecycleStageValidation
+        ); -1
+    )
     return retired
 end
 
@@ -282,6 +294,6 @@ function _publish_lifecycle_transactions!(runtime, workspace, retired)
     copyto_auxiliary_state!(
         runtime.descriptor_state, workspace.staged_descriptor_state
     )
-    runtime.retired_cells += retired
+    runtime.retired_cells += UInt64(retired)
     return runtime
 end

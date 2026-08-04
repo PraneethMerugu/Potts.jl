@@ -73,6 +73,27 @@ include("../backend_conformance/lifecycle_execution.jl")
         @test failure.failure_mcs == 1
         @test failure.committed_mcs == 0
         @test failure.settlements == 1
+        public_failure = run_public_lifecycle_capacity_failure()
+        @test public_failure.committed_mcs == 0
+        @test public_failure.failure_mcs == 1
+        @test public_failure.settlements == 1
+        sequential_failure = run_public_lifecycle_capacity_failure(
+            engine = SequentialEngine()
+        )
+        @test sequential_failure.committed_mcs == 0
+        @test sequential_failure.failure_mcs == 1
+        schedule = run_public_lifecycle_settlement_schedule()
+        @test schedule == (final_only = 1, saveat = 4, public_steps = 4)
+        late_failure = run_public_lifecycle_late_capacity_failure()
+        @test late_failure == (
+            submitted_mcs = 100,
+            committed_mcs = 36,
+            failure_mcs = 37,
+            settlements = 1,
+        )
+        consumers = run_public_settlement_consumers()
+        @test consumers == (checkpoint = 1, index_read = 1, statistics = 1)
+        @test run_lifecycle_enqueue_allocation() <= 128 * 1024
     end
     include("../test_compiler_boundary_repairs.jl")
     include("../test_lifecycle_compiler.jl")
