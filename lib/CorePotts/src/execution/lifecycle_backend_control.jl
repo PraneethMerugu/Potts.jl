@@ -15,6 +15,7 @@ struct LifecycleBackendControl{
     request_scan::C
     request_scan_scratch::C
     candidate_status::S
+    state_rule_failure_rank::C
     site_keys::K
     statistics::U
 end
@@ -109,6 +110,33 @@ end
 struct _LifecycleStatusSlot{S} <: AbstractVector{LifecycleStatusPayload}
     values::S
     slot::Int32
+end
+
+struct _LifecycleRankedStatusSlot{S, R} <: AbstractVector{LifecycleStatusPayload}
+    values::S
+    ranks::R
+    slot::Int32
+    rank::Int32
+end
+
+Base.IndexStyle(::Type{<:_LifecycleRankedStatusSlot}) = IndexLinear()
+Base.size(::_LifecycleRankedStatusSlot) = (1,)
+@inline Base.getindex(status::_LifecycleRankedStatusSlot, index::Integer) =
+    @inbounds status.values[Int(status.slot)]
+@inline function Base.setindex!(
+        status::_LifecycleRankedStatusSlot,
+        value::LifecycleStatusPayload,
+        index::Integer,
+    )
+    slot = Int(status.slot)
+    if value.code !== LifecycleStatusSuccess &&
+            status.rank < @inbounds(status.ranks[slot])
+        @inbounds begin
+            status.ranks[slot] = status.rank
+            status.values[slot] = value
+        end
+    end
+    return value
 end
 
 Base.IndexStyle(::Type{<:_LifecycleStatusSlot}) = IndexLinear()
@@ -281,6 +309,9 @@ function allocate_lifecycle_backend_control(
             LifecycleStatusPayload,
             LifecycleStatusPayload(),
             status_slots,
+        ),
+        _lifecycle_backend_filled(
+            prototype, Int32, typemax(Int32), status_slots
         ),
         _lifecycle_backend_filled(
             prototype, UInt64, typemax(UInt64), key_capacity

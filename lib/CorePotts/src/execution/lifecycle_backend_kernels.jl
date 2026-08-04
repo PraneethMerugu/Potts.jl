@@ -8,6 +8,8 @@
     open = _lifecycle_backend_open(workspace)
     open && index <= length(control.candidate_status) &&
         (@inbounds control.candidate_status[index] = success)
+    open && index <= length(control.state_rule_failure_rank) &&
+        (@inbounds control.state_rule_failure_rank[index] = typemax(Int32))
     open && index == 1 && begin
         @inbounds workspace.request_count[1] = Int32(0)
         @inbounds control.counters[_LIFECYCLE_CONTROL_DUE] = Int32(0)
@@ -424,21 +426,17 @@ end
             Int(workspace.descriptor[request])
         ]
         if _lifecycle_plan_matches(descriptor, plan_class)
-            request_workspace = _lifecycle_workspace_with_status(
-                workspace,
-                _LifecycleStatusSlot(
-                    control.candidate_status, Int32(request)
-                ),
-            )
             _apply_lifecycle_effect_state!(
                 BackendLifecycleExecution(),
                 runtime,
                 plan,
-                request_workspace,
+                workspace,
                 request,
                 descriptor,
                 plan_class,
                 action,
+                control.candidate_status,
+                control.state_rule_failure_rank,
             )
         end
     end

@@ -94,6 +94,14 @@ include("../backend_conformance/lifecycle_execution.jl")
         consumers = run_public_settlement_consumers()
         @test consumers == (checkpoint = 1, index_read = 1, statistics = 1)
         @test run_lifecycle_enqueue_allocation() <= 128 * 1024
+        canonical_failure = run_lifecycle_canonical_state_failure(
+            Array;
+            backend_name = :cpu,
+            to_host = identity,
+            require_isbits = false,
+        )
+        @test canonical_failure.permutations == 2
+        @test canonical_failure.selected == (2, 2)
     end
     include("../test_compiler_boundary_repairs.jl")
     include("../test_lifecycle_compiler.jl")

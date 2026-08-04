@@ -66,6 +66,13 @@ lifecycle_capacity_report = run_lifecycle_capacity_failure(
 )
 println(lifecycle_capacity_report)
 
+canonical_state_failure_report = run_lifecycle_canonical_state_failure(
+    Metal.MtlArray;
+    backend_name = :metal,
+    kernel_convert = Metal.mtlconvert,
+)
+println(canonical_state_failure_report)
+
 public_lifecycle_report = run_public_device_lifecycle_execution(
     PottsToolkit.MetalBackend()
 )

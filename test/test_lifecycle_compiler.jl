@@ -66,6 +66,7 @@ end
         payload -> payload.code === CorePotts.LifecycleStatusSuccess,
         control.candidate_status,
     )
+    @test all(==(typemax(Int32)), control.state_rule_failure_rank)
     @test all(==(typemax(UInt64)), control.site_keys)
 end
 

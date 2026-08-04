@@ -73,6 +73,243 @@ function _lifecycle_backend_fixture(;
     )
 end
 
+function _canonical_state_failure_fixture(reverse_declarations::Bool)
+    @variables probe_time probe_value(probe_time) probe_reset_value(probe_time)
+    @parameters probe_zero = 0.0f0
+    cell = CellKind(:probe_cell; extinction = RetireAtZero())
+    medium = MediumKind(:probe_medium)
+    relation = SpatialRelation(
+        :probe_division; neighborhood = VonNeumann()
+    )
+    state = CellState(
+        probe_value;
+        name = :probe_state,
+        initial = 1.0f0,
+        retirement = RetireTo(0.0f0),
+        division = CopyToDaughters(),
+    )
+    reset_state = CellState(
+        probe_reset_value;
+        name = :probe_reset_state,
+        initial = 4.0f0,
+        retirement = RetireTo(0.0f0),
+        division = CopyToDaughters(),
+    )
+    anchor = CellBinding(:probe_anchor)
+    divide = LifecycleProcess(
+        :z_probe_divide;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Divide(
+            anchor;
+            geometry = SpecifiedNormalPlane((1.0f0, 0.0f0)),
+            relation,
+            side = CanonicalSide(),
+            state = (
+                state => TransformDaughters(
+                    1.0f0 / probe_zero,
+                    1.0f0 / probe_zero,
+                ),
+                reset_state => ResetBoth(
+                    1.0f0 / probe_zero,
+                    1.0f0 / probe_zero,
+                ),
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    create = LifecycleProcess(
+        :a_probe_create;
+        domain = model(),
+        expression = true,
+        effects = (CreateCell(
+            cell;
+            placement = SeedAt(1),
+            state = (
+                state => InitializeFrom(1.0f0 / probe_zero),
+                reset_state => InitializeFrom(4.0f0),
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    lifecycle = reverse_declarations ? (create, divide) : (divide, create)
+    system = PottsSystem(
+        name = :LifecycleFailureOrderProbe,
+        statements = StatementSet((
+            Lattice((6, 6); max_cells = 3),
+            cell,
+            medium,
+            relation,
+            state,
+            reset_state,
+            lifecycle...,
+            ProposalConstraint(:probe_freeze, false),
+            Protocol(Sweep(); name = :main),
+        )),
+        unknowns = [probe_value, probe_reset_value],
+        parameters = [probe_zero],
+        independent_variables = [probe_time],
+    )
+    labels = zeros(Int, 6, 6)
+    labels[3:4, 2:5] .= 1
+    initial = PottsInitialState(ownership = LabelledCells(
+        labels; cells = [cell], medium
+    ))
+    return complete(system), initial
+end
+
+function _canonical_state_failure_runtime(executable, initial)
+    core_initial = PottsToolkit._core_initial_state(
+        executable, initial, UInt64(0x77), UInt32(1)
+    )
+    return CorePotts.initialize_program(
+        executable.core_program,
+        core_initial,
+        executable.core_program.parameter_defaults,
+        UInt64(0x77),
+        UInt32(1),
+    )
+end
+
+function _lifecycle_scientific_state(state)
+    host = CorePotts.Adapt.adapt(Array, state)
+    relationships = Tuple((
+        active = copy(value.active),
+        endpoint_a = copy(value.endpoint_a),
+        endpoint_b = copy(value.endpoint_b),
+        generation_a = copy(value.generation_a),
+        generation_b = copy(value.generation_b),
+        payload = deepcopy(value.payload),
+        degree = copy(value.degree),
+        incident_edges = copy(value.incident_edges),
+    ) for value in host.relationships)
+    descriptor_state = Tuple(
+        copy(bank.values) for bank in host.descriptor_state.banks
+    )
+    return (
+        ownership = copy(host.ownership),
+        cell_kinds = copy(host.cell_kinds),
+        cell_generations = copy(host.cell_generations),
+        trackers = deepcopy(host.trackers.values),
+        relationships,
+        descriptor_state,
+    )
+end
+
+function run_lifecycle_canonical_state_failure(
+        device_array;
+        backend_name::Symbol,
+        kernel_convert = identity,
+        to_host = Array,
+        require_isbits::Bool = true,
+    )
+    statuses = CorePotts.LifecycleStatusPayload[]
+    program_types = DataType[]
+    selected_counts = Int[]
+    for reverse_declarations in (false, true)
+        completed, initial = _canonical_state_failure_fixture(
+            reverse_declarations
+        )
+        sequential = compile(
+            completed;
+            engine = SequentialEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+        checkerboard = compile(
+            completed;
+            engine = CheckerboardEngine(),
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+        push!(program_types, typeof(checkerboard.core_program))
+
+        host = _canonical_state_failure_runtime(sequential, initial)
+        host_before = _lifecycle_scientific_state(host)
+        host_error = try
+            CorePotts.execute_lifecycle!(host)
+            nothing
+        catch error
+            error
+        end
+        host_status = CorePotts.lifecycle_workspace_status(
+            host.lifecycle_workspace
+        )
+        @test host_error isa CorePotts.LifecycleEvaluatorFailure
+        @test _lifecycle_scientific_state(host) == host_before
+
+        candidate = _canonical_state_failure_runtime(checkerboard, initial)
+        device_before = _lifecycle_scientific_state(
+            CorePotts.program_snapshot(candidate)
+        )
+        workspace = CorePotts.adapt_checkerboard_workspace(
+            device_array, candidate.engine_workspace
+        )
+        require_isbits &&
+            @test isbitstype(typeof(kernel_convert(workspace.state)))
+        destination = CorePotts.enqueue_checkerboard_mcs!(workspace, 0)
+        receipt = CorePotts.settle_program!(
+            workspace,
+            CorePotts.ProgramSettlementRequest(
+                CorePotts.FinalizationSettlement; full_snapshot = true
+            ),
+        )
+        device_status = receipt.status
+        destination_workspace = destination.lifecycle_workspace
+        selected_mask = to_host(destination_workspace.selected)
+        selected = count(selected_mask)
+        anchors = to_host(destination_workspace.anchor)
+        descriptors = to_host(destination_workspace.descriptor)
+        candidate_status = to_host(
+            workspace.state.lifecycle_control.candidate_status
+        )
+        failure_rank = to_host(
+            workspace.state.lifecycle_control.state_rule_failure_rank
+        )
+        divide_request = only(findall(
+            request -> selected_mask[request] && anchors[request] == 1,
+            eachindex(selected_mask),
+        ))
+        divide_descriptor = checkerboard.core_program.lifecycle_plan.descriptors[
+            descriptors[divide_request]
+        ]
+
+        @test device_status == host_status
+        @test _lifecycle_scientific_state(receipt.snapshot) == device_before
+        @test receipt.failure isa CorePotts.LifecycleEvaluatorFailure
+        @test receipt.submitted_mcs == 1
+        @test receipt.drained_mcs == 1
+        @test receipt.committed_mcs == 0
+        @test receipt.materialized_mcs == 0
+        @test selected == 2
+        @test candidate_status[divide_request].detail ===
+            CorePotts.LifecycleDetailNonfiniteResult
+        @test failure_rank[divide_request] ==
+            divide_descriptor.state_rule_offset
+        @test device_status.code === CorePotts.LifecycleStatusEvaluator
+        @test device_status.mcs == 1
+        @test device_status.stage === CorePotts.LifecycleStageState
+        @test device_status.source > 0
+        @test device_status.action_identity != 0
+        @test device_status.anchor == 1
+        @test device_status.detail ===
+            CorePotts.LifecycleDetailNonfiniteResult
+        push!(statuses, device_status)
+        push!(selected_counts, selected)
+    end
+    @test allequal(program_types)
+    @test allequal(statuses)
+    return (
+        backend = backend_name,
+        permutations = length(statuses),
+        selected = Tuple(selected_counts),
+        status = first(statuses),
+    )
+end
+
 function run_public_device_lifecycle_execution(backend_selector)
     executable, _ = _lifecycle_backend_fixture(backend = backend_selector)
     reference_executable, _ = _lifecycle_backend_fixture()
@@ -468,6 +705,7 @@ function _lifecycle_workspace_scratch(workspace, to_host)
             request_scan = host(control.request_scan),
             request_scan_scratch = host(control.request_scan_scratch),
             candidate_status = host(control.candidate_status),
+            state_rule_failure_rank = host(control.state_rule_failure_rank),
             site_keys = host(control.site_keys),
             statistics = host(control.statistics),
         ),

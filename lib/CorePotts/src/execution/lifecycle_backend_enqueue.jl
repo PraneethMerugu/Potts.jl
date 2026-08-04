@@ -286,10 +286,10 @@ function enqueue_lifecycle_backend_index!(
                 action_value;
                 ndrange = length(workspace.selected),
             )
-            reduce_planning_status(workspace, control; ndrange = 1)
-            _enqueue_lifecycle_failure_stamp!(state, LifecycleStageState)
         end
     end
+    reduce_planning_status(workspace, control; ndrange = 1)
+    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageState)
     for plan_class in effect_classes
         iszero(
             effect_mask & _lifecycle_effect_bit(

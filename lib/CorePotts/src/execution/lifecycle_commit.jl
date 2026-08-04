@@ -589,6 +589,49 @@ function _apply_lifecycle_state_rules!(
 end
 
 function _apply_lifecycle_state_rules!(
+        mode::BackendLifecycleExecution,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
+        action::Val,
+        candidate_status,
+        failure_rank,
+    )
+    for offset in 0:(Int(descriptor.state_rule_count) - 1)
+        index = Int(descriptor.state_rule_offset) + offset
+        request_workspace = _lifecycle_workspace_with_status(
+            workspace,
+            _LifecycleRankedStatusSlot(
+                candidate_status,
+                failure_rank,
+                Int32(request),
+                Int32(index),
+            ),
+        )
+        succeeded = call_lifecycle_state_rule(
+            _apply_lifecycle_state_rule_action!,
+            plan.state_rules,
+            index,
+            mode,
+            runtime,
+            plan,
+            request_workspace,
+            descriptor,
+            request,
+            source,
+            destination,
+            action,
+        )
+        succeeded || return false
+    end
+    return true
+end
+
+function _apply_lifecycle_state_rules!(
         mode::AbstractLifecycleExecutionMode,
         runtime,
         plan,
@@ -969,6 +1012,36 @@ end
         request,
         source,
         destination,
+    )
+end
+
+@inline function _apply_lifecycle_effect_state!(
+        mode::BackendLifecycleExecution,
+        runtime,
+        plan,
+        workspace,
+        request,
+        descriptor,
+        plan_class,
+        action::Val,
+        candidate_status,
+        failure_rank,
+    )
+    source, destination = _lifecycle_state_endpoints(
+        workspace, request, plan_class
+    )
+    return _apply_lifecycle_state_rules!(
+        mode,
+        runtime,
+        plan,
+        workspace,
+        descriptor,
+        request,
+        source,
+        destination,
+        action,
+        candidate_status,
+        failure_rank,
     )
 end
 
