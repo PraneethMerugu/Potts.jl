@@ -257,7 +257,7 @@ parameters = [
     "1 MCS = 30 seconds",
 ]
 parameter_ownership = "Every listed value remains explicit published-model assembly; solver, splitting, unit conversion, and elongation interpretation are governed by the mapped capability contracts and the Merks sensitivity envelope."
-bounded_reference_trace = "../../spec/process-bigraph-phase16-merks-trace-v1.toml"
+bounded_reference_trace = "git:3591eccd6820bf51c185cf631c75467114319332:spec/process-bigraph-phase16-merks-trace-v1.toml"
 bounded_reference_profile = "bounded_reference_v1"
 bounded_reference_claim = "runnable source-bounded reimplementation; not Figure 5 quantitative reproduction"
 capability_ids = ["core-contact-volume-surface", "spatial-role-relations", "source-attempt-budget", "evolving-fields", "field-coupling", "continuous-system-language", "multirate-global-scheduling", "cross-domain-symbol-mapping", "elongation-equivalence", "paper-observables", "paper-initialization"]

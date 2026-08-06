@@ -63,10 +63,13 @@ Counts are physical Julia lines in the G5H-0 candidate tree.
 | `integration/` | 5 | 126 |
 | `lib/CorePotts/test/` | 2 | 1,426 |
 | `lib/MakiePotts/test/` | 16 | 1,348 |
-| Test total | 58 | 17,451 |
+| Package/integration test total | 58 | 17,451 |
+| `benchmark/backends/*/runtests.jl` | 3 | 207 |
+| Test/qualification-runner total | 61 | 17,658 |
 
-Static source inspection finds 87 root test sets and 1,462 test macros, 4 integration test sets and
-22 macros, 15 CorePotts test sets and 164 macros, and 15 MakiePotts test sets and 169 macros. The
+Within the 58 package/integration files, static source inspection finds 87 root test sets and 1,462
+test macros, 4 integration test sets and 22 macros, 15 CorePotts test sets and 164 macros, and 15
+MakiePotts test sets and 169 macros. The
 imbalance is material: most CorePotts semantics are currently tested from the parent package and
 must move to CorePotts ownership in G5H-1.
 
@@ -143,9 +146,10 @@ duplicate spelling without observable API change.
 | PT08 | `src/PottsToolkit.jl:137-156` | 34 | `merge` | Necessary behavior moves behind the explicit compiler SPI; no name is stable end-user API by declaration alone | PR05, PR06, PR08, PR20, PR22 |
 | PT09 | `src/PottsToolkit.jl:157-166` | 27 | `merge` | Diagnostics and unit conversions are `keep`; `ExecutableFingerprint` and `executable_fingerprint` are `replace` by a private execution-profile fingerprint while public checkpoint/provenance identities remain distinct; `stage_external_inputs!` is `replace` by typed component IO | PR05, PR10, PR13, PR17, PR18, PR23–PR25 |
 
-The unexported `compile` generic is a live compatibility debt, not the accepted public lifecycle.
-G5H-2 replaces all callers and removes it as a user entry point in the same change that installs
-late private materialization; private lowering may use a differently scoped implementation detail.
+The currently exported `compile` generic is a live compatibility debt, not the accepted public
+lifecycle. G5H-2 replaces all callers and removes that export and user entry point in the same
+change that installs late private materialization; private lowering may use a differently scoped
+implementation detail.
 
 ### CorePotts — 479 names
 
@@ -286,8 +290,9 @@ semantic authorities.
 
 ## Exhaustive test-family inventory
 
-These rows partition every surviving Julia test/support file. “Manual” means the file exists but is
-not invoked by normal `Pkg.test`; it cannot qualify a support claim until its gate wires a lane.
+These rows partition all 58 surviving package/integration Julia test/support files plus the three
+manual vendor runners, for 61 files total. “Manual” means the file exists but is not invoked by
+normal `Pkg.test`; it cannot qualify a support claim until its gate wires a lane.
 
 | ID | Exact test/support set | Disposition and witness |
 |:--|:--|:--|
@@ -312,10 +317,28 @@ not invoked by normal `Pkg.test`; it cannot qualify a support claim until its ga
 | MP-T00 | `lib/MakiePotts/test/{runtests,downstream_fixture,test_downstream_conformance,test_adversarial,allocation_fixture,test_allocations}.jl` | `keep` active package tests; PR16, PR25 |
 | MP-T01 | `lib/MakiePotts/test/{measure_allocations,clean_install_smoke}.jl` | Manual; wire or classify in G5H-5; PR16, PR25 |
 | MP-T02 | `lib/MakiePotts/test/backends/{common,cairo,gl,wgl}.jl`, its `Project.toml`/`Manifest.toml` | Manual optional-backend lane; requalify in G5H-5; PR16, PR25 |
-| MP-T03 | `lib/MakiePotts/test/{render_audit,visual_audit_b,visual_reference_scene,visual_regression}.jl`, `test/reference/makiepotts-v02.png` | Manual visual evidence; wire or retire in G5H-5; PR16 |
+| MP-T03 | `lib/MakiePotts/test/{render_audit,visual_audit_b,visual_reference_scene,visual_regression}.jl`, `lib/MakiePotts/test/reference/makiepotts-v02.png` | Manual visual evidence; wire or retire in G5H-5; PR16 |
 | IN-T00 | `integration/{runtests,test_unitful_extension,test_optional_extension_loading}.jl` | Keep upstream extension/load-order evidence; PR18, PR25 |
 | IN-T01 | `integration/test_modelingtoolkit_assimilation.jl`, `integration/test_modelingtoolkit_standard_library.jl` | Replace; these qualify only the superseded copied-assimilation path, not F02/F03; PR27 |
 | GPU-T00 | `benchmark/backends/{metal,cuda,amdgpu}/runtests.jl` | Manual vendor runners. Metal is broadest; CUDA/AMDGPU do not currently prove device lifecycle/relationship mutation. Requalify per row in G5H-4; PR04, PR06–PR09, PR17, PR22, PR24, PR28–PR30 |
+
+## Qualification, benchmark, and historical-tooling inventory
+
+These rows partition the four live top-level qualification scripts, the two live benchmark source
+files outside test trees, and the seven surviving archived Julia checkers. The three vendor
+`runtests.jl` files are already counted in GPU-T00. Generated code and result captures under
+`benchmark/results/**` are historical outputs, not executable source or current qualification.
+
+| ID | Exact tooling set | Disposition and owning witness/gate |
+|:--|:--|:--|
+| QL01 | `scripts/check_v1_operation_inventory.jl` | `merge`; preserve the operation-identity/transfer check through the documented compiler SPI and final public inspection, without private package reach — PR21–PR23, G5H-1/G5H-2 |
+| QL02 | `scripts/qualify_descriptor_metal.jl` | `merge`; this one-line launcher joins the explicit Metal hardware lane and cannot qualify another vendor — PR17, PR22, PR25, G5H-4 |
+| QL03 | `scripts/qualify_specialization_growth.jl` | `keep` the specialization/code-growth measurement and rebase its fixtures and thresholds after compiler-SPI consolidation — PR22, G5H-1 |
+| QL04 | `scripts/qualify_static_evaluator.jl` | `keep` the independent semantic/evaluator oracle while splitting host oracle, generated-code measurement, and optional Metal execution responsibilities — PR22, G5H-1/G5H-4 |
+| BM01 | `benchmark/src/lifecycle_performance.jl` | `keep` as baseline evidence only; update for the F06 inactive-bank lifecycle and rerun final lifecycle memory/performance measurements — PR06, PR09, PR24, G5H-1/G5H-5 |
+| BM02 | `lib/MakiePotts/benchmark/benchmarks.jl` | `keep`; rebind to final public observation/materialization paths and thresholds — PR16, PR25, G5H-5 |
+| AR01 | `scripts/archive/potts-history/*.jl` (7 files) | `defer` as historical reproduction tooling; it is not current qualification, and G5H-5 either retains the clearly archived set or removes it with Git recovery |
+| AR02 | `benchmark/results/**` | `keep` as historical generated evidence only; it neither enters source/responsibility counts nor qualifies the changed G5H implementation, and G5H-5 records fresh measurements separately |
 
 ## Consolidation register
 
@@ -348,9 +371,11 @@ unless a later gate demonstrates divergent meaning or measurable cost.
 
 ### Decision 0041 file-responsibility reviews
 
-Eight source/test files exceed 1,000 nonblank, noncomment lines. None receives a permanent waiver
-at G5H-0; its owning gate must split coherent responsibilities or record a measured, reviewed
-waiver without inventing abstractions.
+Nine active production/test/qualification source files exceed 1,000 nonblank, noncomment lines.
+Generated code captures under `benchmark/results/**` are evidence artifacts rather than maintained
+source and are excluded. None of the nine receives a permanent waiver at G5H-0; its owning gate
+must split coherent responsibilities or record a measured, reviewed waiver without inventing
+abstractions.
 
 | File | Count | Responsibility decision |
 |:--|--:|:--|
@@ -360,6 +385,7 @@ waiver without inventing abstractions.
 | `lib/CorePotts/src/execution/tracker_plan.jl` | 1,369 | Split protocol, plan construction, and runtime operations behind named SPI boundaries — G5H-1 |
 | `lib/CorePotts/test/test_program_v1.jl` | 1,362 | Split its fourteen test families along the CP-T01 inventory — G5H-1 |
 | `test/test_descriptor_compiler.jl` | 1,285 | Move Core descriptor laws to Core and keep external compiler-SPI conformance at root — G5H-1 |
+| `scripts/qualify_static_evaluator.jl` | 1,185 | Split the independent host semantic oracle, generated-code/specialization measurement, and optional Metal execution without sharing decisive oracle logic — G5H-1/G5H-4 |
 | `lib/CorePotts/src/execution/lifecycle_commit.jl` | 1,153 | Separate canonical validation/staging/publication responsibilities under F06 — G5H-1 |
 | `lib/CorePotts/src/program/relationships.jl` | 1,148 | Separate schema/store, request validation, and transaction commit without duplicating integrity law — G5H-1 |
 
