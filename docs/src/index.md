@@ -1,118 +1,55 @@
 # Potts.jl
 
-```@raw html
-<div class="potts-hero">
-  <div>
-    <div class="potts-kicker">Composable Cellular Potts modeling in Julia</div>
-    <p class="potts-hero-copy">
-      Declare cell types, mechanics, fields, lifecycle rules, observations, algorithms, and
-      visualization as explicit parts of one reproducible experiment.
-    </p>
-    <div class="potts-actions">
-      <a href="learn/first-simulation/">Build your first simulation</a>
-      <a href="examples/">Explore the visual gallery</a>
-    </div>
-  </div>
-  <img src="examples/sorting-preview.svg"
-       alt="Two cell populations sorting beside their measured heterotypic-contact trace">
-</div>
-```
+Potts.jl is in an intentional pre-1.0 cohesion and ModelingToolkit hardening phase. The active
+package family is:
 
-The image above is not a hand-authored illustration. It is produced during this documentation
-build by the complete [differential-adhesion example](@ref differential-adhesion-example), using
-MakiePotts on saved engine state.
-
-## A model is a readable scientific object
-
-Here is a complete simulation—not a wrapper around a hidden reference problem.
-
-```@example homepage
-using PottsToolkit
-using MakiePotts
-import CorePotts
-
-medium = Medium(:Medium)
-cell = CellType(:Cell)
-model = PottsModel(
-    medium,
-    cell,
-    Volume(cell => (target = 30, strength = 2)),
-    Adhesion(
-        (medium, medium) => 0,
-        (medium, cell) => 8,
-        (cell, cell) => 0,
-    ),
-)
-
-mask = falses(18, 18)
-mask[8:11, 8:11] .= true
-problem = PottsProblem(
-    model,
-    CartesianDomain(size(mask)),
-    Layout(Place(cell, mask; identity = 1));
-    capacity = 2,
-    tspan = (0, 15),
-    seed = 2026,
-)
-solution = CorePotts.solve(
-    problem,
-    SequentialCPM(temperature = 3.0f0);
-    snapshot_policy = CorePotts.HostSnapshotPolicy(),
-)
-frames = renderframes(solution)
-nothing # hide
-```
-
-```@example homepage
-using CairoMakie
-
-figure = Figure(size = (880, 390))
-before_axis = Axis(figure[1, 1]; title = "Initial state", aspect = DataAspect())
-after_axis = Axis(figure[1, 2]; title = "After 15 MCS", aspect = DataAspect())
-before_plot = pottsplot!(before_axis, first(frames); boundaries = true)
-pottsplot!(after_axis, last(frames); boundaries = true)
-potts_legend(figure[1, 3], before_plot)
-figure
-```
-
-That same public vocabulary scales to prescribed fields, cell properties, division and retirement,
-typed observation, checkpointing, ensembles, two- and three-dimensional domains, and qualified CPU
-or GPU execution.
-
-## Choose a path
-
-| Goal | Start here | Continue with |
-|:--|:--|:--|
-| Run the engine for the first time | [Install and verify](@ref install-and-verify) | [Your first simulation](@ref first-simulation) |
-| Build a biological model | [Compose a biological model](@ref build-model) | [Adhesion and mechanics](@ref adhesion-and-mechanics) |
-| Couple a field | [Fields and chemotaxis](@ref fields-and-chemotaxis) | [A cell follows a gradient](@ref chemotaxis-example) |
-| Add lifecycle behavior | [Rules and lifecycle](@ref rules-and-lifecycle) | [Grow, divide, retire](@ref growth-division-example) |
-| Design a reproducible study | [Research workflow](@ref research-workflow) | [Reproducible ensemble](@ref reproducible-ensemble) |
-| Extend or integrate the engine | [Architecture](@ref architecture) | [Extension author reference](@ref extension-author-reference) |
-
-## Three packages, three responsibilities
-
-| Package | Use it for |
+| Package | Responsibility |
 |:--|:--|
-| `PottsToolkit` | Public model authoring, domains, initialization, rules, observations, and backend preflight |
-| `CorePotts` | Solving, integrators, algorithms, checkpoints, ensembles, and extension protocols |
-| `MakiePotts` | Semantic frames, encodings, Makie recipes, inspection, and recording |
+| `PottsToolkit` | Symbolic Potts authoring, ModelingToolkit integration, component scheduling, and the public SciML problem lifecycle |
+| `CorePotts` | MTK-free CPM state, transitions, lifecycle, checkpoints, reproducibility, and CPU/GPU execution |
+| `MakiePotts` | Visualization over explicit public observations and solutions |
 
-Start with `using PottsToolkit`. Import `CorePotts` when selecting lower-level execution or
-persistence operations, and add a Makie backend plus `MakiePotts` when producing figures or
-animations.
+## Current documentation status
 
-ProcessBigraphs is a fourth, independently documented orchestration package in
-qualified unpublished internal beta. Its
-[standalone manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/) teaches typed stores,
-multirate composition, engine adapters, structural transactions, replay, and
-the complete inline Wortel and Merks source-bounded case studies. It is not
-part of the public three-package workflow above.
+The earlier manual described the removed `PottsModel` API while the source had already moved to
+`PottsSystem`. Those pages are retained in the repository as rewrite material, but they are
+deliberately excluded from the active documentation build. They are not a migration guide or a
+compatibility promise.
 
-## Scientific boundary
+This temporary manual documents only the current architecture, runtime boundary, and honest
+capability state. The complete Learn, Examples, Published Models, and API manual will return after
+the public authoring lifecycle and native MTK integration pass the G5H hardening gates.
 
-The manual distinguishes implemented mechanisms from qualified scientific claims. Pinned example
-trajectories demonstrate APIs and bounded contracts; they are not automatically equilibrium
-studies, published-model reproductions, or backend-agreement evidence. See
-[Scientific guarantees](@ref scientific-guarantees) and
-[Capability status](@ref capability-status) before making a stronger claim.
+## Target public lifecycle
+
+```text
+construct / @named / compose
+        -> complete
+        -> mtkcompile
+        -> scheduled PottsSystem
+        -> PottsProblem
+        -> init or solve with an algorithm and backend
+        -> PottsIntegrator / PottsSolution
+```
+
+`mtkcompile` is structural. It must not choose the CPM engine, backend, scalar type, device, seed,
+or runtime state. Native ModelingToolkit systems remain native component islands with explicit IO,
+scope, cadence, and coupling semantics. CorePotts remains independent of ModelingToolkit.
+
+## What is not yet a stable user claim
+
+- the final constructor vocabulary and exported API;
+- native global or per-cell MTK component execution;
+- MethodOfLines field coupling;
+- first-class whole-trajectory ensembles and per-cell vectorization;
+- a complete CPU/GPU component capability matrix;
+- executable Wortel and Merks documentation through the final interface; and
+- API compatibility with any earlier unpublished authoring surface.
+
+See [Architecture](@ref architecture), [Runtime boundary](@ref runtime-boundary), and
+[Capability status](@ref capability-status) for the current boundary.
+
+## Development
+
+Package and integration commands remain in the repository `CONTRIBUTING.md`. The normative phase
+sequence is maintained under `spec/`; public documentation never overrides it.

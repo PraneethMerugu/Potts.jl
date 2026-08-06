@@ -65,7 +65,8 @@ target MCS 122 (source MCS 121).
 
 ## Wang-specific conformance
 
-[Dedicated history tests](../../lib/CorePotts/test/test_phase14_cell_history.jl) prove:
+The historical dedicated history tests, formerly at
+`lib/CorePotts/test/test_phase14_cell_history.jl`, established:
 
 - `SVector{2,Float32}` centroid samples;
 - capacity-five ring wrap;
@@ -78,8 +79,8 @@ target MCS 122 (source MCS 121).
 - all-input validation before mutation; and
 - invalid semantic-time rejection.
 
-[Dedicated history-process tests](../../lib/CorePotts/test/test_phase14_history_polarity.jl)
-additionally prove:
+The historical dedicated history-process tests, formerly at
+`lib/CorePotts/test/test_phase14_history_polarity.jl`, additionally established:
 
 - exact unwrapped-centroid sampling on the host and portable CPU paths;
 - zero-transfer KernelAbstractions CPU execution;

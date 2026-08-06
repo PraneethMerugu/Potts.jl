@@ -1,6 +1,12 @@
 # Refactor, Benchmark, and Paper-Release Standard
 
-Status: Accepted engineering standard
+Status: superseded in part; historical engineering baseline
+
+Current disposition: the phase order, public API, documentation timing, and package-boundary
+portions are superseded by [Decision 0043](../spec/decisions/0043-retire-processbigraphs.md),
+[Decision 0044](../spec/decisions/0044-pre-g6-cohesion-and-mtk-hardening.md), and the
+[G5H Hardening Contract](../spec/symbolic-potts-v1-hardening.md). Compatible benchmark provenance,
+measurement, clean-break, and scientific-evidence principles remain guidance.
 
 ## Purpose
 
@@ -46,7 +52,7 @@ artifacts. The obsolete engine is not retained in the released packages.
 
 ## Refactor Phases
 
-The accepted phase order is:
+The following was the accepted historical phase order. It is not an active execution sequence:
 
 1. Freeze correctness and performance baselines.
 2. Build reference models and cross-backend conformance harnesses.

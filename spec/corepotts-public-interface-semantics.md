@@ -2,6 +2,11 @@
 
 Status: Accepted architectural and API semantics
 
+Current disposition: superseded in part by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Compatible scientific protocols survive,
+but the old breadth, exact public names, algorithm inventory, and maturity claims do not prevent
+G5H from narrowing CorePotts into an explicit runtime, compiler SPI, and backend SPI boundary.
+
 ## Purpose
 
 This document defines the public Julia interfaces for using and extending CorePotts directly. It

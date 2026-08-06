@@ -17,7 +17,12 @@ Status: fresh whole-G5 `R2Execution` review requested; G6 remains closed
 Review the whole G5 execution boundary against
 `spec/symbolic-potts-v1-compiler-construction.md`, the accepted lifecycle consolidation in
 `design/audits/symbolic-potts-v1-lifecycle-language-consolidation-candidate.md`, the architecture
-freeze, and the execution-control audit. Treat every claim below as a hypothesis. Inspect
+freeze, the surviving `symbolic-potts-v1-g5-l-exit-audit.md`, and the final
+`symbolic-potts-v1-r2-execution-review.md`. The former execution-control and asynchronous-review
+records remain reproducible at parent commit `3591eccd` as
+`design/audits/symbolic-potts-v1-execution-control-audit.md` and
+`design/audits/symbolic-potts-v1-asynchronous-execution-settlement-review.md`; they are historical
+inputs, not required living status files. Treat every claim below as a hypothesis. Inspect
 production and tests and remain read-only.
 
 The reviewer did not author this slice. A blocking finding must cite the exact normative clause,
@@ -219,10 +224,13 @@ The reviewer must classify proposals as:
   planning artifacts in production or tests, and no speculative compiler annotation introduced by
   this investigation.
 
-The implementation did not change after these runs. Later commits add only the independent review,
-exit audit, implementation-control disposition, and this handoff. The reviewer may reuse expensive
-exact-implementation evidence and should run focused decisive probes rather than ceremonially
-repeating the 17-minute Metal suite unless a disputed backend claim requires it.
+The implementation did not change after these runs. Later commits added only the independent
+review, exit audit, former implementation-control disposition, and this handoff. The deleted
+historical implementation-control record remains at parent commit `3591eccd` as
+`design/audits/symbolic-potts-v1-implementation-control.md`; the living post-G5 status authority is
+now `design/hardening/g5h-control.md`. The reviewer may reuse expensive exact-implementation
+evidence and should run focused decisive probes rather than ceremonially repeating the 17-minute
+Metal suite unless a disputed backend claim requires it.
 
 ## Required verdict
 

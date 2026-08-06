@@ -4,21 +4,18 @@ ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
 PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [sources]
 PottsToolkit = {path = ".."}
-ProcessBigraphs = {path = "../lib/ProcessBigraphs"}
 
 [compat]
 DynamicQuantities = "1"
 ModelingToolkit = "11"
 ModelingToolkitBase = "1.51"
 ModelingToolkitStandardLibrary = "2"
-ProcessBigraphs = "0.6"
 Symbolics = "7"
 Unitful = "1"
 julia = "1.12"

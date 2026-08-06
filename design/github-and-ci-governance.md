@@ -1,6 +1,11 @@
 # GitHub and JuliaGPU Governance
 
-Status: Phase 1 operational standard
+Status: historical Phase 1 record; non-authoritative
+
+Current disposition: operational truth is the checked-in `.github/workflows/` configuration and
+`CONTRIBUTING.md`. Exact-check review and backend qualification follow the
+[G5H Hardening Contract](../spec/symbolic-potts-v1-hardening.md). The required-check names, exact
+Julia patch, runner inventory, and phase schedule below describe an earlier repository state.
 
 ## Purpose
 

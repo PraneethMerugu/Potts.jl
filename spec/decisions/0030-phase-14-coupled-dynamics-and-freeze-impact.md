@@ -4,6 +4,10 @@ Status: Accepted for Phase 14.0 architecture and D10 classification; governed D9
 Provisional until their Phase 14.1 evidence gates pass; architectural decomposition superseded by
 Decision 0031
 
+Current disposition: coupled scheduling and integration architecture are further superseded by
+[Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md). Compatible scientific requirements and
+source analysis remain historical input to G5H.
+
 Date: 2026-07-24
 
 Supersession note: [Decision 0031](0031-phase-14-single-semantic-kernel.md) replaces this record's

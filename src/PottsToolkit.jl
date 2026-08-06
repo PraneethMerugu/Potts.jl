@@ -132,7 +132,7 @@ export inspect, Statements, Variables, Effects, RandomOperations, Schedule
 export Capabilities, Fingerprints, StoragePlan, Kernels
 export LifecyclePlans
 export semantic_fingerprint, completed_system_fingerprint
-export EquationComponent, process_component
+export EquationComponent
 
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
@@ -166,7 +166,6 @@ public stage_external_inputs!, runtime_statistics
 public to_dynamic_quantity, to_unitful_quantity
 
 function EquationComponent end
-function process_component end
 function compile end
 function to_unitful_quantity end
 to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value

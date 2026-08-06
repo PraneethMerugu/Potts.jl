@@ -1,6 +1,11 @@
 # Phase 14 GPU-Native Implementation and Qualification Plan
 
-Status: Owner-directed and accepted for execution
+Status: historical execution plan; superseded for current scheduling and promotion
+
+Current disposition: preserve its no-fallback engineering evidence, but use the explicit capability
+profiles and gate order in [Decision 0044](../../spec/decisions/0044-pre-g6-cohesion-and-mtk-hardening.md)
+and the [G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md). Its simultaneous
+CPU/Metal/ROCm target and G4/Phase 16.C route are not current authority.
 
 Date: 2026-07-24
 

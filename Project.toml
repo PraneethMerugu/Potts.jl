@@ -14,7 +14,6 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [sources]
 CorePotts = {path = "lib/CorePotts"}
-ProcessBigraphs = {path = "lib/ProcessBigraphs"}
 
 [compat]
 Aqua = "0.8"
@@ -25,7 +24,6 @@ LinearAlgebra = "1"
 Metal = "1"
 ModelingToolkit = "11"
 ModelingToolkitBase = "1.51"
-ProcessBigraphs = "0.6"
 SciMLBase = "3"
 SHA = "0.7"
 SymbolicIndexingInterface = "0.3"
@@ -38,13 +36,11 @@ julia = "1.12"
 [weakdeps]
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
-ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [extensions]
 PottsToolkitMetalExt = "Metal"
 PottsToolkitModelingToolkitExt = "ModelingToolkit"
-PottsToolkitProcessBigraphsExt = "ProcessBigraphs"
 PottsToolkitUnitfulExt = "Unitful"
 
 [extras]
@@ -52,10 +48,9 @@ Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
-ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "LinearAlgebra", "ModelingToolkit", "ProcessBigraphs", "Test", "TOML", "Unitful"]
+test = ["Aqua", "ExplicitImports", "LinearAlgebra", "ModelingToolkit", "Test", "TOML", "Unitful"]

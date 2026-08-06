@@ -1,5 +1,9 @@
 # Documentation visible-workflow audit
 
+> **Historical evidence.** This audit binds the pre-G5H manual and is not current qualification or
+> construction authority. Its useful teaching observations feed G5H F19; Decision 0044 and the G5H
+> hardening contract govern the replacement documentation product.
+
 Date: 2026-07-27
 
 Scope: the released documentation redesign on `main`, excluding Phase 16 material.

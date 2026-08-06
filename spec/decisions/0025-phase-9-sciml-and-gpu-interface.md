@@ -2,6 +2,10 @@
 
 Status: Accepted
 
+Current disposition: superseded in part by [Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md)
+for problem ownership, late numerical lowering, ensemble integration, and capability profiles.
+Compatible integer-MCS SciML semantics survive.
+
 Date: 2026-07-19
 
 ## Context

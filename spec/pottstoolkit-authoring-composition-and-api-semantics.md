@@ -2,6 +2,11 @@
 
 Status: Accepted Level 1 and Level 2 authoring, composition, and API contract; implementation evidence pending
 
+Current disposition: superseded in part by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Pre-V1 `PottsModel`, `ModelFragment`,
+constructor, compiler, and public API spellings are not current authority. Compatible semantic
+goals for readable, hierarchical, diagnosable authoring remain preservation input.
+
 Phase 14 extension: generic hierarchical composition for complex coupled models is governed by
 [Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md). The Phase 13 flat-model
 contract remains unchanged.

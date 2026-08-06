@@ -1,5 +1,9 @@
 # Documentation 9/10 Audit — Non-Phase-16 Scope
 
+> **Historical evidence.** This audit binds an earlier documentation tree and does not qualify the
+> current package or prescribe its page inventory. G5H F19 owns the replacement manual and review
+> gate; the earlier score is retained only as design research.
+
 > Superseded on 2026-07-27 by
 > [`documentation-visible-workflow-audit.md`](documentation-visible-workflow-audit.md).
 > This score did not test whether canonical programs were visible on the page and therefore
@@ -104,9 +108,8 @@ Round 3 freezes these requirements:
 
 ### Excluded
 
-- unfinished ProcessBigraphs Phase 16 behavior;
+- unfinished external orchestration behavior;
 - dynamic structural transactions and hierarchy tutorials;
-- Potts adapter behavior that has not passed its slice gate;
 - Phase 17 biochemical/FBA ecosystem documentation;
 - claims unsupported by current conformance or evidence;
 - producing new scientific qualification merely to make a documentation page look complete.

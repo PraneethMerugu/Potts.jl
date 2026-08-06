@@ -2,6 +2,10 @@
 
 Status: Accepted
 
+Current disposition: the one-semantic-authority principle remains active. Coupled scheduling,
+component integration, capability profiles, and current phase placement are superseded by
+[Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md).
+
 Date: 2026-07-24
 
 ## Context
@@ -152,10 +156,9 @@ CPU-reference requirement, honest backend reporting, and Mermaid.jl exclusion.
 [Decision 0029](0029-phase-14-model-driven-capability-and-documentation-policy.md) continues to
 govern the selected-model portfolio, fidelity policy, and documentation program.
 
-Decision 0034 later establishes an independent domain-neutral `ProcessBigraphs.jl` package. That
-does not reinstate the rejected collection of cell, field, event, relationship, and continuous
-Potts runtimes. This decision remains authoritative for unmigrated Phase 14 Potts slices; each
-accepted strangler cutover must prove old/new serial equivalence and retire the prior execution
+Decision 0043 retires the later orchestration-package experiment. This decision remains
+authoritative for surviving Phase 14 Potts semantics; each accepted cutover must prove serial
+equivalence and retire the prior execution
 authority for that slice.
 
 ## Consequences

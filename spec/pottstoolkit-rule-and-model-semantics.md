@@ -1,6 +1,13 @@
 # PottsToolkit Rule and Model Semantics
 
-Status: Accepted semantic contract; Phase 11 implementation evidence pending
+Status: Accepted scientific-semantics source; interface and construction clauses superseded in part
+
+> **G5H authority boundary (2026-08-06).** Preserve this document's scientific meaning for rule
+> snapshots, effects, semantic RNG, state scopes, and explicit numerical choices. Its historical
+> authoring layers, compiled-model lifecycle, phase assignments, Unitful restriction, algorithm
+> inventory, and API spellings do not govern the current implementation. Decision 0044 and the
+> [G5H Hardening Contract](symbolic-potts-v1-hardening.md) own those choices; every retained outcome
+> is dispositioned by the G5H-0 preservation map before consolidation.
 
 ## Purpose
 

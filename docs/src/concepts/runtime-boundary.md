@@ -1,47 +1,33 @@
-# [Runtime and orchestration boundary](@id runtime-boundary)
+# [Runtime boundary](@id runtime-boundary)
 
-ProcessBigraphs and the current CorePotts execution engine are separate authorities during the
-runtime transition.
+Status: target contract under pre-G6 hardening
 
-## Stable documentation boundary
+PottsToolkit and CorePotts have one downward numerical boundary:
 
-This manual documents behavior available through the current PottsToolkit, CorePotts, and
-MakiePotts interfaces. ProcessBigraphs is an unpublished internal beta with canonical hierarchy,
-open composition, serial orchestration, structural transactions, solver and field adapters,
-observation, continuation, and logical checkpoint contracts documented inside its package.
-Read the
-[independent ProcessBigraphs manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/) for that
-qualified boundary; its deployment is versioned separately under the
-`ProcessBigraphs` documentation directory.
+- PottsToolkit produces a scheduled symbolic system, runtime schemas, and an immutable private
+  lowering request.
+- CorePotts initializes and advances CPM state for an explicit algorithm/backend profile.
+- CorePotts returns settled observations, checkpoints, capability reports, and generation-safe
+  lifecycle receipts.
+- PottsToolkit coordinates any native SciML component integrators outside copy-attempt kernels.
 
-That internal capability is not presented here as:
+Runtime state is materialized once per `init`. A public executable is not a required authoring
+stage, and an extension cannot introduce another model authority, scheduler, lifecycle engine,
+parameter store, or checkpoint format.
 
-- a public runtime release;
-- complete upstream parity;
-- a replacement for CorePotts;
-- evidence that an uncut Potts path uses ProcessBigraphs.
+## Native component boundary
 
-## Coupled-runtime integration
+A component declares scope, IO, cadence, duration per MCS, split order, solver policy,
+initialization, events, lifecycle transfer, and required capabilities. Unsupported combinations
+fail during preflight. GPU profiles cannot satisfy this contract through host fallback, scalar
+device indexing, or hidden transfers.
 
-ProcessBigraphs owns when and why coupled computation occurs. CorePotts, SciML solvers, and custom
-engines retain authority over how their heavy computation executes inside each authorized
-interval. The internal-beta integration includes checked structural add, remove, divide, move, and
-rewire transactions, structural restart, and bounded Merks and CNV assemblies.
+Global component state and per-cell component pools use the same explicit publication boundary.
+Per-cell pools are fixed-capacity and generation safe; creation, deletion, division, and transition
+are applied from CorePotts lifecycle receipts.
 
-These capabilities do not automatically replace CorePotts execution or promote a public
-ProcessBigraph API. A user-facing PottsToolkit workflow is documented only after its public
-integration contract passes, while package-local capability pages record internal runtime
-authority and checkpoint compatibility.
+## Documentation boundary
 
-## Merge rule for this manual
-
-ProcessBigraph integration documentation enters this structure in three places:
-
-1. **Learn/Examples** only for admitted user workflows;
-2. **Concepts and Guarantees** for hierarchy, ports, structural barriers, lifecycle, failure, and
-   checkpoint semantics;
-3. **API** only for names that have passed the applicable stability gate.
-
-Every page must state its support level and avoid describing a roadmap intention as implemented
-behavior. Package-local ProcessBigraphs docs remain the authority for internal adapter and runtime
-extension details during incubation.
+During G5H, only this narrow status manual is active. Legacy authoring pages are drafts and are not
+support claims. Stable tutorials and API pages return only after they execute against the final
+public surface in the strict documentation build.

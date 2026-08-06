@@ -1,8 +1,17 @@
 # Decision 0041: Semantic-Preserving Repository Consolidation
 
-Status: Accepted and qualified; repository consolidation closed
+Status: Accepted repository-wide principles; ProcessBigraphs program and qualification historical
 
 Date: 2026-07-28
+
+> **Current scope (2026-08-06).** Decisions 0043 and 0044 supersede this record's
+> ProcessBigraphs-first work order, compatibility/version promises, deleted qualification
+> machinery, and claim that the former consolidation candidate qualifies the current tree. The
+> repository-wide rules for one production authority, bounded DRY, independent oracles,
+> impact-based hardware requalification, preservation before deletion, and responsibility review
+> for files over 1,000 nonblank/noncomment lines remain accepted and apply during G5H. The G5H-0
+> preservation map replaces the deleted inventories; its exact R2H-A review supplies current
+> qualification.
 
 ## Context
 
@@ -90,17 +99,16 @@ after exact-head consolidation qualification.
 
 ## Qualification progression
 
-The `baseline_freeze` gate qualified on 2026-07-28. Its authority is
-[`semantic-preserving-consolidation-baseline-freeze.md`](../../design/audits/semantic-preserving-consolidation-baseline-freeze.md)
-and the machine-readable
-[`baseline-freeze-v1.toml`](../../design/evidence/consolidation-baseline/baseline-freeze-v1.toml).
+The historical `baseline_freeze` gate qualified on 2026-07-28. Its records,
+`design/audits/semantic-preserving-consolidation-baseline-freeze.md` and
+`design/evidence/consolidation-baseline/baseline-freeze-v1.toml`, remain recoverable from the parent
+commit but are not current authority.
 
 Naming, archive, test-harness, ProcessBigraphs, CorePotts, frontend, and reconciliation gates
-qualified on 2026-07-29. The closure authority is
-[`semantic-preserving-consolidation-closure.md`](../../design/audits/semantic-preserving-consolidation-closure.md);
-the content-addressed exact-head record is
-[`exact-head-v1.toml`](../../design/evidence/consolidation-qualified/exact-head-v1.toml). All 37
-contract rows pass without an approved or observed functional delta.
+qualified on 2026-07-29. The historical closure record,
+`design/audits/semantic-preserving-consolidation-closure.md`, and exact-head record,
+`design/evidence/consolidation-qualified/exact-head-v1.toml`, are available in Git history. Their
+37 rows describe that former tree and do not qualify the G5H candidate.
 
 ## Alternatives considered
 

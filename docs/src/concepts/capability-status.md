@@ -1,42 +1,35 @@
 # [Capability status](@id capability-status)
 
-This matrix distinguishes stable user workflows, stable extension contracts, experimental
-interfaces, and unavailable roadmap behavior. Export status alone never changes a row.
+This table separates implemented foundations from public product qualification. “Implemented” does
+not mean stable, documented, or qualified for every backend.
 
-| Capability | User support | Extension support | Evidence boundary |
-|:--|:--|:--|:--|
-| PottsToolkit model composition | Stable | Stable lowering contracts | Frozen stability inventory |
-| 2D/3D Cartesian domains | Stable | Stable topology/domain access | Dimension-specific preflight |
-| Volume, surface, adhesion, elongation | Stable | Stable component protocols | Component conformance plus applicable algorithm evidence |
-| Connectivity constraint | Stable | Stable constraint protocol | Executability is not network validation |
-| Prescribed fields and chemotaxis | Stable | Stable field/drive protocols | Mechanism evidence, not assay validation |
-| Growth, division, transition, death | Stable | Stable lifecycle protocols | Capacity and generation-aware identity required |
-| Typed observations | Stable | Stable observable access | Only declared retained values |
-| Canonical checkpoints | Stable | Stable store adapters | Exact restore requires compatibility |
-| CPU execution | Stable baseline | Stable backend contract | Clean-install smoke required |
-| Metal and AMDGPU | Combination-dependent | Backend extension protocol | Consult `backend_report` and retained evidence |
-| MakiePotts 2D and slices | Stable | Stable render-frame protocol | Explicit host materialization |
-| Full volume explorer | Experimental | Experimental | Not a stable workflow |
-| `Act` facade and persistence examples | Experimental | Experimental | Provisional API registry |
-| ProcessBigraphs orchestration | Not yet a public Potts workflow | Qualified internal-beta integration | Public promotion requires a separate API decision |
-| Dynamic hierarchy and structural rewiring | Not yet a public Potts workflow | Qualified internal-beta transactions | Public promotion requires a separate API decision |
-| Published-model reproduction | No models currently admitted | Separate admission contract | Evidence required per model |
+| Capability | Current state | G5H requirement before public stability |
+|:--|:--|:--|
+| `PottsSystem` and completion | Implemented V1 foundation | One cohesive constructor/composition path, structural `mtkcompile`, final docs |
+| Sequential CPU CPM | Cleared G5 scientific foundation | Revalidate touched semantics and expose through the final SciML lifecycle |
+| Checkerboard CPU CPM | Cleared G5 execution foundation | Shared acceptance law, honest distinct-algorithm guarantees, final capability report |
+| Checkerboard GPU CPM | Functional selected-device foundation | Exact admitted profile, real-device no-fallback and performance qualification |
+| Core lifecycle and relationships | Rich implemented foundation | Consolidated schemas, package-owned tests, lifecycle receipts, memory qualification |
+| Checkpoint and symbolic indexing | Implemented in overlapping forms | One logical codec and one problem/integrator/solution indexing authority |
+| Native global MTK components | Not integrated; superseded copied-assimilation prototype exists | Preserve native systems; prove initialization, events, coupling, remake, SII, restart |
+| Dynamic per-cell MTK components | Not integrated | Compile-once generation-safe pools; CPU reference and bounded GPU batch profile |
+| MethodOfLines fields | Not integrated | `symbolic_discretize`, real MTK problem, explicit grid map, profile evidence |
+| SciML whole-trajectory ensembles | Partial identity groundwork | Standard `EnsembleProblem` serial/threaded/distributed workflows |
+| Per-cell vectorization | Not integrated | Separate API and evidence from whole-trajectory ensembles |
+| Dagger scheduling | Not adopted | Measured optional adopt-or-defer decision; never semantic authority |
+| MakiePotts | Existing implementation | Rebind to the final public observation/solution surface |
+| Wortel and Merks | Existing internal fixtures, no current public docs claim | Serial final-API docs and target-Mac run before G6; scientific qualification remains G7 |
+| Published-model reproduction | No model currently admitted | Separate source and scientific review after integration hardening |
 
-## How status changes
+## Backend claims
 
-Package maintainers propose classifications. The project owner approves stable promotions.
-Unclassified exports fail the API registry check. A successful local run, public export, roadmap
-entry, or documentation draft is not a promotion.
+The sequential CPU profile is the semantic reference. Checkerboard CPU and GPU are distinct
+algorithms. Every stable global or per-cell component scope requires a CPU reference and at least
+one real GPU witness for the explicitly admitted subset. Other vendors and unsupported native
+systems must report `Unsupported`; compilation success alone is not qualification.
 
-Experimental pages must label their status visibly. Internal exports remain implementation
-details even when Julia requires them to be exported between repository packages.
+## API claims
 
-## Read machine-readable evidence
-
-- `backend_report` and `compatibility_report` describe executability.
-- `algorithm_guarantees` describes scientific profiles.
-- `scientific_contract_versions` records frozen semantic identities.
-- the frozen stability, provisional additive, and MakiePotts inventories classify public names.
-
-See [Scientific guarantees](@ref scientific-guarantees) for claim interpretation and
-[Experimental API](@ref experimental-api) for the visible provisional surface.
+The legacy `PottsModel` manual is quarantined and there is no compatibility promise for unpublished
+pre-V1 names. The final stable inventory is produced during G5H-2 and qualified with executable
+documentation during G5H-5.

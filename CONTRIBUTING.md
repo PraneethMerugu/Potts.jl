@@ -11,7 +11,6 @@ Run the independently installable package suites from the repository root:
 julia --project=. -e 'using Pkg; Pkg.test()'
 julia --project=lib/CorePotts -e 'using Pkg; Pkg.test()'
 julia --project=lib/MakiePotts -e 'using Pkg; Pkg.test()'
-julia --project=lib/ProcessBigraphs -e 'using Pkg; Pkg.test()'
 ```
 
 Run cross-package behavior with:
@@ -28,30 +27,27 @@ the same trajectory.
 
 ## Build the documentation
 
-Both manuals are strict Documenter builds: doctest, executable-example, and
-cross-reference failures fail the command.
+The temporary pre-1.0 status manual uses a strict Documenter build: doctest, executable-example,
+and cross-reference failures fail the command. Legacy `PottsModel` Learn, Examples, and API pages
+remain draft rewrite material and are excluded from active navigation.
 
 ```sh
 julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
-
-julia --project=lib/ProcessBigraphs/docs -e 'using Pkg; Pkg.instantiate()'
-julia --project=lib/ProcessBigraphs/docs lib/ProcessBigraphs/docs/make.jl
 ```
 
-The Wortel and Merks tutorials display their complete public-API programs and
-generate their figures and animations with Makie during the documentation
-build.
+The full final-interface manual, including serial Wortel and Merks programs and their Makie output,
+is a G5H-5 qualification deliverable and must not be claimed before that gate passes.
 
 ## Continuous integration
 
-Pull requests run the four package suites, the behavioral integration suite,
-small macOS and Windows installation smokes, and both documentation builds.
+Pull requests target the three package suites, the behavioral integration suite, applicable
+platform installation smokes, and the active documentation build.
 GPU hardware tests, benchmarks, performance comparisons, and external-link
 checks are manually dispatched when relevant. Releases use the same tests and
 documentation build as normal development; there is no separate evidence
 refresh or one-time qualification ceremony.
 
-Historical specifications, interviews, evidence records, and retired
-qualification scripts remain under `spec/`, `design/`, and `scripts/archive/`.
-They document past decisions but are not active development gates.
+Current specifications and decisions live under `spec/`. Historical interviews and evidence under
+`design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier
+repository states but are not active development gates.

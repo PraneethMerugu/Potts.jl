@@ -23,15 +23,9 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environments
-        run: |
-          julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Build documentation and check links
         env:
           POTTS_DEPLOY_DOCS: 'false'
           POTTS_DOCS_LINKCHECK: 'true'
-          PROCESS_BIGRAPHS_DEPLOY_DOCS: 'false'
-          PROCESS_BIGRAPHS_DOCS_LINKCHECK: 'true'
-        run: |
-          julia --project=docs --startup-file=no docs/make.jl
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no lib/ProcessBigraphs/docs/make.jl
+        run: julia --project=docs --startup-file=no docs/make.jl

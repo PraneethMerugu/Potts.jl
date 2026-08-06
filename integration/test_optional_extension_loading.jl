@@ -3,9 +3,6 @@
         PottsToolkit, :PottsToolkitModelingToolkitExt
     ) !== nothing
     @test Base.get_extension(
-        PottsToolkit, :PottsToolkitProcessBigraphsExt
-    ) !== nothing
-    @test Base.get_extension(
         PottsToolkit, :PottsToolkitUnitfulExt
     ) !== nothing
 end

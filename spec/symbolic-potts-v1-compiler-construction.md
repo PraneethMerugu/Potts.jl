@@ -4,18 +4,16 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade through cleared R2 and the complete G5 execution boundary; work is
-stopped before G6 for owner review
+Status: implementation-grade through cleared R2 and the complete G5 execution boundary; G5H is
+accepted and G6 remains closed
 
 ## Authority
 
-This contract records CCI-001 through CCI-023 from the accepted
-[compiler-consolidation owner interview](../design/audits/symbolic-potts-v1-compiler-consolidation-owner-interview.md).
-It freezes the remaining compiler-construction decisions required by the
+This contract records the accepted CCI-001 through CCI-023 decisions. It freezes the remaining
+compiler-construction decisions required by the
 [Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md).
 It also incorporates the owner's accepted
-[quick confidence-test research](../design/audits/symbolic-potts-v1-quick-confidence-test-research.md)
-and [execution-control audit](../design/audits/symbolic-potts-v1-execution-control-audit.md).
+[quick confidence-test research](../design/audits/symbolic-potts-v1-quick-confidence-test-research.md).
 It also records LCI-R1-01 through LCI-R5-07 from the accepted
 [lifecycle-language owner interview](../design/audits/symbolic-potts-v1-lifecycle-language-owner-interview.md).
 CCV1-027 received fresh independent G5-L0 clearance in the
@@ -26,20 +24,24 @@ authorized the fresh whole-G5
 [R2 execution review](../design/audits/symbolic-potts-v1-r2-execution-review.md), which cleared with
 zero P0 and zero P1 findings. That clearance closes G5 but does not open G6.
 
+[Decision 0044](decisions/0044-pre-g6-cohesion-and-mtk-hardening.md) subsequently inserted the
+accepted [G5H Hardening Contract](symbolic-potts-v1-hardening.md). G5H is now the sole authority for
+post-G5 cohesion, MTK/SciML integration, late lowering, dynamic components, capability profiles,
+product hardening, and the G6 entry decision.
+
 For compiler construction, descriptor execution, state/workspace layout, spatial planning,
 relationship transactions, backend qualification, and autonomous implementation order, authority
 is:
 
 1. this contract;
 2. the [Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md);
-3. the [Autonomous Consolidation Contract](symbolic-potts-v1-consolidation.md);
-4. [Symbolic Potts V1](symbolic-potts-v1.md);
-5. compatible scientific specifications and accepted decisions; and
-6. historical implementation or design evidence.
+3. [Symbolic Potts V1](symbolic-potts-v1.md);
+4. compatible scientific specifications and accepted decisions; and
+5. historical implementation or design evidence.
 
 This contract supersedes lower authority only where it explicitly tightens those implementation
 areas. Accepted product syntax, scientific semantics, stochastic meaning, units, lifecycle,
-SciML/ModelingToolkit/ProcessBigraphs boundaries, clean-break requirements, and phase exclusions
+SciML/ModelingToolkit boundaries, clean-break requirements, and phase exclusions
 survive unless this contract explicitly resolves an ambiguity.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** have the meanings defined
@@ -812,8 +814,9 @@ fully pass before focal, Wortel, or Merks mechanism lowering resumes.
 
 ## CCV1-022 — Autonomous implementation order
 
-After explicit owner send-off, one autonomous phase MUST proceed through G0 through G9. These gates
-are dependency boundaries, not separate phases, owner approvals, releases, or CI workflows.
+After explicit owner send-off, the program MUST proceed through G0--G5, G5H, and G6--G9. The G0--G5
+and G6--G9 gates are dependency boundaries rather than releases or CI workflows. G5H has the three
+independent reviews and final owner G6 decision defined in its own contract.
 
 ### G0 — Authority and recovery baseline
 
@@ -886,13 +889,34 @@ representation MUST return work to G2 or G4 and MUST NOT be accepted as a reduce
 Focal, Wortel, and Merks lowering MUST NOT begin while either neutral fixture or R2 has a blocking
 failure.
 
-### G6 — Public integration spine
+### G5H — Cohesion, MTK, and product hardening
 
-- Complete the public system, executable, problem, integrator, solution, checkpoint, and
-  SymbolicIndexingInterface lifecycle on neutral fixtures.
-- Pass namespacing, composition, units, parameters, equations, observations, remake, and extension
-  load-order checks.
-- Cross ProcessBigraphs only through the accepted public protocol.
+G5H is governed exclusively by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Its authoritative order is:
+
+```text
+G5H-0 -> R2H-A -> G5H-1 -> G5H-2 -> G5H-3 -> R2H-B
+      -> G5H-4 -> G5H-5 -> R2H-C -> owner G6 decision
+```
+
+G6 MUST NOT begin until R2H-C clears and the owner explicitly opens it.
+
+### G6 — Public integration stabilization and freeze
+
+G5H delivers the functionally complete scheduled Potts system, problem, algorithm, integrator,
+solution, checkpoint, inspection, SII, native-component, ensemble, and documented authoring spine.
+G6 stabilizes and freezes that already-qualified surface; it does not invent or complete a missing
+integration architecture.
+
+- Classify the exact public names and extension SPIs as stable, experimental, or private and freeze
+  their semantic contracts.
+- Finalize namespacing, diagnostics, versioning, composition, units, parameters, observations,
+  remake, and extension load-order behavior without adding a second lifecycle.
+- Keep executable lowering private unless a later accepted decision demonstrates a public need.
+- Cross external composition boundaries only through accepted public protocols.
+- Re-run the G5H black-box and documentation witnesses against the frozen surface. Any missing
+  functional behavior returns to the earliest owning G5H gate and reopens its review; it is not
+  silently implemented as new G6 architecture.
 
 ### G7 — Proof-model reconstruction and scientific qualification
 
@@ -921,8 +945,8 @@ failure.
 - Complete the R4 terminal review and create the final implementation checkpoint only after its
   blocking findings are cleared.
 
-G0 through G9 are the sole authoritative execution order. SPV1-032, ACV1-021, and ARV1-020 remain
-requirement history but are superseded for implementation ordering.
+G0--G5, G5H, and G6--G9 are the sole authoritative execution order. SPV1-032, ACV1-021, and
+ARV1-020 remain requirement history but are superseded for implementation ordering.
 
 Work MAY move within one gate or between adjacent gates to preserve a coherent implementation.
 Dependent work MUST pause on a failed gate and return to the earliest violated abstraction.
@@ -932,8 +956,9 @@ external-fixture gate.
 A read-only temporary clone of `main` MAY provide algorithm, performance, and test-intent evidence.
 It MUST NOT be executed as an oracle, linked, imported, or treated as compatibility authority.
 
-Migration, wrappers, user documentation, polished examples, Dagger, a third engine, and broad
-literature reproduction remain outside this phase.
+Migration, wrappers, a third engine, and broad literature reproduction remain outside this
+program. Final-interface user documentation, polished proof workflows, and an optional Dagger
+disposition are governed by G5H and do not broaden G0--G5.
 
 ## CCV1-023 — Stopping rule and phase exit
 
@@ -982,6 +1007,11 @@ Five fresh-context, read-only reviews are required:
 - `R4Terminal` after G9 reviews the public black-box flow, stale/private APIs, package loading,
   scope, and phase-exit completeness.
 
+G5H adds three fresh-context reviews, `R2H-A`, `R2H-B`, and `R2H-C`, at the authority,
+native-MTK architecture, and hardening-exit boundaries respectively. Their scope and blocking
+rules live only in the [G5H Hardening Contract](symbolic-potts-v1-hardening.md); they do not replace
+R3 or R4.
+
 A reviewer MUST:
 
 - not have authored the slice under review;
@@ -1013,8 +1043,7 @@ and R3, before broad legacy deletion, after the clean break, and after cleared R
 failure recovery MUST repair or revert a bounded coherent slice and MUST NOT use destructive reset
 as the default response.
 
-After explicit implementation send-off, one living
-`design/audits/symbolic-potts-v1-implementation-control.md` MUST record:
+When G5H implementation begins, one living `design/hardening/g5h-control.md` MUST record:
 
 - each gate as `pending`, `in_progress`, `passed`, or `reopened`;
 - the exact tests/static checks establishing it;
@@ -1041,7 +1070,8 @@ The implementation MUST return to the earliest wrong artifact:
 - checkerboard completion-order or proposal-order dependence returns to G4;
 - host fallback, scalar indexing, or kernel-shape failure returns to G2 or G4;
 - unbounded, noncanonical, or partially published relationship mutation returns to G5;
-- public MTK/SciML/extension lifecycle failure returns to G6;
+- public authoring, MTK/SciML, native-component, or late-lowering failure returns to G5H-2 or
+  G5H-3, or to G5H-1 when its first incorrect artifact is a shared runtime authority;
 - a proof model requiring a CorePotts special case returns to G1, G2, or G5;
 - paper/source disagreement returns to G7;
 - dual old/new runtime authority returns to G8; and
@@ -1063,7 +1093,7 @@ Phase exit requires:
 9. relationship/lifecycle ordering, capacity, generation, failure-atomicity, and integrity
    properties pass;
 10. focal, Wortel, and Merks run stochastically through complete visible public definitions;
-11. SciML, ModelingToolkit, equation, observation, ProcessBigraphs, Unitful, and in-scope
+11. SciML, ModelingToolkit, equation, observation, Unitful, and in-scope
     MakiePotts integration gates pass;
 12. every GPU test uses the shared backend-agnostic harness and is ready for later release-matrix
     rows;
@@ -1737,7 +1767,7 @@ independently synchronize or convert device arrays.
 
 PottsToolkit owns the small semantic boundary scheduler. It decides when and what visibility is
 required for SciML stepping/solving, saving, host callbacks, checkpoints, SII, progress, statistics,
-explicit observations, and ProcessBigraph exchange, then requests CorePotts settlement. Its closed
+explicit observations, and external-input publication, then requests CorePotts settlement. Its closed
 request targets the current submitted MCS and contains reason metadata, requested counters/small
 reductions, selected projections, whether a full snapshot is required, and whether host mutation
 follows. Reductions and selected projections are independent closed sets rather than a total
@@ -1746,7 +1776,7 @@ boundary occurrences and output identities remain values rather than types.
 
 Settlement drains the current ordered backend queue and cannot stop at an earlier submitted MCS.
 The scheduler therefore MUST NOT enqueue beyond its next known save, checkpoint, host callback,
-parameter/input update, ProcessBigraph exchange, progress, observation, or finalization boundary.
+parameter/input update, progress, observation, or finalization boundary.
 Later work may already be queued beyond an unknown device scientific failure only because sticky
 status makes that work inert.
 
@@ -1815,9 +1845,9 @@ workspace, and measured performance. Fast tests share fixtures with explicit exp
 qualification rather than duplicating assertions or creating evidence-freshness bureaucracy.
 
 When G5-L and the existing G5 surface/relationship work pass, one fresh `R2Execution` reviews the
-whole boundary. If R2 clears, work MUST stop before G6 for owner review. Wortel, Merks, focal-model
-migration, polished docs, a second evaluator, a legacy oracle, a new CI evidence system, and broader
-lifecycle vocabulary are outside G5-L.
+whole boundary. R2 clearance opens G5H, not G6. Wortel, Merks, focal-model migration, polished docs,
+a second evaluator, a legacy oracle, a new CI evidence system, and broader lifecycle vocabulary
+remain outside G5-L; the subset admitted by G5H is governed by its own contract.
 
 G5-L2Q is deliberately narrower than R2 but, by the 2026-08-03 owner amendment, includes the
 complete backend-resident lifecycle execution boundary. It requires shared checkerboard CPU and

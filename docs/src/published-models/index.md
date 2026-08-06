@@ -6,12 +6,6 @@ No current page in this manual is classified as a completed published-model repr
 Those constructors are useful implementation building blocks, but a reusable constructor alone
 does not establish reproduction fidelity.
 
-The independent
-[ProcessBigraphs scientific case-study manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/case-studies/)
-shows complete inline Wortel and Merks assemblies as **qualified
-source-bounded case studies**. Those pages deliberately stop below the
-published-reproduction class used here.
-
 ## Portfolio status
 
 | Class | Admitted | Reader interpretation |

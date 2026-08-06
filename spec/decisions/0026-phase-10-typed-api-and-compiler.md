@@ -2,6 +2,10 @@
 
 Status: Accepted
 
+Current disposition: superseded in part by [Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md).
+`PottsModel`, the old compiler boundary, and its public-surface choices are not current authority;
+compatible extension and scientific intent survives.
+
 Date: 2026-07-20
 
 ## Context
@@ -183,7 +187,7 @@ one coherent final architecture rather than compatibility with unreleased interf
 - The five OpenVT reference-model categories are mandatory public-Level-2 conformance workloads:
   single-cell migration, chemotaxis in prescribed gradients, monolayer growth, differential-
   adhesion sorting, and elongation-driven angiogenesis. They are ordinary compositions with no
-  runtime special cases. OpenVT schema or bigraph compatibility is not claimed.
+  runtime special cases. OpenVT schema compatibility is not claimed.
 - Benchmarks separate construction, normalization, lowering, compilation, and warm execution and
   report allocations, MCS/s, proposal throughput, device memory, scaling, observations, and
   checkpoint cost on CPU, Metal, and ROCm with machine metadata.

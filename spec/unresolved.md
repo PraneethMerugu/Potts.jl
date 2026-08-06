@@ -2,6 +2,11 @@
 
 Status: Under Investigation
 
+Current disposition: historical registry under G5H revalidation. Only an item explicitly admitted
+by the [G5H Hardening Contract](symbolic-potts-v1-hardening.md) or a later accepted decision may
+drive current implementation. References to `PottsModel`, `ModelFragment`, Lottery, old phase
+ordering, or earlier capability claims are not active requirements.
+
 This registry prevents open questions from being silently resolved by implementation convenience.
 Identifiers remain stable when a question is moved into an accepted specification or decision
 record.

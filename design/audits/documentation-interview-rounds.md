@@ -1,6 +1,10 @@
 # Documentation Interview Rounds
 
-Status: Rounds 1–3 accepted; consolidation in progress
+Status: Historical documentation-planning evidence; superseded by G5H F19
+
+> The interviews below describe the retired pre-G5H manual program and its deleted quality target.
+> They remain only as user-research input. Decision 0044, the G5H hardening contract, and G5H F19
+> govern the current documentation product and do not require restoring the former page inventory.
 
 Companion audit: [Documentation 9/10 Audit](documentation-9-of-10-audit.md)
 

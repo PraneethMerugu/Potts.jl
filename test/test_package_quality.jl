@@ -11,7 +11,6 @@
             "Dagger",
             "KernelAbstractions",
             "Unitful",
-            "ProcessBigraphs",
         )),
     ))
 

@@ -4,15 +4,18 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade and audit-passed; implementation prohibited until explicit owner
-send-off
+Status: implementation-grade through its cleared execution boundary; superseded in part by the
+accepted [G5H Hardening Contract](symbolic-potts-v1-hardening.md)
 
 ## Authority
 
-This contract records ARI-001 through ARI-020 from the accepted
-[architecture-redirection owner interview](../design/audits/symbolic-potts-v1-architecture-redirection-owner-interview.md).
-It governs the compiler and runtime correction required before Symbolic Potts V1 may be
-implemented to completion.
+For post-G5 work, the G5H contract supersedes ARV1-015's public executable flow and
+`EquationProcess` assimilation boundary, and inserts G5H into ARV1-020's implementation order. The
+CorePotts mechanism-free invariant, descriptor architecture, semantic RNG, deterministic
+transactions, no-fallback rule, and compatible test requirements survive.
+
+This contract records the accepted ARI-001 through ARI-020 decisions. It governs the compiler and
+runtime correction required before Symbolic Potts V1 may be implemented to completion.
 
 The authority order for this branch is:
 
@@ -20,10 +23,9 @@ The authority order for this branch is:
    compiler, descriptor, layout, spatial-planning, transaction, backend-test, and autonomous-gate
    details it explicitly freezes;
 2. this architecture-redirection contract;
-3. the [Autonomous Consolidation Contract](symbolic-potts-v1-consolidation.md);
-4. [Symbolic Potts V1](symbolic-potts-v1.md);
-5. surviving scientific specifications and accepted decisions; and
-6. historical implementation notes.
+3. [Symbolic Potts V1](symbolic-potts-v1.md);
+4. surviving scientific specifications and accepted decisions; and
+5. historical implementation notes.
 
 This contract supersedes a lower authority only where it explicitly changes compiler openness,
 CorePotts storage, execution staging, checkerboard semantics, relationship admission, portability,
@@ -59,7 +61,7 @@ The phase MUST deliver:
 - one CPU/GPU portable checkerboard engine;
 - deterministic deferred relationship and lifecycle transactions required by the proof models;
 - SciMLBase problem, integrator, solve, solution, remake, and symbolic-indexing behavior;
-- optional ModelingToolkit, ProcessBigraphs, and Unitful integration already accepted by V1;
+- optional ModelingToolkit and Unitful integration already accepted by V1;
 - an independent downstream extension conformance fixture;
 - complete stochastic Wortel and Merks integration fixtures written visibly through public syntax;
   and
@@ -84,7 +86,7 @@ The phase MUST NOT deliver:
 
 PottsToolkit retains the symbolic and SciML dependency direction defined by ACV1-001. CorePotts
 MUST remain free of ModelingToolkitBase, ModelingToolkit, Symbolics,
-SymbolicIndexingInterface, DynamicQuantities, Unitful, ProcessBigraphs, and external equation
+SymbolicIndexingInterface, DynamicQuantities, Unitful, and external equation
 solvers.
 
 CorePotts MUST use the following portability stack:
@@ -445,31 +447,34 @@ This clause supersedes the requirement that the initial focal fixture be sequent
 Focal-point plasticity is checkerboard-admissible through snapshot energy reads and ordered deferred
 relationship requests. Its checkerboard kinetics MUST be specified and tested as batch-synchronous.
 
-## ARV1-015 — ModelingToolkit, equation, and ProcessBigraphs composition
+## ARV1-015 — ModelingToolkit and equation composition
 
 `PottsSystem` MUST implement the accepted public ModelingToolkitBase system behavior without
 translating lattice sites or copy proposals into an ODE system.
 
-PottsToolkit owns:
+PottsToolkit owns the public lifecycle amended by G5H:
 
 ```text
-PottsSystem -> PottsExecutable -> PottsProblem -> PottsIntegrator -> PottsSolution
+PottsSystem -> complete -> mtkcompile -> scheduled PottsSystem
+            -> PottsProblem -> init/solve -> PottsIntegrator/PottsSolution
 ```
+
+Engine, backend, scalar, and device specialization is late. Any executable lowering artifact is
+private and is not a second public model authority.
 
 SciMLBase owns the public conventions for problem construction, `init`, `step!`, `solve`,
 `solve!`, `remake`, callbacks where admitted, return codes, timeseries behavior, and symbolic
 indexing.
 
-A tightly coupled compatible external equation system enters through an `EquationProcess`. The
-host compiler partitions equation execution from CPM descriptors and creates the coupled
-integrator. An external solver MUST NOT be invoked from a device proposal kernel.
+A tightly coupled compatible external equation system remains a native MTK component island with
+explicit scope, IO, cadence, physical duration per MCS, split policy, initialization, events, and
+capability requirements. The host compiler partitions native numerical execution from CPM
+descriptors and creates the coupled schedule without copying the external system into a Potts
+surrogate. An external solver MUST NOT be invoked from a device proposal kernel.
 
-The optional ProcessBigraphs extension derives a CPM process with typed ports, explicit state
-exchange, integer-MCS advancement, atomic publication, failure propagation, and checkpoint
-behavior. ProcessBigraphs owns multiscale orchestration; CorePotts has no ProcessBigraph dependency.
-
-Future Vivarium interoperability belongs at the ProcessBigraphs component boundary and is outside
-this phase.
+External multiscale orchestration and cross-language interoperability are outside this phase. A
+future adapter requires a new independently reviewed contract and must not become a dependency of
+CorePotts.
 
 ## ARV1-016 — Stochastic, replay, checkpoint, and inspection contract
 
@@ -611,8 +616,9 @@ branch.
 
 ## ARV1-020 — Autonomous implementation order and stopping rule
 
-For implementation ordering only, this clause is superseded by G0 through G9 in CCV1-022 of the
-[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md). Its architecture
+For implementation ordering only, this clause is superseded by G0--G5, G5H, and G6--G9 in the
+[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md) and
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Its compatible architecture
 requirements, autonomous-repair rule, owner-blocker boundary, and exit requirements survive.
 
 After explicit owner send-off, one autonomous phase proceeds through these internal gates:
@@ -673,7 +679,7 @@ The phase is implementation-complete only when:
 8. Wortel and Merks run stochastically through complete visible public V1 definitions;
 9. claimed CPU and available GPU support levels pass their required gates with no fallback, and
    every GPU semantic/conformance test uses the shared backend-agnostic harness;
-10. ModelingToolkit, SciMLBase, ProcessBigraphs, Unitful, MakiePotts, and package boundaries pass
+10. ModelingToolkit, SciMLBase, Unitful, MakiePotts, and package boundaries pass
     their in-scope integration tests;
 11. obsolete monolithic, compatibility, removed-engine, oracle, and evidence authorities are gone;
 12. ordinary CI is green without evidence-freshness or documentation gates; and

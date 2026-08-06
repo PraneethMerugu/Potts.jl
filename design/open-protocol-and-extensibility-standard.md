@@ -2,6 +2,10 @@
 
 Status: Accepted engineering standard
 
+Current disposition: compatible open-protocol principles survive. Exact public names, backend
+inventories, capability promotion, and CorePotts API breadth are requalified by the
+[G5H Hardening Contract](../spec/symbolic-potts-v1-hardening.md).
+
 ## Purpose
 
 Potts.jl is intended to be both a high-performance Cellular Potts engine and an extensible Julia

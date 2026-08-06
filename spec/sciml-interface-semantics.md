@@ -2,6 +2,11 @@
 
 Status: Accepted
 
+Current disposition: superseded in part by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Integer-MCS stepping, genuine SciML
+behavior, replay, saving, and ensemble intent survive. `PottsModel`, old problem ownership,
+algorithm inventory, and early executable lowering are not current API authority.
+
 ## Purpose
 
 This document defines genuine SciML integration for Potts.jl. It governs the relationship among
@@ -272,7 +277,7 @@ continues. This is one scientific stepping path with two visibility policies, no
 fully settled and materialized at its final requested MCS.
 
 The next boundary is the earliest applicable final time, save time, host callback, checkpoint,
-ProcessBigraph exchange, host parameter or external-input update, progress report, or explicit
+host parameter or external-input update, progress report, or explicit
 observation. The scheduler is a small closed value-level mechanism; it is not a general event-query
 language and boundary occurrences do not enter types. Coincident consumers share one settlement.
 Because one KernelAbstractions settlement drains the current ordered queue, `solve!` MUST NOT submit

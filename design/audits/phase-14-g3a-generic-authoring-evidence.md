@@ -59,7 +59,8 @@ instead of a hidden subsystem scheduler.
 
 ## Conformance evidence
 
-[Generic fragment tests](../../test/test_phase14_generic_fragments.jl) prove:
+The historical generic-fragment tests, formerly at
+`test/test_phase14_generic_fragments.jl`, established:
 
 - named requirements and property-like exports;
 - nested re-export and private qualification;
@@ -71,7 +72,8 @@ instead of a hidden subsystem scheduler.
 - transitive backend requirement identity; and
 - explicit periodic process cadence.
 
-[Wang authoring fixture](../../integration/conformance/test_phase14_wang_authoring.jl) proves four
+The historical Wang authoring fixture, formerly at
+`integration/conformance/test_phase14_wang_authoring.jl`, established that four
 generic fragments—secretome coupling, intracellular signaling, focal adhesions, and directed
 motility—compose with one root plan, lower through the ordinary PottsToolkit path, and retain:
 

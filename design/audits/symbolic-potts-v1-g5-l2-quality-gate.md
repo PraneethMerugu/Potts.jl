@@ -21,9 +21,8 @@ This amendment changes execution qualification, not the accepted lifecycle vocab
 authorize proof-model migration, documentation work, a second evaluator, or a general query or
 transaction language.
 
-The independent [asynchronous execution and settlement review](symbolic-potts-v1-asynchronous-execution-settlement-review.md)
-confirmed that this is a runtime-architecture correction rather than a local synchronization
-cleanup. The gate remains blocked until the candidate has whole-MCS two-bank atomicity, one sticky
+Independent review confirmed that this is a runtime-architecture correction rather than a local
+synchronization cleanup. The gate remains blocked until the candidate has whole-MCS two-bank atomicity, one sticky
 first-failure/cumulative control block, distinct submitted/drained/committed/materialized positions,
 one nonblocking CorePotts MCS submission path, one unbypassable CorePotts settlement authority, a
 complete device lifecycle path through publication, and an end-to-end CPU/Metal runtime witness.

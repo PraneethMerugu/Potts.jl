@@ -30,20 +30,10 @@ jobs:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environments
-        run: |
-          julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Build Potts documentation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
           POTTS_DEPLOY_DOCS: ${{ github.event_name == 'push' }}
         run: julia --project=docs --startup-file=no docs/make.jl
-      - name: Build ProcessBigraphs documentation
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-          PROCESS_BIGRAPHS_DEPLOY_DOCS: ${{ github.event_name == 'push' }}
-        run: >-
-          julia --project=lib/ProcessBigraphs/docs --startup-file=no
-          lib/ProcessBigraphs/docs/make.jl

@@ -5,10 +5,26 @@ Date: 2026-07-29
 Branch: `codex/symbolic-potts-v1`
 
 Status: superseded in part by the
-[Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md);
-implementation remains prohibited until explicit owner send-off
+[Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md), the
+[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md), and the accepted
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md)
 
 ## Authority
+
+### Current clause disposition
+
+The G5H contract is current authority for post-G5 authoring cohesion, native ModelingToolkit
+components, `mtkcompile`, late numerical lowering, time coupling, capability profiles, and G6
+entry. In particular, it supersedes SPV1-006 and SPV1-007 where they assign runtime specialization
+to a public executable; SPV1-034 through SPV1-038 where they require `EquationComponent`
+assimilation or prohibit structural `mtkcompile`; SPV1-043 and the public executable portions of
+SPV1-046 and SPV1-048; and the manually duplicated constructor inventory under “Frozen public
+system contract.” Those clauses remain historical design evidence and must not be implemented
+directly.
+
+The clean break, single `PottsSystem`, public MTK interfaces, source-located diagnostics, units,
+semantic RNG, integer-MCS meaning, lifecycle, two distinct target execution algorithms, and visible
+Wortel/Merks authoring requirements survive where compatible.
 
 This document records the owner interviews and governs the clean-break Symbolic Potts V1 work on
 `codex/symbolic-potts-v1`. It is the branch-local authority for the PottsToolkit symbolic authoring
@@ -153,8 +169,8 @@ ModelingToolkit-compatible namespacing. Completed systems MUST NOT be accepted a
 composable components.
 
 Arbitrary external simulators MUST NOT be smuggled into `PottsSystem` as opaque subsystems.
-Heterogeneous simulator composition belongs to an explicit adapter boundary and
-ProcessBigraphs.jl.
+Heterogeneous simulator orchestration is outside this V1 contract and requires a separately
+reviewed optional adapter boundary.
 
 ### SPV1-006 — Completion and compilation are separate
 
@@ -234,15 +250,11 @@ depend on the smallest stable ModelingToolkit layer that satisfies the accepted 
 SPV1-034 freezes the exact dependency and extension graph after package-load, interface, and
 integration research.
 
-### SPV1-011 — ProcessBigraphs owns heterogeneous orchestration
+### SPV1-011 — External orchestration is out of scope
 
-`PottsSystem` owns symbolic CPM composition. ProcessBigraphs owns heterogeneous, multirate,
-Vivarium-style runtime composition between a compiled Potts process and other simulators,
-components, solvers, or processes.
-
-This boundary MUST permit an MTK equation subsystem to participate in a Potts model where the
-coupling has typed symbolic semantics, while preventing `PottsSystem` from becoming a second
-general-purpose orchestration runtime.
+`PottsSystem` owns symbolic CPM composition, including admitted typed ModelingToolkit equation
+components. It MUST NOT become a general-purpose workflow or heterogeneous simulation runtime.
+Any future external orchestration adapter is optional, independently reviewed, and outside V1.
 
 ### SPV1-012 — Existing code is evidence, not an API migration target
 
@@ -489,8 +501,8 @@ external ModelingToolkit system MAY enter only through an explicit equation-comp
 exposes and validates its equations, unknowns, parameters, events, and typed coupling. It MUST NOT
 remain an opaque simulator or hidden runtime inside `PottsSystem`.
 
-ProcessBigraphs owns composition with independently scheduled heterogeneous simulators and
-components.
+Composition with independently scheduled heterogeneous simulators and services is outside this
+specification.
 
 ### SPV1-025 — Strict composition and extension
 
@@ -661,9 +673,11 @@ not a valid syntax fixture.
 
 ### SPV1-032 — One autonomous clean-break implementation phase
 
-For implementation ordering only, this clause is superseded by G0 through G9 in CCV1-022 of the
-[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md). Its product scope,
-clean-break authority, and no-owner-review-between-gates rule survive.
+For implementation ordering only, this clause is superseded by G0--G5, G5H, and G6--G9 in the
+[Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md) and
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Its compatible product scope and clean
+break survive. G5H's three independent reviews and final owner G6 decision supersede the earlier
+no-review rule within G5H only.
 
 After the project owner gives explicit implementation send-off, this branch authorizes one
 end-to-end autonomous implementation phase.
@@ -725,18 +739,17 @@ PottsToolkit MUST strongly depend on:
 - DynamicQuantities; and
 - SciMLBase.
 
-Full ModelingToolkit, ProcessBigraphs, and Unitful MUST be weak dependencies implemented through
-`PottsToolkitModelingToolkitExt`, `PottsToolkitProcessBigraphsExt`, and
-`PottsToolkitUnitfulExt`, respectively.
+Full ModelingToolkit and Unitful MUST be weak dependencies implemented through
+`PottsToolkitModelingToolkitExt` and `PottsToolkitUnitfulExt`, respectively.
 
-The parent package MUST own the public `EquationComponent` and `process_component` entry points.
+The parent package MUST own the public `EquationComponent` entry point.
 Extension-owned concrete adapter types are private implementation details. ModelingToolkitStandardLibrary
 is an integration-test and example dependency, not a production dependency or package-specific
 adapter target.
 
-CorePotts MUST NOT depend on ProcessBigraphs, ModelingToolkitBase, ModelingToolkit, Symbolics,
-SymbolicIndexingInterface, DynamicQuantities, Unitful, or a cross-language transport. ProcessBigraphs
-MUST remain domain-neutral and independent of PottsToolkit and CorePotts.
+CorePotts MUST NOT depend on ModelingToolkitBase, ModelingToolkit, Symbolics,
+SymbolicIndexingInterface, DynamicQuantities, Unitful, a cross-language transport, or an external
+orchestration framework.
 
 This clause resolves the dependency measurement left open by SPV1-010.
 
@@ -838,126 +851,20 @@ Completion MUST validate declared IO against compiler-inferred accesses:
 
 Qualified symbolic identity, type, shape, exact declared units, reference-unit conversion,
 ownership, persistence, and publication policy MUST survive completion and executable inspection.
-This same metadata drives ModelingToolkit IO, SymbolicIndexingInterface, and the optional
-ProcessBigraphs bridge.
+This same metadata drives ModelingToolkit IO and SymbolicIndexingInterface.
 
-### SPV1-038 — Exactly two composition levels and one scheduling owner
+### SPV1-038 — One Potts composition and scheduling authority
 
-The ecosystem has two composition levels:
-
-1. `PottsSystem` plus `EquationComponent` performs compile-time symbolic composition under one
-   Potts completion, phase schedule, unit system, compiler, and atomic publication protocol.
-2. ProcessBigraphs performs runtime composition between independently scheduled engines,
-   simulators, services, or language runtimes.
-
-Every component has exactly one scheduling owner. An assimilated `EquationComponent` is scheduled
-inside the Potts executable and MUST NOT also be mounted as an independent ProcessBigraphs
-component. An independently mounted ProcessBigraphs component MUST NOT also be assimilated into
-the Potts executable.
-
-ProcessBigraphs owns global paths, store binding, global or multirate time, invocation,
-reconciliation, external failure, checkpoint coordination, and publication. CorePotts owns copy
-attempts, kernels, workspaces, stochastic streams, Potts transactions, and numerical execution
-inside one MCS.
-
-### SPV1-039 — Derived `process_component` bridge
-
-The public runnable bridge entry is:
-
-```julia
-component = process_component(prob::PottsProblem)
-```
-
-The ProcessBigraphs extension MUST derive the component interface, schema, capability declaration,
-and stable identity from `prob.executable`. The `PottsProblem` supplies initial state, runtime
-parameters, seed, replica identity, and permitted horizon. These runtime values MUST NOT enter the
-semantic or completed-system fingerprints.
-
-The derived manifest contains:
-
-- qualified symbolic input and output identity;
-- a stable external endpoint `Symbol` derived from canonical serialization of the fully qualified
-  symbolic identity, independent of source order and object identity;
-- direction and inferred access;
-- scalar or array element type and shape;
-- canonical unit string and reference conversion;
-- ownership, persistence, update law, residency, and codec;
-- input interval behavior and publication cadence;
-- selected engine, backend, precision, and capability envelope;
-- replay class and checkpoint schema; and
-- stable diagnostic and failure identities.
-
-The returned value MUST participate through ordinary public ProcessBigraphs process and managed
-engine interfaces. A private extension-owned `AbstractEngineAdapter` subtype MAY implement the
-bridge. Users MUST NOT need to name that type, redescribe the Potts read/write set, or reproduce
-the executable schema manually.
-
-The V1 bridge declares the ProcessBigraphs `:interval_advance` engine-operation family. One
-authorized interval is exactly one MCS in the admitted logical time scale. Its process schedule
-declares partial advance unsupported, and its input ports declare frozen interval behavior.
-
-ProcessBigraphs path placement remains explicit composition work: the bridge exposes endpoints and
-schemas, and the surrounding composite binds them to hierarchical stores. Two external identities
-that would produce the same endpoint name are a completion error; the bridge MUST NOT append an
-order-dependent suffix.
-
-### SPV1-040 — Whole-MCS invocation, publication, and checkpoint contract
-
-One V1 ProcessBigraphs invocation advances exactly one complete MCS.
-
-- The input projection is immutable and frozen for that MCS.
-- All admitted output values publish atomically after the MCS commits.
-- Partial interval execution and mid-MCS publication are unsupported.
-- ProcessBigraphs MAY invoke the component repeatedly to implement multirate orchestration.
-- A native `:mcs` logical scale maps exactly one tick to one MCS.
-- A physical logical scale is admitted only when `duration_per_mcs` supplies an exact conversion
-  and every invocation boundary maps to an integral MCS.
-- A nonintegral time request MUST fail before Potts execution. It MUST NOT round, interpolate
-  Potts state, or execute a fractional MCS.
-- Every input value is type-, shape-, and unit-validated, converted from its declared external
-  unit to the executable reference unit, and staged before the MCS begins. A failed input
-  projection MUST NOT mutate published Potts state.
-- Every output value is read only after commit and converted from the executable reference unit to
-  its declared external unit before atomic PB publication.
-- An invocation beyond the `PottsProblem` horizon MUST fail before execution.
-
-Checkpoint capture is legal only when the PB and Potts runtimes are settled after a complete-MCS
-publication. The Potts checkpoint component contains the logical CorePotts state, RNG
-continuation, completed-MCS time, continuation parameters, executable fingerprint, schema
-identity, and declared replay class. It MUST NOT serialize an incomplete kernel, scratch
-workspace, Symbolics graph, external ModelingToolkit system, or extension registry.
-
-Restore MUST verify executable identity, schema, units, capability envelope, and replay class
-before reconstructing runtime buffers. PB MUST NOT reach into an incomplete MCS, kernel schedule,
-or private CorePotts workspace.
-
-### SPV1-041 — Cross-language peer protocol is deferred, not faked
-
-A future Vivarium or other cross-language component is a ProcessBigraphs peer of the Potts
-component. Its language-neutral protocol must eventually define:
-
-- component and protocol identity;
-- hierarchical typed ports and canonical unit strings;
-- requested logical interval;
-- immutable input snapshot and snapshot identity;
-- typed output update;
-- status, diagnostics, and failure;
-- logical checkpoint capture and restore; and
-- deterministic publication and replay classification.
-
-The current Julia logical-checkpoint codec MUST NOT be represented as a complete cross-language
-transport. Python, Vivarium, JSON-RPC, Arrow, IPC, container, and service dependencies MUST NOT
-enter PottsToolkit or CorePotts.
-
-Cross-language transport implementation is deferred from this V1 branch unless the owner
-explicitly amends scope. The V1 implementation MUST preserve the derived manifest and orchestration
-boundary needed by that future work.
+`PottsSystem` plus `EquationComponent` performs compile-time symbolic composition under one Potts
+completion, phase schedule, unit system, compiler, and atomic publication protocol. CorePotts owns
+copy attempts, kernels, workspaces, stochastic streams, Potts transactions, and numerical
+execution inside one MCS. External orchestration and cross-language transport are out of scope.
 
 ### SPV1-042 — Integration acceptance gate
 
 Ordinary repository and integration tests MUST prove:
 
-- PottsToolkit base authoring loads without ModelingToolkit, ProcessBigraphs, or Unitful;
+- PottsToolkit base authoring loads without ModelingToolkit or Unitful;
 - extension methods load only when their weak dependency is present;
 - the complete public MTK system, IO, namespace, property, substitution, and SII behavior;
 - source-to-assimilated identity preservation through problem construction, symbolic `remake`,
@@ -966,11 +873,7 @@ Ordinary repository and integration tests MUST prove:
   ModelingToolkitStandardLibrary component;
 - contextual rejection of every excluded external-system family;
 - absence of private ModelingToolkit access;
-- `process_component(prob)` derivation without a CorePotts ProcessBigraphs dependency;
-- exact PB schema, direction, unit, time, capability, and failure derivation;
-- atomic whole-MCS publication and rejection of nonintegral time requests;
-- settled checkpoint/restore under the declared replay contract; and
-- rejection of dual scheduling ownership.
+- settled checkpoint/restore under the declared replay contract.
 
 These are normal tests, not a compatibility oracle, evidence-freshness ledger, or one-time release
 qualification framework.
@@ -1151,12 +1054,11 @@ checkpoint schema. Applicable scientific assertions are ported to `PottsCheckpoi
 PottsToolkit MUST export the names required in ordinary model source: the canonical system,
 executable, initial-state, problem, integrator, solution, checkpoint, lifecycle, composition,
 statement, operation, domain, effect, schedule, solver-policy, component, registry, layout,
-engine/backend, common inspection, ModelingToolkit-assimilation, and ProcessBigraph bridge entry
-points.
+engine/backend, common inspection, and ModelingToolkit-assimilation entry points.
 
 Structured diagnostics, qualified IR and manifests, fingerprint and canonical serialization types
 needed by extensions, SII support, statement traversal/reconstruction and registration hooks, and
-backend or ProcessBigraph adapter hooks MUST be qualified `public` names rather than exports.
+backend adapter hooks MUST be qualified `public` names rather than exports.
 Compiler passes and builders, storage and workspaces, kernels, concrete adapters, cache keys,
 namespace and generated-function helpers, and transaction internals MUST remain private. Source
 `export` and `public` blocks are the authority; V1 MUST NOT introduce an API ledger, migration
@@ -1174,7 +1076,7 @@ Implementation MUST:
    interface around V1;
 2. replace hidden reference-model builders with visible Merks, Wortel, and focal-link test
    fixtures;
-3. delete compatibility code, Lottery, tiled checkerboard, CorePotts ProcessBigraph adapters and
+3. delete compatibility code, Lottery, tiled checkerboard, obsolete coupled adapters and
    conversions, paper-specific CorePotts assemblies, and legacy checkpoint readers;
 4. first extract the qualified relationship, field, lifecycle, history, observation, transaction,
    initialization, persistence, sequential, checkerboard, checkpoint-integrity, and capability
@@ -1184,16 +1086,15 @@ Implementation MUST:
 
 MakiePotts MAY be adapted to V1 runtime, state, observation, and solution interfaces to keep the
 package family coherent. This is runtime integration and MUST NOT introduce tutorials or other
-user-facing documentation on this branch. ProcessBigraphs itself remains outside the rewrite
-except for a minimal public-protocol change proven necessary for the optional extension.
+user-facing documentation on this branch.
 
 ### SPV1-049 — Strict, ordinary QA and scoped supersession
 
 The required repository gate consists of:
 
 - PottsToolkit and CorePotts Linux package tests;
-- the repository's normal ProcessBigraphs and MakiePotts tests;
-- ModelingToolkit, ModelingToolkitStandardLibrary, ProcessBigraphs, Unitful, and optional-extension
+- the repository's normal MakiePotts tests;
+- ModelingToolkit, ModelingToolkitStandardLibrary, Unitful, and optional-extension
   integration tests;
 - fresh macOS and Windows package load plus a tiny sequential CPU trajectory;
 - Aqua and ExplicitImports;
@@ -1228,8 +1129,6 @@ Historical specifications and evidence remain indexed. The following conflicts a
   mechanisms, parameters, stochasticity, and observables survive;
 - the semantic-preserving consolidation contract for compatibility aliases, old dependency
   direction, evidence preservation, requalification, and migration;
-- ProcessBigraph requirements placing the Potts adapter in CorePotts, while ProcessBigraphs
-  semantics otherwise remain authoritative; and
 - historical checkpoint migration and authoring-serialization requirements.
 
 Surviving scientific CPM semantics remain authoritative where V1 does not explicitly change them.
@@ -1349,17 +1248,12 @@ Portable logical restore and exact continuation remain different replay claims. 
 are admitted only by the checkpoint's declared replay class and never silently preserve an exact
 trajectory claim.
 
-### SPV1-055 — Consolidation specification and audit are implementation authority
+### SPV1-055 — Construction contracts are implementation authority
 
-The implementation-grade phase contract is
-[`symbolic-potts-v1-consolidation.md`](symbolic-potts-v1-consolidation.md). Its repository map,
-pass order, runtime schemas, test matrix, internal slices, and exit conditions refine this document
-without changing the accepted product direction.
-
-The completed readiness audit is
-[`design/audits/symbolic-potts-v1-consolidation-audit.md`](../design/audits/symbolic-potts-v1-consolidation-audit.md).
-It found no unresolved product or upstream-interface blocker. This finding does not itself authorize
-implementation: explicit owner send-off remains mandatory.
+The [Compiler Construction Contract](symbolic-potts-v1-compiler-construction.md) and
+[Architecture Redirection Contract](symbolic-potts-v1-architecture-redirection.md), as amended by
+the [G5H Hardening Contract](symbolic-potts-v1-hardening.md), refine this document with
+implementation order, runtime schemas, MTK integration, test requirements, and exit conditions.
 
 ## Frozen public system contract
 
@@ -1387,36 +1281,26 @@ freeze the concrete `PottsSystem` field layout.
 
 ## Round 3 closure
 
-The non-normative research basis for this interview is
-[`design/audits/symbolic-potts-v1-round-3-research.md`](../design/audits/symbolic-potts-v1-round-3-research.md).
-Its accepted recommendations and syntax requirements are incorporated in SPV1-014 through
+The accepted Round 3 recommendations and syntax requirements are incorporated in SPV1-014 through
 SPV1-033.
 
 No owner decision remains open from Round 3. The required implementation-grade consolidation and
 audit are complete. Production implementation remains prohibited until the project owner gives
 explicit implementation send-off.
 
-## MTK and ProcessBigraphs integration closure
+## MTK integration closure
 
-The non-normative research basis for SPV1-034 through SPV1-042 is
-[`design/audits/symbolic-potts-v1-mtk-processbigraph-integration-research.md`](../design/audits/symbolic-potts-v1-mtk-processbigraph-integration-research.md).
-
-CI-017 through CI-021 are now consolidated into normative dependency, assimilation, IO,
-orchestration, timing, checkpoint, transport-deferral, and acceptance contracts. No architectural
-decision from the integration amendment remains open.
+The ModelingToolkit dependency, assimilation, IO, identity, and acceptance requirements survive.
+The retired orchestration bridge and transport clauses do not.
 
 The consolidation specification and audit are complete. Production implementation remains
 prohibited until the project owner gives explicit implementation send-off.
 
 ## Round 4 and interview closure
 
-The non-normative research basis for SPV1-043 through SPV1-049 is
-[`design/audits/symbolic-potts-v1-round-4-research.md`](../design/audits/symbolic-potts-v1-round-4-research.md).
-
 CI-022 through CI-026 are consolidated into normative executable, problem, runtime, solution,
 checkpoint, public-surface, source-disposition, QA, and supersession contracts. Together with
 CI-001 through CI-021, they close the owner interview with no product decision left open.
 
-These clauses are assembled into the implementation-grade consolidation specification and audited
-against the repository and surviving scientific authorities. Production implementation remains
-prohibited until the project owner gives explicit implementation send-off.
+These clauses were audited against the repository and surviving scientific authorities. Production
+implementation remains prohibited until the project owner gives explicit implementation send-off.

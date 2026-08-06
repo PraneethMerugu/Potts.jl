@@ -4,167 +4,100 @@ Status: Accepted
 
 ## Mission
 
-This repository develops two coordinated scientific products:
+This repository develops a scientifically trustworthy, high-performance, and approachable
+Cellular Potts modeling ecosystem for Julia.
 
-1. Potts.jl, a scientific simulation ecosystem for Cellular Potts Models
-2. `ProcessBigraphs.jl`, an independently identified, Julia-native multirate process-bigraph
-   runtime incubated under `lib/`
+The active package family has three responsibilities:
 
-Potts.jl is intended to combine three equal identities:
+1. PottsToolkit is the primary biological and symbolic authoring interface.
+2. CorePotts is the independently usable scientific execution engine and extension boundary.
+3. MakiePotts converts explicit host-owned observations into visualization recipes.
 
-1. A scientifically trustworthy modeling library
-2. A world-leading high-performance simulation engine
-3. An approachable biological modeling environment
+The ecosystem must remain architecturally hardware agnostic. Stable scientific features target
+CPU execution and explicitly qualified accelerator backends. Backend availability must never
+silently change model semantics.
 
-`ProcessBigraphs.jl` targets source-audited feature and semantic parity with a pinned
-Process-Bigraph 2.0 authority through idiomatic Julia contracts. Its long-term purpose is to
-support whole-cell and multiscale model development, not merely to provide schema interchange with
-another runtime. Vivarium 1.x compatibility is outside this parity goal unless a later accepted
-decision adds a specific capability on its own merits.
+Stable Potts scientific features must support both two- and three-dimensional models unless an
+accepted capability row and user-facing contract explicitly documents a narrower dimensional
+scope. Dimensionality and topology are capability dimensions, not implicit backend facts.
 
-The Potts ecosystem MUST remain architecturally hardware agnostic. Until superseded by an accepted
-semantic decision, its first-class release contract is CPU, Apple Metal, and AMD ROCm. NVIDIA CUDA
-remains a deferred integration: its code MAY remain available for development, but it MUST NOT be
-included in Potts support, correctness, performance, or release claims. Stable Potts scientific
-features MUST support both two- and three-dimensional models unless explicitly documented
-otherwise.
+## Primary user experience
 
-## Primary User Experience
+PottsToolkit acts as a high-level declarative language and model compiler for CorePotts. It should
+allow computational biologists, statistical physicists, HPC researchers, and Julia developers to
+express models without depending on CorePotts internals.
 
-PottsToolkit is the primary public modeling interface. It SHOULD allow computational biologists,
-statistical physicists, HPC researchers, and Julia developers to express models without depending
-on CorePotts internals.
+Advanced users may extend or use CorePotts directly through its public protocols. PottsToolkit
+must not duplicate the numerical engine or make private storage part of its authoring contract.
 
-PottsToolkit acts as a high-level declarative language and model compiler for CorePotts. It MUST
-provide an ergonomic path for ordinary users without preventing advanced users from extending or
-using CorePotts directly.
-
-## Core Engine
+## Core engine
 
 CorePotts defines the scientific execution contracts, fundamental state model, reference engine,
-optimized engines, and extension interfaces. It MUST remain usable independently of visualization
-and experimental neural-model packages.
+optimized algorithms, checkpoints, observations, and backend extension interfaces. It must remain
+usable independently of PottsToolkit and visualization packages.
 
-Optimized execution MUST be judged against explicit scientific contracts. Performance improvements
-MUST NOT silently redefine model behavior.
+Optimized execution is judged against explicit scientific contracts. Performance improvements
+must not silently redefine model behavior.
 
-## Process-Bigraph Runtime
+## ModelingToolkit and SciML integration
 
-`ProcessBigraphs.jl` owns domain-neutral paths, ports, state schemas, process and step protocols,
-typed deltas, logical clocks, composites, scheduling, reconciliation, and commit semantics. It MUST
-NOT depend on CorePotts, PottsToolkit, or another Potts-specific package.
+PottsToolkit owns ModelingToolkit-facing symbolic completion and compilation. CorePotts execution
+is exposed through genuine SciML problem, algorithm, integrator, solution, remake, checkpoint, and
+ensemble conventions where applicable.
 
-One custom ProcessBigraph ACSet is the canonical structural model. Structured cospans define open
-composition and directed wiring diagrams are derived views. AlgebraicJulia structure compiles into
-ProcessBigraphs-owned immutable runtime tables; ACSet row numbers are nonsemantic and ordinary
-numerical hot paths do not traverse the authoring structure.
+`complete` and `mtkcompile` are structural operations on `PottsSystem`; numerical engine, backend,
+scalar, and device specialization occurs during problem materialization, `init`, or `solve`.
+External ModelingToolkit systems remain native component islands with explicit scope, IO, cadence,
+and coupling policies. They are not copied field by field into a Potts surrogate.
 
-CorePotts is the flagship spatial-process adapter for the runtime. PottsToolkit retains its
-biological authoring façades and MAY lower generic composition into `ProcessBigraphs.jl`. Generic
-runtime semantics MUST NOT be duplicated or defined in parallel by the Potts packages after the
-corresponding migration slice is accepted.
+The completed integer MCS remains the master CPM clock and lifecycle boundary. Native component
+time is related through an explicit duration-per-MCS map and named split policy. Integration must
+use public package interfaces. Lattice sites and stochastic copy attempts are not misrepresented
+as ordinary ODE unknowns merely to obtain superficial API compatibility, and CorePotts remains free
+of MTK dependencies.
 
-An independent checked Julia specification oracle establishes expected semantic traces. The
-deterministic serial executor is the reference for alternate executor equivalence. Dagger and other
-parallel executors MAY determine physical placement and concurrent execution of already selected
-work, but MUST NOT define scientific ordering, logical time, visibility, reconciliation, or commit
-behavior.
+## Algorithms and scientific guarantees
 
-The runtime is GPU-native at its execution boundaries, while each process family declares and
-qualifies its own backend capabilities. Whole-cell composites MAY contain explicit CPU-only
-processes. Cross-residency movement MUST be declared, bounded, measured, and visible during
-preflight; hidden movement is a contract violation. These runtime rules do not weaken the Potts
-CPU, Metal, and ROCm release contract.
+Reference and approximate algorithms must be separately identified and must report their kinetic,
+equilibrium, attempt-normalization, reproducibility, topology, precision, and backend guarantees.
 
-Runtime development proceeds independently, including independent research and resolution of
-upstream ambiguities. Source-audited feature and semantic parity MUST be established against an
-explicitly pinned Process-Bigraph 2.0 revision through a versioned parity registry, source-located
-derivations, and executable Julia conformance evidence. CI, tests, examples, attestations, and
-release tooling MUST NOT install or execute the upstream Python runtimes. Interchange formats and
-Python bridges MAY be added later, but they are not the product center or a substitute for semantic
-parity.
+The unqualified word “exact” is not a technical guarantee. Documentation must state the specific
+property being claimed. All user-visible algorithms use comparable normalized Monte Carlo step
+units.
 
-## SciML Integration
+Auxiliary constraint and fluctuating mechanical-state components remain a defining project
+capability. They participate through the same component, capability, backend, semantic-randomness,
+checkpoint, and lifecycle contracts as other scientific families. Equilibrium auxiliary
+constraints and nonequilibrium fluctuating-pressure or fluctuating-tension mechanics are separately
+named and qualified; a historical name or superficial storage resemblance cannot imply an
+equilibrium claim.
 
-Potts.jl targets genuine SciML semantic integration rather than a merely SciML-shaped API. The
-eventual stable interface is expected to support the applicable `solve`, `init`, `step!`, callback,
-ensemble, saving, remake, termination, return-code, and solution conventions.
+## Performance and portability
 
-The exact supported SciML contract remains under investigation and MUST be established using the
-current SciMLBase interfaces.
+The project aims to be among the fastest Cellular Potts implementations while remaining
+scientifically auditable. Performance claims require reproducible benchmarks.
 
-## Algorithms and Scientific Guarantees
+Hardware portability requires more than successful compilation. Each supported backend needs a
+capability policy, conformance tests, numerical expectations, and measured execution evidence.
+Backend-specific code may optimize a shared semantic operation but cannot define that operation.
 
-Potts.jl MAY provide both reference and approximate algorithms. They MUST be separately identified
-and MUST report their equilibrium, kinetic, attempt-normalization, reproducibility, topology, and
-backend guarantees.
+## Compatibility and release goal
 
-The unqualified word "exact" MUST NOT be used as a technical guarantee. Documentation MUST instead
-state whether an algorithm provides reference CPM kinetics, a proven invariant equilibrium
-distribution, a reference-equivalent implementation, a statistically calibrated approximation, or
-experimental behavior.
-
-All user-visible algorithms MUST use comparable normalized Monte Carlo step units.
-
-## Performance and Hardware Portability
-
-The project aims to be the fastest Cellular Potts implementation while remaining scientifically
-auditable and approachable. Performance claims MUST be supported by reproducible benchmarks.
-
-Hardware portability means more than successful compilation. Each supported backend MUST be covered
-by a capability policy, conformance tests, numerical expectations, and performance measurements.
-
-Backend-specific code MAY optimize a shared semantic operation. Backend-specific behavior MUST NOT
-become the implicit definition of that operation.
-
-## Package Stability
-
-The package boundaries are open to revision. PottsToolkit is the stable public destination;
-CorePotts is the stable engine and extension destination. MakiePotts should consume stable
-observation interfaces. NeuralPotts is an experimental satellite until the classical simulation
-foundation and differentiation contracts mature.
-
-`ProcessBigraphs.jl` begins as an independent internal package under `lib/`, with its own UUID,
-project metadata, source, tests, documentation, and compatibility declarations. Internal alpha and
-beta milestones MAY be used for planning, but the package MUST NOT be publicly released before it
-passes complete parity against the pinned Process-Bigraph 2.0 authority and a whole-cell-style
-composite acceptance workload. Repository co-location MUST NOT weaken its domain-neutral dependency
-boundary.
-
-Auxiliary constraint and fluctuating mechanical-state components are a defining project capability.
-They MUST participate through the same extensible component, algorithm-capability, backend,
-randomness, checkpoint, and lifecycle interfaces as other scientific families. Historical
-`HST...Penalty` names and detailed-balance claims are not normative: the Hubbard-Stratonovich name
-MUST be used only when a valid transformation has been derived. Equilibrium auxiliary constraints
-and nonequilibrium fluctuating-pressure or fluctuating-tension mechanics MUST be separately named.
-
-## Compatibility and Release Goal
-
-The immediate Potts target is a paper-quality research release. There are no external API
-compatibility requirements for the current Potts redesign. Breaking changes are permitted when they
-materially improve scientific correctness, API coherence, GPU execution, extensibility, or
+The immediate target is a paper-quality research release. There are no external API compatibility
+requirements for the current pre-1.0 redesign. Breaking changes are permitted when they materially
+improve scientific correctness, API cohesion, execution portability, extensibility, or
 maintainability.
 
-The runtime has a separate compatibility obligation: source-audited feature and semantic parity
-with its pinned Process-Bigraph 2.0 authority. Julia API spelling and implementation structure need
-not copy upstream, but deliberate semantic differences MUST be versioned, justified, and covered
-by conformance evidence. This is not a claim of live upstream-runtime equivalence. The runtime and
-Potts workstreams MAY advance concurrently; neither workstream may silently relax the other's
-accepted gates.
+External orchestration is not an active product responsibility. A future adapter must be proposed
+and reviewed independently and cannot become a prerequisite for PottsToolkit or CorePotts.
 
-Metaprogramming is an implementation tool, not a goal. It MUST be evaluated by generated-code
-quality, compilation latency, clarity, extensibility, and GPU suitability.
-
-## Quality Principles
+## Quality principles
 
 - Scientific semantics precede optimization.
 - The sequential reference engine is the executable scientific baseline.
 - Public APIs require documentation, validation, and extension examples.
-- Every runtime phase owns its package documentation, conformance evidence, and CI coverage rather
-  than deferring them to a final cleanup phase.
 - State mutations require explicit ownership and invariants.
 - Semantic duplication is eliminated.
-- Intentional hardware specialization is documented rather than hidden behind unsuitable
-  abstractions.
-- Tests validate laws and observable behavior rather than incidental struct layouts.
+- Hardware specialization is documented rather than hidden.
+- Tests validate laws and observable behavior rather than incidental layouts.
 - Current behavior, intended behavior, and compatibility behavior are documented separately.

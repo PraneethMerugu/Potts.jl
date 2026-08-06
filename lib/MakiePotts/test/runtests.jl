@@ -21,8 +21,12 @@ function render_fixture(; dimensions = 2)
         fill!(view(labels, 2:3, 2:3, 2), 1)
         fill!(view(labels, 4:5, 2:3, 2), 2)
     end
-    cell = PottsToolkit.CellKind(:cell)
-    other = PottsToolkit.CellKind(:other)
+    cell = PottsToolkit.CellKind(
+        :cell; extinction = PottsToolkit.RetireAtZero()
+    )
+    other = PottsToolkit.CellKind(
+        :other; extinction = PottsToolkit.RetireAtZero()
+    )
     medium = PottsToolkit.MediumKind(:medium)
     @named visual = PottsToolkit.PottsSystem(
         statements = PottsToolkit.StatementSet((

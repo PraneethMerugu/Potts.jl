@@ -30,8 +30,6 @@ jobs:
             project: lib/CorePotts
           - package: MakiePotts
             project: lib/MakiePotts
-          - package: ProcessBigraphs
-            project: lib/ProcessBigraphs
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

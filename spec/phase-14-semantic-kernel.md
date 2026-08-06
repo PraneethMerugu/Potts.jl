@@ -5,6 +5,11 @@ Version: `0.2-provisional`
 Status: Accepted architecture; individual Phase 14.1 contracts remain Provisional until their
 registered vertical-slice gates pass
 
+Current disposition: historical scientific and preservation input, superseded for active
+authoring, coupled scheduling, capability promotion, phase order, and implementation maturity by
+[Decision 0044](decisions/0044-pre-g6-cohesion-and-mtk-hardening.md) and the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md).
+
 Implementation evidence: the Wortel Act-CPM CPU-reference slice passed on 2026-07-24 and its
 real-hardware Metal/ROCm G2 closure passed on 2026-07-25. Wang G3-B sequential CPU closure is
 attested complete at implementation commit `a82b0c4`; its
@@ -14,9 +19,9 @@ attested complete at implementation commit `a82b0c4`; its
 [G3-B closure contract](../design/audits/phase-14-g3b-entry-packet.md) govern that evidence.
 This proves the bounded Wortel slice and Wang sequential CPU model. Decision 0035 retires the
 assembled Wang Metal/ROCm promotion because the paper-faithful sequential algorithm is not an
-appropriate GPU target. Decision 0039 preserves the former G4 obligations and reassigns them as
-mandatory Phase 16.C work; they are not complete. Contracts outside the proven slices remain
-Provisional.
+appropriate GPU target. The former Decision 0039/Phase 16.C scheduling route is retired; applicable
+preservation and profile work is owned by G5H. Contracts outside the proven slices remain
+Provisional historical input.
 
 Governing decisions:
 [Decision 0031](decisions/0031-phase-14-single-semantic-kernel.md) and
@@ -24,24 +29,20 @@ Governing decisions:
 boundary in
 [Decision 0033](decisions/0033-phase-14-generic-hierarchical-authoring.md)
 and the Wang algorithm-suitability boundary in
-[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md), plus the G4 scheduling
-disposition in
-[Decision 0039](decisions/0039-phase-16-compute-ownership-and-scope.md)
+[Decision 0035](decisions/0035-wang-sequential-gpu-disposition.md)
 
 Registry:
 [Phase 14 Contract Registry v2](phase-14-contract-registry-v2.toml)
 
 ## Authority
 
-This document is the sole normative architecture for the existing Potts-owned Phase 14
-coupled-model path. The earlier Phase 14 domain specifications are retained as source and prototype
-evidence, but they do not define independent Potts runtimes or contracts. When an earlier Phase 14
-document conflicts with this one, this document and Decision 0031 control.
+This document was the sole normative architecture for the former Potts-owned Phase 14 coupled-model
+path. The earlier Phase 14 domain specifications are retained as source and prototype evidence, but
+they do not define independent Potts runtimes or contracts. For historical Phase 14 interpretation,
+this document and Decision 0031 control; for current implementation, Decision 0044 and G5H control.
 
-Decision 0034 separately establishes the domain-neutral `ProcessBigraphs.jl` runtime. During the
-strangler migration, this kernel remains authoritative for unmigrated Potts models; migrated slices
-lower through the runtime and must pass old/new serial differential evidence. The migration MUST
-end dual execution authority for each cut-over slice rather than leave two Potts schedulers.
+Decision 0043 retires the former orchestration runtime. This kernel remains historical authority
+only where its Potts semantics survive the Symbolic Potts V1 construction contracts.
 
 The specification defines observable semantics, not concrete Julia storage layouts. Candidate type
 names illustrate the intended API and remain Provisional until the corresponding vertical slice is
@@ -763,9 +764,8 @@ Wang is one indivisible paper-faithful sequential CPU reference slice. Its secre
 histories, relationships, intracellular dynamics, and exact accepted-copy order are part of that
 reference and cannot be substituted by a checkerboard algorithm while retaining the paper claim.
 Decision 0035 deliberately makes the assembled Wang backend profile unsupported. Reusable state
-and law families introduced by the slice remain subject to focused CPU/Metal/ROCm promotion when
-they stabilize, beginning with the algorithm-suitable former G4 field-model gate now scheduled as
-Phase 16.C by Decision 0039.
+and law families introduced by the slice remain preservation candidates. Their current promotion
+requirements are the explicit G5H capability profiles, not the former G4/Phase 16.C route.
 
 Each sketch MUST become an executable lowering fixture before its vertical slice is considered
 complete.
@@ -845,13 +845,11 @@ evidence closed the second half on 2026-07-25 by proving:
 
 ### Expansion gates
 
-Wortel has passed both its CPU reference and Metal/ROCm closure, and Wang G3-B has passed its
-sequential CPU gate. Decision 0035 retires G3-C assembled-model GPU qualification. Decision 0039
-absorbs G4 into Phase 16.C as the still-open gate for broader boundary, solver, and exchange work
-on CPU, Metal, and ROCm. This changes scheduling, not semantics or evidence requirements. Every
-later stable execution capability follows the same reference-then-device promotion rule, using an
-algorithm-suitable fixture rather than requiring every paper reference assembly to be a GPU
-workload.
+Wortel passed its historical CPU and Metal/ROCm slice, and Wang G3-B passed its sequential CPU
+gate. Decision 0035 retires G3-C assembled-model GPU qualification. The former G4/Phase 16.C route
+is no longer active. G5H dispositions preserve the applicable semantics and evidence, then qualify
+each current profile with an algorithm-suitable fixture rather than requiring every paper
+reference assembly to be a GPU workload.
 
 ## Phase 13 Freeze Impact
 

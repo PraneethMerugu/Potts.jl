@@ -1303,13 +1303,11 @@ version = "0.2.0"
     [deps.PottsToolkit.extensions]
     PottsToolkitMetalExt = "Metal"
     PottsToolkitModelingToolkitExt = "ModelingToolkit"
-    PottsToolkitProcessBigraphsExt = "ProcessBigraphs"
     PottsToolkitUnitfulExt = "Unitful"
 
     [deps.PottsToolkit.weakdeps]
     Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
     ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
-    ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.PreallocationTools]]
