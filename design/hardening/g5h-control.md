@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: active; G5H-0 in progress; corrected R2H-A candidate pending
+Status: active; G5H-0 and R2H-A passed; G5H-1 pending
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -11,9 +11,9 @@ repeat or amend gate requirements.
 
 | Boundary | State | Evidence or blocker |
 |:--|:--|:--|
-| G5H-0 — authority, baseline, preservation | `in_progress` | Candidate `6e8ea1c5e68a5a69f51f9c69249b1b756b4fb28c` passed review with carried P2s; the project elected immediate repair. The commit containing the corrected evidence defines the next immutable candidate. |
-| R2H-A — authority and preservation review | `pending` | Awaiting a fresh independent read-only rereview of the corrected exact candidate commit. |
-| G5H-1 — semantic and CorePotts consolidation | `pending` | Blocked by R2H-A. |
+| G5H-0 — authority, baseline, preservation | `passed` | Corrected candidate `9afcf6f1ec44cf84525d8b023c2d1b705560e365`, tree `a8b0ce43489e558e1770f4982dece97ef4c6eca7`, cleared R2H-A with no carried finding. |
+| R2H-A — authority and preservation review | `passed` | Fresh independent read-only review of the exact corrected candidate returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
+| G5H-1 — semantic and CorePotts consolidation | `pending` | Unblocked by R2H-A; implementation has not begun. |
 | G5H-2 — pure-Potts authoring and SciML lifecycle | `pending` | Depends on G5H-1. |
 | G5H-3 — native global MTK integration | `pending` | Depends on G5H-2. |
 | R2H-B — cohesion and real-MTK review | `pending` | Opens only after G5H-1 through G5H-3 pass. |
@@ -33,9 +33,18 @@ exact command record, the exported `compile` generic mislabeled unexported, stal
 wording in one active standard, and one dangling historical trace locator.
 
 The contract permitted those P2s to be carried, but the project elected to repair every finding
-before clearance. Therefore the first result does not advance G5H-0, and the corrected candidate
-requires a new exact-commit R2H-A review. Separate request, copied-log, or freshness-ledger files
+before clearance. Therefore the first result did not advance G5H-0, and the corrected candidate
+required a new exact-commit R2H-A review. Separate request, copied-log, or freshness-ledger files
 are not created.
+
+The fresh formal rereview then inspected corrected candidate
+`9afcf6f1ec44cf84525d8b023c2d1b705560e365`, tree
+`a8b0ce43489e558e1770f4982dece97ef4c6eca7`, read-only and returned `PASS` with P0=0, P1=0,
+P2=0, and P3=0. It independently reproduced the authority order, complete preservation and
+tooling partitions, all 356 deletion/recovery witnesses, the archive hash and entry count, public
+declaration ranges and digests, active-link/TOML/local-path checks, fresh package boundaries, and
+closure of every first-review finding. G5H-0 and R2H-A therefore pass with no carried P2; G5H-1 is
+unblocked but has not begun.
 
 ## G5H-0 candidate evidence
 
