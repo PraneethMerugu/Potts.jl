@@ -1,75 +1,115 @@
-struct PottsSolution{S, P, R, A, H} <:
-       SciMLBase.AbstractTimeseriesSolution{S, 1, A}
-    u::A
+struct PottsSolution{S, P, A, R, H} <:
+       SciMLBase.AbstractTimeseriesSolution{S, 1, Vector{S}}
+    u::Vector{S}
     t::Vector{Int}
     prob::P
-    alg::Nothing
+    alg::A
     interp::Nothing
     dense::Bool
     retcode::SciMLBase.ReturnCode.T
     stats::PottsStats
     provenance::R
     parameter_history::H
-    failure_report::Union{Nothing, CorePotts.ProgramFailureReport}
+    failure_report::Any
 end
 
-function PottsSolution(
-        states::Vector{S},
-        times::Vector{Int},
-        problem,
-        retcode,
-        stats,
-        parameter_history,
-        failure_report = nothing,
-    ) where {S}
+function PottsSolution(integrator::PottsIntegrator)
+    problem = integrator.prob
+    plan = integrator.plan
     frozen_parameter_history = Tuple(
         time => parameters.values
-        for (time, parameters) in parameter_history
+        for (time, parameters) in integrator.parameter_history
     )
+    scheduled_fingerprint = scheduled_system_fingerprint(problem.system)
+    profile_fingerprint = _execution_plan_fingerprint(plan)
     provenance = (
-        executable = executable_fingerprint(problem.executable),
+        scheduled = scheduled_fingerprint,
+        runtime_profile = profile_fingerprint,
         problem = _sha256_hex(
-            "potts-problem-v1",
-            executable_fingerprint(problem.executable),
-            problem.initial,
+            "potts-problem-v2",
+            scheduled_fingerprint,
+            _problem_initial_state(problem),
             problem.tspan,
-            problem.parameters.values,
+            problem.p.values,
             problem.seed,
             problem.replica,
-            problem.ensemble_repeat,
+            problem.repeat,
+            problem.policies,
         ),
-        engine = problem.executable.reports.execution.engine,
-        backend = problem.executable.reports.execution.backend,
-        scalar_type = problem.executable.reports.execution.scalar_type,
-        replay = problem.executable.reports.replay,
+        algorithm = nameof(typeof(integrator.alg)),
+        backend = nameof(typeof(integrator.backend)),
+        scalar_type = integrator.scalar_type,
+        replay = isempty(integrator.native_profiles) ? plan.reports.replay : (
+            class = integrator.capability_report.key.replay ===
+                    CorePotts.BackendSPI.ExactConfigurationReplay ?
+                    :exact_pinned_native_profiles :
+                    :portable_logical_native_restart,
+            cross_engine = false,
+            addressed_rng = true,
+        ),
+        native_profiles = Tuple((
+            path = profile.path,
+            fingerprint = _native_profile_fingerprint(profile),
+            profile_id = profile.profile_id,
+            deterministic = profile.deterministic,
+            exact_replay = profile.exact_replay,
+        ) for profile in integrator.native_profiles),
+        capability = integrator.capability_report,
         seed = problem.seed,
         replica = problem.replica,
-        ensemble_repeat = problem.ensemble_repeat,
+        repeat = problem.repeat,
         parameter_history = frozen_parameter_history,
     )
     return PottsSolution{
-        S,
+        eltype(integrator.saved_states),
         typeof(problem),
+        typeof(integrator.alg),
         typeof(provenance),
-        Vector{S},
         typeof(frozen_parameter_history),
     }(
-        states,
-        times,
+        copy(integrator.saved_states),
+        copy(integrator.saved_times),
         problem,
-        nothing,
+        integrator.alg,
         nothing,
         false,
-        retcode,
-        stats,
+        integrator.retcode,
+        _integrator_stats(integrator),
         provenance,
         frozen_parameter_history,
-        failure_report,
+        integrator.failure_report,
     )
+end
+
+function native_state(
+        solution::PottsSolution,
+        path;
+        index::Integer = lastindex(solution),
+    )
+    checkbounds(solution.u, index)
+    component = _native_component_by_path(solution.prob.system, path)
+    logical = _native_state_by_path(solution.u[index].native, path)
+    return native_state_view(component, logical)
+end
+
+function native_value(
+        solution::PottsSolution,
+        path,
+        symbolic;
+        index::Integer = lastindex(solution),
+    )
+    checkbounds(solution.u, index)
+    component = _native_component_by_path(solution.prob.system, path)
+    logical = _native_state_by_path(solution.u[index].native, path)
+    return native_component_value(component, logical, symbolic)
 end
 
 Base.size(solution::PottsSolution) = (length(solution.u),)
 Base.length(solution::PottsSolution) = length(solution.u)
+# RecursiveArrayTools provides a vararg-Int indexing fallback for SciML
+# timeseries solutions.  Keep the ordinary vector index unambiguous for the
+# native Int used by `first`, `last`, iteration consumers, and array code.
+Base.getindex(solution::PottsSolution, index::Int) = solution.u[index]
 Base.getindex(solution::PottsSolution, index::Integer) = solution.u[index]
 Base.iterate(solution::PottsSolution, state...) = iterate(solution.u, state...)
 Base.firstindex(solution::PottsSolution) = firstindex(solution.u)
@@ -77,20 +117,18 @@ Base.lastindex(solution::PottsSolution) = lastindex(solution.u)
 Base.eltype(::Type{<:PottsSolution{S}}) where {S} = S
 
 function (solution::PottsSolution)(mcs::Integer; idxs = nothing)
-    index = findfirst(==(Int(mcs)), solution.t)
+    index = findlast(==(Int(mcs)), solution.t)
     index === nothing && throw(PottsUnsavedTimeError(Int(mcs)))
     state = solution.u[index]
     idxs === nothing && return state
-    name = _state_name(idxs)
-    return state[name]
+    return state[_state_name(idxs)]
 end
 
 function _next_queued_boundary(integrator::PottsIntegrator)
     policy = integrator.policy
     remaining_iterations = policy.maxiters - integrator.iterations
-    limit = min(
-        integrator.prob.tspan[2], integrator.t + remaining_iterations
-    )
+    limit = min(integrator.prob.tspan[2], integrator.t + remaining_iterations)
+    !_callbacks_empty(integrator) && return min(limit, integrator.t + 1)
     policy.save_everystep && return min(limit, integrator.t + 1)
     boundary = limit
     for saved_time in policy.saveat
@@ -98,31 +136,34 @@ function _next_queued_boundary(integrator::PottsIntegrator)
         boundary = min(boundary, saved_time)
         break
     end
-    policy.progress && (boundary = min(
-        boundary, integrator.t + policy.progress_steps
-    ))
+    policy.progress &&
+        (boundary = min(boundary, integrator.t + policy.progress_steps))
     return boundary
 end
 
 function _queued_boundary_reason(integrator::PottsIntegrator, boundary::Int)
+    !_callbacks_empty(integrator) &&
+        return CorePotts.BackendSPI.HostCallbackSettlement
     policy = integrator.policy
-    boundary in policy.saveat && return CorePotts.SaveSettlement
-    policy.save_everystep && return CorePotts.SaveSettlement
+    boundary in policy.saveat && return CorePotts.BackendSPI.SaveSettlement
+    policy.save_everystep && return CorePotts.BackendSPI.SaveSettlement
     policy.progress && boundary < integrator.prob.tspan[2] &&
-        return CorePotts.ProgressSettlement
-    return CorePotts.FinalizationSettlement
+        return CorePotts.BackendSPI.ProgressSettlement
+    return CorePotts.BackendSPI.FinalizationSettlement
 end
 
 function _advance_queued_boundary!(
         integrator::PottsIntegrator, boundary::Int
     )
-    CorePotts.enqueue_program_through!(integrator.runtime, boundary)
+    CorePotts.BackendSPI.enqueue_program_through!(integrator.runtime, boundary)
     _request_integrator_settlement!(
         integrator, _queued_boundary_reason(integrator, boundary)
     )
     failure_report = CorePotts.program_failure_report(integrator.runtime)
-    failure_report === nothing && _save_due(integrator) &&
-        _save_current!(integrator)
+    if failure_report === nothing
+        _run_callbacks!(integrator)
+        _save_due(integrator) && _save_current!(integrator)
+    end
     return integrator
 end
 
@@ -139,15 +180,30 @@ function _solve_queued!(integrator::PottsIntegrator)
 end
 
 function solve!(integrator::PottsIntegrator)
-    if CorePotts.supports_queued_program_execution(integrator.runtime)
-        _solve_queued!(integrator)
-    else
-        while !integrator.terminated &&
-                integrator.retcode == SciMLBase.ReturnCode.Default &&
-                integrator.t < integrator.prob.tspan[2] &&
-                integrator.iterations < integrator.policy.maxiters
-            step!(integrator)
+    try
+        # Native components advance from a settled, staged Core snapshot and
+        # publish with that Core step.  The Core-only queued fast path cannot
+        # represent that coupled boundary.
+        if isempty(integrator.native_states) &&
+                CorePotts.BackendSPI.supports_queued_program_execution(
+                    integrator.runtime
+                )
+            _solve_queued!(integrator)
+        else
+            while !integrator.terminated &&
+                    integrator.retcode == SciMLBase.ReturnCode.Default &&
+                    integrator.t < integrator.prob.tspan[2] &&
+                    integrator.iterations < integrator.policy.maxiters
+                step!(integrator)
+            end
         end
+    catch solve_error
+        try
+            _finalize_callbacks!(integrator)
+        catch finalize_error
+            throw(CompositeException(solve_error, finalize_error))
+        end
+        rethrow()
     end
     if integrator.retcode == SciMLBase.ReturnCode.Default
         integrator.retcode = integrator.t == integrator.prob.tspan[2] ?
@@ -155,19 +211,14 @@ function solve!(integrator::PottsIntegrator)
                              SciMLBase.ReturnCode.MaxIters
     end
     integrator.policy.save_end && _save_current!(integrator)
-    return PottsSolution(
-        copy(integrator.saved_states),
-        copy(integrator.saved_times),
-        integrator.prob,
-        integrator.retcode,
-        _integrator_stats(integrator),
-        integrator.parameter_history,
-        integrator.failure_report,
-    )
+    _finalize_callbacks!(integrator)
+    return PottsSolution(integrator)
 end
 
-solve(problem::PottsProblem; kwargs...) = solve!(init(problem; kwargs...))
-solve(problem::PottsProblem, ::Nothing; kwargs...) = solve(problem; kwargs...)
+solve(problem::PottsProblem, algorithm::AbstractPottsAlgorithm; kwargs...) =
+    solve!(init(problem, algorithm; kwargs...))
+solve(problem::PottsProblem; alg = SequentialCPM(), kwargs...) =
+    solve(problem, alg; kwargs...)
 
 function SciMLBase.EnsembleProblem(
         problem::PottsProblem;
@@ -185,9 +236,7 @@ function SciMLBase.EnsembleProblem(
         ))
         replica = candidate.replica == template.replica ?
                   context.sim_id : candidate.replica
-        return _with_ensemble_context(
-            candidate, replica, context.repeat
-        )
+        return _with_ensemble_context(candidate, replica, context.repeat)
     end
     wrapped_output = output_func === nothing ?
                      ((solution, _) -> (solution, false)) : output_func

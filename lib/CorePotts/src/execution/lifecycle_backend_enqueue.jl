@@ -69,7 +69,7 @@ function enqueue_lifecycle_backend_index!(
     reduce_status(
         workspace, control, Int32(length(state.ownership)); ndrange = 1
     )
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageIndex)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageIndex)
     @debug "enqueue lifecycle backend stage" stage = :index_sites
     index_sites(
         workspace,
@@ -89,7 +89,7 @@ function enqueue_lifecycle_backend_index!(
     reduce_status(
         workspace, control, Int32(length(workspace.active)); ndrange = 1
     )
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageEmission)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageEmission)
     @debug "enqueue lifecycle backend stage" stage = :mark_requests
     mark_requests(
         workspace, control; ndrange = length(control.request_scan)
@@ -170,10 +170,10 @@ function enqueue_lifecycle_backend_index!(
     )
     @debug "enqueue lifecycle backend stage" stage = :reduce_planning_status
     reduce_planning_status(workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStagePlanning)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStagePlanning)
     @debug "enqueue lifecycle backend stage" stage = :select_requests
     select_requests(state, workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageSelection)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageSelection)
     policy_workspace_length = length(workspace.policy_workspace)
     if policy_workspace_length > 0
         @debug "enqueue lifecycle backend stage" stage = :clear_selected_division_workspace
@@ -198,7 +198,7 @@ function enqueue_lifecycle_backend_index!(
     end
     @debug "enqueue lifecycle backend stage" stage = :reduce_selected_planning_status
     reduce_planning_status(workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStagePlanning)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStagePlanning)
     staged_state = (
         ownership = workspace.staged_ownership,
         cell_kinds = workspace.staged_cell_kinds,
@@ -229,7 +229,7 @@ function enqueue_lifecycle_backend_index!(
             state, workspace, control, plan_class; ndrange = 1
         )
     end
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageStructure)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageStructure)
     relationship_action_mask =
         state.program.lifecycle_plan.relationship_action_mask
     for action_value in (
@@ -245,7 +245,7 @@ function enqueue_lifecycle_backend_index!(
             state, workspace, control, action_value; ndrange = 1
         )
     end
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageRelationships)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageRelationships)
     state_actions = (
         Val(:initialize),
         Val(:retire_to),
@@ -289,7 +289,7 @@ function enqueue_lifecycle_backend_index!(
         end
     end
     reduce_planning_status(workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageState)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageState)
     for plan_class in effect_classes
         iszero(
             effect_mask & _lifecycle_effect_bit(
@@ -303,7 +303,7 @@ function enqueue_lifecycle_backend_index!(
     end
     @debug "enqueue lifecycle backend stage" stage = :validate_staged_state
     validate_requests(state, workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, LifecycleStageValidation)
+    _enqueue_lifecycle_failure_stamp!(state, ProgramStageValidation)
     @debug "enqueue lifecycle backend stage" stage = :publish_state
     _enqueue_lifecycle_gated_state_copy!(
         state, staged_state, backend, workspace, control

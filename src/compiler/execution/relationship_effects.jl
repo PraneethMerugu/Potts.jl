@@ -13,11 +13,11 @@ function _potts_relationship_endpoint_kinds end
 end
 
 struct RelationshipEndpointKindsCallable <:
-       CorePotts.AbstractContextualOperation end
+       CorePotts.CompilerSPI.AbstractContextualOperation end
 
-CorePotts.operation_context_supported(
+CorePotts.CompilerSPI.operation_context_supported(
     ::RelationshipEndpointKindsCallable,
-    ::Type{CorePotts.AbstractProposalEvaluationContext},
+    ::Type{CorePotts.CompilerSPI.AbstractProposalEvaluationContext},
 ) = true
 
 operation_transfer(
@@ -34,7 +34,7 @@ operation_transfer(
     owner = :PottsToolkitRelationshipOperations,
 )
 
-function CorePotts.operation_callable(
+function CorePotts.CompilerSPI.operation_callable(
         ::Val{:relationship_endpoint_kinds},
         version::VersionNumber,
     )
@@ -50,8 +50,8 @@ end
     kind_a = Int16(arguments[3])
     kind_b = Int16(arguments[4])
     endpoint_a > 0 && endpoint_b > 0 || return false
-    actual_a = CorePotts.owner_kind(context, endpoint_a)
-    actual_b = CorePotts.owner_kind(context, endpoint_b)
+    actual_a = CorePotts.CompilerSPI.owner_kind(context, endpoint_a)
+    actual_b = CorePotts.CompilerSPI.owner_kind(context, endpoint_b)
     return _undirected_endpoint_kinds_match(
         actual_a, actual_b, kind_a, kind_b
     )

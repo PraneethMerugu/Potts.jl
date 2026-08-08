@@ -3,7 +3,7 @@
 function _state_handle_for_leaf(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
-        handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
+        handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
 )
     if node.payload isa StateBindingPayload
         return get(handles, node.payload.identity, nothing)
@@ -21,7 +21,7 @@ end
 
 const _FIRST_EXPLICIT_DRAW_OPERATION = UInt16(0x0010)
 const _EXPLICIT_DRAW_OPERATION_COUNT =
-    Int(CorePotts.rng_operation_limit() - _FIRST_EXPLICIT_DRAW_OPERATION + 1)
+    Int(CorePotts.CompilerSPI.rng_operation_limit() - _FIRST_EXPLICIT_DRAW_OPERATION + 1)
 
 function _stable_draw_operation(path::Tuple, identity::Symbol)
     digest = SHA.sha256(codeunits(_canonical_value((
@@ -168,5 +168,5 @@ function _energy_anchor_expression(
     operation === nothing && throw(ArgumentError(
         "energy-anchor callable was not frozen during completion"
     ))
-    return CorePotts.ContextExpression(operation)
+    return CorePotts.CompilerSPI.ContextExpression(operation)
 end

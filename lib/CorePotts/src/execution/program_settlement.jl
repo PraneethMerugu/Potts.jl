@@ -23,27 +23,28 @@ ProgramSettlementRequest(
     reason::ProgramSettlementReason; full_snapshot::Bool = false
 ) = ProgramSettlementRequest(reason, full_snapshot)
 
-struct ProgramSettlementReceipt{S, F}
+struct ProgramSettlementReceipt{S, F, L}
     submitted_mcs::Int
     drained_mcs::Int
     committed_mcs::Int
     materialized_mcs::Int
     counters::NamedTuple
-    status::LifecycleStatusPayload
+    status::ProgramStatus
     failure::F
+    lifecycle_receipt::L
     snapshot::S
 end
 
 """Immutable public detail for one expected device-reported scientific stop."""
 struct ProgramFailureReport
-    code::LifecycleStatusCode
+    code::ProgramStatusCode
     mcs::Int
-    stage::LifecycleExecutionStage
+    stage::ProgramExecutionStage
     source::Int32
     action_identity::UInt64
     secondary_source::Int32
     anchor::Int32
-    detail::LifecycleStatusDetailCode
+    detail::ProgramStatusDetailCode
     required::Int32
     available::Int32
     maximum::Int32
@@ -63,9 +64,7 @@ function update_program_parameters!(
         throw(ArgumentError("parameter updates require a settled MCS boundary"))
     length(parameters) == length(runtime.parameters) ||
         throw(ArgumentError("runtime parameter buffer has the wrong length"))
-    replacement = T.(parameters)
-    all(isfinite, replacement) ||
-        throw(ArgumentError("runtime parameters must be finite"))
+    replacement = _validated_program_parameters(runtime.program, parameters)
     copyto!(runtime.parameters, replacement)
     workspace = runtime.engine_workspace
     if workspace isa CheckerboardWorkspace
@@ -98,7 +97,7 @@ function update_program_descriptor_state!(
     return runtime
 end
 
-ProgramFailureReport(status::LifecycleStatusPayload) = ProgramFailureReport(
+ProgramFailureReport(status::ProgramStatus) = ProgramFailureReport(
     status.code,
     Int(status.mcs),
     status.stage,
@@ -112,15 +111,16 @@ ProgramFailureReport(status::LifecycleStatusPayload) = ProgramFailureReport(
     status.maximum,
 )
 
-@inline function lifecycle_status_is_expected(status::LifecycleStatusPayload)
+@inline function program_status_is_expected(status::ProgramStatus)
     status.code in (
-        LifecycleStatusInadmissible,
-        LifecycleStatusConflict,
-        LifecycleStatusCellCapacity,
-        LifecycleStatusRelationshipCapacity,
-        LifecycleStatusGenerationOverflow,
+        ProgramStatusInadmissible,
+        ProgramStatusConflict,
+        ProgramStatusCellCapacity,
+        ProgramStatusRelationshipCapacity,
+        ProgramStatusGenerationOverflow,
+        ProgramStatusAcceptance,
     ) && return true
-    status.code === LifecycleStatusEvaluator || return false
+    status.code === ProgramStatusEvaluator || return false
     return status.detail in (
         LifecycleDetailNonfiniteResult,
         LifecycleDetailSplitFractionOutOfBounds,
@@ -171,6 +171,39 @@ function _settlement_active_state(workspace, active_bank::Int)
     ))
 end
 
+function _settlement_inactive_state(workspace, active_bank::Int)
+    active_bank == 1 && return workspace.alternate_state
+    active_bank == 2 && return workspace.state
+    throw(LifecycleInvariantFailure(
+        Int32(0), Int32(active_bank), :invalid_active_state_bank
+    ))
+end
+
+function _settlement_lifecycle_receipt(
+        backend,
+        active_state,
+        before_state,
+        committed::Int,
+        previous_drained::Int,
+        failure,
+    )
+    failure === nothing || return nothing
+    committed > previous_drained || return nothing
+    backend isa KernelAbstractions.CPU || return nothing
+    return _materialize_lifecycle_receipt(
+        active_state.program.lifecycle_plan,
+        active_state.lifecycle_workspace,
+        before_state.cell_kinds,
+        before_state.cell_generations,
+        active_state.cell_kinds,
+        active_state.cell_generations,
+        committed,
+        active_state.seed,
+        active_state.replica,
+        active_state.repeat,
+    )
+end
+
 """
     settle_program!(workspace, request)
 
@@ -182,6 +215,10 @@ state to the host.
 function settle_program!(
         workspace::CheckerboardWorkspace,
         request::ProgramSettlementRequest,
+    )
+    _require_program_execution_capability(
+        workspace.capability_report;
+        operation = :backend_settle_program,
     )
     execution = workspace.execution
     submitted = execution.submitted_mcs
@@ -197,9 +234,7 @@ function settle_program!(
     execution.drained_mcs = submitted
     execution.settlement_count += 1
 
-    status_values = Adapt.adapt(
-        Array, workspace.state.lifecycle_workspace.status
-    )
+    status_values = Adapt.adapt(Array, workspace.state.program_status)
     counter_values = Adapt.adapt(
         Array, workspace.state.lifecycle_control.counters
     )
@@ -211,8 +246,8 @@ function settle_program!(
     active_bank = Int(counter_values[_LIFECYCLE_CONTROL_ACTIVE_BANK])
     execution.committed_mcs = committed
 
-    failure = _translate_lifecycle_status(status)
-    if failure !== nothing && !lifecycle_status_is_expected(status)
+    failure = _translate_program_status(status)
+    if failure !== nothing && !program_status_is_expected(status)
         throw(failure)
     end
     if failure === nothing && committed != submitted
@@ -229,9 +264,18 @@ function settle_program!(
         ))
     end
 
+    active_state = _settlement_active_state(workspace, active_bank)
+    before_state = _settlement_inactive_state(workspace, active_bank)
+    lifecycle_receipt = _settlement_lifecycle_receipt(
+        backend,
+        active_state,
+        before_state,
+        committed,
+        previous_drained,
+        failure,
+    )
     snapshot = if request.full_snapshot
-        state = _settlement_active_state(workspace, active_bank)
-        value = _materialize_program_bank(state, committed)
+        value = _materialize_program_bank(active_state, committed)
         execution.materialized_mcs = committed
         value
     else
@@ -245,6 +289,7 @@ function settle_program!(
         _settlement_counters(statistic_values),
         status,
         failure,
+        lifecycle_receipt,
         snapshot,
     )
 end

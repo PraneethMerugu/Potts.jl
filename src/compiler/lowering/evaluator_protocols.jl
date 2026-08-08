@@ -92,9 +92,9 @@ function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
     if value isa Bool || value isa Integer || value isa Symbol
-        return CorePotts.LiteralExpression(value)
+        return CorePotts.CompilerSPI.LiteralExpression(value)
     elseif value isa Number
-        return CorePotts.LiteralExpression(T(_numeric_value(
+        return CorePotts.CompilerSPI.LiteralExpression(T(_numeric_value(
             value, _reference_for(manifest.reference_units, value)
         )))
     end
@@ -107,7 +107,7 @@ function _static_parameter(value, manifest::ParameterManifest, ::Type{T}) where 
         T <: AbstractFloat,
     }
     scalar = _compiled_scalar(value, manifest, T)
-    return CorePotts.ParameterExpression(
+    return CorePotts.CompilerSPI.ParameterExpression(
         scalar.value, scalar.parameter_index
     )
 end
@@ -222,18 +222,18 @@ function _compiler_synthesized_operation_expression(
 end
 
 function _validate_static_expression_context(
-        expression::CorePotts.AbstractStaticExpression,
-        context::Type{<:CorePotts.AbstractEvaluatorExecutionContext},
+        expression::CorePotts.CompilerSPI.AbstractStaticExpression,
+        context::Type{<:CorePotts.CompilerSPI.AbstractEvaluatorExecutionContext},
         record::QualifiedStatement,
     )
-    operation = if expression isa CorePotts.ContextExpression
+    operation = if expression isa CorePotts.CompilerSPI.ContextExpression
         expression.operation
-    elseif expression isa CorePotts.OperationExpression
+    elseif expression isa CorePotts.CompilerSPI.OperationExpression
         expression.operation
     else
         nothing
     end
-    if operation !== nothing && !CorePotts.operation_context_supported(
+    if operation !== nothing && !CorePotts.CompilerSPI.operation_context_supported(
             operation, context
         )
         throw(PottsValidationError(
@@ -250,7 +250,7 @@ function _validate_static_expression_context(
             ),),
         ))
     end
-    if expression isa CorePotts.OperationExpression
+    if expression isa CorePotts.CompilerSPI.OperationExpression
         for argument in expression.arguments
             _validate_static_expression_context(argument, context, record)
         end
@@ -259,26 +259,26 @@ function _validate_static_expression_context(
 end
 
 function _static_evaluator(
-        expression::CorePotts.AbstractStaticExpression,
-        context::Type{<:CorePotts.AbstractEvaluatorExecutionContext},
+        expression::CorePotts.CompilerSPI.AbstractStaticExpression,
+        context::Type{<:CorePotts.CompilerSPI.AbstractEvaluatorExecutionContext},
         record::QualifiedStatement,
     )
     _validate_static_expression_context(expression, context, record)
-    return CorePotts.StaticEvaluator(expression)
+    return CorePotts.CompilerSPI.StaticEvaluator(expression)
 end
 
 function _bounded_static_operation(operation, arguments::Tuple)
     length(arguments) <= 8 &&
-        return CorePotts.OperationExpression(operation, arguments...)
+        return CorePotts.CompilerSPI.OperationExpression(operation, arguments...)
     (
-        operation isa CorePotts.OrderedFold &&
+        operation isa CorePotts.CompilerSPI.OrderedFold &&
         operation.operation in (+, *)
-    ) || return CorePotts.OperationExpression(operation, arguments...)
-    result = CorePotts.OperationExpression(operation, arguments[1:8]...)
+    ) || return CorePotts.CompilerSPI.OperationExpression(operation, arguments...)
+    result = CorePotts.CompilerSPI.OperationExpression(operation, arguments[1:8]...)
     index = 9
     while index <= length(arguments)
         final = min(index + 6, length(arguments))
-        result = CorePotts.OperationExpression(
+        result = CorePotts.CompilerSPI.OperationExpression(
             operation, result, arguments[index:final]...
         )
         index = final + 1

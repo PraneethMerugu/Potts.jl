@@ -18,7 +18,7 @@ function _collect_symbolics!(found, value)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
-            SweepStage, ObserveStage,
+            SweepStage,
             SymmetricPair,
         }
         for field in fieldnames(typeof(value))
@@ -117,8 +117,10 @@ function _statement_phase(statement)
     statement isa SynchronousProcess && return AfterMCS()
     statement isa RelationshipProcess && return RelationshipCommit()
     statement isa LifecycleProcess && return Lifecycle()
-    statement isa EquationProcess && return EquationStep()
-    statement isa Observation && return Observe()
+    statement isa EquationProcess && return AfterMCS()
+    # Observations are settled-boundary save metadata. They do not introduce
+    # an executable semantic phase or protocol stage.
+    statement isa Observation && return nothing
     return nothing
 end
 
@@ -173,7 +175,7 @@ function _collect_draw_calls!(result, value)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
-            SweepStage, ObserveStage,
+            SweepStage,
             SymmetricPair,
         }
         foreach(

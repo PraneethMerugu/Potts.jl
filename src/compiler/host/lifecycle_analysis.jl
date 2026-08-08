@@ -290,7 +290,7 @@ function _validate_lifecycle_root_results!(record, graph, facts, roots)
                 ),),
             ))
         elseif root.role === :lifecycle_placement
-            type <: CorePotts.AbstractLifecycleSiteSelection || throw(PottsValidationError(
+            type <: CorePotts.CompilerSPI.AbstractLifecycleSiteSelection || throw(PottsValidationError(
                 :analysis,
                 (PottsDiagnostic(
                     :invalid_lifecycle_policy_result,

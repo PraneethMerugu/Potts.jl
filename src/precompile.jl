@@ -15,16 +15,16 @@ let
             Protocol(Sweep(; temperature = 1.0); name = :main),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    scheduled = mtkcompile(system)
     labels = zeros(Int, 3, 3)
     labels[2, 2] = 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
     )
-    solve(PottsProblem(executable, initial, (0, 1); seed = 1))
+    solve(
+        PottsProblem(scheduled, initial, (0, 1); seed = 1),
+        SequentialCPM();
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
 end

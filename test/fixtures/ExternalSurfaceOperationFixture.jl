@@ -6,16 +6,20 @@ import CorePotts
 import PottsToolkit: operation_transfer
 import PottsToolkit: registered_operation_tracker_requirements
 
+const CompilerSPI = CorePotts.CompilerSPI
+
 const VERSION = v"1.0.0"
 
 function external_cell_surface end
 Symbolics.@register_symbolic external_cell_surface(cell)::Real
+function external_cell_surface_alt end
+Symbolics.@register_symbolic external_cell_surface_alt(cell)::Real
 
-struct ExternalCellSurfaceCallable <: CorePotts.AbstractContextualOperation end
+struct ExternalCellSurfaceCallable <: CompilerSPI.AbstractContextualOperation end
 
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::ExternalCellSurfaceCallable,
-    ::Type{CorePotts.AbstractHamiltonianEvaluationContext},
+    ::Type{CompilerSPI.AbstractHamiltonianEvaluationContext},
 ) = true
 
 operation_transfer(::typeof(external_cell_surface), ::Int) =
@@ -41,18 +45,45 @@ operation_transfer(::typeof(external_cell_surface), ::Int) =
         (PottsToolkit.NamedSpatialRelationRequirement(:surface),),
     )
 
-CorePotts.operation_callable(
+operation_transfer(::typeof(external_cell_surface_alt), ::Int) =
+    PottsToolkit.OperationTransfer(
+        :fixture_external_cell_surface_alt,
+        VERSION,
+        "external-cell-surface-alt-v1",
+        1:1,
+        :real,
+        :dimensionless,
+        :pure,
+        :total,
+        PottsToolkit.OwnerFootprintRule(),
+        true,
+        true,
+        (:fixture_external_cell_surface_alt_tracker,),
+        :any,
+        (:hamiltonian,),
+        (:Proposal,),
+        :hamiltonian,
+        :ExternalSurfaceOperationFixture,
+        "ExternalSurfaceOperationFixture.ExternalCellSurfaceCallable",
+        (PottsToolkit.NamedSpatialRelationRequirement(:surface_alt),),
+    )
+
+CompilerSPI.operation_callable(
     ::Val{:fixture_external_cell_surface}, version::VersionNumber
 ) = version == VERSION ? ExternalCellSurfaceCallable() :
     throw(ArgumentError("unsupported external surface version $version"))
+CompilerSPI.operation_callable(
+    ::Val{:fixture_external_cell_surface_alt}, version::VersionNumber
+) = version == VERSION ? ExternalCellSurfaceCallable() :
+    throw(ArgumentError("unsupported alternate external surface version $version"))
 
-@inline CorePotts.qualified_tracker_operation_call(
+@inline CompilerSPI.qualified_tracker_operation_call(
     ::ExternalCellSurfaceCallable,
     arguments,
     context,
     quantity::Val,
     source_handle::Int32,
-) = CorePotts.tracker_operation_value(
+) = CompilerSPI.tracker_operation_value(
     context,
     quantity,
     source_handle,
@@ -60,7 +91,10 @@ CorePotts.operation_callable(
 )
 
 function registered_operation_tracker_requirements(
-        ::Val{:fixture_external_cell_surface_tracker},
+        ::Union{
+            Val{:fixture_external_cell_surface_tracker},
+            Val{:fixture_external_cell_surface_alt_tracker},
+        },
         context::PottsToolkit.OperationTrackerContext,
         ::Type,
         ::Tuple,
@@ -70,7 +104,7 @@ function registered_operation_tracker_requirements(
         context.bindings,
     )
     relation = only(relations)
-    return (CorePotts.CellSurfaceTracker(
+    return (CompilerSPI.CellSurfaceTracker(
         relation.handle,
         relation.metadata.maximum_neighbors,
     ),)

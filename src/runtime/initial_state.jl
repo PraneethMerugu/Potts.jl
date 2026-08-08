@@ -120,9 +120,10 @@ function OwnershipLayout(
     )
 end
 
-struct PottsInitialState{O, V <: Tuple}
+struct PottsInitialState{O, V <: Tuple, N <: Tuple}
     ownership::O
     values::V
+    native::N
 end
 
 function _initial_value_pairs(values)
@@ -146,20 +147,47 @@ function _initial_value_pairs(values)
     )
 end
 
-function PottsInitialState(; ownership, values = ())
+function _native_operating_points(values)
+    values === nothing && return ()
+    tuple = values isa NativeOperatingPoint ? (values,) : try
+        Tuple(values)
+    catch
+        throw(ArgumentError(
+            "native operating points must be NativeOperatingPoint values"
+        ))
+    end
+    all(value -> value isa NativeOperatingPoint, tuple) || throw(ArgumentError(
+        "native operating points must contain only NativeOperatingPoint values"
+    ))
+    paths = map(point -> point.path, tuple)
+    length(unique(paths)) == length(paths) || throw(ArgumentError(
+        "native operating-point paths must be unique"
+    ))
+    return map(_defensive_copy, tuple)
+end
+
+function PottsInitialState(; ownership, values = (), native = ())
     ownership isa Union{LabelledCells, OwnershipLayout} ||
         throw(ArgumentError(
             "ownership must be LabelledCells(...) or OwnershipLayout(...)"
         ))
-    return PottsInitialState(_defensive_copy(ownership), _initial_value_pairs(values))
+    return PottsInitialState(
+        _defensive_copy(ownership),
+        _initial_value_pairs(values),
+        _native_operating_points(native),
+    )
 end
 
 _defensive_copy(value::LabelledCells) =
     LabelledCells(value.labels; cells = value.cells, medium = value.medium)
 _defensive_copy(value::OwnershipLayout) = value
+_defensive_copy(value::NativeOperatingPoint) = NativeOperatingPoint(
+    value.path; values = value.values, guesses = value.guesses
+)
 _defensive_copy(value::PottsInitialState) = PottsInitialState(
     ownership = _defensive_copy(value.ownership),
     values = value.values,
+    native = value.native,
 )
 
 function _kind_symbol(kind)
@@ -168,7 +196,7 @@ function _kind_symbol(kind)
     throw(ArgumentError("cell and medium kinds use declarations or Symbol names"))
 end
 
-function _kind_indices(executable::PottsExecutable)
+function _kind_indices(executable::_PottsExecutionPlan)
     result = Dict(
         kind => index for (index, kind) in enumerate(executable.reports.kinds)
     )
@@ -187,7 +215,7 @@ function _kind_indices(executable::PottsExecutable)
 end
 
 function _materialize_labelled(
-        executable::PottsExecutable, labelled::LabelledCells
+        executable::_PottsExecutionPlan, labelled::LabelledCells
     )
     program = executable.core_program
     size(labelled.labels) == program.shape ||
@@ -234,10 +262,11 @@ function _materialize_labelled(
 end
 
 function _materialize_layout(
-        executable::PottsExecutable,
+        executable::_PottsExecutionPlan,
         layout::OwnershipLayout,
         seed::UInt64,
         replica::UInt32,
+        repeat::UInt32,
     )
     layout.shape == executable.core_program.shape ||
         throw(ArgumentError("ownership layout shape does not match the executable"))
@@ -340,9 +369,10 @@ function _materialize_layout(
             label = placement.first_label + offset
             cells[label] = placement.kind
             for _ in 1:placement.sites_per_cell
-                selected = CorePotts.initialization_bounded(
+                selected = CorePotts.CompilerSPI.initialization_bounded(
                     seed,
                     replica,
+                    repeat,
                     operation_index,
                     invocation,
                     length(available),
@@ -379,7 +409,7 @@ function _state_name(value)
     end
 end
 
-function _initial_value_map(executable::PottsExecutable, initial::PottsInitialState)
+function _initial_value_map(executable::_PottsExecutionPlan, initial::PottsInitialState)
     result = Dict{Symbol, Any}()
     entries = (
         executable.reports.states...,
@@ -606,14 +636,15 @@ function _validate_initial_relationship_endpoints!(
 end
 
 function _core_initial_state(
-        executable::PottsExecutable,
+        executable::_PottsExecutionPlan,
         initial::PottsInitialState,
         seed::UInt64 = UInt64(0),
         replica::UInt32 = UInt32(1),
+        repeat::UInt32 = UInt32(1),
     )
     ownership, cell_kinds = initial.ownership isa LabelledCells ?
         _materialize_labelled(executable, initial.ownership) :
-        _materialize_layout(executable, initial.ownership, seed, replica)
+        _materialize_layout(executable, initial.ownership, seed, replica, repeat)
     values = _initial_value_map(executable, initial)
     known = Set{Symbol}()
     union!(known, entry.name for entry in executable.reports.states)
@@ -624,12 +655,12 @@ function _core_initial_state(
                             join(string.(sort!(collect(unknown))), ", ")))
     T = eltype(executable.core_program.parameter_defaults)
     lifecycle_plan = executable.core_program.lifecycle_plan
-    cell_capacity = lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+    cell_capacity = lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
         Int(lifecycle_plan.cell_capacity) : length(cell_kinds)
     length(cell_kinds) <= cell_capacity || throw(ArgumentError(
         "initial finite-cell count exceeds compiled max_cells=$cell_capacity"
     ))
-    normalized_states = Dict{CorePotts.QualifiedResourceIdentity, Any}()
+    normalized_states = Dict{CorePotts.CompilerSPI.QualifiedResourceIdentity, Any}()
     for entry in executable.reports.states
         normalized_states[entry.identity] = _normalize_initial_state_entry(
             entry,
@@ -665,7 +696,7 @@ function _core_initial_state(
             nothing
         end
     end
-    descriptor_state = CorePotts.allocate_auxiliary_state(
+    descriptor_state = CorePotts.CompilerSPI.allocate_auxiliary_state(
         descriptor_layout, descriptor_initial_values
     )
     relationships = Tuple(

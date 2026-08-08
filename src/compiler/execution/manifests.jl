@@ -99,135 +99,6 @@ function _compiled_statement_manifest(completed::PottsSystem)
     ]
 end
 
-function _compiled_external_io(
-        completed::PottsSystem,
-        manifest::ParameterManifest,
-        states,
-        observations,
-        shape,
-        ::Type{T},
-    ) where {T <: AbstractFloat}
-    entries = NamedTuple[]
-    endpoints = Set{Symbol}()
-    input_names = Set(
-        _symbolic_name(value; context = "external input identity")
-        for value in ModelingToolkitBase.inputs(completed)
-    )
-    output_names = Set(
-        _symbolic_name(value; context = "external output identity")
-        for value in ModelingToolkitBase.outputs(completed)
-    )
-    overlap = intersect(input_names, output_names)
-    isempty(overlap) || throw(ArgumentError(
-        "external identities cannot be both input and output: " *
-        join(string.(sort!(collect(overlap))), ", ")
-    ))
-    for (direction, values) in (
-            :input => ModelingToolkitBase.inputs(completed),
-            :output => ModelingToolkitBase.outputs(completed),
-        )
-        for value in values
-            key = _symbolic_name(value; context = "external IO identity")
-            parameter_index = _parameter_index(manifest, value)
-            state_index = findfirst(
-                entry -> entry.key === key || entry.name === key, states
-            )
-            observation_index = findfirst(entry -> entry.name === key, observations)
-            builtin = key === :ownership ? :ownership : nothing
-            if direction === :input &&
-                    (observation_index !== nothing || builtin !== nothing)
-                throw(ArgumentError(
-                    "external input `$key` is not a mutable input authority"
-                ))
-            end
-            if direction === :input && state_index !== nothing
-                runtime_writers = Tuple(
-                    record.identity
-                    for record in inspect(completed, Statements())
-                    if !(record.effect isa PureRead) &&
-                       any(
-                           write -> _manifest_symbol(write) in
-                                    (key, states[state_index].name),
-                           record.writes,
-                       )
-                )
-                isempty(runtime_writers) || throw(ArgumentError(
-                    "external input `$key` is also written by Potts statement" *
-                    (length(runtime_writers) == 1 ? " " : "s ") *
-                    join(string.(runtime_writers), ", ")
-                ))
-            end
-            if direction === :output && parameter_index !== nothing
-                throw(ArgumentError(
-                    "runtime parameter `$key` is an input, not a settled output"
-                ))
-            end
-            parameter_index === nothing && state_index === nothing &&
-                observation_index === nothing && builtin === nothing &&
-                throw(ArgumentError(
-                    "external IO `$key` is not a compiled parameter, state, " *
-                    "observation, or logical ownership output"
-                ))
-            parameter = parameter_index === nothing ? nothing :
-                        manifest[parameter_index]
-            state = state_index === nothing ? nothing : states[state_index]
-            observation = observation_index === nothing ?
-                          nothing : observations[observation_index]
-            value_shape = if builtin === :ownership
-                shape
-            elseif state !== nothing && state.shape isa Tuple
-                state.shape
-            elseif observation !== nothing && observation.kind === :state_export
-                shape
-            else
-                ()
-            end
-            descriptor = parameter !== nothing ? parameter.unit :
-                         state !== nothing ? state.unit : nothing
-            unit = descriptor === nothing ? nothing : (
-                name = descriptor.name,
-                dimension = descriptor.dimension,
-                scale = descriptor.scale,
-            )
-            element_type = builtin === :ownership ? Int32 : T
-            endpoint_hash = _sha256_hex(
-                "potts-external-endpoint-v1", key, direction
-            )
-            endpoint = Symbol("potts_", first(endpoint_hash, 20))
-            endpoint in endpoints && throw(ArgumentError(
-                "external IO endpoint collision for `$key`"
-            ))
-            push!(endpoints, endpoint)
-            push!(entries, (
-                identity = key,
-                endpoint,
-                direction,
-                access = direction === :input ? :read : :write,
-                element_type,
-                shape = value_shape,
-                unit,
-                ownership = :process,
-                persistence = :required,
-                update_law = :replace,
-                residency = :host,
-                codec = :canonical_v1,
-                interval_behavior = direction === :input ? :frozen : :published,
-                cadence = :whole_mcs,
-                parameter_index,
-                state_index,
-                observation_index,
-                builtin,
-                source = parameter !== nothing ? :parameter :
-                         state !== nothing && state.role === :field ? :field :
-                         state !== nothing ? state.name :
-                         observation !== nothing ? observation.name : builtin,
-            ))
-        end
-    end
-    sort!(entries; by = entry -> (entry.direction, String(entry.identity)))
-    return Tuple(entries)
-end
-
 function _compiled_state_initial(
         completed::PottsSystem,
         record::QualifiedStatement,
@@ -260,7 +131,7 @@ function _compiled_state_manifest(
         completed::PottsSystem,
         records,
         manifest::ParameterManifest,
-        state_layout::CorePotts.StateLayout,
+        state_layout::CorePotts.CompilerSPI.StateLayout,
         shape,
         ::Type{T},
     ) where {T <: AbstractFloat}

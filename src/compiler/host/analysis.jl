@@ -80,9 +80,7 @@ function _operation_context_admitted(
     required === :any && return true
     required === :proposal && return phase in (:Proposal, :AcceptedCopy)
     required === :hamiltonian && return role === :hamiltonian
-    required === :iteration && return phase in (
-        :AfterMCS, :EquationStep, :Observe,
-    )
+    required === :iteration && return phase === :AfterMCS
     required === :relationship && return role === :relationship
     required === :lifecycle_trigger && return role === :lifecycle_trigger
     required === :lifecycle_placement && return role === :lifecycle_placement
@@ -105,25 +103,25 @@ end
 
 function _operation_evaluation_context(role::Symbol, phase::Symbol)
     role === :lifecycle_trigger &&
-        return CorePotts.AbstractLifecycleTriggerEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecycleTriggerEvaluationContext
     role === :lifecycle_placement &&
-        return CorePotts.AbstractLifecyclePlacementEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecyclePlacementEvaluationContext
     role === :lifecycle_partition &&
-        return CorePotts.AbstractLifecyclePartitionEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecyclePartitionEvaluationContext
     role === :lifecycle_state_transform &&
-        return CorePotts.AbstractLifecycleStateTransformEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecycleStateTransformEvaluationContext
     role === :lifecycle_priority && return nothing
     role === :hamiltonian &&
-        return CorePotts.AbstractHamiltonianEvaluationContext
+        return CorePotts.CompilerSPI.AbstractHamiltonianEvaluationContext
     # V1 observations lower through their closed observation manifest rather
     # than the generic static-evaluator path.
     role === :observation && return nothing
     phase in (:Proposal, :AcceptedCopy) &&
-        return CorePotts.AbstractProposalEvaluationContext
-    phase in (:AfterMCS, :EquationStep) &&
-        return CorePotts.AbstractSiteStageEvaluationContext
+        return CorePotts.CompilerSPI.AbstractProposalEvaluationContext
+    phase === :AfterMCS &&
+        return CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext
     phase in (:RelationshipCommit, :Lifecycle) &&
-        return CorePotts.AbstractRelationshipStageEvaluationContext
+        return CorePotts.CompilerSPI.AbstractRelationshipStageEvaluationContext
     return nothing
 end
 
@@ -289,7 +287,7 @@ function _validate_operation_use!(
             )) !== nothing
         source_problem
     elseif (context = _operation_evaluation_context(role, phase)) !== nothing &&
-            !CorePotts.operation_context_supported(node.callable, context)
+            !CorePotts.CompilerSPI.operation_context_supported(node.callable, context)
         "frozen callable $(typeof(node.callable)) has no implementation for " *
         "$(nameof(context))"
     else
@@ -671,7 +669,7 @@ function _analyze_term_graph(
     source_bindings = Any[() for _ in 1:count]
     operation_roles = _node_operation_roles(source, graph)
 
-    dimensions = length(_host_lattice_shape(source))
+    dimensions = _host_lattice_dimensions(source)
     for node in graph.nodes
         index = Int(node.identity)
         record = source.records[node.record]
@@ -707,7 +705,7 @@ function _analyze_term_graph(
         elseif transfer.result_rule === :integer
             Int
         elseif transfer.result_rule === :site_selection
-            CorePotts.AbstractLifecycleSiteSelection
+            CorePotts.CompilerSPI.AbstractLifecycleSiteSelection
         elseif transfer.result_rule === :branch_promote && length(operand_indices) == 3
             promote_type(
                 result_type[operand_indices[2]],
@@ -984,6 +982,7 @@ end
 
 function _analyze_completed_system(completed::PottsSystem)
     data = _completion_data(completed)
+    data.analysis === nothing || return data.analysis
     return _analyze_term_graph(data.source_graph, data.normalized_graph)
 end
 

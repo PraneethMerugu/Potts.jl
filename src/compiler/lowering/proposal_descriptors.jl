@@ -8,7 +8,7 @@ end
 
 function _construct_descriptor(
         record::QualifiedStatement,
-        evaluator::CorePotts.StaticEvaluator,
+        evaluator::CorePotts.CompilerSPI.StaticEvaluator,
         context::DescriptorConstructionContext,
     )
     payload = if _registered_record(record)
@@ -36,7 +36,7 @@ function _construct_descriptor(
             rethrow(error)
         end
     else
-        CorePotts.EmptyDescriptorPayload()
+        CorePotts.CompilerSPI.EmptyDescriptorPayload()
     end
     _validate_descriptor_payload(payload, record)
     if _registered_record(record)
@@ -55,7 +55,7 @@ function _construct_descriptor(
             ),),
         ))
     end
-    return CorePotts.ProposalDescriptor(
+    return CorePotts.CompilerSPI.ProposalDescriptor(
         evaluator,
         context.access,
         context.support,
@@ -89,9 +89,9 @@ function _validate_descriptor_payload(
         value = pop!(stack)
         if value isa Union{
                 Function,
-                CorePotts.AbstractStaticExpression,
-                CorePotts.StaticEvaluator,
-                CorePotts.AbstractContextualOperation,
+                CorePotts.CompilerSPI.AbstractStaticExpression,
+                CorePotts.CompilerSPI.StaticEvaluator,
+                CorePotts.CompilerSPI.AbstractContextualOperation,
             }
             throw(PottsValidationError(
                 :descriptor_lowering,
@@ -151,12 +151,12 @@ function _validate_descriptor_protocol(
         expected_source_handle::Integer,
     )
     facts = try
-        payload = CorePotts.descriptor_payload_checkpoint_encode(
+        payload = CorePotts.CompilerSPI.descriptor_payload_checkpoint_encode(
             descriptor.payload
         )
         reconstructed = invoke(
-            CorePotts.descriptor_checkpoint_reconstruct,
-            Tuple{CorePotts.ProposalDescriptor, Any},
+            CorePotts.CompilerSPI.descriptor_checkpoint_reconstruct,
+            Tuple{CorePotts.CompilerSPI.ProposalDescriptor, Any},
             descriptor,
             payload,
         )
@@ -169,18 +169,18 @@ function _validate_descriptor_protocol(
             dependencies = (),
             support = descriptor.support,
             adapted = invoke(
-                CorePotts.descriptor_adapt,
-                Tuple{Any, CorePotts.ProposalDescriptor},
+                CorePotts.CompilerSPI.descriptor_adapt,
+                Tuple{Any, CorePotts.CompilerSPI.ProposalDescriptor},
                 nothing,
                 descriptor,
             ),
-            nodes = CorePotts.evaluator_node_count(descriptor.evaluator),
+            nodes = CorePotts.CompilerSPI.evaluator_node_count(descriptor.evaluator),
             source_handle = descriptor.source_handle,
             checkpoint_policy = :reconstruct_from_executable,
             reconstructed,
             inspection = invoke(
-                CorePotts.descriptor_inspection,
-                Tuple{CorePotts.ProposalDescriptor},
+                CorePotts.CompilerSPI.descriptor_inspection,
+                Tuple{CorePotts.CompilerSPI.ProposalDescriptor},
                 descriptor,
             ),
         )
@@ -197,7 +197,7 @@ function _validate_descriptor_protocol(
         throw(_descriptor_protocol_error(
             record, descriptor, "workspace requirements must be a tuple"
         ))
-    facts.access isa CorePotts.ResourceAccess ||
+    facts.access isa CorePotts.CompilerSPI.ResourceAccess ||
         throw(_descriptor_protocol_error(
             record, descriptor, "resource access must be ResourceAccess"
         ))
@@ -205,7 +205,7 @@ function _validate_descriptor_protocol(
         throw(_descriptor_protocol_error(
             record, descriptor, "stage must be a Symbol"
         ))
-    facts.role isa CorePotts.AbstractProposalRole ||
+    facts.role isa CorePotts.CompilerSPI.AbstractProposalRole ||
         throw(_descriptor_protocol_error(
             record, descriptor, "proposal role is invalid"
         ))
@@ -213,7 +213,7 @@ function _validate_descriptor_protocol(
         throw(_descriptor_protocol_error(
             record, descriptor, "dependencies must be a tuple"
         ))
-    facts.support isa CorePotts.DescriptorSupport ||
+    facts.support isa CorePotts.CompilerSPI.DescriptorSupport ||
         throw(_descriptor_protocol_error(
             record, descriptor, "support must be DescriptorSupport"
         ))
@@ -264,7 +264,7 @@ function _proposal_descriptor(
         "a proposal descriptor requires exactly one expression root"
     ))
     root = only(candidate.roots)
-    cache = Dict{Int32, CorePotts.AbstractStaticExpression}()
+    cache = Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}()
     expression = _lower_static_node(
         ir.graph,
         ir,
@@ -277,19 +277,19 @@ function _proposal_descriptor(
     )
     record = ir.source.records[candidate.record]
     execution_context = candidate.category === :hamiltonian ?
-        CorePotts.AbstractHamiltonianEvaluationContext :
-        CorePotts.AbstractProposalEvaluationContext
+        CorePotts.CompilerSPI.AbstractHamiltonianEvaluationContext :
+        CorePotts.CompilerSPI.AbstractProposalEvaluationContext
     evaluator = _static_evaluator(expression, execution_context, record)
     resolved_states = _record_state_handles(ir, record, state_handles)
     resolved_workspaces = _record_workspace_handles(
         record, workspace_layout, workspace_handles
     )
-    access = CorePotts.ResourceAccess(
+    access = CorePotts.CompilerSPI.ResourceAccess(
         resolved_states,
         (),
         _descriptor_footprint(ir, root),
-        CorePotts.EmptyFootprint(),
-        CorePotts.NoWriteAccess(),
+        CorePotts.CompilerSPI.EmptyFootprint(),
+        CorePotts.CompilerSPI.NoWriteAccess(),
     )
     context = DescriptorConstructionContext(
         access,
@@ -320,7 +320,7 @@ function _proposal_descriptor(
     return descriptor
 end
 
-function _descriptor_group_key(descriptor::CorePotts.ProposalDescriptor)
+function _descriptor_group_key(descriptor::CorePotts.CompilerSPI.ProposalDescriptor)
     return (
         descriptor_type = typeof(descriptor),
         evaluator_type = typeof(descriptor.evaluator.expression),
@@ -350,35 +350,35 @@ function _descriptor_groups(descriptors)
             instance for instance in instances
         ]
         state_handles = Tuple(sort!(unique!(
-            CorePotts.StateHandle[
+            CorePotts.CompilerSPI.StateHandle[
                 handle
                 for descriptor in instances
                 for handle in
                     descriptor.state_handles
             ]
         ); by = handle -> (
-            CorePotts.handle_bank(handle),
-            CorePotts.handle_slot(handle),
+            CorePotts.CompilerSPI.handle_bank(handle),
+            CorePotts.CompilerSPI.handle_slot(handle),
         )))
         workspace_handles = Tuple(sort!(unique!(
-            CorePotts.WorkspaceHandle[
+            CorePotts.CompilerSPI.WorkspaceHandle[
                 handle
                 for descriptor in instances
                 for handle in
                     descriptor.workspace_handles
             ]
         ); by = handle -> (
-            CorePotts.handle_bank(handle),
-            CorePotts.handle_slot(handle),
+            CorePotts.CompilerSPI.handle_bank(handle),
+            CorePotts.CompilerSPI.handle_slot(handle),
         )))
-        strategy = CorePotts.DescriptorKernelStrategy{
+        strategy = CorePotts.CompilerSPI.DescriptorKernelStrategy{
             descriptor_type,
             key.evaluator_type,
             key.access_type,
             key.role_type,
             Val{:proposal},
         }()
-        launch = CorePotts.DescriptorLaunch(
+        launch = CorePotts.CompilerSPI.DescriptorLaunch(
             strategy,
             typed_instances,
             state_handles,
@@ -397,7 +397,7 @@ function _descriptor_groups(descriptors)
             role = nameof(key.role_type),
             stage = key.stage,
         )
-        groups = (groups..., CorePotts.DescriptorGroup(launch, split))
+        groups = (groups..., CorePotts.CompilerSPI.DescriptorGroup(launch, split))
     end
     return groups
 end

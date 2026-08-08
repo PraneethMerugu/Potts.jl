@@ -1,6 +1,8 @@
 # CorePotts V1 program ownership map. Each included file owns one runtime layer;
 # this file deliberately contains no executable implementation.
 
+include("lifecycle_receipt.jl")
+include("bulk_component_state.jl")
 include("relationships.jl")
 include("runtime.jl")
 include("../execution/program_rng.jl")
@@ -18,3 +20,4 @@ include("../execution/stage_runtime.jl")
 include("../execution/checkerboard_program.jl")
 include("../execution/program_settlement.jl")
 include("../execution/sequential_program.jl")
+include("../execution/host_relationship_transaction.jl")

@@ -35,12 +35,13 @@ struct EngineAdmission
 end
 
 struct QualifiedStatement{
-        S, N, T, Y, H, U, C, R, W, Q, D, Z, E, B, X, L, G, P, O, A,
+        S, M, N, T, Y, H, U, C, R, W, Q, D, Z, E, B, X, L, G, P, O, A,
     }
     identity::QualifiedStatementID
     kind::Symbol
     schema_version::VersionNumber
     source::S
+    normalized_statement::M
     provenance::N
     normalized_payload::T
     result_type::Y

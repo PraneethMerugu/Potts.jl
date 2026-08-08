@@ -206,7 +206,7 @@ function run_lifecycle_canonical_state_failure(
         to_host = Array,
         require_isbits::Bool = true,
     )
-    statuses = CorePotts.LifecycleStatusPayload[]
+    statuses = CorePotts.ProgramStatus[]
     program_types = DataType[]
     selected_counts = Int[]
     for reverse_declarations in (false, true)
@@ -289,9 +289,9 @@ function run_lifecycle_canonical_state_failure(
             CorePotts.LifecycleDetailNonfiniteResult
         @test failure_rank[divide_request] ==
             divide_descriptor.state_rule_offset
-        @test device_status.code === CorePotts.LifecycleStatusEvaluator
+        @test device_status.code === CorePotts.ProgramStatusEvaluator
         @test device_status.mcs == 1
-        @test device_status.stage === CorePotts.LifecycleStageState
+        @test device_status.stage === CorePotts.ProgramStageState
         @test device_status.source > 0
         @test device_status.action_identity != 0
         @test device_status.anchor == 1
@@ -417,7 +417,7 @@ function run_public_lifecycle_late_capacity_failure()
     @test queued.iterations == 37
     @test queued.failure_report !== nothing
     @test queued.failure_report.mcs == 37
-    @test queued.failure_report.stage === CorePotts.LifecycleStageSelection
+    @test queued.failure_report.stage === CorePotts.ProgramStageSelection
     @test queued.runtime.engine_workspace.execution.submitted_mcs == 100
     @test queued.runtime.engine_workspace.execution.drained_mcs == 100
     @test queued.runtime.engine_workspace.execution.committed_mcs == 36
@@ -555,7 +555,7 @@ function run_lifecycle_mcs_execution(
         destination.trackers,
         Val(:cell_volume),
     ) == CorePotts.program_tracker_values(reference, Val(:cell_volume))
-    @test receipt.status.code === CorePotts.LifecycleStatusSuccess
+    @test receipt.status.code === CorePotts.ProgramStatusSuccess
     @test receipt.failure === nothing
     @test receipt.submitted_mcs == 2
     @test receipt.drained_mcs == 2
@@ -624,9 +624,9 @@ function run_lifecycle_capacity_failure(
     )
 
     status = receipt.status
-    @test status.code === CorePotts.LifecycleStatusCellCapacity
+    @test status.code === CorePotts.ProgramStatusCellCapacity
     @test status.mcs == 1
-    @test status.stage === CorePotts.LifecycleStageSelection
+    @test status.stage === CorePotts.ProgramStageSelection
     @test status.source > 0
     @test status.action_identity != 0
     @test receipt.failure isa CorePotts.CellCapacityFailure
@@ -737,7 +737,7 @@ function run_public_lifecycle_capacity_failure(;
     @test integrator.failure_report !== nothing
     @test integrator.failure_report.mcs == 1
     @test integrator.failure_report.code ===
-        CorePotts.LifecycleStatusCellCapacity
+        CorePotts.ProgramStatusCellCapacity
     settlements = engine isa CheckerboardEngine ?
         integrator.runtime.engine_workspace.execution.settlement_count : 0
     engine isa CheckerboardEngine && @test settlements == 1
@@ -864,7 +864,7 @@ function run_lifecycle_execution(
     CorePotts.KernelAbstractions.synchronize(backend)
 
     status = only(to_host(state.lifecycle_workspace.status))
-    @test status.code === CorePotts.LifecycleStatusSuccess
+    @test status.code === CorePotts.ProgramStatusSuccess
     @test to_host(state.ownership) == reference.ownership
     @test to_host(state.cell_kinds) == reference.cell_kinds
     @test to_host(state.cell_generations) == reference.cell_generations

@@ -13,9 +13,9 @@ function PottsToolkit._validate_backend_available(::PottsToolkit.MetalBackend)
 end
 
 function PottsToolkit._adapt_runtime_backend(
-        ::CorePotts.AdaptedProgramBackend{:MetalBackend}, runtime
+        ::CorePotts.BackendSPI.AdaptedProgramBackend{:MetalBackend}, runtime
     )
-    return CorePotts.adapt_program_runtime(Metal.MtlArray, runtime)
+    return CorePotts.BackendSPI.adapt_program_runtime(Metal.MtlArray, runtime)
 end
 
 end

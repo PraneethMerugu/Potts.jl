@@ -40,6 +40,9 @@ const _LIFECYCLE_STATUS_DETAILS = (
     :relationship_integrity_invalid => LifecycleDetailRelationshipIntegrityInvalid,
     :tracker_commit_invalid => LifecycleDetailTrackerCommitInvalid,
     :relationship_commit_invalid => LifecycleDetailRelationshipCommitInvalid,
+    :acceptance_nonfinite => LifecycleDetailAcceptanceNonfinite,
+    :acceptance_zero_temperature_drive =>
+        LifecycleDetailAcceptanceZeroTemperatureDrive,
 )
 
 @inline function _lifecycle_detail_code(reason::Symbol)
@@ -49,7 +52,7 @@ const _LIFECYCLE_STATUS_DETAILS = (
     return LifecycleDetailNone
 end
 
-function _lifecycle_detail_symbol(detail::LifecycleStatusDetailCode)
+function _program_status_detail_symbol(detail::ProgramStatusDetailCode)
     for pair in _LIFECYCLE_STATUS_DETAILS
         last(pair) === detail && return first(pair)
     end
@@ -58,19 +61,19 @@ end
 
 @inline function _set_lifecycle_status!(
         workspace,
-        code::LifecycleStatusCode;
+        code::ProgramStatusCode;
         source::Integer = 0,
         action_identity::Integer = 0,
         mcs::Integer = 0,
-        stage::LifecycleExecutionStage = LifecycleStageNone,
+        stage::ProgramExecutionStage = ProgramStageNone,
         secondary_source::Integer = 0,
         anchor::Integer = 0,
-        detail::LifecycleStatusDetailCode = LifecycleDetailNone,
+        detail::ProgramStatusDetailCode = LifecycleDetailNone,
         required::Integer = 0,
         available::Integer = 0,
         maximum::Integer = 0,
     )
-    @inbounds workspace.status[1] = LifecycleStatusPayload(
+    @inbounds workspace.status[1] = ProgramStatus(
         code,
         Int32(mcs),
         stage,
@@ -87,7 +90,7 @@ end
 end
 
 @inline _lifecycle_succeeded(workspace) =
-    lifecycle_workspace_status(workspace).code === LifecycleStatusSuccess
+    lifecycle_workspace_status(workspace).code === ProgramStatusSuccess
 
 struct LifecycleEvaluationFailed end
 
@@ -117,7 +120,7 @@ function _index_lifecycle_representative_sites!(runtime, workspace)
         if owner > length(workspace.representative_site)
             _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 anchor = owner,
                 detail = LifecycleDetailOwnershipExceedsCellCapacity,
             )
@@ -138,7 +141,7 @@ function _index_lifecycle_representative_sites!(runtime, workspace)
     if cursor > length(runtime.ownership) + 1
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             detail = LifecycleDetailCellSiteIndexExceedsLattice,
         )
         return false
@@ -182,7 +185,7 @@ function _evaluate_lifecycle_checked(
         if value isa AbstractFloat && !isfinite(value)
             _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusEvaluator;
+                ProgramStatusEvaluator;
                 source = descriptor.source_handle,
                 anchor = context.anchor,
                 detail = LifecycleDetailNonfiniteResult,
@@ -193,7 +196,7 @@ function _evaluate_lifecycle_checked(
     catch error
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusEvaluator;
+            ProgramStatusEvaluator;
             source = descriptor.source_handle,
             anchor = context.anchor,
             detail = LifecycleDetailEvaluationError,
@@ -214,7 +217,7 @@ end
     if value isa AbstractFloat && !isfinite(value)
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusEvaluator;
+            ProgramStatusEvaluator;
             source = descriptor.source_handle,
             anchor = context.anchor,
             detail = LifecycleDetailNonfiniteResult,
@@ -241,7 +244,7 @@ function _emit_lifecycle_request!(
     if index > length(workspace.descriptor)
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusFootprint;
+            ProgramStatusFootprint;
             source = descriptor.source_handle,
             anchor,
             detail = LifecycleDetailRequestBoundExceeded,
@@ -284,7 +287,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
             enabled isa LifecycleEvaluationFailed && return false
             enabled isa Bool || return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusEvaluator;
+                ProgramStatusEvaluator;
                 source = descriptor.source_handle,
                 detail = LifecycleDetailTriggerNotBoolean,
             )
@@ -304,7 +307,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                 kind == descriptor.domain_kind || continue
                 generation = @inbounds runtime.cell_generations[cell]
                 iszero(generation) && return _set_lifecycle_status!(
-                    workspace, LifecycleStatusStaleGeneration; anchor = cell
+                    workspace, ProgramStatusStaleGeneration; anchor = cell
                 )
                 context = _LifecycleTriggerContext(
                     runtime,
@@ -325,7 +328,7 @@ function _emit_lifecycle_requests!(runtime, plan, workspace)
                 enabled isa LifecycleEvaluationFailed && return false
                 enabled isa Bool || return _set_lifecycle_status!(
                     workspace,
-                    LifecycleStatusEvaluator;
+                    ProgramStatusEvaluator;
                     source = descriptor.source_handle,
                     anchor = cell,
                     detail = LifecycleDetailTriggerNotBoolean,

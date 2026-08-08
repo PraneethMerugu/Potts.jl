@@ -1,20 +1,21 @@
 # Fixed-size lifecycle status values and host-side failure translations.
 
-@enum LifecycleStatusCode::UInt8 begin
-    LifecycleStatusSuccess = 0x00
-    LifecycleStatusInadmissible = 0x01
-    LifecycleStatusConflict = 0x02
-    LifecycleStatusCellCapacity = 0x03
-    LifecycleStatusRelationshipCapacity = 0x04
-    LifecycleStatusStaleGeneration = 0x05
-    LifecycleStatusGenerationOverflow = 0x06
-    LifecycleStatusEvaluator = 0x07
-    LifecycleStatusFootprint = 0x08
-    LifecycleStatusInvariant = 0x09
-    LifecycleStatusBackend = 0x0a
+@enum ProgramStatusCode::UInt8 begin
+    ProgramStatusSuccess = 0x00
+    ProgramStatusInadmissible = 0x01
+    ProgramStatusConflict = 0x02
+    ProgramStatusCellCapacity = 0x03
+    ProgramStatusRelationshipCapacity = 0x04
+    ProgramStatusStaleGeneration = 0x05
+    ProgramStatusGenerationOverflow = 0x06
+    ProgramStatusEvaluator = 0x07
+    ProgramStatusFootprint = 0x08
+    ProgramStatusInvariant = 0x09
+    ProgramStatusBackend = 0x0a
+    ProgramStatusAcceptance = 0x0b
 end
 
-@enum LifecycleStatusDetailCode::UInt16 begin
+@enum ProgramStatusDetailCode::UInt16 begin
     LifecycleDetailNone = 0x0000
     LifecycleDetailOwnershipExceedsCellCapacity = 0x0001
     LifecycleDetailCellSiteIndexExceedsLattice = 0x0002
@@ -52,40 +53,43 @@ end
     LifecycleDetailRelationshipIntegrityInvalid = 0x0022
     LifecycleDetailTrackerCommitInvalid = 0x0023
     LifecycleDetailRelationshipCommitInvalid = 0x0024
+    LifecycleDetailAcceptanceNonfinite = 0x0025
+    LifecycleDetailAcceptanceZeroTemperatureDrive = 0x0026
 end
 
-@enum LifecycleExecutionStage::UInt8 begin
-    LifecycleStageNone = 0x00
-    LifecycleStageIndex = 0x01
-    LifecycleStageEmission = 0x02
-    LifecycleStagePlanning = 0x03
-    LifecycleStageSelection = 0x04
-    LifecycleStageStructure = 0x05
-    LifecycleStageRelationships = 0x06
-    LifecycleStageState = 0x07
-    LifecycleStageValidation = 0x08
-    LifecycleStagePublication = 0x09
+@enum ProgramExecutionStage::UInt8 begin
+    ProgramStageNone = 0x00
+    ProgramStageIndex = 0x01
+    ProgramStageEmission = 0x02
+    ProgramStagePlanning = 0x03
+    ProgramStageSelection = 0x04
+    ProgramStageStructure = 0x05
+    ProgramStageRelationships = 0x06
+    ProgramStageState = 0x07
+    ProgramStageValidation = 0x08
+    ProgramStagePublication = 0x09
+    ProgramStageAcceptance = 0x0a
 end
 
 """One fixed-size engine status; host exceptions are derived only at settlement."""
-struct LifecycleStatusPayload
-    code::LifecycleStatusCode
+struct ProgramStatus
+    code::ProgramStatusCode
     mcs::Int32
-    stage::LifecycleExecutionStage
+    stage::ProgramExecutionStage
     source::Int32
     action_identity::UInt64
     secondary_source::Int32
     anchor::Int32
-    detail::LifecycleStatusDetailCode
+    detail::ProgramStatusDetailCode
     required::Int32
     available::Int32
     maximum::Int32
 end
 
-LifecycleStatusPayload() = LifecycleStatusPayload(
-    LifecycleStatusSuccess,
+ProgramStatus() = ProgramStatus(
+    ProgramStatusSuccess,
     Int32(0),
-    LifecycleStageNone,
+    ProgramStageNone,
     Int32(0),
     UInt64(0),
     Int32(0),
@@ -96,19 +100,19 @@ LifecycleStatusPayload() = LifecycleStatusPayload(
     Int32(0),
 )
 
-LifecycleStatusPayload(
-    code::LifecycleStatusCode,
+ProgramStatus(
+    code::ProgramStatusCode,
     source::Int32,
     secondary_source::Int32,
     anchor::Int32,
-    detail::LifecycleStatusDetailCode,
+    detail::ProgramStatusDetailCode,
     required::Int32,
     available::Int32,
     maximum::Int32,
-) = LifecycleStatusPayload(
+) = ProgramStatus(
     code,
     Int32(0),
-    LifecycleStageNone,
+    ProgramStageNone,
     source,
     UInt64(0),
     secondary_source,
@@ -166,6 +170,11 @@ struct LifecycleBackendFailure{E} <: AbstractLifecycleFailure
     last_possible_mcs::Int
 end
 
+struct ProposalAcceptanceFailure <: Exception
+    proposal_identity::Int32
+    reason::Symbol
+end
+
 LifecycleBackendFailure(cause) = LifecycleBackendFailure(cause, 0, 0)
 
 function Base.showerror(io::IO, failure::CellCapacityFailure)
@@ -188,4 +197,15 @@ function Base.showerror(io::IO, failure::AbstractLifecycleFailure)
         print(io, field, "=", repr(getfield(failure, field)))
     end
     print(io, ")")
+end
+
+function Base.showerror(io::IO, failure::ProposalAcceptanceFailure)
+    print(
+        io,
+        "ProposalAcceptanceFailure(proposal_identity=",
+        failure.proposal_identity,
+        ", reason=",
+        repr(failure.reason),
+        ")",
+    )
 end

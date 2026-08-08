@@ -18,14 +18,14 @@ operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
         owner = :PottsToolkitNumerics,
     )
 
-struct ExplicitFieldEulerCallable <: CorePotts.AbstractContextualOperation end
+struct ExplicitFieldEulerCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
 
-CorePotts.operation_context_supported(
+CorePotts.CompilerSPI.operation_context_supported(
     ::ExplicitFieldEulerCallable,
-    ::Type{CorePotts.AbstractSiteStageEvaluationContext},
+    ::Type{CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext},
 ) = true
 
-function CorePotts.operation_callable(
+function CorePotts.CompilerSPI.operation_callable(
         ::Val{:explicit_field_euler},
         version::VersionNumber,
     )
@@ -48,21 +48,21 @@ end
     T = promote_type(
         typeof(diffusion), typeof(decay), typeof(secretion), typeof(timestep)
     )
-    site = CorePotts.stage_site(CorePotts.IterationStageSite(), context)
-    center = T(CorePotts.state_value(context, state_handle, site))
+    site = CorePotts.CompilerSPI.stage_site(CorePotts.CompilerSPI.IterationStageSite(), context)
+    center = T(CorePotts.CompilerSPI.state_value(context, state_handle, site))
     laplace = zero(T)
-    for direction in 1:CorePotts.relation_count(context, relation_handle)
-        neighbor = CorePotts.relation_neighbor_site(
+    for direction in 1:CorePotts.CompilerSPI.relation_count(context, relation_handle)
+        neighbor = CorePotts.CompilerSPI.relation_neighbor_site(
             context, relation_handle, site, direction
         )
         neighbor === nothing && continue
-        laplace += T(CorePotts.state_value(
+        laplace += T(CorePotts.CompilerSPI.state_value(
             context, state_handle, neighbor
         )) - center
     end
-    owner = CorePotts.site_owner(context, site)
+    owner = CorePotts.CompilerSPI.site_owner(context, site)
     source = owner > 0 && source_kind != 0 &&
-             CorePotts.owner_kind(context, owner) == source_kind ?
+             CorePotts.CompilerSPI.owner_kind(context, owner) == source_kind ?
              T(secretion) : zero(T)
     return max(
         zero(T),
@@ -171,38 +171,38 @@ function numerical_field_stage_descriptor(
             ir.graph,
             _potts_explicit_field_euler,
             (
-                CorePotts.StateExpression(target),
-                CorePotts.LiteralExpression(Int32(relation_handle)),
+                CorePotts.CompilerSPI.StateExpression(target),
+                CorePotts.CompilerSPI.LiteralExpression(Int32(relation_handle)),
                 diffusion,
                 decay,
                 secretion,
-                CorePotts.LiteralExpression(source_kind),
-                CorePotts.LiteralExpression(duration / T(substeps)),
+                CorePotts.CompilerSPI.LiteralExpression(source_kind),
+                CorePotts.CompilerSPI.LiteralExpression(duration / T(substeps)),
             ),
             record,
             semantic_role = :process,
             semantic_phase = :AfterMCS,
         ),
-        CorePotts.AbstractSiteStageEvaluationContext,
+        CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext,
         record,
     )
-    return CorePotts.CompiledStageDescriptor(
+    return CorePotts.CompilerSPI.CompiledStageDescriptor(
         _static_evaluator(
-            CorePotts.LiteralExpression(true),
-            CorePotts.AbstractSiteStageEvaluationContext,
+            CorePotts.CompilerSPI.LiteralExpression(true),
+            CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext,
             record,
         ),
         value,
-        CorePotts.IteratedSiteAssignmentEffect(target, substeps),
-        CorePotts.AfterMCSStage(),
-        CorePotts.ResourceAccess(
+        CorePotts.CompilerSPI.IteratedSiteAssignmentEffect(target, substeps),
+        CorePotts.CompilerSPI.AfterMCSStage(),
+        CorePotts.CompilerSPI.ResourceAccess(
             (target,),
             (target,),
-            CorePotts.FiniteSpatialFootprint(
-                CorePotts.IterationSiteFootprintAnchor(), read_offsets
+            CorePotts.CompilerSPI.FiniteSpatialFootprint(
+                CorePotts.CompilerSPI.IterationSiteFootprintAnchor(), read_offsets
             ),
-            _site_write_footprint(ir, CorePotts.AfterMCSStage()),
-            CorePotts.ExclusiveWriteAccess(),
+            _site_write_footprint(ir, CorePotts.CompilerSPI.AfterMCSStage()),
+            CorePotts.CompilerSPI.ExclusiveWriteAccess(),
         ),
         _stage_support(ir, process_index),
         process_index,

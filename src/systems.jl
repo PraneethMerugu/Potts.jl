@@ -15,6 +15,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     iv::Any
     ivs::Vector{Any}
     systems::Vector{PottsSystem}
+    native_components::Vector{NativeComponent}
     inputs::Vector{Any}
     outputs::Vector{Any}
     initial_conditions::Dict{Any, Any}
@@ -22,6 +23,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     continuous_events::Vector{Any}
     discrete_events::Vector{Any}
     complete::Bool
+    isscheduled::Bool
     namespacing::Bool
     completion::Any
 
@@ -34,6 +36,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             iv,
             ivs::Vector{Any},
             systems::Vector{PottsSystem},
+            native_components::Vector{NativeComponent},
             inputs::Vector{Any},
             outputs::Vector{Any},
             initial_conditions::Dict{Any, Any},
@@ -41,6 +44,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             continuous_events::Vector{Any},
             discrete_events::Vector{Any},
             complete::Bool,
+            isscheduled::Bool,
             namespacing::Bool,
             completion;
             checks::Bool = true,
@@ -57,6 +61,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             iv,
             ivs,
             systems,
+            native_components,
             inputs,
             outputs,
             initial_conditions,
@@ -64,10 +69,329 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             continuous_events,
             discrete_events,
             complete,
+            isscheduled,
             namespacing,
             completion,
         )
     end
+end
+
+struct _SourceSystemOccurrence
+    index::Int32
+    system::PottsSystem
+    path::Tuple{Vararg{Symbol}}
+    parent::Int32
+end
+
+struct _SourceStatementOccurrence
+    system::Int32
+    path::Tuple{Vararg{Symbol}}
+    source_order::Int32
+    statement::AbstractPottsStatement
+end
+
+struct _SourceReferenceOccurrence
+    kind::Symbol
+    path::Tuple{Vararg{Symbol}}
+    value::Any
+end
+
+struct _SourceNativeOccurrence
+    system::Int32
+    system_path::Tuple{Vararg{Symbol}}
+    path::Tuple{Vararg{Symbol}}
+    component::NativeComponent
+end
+
+struct _PottsSourceInventory
+    systems::Vector{_SourceSystemOccurrence}
+    statements::Vector{_SourceStatementOccurrence}
+    references::Vector{_SourceReferenceOccurrence}
+    natives::Vector{_SourceNativeOccurrence}
+end
+
+const _SOURCE_TRAVERSAL_WITNESS_KEY = :__potts_source_traversal_witness__
+
+function _record_source_visit(kind::Symbol, path::Tuple, value)
+    witness = get(task_local_storage(), _SOURCE_TRAVERSAL_WITNESS_KEY, nothing)
+    witness === nothing || witness(kind, path, value)
+    return nothing
+end
+
+"""Run `f` while recording the declarations discovered by source traversal."""
+function _with_source_traversal_witness(f, witness)
+    storage = task_local_storage()
+    had_previous = haskey(storage, _SOURCE_TRAVERSAL_WITNESS_KEY)
+    previous = get(storage, _SOURCE_TRAVERSAL_WITNESS_KEY, nothing)
+    storage[_SOURCE_TRAVERSAL_WITNESS_KEY] = witness
+    try
+        return f()
+    finally
+        if had_previous
+            storage[_SOURCE_TRAVERSAL_WITNESS_KEY] = previous
+        else
+            delete!(storage, _SOURCE_TRAVERSAL_WITNESS_KEY)
+        end
+    end
+end
+
+function _append_source_references!(references, current, path)
+    for (kind, values) in (
+            :equation => getfield(current, :eqs),
+            :variable => getfield(current, :unknowns),
+            :parameter => getfield(current, :ps),
+            :independent_variable => getfield(current, :ivs),
+            :input => _potts_inputs(current, Val(:local)),
+            :output => _potts_outputs(current, Val(:local)),
+            :observation => getfield(current, :observed),
+            :continuous_event => getfield(current, :continuous_events),
+            :discrete_event => getfield(current, :discrete_events),
+        )
+        for value in values
+            push!(references, _SourceReferenceOccurrence(
+                kind, path, _defensive_copy(value)
+            ))
+            _record_source_visit(kind, path, value)
+        end
+    end
+    initial_conditions = sort!(
+        collect(getfield(current, :initial_conditions));
+        by = pair -> _canonical_value(first(pair)),
+    )
+    for (key, value) in initial_conditions
+        pair = _defensive_copy(key) => _defensive_copy(value)
+        push!(references, _SourceReferenceOccurrence(
+            :initial_condition, path, pair
+        ))
+        _record_source_visit(:initial_condition, path, pair)
+    end
+    return references
+end
+
+"""Traverse an authored hierarchy exactly once into the host semantic inventory."""
+function _source_inventory(system::PottsSystem)
+    systems = _SourceSystemOccurrence[]
+    statement_values = _SourceStatementOccurrence[]
+    references = _SourceReferenceOccurrence[]
+    natives = _SourceNativeOccurrence[]
+    source_order = Ref(0)
+    function visit(current::PottsSystem, parent::Int32, parent_path::Tuple)
+        path = (parent_path..., nameof(current))
+        system_index = Int32(length(systems) + 1)
+        _record_source_visit(:system, path, current)
+        push!(systems, _SourceSystemOccurrence(
+            system_index, current, path, parent
+        ))
+        for statement in statements(current)
+            _record_source_visit(:statement, path, statement)
+            source_order[] += 1
+            push!(statement_values, _SourceStatementOccurrence(
+                system_index, path, Int32(source_order[]), statement
+            ))
+        end
+        for component in getfield(current, :native_components)
+            component_path = (path..., nameof(component))
+            _record_source_visit(:native_component, component_path, component)
+            push!(natives, _SourceNativeOccurrence(
+                system_index,
+                path,
+                component_path,
+                component,
+            ))
+        end
+        _append_source_references!(references, current, path)
+        for child in getfield(current, :systems)
+            visit(child, system_index, path)
+        end
+        return nothing
+    end
+    visit(system, Int32(0), ())
+    return _PottsSourceInventory(systems, statement_values, references, natives)
+end
+
+function _inventory_statements(inventory::_PottsSourceInventory)
+    return AbstractPottsStatement[
+        _namespace_statement(occurrence.statement, occurrence.path)
+        for occurrence in inventory.statements
+    ]
+end
+
+function _inventory_statement_groups(inventory::_PottsSourceInventory)
+    groups = [AbstractPottsStatement[] for _ in inventory.systems]
+    for occurrence in inventory.statements
+        push!(groups[Int(occurrence.system)], occurrence.statement)
+    end
+    return groups
+end
+
+function _inventory_child_indices(inventory::_PottsSourceInventory)
+    children = [Int32[] for _ in inventory.systems]
+    for occurrence in inventory.systems
+        iszero(occurrence.parent) && continue
+        push!(children[Int(occurrence.parent)], occurrence.index)
+    end
+    return children
+end
+
+"""
+Rebuild a hierarchy and its inventory from already discovered occurrences.
+
+This is the only completion-time hierarchy reconstruction primitive. It does
+not rediscover source declarations and deliberately does not emit traversal
+witness events.
+"""
+function _rebuild_source_inventory(
+        inventory::_PottsSourceInventory,
+        local_systems::AbstractVector{<:PottsSystem},
+        statement_groups::AbstractVector,
+    )
+    count = length(inventory.systems)
+    length(local_systems) == count || throw(ArgumentError(
+        "source-inventory rebuild requires one local system per occurrence"
+    ))
+    length(statement_groups) == count || throw(ArgumentError(
+        "source-inventory rebuild requires one statement group per occurrence"
+    ))
+    children = _inventory_child_indices(inventory)
+    rebuilt = Vector{PottsSystem}(undef, count)
+    for index in count:-1:1
+        rebuilt_children = PottsSystem[
+            rebuilt[Int(child)] for child in children[index]
+        ]
+        rebuilt[index] = _rebuild(
+            local_systems[index];
+            statements = StatementSet(statement_groups[index]),
+            systems = rebuilt_children,
+        )
+    end
+
+    systems = _SourceSystemOccurrence[
+        _SourceSystemOccurrence(
+            occurrence.index,
+            rebuilt[Int(occurrence.index)],
+            occurrence.path,
+            occurrence.parent,
+        ) for occurrence in inventory.systems
+    ]
+    statement_values = _SourceStatementOccurrence[]
+    references = _SourceReferenceOccurrence[]
+    natives = _SourceNativeOccurrence[]
+    source_order = Int32(0)
+    for occurrence in systems
+        index = Int(occurrence.index)
+        for statement in statement_groups[index]
+            source_order += Int32(1)
+            push!(statement_values, _SourceStatementOccurrence(
+                occurrence.index,
+                occurrence.path,
+                source_order,
+                statement,
+            ))
+        end
+        current = occurrence.system
+        for component in getfield(current, :native_components)
+            push!(natives, _SourceNativeOccurrence(
+                occurrence.index,
+                occurrence.path,
+                (occurrence.path..., nameof(component)),
+                component,
+            ))
+        end
+        # Reification is from known system occurrences, not a source traversal.
+        for (kind, values) in (
+                :equation => getfield(current, :eqs),
+                :variable => getfield(current, :unknowns),
+                :parameter => getfield(current, :ps),
+                :independent_variable => getfield(current, :ivs),
+                :input => _potts_inputs(current, Val(:local)),
+                :output => _potts_outputs(current, Val(:local)),
+                :observation => getfield(current, :observed),
+                :continuous_event => getfield(current, :continuous_events),
+                :discrete_event => getfield(current, :discrete_events),
+            )
+            for value in values
+                push!(references, _SourceReferenceOccurrence(
+                    kind, occurrence.path, _defensive_copy(value)
+                ))
+            end
+        end
+        initial_conditions = sort!(
+            collect(getfield(current, :initial_conditions));
+            by = pair -> _canonical_value(first(pair)),
+        )
+        for (key, value) in initial_conditions
+            push!(references, _SourceReferenceOccurrence(
+                :initial_condition,
+                occurrence.path,
+                _defensive_copy(key) => _defensive_copy(value),
+            ))
+        end
+    end
+    next_inventory = _PottsSourceInventory(
+        systems, statement_values, references, natives
+    )
+    return rebuilt[1], next_inventory
+end
+
+function _inventory_path_iswithin(path::Tuple, prefix::Tuple)
+    length(path) >= length(prefix) || return false
+    return path[1:length(prefix)] == prefix
+end
+
+"""Create a rebased subtree view without walking the source hierarchy."""
+function _source_subinventory(
+        inventory::_PottsSourceInventory, root_index::Integer
+    )
+    root = inventory.systems[root_index]
+    prefix = root.path
+    included = filter(
+        occurrence -> _inventory_path_iswithin(occurrence.path, prefix),
+        inventory.systems,
+    )
+    old_to_new = Dict(
+        occurrence.index => Int32(index)
+        for (index, occurrence) in enumerate(included)
+    )
+    rebase = path -> path[length(prefix):end]
+    systems = _SourceSystemOccurrence[
+        _SourceSystemOccurrence(
+            old_to_new[occurrence.index],
+            occurrence.system,
+            rebase(occurrence.path),
+            occurrence.index == root.index ? Int32(0) :
+                old_to_new[occurrence.parent],
+        ) for occurrence in included
+    ]
+    statements = _SourceStatementOccurrence[]
+    order = Int32(0)
+    for occurrence in inventory.statements
+        haskey(old_to_new, occurrence.system) || continue
+        order += Int32(1)
+        push!(statements, _SourceStatementOccurrence(
+            old_to_new[occurrence.system],
+            rebase(occurrence.path),
+            order,
+            occurrence.statement,
+        ))
+    end
+    references = _SourceReferenceOccurrence[
+        _SourceReferenceOccurrence(
+            occurrence.kind,
+            rebase(occurrence.path),
+            occurrence.value,
+        ) for occurrence in inventory.references
+        if _inventory_path_iswithin(occurrence.path, prefix)
+    ]
+    natives = _SourceNativeOccurrence[
+        _SourceNativeOccurrence(
+            old_to_new[occurrence.system],
+            rebase(occurrence.system_path),
+            rebase(occurrence.path),
+            occurrence.component,
+        ) for occurrence in inventory.natives
+        if haskey(old_to_new, occurrence.system)
+    ]
+    return _PottsSourceInventory(systems, statements, references, natives)
 end
 
 function PottsSystem(;
@@ -78,6 +402,7 @@ function PottsSystem(;
         parameters = (),
         independent_variables = (),
         systems = (),
+        native_components = (),
         inputs = (),
         outputs = (),
         initial_conditions = Dict(),
@@ -98,7 +423,15 @@ function PottsSystem(;
         ))
         push!(child_systems, system)
     end
-    _assert_unique_system_names(child_systems)
+    native_values = NativeComponent[]
+    for component in native_components
+        component isa NativeComponent || throw(ArgumentError(
+            "native_components must contain only NativeComponent declarations; " *
+            "got $(typeof(component))"
+        ))
+        push!(native_values, component)
+    end
+    _assert_unique_namespace_names(child_systems, native_values)
     ivs = Any[_defensive_copy(value) for value in independent_variables]
     iv = length(ivs) == 1 ? only(ivs) : nothing
     return PottsSystem(
@@ -110,6 +443,7 @@ function PottsSystem(;
         iv,
         ivs,
         child_systems,
+        native_values,
         Any[_defensive_copy(value) for value in inputs],
         Any[_defensive_copy(value) for value in outputs],
         Dict{Any, Any}(
@@ -119,6 +453,7 @@ function PottsSystem(;
         Any[_defensive_copy(value) for value in observed],
         Any[_defensive_copy(value) for value in continuous_events],
         Any[_defensive_copy(value) for value in discrete_events],
+        false,
         false,
         true,
         nothing,
@@ -134,6 +469,7 @@ function _rebuild(
         parameters = getfield(system, :ps),
         independent_variables = getfield(system, :ivs),
         systems = getfield(system, :systems),
+        native_components = getfield(system, :native_components),
         inputs = getfield(system, :inputs),
         outputs = getfield(system, :outputs),
         initial_conditions = getfield(system, :initial_conditions),
@@ -141,6 +477,7 @@ function _rebuild(
         continuous_events = getfield(system, :continuous_events),
         discrete_events = getfield(system, :discrete_events),
         complete = getfield(system, :complete),
+        isscheduled = getfield(system, :isscheduled),
         namespacing = getfield(system, :namespacing),
         completion = getfield(system, :completion),
     )
@@ -155,6 +492,7 @@ function _rebuild(
         iv,
         ivs,
         PottsSystem[system for system in systems],
+        NativeComponent[component for component in native_components],
         Any[_defensive_copy(value) for value in inputs],
         Any[_defensive_copy(value) for value in outputs],
         Dict{Any, Any}(
@@ -165,12 +503,25 @@ function _rebuild(
         Any[_defensive_copy(value) for value in continuous_events],
         Any[_defensive_copy(value) for value in discrete_events],
         Bool(complete),
+        Bool(isscheduled),
         Bool(namespacing),
         completion,
     )
 end
 
 statements(system::PottsSystem) = statements(getfield(system, :statements))
+native_components(system::PottsSystem) =
+    Tuple(getfield(system, :native_components))
+
+"""
+    is_scheduled(system::PottsSystem) -> Bool
+
+Return whether `system` has passed PottsToolkit's structural `mtkcompile`
+boundary. This is the Potts-owned scheduling query; the `isscheduled` field is
+retained only as part of the `ModelingToolkitBase.AbstractSystem` storage
+contract.
+"""
+is_scheduled(system::PottsSystem) = getfield(system, :isscheduled)
 ModelingToolkitBase.has_iv(system::PottsSystem) = getfield(system, :iv) !== nothing
 function ModelingToolkitBase.independent_variables(system::PottsSystem)
     result = Any[_defensive_copy(value) for value in getfield(system, :ivs)]
@@ -234,6 +585,11 @@ function Symbolics.substitute(
         return _rebuild(system; name = renamed, systems = children)
     end
 
+    _has_native_components(system) && throw(ArgumentError(
+        "symbolic substitution of a PottsSystem with NativeComponent " *
+        "declarations is not defined; remake native problem data after scheduling"
+    ))
+
     substitute_one = value -> _substitute_value(value, normalized)
     substituted_statements = StatementSet(
         map_symbolics(substitute_one, statement) for statement in statements(system)
@@ -271,11 +627,29 @@ function Symbolics.substitute(
     )
 end
 
+function _has_native_components(system::PottsSystem)
+    !isempty(getfield(system, :native_components)) && return true
+    return any(_has_native_components, getfield(system, :systems))
+end
+
 function _assert_unique_system_names(systems)
     seen = Set{Symbol}()
     for system in systems
         name = nameof(system)
         name in seen && throw(ArgumentError("duplicate subsystem name `$name`"))
+        push!(seen, name)
+    end
+    return nothing
+end
+
+function _assert_unique_namespace_names(systems, natives)
+    _assert_unique_system_names(systems)
+    seen = Set(nameof(system) for system in systems)
+    for component in natives
+        name = nameof(component)
+        name in seen && throw(ArgumentError(
+            "duplicate subsystem or native component name `$name`"
+        ))
         push!(seen, name)
     end
     return nothing
@@ -293,16 +667,26 @@ function ModelingToolkitBase.compose(
     )
     _ensure_incomplete(system, "compose")
     typed_children = PottsSystem[]
+    native_children = NativeComponent[]
     for child in children
-        child isa PottsSystem || throw(ArgumentError(
-            "PottsSystem may compose only PottsSystem children, got $(typeof(child))"
-        ))
-        _ensure_incomplete(child, "compose")
-        push!(typed_children, child)
+        if child isa PottsSystem
+            _ensure_incomplete(child, "compose")
+            push!(typed_children, child)
+        elseif child isa NativeComponent
+            push!(native_children, child)
+        else
+            throw(ArgumentError(
+                "PottsSystem compose admits PottsSystem and NativeComponent " *
+                "children, got $(typeof(child))"
+            ))
+        end
     end
     merged = [getfield(system, :systems); typed_children]
-    _assert_unique_system_names(merged)
-    return _rebuild(system; name, systems = merged)
+    merged_natives = [getfield(system, :native_components); native_children]
+    _assert_unique_namespace_names(merged, merged_natives)
+    return _rebuild(
+        system; name, systems = merged, native_components = merged_natives
+    )
 end
 
 function ModelingToolkitBase.extend(
@@ -344,7 +728,11 @@ function ModelingToolkitBase.extend(
     end
 
     children = [getfield(base, :systems); getfield(system, :systems)]
-    _assert_unique_system_names(children)
+    natives = [
+        getfield(base, :native_components);
+        getfield(system, :native_components)
+    ]
+    _assert_unique_namespace_names(children, natives)
     return _rebuild(
         system;
         name,
@@ -354,6 +742,7 @@ function ModelingToolkitBase.extend(
         parameters = _stable_union(getfield(base, :ps), getfield(system, :ps)),
         independent_variables = _stable_union(getfield(base, :ivs), getfield(system, :ivs)),
         systems = children,
+        native_components = natives,
         inputs = _stable_union(getfield(base, :inputs), getfield(system, :inputs)),
         outputs = _stable_union(getfield(base, :outputs), getfield(system, :outputs)),
         initial_conditions,
@@ -383,23 +772,6 @@ function _stable_union(left, right)
     return result
 end
 
-"""Return the canonical flattened statement view used by host-only passes."""
-function _all_system_statements(
-        system::PottsSystem, namespace::Tuple = ()
-    )
-    result = AbstractPottsStatement[
-        _namespace_statement_for_lowering(statement, namespace)
-        for statement in statements(system)
-    ]
-    for child in getfield(system, :systems)
-        append!(
-            result,
-            _all_system_statements(child, (namespace..., nameof(child))),
-        )
-    end
-    return result
-end
-
 function ModelingToolkitBase.flatten(system::PottsSystem, args...)
     isempty(args) || throw(ArgumentError("PottsSystem flatten accepts no positional options"))
     _ensure_incomplete(system, "flatten")
@@ -407,21 +779,31 @@ function ModelingToolkitBase.flatten(system::PottsSystem, args...)
     return _flatten(system, ())
 end
 
-function _flatten_statements!(result, system::PottsSystem, namespace::Tuple)
-    for statement in statements(system)
-        push!(result, _namespace_statement_for_lowering(statement, namespace))
-    end
-    for child in getfield(system, :systems)
-        _flatten_statements!(
-            result, child, (namespace..., nameof(child))
-        )
-    end
-    return result
-end
-
 function _flatten(system::PottsSystem, prefix::Tuple)
+    inventory = _source_inventory(system)
     flat_statements = AbstractPottsStatement[]
-    _flatten_statements!(flat_statements, system, prefix)
+    for occurrence in inventory.statements
+        relative_path = occurrence.path[2:end]
+        push!(flat_statements, _namespace_statement_for_lowering(
+            occurrence.statement, (prefix..., relative_path...)
+        ))
+    end
+    flat_natives = NativeComponent[]
+    for occurrence in inventory.natives
+        relative_system_path = occurrence.system_path[2:end]
+        native_path = (prefix..., relative_system_path..., nameof(occurrence.component))
+        name = isempty(native_path[1:(end - 1)]) ? nameof(occurrence.component) :
+               Symbol(join(String.(native_path), "₊"))
+        mapped = _map_native_potts_endpoints(
+            endpoint -> _namespace_statement_for_lowering(
+                endpoint, (prefix..., relative_system_path...)
+            ),
+            occurrence.component;
+            name,
+        )
+        push!(flat_natives, mapped)
+    end
+    _assert_unique_namespace_names(PottsSystem[], flat_natives)
 
     return _rebuild(
         system;
@@ -432,6 +814,7 @@ function _flatten(system::PottsSystem, prefix::Tuple)
         independent_variables =
             ModelingToolkitBase.independent_variables(system),
         systems = PottsSystem[],
+        native_components = flat_natives,
         inputs = ModelingToolkitBase.inputs(system),
         outputs = ModelingToolkitBase.outputs(system),
         initial_conditions =
@@ -467,33 +850,23 @@ function ModelingToolkitBase.complete(
         throw(ArgumentError("a completed PottsSystem cannot be completed with new options"))
     end
 
-    resolved_system, structural_parameters =
-        _resolve_structural_parameters(system)
+    # This is the sole hierarchy discovery for completion. Every later pass
+    # transforms or projects these occurrences without walking `systems` again.
+    inventory = _source_inventory(system)
+    _, inventory, structural_parameters =
+        _resolve_structural_parameters(inventory)
     diagnostics = PottsDiagnostic[]
-    expanded_system = _expand_registered_system(
-        resolved_system, registry, diagnostics
+    expanded_system, inventory = _expand_registered_inventory(
+        inventory, registry, diagnostics
     )
     _throw_diagnostics(:completion, diagnostics)
-    expanded_system = _expand_structural_policies(expanded_system)
-    _validate_lifecycle_conflicts!(_all_system_statements(expanded_system))
-    _validate_completion_reference_units(expanded_system, reference_units)
-    completion_data = _complete_potts(
+    expanded_system, inventory = _expand_structural_policies(inventory)
+    return _complete_inventory_hierarchy(
         expanded_system,
+        inventory,
         reference_units,
         registry,
-        (structural = structural_parameters,),
-    )
-    completed_children = PottsSystem[
-        ModelingToolkitBase.complete(
-            child; reference_units, registry
-        ) for child in getfield(expanded_system, :systems)
-    ]
-    return _rebuild(
-        expanded_system;
-        systems = completed_children,
-        complete = true,
-        namespacing = false,
-        completion = completion_data,
+        structural_parameters,
     )
 end
 
@@ -522,6 +895,11 @@ function Base.show(io::IO, system::PottsSystem)
         length(getfield(system, :systems)),
         " subsystem",
         length(getfield(system, :systems)) == 1 ? "" : "s",
+        ", ",
+        length(getfield(system, :native_components)),
+        " native component",
+        length(getfield(system, :native_components)) == 1 ? "" : "s",
+        is_scheduled(system) ? ", scheduled)" :
         ModelingToolkitBase.iscomplete(system) ? ", complete)" : ", incomplete)",
     )
 end

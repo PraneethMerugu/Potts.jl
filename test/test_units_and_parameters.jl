@@ -1,12 +1,13 @@
-@testset "units and runtime parameters" begin
+@testset "scheduled units and runtime parameters" begin
     @parameters begin
-        target = 8.0u"μm^2"
-        strength = 2.0e-12u"J"
-        temperature = 4.0e-12u"J"
+        unit_target = 8.0u"μm^2"
+        unit_strength = 2.0e-12u"J"
+        unit_temperature = 4.0e-12u"J"
     end
-    cell = CellKind(:cell; extinction = RetireAtZero())
-    medium = MediumKind(:medium)
-    @named dimensional = PottsSystem(
+    cell = CellKind(:unit_cell; extinction = RetireAtZero())
+    medium = MediumKind(:unit_medium)
+    source = PottsSystem(
+        name = :dimensional_scheduled_model,
         statements = StatementSet((
             Lattice(
                 (6, 6);
@@ -18,49 +19,37 @@
             ),
             cell,
             medium,
-            Volume(cell; target, strength),
+            Volume(cell; target = unit_target, strength = unit_strength),
             ContactEnergy([
                 (cell ↔ medium) => 6.0e-12u"J",
                 (cell ↔ cell) => 2.0e-12u"J",
             ]),
-            Protocol(Sweep(; temperature); name = :main),
+            Protocol(Sweep(; temperature = unit_temperature); name = :main),
         )),
-        parameters = [target, strength, temperature],
+        parameters = [unit_target, unit_strength, unit_temperature],
     )
     completed = complete(
-        dimensional;
+        source;
         reference_units = ReferenceUnits(
             length = 1.0u"μm",
             area = 1.0u"μm^2",
             energy = 1.0e-12u"J",
         ),
     )
-    executable = compile(
-        completed;
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
-    dimensional_records = inspect(completed, Statements())
-    @test any(record -> !isempty(record.units), dimensional_records)
+    records = inspect(completed, Statements())
+    @test any(record -> !isempty(record.units), records)
     @test all(
         record -> length(record.units) == length(record.reference_conversion),
-        dimensional_records,
+        records,
     )
-    @test all(
-        entry -> entry.unit === nothing ||
-                 entry.unit isa PottsToolkit.ReferenceUnitDescriptor,
-        executable.parameter_manifest,
-    )
-    @test all(
-        descriptor -> descriptor isa PottsToolkit.ReferenceUnitDescriptor,
-        executable.parameter_manifest.reference_units,
-    )
-    @test !any(
-        descriptor -> descriptor isa DynamicQuantities.UnionAbstractQuantity,
-        executable.parameter_manifest.reference_units,
-    )
-    @test executable.core_program.parameter_defaults == Float32[8, 2, 4]
+
+    scheduled = mtkcompile(completed)
+    schema = inspect(scheduled, ParameterSchema())
+    @test Tuple(entry.name for entry in schema.runtime) ==
+          (:unit_target, :unit_strength, :unit_temperature)
+    @test schema.runtime[1].default == 8.0u"μm^2"
+    @test schema.runtime[2].default == 2.0e-12u"J"
+    @test all(!entry.required for entry in schema.runtime)
 
     labels = zeros(Int, 6, 6)
     labels[3:4, 3:4] .= 1
@@ -68,54 +57,69 @@
         ownership = LabelledCells(labels; cells = [cell], medium)
     )
     problem = PottsProblem(
-        executable,
+        scheduled,
         initial,
         (0, 1);
-        p = [
-            target => 10.0u"μm^2",
-            strength => 3.0e-12u"J",
-            temperature => 5.0e-12u"J",
-        ],
+        p = (
+            unit_target => 10.0u"μm^2",
+            unit_strength => 3.0e-12u"J",
+            unit_temperature => 5.0e-12u"J",
+        ),
         seed = 1,
     )
-    @test problem.parameters.values == (10.0f0, 3.0f0, 5.0f0)
+    integrator = init(
+        problem,
+        SequentialCPM();
+        backend = CPUBackend(),
+        scalar_type = Float32,
+        save_start = false,
+    )
+    @test SymbolicIndexingInterface.getp(integrator, unit_target)(integrator) ==
+          10.0f0
+    @test SymbolicIndexingInterface.getp(integrator, unit_strength)(integrator) ==
+          3.0f0
+    @test SymbolicIndexingInterface.getp(
+        integrator, unit_temperature
+    )(integrator) == 5.0f0
+
     @test_throws ArgumentError PottsProblem(
-        executable,
+        scheduled,
         initial,
         (0, 1);
-        p = [
-            target => 10.0u"μm^2",
-            strength => 3.0e-12u"J",
-            temperature => 1.0u"μm",
-        ],
+        p = (
+            unit_target => 10.0u"μm^2",
+            unit_strength => 3.0e-12u"J",
+            unit_temperature => 1.0u"μm",
+        ),
         seed = 1,
     )
     @test_throws ArgumentError PottsProblem(
-        executable,
+        scheduled,
         initial,
         (0, 1);
-        p = [
+        p = (
             :unknown => 1.0,
-            strength => 3.0e-12u"J",
-            temperature => 5.0e-12u"J",
-        ],
+            unit_strength => 3.0e-12u"J",
+            unit_temperature => 5.0e-12u"J",
+        ),
         seed = 1,
     )
 end
 
-@testset "compiler-proven structural parameter roles" begin
-    @parameters capacity = 4
-    cell = CellKind(:cell; extinction = RetireAtZero())
-    medium = MediumKind(:medium)
+@testset "scheduled structural parameter roles" begin
+    @parameters relationship_capacity = 4
+    cell = CellKind(:structural_cell; extinction = RetireAtZero())
+    medium = MediumKind(:structural_medium)
     links = RelationshipState(
-        :links;
+        :structural_links;
         endpoints = Undirected(cell, cell),
         payload = (strength = 1.0, target = 2.0, maximum = 8.0),
-        capacity,
+        capacity = relationship_capacity,
         maximum_degree = 2,
         lifecycle = RemoveWithEndpoint(),
     )
-    @named structural_model = PottsSystem(
+    source = PottsSystem(
+        name = :structural_parameter_model,
         statements = StatementSet((
             Lattice((6, 6)),
             cell,
@@ -124,19 +128,13 @@ end
             Volume(cell; target = 4.0, strength = 1.0),
             Protocol(Sweep(; temperature = 2.0); name = :main),
         )),
-        parameters = [capacity],
+        parameters = [relationship_capacity],
     )
-    completed = complete(structural_model)
-    executable = compile(
-        completed;
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float64,
-    )
-    schema = inspect(executable, PottsToolkit.ParameterSchema())
-    @test isempty(schema.entries)
-    @test only(schema.structural).name === :capacity
-    @test only(schema.structural).value == 4
+    scheduled = mtkcompile(source)
+    schema = inspect(scheduled, ParameterSchema())
+    @test isempty(schema.runtime)
+    @test only(schema.structural).name === :relationship_capacity
+    @test only(schema.structural).default == 4
 
     labels = zeros(Int, 6, 6)
     labels[3:4, 3:4] .= 1
@@ -144,7 +142,11 @@ end
         ownership = LabelledCells(labels; cells = [cell], medium)
     )
     @test_throws ArgumentError PottsProblem(
-        executable, initial, (0, 1); p = [capacity => 5], seed = 1
+        scheduled,
+        initial,
+        (0, 1);
+        p = (relationship_capacity => 5,),
+        seed = 1,
     )
 
     @parameters unresolved_capacity
@@ -154,44 +156,48 @@ end
         payload = (strength = 1.0, target = 2.0, maximum = 8.0),
         capacity = unresolved_capacity,
         maximum_degree = 2,
-        lifecycle = RemoveWithEndpoint(),
     )
-    @named unresolved_model = PottsSystem(
+    unresolved = PottsSystem(
+        name = :unresolved_structural_parameter,
         statements = StatementSet((
             Lattice((6, 6)),
             cell,
             medium,
             unresolved_links,
-            Volume(cell; target = 4.0, strength = 1.0),
-            Protocol(Sweep(; temperature = 2.0); name = :main),
+            Protocol(Sweep(); name = :main),
         )),
         parameters = [unresolved_capacity],
     )
-    @test_throws ArgumentError complete(unresolved_model)
+    @test_throws ArgumentError complete(unresolved)
 end
 
 @testset "completion owns reference-unit validation" begin
-    @parameters target = 8.0u"μm^2" strength = 2.0
-    cell = CellKind(:cell; extinction = RetireAtZero())
-    medium = MediumKind(:medium)
-    @named missing_anchor = PottsSystem(
+    @parameters incomplete_target = 8.0u"μm^2" incomplete_strength = 2.0
+    cell = CellKind(:reference_cell; extinction = RetireAtZero())
+    medium = MediumKind(:reference_medium)
+    missing_anchor = PottsSystem(
+        name = :missing_reference_anchor,
         statements = StatementSet((
             Lattice((4, 4)),
             cell,
             medium,
-            Volume(cell; target, strength),
+            Volume(
+                cell;
+                target = incomplete_target,
+                strength = incomplete_strength,
+            ),
             Protocol(Sweep(; temperature = 2.0); name = :main),
         )),
-        parameters = [target, strength],
+        parameters = [incomplete_target, incomplete_strength],
     )
     @test_throws ArgumentError complete(missing_anchor)
 
-    @named ambiguous_anchor = PottsSystem(
+    ambiguous_anchor = PottsSystem(
+        name = :ambiguous_reference_anchor,
         statements = StatementSet((
             Lattice((4, 4); spacing = (1.0u"μm", 2.0u"μm")),
             cell,
             medium,
-            Volume(cell; target = 8.0, strength = 2.0),
             Protocol(Sweep(; temperature = 2.0); name = :main),
         )),
     )
@@ -200,4 +206,68 @@ end
         ambiguous_anchor;
         reference_units = ReferenceUnits(length = 1.0u"μm"),
     ))
+end
+
+@testset "unit transfer proves fixed powers and roots" begin
+    @parameters begin
+        transfer_length = 2.0u"m"
+        transfer_area = 4.0u"m^2"
+        transfer_exponent = 2.0
+    end
+    cell = CellKind(:unit_transfer_cell; extinction = RetireAtZero())
+    medium = MediumKind(:unit_transfer_medium)
+    reference_units = ReferenceUnits(
+        length = 1.0u"m",
+        area = 1.0u"m^2",
+    )
+
+    function unit_transfer_model(name, expression; exponent = false)
+        return PottsSystem(
+            name = name,
+            statements = StatementSet((
+                Lattice((2, 2); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                ProposalDrive(:unit_transfer_drive, expression),
+                Protocol(Sweep(); name = :main),
+            )),
+            parameters = exponent ?
+                [transfer_length, transfer_area, transfer_exponent] :
+                [transfer_length, transfer_area],
+        )
+    end
+
+    @test iscomplete(complete(unit_transfer_model(
+        :fixed_power_units,
+        transfer_length^2 - transfer_area,
+    ); reference_units))
+    @test iscomplete(complete(unit_transfer_model(
+        :square_root_units,
+        sqrt(transfer_area) - transfer_length,
+    ); reference_units))
+
+    incompatible = try
+        complete(unit_transfer_model(
+            :incompatible_root_units,
+            sqrt(transfer_area) + transfer_area,
+        ); reference_units)
+        nothing
+    catch caught
+        caught
+    end
+    @test incompatible isa PottsToolkit.PottsValidationError
+    @test only(incompatible.diagnostics).kind === :illegal_operation_units
+
+    parameterized = try
+        complete(unit_transfer_model(
+            :parameterized_power_units,
+            transfer_length^transfer_exponent;
+            exponent = true,
+        ); reference_units)
+        nothing
+    catch caught
+        caught
+    end
+    @test parameterized isa PottsToolkit.PottsValidationError
+    @test only(parameterized.diagnostics).kind === :illegal_operation_units
 end

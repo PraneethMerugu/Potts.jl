@@ -136,6 +136,15 @@ const _STATE_TYPES = Union{
     RelationshipState,
 }
 
+const _SYMBOLIC_STATE_TYPES = Union{
+    SiteState,
+    CellState,
+    MediumState,
+    ModelState,
+    FieldState,
+    HistoryState,
+}
+
 const _PROPOSAL_TYPES = Union{
     ProposalDrive,
     ProposalConstraint,
@@ -158,6 +167,21 @@ end
 function (::Type{T})(id::Union{Symbol, StatementID}; initial = nothing,
         source = UnknownSource(), kwargs...) where {T <: _STATE_TYPES}
     return T(_statement_core(id, (; initial), (; kwargs...), source))
+end
+
+function (::Type{T})(
+        variable::Union{Symbolics.Num, Symbolics.Arr};
+        name,
+        initial = nothing,
+        source = UnknownSource(),
+        kwargs...,
+    ) where {T <: _SYMBOLIC_STATE_TYPES}
+    name isa Union{Symbol, StatementID} || throw(ArgumentError(
+        "a symbolic state declaration requires a Symbol or StatementID `name`"
+    ))
+    return T(_statement_core(
+        name, (; variable, initial), (; kwargs...), source
+    ))
 end
 
 function RelationshipState(
@@ -212,9 +236,13 @@ end
 function Protocol(id::Union{Symbol, StatementID}; stages = (),
         lifecycle_conflicts = RejectLifecycleAmbiguity(),
         source = UnknownSource(), kwargs...)
+    frozen_stages = _defensive_tuple(stages)
+    all(stage -> stage isa SweepStage, frozen_stages) || throw(ArgumentError(
+        "Protocol admits only SweepStage values; observations are settled save metadata"
+    ))
     return Protocol(_statement_core(
         id,
-        (; stages = _defensive_tuple(stages)),
+        (; stages = frozen_stages),
         (; lifecycle_conflicts, kwargs...),
         source,
     ))

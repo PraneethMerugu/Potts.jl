@@ -2,6 +2,8 @@
 
 abstract type AbstractFootprint end
 struct EmptyFootprint <: AbstractFootprint end
+"""One model-scoped resource, independent of lattice coordinates."""
+struct ModelFootprint <: AbstractFootprint end
 abstract type AbstractSpatialFootprintAnchor end
 struct ProposalSourceFootprintAnchor <: AbstractSpatialFootprintAnchor end
 struct ProposalTargetFootprintAnchor <: AbstractSpatialFootprintAnchor end

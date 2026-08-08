@@ -6,7 +6,7 @@ function _lower_stage_plan(
         ::Type{T},
         state_handles,
         draw_handles,
-        state_layout::CorePotts.StateLayout,
+        state_layout::CorePotts.CompilerSPI.StateLayout,
         relationship_endpoint_policies,
     ) where {T <: AbstractFloat}
     accepted = Any[]
@@ -14,7 +14,8 @@ function _lower_stage_plan(
     after_mcs_iterated = Any[]
     after_mcs_relationships = Any[]
     after_mcs_commits = Any[]
-    after_mcs_slot = 0
+    after_mcs_site_slot = 0
+    after_mcs_model_slot = 0
     relationship_slot = 0
     for (record_index, record) in enumerate(ir.source.records)
         if record.kind === :AcceptedCopyProcess
@@ -29,7 +30,8 @@ function _lower_stage_plan(
                     T,
                     state_handles,
                     draw_handles,
-                    CorePotts.AcceptedCopyStage(),
+                    state_layout,
+                    CorePotts.CompilerSPI.AcceptedCopyStage(),
                     length(accepted) + 1,
                 )
             elseif effect isa Create
@@ -51,7 +53,15 @@ function _lower_stage_plan(
             arguments = first(record.normalized_payload)
             length(arguments.effects) == 1 &&
                 only(arguments.effects) isa Assign || continue
-            after_mcs_slot += 1
+            effect = only(arguments.effects)
+            target_record = _stage_state_record(ir, record, effect.target)
+            is_model_assignment =
+                target_record !== nothing && target_record.kind === :ModelState
+            if is_model_assignment
+                after_mcs_model_slot += 1
+            else
+                after_mcs_site_slot += 1
+            end
             push!(after_mcs_assignments, _stage_descriptor(
                 ir,
                 record_index,
@@ -59,8 +69,10 @@ function _lower_stage_plan(
                 T,
                 state_handles,
                 draw_handles,
-                CorePotts.AfterMCSStage(),
-                after_mcs_slot,
+                state_layout,
+                CorePotts.CompilerSPI.AfterMCSStage(),
+                is_model_assignment ?
+                    after_mcs_model_slot : after_mcs_site_slot,
             ))
         elseif record.kind in (:RelationshipProcess, :LifecycleProcess)
             arguments = first(record.normalized_payload)
@@ -105,33 +117,33 @@ function _lower_stage_plan(
                     "HistoryState source and target storage shapes are incompatible"
                 ))
             condition = _static_evaluator(
-                CorePotts.LiteralExpression(true),
-                CorePotts.AbstractSiteStageEvaluationContext,
+                CorePotts.CompilerSPI.LiteralExpression(true),
+                CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext,
                 record,
             )
             value = _static_evaluator(
-                CorePotts.LiteralExpression(zero(T)),
-                CorePotts.AbstractSiteStageEvaluationContext,
+                CorePotts.CompilerSPI.LiteralExpression(zero(T)),
+                CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext,
                 record,
             )
-            push!(after_mcs_commits, CorePotts.CompiledStageDescriptor(
+            push!(after_mcs_commits, CorePotts.CompilerSPI.CompiledStageDescriptor(
                 condition,
                 value,
-                CorePotts.ShiftAppendEffect(
+                CorePotts.CompilerSPI.ShiftAppendEffect(
                     target, source, length(target_shape)
                 ),
-                CorePotts.AfterMCSStage(),
-                CorePotts.ResourceAccess(
+                CorePotts.CompilerSPI.AfterMCSStage(),
+                CorePotts.CompilerSPI.ResourceAccess(
                     (target, source),
                     (target,),
-                    CorePotts.FiniteSpatialFootprint(
-                        CorePotts.IterationSiteFootprintAnchor(),
+                    CorePotts.CompilerSPI.FiniteSpatialFootprint(
+                        CorePotts.CompilerSPI.IterationSiteFootprintAnchor(),
                         (ntuple(_ -> 0, length(_lattice_shape(ir))),),
                     ),
                     _site_write_footprint(
-                        ir, CorePotts.AfterMCSStage()
+                        ir, CorePotts.CompilerSPI.AfterMCSStage()
                     ),
-                    CorePotts.ExclusiveWriteAccess(),
+                    CorePotts.CompilerSPI.ExclusiveWriteAccess(),
                 ),
                 _stage_support(ir, record_index),
                 record_index,
@@ -144,10 +156,10 @@ function _lower_stage_plan(
                 manifest,
                 T,
                 state_handles,
-                after_mcs_slot + 1,
+                after_mcs_site_slot + 1,
             )
             if descriptor !== nothing
-                after_mcs_slot += 1
+                after_mcs_site_slot += 1
                 push!(after_mcs_iterated, descriptor)
             end
         end
@@ -181,13 +193,13 @@ function _lower_stage_plan(
             descriptor.effect,
         ) for descriptor in (accepted..., after_mcs...)),
     )
-    return CorePotts.StageExecutionPlan(
+    return CorePotts.CompilerSPI.StageExecutionPlan(
         accepted_groups,
         before_groups,
         lifecycle_after_groups,
         after_groups,
         length(accepted),
-        after_mcs_slot,
+        after_mcs_site_slot,
         fingerprint,
     )
 end

@@ -1,26 +1,26 @@
 # Final executable storage reports and CorePotts boundary validation.
 
-function _storage_report(program::CorePotts.CompiledPottsProgram)
+function _storage_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
     site_count = prod(program.shape)
     return (
         shape = program.shape,
         site_count,
-        max_cells = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+        max_cells = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
             Int(program.lifecycle_plan.cell_capacity) : nothing,
         ownership = (element = Int32, count = site_count),
         cell_kind = (
             element = Int16,
-            count = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+            count = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
                 Int(program.lifecycle_plan.cell_capacity) : nothing,
         ),
         cell_generation = (
             element = UInt32,
-            count = program.lifecycle_plan isa CorePotts.LifecycleExecutionPlan ?
+            count = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
                 Int(program.lifecycle_plan.cell_capacity) : nothing,
         ),
         volume = Int,
         declared_state_blocks = Tuple(
-            CorePotts.state_schema_metadata(entry.schema)
+            CorePotts.CompilerSPI.state_schema_metadata(entry.schema)
             for entry in program.descriptor_plan.state_layout.entries
         ),
         relationships = Tuple((
@@ -33,8 +33,8 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
     )
 end
 
-function _workspace_report(program::CorePotts.CompiledPottsProgram)
-    lifecycle = CorePotts.lifecycle_workspace_layout(
+function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
+    lifecycle = CorePotts.CompilerSPI.lifecycle_workspace_layout(
         program.lifecycle_plan, prod(program.shape)
     )
     return (
@@ -43,10 +43,16 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
             for group in program.stage_plan.after_mcs
             for descriptor in group.instances
             if descriptor.effect isa Union{
-                CorePotts.SiteAssignmentEffect,
-                CorePotts.IteratedSiteAssignmentEffect,
+                CorePotts.CompilerSPI.SiteAssignmentEffect,
+                CorePotts.CompilerSPI.IteratedSiteAssignmentEffect,
             }
         ); init = 0) * prod(program.shape),
+        stage_model_scratch = sum((
+            1
+            for group in program.stage_plan.after_mcs
+            for descriptor in group.instances
+            if descriptor.effect isa CorePotts.CompilerSPI.ModelAssignmentEffect
+        ); init = 0),
         proposal_scratch = length(program.descriptor_plan.source_table),
         relationship_requests = sum(
             schema.capacity for schema in program.relationships; init = 0
@@ -57,8 +63,8 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
                 for group in program.stage_plan.after_mcs
                 for descriptor in group.instances
                 if descriptor.effect isa Union{
-                    CorePotts.RelationshipRemoveEffect,
-                    CorePotts.RelationshipRetuneEffect,
+                    CorePotts.CompilerSPI.RelationshipRemoveEffect,
+                    CorePotts.CompilerSPI.RelationshipRetuneEffect,
                 }
             ); init = 0),
         lifecycle,

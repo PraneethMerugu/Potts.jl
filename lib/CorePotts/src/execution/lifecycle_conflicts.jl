@@ -122,7 +122,7 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
             ]
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusConflict;
+                ProgramStatusConflict;
                 source = first_descriptor.source_handle,
                 secondary_source = second_descriptor.source_handle,
                 anchor = @inbounds(workspace.anchor[second_conflict]),
@@ -197,7 +197,7 @@ function _resolve_lifecycle_conflicts!(runtime, plan, workspace)
             ]
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusConflict;
+                ProgramStatusConflict;
                 source = tied_descriptor.source_handle,
                 secondary_source = candidate_descriptor.source_handle,
                 anchor = @inbounds(workspace.anchor[candidate]),
@@ -262,7 +262,7 @@ function _preflight_lifecycle_capacity!(runtime, plan, workspace)
     if requested > free_count
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusCellCapacity;
+            ProgramStatusCellCapacity;
             required = requested,
             available = free_count,
             maximum = plan.cell_capacity,
@@ -279,7 +279,7 @@ function _preflight_lifecycle_capacity!(runtime, plan, workspace)
         generation = @inbounds runtime.cell_generations[slot]
         if generation == typemax(UInt32)
             _set_lifecycle_status!(
-                workspace, LifecycleStatusGenerationOverflow; anchor = slot
+                workspace, ProgramStatusGenerationOverflow; anchor = slot
             )
             return -1
         end

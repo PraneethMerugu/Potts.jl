@@ -69,7 +69,7 @@ end
 function _assert_direct_lifecycle_equivalence(reference, workspace, to_host)
     state = workspace.state
     @test only(to_host(state.lifecycle_workspace.status)).code ===
-        CorePotts.LifecycleStatusSuccess
+        CorePotts.ProgramStatusSuccess
     @test to_host(state.ownership) == reference.ownership
     @test to_host(state.cell_kinds) == reference.cell_kinds
     @test to_host(state.cell_generations) == reference.cell_generations
@@ -853,8 +853,8 @@ function run_lifecycle_resolution_policy_execution(
     backend = CorePotts.KernelAbstractions.get_backend(state.ownership)
     CorePotts.KernelAbstractions.synchronize(backend)
     status = only(to_host(state.lifecycle_workspace.status))
-    @test status.code === CorePotts.LifecycleStatusConflict
-    @test status.stage === CorePotts.LifecycleStageSelection
+    @test status.code === CorePotts.ProgramStatusConflict
+    @test status.stage === CorePotts.ProgramStageSelection
     @test to_host(state.ownership) == initial_ownership
     @test reject_executable.reports.lifecycle.conflict_policy ===
         :RejectLifecycleConflicts

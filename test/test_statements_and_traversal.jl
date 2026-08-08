@@ -120,6 +120,70 @@
     @test occursin("edge_payload", string(edge.strength))
     @test draw(Normal(0.0, k), DrawKey(:noise)) isa Num
 
+    query_contracts = (
+        (contact_edge_count, 2, contact_edge_count(x, k)),
+        (contact_measure, 3, contact_measure(x, k, 1.0)),
+        (boundary_site_count, 2, boundary_site_count(x, k)),
+        (neighbor_cell_count, 2, neighbor_cell_count(x, k)),
+        (neighbor_property_sum, 3, neighbor_property_sum(x, k, x)),
+        (
+            neighbor_property_mean,
+            4,
+            neighbor_property_mean(x, k, x, 0.0),
+        ),
+        (
+            global_interface_measure,
+            3,
+            global_interface_measure(x, k, 1.0),
+        ),
+    )
+    for (operation, arity, expression) in query_contracts
+        @test expression isa Num
+        transfer = PottsToolkit.operation_transfer(operation, arity)
+        @test transfer.arity == arity:arity
+        @test transfer.allowed_roles == (:observation,)
+        @test transfer.allowed_phases == (:none,)
+        @test !transfer.cpu
+        @test !transfer.gpu
+    end
+    @test !applicable(neighbor_property_mean, x, k, x)
+    collection_error = try
+        neighbor_cells(x, k)
+        nothing
+    catch caught
+        caught
+    end
+    @test collection_error isa ArgumentError
+    @test occursin("collection-valued settled-snapshot", sprint(
+        showerror, collection_error
+    ))
+    @test occursin("G5H-4", sprint(showerror, collection_error))
+    @test_throws ArgumentError Protocol(:invalid; stages = (EveryMCS(),))
+
+    phase_cell = CellKind(:phase_cell; extinction = RetireAtZero())
+    phase_medium = MediumKind(:phase_medium)
+    phase_completed = complete(PottsSystem(
+        name = :phase_contract,
+        statements = StatementSet((
+            Lattice((2, 2)),
+            phase_cell,
+            phase_medium,
+            EquationProcess(:field_update, ()),
+            Observation(:settled_metadata, 1.0),
+            Protocol(Sweep(); name = :phase_protocol),
+        )),
+    ))
+    phase_records = inspect(phase_completed, Schedule())
+    equation_record = only(filter(
+        record -> record.kind === :EquationProcess, phase_records
+    ))
+    observation_record = only(filter(
+        record -> record.kind === :Observation, phase_records
+    ))
+    @test equation_record.phase isa AfterMCS
+    @test observation_record.phase === nothing
+    @test isempty(observation_record.ordering_dependencies)
+
     contract = (
         argument_types = (Num,),
         result_type = Real,
@@ -139,7 +203,7 @@
         energy_domain = nothing,
         affected_region = nothing,
         reference_semantics = :dimensionless,
-        descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
+        descriptor_payload_type = CorePotts.CompilerSPI.EmptyDescriptorPayload,
         serialization_identity = "example-schema-v1",
         lowering_identity = :lower_example,
     )
@@ -178,7 +242,7 @@
             version = v"1.0.0",
             serialization_identity = "example-schema-v1",
             lowering_identity = :lower_example,
-            descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
+            descriptor_payload_type = CorePotts.CompilerSPI.EmptyDescriptorPayload,
         ),
     )
     @test_throws ArgumentError register_statement(

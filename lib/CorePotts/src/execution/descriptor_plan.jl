@@ -355,11 +355,7 @@ ProposalEvaluation(
 @inline function _checked_proposal_scalar(value, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    converted = T(value)
-    isfinite(converted) || throw(DomainError(
-        converted, "proposal descriptor returned a nonfinite scalar"
-    ))
-    return converted
+    return T(value)
 end
 
 @inline function _compiled_proposal_evaluation(

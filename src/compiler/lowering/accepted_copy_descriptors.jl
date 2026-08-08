@@ -7,7 +7,8 @@ function _stage_descriptor(
         ::Type{T},
         state_handles,
         draw_handles,
-        stage::CorePotts.AbstractCompiledStage,
+        state_layout::CorePotts.CompilerSPI.StateLayout,
+        stage::CorePotts.CompilerSPI.AbstractCompiledStage,
         slot::Integer,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
@@ -20,9 +21,17 @@ function _stage_descriptor(
     effect isa Assign || throw(ArgumentError(
         "V1 staged assignment descriptors require Assign"
     ))
-    binding = stage isa CorePotts.AcceptedCopyStage ?
-              CorePotts.ProposalTargetStageSite() :
-              CorePotts.IterationStageSite()
+    target_record = _stage_state_record(ir, record, effect.target)
+    target_record === nothing && throw(ArgumentError(
+        "staged assignment target does not resolve to declared state"
+    ))
+    is_model_assignment =
+        stage isa CorePotts.CompilerSPI.AfterMCSStage &&
+        target_record.kind === :ModelState
+    binding = stage isa CorePotts.CompilerSPI.AcceptedCopyStage ?
+              CorePotts.CompilerSPI.ProposalTargetStageSite() :
+              is_model_assignment ? CorePotts.CompilerSPI.ModelStageSite() :
+              CorePotts.CompilerSPI.IterationStageSite()
     condition = _stage_evaluator(
         ir,
         record_index,
@@ -48,17 +57,36 @@ function _stage_descriptor(
     target = _stage_state_handle(ir, record, effect.target, state_handles)
     reads = _record_state_handles(ir, record, state_handles)
     target in reads || (reads = (reads..., target))
-    return CorePotts.CompiledStageDescriptor(
+    if is_model_assignment
+        entries = Tuple(
+            only(entry for entry in state_layout.entries if entry.handle == handle)
+            for handle in reads
+        )
+        all(entry -> entry.schema.domain === :model, entries) || throw(
+            ArgumentError(
+                "a synchronous ModelState assignment may read only ModelState values and parameters"
+            )
+        )
+        all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
+            ArgumentError(
+                "a synchronous ModelState assignment requires scalar ModelState reads and target"
+            )
+        )
+    end
+    return CorePotts.CompilerSPI.CompiledStageDescriptor(
         condition,
         value,
-        CorePotts.SiteAssignmentEffect(target),
+        is_model_assignment ?
+            CorePotts.CompilerSPI.ModelAssignmentEffect(target) :
+            CorePotts.CompilerSPI.SiteAssignmentEffect(target),
         stage,
-        CorePotts.ResourceAccess(
+        CorePotts.CompilerSPI.ResourceAccess(
             reads,
             (target,),
             _record_read_footprint(ir, record_index),
-            _site_write_footprint(ir, stage),
-            CorePotts.ExclusiveWriteAccess(),
+            is_model_assignment ? CorePotts.CompilerSPI.ModelFootprint() :
+                _site_write_footprint(ir, stage),
+            CorePotts.CompilerSPI.ExclusiveWriteAccess(),
         ),
         _stage_support(ir, record_index),
         record_index,
@@ -102,7 +130,7 @@ function _relationship_create_stage_descriptor(
         T,
         state_handles,
         draw_handles,
-        CorePotts.ProposalTargetStageSite(),
+        CorePotts.CompilerSPI.ProposalTargetStageSite(),
     )
     endpoint_a = _stage_evaluator(
         ir,
@@ -113,7 +141,7 @@ function _relationship_create_stage_descriptor(
         T,
         state_handles,
         draw_handles,
-        CorePotts.ProposalTargetStageSite(),
+        CorePotts.CompilerSPI.ProposalTargetStageSite(),
     )
     endpoint_b = _stage_evaluator(
         ir,
@@ -124,7 +152,7 @@ function _relationship_create_stage_descriptor(
         T,
         state_handles,
         draw_handles,
-        CorePotts.ProposalTargetStageSite(),
+        CorePotts.CompilerSPI.ProposalTargetStageSite(),
     )
 
     relationship_options = _record_options(relationship)
@@ -148,7 +176,7 @@ function _relationship_create_stage_descriptor(
             T,
             state_handles,
             draw_handles,
-            CorePotts.ProposalTargetStageSite(),
+            CorePotts.CompilerSPI.ProposalTargetStageSite(),
         )
         for name in keys(declared_payload)
     )
@@ -159,8 +187,8 @@ function _relationship_create_stage_descriptor(
         (
             endpoint_a.expression,
             endpoint_b.expression,
-            CorePotts.LiteralExpression(endpoint_policy.kind_a),
-            CorePotts.LiteralExpression(endpoint_policy.kind_b),
+            CorePotts.CompilerSPI.LiteralExpression(endpoint_policy.kind_a),
+            CorePotts.CompilerSPI.LiteralExpression(endpoint_policy.kind_b),
         ),
         record,
     )
@@ -174,7 +202,7 @@ function _relationship_create_stage_descriptor(
             ),
             record,
         ),
-        CorePotts.AbstractProposalEvaluationContext,
+        CorePotts.CompilerSPI.AbstractProposalEvaluationContext,
         record,
     )
     priority = _numeric_value(effect.priority)
@@ -182,27 +210,27 @@ function _relationship_create_stage_descriptor(
         "relationship request priority must be structurally resolved"
     ))
     reads = _record_state_handles(ir, record, state_handles)
-    return CorePotts.CompiledStageDescriptor(
+    return CorePotts.CompilerSPI.CompiledStageDescriptor(
         compiled_condition,
         _static_evaluator(
-            CorePotts.LiteralExpression(zero(T)),
-            CorePotts.AbstractProposalEvaluationContext,
+            CorePotts.CompilerSPI.LiteralExpression(zero(T)),
+            CorePotts.CompilerSPI.AbstractProposalEvaluationContext,
             record,
         ),
-        CorePotts.RelationshipCreateEffect(
+        CorePotts.CompilerSPI.RelationshipCreateEffect(
             store_slot,
             endpoint_a,
             endpoint_b,
             payload,
             Int(priority),
         ),
-        CorePotts.AcceptedCopyStage(),
-        CorePotts.ResourceAccess(
+        CorePotts.CompilerSPI.AcceptedCopyStage(),
+        CorePotts.CompilerSPI.ResourceAccess(
             reads,
             (store_slot,),
             _record_read_footprint(ir, record_index),
-            CorePotts.EmptyFootprint(),
-            CorePotts.DeferredRequestWriteAccess(),
+            CorePotts.CompilerSPI.EmptyFootprint(),
+            CorePotts.CompilerSPI.DeferredRequestWriteAccess(),
         ),
         _stage_support(ir, record_index),
         record_index,

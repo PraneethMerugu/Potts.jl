@@ -32,12 +32,13 @@ function direct_model(count::Integer; weight_default = 2.0)
     return direct
 end
 
-function compile_direct_model(count::Integer; weight_default = 2.0)
-    return compile(
-        complete(direct_model(count; weight_default));
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+function lower_direct_model(count::Integer; weight_default = 2.0)
+    scheduled = mtkcompile(complete(direct_model(count; weight_default)))
+    return PottsToolkit._lower_execution_plan(
+        scheduled,
+        SequentialCPM(),
+        CPUBackend(),
+        Float32,
     )
 end
 

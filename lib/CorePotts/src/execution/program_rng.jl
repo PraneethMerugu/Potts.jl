@@ -69,6 +69,7 @@ end
 function initialization_bounded(
         seed::UInt64,
         replica::UInt32,
+        repeat::UInt32,
         operation::Integer,
         invocation::Integer,
         bound::Integer,
@@ -93,7 +94,7 @@ function initialization_bounded(
     )
     return Int(bounded_uint(
         Philox4x32x10V1(),
-        _trajectory_seed(seed, replica, UInt32(1)),
+        _trajectory_seed(seed, replica, repeat),
         address,
         UInt32(bound),
     )) + 1

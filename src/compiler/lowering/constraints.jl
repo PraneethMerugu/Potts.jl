@@ -2,15 +2,15 @@
 
 function _parameter_only_expression(expression)
     expression isa Union{
-        CorePotts.LiteralExpression,
-        CorePotts.ParameterExpression,
+        CorePotts.CompilerSPI.LiteralExpression,
+        CorePotts.CompilerSPI.ParameterExpression,
     } && return true
-    expression isa CorePotts.OperationExpression || return false
+    expression isa CorePotts.CompilerSPI.OperationExpression || return false
     return all(_parameter_only_expression, expression.arguments)
 end
 
 function _parameter_constraint(
-        expression::CorePotts.AbstractStaticExpression,
+        expression::CorePotts.CompilerSPI.AbstractStaticExpression,
         predicate::UInt8,
         node::NormalizedTermNode,
         record::QualifiedStatement,
@@ -28,10 +28,10 @@ function _parameter_constraint(
             UnknownSource(),
         ),),
     ))
-    return CorePotts.ParameterDomainConstraint(
+    return CorePotts.CompilerSPI.ParameterDomainConstraint(
         _static_evaluator(
             expression,
-            CorePotts.AbstractProbeEvaluationContext,
+            CorePotts.CompilerSPI.AbstractProbeEvaluationContext,
             record,
         ),
         predicate,
@@ -75,7 +75,7 @@ function _draw_domain_constraints(
     )
     family = _draw_family_code(ir.graph, node)
     record = ir.source.records[node.record]
-    cache = Dict{Int32, CorePotts.AbstractStaticExpression}()
+    cache = Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}()
     first_parameter = _lower_static_node(
         ir.graph,
         ir,
@@ -96,8 +96,8 @@ function _draw_domain_constraints(
         draw_handles,
         cache,
     )
-    zero_expression = CorePotts.LiteralExpression(zero(T))
-    one_expression = CorePotts.LiteralExpression(one(T))
+    zero_expression = CorePotts.CompilerSPI.LiteralExpression(zero(T))
+    one_expression = CorePotts.CompilerSPI.LiteralExpression(one(T))
     if family == 1
         lower = _compiler_synthesized_operation_expression(
             ir.graph,
@@ -205,7 +205,7 @@ function _domain_constraints(
         length(node.operands) == 1 || error(
             "validated unary operation has invalid normalized arity"
         )
-        cache = Dict{Int32, CorePotts.AbstractStaticExpression}()
+        cache = Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}()
         operand = _lower_static_node(
             ir.graph,
             ir,
@@ -242,7 +242,7 @@ function _domain_constraints(
     groups = ()
     for (key, entries) in zip(keys, values)
         typed = key[entry for entry in entries]
-        groups = (groups..., CorePotts.ConstraintGroup(typed))
+        groups = (groups..., CorePotts.CompilerSPI.ConstraintGroup(typed))
     end
     return groups
 end
@@ -323,7 +323,7 @@ function _lower_descriptor_plan(
         domain_resources.contact_counts,
         domain_resources.relationship_slots,
     )
-    plan = CorePotts.DescriptorExecutionPlan(
+    plan = CorePotts.CompilerSPI.DescriptorExecutionPlan(
         groups,
         state_layout,
         workspace_layout,

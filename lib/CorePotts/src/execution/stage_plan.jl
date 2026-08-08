@@ -7,6 +7,8 @@ struct AfterMCSStage <: AbstractCompiledStage end
 abstract type AbstractStageSiteSelector end
 struct ProposalTargetStageSite <: AbstractStageSiteSelector end
 struct IterationStageSite <: AbstractStageSiteSelector end
+"""Select the sole scalar value of a model-scoped state block."""
+struct ModelStageSite <: AbstractStageSiteSelector end
 
 """Read one declared state block at the site bound by a compiled stage."""
 struct BoundStateValueOperation{S <: AbstractStageSiteSelector} <:
@@ -32,6 +34,16 @@ function operation_callable(
     return BoundStateValueOperation{IterationStageSite}()
 end
 
+function operation_callable(
+        ::Val{:model_bound_state_value},
+        version::VersionNumber,
+    )
+    version == v"1.0.0" || throw(ArgumentError(
+        "unsupported model-bound-state operation version $version"
+    ))
+    return BoundStateValueOperation{ModelStageSite}()
+end
+
 function stage_site end
 
 @inline function (operation::BoundStateValueOperation{S})(
@@ -51,10 +63,20 @@ operation_context_supported(
     ::Type{AbstractSiteStageEvaluationContext},
 ) = true
 
+operation_context_supported(
+    ::BoundStateValueOperation{ModelStageSite},
+    ::Type{AbstractSiteStageEvaluationContext},
+) = true
+
 abstract type AbstractCompiledEffect end
 
 """Assign a scalar value to one site in a declared auxiliary-state block."""
 struct SiteAssignmentEffect{H <: StateHandle} <: AbstractCompiledEffect
+    target::H
+end
+
+"""Assign one scalar model-scoped state value once at an after-MCS boundary."""
+struct ModelAssignmentEffect{H <: StateHandle} <: AbstractCompiledEffect
     target::H
 end
 
@@ -165,6 +187,7 @@ end
 function stage_effect_buffered end
 stage_effect_buffered(::AbstractCompiledEffect) = false
 stage_effect_buffered(::SiteAssignmentEffect) = true
+stage_effect_buffered(::ModelAssignmentEffect) = true
 stage_effect_buffered(::IteratedSiteAssignmentEffect) = true
 stage_effect_buffered(::RelationshipCreateEffect) = true
 stage_effect_buffered(::RelationshipRemoveEffect) = true
@@ -299,6 +322,15 @@ function StageExecutionPlan(
         after_mcs_scratch_count::Integer,
         fingerprint,
     ) where {A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
+    all(
+        group -> group isa StageDescriptorGroup && all(
+            descriptor -> descriptor isa CompiledStageDescriptor,
+            group.instances,
+        ),
+        (accepted_copy..., before_lifecycle..., after_lifecycle...),
+    ) || throw(ArgumentError(
+        "stage execution plans admit only compiler-owned CompiledStageDescriptor values"
+    ))
     accepted_count >= 0 || throw(ArgumentError(
         "accepted-copy descriptor count cannot be negative"
     ))
@@ -311,9 +343,24 @@ function StageExecutionPlan(
     actual_accepted == accepted_count || throw(ArgumentError(
         "accepted-copy descriptor count does not match its groups"
     ))
+    any(
+        descriptor -> descriptor.effect isa ModelAssignmentEffect,
+        (descriptor for group in accepted_copy for descriptor in group.instances),
+    ) && throw(ArgumentError(
+        "model assignments are admitted only at the after-MCS boundary"
+    ))
     after_mcs == (before_lifecycle..., after_lifecycle...) || throw(
         ArgumentError("after-MCS groups must preserve lifecycle-boundary order")
     )
+    model_slots = sort!(Int[
+        descriptor.buffer_slot
+        for group in after_mcs
+        for descriptor in group.instances
+        if descriptor.effect isa ModelAssignmentEffect
+    ])
+    model_slots == collect(eachindex(model_slots)) || throw(ArgumentError(
+        "after-MCS model-assignment buffer slots must be dense and unique"
+    ))
     return StageExecutionPlan{A, B, L, M}(
         accepted_copy,
         before_lifecycle,
@@ -356,6 +403,7 @@ end
 mutable struct StageRuntimeBuffers{T <: AbstractFloat, N, R}
     accepted_copy::Vector{StageEvaluation{T}}
     after_mcs::Vector{Array{T, N}}
+    after_mcs_model::Vector{StageEvaluation{T}}
     relationship_transactions::R
 end
 
@@ -376,6 +424,13 @@ function allocate_stage_runtime_buffers(
     after = [
         zeros(T, shape) for _ in 1:Int(plan.after_mcs_scratch_count)
     ]
+    model_count = sum((
+        1
+        for group in plan.after_mcs
+        for descriptor in group.instances
+        if descriptor.effect isa ModelAssignmentEffect
+    ); init = 0)
+    after_model = fill(StageEvaluation(false, zero(T)), model_count)
     transactions = Any[]
     for store_slot in eachindex(relationships)
         accepted_bound = sum((
@@ -401,12 +456,13 @@ function allocate_stage_runtime_buffers(
     end
     relationship_transactions = RelationshipStorage(transactions)
     return StageRuntimeBuffers{T, N, typeof(relationship_transactions)}(
-        accepted, after, relationship_transactions
+        accepted, after, after_model, relationship_transactions
     )
 end
 
 Adapt.@adapt_structure BoundStateValueOperation
 Adapt.@adapt_structure SiteAssignmentEffect
+Adapt.@adapt_structure ModelAssignmentEffect
 Adapt.@adapt_structure IteratedSiteAssignmentEffect
 Adapt.@adapt_structure ShiftAppendEffect
 Adapt.@adapt_structure RelationshipCreateEffect
@@ -416,3 +472,4 @@ Adapt.@adapt_structure CompiledStageDescriptor
 Adapt.@adapt_structure StageDescriptorGroup
 Adapt.@adapt_structure StageExecutionPlan
 Adapt.@adapt_structure StageKernelPlan
+Adapt.@adapt_structure StageRuntimeBuffers

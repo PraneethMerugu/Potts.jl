@@ -6,6 +6,8 @@ using Symbolics
 import CorePotts
 import PottsToolkit: operation_transfer
 
+const CompilerSPI = CorePotts.CompilerSPI
+
 export external_lifecycle_trigger, external_lifecycle_placement
 export external_lifecycle_partition, external_lifecycle_transform
 export external_unqualified_partition
@@ -31,89 +33,89 @@ Symbolics.@register_symbolic external_unqualified_partition(value)::Int
 Symbolics.@register_symbolic external_unqualified_trigger(value)::Bool
 Symbolics.@register_symbolic external_unqualified_transform(value)::Real
 
-struct TriggerCallable <: CorePotts.AbstractContextualOperation end
-struct PlacementCallable <: CorePotts.AbstractContextualOperation end
-struct PartitionCallable <: CorePotts.AbstractContextualOperation end
-struct TransformCallable <: CorePotts.AbstractContextualOperation end
-struct UnqualifiedPartitionCallable <: CorePotts.AbstractContextualOperation end
-struct UnqualifiedTriggerCallable <: CorePotts.AbstractContextualOperation end
-struct UnqualifiedTransformCallable <: CorePotts.AbstractContextualOperation end
+struct TriggerCallable <: CompilerSPI.AbstractContextualOperation end
+struct PlacementCallable <: CompilerSPI.AbstractContextualOperation end
+struct PartitionCallable <: CompilerSPI.AbstractContextualOperation end
+struct TransformCallable <: CompilerSPI.AbstractContextualOperation end
+struct UnqualifiedPartitionCallable <: CompilerSPI.AbstractContextualOperation end
+struct UnqualifiedTriggerCallable <: CompilerSPI.AbstractContextualOperation end
+struct UnqualifiedTransformCallable <: CompilerSPI.AbstractContextualOperation end
 
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::TriggerCallable,
-    ::Type{CorePotts.AbstractLifecycleTriggerEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecycleTriggerEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::UnqualifiedPartitionCallable,
-    ::Type{CorePotts.AbstractLifecyclePartitionEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecyclePartitionEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::UnqualifiedTriggerCallable,
-    ::Type{CorePotts.AbstractLifecycleTriggerEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecycleTriggerEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::UnqualifiedTransformCallable,
-    ::Type{CorePotts.AbstractLifecycleStateTransformEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecycleStateTransformEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::PlacementCallable,
-    ::Type{CorePotts.AbstractLifecyclePlacementEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecyclePlacementEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::PartitionCallable,
-    ::Type{CorePotts.AbstractLifecyclePartitionEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecyclePartitionEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::TransformCallable,
-    ::Type{CorePotts.AbstractLifecycleStateTransformEvaluationContext},
+    ::Type{CompilerSPI.AbstractLifecycleStateTransformEvaluationContext},
 ) = true
 
 @inline function (::TriggerCallable)(arguments, context)
     return arguments[1] > 0 &&
-        !iszero(CorePotts.lifecycle_source_identity(context)) &&
-        !iszero(CorePotts.lifecycle_action_identity(context))
+        !iszero(CompilerSPI.lifecycle_source_identity(context)) &&
+        !iszero(CompilerSPI.lifecycle_action_identity(context))
 end
 @inline function (::PlacementCallable)(arguments, context)
     first_site = Int32(arguments[1])
-    CorePotts.lifecycle_workspace_capacity(context) == 4 ||
-        return CorePotts.LifecycleSiteSelection((Int32(0), Int32(0), Int32(0), Int32(0)), 0)
-    workspace_zero = CorePotts.lifecycle_workspace_value(context, 1)
-    CorePotts.set_lifecycle_workspace_value!(
+    CompilerSPI.lifecycle_workspace_capacity(context) == 4 ||
+        return CompilerSPI.LifecycleSiteSelection((Int32(0), Int32(0), Int32(0), Int32(0)), 0)
+    workspace_zero = CompilerSPI.lifecycle_workspace_value(context, 1)
+    CompilerSPI.set_lifecycle_workspace_value!(
         context, oftype(workspace_zero, first_site), 1
     )
-    stored = Int32(CorePotts.lifecycle_workspace_value(context, 1))
-    return CorePotts.LifecycleSiteSelection(
+    stored = Int32(CompilerSPI.lifecycle_workspace_value(context, 1))
+    return CompilerSPI.LifecycleSiteSelection(
         (stored, stored + Int32(1), Int32(0), Int32(0)), 2
     )
 end
 @inline function (::PartitionCallable)(arguments, context)
-    site = CorePotts.lifecycle_site(context)
+    site = CompilerSPI.lifecycle_site(context)
     index = site[1]
-    previous = CorePotts.lifecycle_workspace_value(context, index)
+    previous = CompilerSPI.lifecycle_workspace_value(context, index)
     calls = previous + one(previous)
-    CorePotts.set_lifecycle_workspace_value!(context, calls, index)
+    CompilerSPI.set_lifecycle_workspace_value!(context, calls, index)
     calls == 1 || return 0
     return site[1] <= 3 ? 1 : 2
 end
 @inline function (::TransformCallable)(arguments, context)
-    CorePotts.lifecycle_state_role(context) ===
-        CorePotts.DestinationLifecycleStateRole || return Float32(NaN)
-    CorePotts.lifecycle_destination_cell(context) > 0 ||
+    CompilerSPI.lifecycle_state_role(context) ===
+        CompilerSPI.DestinationLifecycleStateRole || return Float32(NaN)
+    CompilerSPI.lifecycle_destination_cell(context) > 0 ||
         return Float32(NaN)
-    CorePotts.lifecycle_source_cell(context) == 0 ||
+    CompilerSPI.lifecycle_source_cell(context) == 0 ||
         return Float32(NaN)
-    CorePotts.lifecycle_before_state_value(context) ==
-        CorePotts.lifecycle_planned_state_value(context) ||
+    CompilerSPI.lifecycle_before_state_value(context) ==
+        CompilerSPI.lifecycle_planned_state_value(context) ||
         return Float32(NaN)
-    prior = CorePotts.lifecycle_workspace_value(context, 1)
+    prior = CompilerSPI.lifecycle_workspace_value(context, 1)
     arguments[1] == 3 && prior == 2 && return Float32(NaN)
     arguments[1] < 0 && return oftype(
-        CorePotts.lifecycle_workspace_value(context, 1), NaN
+        CompilerSPI.lifecycle_workspace_value(context, 1), NaN
     )
-    CorePotts.set_lifecycle_workspace_value!(
+    CompilerSPI.set_lifecycle_workspace_value!(
         context, oftype(prior, arguments[1]), 1
     )
-    return CorePotts.lifecycle_workspace_value(context, 1)
+    return CompilerSPI.lifecycle_workspace_value(context, 1)
 end
 @inline (::UnqualifiedPartitionCallable)(arguments, context) = Int(arguments[1])
 @inline (::UnqualifiedTriggerCallable)(arguments, context) = arguments[1] > 0
@@ -245,7 +247,7 @@ operation_transfer(::typeof(external_unqualified_transform), ::Int) =
         :real,
     )
 
-function CorePotts.operation_callable(
+function CompilerSPI.operation_callable(
         ::Val{identity}, version::VersionNumber
     ) where {identity}
     identity in (
@@ -256,7 +258,7 @@ function CorePotts.operation_callable(
         :external_unqualified_partition,
         :external_unqualified_trigger,
         :external_unqualified_transform,
-    ) || throw(MethodError(CorePotts.operation_callable, (Val(identity), version)))
+    ) || throw(MethodError(CompilerSPI.operation_callable, (Val(identity), version)))
     version == VERSION || throw(ArgumentError(
         "unsupported lifecycle operation fixture version $version"
     ))

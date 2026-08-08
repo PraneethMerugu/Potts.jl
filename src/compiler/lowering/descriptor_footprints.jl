@@ -41,30 +41,30 @@ function _materialize_footprint(fact::FootprintUnionFact)
 end
 
 _core_footprint_anchor(::ProposalSourceAnchor) =
-    CorePotts.ProposalSourceFootprintAnchor()
+    CorePotts.CompilerSPI.ProposalSourceFootprintAnchor()
 _core_footprint_anchor(::ProposalTargetAnchor) =
-    CorePotts.ProposalTargetFootprintAnchor()
+    CorePotts.CompilerSPI.ProposalTargetFootprintAnchor()
 _core_footprint_anchor(::IterationSiteAnchor) =
-    CorePotts.IterationSiteFootprintAnchor()
+    CorePotts.CompilerSPI.IterationSiteFootprintAnchor()
 _core_footprint_anchor(::BoundSiteAnchor, bound_slot::Integer) =
-    CorePotts.BoundSiteFootprintAnchor(bound_slot)
+    CorePotts.CompilerSPI.BoundSiteFootprintAnchor(bound_slot)
 _core_footprint_anchor(anchor, bound_slot::Integer) =
     _core_footprint_anchor(anchor)
 
 _lower_footprint_fact(::EmptyAnalyzedFootprint, bound_slot = 0) =
-    CorePotts.EmptyFootprint()
+    CorePotts.CompilerSPI.EmptyFootprint()
 _lower_footprint_fact(::OwnerFootprintFact, bound_slot = 0) =
-    CorePotts.OwnerFootprint()
+    CorePotts.CompilerSPI.OwnerFootprint()
 _lower_footprint_fact(::ContactFootprintFact, bound_slot = 0) =
-    CorePotts.ContactFootprint()
+    CorePotts.CompilerSPI.ContactFootprint()
 _lower_footprint_fact(fact::SpatialFootprintFact, bound_slot = 0) =
-    CorePotts.FiniteSpatialFootprint(
+    CorePotts.CompilerSPI.FiniteSpatialFootprint(
         _core_footprint_anchor(fact.anchor, bound_slot), fact.offsets
     )
 _lower_footprint_fact(fact::IncidentRelationshipFootprintFact, bound_slot = 0) =
-    CorePotts.IncidentRelationshipFootprint(fact.maximum_degree)
+    CorePotts.CompilerSPI.IncidentRelationshipFootprint(fact.maximum_degree)
 _lower_footprint_fact(fact::FootprintUnionFact, bound_slot = 0) =
-    CorePotts.FootprintUnion(
+    CorePotts.CompilerSPI.FootprintUnion(
     Tuple(
         _lower_footprint_fact(member, bound_slot)
         for member in fact.footprints
@@ -84,7 +84,7 @@ function _record_read_footprint(ir::AnalyzedTermIR, record_index::Integer)
     roots = Int32[
         root.node for root in ir.graph.roots if root.record == record_index
     ]
-    isempty(roots) && return CorePotts.EmptyFootprint()
+    isempty(roots) && return CorePotts.CompilerSPI.EmptyFootprint()
     fact = _footprint_union(Tuple(
         ir.facts.footprint[Int(root)] for root in roots
     ))
@@ -97,11 +97,11 @@ function _record_read_footprint(ir::AnalyzedTermIR, record_index::Integer)
 end
 
 function _site_write_footprint(ir::AnalyzedTermIR, stage)
-    anchor = stage isa CorePotts.AcceptedCopyStage ?
-             CorePotts.ProposalTargetFootprintAnchor() :
-             CorePotts.IterationSiteFootprintAnchor()
+    anchor = stage isa CorePotts.CompilerSPI.AcceptedCopyStage ?
+             CorePotts.CompilerSPI.ProposalTargetFootprintAnchor() :
+             CorePotts.CompilerSPI.IterationSiteFootprintAnchor()
     dimensions = length(_lattice_shape(ir))
-    return CorePotts.FiniteSpatialFootprint(
+    return CorePotts.CompilerSPI.FiniteSpatialFootprint(
         anchor, (ntuple(_ -> 0, dimensions),)
     )
 end
@@ -129,7 +129,7 @@ function _descriptor_support(
         (!cpu ? 0x04 : 0x00) |
         (!gpu ? 0x08 : 0x00)
     )
-    return CorePotts.DescriptorSupport(
+    return CorePotts.CompilerSPI.DescriptorSupport(
         sequential,
         checkerboard,
         cpu,
@@ -139,6 +139,6 @@ function _descriptor_support(
 end
 
 _qualified_resource_identity(identity::QualifiedStatementID) =
-    CorePotts.QualifiedResourceIdentity(
+    CorePotts.CompilerSPI.QualifiedResourceIdentity(
         identity.path, Symbol(identity.local_id)
     )

@@ -49,7 +49,7 @@ function _source_graph_reference!(
 end
 
 function _freeze_source_graph(
-        system::PottsSystem,
+        inventory::_PottsSourceInventory,
         records,
         registry::StatementRegistry,
     )
@@ -62,63 +62,52 @@ function _freeze_source_graph(
         for (index, record) in enumerate(record_table)
     )
     source_indices = Dict{QualifiedStatementID, Int32}()
-    source_order = Ref(0)
 
-    function visit(current::PottsSystem, parent::Int32, parent_path::Tuple)
-        path = (parent_path..., nameof(current))
-        system_index = Int32(length(systems) + 1)
+    for occurrence in inventory.systems
         push!(
             systems,
-            FrozenSystemNode(system_index, nameof(current), path, parent),
+            FrozenSystemNode(
+                occurrence.index,
+                nameof(occurrence.system),
+                occurrence.path,
+                occurrence.parent,
+            ),
         )
-        for statement in statements(current)
-            source_order[] += 1
-            identity = QualifiedStatementID(path, statement_id(statement))
-            record_index = get(record_indices, identity, Int32(0))
-            record_index == 0 && error(
-                "completed statement $identity is absent from its qualified record table"
-            )
-            record = record_table[record_index]
-            node_index = Int32(length(source_nodes) + 1)
-            source_indices[identity] = node_index
-            push!(
-                source_nodes,
-                FrozenSourceNode(
-                    node_index,
-                    identity,
-                    system_index,
-                    Int32(source_order[]),
-                    record_index,
-                    record.kind,
-                    Int32[],
-                    record.provenance,
-                ),
-            )
-        end
-        for (kind, values) in (
-                :equation => getfield(current, :eqs),
-                :variable => getfield(current, :unknowns),
-                :parameter => getfield(current, :ps),
-                :independent_variable => getfield(current, :ivs),
-                :input => _potts_inputs(current, Val(:local)),
-                :output => _potts_outputs(current, Val(:local)),
-                :observation => getfield(current, :observed),
-                :continuous_event => getfield(current, :continuous_events),
-                :discrete_event => getfield(current, :discrete_events),
-            )
-            for value in values
-                _source_graph_reference!(
-                    references, kind, path, 0, _defensive_copy(value)
-                )
-            end
-        end
-        for child in getfield(current, :systems)
-            visit(child, system_index, path)
-        end
-        return nothing
     end
-
-    visit(system, Int32(0), ())
+    for occurrence in inventory.statements
+        identity = QualifiedStatementID(
+            occurrence.path, statement_id(occurrence.statement)
+        )
+        record_index = get(record_indices, identity, Int32(0))
+        record_index == 0 && error(
+            "completed statement $identity is absent from its qualified record table"
+        )
+        record = record_table[record_index]
+        node_index = Int32(length(source_nodes) + 1)
+        source_indices[identity] = node_index
+        push!(
+            source_nodes,
+            FrozenSourceNode(
+                node_index,
+                identity,
+                occurrence.system,
+                occurrence.source_order,
+                record_index,
+                record.kind,
+                Int32[],
+                record.provenance,
+            ),
+        )
+    end
+    for occurrence in inventory.references
+        _source_graph_reference!(
+            references,
+            occurrence.kind,
+            occurrence.path,
+            0,
+            occurrence.value,
+        )
+    end
     for index in eachindex(source_nodes)
         node = source_nodes[index]
         record = record_table[node.record]
@@ -190,4 +179,3 @@ function _freeze_source_graph(
         structural_key,
     )
 end
-

@@ -1,103 +1,192 @@
-function _symbolic_state_manifest(executable::PottsExecutable)
-    return executable.reports.states
+_scheduled_parameter_entries(system::PottsSystem) =
+    _scheduled_data(system).parameters.runtime
+_scheduled_state_entries(system::PottsSystem) = _scheduled_data(system).states
+_scheduled_observation_entries(system::PottsSystem) =
+    _scheduled_data(system).observations
+
+function _symbolic_identity_name(value)
+    value isa Symbol && return value
+    return _try_symbolic_name(value)
 end
 
-SymbolicIndexingInterface.symbolic_container(executable::PottsExecutable) =
-    executable
-SymbolicIndexingInterface.symbolic_container(problem::PottsProblem) =
-    problem.executable
+function _entry_matches(entry, symbol, fields)
+    any(field -> haskey(entry, field) && isequal(getproperty(entry, field), symbol), fields) &&
+        return true
+    requested = _symbolic_identity_name(symbol)
+    requested === nothing && return false
+    return any(fields) do field
+        haskey(entry, field) || return false
+        candidate = getproperty(entry, field)
+        candidate_name = _symbolic_identity_name(candidate)
+        candidate_name === requested
+    end
+end
+
+SymbolicIndexingInterface.symbolic_container(system::PottsSystem) = system
+SymbolicIndexingInterface.symbolic_container(problem::PottsProblem) = problem.system
 SymbolicIndexingInterface.symbolic_container(integrator::PottsIntegrator) =
-    integrator.prob.executable
+    integrator.prob.system
 SymbolicIndexingInterface.symbolic_container(solution::PottsSolution) =
-    solution.prob.executable
+    solution.prob.system
 
-function SymbolicIndexingInterface.is_parameter(
-        executable::PottsExecutable, symbol
+function SymbolicIndexingInterface.parameter_index(system::PottsSystem, symbol)
+    is_scheduled(system) || return nothing
+    return findfirst(
+        entry -> _entry_matches(entry, symbol, (:symbolic, :name)),
+        _scheduled_parameter_entries(system),
     )
-    return _parameter_index(executable.parameter_manifest, symbol) !== nothing
 end
 
-function SymbolicIndexingInterface.parameter_index(
-        executable::PottsExecutable, symbol
-    )
-    return _parameter_index(executable.parameter_manifest, symbol)
+SymbolicIndexingInterface.parameter_index(
+    system::PottsSystem, symbol::Symbol
+) = invoke(
+    SymbolicIndexingInterface.parameter_index,
+    Tuple{PottsSystem, Any},
+    system,
+    symbol,
+)
+
+SymbolicIndexingInterface.is_parameter(
+    system::PottsSystem, symbol::Symbol
+) = SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing
+
+SymbolicIndexingInterface.is_parameter(
+    system::PottsSystem, symbol::Int
+) = is_scheduled(system) &&
+    1 <= symbol <= length(_scheduled_parameter_entries(system))
+
+function SymbolicIndexingInterface.parameter_symbols(system::PottsSystem)
+    is_scheduled(system) || return Any[]
+    return Any[entry.symbolic for entry in _scheduled_parameter_entries(system)]
 end
 
-SymbolicIndexingInterface.parameter_symbols(executable::PottsExecutable) =
-    Symbol[entry.name for entry in executable.parameter_manifest]
-
-function SymbolicIndexingInterface.is_variable(
-        executable::PottsExecutable, symbol
-    )
-    key = _try_symbolic_name(symbol)
-    key === nothing && return false
-    return any(entry -> entry.key === key,
-               _symbolic_state_manifest(executable)) ||
-           any(entry -> entry.name === key, executable.observations)
+function SymbolicIndexingInterface.is_variable(system::PottsSystem, symbol)
+    return SymbolicIndexingInterface.variable_index(system, symbol) !== nothing
 end
 
-function SymbolicIndexingInterface.variable_index(
-        executable::PottsExecutable, symbol
+SymbolicIndexingInterface.is_variable(
+    system::PottsSystem, symbol::Symbol
+) = SymbolicIndexingInterface.variable_index(system, symbol) !== nothing
+
+function SymbolicIndexingInterface.variable_index(system::PottsSystem, symbol)
+    is_scheduled(system) || return nothing
+    return findfirst(
+        entry -> _entry_matches(entry, symbol, (:variable, :key, :name)),
+        _scheduled_state_entries(system),
     )
-    key = _try_symbolic_name(symbol)
-    key === nothing && return nothing
-    states = _symbolic_state_manifest(executable)
-    state_index = findfirst(entry -> entry.key === key, states)
-    state_index === nothing || return state_index
-    observation_index = findfirst(
-        entry -> entry.name === key, executable.observations
-    )
-    observation_index === nothing && return nothing
-    return length(states) + observation_index
 end
 
-SymbolicIndexingInterface.variable_symbols(executable::PottsExecutable) =
-    Symbol[
-        (entry.key for entry in _symbolic_state_manifest(executable))...,
-        (entry.name for entry in executable.observations)...,
+SymbolicIndexingInterface.variable_index(
+    system::PottsSystem, symbol::Symbol
+) = invoke(
+    SymbolicIndexingInterface.variable_index,
+    Tuple{PottsSystem, Any},
+    system,
+    symbol,
+)
+
+function SymbolicIndexingInterface.variable_symbols(system::PottsSystem)
+    is_scheduled(system) || return Any[]
+    return Any[entry.variable for entry in _scheduled_state_entries(system)]
+end
+
+function SymbolicIndexingInterface.is_observed(system::PottsSystem, symbol)
+    is_scheduled(system) || return false
+    return any(
+        entry -> _entry_matches(entry, symbol, (:name, :expression)),
+        _scheduled_observation_entries(system),
+    )
+end
+
+function _observation_index(system::PottsSystem, symbol)
+    return findfirst(
+        entry -> _entry_matches(entry, symbol, (:name, :expression)),
+        _scheduled_observation_entries(system),
+    )
+end
+
+function SymbolicIndexingInterface.observed(system::PottsSystem, symbol)
+    index = _observation_index(system, symbol)
+    index === nothing && throw(ArgumentError(
+        "unknown scheduled observation $(repr(symbol))"
+    ))
+    state_count = length(_scheduled_state_entries(system))
+    return (u, _, _) -> u[state_count + index]
+end
+
+function SymbolicIndexingInterface.all_variable_symbols(system::PottsSystem)
+    is_scheduled(system) || return Any[]
+    return Any[
+        SymbolicIndexingInterface.variable_symbols(system)...,
+        (entry.name for entry in _scheduled_observation_entries(system))...,
     ]
-SymbolicIndexingInterface.all_variable_symbols(executable::PottsExecutable) =
-    SymbolicIndexingInterface.variable_symbols(executable)
-SymbolicIndexingInterface.all_symbols(executable::PottsExecutable) =
-    Any[
-        SymbolicIndexingInterface.variable_symbols(executable)...,
-        SymbolicIndexingInterface.parameter_symbols(executable)...,
+end
+
+function SymbolicIndexingInterface.all_symbols(system::PottsSystem)
+    return Any[
+        SymbolicIndexingInterface.all_variable_symbols(system)...,
+        SymbolicIndexingInterface.parameter_symbols(system)...,
+        SymbolicIndexingInterface.independent_variable_symbols(system)...,
     ]
-SymbolicIndexingInterface.constant_structure(::PottsExecutable) = true
-SymbolicIndexingInterface.is_time_dependent(::PottsExecutable) = true
-SymbolicIndexingInterface.is_markovian(::PottsExecutable) = true
+end
+
+SymbolicIndexingInterface.constant_structure(::PottsSystem) = true
+SymbolicIndexingInterface.is_time_dependent(::PottsSystem) = true
+SymbolicIndexingInterface.is_markovian(::PottsSystem) = true
+function SymbolicIndexingInterface.get_all_timeseries_indexes(
+        system::PottsSystem, symbol
+    )
+    if SymbolicIndexingInterface.is_variable(system, symbol) ||
+            SymbolicIndexingInterface.is_observed(system, symbol) ||
+            SymbolicIndexingInterface.is_independent_variable(system, symbol)
+        return Set([SymbolicIndexingInterface.ContinuousTimeseries()])
+    end
+    return Set()
+end
+SymbolicIndexingInterface.independent_variable_symbols(::PottsSystem) = Any[:mcs]
+SymbolicIndexingInterface.is_independent_variable(::PottsSystem, value) =
+    value === :mcs
+SymbolicIndexingInterface.is_independent_variable(
+    ::PottsSystem, value::Symbol
+) = value === :mcs
+
+function SymbolicIndexingInterface.default_values(system::PottsSystem)
+    is_scheduled(system) || return Dict{Any, Any}()
+    result = Dict{Any, Any}()
+    for entry in _scheduled_parameter_entries(system)
+        entry.required || (result[entry.symbolic] = _defensive_copy(entry.default))
+    end
+    for entry in _scheduled_state_entries(system)
+        result[entry.variable] = _defensive_copy(entry.initial)
+    end
+    return result
+end
 
 SymbolicIndexingInterface.parameter_values(problem::PottsProblem) =
-    _parameter_buffer(problem.parameters)
-function SymbolicIndexingInterface.parameter_values(
-        integrator::PottsIntegrator
-    )
+    problem.p.values
+function SymbolicIndexingInterface.parameter_values(integrator::PottsIntegrator)
     _request_integrator_settlement!(
-        integrator, CorePotts.IndexReadSettlement
+        integrator, CorePotts.BackendSPI.IndexReadSettlement
     )
     return integrator.runtime.parameters
 end
-SymbolicIndexingInterface.parameter_values(solution::PottsSolution) =
-    isempty(solution.parameter_history) ?
-    _parameter_buffer(solution.prob.parameters) :
-    _parameter_buffer(
-        last(solution.parameter_history).second,
-        eltype(solution.prob.executable.core_program.parameter_defaults),
-    )
+function SymbolicIndexingInterface.parameter_values(solution::PottsSolution)
+    isempty(solution.parameter_history) && return solution.prob.p.values
+    return last(solution.parameter_history).second
+end
+SymbolicIndexingInterface.parameter_values(solution::PottsSolution, index) =
+    SymbolicIndexingInterface.parameter_values(solution)[index]
 
 struct PottsParameterSetter{I <: Tuple}
     indices::I
 end
 
-function _parameter_setter_indices(executable::PottsExecutable, symbols)
-    requested = if symbols isa Tuple || symbols isa AbstractArray
-        Tuple(symbols)
-    else
-        (symbols,)
-    end
+function _parameter_setter_indices(system::PottsSystem, symbols)
+    requested = symbols isa Tuple || symbols isa AbstractArray ?
+                Tuple(symbols) : (symbols,)
     indices = Int[]
     for symbol in requested
-        index = SymbolicIndexingInterface.parameter_index(executable, symbol)
+        index = SymbolicIndexingInterface.parameter_index(system, symbol)
         index === nothing && throw(ArgumentError(
             "unknown runtime parameter $(repr(symbol))"
         ))
@@ -113,15 +202,13 @@ function SymbolicIndexingInterface.setp(
         integrator::PottsIntegrator, symbols
     )
     return PottsParameterSetter(
-        _parameter_setter_indices(integrator.prob.executable, symbols)
+        _parameter_setter_indices(integrator.prob.system, symbols)
     )
 end
 
-function (setter::PottsParameterSetter)(
-        integrator::PottsIntegrator, values
-    )
+function (setter::PottsParameterSetter)(integrator::PottsIntegrator, values)
     _request_integrator_settlement!(
-        integrator, CorePotts.IndexMutationSettlement
+        integrator, CorePotts.BackendSPI.IndexMutationSettlement
     )
     replacements = length(setter.indices) == 1 &&
                    !(values isa Tuple || values isa AbstractArray) ?
@@ -132,18 +219,16 @@ function (setter::PottsParameterSetter)(
     T = eltype(integrator.runtime.parameters)
     staged = copy(integrator.runtime.parameters)
     for (index, value) in zip(setter.indices, replacements)
-        entry = integrator.prob.executable.parameter_manifest[index]
-        staged[index] = _convert_parameter_value(entry, value, T)
+        staged[index] = _convert_parameter_value(
+            integrator.plan.parameter_manifest[index], value, T
+        )
     end
-    # One publication after every value has validated preserves atomicity.
     CorePotts.update_program_parameters!(integrator.runtime, staged)
-    names = Tuple(
-        entry.name for entry in integrator.prob.executable.parameter_manifest
-    )
-    parameters = PottsParameters(
-        staged, NamedTuple{names}(Tuple(staged))
-    )
+    names = Tuple(entry.name for entry in integrator.plan.parameter_manifest)
+    parameters = PottsParameters(staged, NamedTuple{names}(Tuple(staged)))
     push!(integrator.parameter_history, integrator.t => parameters)
+    integrator.pending_parameters = nothing
+    integrator.u = _current_saved_state(integrator)
     return nothing
 end
 
@@ -159,116 +244,145 @@ function SymbolicIndexingInterface.set_parameter!(
         integrator::PottsIntegrator, value, index
     )
     _request_integrator_settlement!(
-        integrator, CorePotts.IndexMutationSettlement
+        integrator, CorePotts.BackendSPI.IndexMutationSettlement
     )
-    1 <= index <= length(integrator.prob.executable.parameter_manifest) ||
+    1 <= index <= length(integrator.plan.parameter_manifest) ||
         throw(BoundsError(integrator.runtime.parameters, index))
-    entry = integrator.prob.executable.parameter_manifest[index]
-    T = eltype(integrator.runtime.parameters)
-    converted = _convert_parameter_value(entry, value, T)
-    integrator.runtime.parameters[index] = converted
+    staged = integrator.pending_parameters === nothing ?
+             copy(integrator.runtime.parameters) : integrator.pending_parameters
+    staged[index] = _convert_parameter_value(
+        integrator.plan.parameter_manifest[index],
+        value,
+        eltype(integrator.runtime.parameters),
+    )
+    integrator.pending_parameters = staged
     return nothing
 end
 
 function SymbolicIndexingInterface.finalize_parameters_hook!(
         integrator::PottsIntegrator, symbols
     )
-    CorePotts.update_program_parameters!(
-        integrator.runtime, integrator.runtime.parameters
-    )
-    names = Tuple(entry.name for entry in integrator.prob.executable.parameter_manifest)
-    parameters = PottsParameters(
-        copy(integrator.runtime.parameters),
-        NamedTuple{names}(Tuple(integrator.runtime.parameters)),
-    )
+    staged = integrator.pending_parameters
+    staged === nothing && return nothing
+    CorePotts.update_program_parameters!(integrator.runtime, staged)
+    names = Tuple(entry.name for entry in integrator.plan.parameter_manifest)
+    parameters = PottsParameters(staged, NamedTuple{names}(Tuple(staged)))
     push!(integrator.parameter_history, integrator.t => parameters)
+    integrator.pending_parameters = nothing
+    integrator.u = _current_saved_state(integrator)
     return nothing
 end
 
-function _state_value(saved::PottsSavedState, entry)
-    return saved[entry.name]
+function _state_values_for(
+        plan::_PottsExecutionPlan,
+        saved::PottsSavedState;
+        require_observations::Bool = true,
+    )
+    states = Tuple(saved[entry.name] for entry in plan.reports.states)
+    observations = Tuple(
+        require_observations ? saved[entry.name] :
+        get(saved.observations, entry.name, missing)
+        for entry in plan.observations
+    )
+    return (states..., observations...)
 end
 
-function _state_values_for(executable::PottsExecutable, saved::PottsSavedState)
-    return (
-        (_state_value(saved, entry)
-         for entry in _symbolic_state_manifest(executable))...,
-        (saved[entry.name] for entry in executable.observations)...,
+function _problem_state_values(problem::PottsProblem)
+    supplied = Dict{Symbol, Any}()
+    for (key, value) in _problem_initial_state(problem).values
+        supplied[_state_name(key)] = value
+    end
+    states = Tuple(
+        _defensive_copy(get(
+            supplied,
+            entry.name,
+            get(supplied, entry.key, entry.initial),
+        ))
+        for entry in _scheduled_state_entries(problem.system)
     )
-end
-
-function _problem_saved_state(problem::PottsProblem)
-    core_initial = _core_initial_state(
-        problem.executable, problem.initial, problem.seed, problem.replica
+    observations = ntuple(
+        _ -> missing,
+        length(_scheduled_observation_entries(problem.system)),
     )
-    runtime = CorePotts.initialize_program(
-        problem.executable.core_program,
-        core_initial,
-        _parameter_buffer(problem.parameters),
-        problem.seed,
-        problem.replica;
-        repeat = problem.ensemble_repeat,
-        initial_mcs = problem.tspan[1],
-    )
-    names = Tuple(entry.name for entry in problem.executable.observations)
-    observations = _named_runtime_observations(
-        runtime, problem.executable, names
-    )
-    return _saved_state(
-        problem.executable,
-        CorePotts.program_snapshot(runtime),
-        observations,
-        names,
-    )
+    return (states..., observations...)
 end
 
 SymbolicIndexingInterface.state_values(problem::PottsProblem) =
-    _state_values_for(problem.executable, _problem_saved_state(problem))
-function SymbolicIndexingInterface.state_values(
-        integrator::PottsIntegrator
-    )
+    _problem_state_values(problem)
+SymbolicIndexingInterface.state_values(problem::PottsProblem, index) =
+    _problem_state_values(problem)[index]
+
+function SymbolicIndexingInterface.state_values(integrator::PottsIntegrator)
     _request_integrator_settlement!(
-        integrator, CorePotts.IndexReadSettlement
+        integrator, CorePotts.BackendSPI.IndexReadSettlement
     )
-    return _state_values_for(integrator.prob.executable, integrator.u)
+    all_names = Tuple(entry.name for entry in integrator.plan.observations)
+    current = _saved_state(
+        integrator.plan,
+        CorePotts.program_snapshot(integrator.runtime),
+        _named_runtime_observations(
+            integrator.runtime, integrator.plan, all_names
+        ),
+        all_names,
+    )
+    return _state_values_for(integrator.plan, current)
 end
+SymbolicIndexingInterface.state_values(
+    integrator::PottsIntegrator, index
+) = SymbolicIndexingInterface.state_values(integrator)[index]
+
+function _scheduled_saved_values(system::PottsSystem, saved::PottsSavedState)
+    states = Tuple(
+        saved[entry.name] for entry in _scheduled_state_entries(system)
+    )
+    observations = Tuple(
+        saved[entry.name] for entry in _scheduled_observation_entries(system)
+    )
+    return (states..., observations...)
+end
+
 SymbolicIndexingInterface.state_values(solution::PottsSolution) =
-    [_state_values_for(solution.prob.executable, saved) for saved in solution.u]
-function SymbolicIndexingInterface.current_time(
-        integrator::PottsIntegrator
+    [_scheduled_saved_values(solution.prob.system, saved) for saved in solution.u]
+function SymbolicIndexingInterface.state_values(
+        solution::PottsSolution, index
     )
-    _request_integrator_settlement!(
-        integrator, CorePotts.IndexReadSettlement
-    )
-    return integrator.t
+    saved = solution.u[index]
+    # Saved-state ordering is the scheduled ordering and does not require
+    # rematerializing runtime state.
+    return _scheduled_saved_values(solution.prob.system, saved)
 end
-SymbolicIndexingInterface.current_time(problem::PottsProblem) =
-    problem.tspan[1]
-SymbolicIndexingInterface.current_time(solution::PottsSolution) =
-    solution.t
+
+SymbolicIndexingInterface.current_time(integrator::PottsIntegrator) = begin
+    _request_integrator_settlement!(
+        integrator, CorePotts.BackendSPI.IndexReadSettlement
+    )
+    integrator.t
+end
+SymbolicIndexingInterface.current_time(problem::PottsProblem) = problem.tspan[1]
+SymbolicIndexingInterface.current_time(solution::PottsSolution) = solution.t
+SymbolicIndexingInterface.current_time(solution::PottsSolution, index) =
+    solution.t[index]
 SymbolicIndexingInterface.is_timeseries(::PottsSolution) =
     SymbolicIndexingInterface.Timeseries()
 
 function SymbolicIndexingInterface.remake_buffer(
-        executable::PottsExecutable,
+        system::PottsSystem,
         old::PottsParameters,
         indices,
         values,
     )
-    staged = collect(old.values)
-    T = eltype(executable.core_program.parameter_defaults)
+    replacements = Dict{Symbol, Any}(
+        name => getproperty(old.named, name) for name in keys(old.named)
+    )
     for (identity, value) in zip(indices, values)
-        index = identity isa Integer ?
-                Int(identity) :
-                SymbolicIndexingInterface.parameter_index(executable, identity)
+        index = identity isa Integer ? Int(identity) :
+                SymbolicIndexingInterface.parameter_index(system, identity)
         index === nothing && throw(ArgumentError(
             "unknown runtime parameter $(repr(identity))"
         ))
-        1 <= index <= length(executable.parameter_manifest) ||
-            throw(BoundsError(staged, index))
-        entry = executable.parameter_manifest[index]
-        staged[index] = _convert_parameter_value(entry, value, T)
+        entries = _scheduled_parameter_entries(system)
+        1 <= index <= length(entries) || throw(BoundsError(entries, index))
+        replacements[entries[index].name] = value
     end
-    names = Tuple(entry.name for entry in executable.parameter_manifest)
-    return PottsParameters(staged, NamedTuple{names}(Tuple(staged)))
+    return _normalize_problem_parameters(system, replacements)
 end

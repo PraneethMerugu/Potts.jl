@@ -16,7 +16,7 @@ function _stage_descriptor_groups(descriptors)
     groups = ()
     for (descriptor_type, instances) in zip(types, grouped)
         typed = descriptor_type[instance for instance in instances]
-        groups = (groups..., CorePotts.StageDescriptorGroup(typed))
+        groups = (groups..., CorePotts.CompilerSPI.StageDescriptorGroup(typed))
     end
     return groups
 end

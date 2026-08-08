@@ -12,23 +12,33 @@ function _stage_root(
     return index === nothing ? nothing : ir.graph.roots[index].node
 end
 
+function _stage_state_record(
+        ir::AnalyzedTermIR,
+        owner::QualifiedStatement,
+        value,
+    )
+    for record in ir.source.records
+        variable = _state_record_variable(record)
+        variable !== nothing && isequal(variable, value) &&
+            return record
+        if value isa AbstractPottsStatement &&
+                statement_id(value) == record.identity.local_id &&
+                record.identity in owner.resources
+            return record
+        end
+    end
+    return nothing
+end
+
 function _stage_state_handle(
         ir::AnalyzedTermIR,
         owner::QualifiedStatement,
         value,
         handles,
     )
-    for record in ir.source.records
-        haskey(handles, record.identity) || continue
-        variable = _state_record_variable(record)
-        variable !== nothing && isequal(variable, value) &&
-            return handles[record.identity]
-        if value isa AbstractPottsStatement &&
-                statement_id(value) == record.identity.local_id &&
-                record.identity in owner.resources
-            return handles[record.identity]
-        end
-    end
+    record = _stage_state_record(ir, owner, value)
+    record !== nothing && haskey(handles, record.identity) &&
+        return handles[record.identity]
     throw(PottsValidationError(
         :descriptor_lowering,
         (PottsDiagnostic(
@@ -53,7 +63,7 @@ function _stage_evaluator(
         ::Type{T},
         state_handles,
         draw_handles,
-        binding::Union{Nothing, CorePotts.AbstractStageSiteSelector},
+        binding::Union{Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector},
     ) where {T <: AbstractFloat}
     root = _stage_root(ir, record_index, role)
     expression = if root === nothing
@@ -67,15 +77,18 @@ function _stage_evaluator(
             T,
             state_handles,
             draw_handles,
-            Dict{Int32, CorePotts.AbstractStaticExpression}(),
+            Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
             binding,
         )
     end
-    execution_context = binding isa CorePotts.ProposalTargetStageSite ?
-        CorePotts.AbstractProposalEvaluationContext :
-        binding isa CorePotts.IterationStageSite ?
-        CorePotts.AbstractSiteStageEvaluationContext :
-        CorePotts.AbstractRelationshipStageEvaluationContext
+    execution_context = binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
+        CorePotts.CompilerSPI.AbstractProposalEvaluationContext :
+        binding isa Union{
+            CorePotts.CompilerSPI.IterationStageSite,
+            CorePotts.CompilerSPI.ModelStageSite,
+        } ?
+        CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext :
+        CorePotts.CompilerSPI.AbstractRelationshipStageEvaluationContext
     return _static_evaluator(
         expression,
         execution_context,
@@ -103,7 +116,7 @@ function _stage_support(
         admission.engine === :checkerboard && admission.admitted,
         record.engine_admission,
     )
-    return CorePotts.DescriptorSupport(
+    return CorePotts.CompilerSPI.DescriptorSupport(
         sequential, checkerboard, true, true
     )
 end

@@ -108,7 +108,7 @@ function _plan_creation!(
     if count > descriptor.placement_maximum
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusFootprint;
+            ProgramStatusFootprint;
             source = descriptor.source_handle,
             anchor,
             detail = LifecycleDetailPlacementEmissionBoundExceeded,
@@ -118,7 +118,7 @@ function _plan_creation!(
     if count > size(workspace.planned_sites, 1)
         _set_lifecycle_status!(
             workspace,
-            LifecycleStatusFootprint;
+            ProgramStatusFootprint;
             source = descriptor.source_handle,
             anchor,
             detail = LifecycleDetailPlacementBoundExceeded,
@@ -346,7 +346,7 @@ function _partition_connected(
             position = Int(@inbounds workspace.site_position[neighbor_linear])
             position > 0 || return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 source = descriptor.source_handle,
                 anchor,
                 detail = LifecycleDetailCellSiteIndexMissingOwnedSite,
@@ -598,7 +598,7 @@ function _plan_lifecycle_request_effect!(
                 @inbounds(runtime.cell_generations[anchor]) != generation ||
                 @inbounds(runtime.cell_kinds[anchor]) == 0
             _set_lifecycle_status!(
-                workspace, LifecycleStatusStaleGeneration; anchor
+                workspace, ProgramStatusStaleGeneration; anchor
             )
             return :status_failure
         end
@@ -710,7 +710,7 @@ function _plan_and_filter_lifecycle_requests!(
         else
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInadmissible;
+                ProgramStatusInadmissible;
                 source = descriptor.source_handle,
                 anchor = @inbounds(workspace.anchor[request]),
                 detail = _lifecycle_detail_code(reason),

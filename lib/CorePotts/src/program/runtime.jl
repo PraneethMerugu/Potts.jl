@@ -10,7 +10,21 @@ struct ProgramSnapshot{T <: AbstractFloat, N, R, D, TS}
     descriptor_state::D
 end
 
-struct ProgramCheckpoint{S, P}
+"""
+Return an independently owned copy of a logical snapshot's descriptor state.
+
+The returned state may be inspected or transformed by a backend integration
+without mutating the settled logical snapshot from which it was derived.
+"""
+function program_snapshot_descriptor_state(snapshot::ProgramSnapshot)
+    state = snapshot.descriptor_state
+    state isa AuxiliaryState || throw(ArgumentError(
+        "the program snapshot descriptor state is not a CorePotts AuxiliaryState"
+    ))
+    return copy_auxiliary_state(state)
+end
+
+struct ProgramCheckpoint{S, P, E}
     schema::VersionNumber
     program_fingerprint::String
     snapshot::S
@@ -24,7 +38,117 @@ struct ProgramCheckpoint{S, P}
     constraint_rejections::UInt64
     energy_rejections::UInt64
     retired_cells::UInt64
+    extensions::E
     checksum::String
+end
+
+const _CORE_CHECKPOINT_CAPABILITY_SCHEMA = v"1.0.0"
+
+function _core_checkpoint_capability_block(program::CompiledPottsProgram)
+    key = program_capability_report(program).key
+    return (
+        schema = _CORE_CHECKPOINT_CAPABILITY_SCHEMA,
+        capability_fingerprint = _capability_key_fingerprint(key),
+        environment = key.environment,
+    )
+end
+
+function _owned_checkpoint_extensions(program, extensions)
+    extensions isa NamedTuple || throw(ArgumentError(
+        "checkpoint extensions must be a named tuple"
+    ))
+    hasproperty(extensions, :CorePotts) && throw(ArgumentError(
+        "checkpoint extension owner `CorePotts` is reserved"
+    ))
+    return merge(
+        (CorePotts = _core_checkpoint_capability_block(program),),
+        deepcopy(extensions),
+    )
+end
+
+function _validate_checkpoint_capability(
+        program::CompiledPottsProgram, extensions
+    )
+    extensions isa NamedTuple || throw(ArgumentError(
+        "checkpoint extensions must be a named tuple"
+    ))
+    hasproperty(extensions, :CorePotts) || throw(ArgumentError(
+        "checkpoint is missing its CorePotts exact-configuration identity"
+    ))
+    block = getproperty(extensions, :CorePotts)
+    block isa NamedTuple &&
+        all(
+            name -> hasproperty(block, name),
+            (:schema, :capability_fingerprint, :environment),
+        ) || throw(ArgumentError(
+            "checkpoint has an incomplete CorePotts capability block"
+        ))
+    block.schema == _CORE_CHECKPOINT_CAPABILITY_SCHEMA || throw(ArgumentError(
+        "unsupported CorePotts checkpoint capability schema"
+    ))
+    key = program_capability_report(program).key
+    block.environment == key.environment || throw(ArgumentError(
+        "checkpoint exact-configuration execution environment mismatch"
+    ))
+    block.capability_fingerprint == _capability_key_fingerprint(key) ||
+        throw(ArgumentError(
+            "checkpoint exact-configuration capability fingerprint mismatch"
+        ))
+    return block
+end
+
+function _checkpoint_extension_payload(value::NamedTuple)
+    return string(
+        "named(",
+        join((
+            string(
+                repr(name), "=>",
+                _checkpoint_extension_payload(getproperty(value, name)),
+            ) for name in keys(value)
+        ), ','),
+        ')',
+    )
+end
+
+function _checkpoint_extension_payload(value::Tuple)
+    return string(
+        "tuple(",
+        join((_checkpoint_extension_payload(item) for item in value), ','),
+        ')',
+    )
+end
+
+function _checkpoint_extension_payload(value::Pair)
+    return string(
+        "pair(",
+        _checkpoint_extension_payload(first(value)), ',',
+        _checkpoint_extension_payload(last(value)),
+        ')',
+    )
+end
+
+function _checkpoint_extension_payload(value::AbstractArray)
+    return string(
+        "array(", repr(typeof(value)), ';', repr(size(value)), ';',
+        join((_checkpoint_extension_payload(item) for item in value), ','),
+        ')',
+    )
+end
+
+_checkpoint_extension_payload(value::Nothing) = "nothing"
+_checkpoint_extension_payload(value::Missing) = "missing"
+function _checkpoint_extension_payload(
+        value::Union{Bool, Integer, AbstractFloat, Symbol, AbstractString,
+                     VersionNumber, Enum}
+    )
+    return string(repr(typeof(value)), '(', repr(value), ')')
+end
+
+function _checkpoint_extension_payload(value)
+    throw(ArgumentError(
+        "checkpoint extension payloads must use deterministic logical values; " *
+        "unsupported value type $(typeof(value))"
+    ))
 end
 
 function _relationship_checkpoint_payload(state::ProgramRelationshipState)
@@ -73,6 +197,7 @@ function _program_checkpoint_checksum(
         constraint_rejections,
         energy_rejections,
         retired_cells,
+        extensions,
     )
     payload = string(
         schema, '\n',
@@ -94,25 +219,37 @@ function _program_checkpoint_checksum(
         null_attempts, '\n',
         constraint_rejections, '\n',
         energy_rejections, '\n',
-        retired_cells,
+        retired_cells, '\n',
+        _checkpoint_extension_payload(extensions),
     )
     return bytes2hex(SHA.sha256(codeunits(payload)))
 end
 
-function program_checkpoint(runtime)
+function program_checkpoint(runtime; extensions = NamedTuple())
     runtime.settled || throw(ArgumentError(
         "a checkpoint requires a settled complete-MCS boundary"
     ))
-    schema = v"1.0.0"
+    program_failed(runtime) && throw(ArgumentError(
+        "a terminal failed runtime cannot be checkpointed"
+    ))
+    _validate_compiled_program_integrity(runtime.program)
+    _require_program_replay_capability(
+        runtime.capability_report; operation = :checkpoint
+    )
+    schema = v"2.0.0"
     logical_snapshot = program_snapshot(runtime)
     trackers = encode_tracker_checkpoint(
         runtime.program.tracker_plan, runtime.trackers
+    )
+    descriptor_state = encode_auxiliary_state_checkpoint(
+        runtime.program.descriptor_plan.state_layout,
+        runtime.descriptor_state,
     )
     snapshot = ProgramSnapshot{
         eltype(runtime.parameters),
         ndims(runtime.ownership),
         typeof(logical_snapshot.relationships),
-        typeof(logical_snapshot.descriptor_state),
+        typeof(descriptor_state),
         typeof(trackers),
     }(
         logical_snapshot.mcs,
@@ -121,9 +258,16 @@ function program_checkpoint(runtime)
         logical_snapshot.cell_generations,
         trackers,
         logical_snapshot.relationships,
-        logical_snapshot.descriptor_state,
+        descriptor_state,
     )
     parameters = copy(runtime.parameters)
+    # Extension owners provide logical values, never functions or live solver
+    # objects.  Validate before copying so one outer checksum owns the complete
+    # cross-package checkpoint rather than layering a second codec around Core.
+    _checkpoint_extension_payload(extensions)
+    owned_extensions = _owned_checkpoint_extensions(
+        runtime.program, extensions
+    )
     checksum = _program_checkpoint_checksum(
         schema,
         runtime.program.fingerprint,
@@ -138,6 +282,7 @@ function program_checkpoint(runtime)
         runtime.constraint_rejections,
         runtime.energy_rejections,
         runtime.retired_cells,
+        owned_extensions,
     )
     return ProgramCheckpoint(
         schema,
@@ -153,14 +298,19 @@ function program_checkpoint(runtime)
         runtime.constraint_rejections,
         runtime.energy_rejections,
         runtime.retired_cells,
+        owned_extensions,
         checksum,
     )
 end
 
-function restore_program_checkpoint(
+function validate_program_checkpoint(
         program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
     )
-    checkpoint.schema == v"1.0.0" ||
+    _validate_compiled_program_integrity(program)
+    _require_program_replay_capability(
+        program; operation = :checkpoint_restore
+    )
+    checkpoint.schema == v"2.0.0" ||
         throw(ArgumentError("unsupported CorePotts checkpoint schema"))
     checkpoint.program_fingerprint == program.fingerprint ||
         throw(ArgumentError("checkpoint executable identity does not match"))
@@ -178,18 +328,31 @@ function restore_program_checkpoint(
         checkpoint.constraint_rejections,
         checkpoint.energy_rejections,
         checkpoint.retired_cells,
+        checkpoint.extensions,
     )
     expected == checkpoint.checksum ||
         throw(ArgumentError("checkpoint integrity checksum mismatch"))
+    _validate_checkpoint_capability(program, checkpoint.extensions)
+    return checkpoint
+end
+
+function restore_program_checkpoint(
+        program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
+    )
+    validate_program_checkpoint(program, checkpoint)
+    descriptor_state = reconstruct_auxiliary_state(
+        program.descriptor_plan.state_layout,
+        checkpoint.snapshot.descriptor_state,
+    )
     initial = ProgramInitialState(
         checkpoint.snapshot.ownership,
         checkpoint.snapshot.cell_kinds;
         scalar_type = eltype(program.parameter_defaults),
         cell_generations = checkpoint.snapshot.cell_generations,
-        relationships = fill(nothing, length(program.relationships)),
-        descriptor_state = checkpoint.snapshot.descriptor_state,
+        relationships = collect(checkpoint.snapshot.relationships),
+        descriptor_state,
     )
-    runtime = initialize_program(
+    return _materialize_program(
         program,
         initial,
         checkpoint.parameters,
@@ -197,73 +360,16 @@ function restore_program_checkpoint(
         checkpoint.replica;
         repeat = checkpoint.repeat,
         initial_mcs = checkpoint.snapshot.mcs,
+        tracker_checkpoint = checkpoint.snapshot.trackers,
+        counters = (
+            accepted = checkpoint.accepted,
+            rejected = checkpoint.rejected,
+            null_attempts = checkpoint.null_attempts,
+            constraint_rejections = checkpoint.constraint_rejections,
+            energy_rejections = checkpoint.energy_rejections,
+            retired_cells = checkpoint.retired_cells,
+        ),
     )
-    reconstructed_trackers = reconstruct_tracker_checkpoint(
-        program.tracker_plan,
-        checkpoint.snapshot.trackers,
-        checkpoint.snapshot.ownership,
-        checkpoint.snapshot.cell_kinds,
-        program,
-    )
-    validate_tracker_state!(
-        program.tracker_plan,
-        reconstructed_trackers,
-        checkpoint.snapshot.ownership,
-        checkpoint.snapshot.cell_kinds,
-        program,
-    )
-    runtime.trackers = reconstructed_trackers
-    runtime.relationships = copy(checkpoint.snapshot.relationships)
-    _validate_runtime_relationships!(runtime)
-    runtime.stage_buffers = allocate_stage_runtime_buffers(
-        program.stage_plan,
-        eltype(runtime.parameters),
-        program.shape,
-        runtime.relationships,
-        accepted_batch_bound = _accepted_copy_batch_bound(program),
-    )
-    runtime.engine_workspace = allocate_program_engine_workspace(
-        program,
-        runtime.ownership,
-        runtime.cell_kinds,
-        runtime.cell_generations,
-        runtime.trackers,
-        runtime.relationships,
-        runtime.descriptor_state,
-        runtime.stage_buffers,
-        runtime.parameters,
-        runtime.seed,
-        runtime.replica,
-        runtime.repeat,
-        checkpoint.snapshot.mcs,
-    )
-    runtime.lifecycle_workspace = allocate_lifecycle_workspace(
-        program.lifecycle_plan,
-        program,
-        runtime.ownership,
-        runtime.cell_kinds,
-        runtime.cell_generations,
-        runtime.trackers,
-        runtime.relationships,
-        runtime.descriptor_state,
-    )
-    runtime.accepted = checkpoint.accepted
-    runtime.rejected = checkpoint.rejected
-    runtime.null_attempts = checkpoint.null_attempts
-    runtime.constraint_rejections = checkpoint.constraint_rejections
-    runtime.energy_rejections = checkpoint.energy_rejections
-    runtime.retired_cells = checkpoint.retired_cells
-    runtime.engine_workspace isa CheckerboardWorkspace &&
-        initialize_program_execution_statistics!(
-            runtime.engine_workspace,
-            runtime.accepted,
-            runtime.rejected,
-            runtime.null_attempts,
-            runtime.constraint_rejections,
-            runtime.energy_rejections,
-            runtime.retired_cells,
-        )
-    return runtime
 end
 
 function _accepted_copy_batch_bound(program::CompiledPottsProgram)
@@ -272,8 +378,9 @@ function _accepted_copy_batch_bound(program::CompiledPottsProgram)
            Int(plan.maximum_color_size) * Int(program.attempts_per_site) : 1
 end
 
-mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW, LW}
+mutable struct ProgramRuntime{T <: AbstractFloat, N, P, C, R, TS, D, SB, EW, LW}
     program::P
+    capability_report::C
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
@@ -296,10 +403,11 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, R, TS, D, SB, EW, LW}
     energy_rejections::UInt64
     retired_cells::UInt64
     settled::Bool
-    failure_status::LifecycleStatusPayload
+    failure_status::ProgramStatus
+    last_lifecycle_receipt::MaybeLifecycleReceipt
 end
 
-function initialize_program(
+function _materialize_program(
         program::CompiledPottsProgram{T, N},
         initial::ProgramInitialState,
         parameters::AbstractVector{<:Real},
@@ -307,52 +415,96 @@ function initialize_program(
         replica::UInt32;
         repeat::UInt32 = UInt32(1),
         initial_mcs::Integer = 0,
+        tracker_checkpoint = nothing,
+        counters = (
+            accepted = UInt64(0),
+            rejected = UInt64(0),
+            null_attempts = UInt64(0),
+            constraint_rejections = UInt64(0),
+            energy_rejections = UInt64(0),
+            retired_cells = UInt64(0),
+        ),
     ) where {T, N}
-    size(initial.ownership) == program.shape ||
+    _validate_compiled_program_integrity(program)
+    capability_report = _require_program_execution_capability(
+        program; operation = :initialize_program
+    )
+    # A runtime owns its executable independently of the compiler-facing
+    # artifact.  This is a cold-path copy: later caller mutation of the source
+    # program cannot change an initialized or ensemble runtime.
+    program = deepcopy(program)
+    initial_ownership = _program_initial_field(initial, :ownership)
+    initial_cell_kinds = _program_initial_field(initial, :cell_kinds)
+    initial_cell_generations = _program_initial_field(
+        initial, :cell_generations
+    )
+    initial_relationships = _program_initial_field(initial, :relationships)
+    initial_descriptor_state = _program_initial_field(
+        initial, :descriptor_state
+    )
+    size(initial_ownership) == program.shape ||
         throw(ArgumentError("initial ownership shape does not match the program"))
-    length(parameters) == length(program.parameter_defaults) ||
-        throw(ArgumentError("runtime parameter buffer has the wrong length"))
+    runtime_parameters = _validated_program_parameters(program, parameters)
     lifecycle_plan = program.lifecycle_plan
     cell_capacity = lifecycle_plan isa LifecycleExecutionPlan ?
-        Int(lifecycle_plan.cell_capacity) : length(initial.cell_kinds)
-    length(initial.cell_kinds) <= cell_capacity || throw(ArgumentError(
+        Int(lifecycle_plan.cell_capacity) : length(initial_cell_kinds)
+    length(initial_cell_kinds) <= cell_capacity || throw(ArgumentError(
         "initial finite-cell count exceeds compiled max_cells=$cell_capacity"
     ))
-    maximum(initial.ownership; init = Int32(0)) <= length(initial.cell_kinds) ||
+    maximum(initial_ownership; init = Int32(0)) <= length(initial_cell_kinds) ||
         throw(ArgumentError("initial ownership references an unknown cell label"))
-    minimum(initial.ownership; init = Int32(0)) >= -program.kind_count ||
+    minimum(initial_ownership; init = Int32(0)) >= -program.kind_count ||
         throw(ArgumentError("initial ownership references an unknown medium kind"))
-    all(initial.ownership) do owner
+    all(initial_ownership) do owner
         owner >= 0 || @inbounds(program.medium_kinds[-owner])
     end || throw(ArgumentError(
         "initial ownership uses a non-medium kind as a medium domain"
     ))
-    all(kind -> kind == 0 || 1 <= kind <= program.kind_count, initial.cell_kinds) ||
+    all(kind -> kind == 0 || 1 <= kind <= program.kind_count, initial_cell_kinds) ||
         throw(ArgumentError("initial cell kind is outside the compiled kind table"))
-    all(kind -> kind == 0 || !program.medium_kinds[kind], initial.cell_kinds) ||
+    all(kind -> kind == 0 || !program.medium_kinds[kind], initial_cell_kinds) ||
         throw(ArgumentError("a finite cell cannot use a medium kind"))
-    length(initial.cell_generations) == length(initial.cell_kinds) ||
+    length(initial_cell_generations) == length(initial_cell_kinds) ||
         throw(ArgumentError("initial cell generation table has the wrong length"))
-    all(eachindex(initial.cell_kinds)) do index
-        @inbounds initial.cell_kinds[index] == 0 ||
-            !iszero(initial.cell_generations[index])
+    all(eachindex(initial_cell_kinds)) do index
+        @inbounds initial_cell_kinds[index] == 0 ||
+            !iszero(initial_cell_generations[index])
     end || throw(ArgumentError("active cell generations must be positive"))
     initial_mcs >= 0 || throw(ArgumentError("initial MCS must be nonnegative"))
     repeat > 0 || throw(ArgumentError("ensemble repeat identity must be positive"))
 
-    runtime_ownership = copy(initial.ownership)
+    runtime_ownership = copy(initial_ownership)
     runtime_cell_kinds = zeros(Int16, cell_capacity)
     runtime_cell_generations = zeros(UInt32, cell_capacity)
-    copyto!(runtime_cell_kinds, 1, initial.cell_kinds, 1, length(initial.cell_kinds))
+    copyto!(
+        runtime_cell_kinds,
+        1,
+        initial_cell_kinds,
+        1,
+        length(initial_cell_kinds),
+    )
     copyto!(
         runtime_cell_generations,
         1,
-        initial.cell_generations,
+        initial_cell_generations,
         1,
-        length(initial.cell_generations),
+        length(initial_cell_generations),
     )
-    trackers = initialize_tracker_state(
+    trackers = tracker_checkpoint === nothing ? initialize_tracker_state(
         program.tracker_plan, runtime_ownership, runtime_cell_kinds, program
+    ) : reconstruct_tracker_checkpoint(
+        program.tracker_plan,
+        tracker_checkpoint,
+        runtime_ownership,
+        runtime_cell_kinds,
+        program,
+    )
+    validate_tracker_state!(
+        program.tracker_plan,
+        trackers,
+        runtime_ownership,
+        runtime_cell_kinds,
+        program,
     )
     volumes = tracker_values(
         program.tracker_plan, trackers, Val(:cell_volume)
@@ -365,7 +517,7 @@ function initialize_program(
         "every active finite cell must own at least one site and inactive slots " *
         "must not appear in ownership"
     ))
-    length(initial.relationships) == length(program.relationships) || throw(
+    length(initial_relationships) == length(program.relationships) || throw(
         ArgumentError(
             "initial relationship values must align with compiled schemas"
         )
@@ -373,29 +525,40 @@ function initialize_program(
     relationship_values = Any[]
     for relationship_slot in eachindex(program.relationships)
         schema = program.relationships[relationship_slot]
-        entries = initial.relationships[relationship_slot]
-        push!(relationship_values, initialize_program_relationships(
-            schema,
-            runtime_cell_kinds,
-            runtime_cell_generations,
-            T.(parameters),
-            entries,
-        ))
+        entries = initial_relationships[relationship_slot]
+        state = if entries isa ProgramRelationshipState
+            value = copy(entries)
+            validate_relationship_integrity(
+                value,
+                schema,
+                runtime_cell_kinds,
+                runtime_cell_generations,
+            )
+            value
+        else
+            initialize_program_relationships(
+                schema,
+                runtime_cell_kinds,
+                runtime_cell_generations,
+                runtime_parameters,
+                entries,
+            )
+        end
+        push!(relationship_values, state)
     end
     relationships = RelationshipStorage(relationship_values)
-    descriptor_state = if initial.descriptor_state === nothing
+    descriptor_state = if initial_descriptor_state === nothing
         allocate_auxiliary_state(program.descriptor_plan.state_layout)
-    elseif initial.descriptor_state isa AuxiliaryState
+    elseif initial_descriptor_state isa AuxiliaryState
         copy_auxiliary_state(
             program.descriptor_plan.state_layout,
-            initial.descriptor_state,
+            initial_descriptor_state,
         )
     else
         throw(ArgumentError(
             "descriptor state must be a CorePotts AuxiliaryState"
         ))
     end
-    runtime_parameters = T.(parameters)
     stage_buffers = allocate_stage_runtime_buffers(
         program.stage_plan,
         T,
@@ -428,14 +591,22 @@ function initialize_program(
         relationships,
         descriptor_state,
     )
-    return ProgramRuntime{
-        T, N, typeof(program), typeof(relationships), typeof(trackers),
+    if lifecycle_workspace isa LifecycleWorkspace &&
+            engine_workspace isa SequentialTransactionWorkspace
+        lifecycle_workspace = _lifecycle_workspace_with_staged_state(
+            lifecycle_workspace, engine_workspace
+        )
+    end
+    runtime = ProgramRuntime{
+        T, N, typeof(program), typeof(capability_report),
+        typeof(relationships), typeof(trackers),
         typeof(descriptor_state),
         typeof(stage_buffers),
         typeof(engine_workspace),
         typeof(lifecycle_workspace),
     }(
         program,
+        capability_report,
         runtime_ownership,
         runtime_cell_kinds,
         runtime_cell_generations,
@@ -454,14 +625,46 @@ function initialize_program(
         replica,
         repeat,
         Int(initial_mcs),
-        UInt64(0),
-        UInt64(0),
-        UInt64(0),
-        UInt64(0),
-        UInt64(0),
-        UInt64(0),
+        UInt64(counters.accepted),
+        UInt64(counters.rejected),
+        UInt64(counters.null_attempts),
+        UInt64(counters.constraint_rejections),
+        UInt64(counters.energy_rejections),
+        UInt64(counters.retired_cells),
         true,
-        LifecycleStatusPayload(),
+        ProgramStatus(),
+        nothing,
+    )
+    runtime.engine_workspace isa CheckerboardWorkspace &&
+        initialize_program_execution_statistics!(
+            runtime.engine_workspace,
+            runtime.accepted,
+            runtime.rejected,
+            runtime.null_attempts,
+            runtime.constraint_rejections,
+            runtime.energy_rejections,
+            runtime.retired_cells,
+        )
+    return runtime
+end
+
+function initialize_program(
+        program::CompiledPottsProgram,
+        initial::ProgramInitialState,
+        parameters::AbstractVector{<:Real},
+        seed::UInt64,
+        replica::UInt32;
+        repeat::UInt32 = UInt32(1),
+        initial_mcs::Integer = 0,
+    )
+    return _materialize_program(
+        program,
+        initial,
+        parameters,
+        seed,
+        replica;
+        repeat,
+        initial_mcs,
     )
 end
 
@@ -475,10 +678,12 @@ function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
     engine_workspace = adapt_checkerboard_workspace(
         to, runtime.engine_workspace
     )
+    capability_report = engine_workspace.capability_report
     return ProgramRuntime{
         T,
         N,
         typeof(runtime.program),
+        typeof(capability_report),
         typeof(runtime.relationships),
         typeof(runtime.trackers),
         typeof(runtime.descriptor_state),
@@ -487,6 +692,7 @@ function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
         typeof(runtime.lifecycle_workspace),
     }(
         runtime.program,
+        capability_report,
         runtime.ownership,
         runtime.cell_kinds,
         runtime.cell_generations,
@@ -510,42 +716,70 @@ function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
         runtime.retired_cells,
         runtime.settled,
         runtime.failure_status,
+        runtime.last_lifecycle_receipt,
     )
 end
 
 @inline program_failed(runtime::ProgramRuntime) =
-    runtime.failure_status.code !== LifecycleStatusSuccess
+    runtime.failure_status.code !== ProgramStatusSuccess
 
 @inline program_failure_report(runtime::ProgramRuntime) =
     program_failed(runtime) ? ProgramFailureReport(runtime.failure_status) : nothing
 
-function program_snapshot(runtime::ProgramRuntime{T, N}) where {T, N}
-    runtime.settled || throw(ArgumentError(
-        "a program snapshot requires a settled complete-MCS boundary"
-    ))
-    _validate_runtime_relationships!(runtime)
+"""Return the most recently published lifecycle receipt, if any."""
+@inline program_lifecycle_receipt(runtime::ProgramRuntime) =
+    runtime.last_lifecycle_receipt
+
+function _materialize_program_state_snapshot(
+        runtime::ProgramRuntime{T, N}, state, mcs::Integer
+    ) where {T, N}
+    length(state.relationships) == length(runtime.program.relationships) ||
+        throw(ArgumentError(
+            "runtime relationship state and compiled schemas are misaligned"
+        ))
+    for slot in eachindex(state.relationships)
+        validate_relationship_integrity(
+            state.relationships[slot],
+            runtime.program.relationships[slot],
+            state.cell_kinds,
+            state.cell_generations,
+        )
+    end
     validate_tracker_state!(
         runtime.program.tracker_plan,
-        runtime.trackers,
-        runtime.ownership,
-        runtime.cell_kinds,
+        state.trackers,
+        state.ownership,
+        state.cell_kinds,
         runtime.program,
     )
-    relationships = copy(runtime.relationships)
+    relationships = copy(state.relationships)
     descriptor_state = copy_auxiliary_state(
         runtime.program.descriptor_plan.state_layout,
-        runtime.descriptor_state,
+        state.descriptor_state,
     )
     return ProgramSnapshot{
         T, N, typeof(relationships), typeof(descriptor_state),
-        typeof(runtime.trackers),
+        typeof(state.trackers),
     }(
-        runtime.mcs,
-        copy(runtime.ownership),
-        copy(runtime.cell_kinds),
-        copy(runtime.cell_generations),
-        copy_tracker_state(runtime.trackers),
+        Int(mcs),
+        copy(state.ownership),
+        copy(state.cell_kinds),
+        copy(state.cell_generations),
+        copy_tracker_state(state.trackers),
         relationships,
         descriptor_state,
     )
+end
+
+function _materialize_runtime_snapshot(
+        runtime::ProgramRuntime, mcs::Integer
+    )
+    return _materialize_program_state_snapshot(runtime, runtime, mcs)
+end
+
+function program_snapshot(runtime::ProgramRuntime)
+    runtime.settled || throw(ArgumentError(
+        "a program snapshot requires a settled complete-MCS boundary"
+    ))
+    return _materialize_runtime_snapshot(runtime, runtime.mcs)
 end

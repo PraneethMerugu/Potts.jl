@@ -11,7 +11,7 @@ not mean stable, documented, or qualified for every backend.
 | Checkerboard GPU CPM | Functional selected-device foundation | Exact admitted profile, real-device no-fallback and performance qualification |
 | Core lifecycle and relationships | Rich implemented foundation | Consolidated schemas, package-owned tests, lifecycle receipts, memory qualification |
 | Checkpoint and symbolic indexing | Implemented in overlapping forms | One logical codec and one problem/integrator/solution indexing authority |
-| Native global MTK components | Not integrated; superseded copied-assimilation prototype exists | Preserve native systems; prove initialization, events, coupling, remake, SII, restart |
+| Native global MTK components | Event-free global scalar ODE CPU row is under G5H-3 qualification; DAE construction is retained but coupled execution is unsupported | Close exact-stack ODE replay evidence and keep events, DAEs, opaque functions, callbacks, and unreviewed solvers fail-closed |
 | Dynamic per-cell MTK components | Not integrated | Compile-once generation-safe pools; CPU reference and bounded GPU batch profile |
 | MethodOfLines fields | Not integrated | `symbolic_discretize`, real MTK problem, explicit grid map, profile evidence |
 | SciML whole-trajectory ensembles | Partial identity groundwork | Standard `EnsembleProblem` serial/threaded/distributed workflows |

@@ -150,8 +150,18 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         )
         problem === nothing || return problem
     end
-    transfer.cpu ||
-        return "V1 operations must admit the CPU reference backend"
+    if !transfer.cpu
+        interface_only =
+            transfer.identity in _INTERFACE_ONLY_SPATIAL_QUERY_IDENTITIES &&
+            transfer.owner === :PottsToolkitSpatialQueryInterface &&
+            transfer.allowed_roles == (:observation,) &&
+            transfer.allowed_phases == (:none,) &&
+            !transfer.gpu
+        if !interface_only
+            return "non-executable V1 operations must use the closed " *
+                   "interface-only contract"
+        end
+    end
     return nothing
 end
 

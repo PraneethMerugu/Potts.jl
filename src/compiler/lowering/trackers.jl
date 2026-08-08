@@ -52,7 +52,7 @@ function registered_operation_tracker_requirements(
         ::Type{T},
         shape::Tuple,
     ) where {T <: AbstractFloat}
-    return (CorePotts.CellMomentsTracker{length(shape), T}(),)
+    return (CorePotts.CompilerSPI.CellMomentsTracker{length(shape), T}(),)
 end
 
 function registered_operation_tracker_requirements(
@@ -73,7 +73,7 @@ function registered_operation_tracker_requirements(
     maximum_neighbors > 0 || throw(ArgumentError(
         "surface relation degree exceeds the V1 tracker bound"
     ))
-    return (CorePotts.CellSurfaceTracker(
+    return (CorePotts.CompilerSPI.CellSurfaceTracker(
         relation.handle, maximum_neighbors
     ),)
 end
@@ -119,23 +119,23 @@ function _operation_tracker_keys(
         ::Type{T},
     ) where {T <: AbstractFloat}
     return map(
-        CorePotts.tracker_quantity,
+        CorePotts.CompilerSPI.tracker_quantity,
         _operation_tracker_descriptors(ir, node, T),
     )
 end
 
 function _append_tracker_requirement!(descriptors, descriptor)
-    descriptor isa CorePotts.AbstractTrackerDescriptor || throw(ArgumentError(
+    descriptor isa CorePotts.CompilerSPI.AbstractTrackerDescriptor || throw(ArgumentError(
         "registered tracker requirements must be AbstractTrackerDescriptor values"
     ))
-    contract = CorePotts.tracker_contract(descriptor)
-    contract isa CorePotts.TrackerContract || throw(ArgumentError(
+    contract = CorePotts.CompilerSPI.tracker_contract(descriptor)
+    contract isa CorePotts.CompilerSPI.TrackerContract || throw(ArgumentError(
         "registered trackers must provide a closed TrackerContract"
     ))
-    quantity = CorePotts.tracker_quantity(descriptor)
+    quantity = CorePotts.CompilerSPI.tracker_quantity(descriptor)
     index = findfirst(
         existing -> isequal(
-            CorePotts.tracker_quantity(existing), quantity
+            CorePotts.CompilerSPI.tracker_quantity(existing), quantity
         ),
         descriptors,
     )
@@ -151,9 +151,9 @@ function _append_tracker_requirement!(descriptors, descriptor)
 end
 
 function _validate_tracker_engine_support(descriptor, engine)
-    contract = CorePotts.tracker_contract(descriptor)
+    contract = CorePotts.CompilerSPI.tracker_contract(descriptor)
     support = contract.support
-    admitted = engine isa SequentialEngine ?
+    admitted = engine isa SequentialCPM ?
                support.sequential : support.checkerboard
     admitted || throw(ArgumentError(
         "tracker $(contract.quantity) does not support " *
@@ -169,14 +169,14 @@ function _group_tracker_instances(ordered::Tuple)
     grouped = Any[]
     scalar_groups = Dict{DataType, Int}()
     for descriptor in ordered
-        key = CorePotts.tracker_quantity(descriptor)
-        storage = CorePotts.tracker_contract(descriptor).storage
-        if key isa CorePotts.QualifiedTrackerKey &&
-                storage isa CorePotts.DenseOwnerScalarStorage
+        key = CorePotts.CompilerSPI.tracker_quantity(descriptor)
+        storage = CorePotts.CompilerSPI.tracker_contract(descriptor).storage
+        if key isa CorePotts.CompilerSPI.QualifiedTrackerKey &&
+                storage isa CorePotts.CompilerSPI.DenseOwnerScalarStorage
             descriptor_type = typeof(descriptor)
             index = get(scalar_groups, descriptor_type, 0)
             if index == 0
-                push!(grouped, CorePotts.DenseScalarTrackerGroup(
+                push!(grouped, CorePotts.CompilerSPI.DenseScalarTrackerGroup(
                     descriptor_type[descriptor]
                 ))
                 scalar_groups[descriptor_type] = length(grouped)
@@ -193,13 +193,13 @@ end
 
 function _lower_tracker_plan(
         ir::AnalyzedTermIR,
-        engine::AbstractPottsEngine,
+        engine::AbstractPottsAlgorithm,
         ::Type{T},
     ) where {T <: AbstractFloat}
     shape = _lattice_shape(ir)
-    descriptors = CorePotts.AbstractTrackerDescriptor[]
+    descriptors = CorePotts.CompilerSPI.AbstractTrackerDescriptor[]
     _append_tracker_requirement!(
-        descriptors, CorePotts.OwnershipCountTracker()
+        descriptors, CorePotts.CompilerSPI.OwnershipCountTracker()
     )
 
     if any(ir.graph.nodes) do node
@@ -227,7 +227,7 @@ function _lower_tracker_plan(
             hasproperty(geometry, :point) && geometry.point isa CellCentroid
     end
     lifecycle_moments && _append_tracker_requirement!(
-        descriptors, CorePotts.CellMomentsTracker{length(shape), T}()
+        descriptors, CorePotts.CompilerSPI.CellMomentsTracker{length(shape), T}()
     )
 
     for candidate in ir.candidates
@@ -257,11 +257,11 @@ function _lower_tracker_plan(
     )
     fingerprint = _sha256_hex(
         "potts-tracker-plan-v2",
-        map(CorePotts.tracker_quantity, ordered),
-        map(CorePotts.tracker_inspection, ordered),
-        map(CorePotts.tracker_contract, ordered),
+        map(CorePotts.CompilerSPI.tracker_quantity, ordered),
+        map(CorePotts.CompilerSPI.tracker_inspection, ordered),
+        map(CorePotts.CompilerSPI.tracker_contract, ordered),
     )
-    return CorePotts.TrackerExecutionPlan(
+    return CorePotts.CompilerSPI.TrackerExecutionPlan(
         _group_tracker_instances(ordered), fingerprint
     )
 end

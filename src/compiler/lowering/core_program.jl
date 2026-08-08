@@ -58,7 +58,7 @@ function _lower_relationships(
                 _compiled_scalar(getproperty(payload, name), manifest, T)
                 for name in keys(payload)
             )
-            CorePotts.RelationshipStoreSchema(
+            CorePotts.CompilerSPI.RelationshipStoreSchema(
                 Int(capacity),
                 Int(maximum_degree),
                 defaults,
@@ -129,7 +129,7 @@ function _lower_observations(
                     Int16(kinds[kind_node.payload.identity])
                 ),
             ))
-        elseif node.operation in (:neighbor_count, :degree) &&
+        elseif node.operation === :degree &&
                 length(node.operands) == 2
             relationship_node = ir.graph.nodes[Int(first(node.operands))]
             relationship_node.payload isa ResourceBindingPayload &&
@@ -196,7 +196,7 @@ end
 
 function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
-        ::CorePotts.EmptyFootprint,
+        ::CorePotts.CompilerSPI.EmptyFootprint,
         proposal_offsets,
     ) where {N}
     return values
@@ -204,13 +204,13 @@ end
 
 function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
-        footprint::CorePotts.FiniteSpatialFootprint,
+        footprint::CorePotts.CompilerSPI.FiniteSpatialFootprint,
         proposal_offsets,
     ) where {N}
     base_offsets = if footprint.anchor isa
-            CorePotts.ProposalTargetFootprintAnchor
+            CorePotts.CompilerSPI.ProposalTargetFootprintAnchor
         (ntuple(_ -> 0, N),)
-    elseif footprint.anchor isa CorePotts.ProposalSourceFootprintAnchor
+    elseif footprint.anchor isa CorePotts.CompilerSPI.ProposalSourceFootprintAnchor
         Tuple(
             ntuple(dimension -> Int(proposal_offsets[dimension, column]), N)
             for column in axes(proposal_offsets, 2)
@@ -233,7 +233,7 @@ end
 
 function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
-        footprint::CorePotts.FootprintUnion,
+        footprint::CorePotts.CompilerSPI.FootprintUnion,
         proposal_offsets,
     ) where {N}
     for member in footprint.footprints
@@ -244,7 +244,7 @@ end
 
 function _append_relative_write_offsets!(
         values::Vector{NTuple{N, Int}},
-        footprint::CorePotts.AbstractFootprint,
+        footprint::CorePotts.CompilerSPI.AbstractFootprint,
         proposal_offsets,
     ) where {N}
     throw(ArgumentError(
@@ -254,17 +254,17 @@ end
 
 function _append_exclusive_access!(
         resources,
-        access::CorePotts.ResourceAccess,
+        access::CorePotts.CompilerSPI.ResourceAccess,
         proposal_offsets,
         ::Val{N},
     ) where {N}
     policy = access.write_policy
-    policy isa CorePotts.NoWriteAccess && return resources
+    policy isa CorePotts.CompilerSPI.NoWriteAccess && return resources
     policy isa Union{
-        CorePotts.CommutativeIntegerWriteAccess,
-        CorePotts.DeferredRequestWriteAccess,
+        CorePotts.CompilerSPI.CommutativeIntegerWriteAccess,
+        CorePotts.CompilerSPI.DeferredRequestWriteAccess,
     } && return resources
-    policy isa CorePotts.ExclusiveWriteAccess || throw(ArgumentError(
+    policy isa CorePotts.CompilerSPI.ExclusiveWriteAccess || throw(ArgumentError(
         "checkerboard encountered an unknown write-access policy"
     ))
     offsets = NTuple{N, Int}[]
@@ -281,7 +281,7 @@ function _append_exclusive_access!(
 end
 
 function _checkerboard_conflict_displacements(
-        accesses::AbstractVector{<:CorePotts.ResourceAccess},
+        accesses::AbstractVector{<:CorePotts.CompilerSPI.ResourceAccess},
         proposal_offsets,
         ::Val{N},
     ) where {N}
@@ -308,13 +308,13 @@ end
 function _append_relation_tracker_conflicts!(
         displacements::Vector{NTuple{N, Int}},
         tracker_plan,
-        resources::CorePotts.HamiltonianDomainResources,
+        resources::CorePotts.CompilerSPI.HamiltonianDomainResources,
         ::Val{N},
     ) where {N}
-    for descriptor in CorePotts.tracker_instances(tracker_plan)
-        source = CorePotts.tracker_contract(descriptor).source
-        source isa CorePotts.OwnershipRelationTrackerSource || continue
-        offsets = CorePotts.relation_offsets(
+    for descriptor in CorePotts.CompilerSPI.tracker_instances(tracker_plan)
+        source = CorePotts.CompilerSPI.tracker_contract(descriptor).source
+        source isa CorePotts.CompilerSPI.OwnershipRelationTrackerSource || continue
+        offsets = CorePotts.CompilerSPI.relation_offsets(
             resources, source.relation_handle
         )
         for column in axes(offsets, 2)
@@ -345,18 +345,18 @@ function _conflict_displacement_matrix(
 end
 
 function _checkerboard_conflict_displacements(
-        descriptor_plan::CorePotts.DescriptorExecutionPlan,
-        stage_plan::CorePotts.StageExecutionPlan,
+        descriptor_plan::CorePotts.CompilerSPI.DescriptorExecutionPlan,
+        stage_plan::CorePotts.CompilerSPI.StageExecutionPlan,
         tracker_plan,
         proposal_offsets,
         ::Val{N},
     ) where {N}
-    accesses = CorePotts.ResourceAccess[]
+    accesses = CorePotts.CompilerSPI.ResourceAccess[]
     for group in descriptor_plan.groups
         for descriptor in group.launch.instances
             push!(
                 accesses,
-                CorePotts.descriptor_resource_access(descriptor),
+                CorePotts.CompilerSPI.descriptor_resource_access(descriptor),
             )
         end
     end
@@ -364,7 +364,7 @@ function _checkerboard_conflict_displacements(
         for descriptor in group.instances
             push!(
                 accesses,
-                CorePotts.descriptor_resource_access(descriptor),
+                CorePotts.CompilerSPI.descriptor_resource_access(descriptor),
             )
         end
     end
@@ -399,13 +399,13 @@ end
 
 function _lower_core_program(
         ir::AnalyzedTermIR,
-        engine::AbstractPottsEngine,
+        engine::AbstractPottsAlgorithm,
         backend::AbstractPottsBackend,
         ::Type{T},
         manifest::ParameterManifest,
-        descriptor_plan::CorePotts.DescriptorExecutionPlan,
-        stage_plan::CorePotts.StageExecutionPlan,
-        lifecycle_plan::CorePotts.AbstractLifecycleExecutionPlan,
+        descriptor_plan::CorePotts.CompilerSPI.DescriptorExecutionPlan,
+        stage_plan::CorePotts.CompilerSPI.StageExecutionPlan,
+        lifecycle_plan::CorePotts.CompilerSPI.AbstractLifecycleExecutionPlan,
         relationship_endpoint_policies,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
@@ -461,12 +461,12 @@ function _lower_core_program(
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
     )
-    core_engine = engine isa SequentialEngine ?
-                  CorePotts.SequentialProgramEngine() :
-                  CorePotts.CheckerboardProgramEngine()
+    core_engine = engine isa SequentialCPM ?
+                  CorePotts.BackendSPI.SequentialProgramEngine() :
+                  CorePotts.BackendSPI.CheckerboardProgramEngine()
     core_backend = _core_program_backend(backend)
     tracker_plan = _lower_tracker_plan(ir, engine, T)
-    checkerboard_plan = if core_engine isa CorePotts.CheckerboardProgramEngine
+    checkerboard_plan = if core_engine isa CorePotts.BackendSPI.CheckerboardProgramEngine
         conflicts = _checkerboard_conflict_displacements(
             descriptor_plan,
             stage_plan,
@@ -474,9 +474,9 @@ function _lower_core_program(
             proposal_offsets,
             Val(dimensions),
         )
-        CorePotts.CheckerboardPlan(shape, periodic, conflicts)
+        CorePotts.BackendSPI.CheckerboardPlan(shape, periodic, conflicts)
     else
-        CorePotts.NoCheckerboardPlan()
+        CorePotts.BackendSPI.NoCheckerboardPlan()
     end
     ownership_change_handles = _ownership_change_handles(descriptor_plan)
     program_fingerprint = _sha256_hex(
@@ -494,10 +494,12 @@ function _lower_core_program(
         descriptor_plan.fingerprint,
         stage_plan.fingerprint,
         ownership_change_handles,
-        CorePotts.lifecycle_plan_report(lifecycle_plan),
-        CorePotts.checkerboard_plan_report(checkerboard_plan),
+        CorePotts.CompilerSPI.lifecycle_plan_report(lifecycle_plan),
+        CorePotts.BackendSPI.checkerboard_plan_report(checkerboard_plan),
+        :PottsToolkit,
+        Base.pkgversion(PottsToolkit),
     )
-    return CorePotts.CompiledPottsProgram(
+    return CorePotts.CompilerSPI.CompiledPottsProgram(
         shape,
         periodic,
         proposal_offsets,
@@ -517,6 +519,16 @@ function _lower_core_program(
         lifecycle_plan,
         checkerboard_plan,
         ownership_change_handles,
+        mechanism_authority = (
+            authority = :PottsToolkit,
+            package = (
+                name = :PottsToolkit,
+                uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
+                version = something(Base.pkgversion(PottsToolkit), v"0.0.0"),
+            ),
+            suite = :g5h1_potts_compiler_mechanisms,
+            revision = v"1.0.0",
+        ),
     ), Tuple((
         identity = _manifest_identity(declaration.identity),
         resource_identity = _qualified_resource_identity(declaration.identity),

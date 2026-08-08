@@ -180,6 +180,41 @@ end
 @inline _center_distance(first, ::Nothing) = Inf
 @inline _center_distance(::Nothing, ::Nothing) = Inf
 
+@inline _has_due_zero_volume_retirement(
+    ::NoLifecycleExecutionPlan, kind::Int16
+) = false
+
+@inline function _has_due_zero_volume_retirement(
+        plan::LifecycleExecutionPlan, kind::Int16
+    )
+    for descriptor in plan.descriptors
+        if descriptor.compiler_synthesized &&
+                descriptor.effect === RetireCellLifecycleEffect &&
+                descriptor.domain === CellKindLifecycleDomain &&
+                descriptor.domain_kind == kind
+            return true
+        end
+    end
+    return false
+end
+
+"""Whether one copy may remove the old owner's final occupied site."""
+@inline function _extinction_copy_admitted(state, old_owner, new_owner)
+    old_owner > 0 && old_owner != new_owner || return true
+    volumes = tracker_values(
+        state.program.tracker_plan, state.trackers, Val(:cell_volume)
+    )
+    @inbounds volumes[Int(old_owner)] == 1 || return true
+    kind = @inbounds state.cell_kinds[Int(old_owner)]
+    kind > 0 || return false
+    plan = state.program.lifecycle_plan
+    if plan isa LifecycleExecutionPlan &&
+            @inbounds(plan.forbid_extinction[Int(kind)])
+        return false
+    end
+    return _has_due_zero_volume_retirement(plan, kind)
+end
+
 function _commit_copy!(
         runtime::ProgramRuntime{T, N},
         target::CartesianIndex{N},

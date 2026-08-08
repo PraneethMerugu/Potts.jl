@@ -12,6 +12,19 @@ function _host_lattice_shape(source::FrozenSourceGraph)
     return shape
 end
 
+function _host_lattice_dimensions(source::FrozenSourceGraph)
+    domains = filter(record -> record.kind === :LatticeDomain, source.records)
+    isempty(domains) && return 0
+    length(domains) == 1 || throw(ArgumentError(
+        "footprint analysis permits at most one lattice domain"
+    ))
+    shape = get(_record_options(only(domains)), :shape, nothing)
+    shape isa Tuple{Vararg{Int}} && !isempty(shape) || throw(ArgumentError(
+        "footprint analysis requires a concrete nonempty lattice shape"
+    ))
+    return length(shape)
+end
+
 function _host_neighborhood_offsets(neighborhood::VonNeumann, dimensions::Int)
     offsets = Tuple[]
     ranges = ntuple(_ -> (-neighborhood.radius):neighborhood.radius, dimensions)

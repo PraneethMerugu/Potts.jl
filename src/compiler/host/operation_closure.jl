@@ -28,6 +28,26 @@ function _record_has_relationship_create(record::QualifiedStatement)
     return any(effect -> effect isa Create, arguments.effects)
 end
 
+function _record_has_model_assignment(
+        source::FrozenSourceGraph,
+        record::QualifiedStatement,
+    )
+    record.kind === :SynchronousProcess || return false
+    arguments = _record_arguments(record)
+    arguments isa NamedTuple && haskey(arguments, :effects) || return false
+    length(arguments.effects) == 1 || return false
+    effect = only(arguments.effects)
+    effect isa Assign || return false
+    return any(source.records) do candidate
+        candidate.kind === :ModelState || return false
+        variable = _state_record_variable(candidate)
+        variable !== nothing && isequal(variable, effect.target) && return true
+        effect.target isa AbstractPottsStatement || return false
+        return statement_id(effect.target) == candidate.identity.local_id &&
+               candidate.identity in record.resources
+    end
+end
+
 function _compiler_synthesized_operation_requirements(
         source::FrozenSourceGraph,
         nodes::Vector{NormalizedTermNode},
@@ -70,7 +90,11 @@ function _compiler_synthesized_operation_requirements(
             )
         elseif record.phase isa AfterMCS
             _push_operation_requirement!(
-                requirements, _potts_iteration_bound_state_value, 1
+                requirements,
+                _record_has_model_assignment(source, record) ?
+                    _potts_model_bound_state_value :
+                    _potts_iteration_bound_state_value,
+                1,
             )
         elseif record.phase isa Lifecycle
             _push_operation_requirement!(

@@ -90,24 +90,26 @@ mutable struct _TermGraphBuilder
     diagnostics::Vector{PottsDiagnostic}
 end
 
-function _compiler_leaf_kind(value, completed::PottsSystem)
-    parameters = ModelingToolkitBase.parameters(completed)
-    any(candidate -> isequal(candidate, value), parameters) && return :parameter
-    for statement in _all_system_statements(completed)
-        statement isa Union{
-            SiteState,
-            CellState,
-            MediumState,
-            ModelState,
-            FieldState,
-            HistoryState,
-        } || continue
-        arguments = _statement_arguments(statement)
-        haskey(arguments, :variable) || continue
-        isequal(arguments.variable, value) && return :state
+function _qualified_source_reference(reference::FrozenSourceReference)
+    return _namespace_symbolic_value(
+        reference.value, reference.path[2:end]
+    )
+end
+
+function _compiler_leaf_kind(value, source::FrozenSourceGraph)
+    any(source.references) do reference
+        reference.kind === :parameter &&
+            isequal(_qualified_source_reference(reference), value)
+    end && return :parameter
+    for record in source.records
+        state_variable = _state_record_variable(record)
+        state_variable === nothing && continue
+        isequal(state_variable, value) && return :state
     end
-    unknowns = ModelingToolkitBase.unknowns(completed)
-    any(candidate -> isequal(candidate, value), unknowns) && return :variable
+    any(source.references) do reference
+        reference.kind === :variable &&
+            isequal(_qualified_source_reference(reference), value)
+    end && return :variable
     name = _try_symbolic_name(value)
     name === nothing && return :literal
     text = String(name)
@@ -223,7 +225,6 @@ end
 function _resolve_normalized_payload(
         kind::Symbol,
         value,
-        completed::PottsSystem,
         source::FrozenSourceGraph,
         record::QualifiedStatement,
     )
@@ -351,7 +352,7 @@ function _normalized_leaf_callable(kind::Symbol, version::VersionNumber)
                kind === :relationship_context ? :energy_anchor_relationship :
                nothing
     identity === nothing && return nothing
-    return CorePotts.operation_callable(Val(identity), version)
+    return CorePotts.CompilerSPI.operation_callable(Val(identity), version)
 end
 
 function _compiler_literal(value)

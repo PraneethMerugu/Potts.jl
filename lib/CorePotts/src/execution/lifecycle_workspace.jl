@@ -45,14 +45,14 @@ struct LifecycleWorkspace{
         V32 <: AbstractVector{Int32},
         VU32 <: AbstractVector{UInt32},
         VB <: AbstractVector{Bool},
-        VS <: AbstractVector{LifecycleStatusDetailCode},
+        VS <: AbstractVector{ProgramStatusDetailCode},
         M32 <: AbstractMatrix{Int32},
         V8 <: AbstractVector{UInt8},
         PW <: AbstractMatrix,
         O <: AbstractArray{Int32},
         K <: AbstractVector{Int16},
         G <: AbstractVector{UInt32},
-        LS <: AbstractVector{LifecycleStatusPayload},
+        LS <: AbstractVector{ProgramStatus},
         TS,
         R,
         D,
@@ -231,7 +231,7 @@ function allocate_lifecycle_workspace(
         copy_tracker_state(trackers),
         copy(relationships),
         copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
-        LifecycleStatusPayload[LifecycleStatusPayload()],
+        ProgramStatus[ProgramStatus()],
     )
 end
 
@@ -248,7 +248,7 @@ function _reset_lifecycle_workspace!(workspace::LifecycleWorkspace)
     fill!(workspace.allocation, 0)
     fill!(workspace.conflict_seen, false)
     fill!(workspace.representative_site, 0)
-    @inbounds workspace.status[1] = LifecycleStatusPayload()
+    @inbounds workspace.status[1] = ProgramStatus()
     return workspace
 end
 

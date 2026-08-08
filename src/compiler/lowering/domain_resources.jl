@@ -70,7 +70,7 @@ function _hamiltonian_domain_resources(
         offsets[:, cursor:(cursor + count - 1)] .= relation
         cursor += count
     end
-    return CorePotts.HamiltonianDomainResources(
+    return CorePotts.CompilerSPI.HamiltonianDomainResources(
         offsets,
         contact_starts,
         contact_counts,

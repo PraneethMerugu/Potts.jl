@@ -41,21 +41,39 @@ function render_fixture(; dimensions = 2)
             ),
         )),
     )
-    executable = PottsToolkit.compile(
-        PottsToolkit.complete(visual);
-        engine = PottsToolkit.SequentialEngine(),
-        backend = PottsToolkit.CPUBackend(),
-        scalar_type = Float64,
-    )
+    scheduled = PottsToolkit.mtkcompile(PottsToolkit.complete(visual))
     initial = PottsToolkit.PottsInitialState(
         ownership = PottsToolkit.LabelledCells(
             labels; cells = [cell, other], medium
         )
     )
     problem = PottsToolkit.PottsProblem(
-        executable, initial, (0, 0); seed = 1
+        scheduled, initial, (0, 0); seed = 1
     )
-    state = only(PottsToolkit.solve(problem))
+    state = if dimensions == 2
+        only(PottsToolkit.solve(
+            problem,
+            PottsToolkit.SequentialCPM();
+            backend = PottsToolkit.CPUBackend(),
+            scalar_type = Float64,
+        ))
+    else
+        # Three-dimensional CPM execution is intentionally not admitted until
+        # G5H-4. Keep MakiePotts' independent 3D projection witness without
+        # bypassing the runtime capability preflight.
+        PottsToolkit.PottsSavedState(
+            0,
+            Int32.(labels),
+            Int32[2, 3],
+            UInt32[1, 1],
+            Int32[count(==(1), labels), count(==(2), labels)],
+            NamedTuple(),
+            NamedTuple(),
+            Dict{Symbol, Any}(),
+            (),
+            (),
+        )
+    end
     return (; state, problem)
 end
 

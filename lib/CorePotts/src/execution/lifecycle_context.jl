@@ -452,7 +452,7 @@ function _lifecycle_planned_surface(
         if shape[dimension] <= 0
             _set_lifecycle_status!(
                 view.workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 source = source_handle,
                 anchor = cell,
                 detail = LifecycleDetailTrackerStorageInvalid,
@@ -467,7 +467,7 @@ function _lifecycle_planned_surface(
             @inbounds(resources.contact_counts[source_handle]) <= 0
         _set_lifecycle_status!(
             view.workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             source = source_handle,
             anchor = cell,
             detail = LifecycleDetailTrackerStorageInvalid,

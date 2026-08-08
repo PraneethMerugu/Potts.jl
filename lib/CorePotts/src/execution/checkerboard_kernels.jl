@@ -1,10 +1,15 @@
 # Backend-portable checkerboard candidate, claim, evaluation, and commit kernels.
 
+@inline function _program_backend_open(state)
+    return (@inbounds state.program_status[1]).code === ProgramStatusSuccess &&
+           _lifecycle_backend_open(state.lifecycle_workspace)
+end
+
 @kernel function _checkerboard_clear_mcs_kernel!(
         maximums, identities, report, state
     )
     index = @index(Global, Linear)
-    if _lifecycle_backend_open(state.lifecycle_workspace)
+    if _program_backend_open(state)
         if index <= length(maximums)
             @inbounds begin
                 maximums[index] = UInt32(0)
@@ -20,7 +25,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= length(maximums) &&
-            _lifecycle_backend_open(state.lifecycle_workspace)
+            _program_backend_open(state)
         @inbounds begin
             maximums[index] = UInt32(0)
             identities[index] = typemax(UInt32)
@@ -61,7 +66,7 @@ end
     stop_index = @inbounds plan.color_offsets[Int(color) + 1] - Int32(1)
     color_size = stop_index - first_index + Int32(1)
     if local_index <= color_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace)
+            _program_backend_open(state)
         site_offset = Int32(local_index - 1)
         schedule_index = first_index + site_offset
         target_linear = @inbounds plan.sites[Int(schedule_index)]
@@ -119,7 +124,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace) &&
+            _program_backend_open(state) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         old_owner = @inbounds old_owners[index]
@@ -156,7 +161,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace) &&
+            _program_backend_open(state) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
@@ -200,7 +205,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace) &&
+            _program_backend_open(state) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         priority = @inbounds priorities[index]
         identity = UInt32(@inbounds semantic_ids[index])
@@ -224,17 +229,6 @@ end
     end
 end
 
-@inline function _checkerboard_log_ratio(evaluation, temperature)
-    evaluation.constraints_allowed || return -typeof(temperature)(Inf)
-    if iszero(temperature)
-        effective = evaluation.delta_h + evaluation.drive_energy
-        return effective <= zero(temperature) ?
-               zero(temperature) : -typeof(temperature)(Inf)
-    end
-    return -(evaluation.delta_h + evaluation.drive_energy) / temperature +
-           evaluation.drive_log_bias + evaluation.kinetic_modifier
-end
-
 @kernel function _checkerboard_evaluate_kernel!(
         contributions,
         target_sites,
@@ -249,55 +243,96 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace) &&
+            _program_backend_open(state) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_PENDING)
-        target = CartesianIndices(state.ownership)[Int(
+        old_owner = @inbounds old_owners[index]
+        new_owner = @inbounds new_owners[index]
+        if !_extinction_copy_admitted(state, old_owner, new_owner)
+            @inbounds dispositions[index] = _PROGRAM_CHECKERBOARD_CONSTRAINT
+        else
+            target = CartesianIndices(state.ownership)[Int(
             @inbounds target_sites[index]
-        )]
-        source = CartesianIndices(state.ownership)[Int(
+            )]
+            source = CartesianIndices(state.ownership)[Int(
             @inbounds source_sites[index]
-        )]
-        semantic_id = @inbounds semantic_ids[index]
-        context = _ProposalEvaluationContext(
+            )]
+            semantic_id = @inbounds semantic_ids[index]
+            context = _ProposalEvaluationContext(
             state,
             source,
             target,
-            @inbounds(old_owners[index]),
-            @inbounds(new_owners[index]),
+            old_owner,
+            new_owner,
             Int(semantic_id),
             Int(color),
         )
-        source_count = state.program.descriptor_plan.source_count
-        column = CheckerboardContributionColumn(
+            source_count = state.program.descriptor_plan.source_count
+            column = CheckerboardContributionColumn(
             contributions, Int32(index), source_count
-        )
-        evaluate_proposal_contributions!(
-            column, state.program.descriptor_plan, context
-        )
-        evaluation = fold_proposal_contributions(
-            state.program.descriptor_plan, column
-        )
-        if !evaluation.constraints_allowed
-            @inbounds dispositions[index] = _PROGRAM_CHECKERBOARD_CONSTRAINT
-        else
-            temperature = compiled_scalar_value(
-                state.program.temperature, state.parameters
             )
-            log_ratio = _checkerboard_log_ratio(evaluation, temperature)
-            accepted = log_ratio >= zero(temperature)
-            if !accepted && isfinite(log_ratio)
-                draw = _program_uniform(
-                    typeof(temperature),
-                    state,
-                    AcceptanceStream,
-                    3,
-                    semantic_id;
-                    subround = color,
-                )
-                accepted = log(draw) < log_ratio
+            evaluate_proposal_contributions!(
+            column, state.program.descriptor_plan, context
+            )
+            evaluation = fold_proposal_contributions(
+            state.program.descriptor_plan, column
+            )
+            temperature = compiled_scalar_value(
+            state.program.temperature, state.parameters
+            )
+            result = _proposal_acceptance_result(evaluation, temperature)
+            if result.code === ProposalAcceptanceConstraintRejected
+                @inbounds dispositions[index] = _PROGRAM_CHECKERBOARD_CONSTRAINT
+            elseif result.code === ProposalAcceptanceNonfinite
+                @inbounds dispositions[index] = _PROGRAM_CHECKERBOARD_NONFINITE
+            elseif result.code === ProposalAcceptanceZeroTemperatureDrive
+                @inbounds dispositions[index] = _PROGRAM_CHECKERBOARD_ZERO_T_DRIVE
+            else
+                log_ratio = result.log_ratio
+                accepted = log_ratio >= zero(temperature)
+                if !accepted && isfinite(log_ratio)
+                    draw = _program_uniform(
+                        typeof(temperature),
+                        state,
+                        AcceptanceStream,
+                        3,
+                        semantic_id;
+                        subround = color,
+                    )
+                    accepted = log(draw) < log_ratio
+                end
+                @inbounds dispositions[index] = accepted ?
+                    _PROGRAM_CHECKERBOARD_ACCEPTED : _PROGRAM_CHECKERBOARD_ENERGY
             end
-            @inbounds dispositions[index] = accepted ?
-                _PROGRAM_CHECKERBOARD_ACCEPTED : _PROGRAM_CHECKERBOARD_ENERGY
+        end
+    end
+end
+
+@kernel function _checkerboard_acceptance_status_kernel!(
+        dispositions, semantic_ids, state, batch_size::Int32
+    )
+    index = @index(Global, Linear)
+    if index == 1 && _program_backend_open(state)
+        selected_identity = typemax(Int32)
+        selected_code = ProposalAcceptanceReady
+        for candidate in 1:Int(batch_size)
+            disposition = @inbounds dispositions[candidate]
+            if disposition == _PROGRAM_CHECKERBOARD_NONFINITE ||
+                    disposition == _PROGRAM_CHECKERBOARD_ZERO_T_DRIVE
+                identity = @inbounds semantic_ids[candidate]
+                if identity < selected_identity
+                    selected_identity = identity
+                    selected_code = disposition == _PROGRAM_CHECKERBOARD_NONFINITE ?
+                        ProposalAcceptanceNonfinite :
+                        ProposalAcceptanceZeroTemperatureDrive
+                end
+            end
+        end
+        if selected_code !== ProposalAcceptanceReady
+            T = eltype(state.parameters)
+            result = ProposalAcceptanceResult(-T(Inf), selected_code)
+            @inbounds state.program_status[1] = _acceptance_failure_status(
+                result, state.mcs + 1, selected_identity
+            )
         end
     end
 end
@@ -312,7 +347,7 @@ end
     )
     index = @index(Global, Linear)
     if index <= batch_size &&
-            _lifecycle_backend_open(state.lifecycle_workspace) &&
+            _program_backend_open(state) &&
             @inbounds(dispositions[index] == _PROGRAM_CHECKERBOARD_ACCEPTED)
         target = CartesianIndices(state.ownership)[Int(
             @inbounds target_sites[index]
@@ -344,7 +379,7 @@ end
         batch_size::Int32,
     )
     index = @index(Global, Linear)
-    if index == 1 && _lifecycle_backend_open(state.lifecycle_workspace)
+    if index == 1 && _program_backend_open(state)
         accepted = UInt64(0)
         rejected = UInt64(0)
         null_attempts = UInt64(0)

@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: active; G5H-0 and R2H-A passed; G5H-1 pending
+Status: active; G5H-0 and R2H-A passed; G5H-1 through G5H-3 implementation in progress
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -13,9 +13,9 @@ repeat or amend gate requirements.
 |:--|:--|:--|
 | G5H-0 — authority, baseline, preservation | `passed` | Corrected candidate `9afcf6f1ec44cf84525d8b023c2d1b705560e365`, tree `a8b0ce43489e558e1770f4982dece97ef4c6eca7`, cleared R2H-A with no carried finding. |
 | R2H-A — authority and preservation review | `passed` | Fresh independent read-only review of the exact corrected candidate returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
-| G5H-1 — semantic and CorePotts consolidation | `pending` | Unblocked by R2H-A; implementation has not begun. |
-| G5H-2 — pure-Potts authoring and SciML lifecycle | `pending` | Depends on G5H-1. |
-| G5H-3 — native global MTK integration | `pending` | Depends on G5H-2. |
+| G5H-1 — semantic and CorePotts consolidation | `active` | Implemented on the uncommitted working candidate; F11's single Core host-candidate transaction and atomic runtime rebuild are focused-green, while final authoritative qualification is pending. |
+| G5H-2 — pure-Potts authoring and SciML lifecycle | `active` | Implemented together with G5H-1; F11 now has one public settled host transaction with generation-safe identities and callback rollback, while the remaining preservation closure and final qualification are pending. |
+| G5H-3 — native global MTK integration | `active` | Native declarations, real upstream MTK compilation, and the coupled runtime are under executable qualification; R2H-B is not yet open. |
 | R2H-B — cohesion and real-MTK review | `pending` | Opens only after G5H-1 through G5H-3 pass. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Blocked by R2H-B. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
@@ -43,8 +43,29 @@ The fresh formal rereview then inspected corrected candidate
 P2=0, and P3=0. It independently reproduced the authority order, complete preservation and
 tooling partitions, all 356 deletion/recovery witnesses, the archive hash and entry count, public
 declaration ranges and digests, active-link/TOML/local-path checks, fresh package boundaries, and
-closure of every first-review finding. G5H-0 and R2H-A therefore pass with no carried P2; G5H-1 is
-unblocked but has not begun.
+closure of every first-review finding. G5H-0 and R2H-A therefore pass with no carried P2. G5H-1
+through G5H-3 are now active on branch `codex/symbolic-potts-v1` from HEAD
+`9f3877d82db7ca95d2c89700bb7de1b6f4c0c7d1`; the working tree is intentionally uncommitted and
+does not become gate evidence until the final matrix, exact candidate identity, and R2H-B review
+are recorded below.
+
+## G5H-1/G5H-2 working-candidate evidence
+
+This section records provisional focused results on the dirty working candidate. It closes an
+implementation gap for the named obligation, but it does not mark either gate passed and does not
+replace the final exact-candidate matrix.
+
+| Obligation | Implemented authority | Focused result | Remaining qualification |
+|:--|:--|:--|:--|
+| F11 settled host relationship mutation | Public `CellIdentity` and `relationship_transaction!(integrator, effects...)` reuse the existing `Create`, `Remove`, and `Retune` effects. Endpoint-pair remove/retune, exact generation checks, integer endpoint auto-stamping, canonical Core validation, one host-candidate rebuild, backend adaptation, and pointer publication form one atomic boundary. Callback failure retains the previously published runtime. | `test/test_relationship_host_transactions_v2.jl`: 22/22 passed. The public API and Core SPI boundary selection passed 550/550. `lib/CorePotts/test/test_program_v1_relationships_checkpoint.jl` contains the package-owned settled-host rebuild, invalid-batch, stale-generation, unsettled-runtime, and cross-store all-or-nothing unit witnesses. | Repeat the complete root and CorePotts suites on the exact clean candidate and record their totals before either gate passes. GPU-resident descriptor requests and no-hidden-transfer backend claims remain G5H-4 obligations; this row proves only the settled host path. |
+
+### Intentional stable public-API delta from G5H-0
+
+F11 adds exactly two PottsToolkit stable public names relative to the G5H-0 surface:
+`CellIdentity` and `relationship_transaction!`. This `+2` is the minimal author-facing realization
+of the already frozen F11 settled-host relationship contract. Neither name is a compatibility alias
+or an alternate transaction authority. The exact inventory in `test/test_public_api_v2.jl` names
+both additions; any further stable F11 spelling is drift and requires review.
 
 ## G5H-0 candidate evidence
 

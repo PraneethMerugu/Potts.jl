@@ -13,6 +13,25 @@ struct FingerprintPayload{Name}
     schema::UInt16
 end
 
+struct FingerprintDelimiterPayload
+    value::String
+end
+
+Base.show(io::IO, value::FingerprintDelimiterPayload) =
+    print(io, value.value)
+
+struct FingerprintAxisVector{T} <: AbstractVector{T}
+    values::Vector{T}
+    offset::Int
+end
+
+Base.size(value::FingerprintAxisVector) = (length(value.values),)
+Base.axes(value::FingerprintAxisVector) =
+    (value.offset:(value.offset + length(value.values) - 1),)
+Base.IndexStyle(::Type{<:FingerprintAxisVector}) = IndexCartesian()
+Base.getindex(value::FingerprintAxisVector, index::Int) =
+    value.values[index - value.offset + 1]
+
 @testset "completion and diagnostics" begin
     @variables t activity(t)
     @parameters target strength maximum activity_strength
@@ -98,37 +117,36 @@ end
     @test length(string(semantic_fingerprint(completed))) == 64
     @test length(string(completed_system_fingerprint(completed))) == 64
 
-    @variables chemo_signal(t)
-    chemo_field = FieldState(
-        chemo_signal; name = :chemo_signal, initial = 0.0
-    )
-    retraction_error = try
-        Chemotaxis(
-            endothelial,
-            chemo_field;
-            strength = 1.0,
-            mode = RetractionsOnly(),
-        )
-        nothing
-    catch caught
-        caught
-    end
-    @test retraction_error isa ArgumentError
-    @test occursin("ExtensionsOnly", sprint(showerror, retraction_error))
+    flat = Int16[1, 2, 3, 4]
+    square = reshape(Base.copy(flat), 2, 2)
+    @test collect(flat) == vec(square)
+    @test PottsToolkit._canonical_value(flat) !=
+          PottsToolkit._canonical_value(square)
+    @test PottsToolkit._sha256_hex(:array_shape, flat) !=
+          PottsToolkit._sha256_hex(:array_shape, square)
 
-    interpolation_error = try
-        Chemotaxis(
-            endothelial,
-            chemo_field;
-            strength = 1.0,
-            sample = Multilinear(),
-        )
-        nothing
-    catch caught
-        caught
-    end
-    @test interpolation_error isa ArgumentError
-    @test occursin("Nearest", sprint(showerror, interpolation_error))
+    one_based = FingerprintAxisVector(Base.copy(flat), 1)
+    shifted = FingerprintAxisVector(Base.copy(flat), -2)
+    @test collect(one_based) == collect(shifted)
+    @test axes(one_based) != axes(shifted)
+    @test PottsToolkit._canonical_value(one_based) !=
+          PottsToolkit._canonical_value(shifted)
+
+    delimiter_left = (
+        FingerprintDelimiterPayload("x,y"),
+        FingerprintDelimiterPayload("z"),
+    )
+    delimiter_right = (
+        FingerprintDelimiterPayload("x"),
+        FingerprintDelimiterPayload("y,z"),
+    )
+    legacy_join(value) = "(" *
+        join((sprint(show, item) for item in value), ",") * ")"
+    @test legacy_join(delimiter_left) == legacy_join(delimiter_right)
+    @test PottsToolkit._canonical_value(delimiter_left) !=
+          PottsToolkit._canonical_value(delimiter_right)
+    @test PottsToolkit._sha256_hex(delimiter_left) !=
+          PottsToolkit._sha256_hex(delimiter_right)
 
     cell = CellBinding(:cell)
     @named missing_surface_relation = PottsSystem(
@@ -146,12 +164,7 @@ end
         )),
     )
     surface_relation_error = try
-        compile(
-            complete(missing_surface_relation);
-            engine = SequentialEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float64,
-        )
+        mtkcompile(missing_surface_relation)
         nothing
     catch caught
         caught
@@ -210,7 +223,7 @@ end
         effect = :pure_read,
         rng = (),
         boundedness = (maximum = 0, basis = :read_only),
-        phase = Observe(),
+        phase = nothing,
         capabilities = (
             sequential = true,
             checkerboard = true,
@@ -220,7 +233,7 @@ end
         energy_domain = nothing,
         affected_region = nothing,
         reference_semantics = :dimensionless,
-        descriptor_payload_type = CorePotts.EmptyDescriptorPayload,
+        descriptor_payload_type = CorePotts.CompilerSPI.EmptyDescriptorPayload,
         serialization_identity = "example-read-v1",
         lowering_identity = :lower_example_read,
     )
@@ -241,7 +254,7 @@ end
     @test registered_record.provenance.registered_lowering_identity ===
           :lower_example_read
     @test registered_record.provenance.registered_descriptor_payload_type ===
-          CorePotts.EmptyDescriptorPayload
+          CorePotts.CompilerSPI.EmptyDescriptorPayload
 
     fingerprint_contract_a = merge(
         registered_contract,
@@ -400,11 +413,11 @@ end
     @test duplicate_draw_error isa PottsToolkit.PottsValidationError
     @test only(duplicate_draw_error.diagnostics).kind === :duplicate_draw_key
 
-    @named invalid_distribution = PottsSystem(statements = StatementSet((
+    @named invalid_distribution = PottsSystem(statements = @statements begin
         ProposalDrive(
             :bad_noise, draw(Normal(0.0, -1.0), DrawKey(:bad_noise))
-        ),
-    )))
+        )
+    end)
     distribution_error = try
         complete(invalid_distribution)
         nothing
@@ -414,14 +427,118 @@ end
     @test distribution_error isa PottsToolkit.PottsValidationError
     @test only(distribution_error.diagnostics).kind ===
           :invalid_random_distribution
+    @test only(distribution_error.diagnostics).source isa SourceLocation
 
-    @named invalid_phase = PottsSystem(statements = StatementSet((
+    @named invalid_unit_vector = PottsSystem(statements = @statements begin
+        ProposalDrive(
+            :vector_noise,
+            draw(UnitVector(2), DrawKey(:vector_noise)),
+        )
+    end)
+    unit_vector_error = try
+        mtkcompile(invalid_unit_vector)
+        nothing
+    catch caught
+        caught
+    end
+    @test unit_vector_error isa PottsToolkit.PottsValidationError
+    @test only(unit_vector_error.diagnostics).kind ===
+          :nonscalar_distribution_in_proposal_term
+    @test only(unit_vector_error.diagnostics).source isa SourceLocation
+
+    marker_cell = CellKind(:marker_cell; extinction = RetireAtZero())
+    marker_medium = MediumKind(:marker_medium)
+    marker_field = FieldState(:marker_field; initial = 0.0)
+    marker_base = @statements begin
+        Lattice((2, 2))
+        marker_cell
+        marker_medium
+        marker_field
+        Protocol(Sweep(); name = :marker_protocol)
+    end
+    unsupported_chemotaxis = (
+        (
+            only(@statements begin
+                Chemotaxis(
+                    marker_cell,
+                    marker_field;
+                    strength = 1.0,
+                    mode = RetractionsOnly(),
+                )
+            end),
+            :unsupported_chemotaxis_mode,
+        ),
+        (
+            only(@statements begin
+                Chemotaxis(
+                    marker_cell,
+                    marker_field;
+                    strength = 1.0,
+                    mode = ExtensionsAndRetractions(),
+                )
+            end),
+            :unsupported_chemotaxis_mode,
+        ),
+        (
+            only(@statements begin
+                Chemotaxis(
+                    marker_cell,
+                    marker_field;
+                    strength = 1.0,
+                    sample = Multilinear(),
+                )
+            end),
+            :unsupported_chemotaxis_sampling,
+        ),
+    )
+    for (statement, kind) in unsupported_chemotaxis
+        marker_error = try
+            complete(PottsSystem(
+                name = Symbol(:invalid_, Symbol(statement_id(statement))),
+                statements = StatementSet((marker_base, statement)),
+            ))
+            nothing
+        catch caught
+            caught
+        end
+        @test marker_error isa PottsToolkit.PottsValidationError
+        @test only(marker_error.diagnostics).kind === kind
+        @test only(marker_error.diagnostics).source isa SourceLocation
+    end
+
+    centered_field = only(@statements begin
+        FieldState(
+            :centered_field;
+            initial = 0.0,
+            placement = CellCentered(),
+        )
+    end)
+    centered_error = try
+        complete(PottsSystem(
+            name = :unsupported_centered_field,
+            statements = StatementSet((Lattice((2, 2)), centered_field)),
+        ))
+        nothing
+    catch caught
+        caught
+    end
+    @test centered_error isa PottsToolkit.PottsValidationError
+    @test only(centered_error.diagnostics).kind ===
+          :unsupported_field_placement
+    @test only(centered_error.diagnostics).source isa SourceLocation
+
+    invalid_phase_statements = @statements begin
         AcceptedCopyProcess(
             :misphased;
             effects = (Assign(activity, 1.0),),
             phase = AfterMCS(),
-        ),
-    )), unknowns = [activity], independent_variables = [t])
+        )
+    end
+    @named invalid_phase = PottsSystem(
+        statements = invalid_phase_statements,
+        unknowns = [activity],
+        independent_variables = [t],
+    )
     phase_error = try
         complete(invalid_phase)
         nothing
@@ -430,4 +547,5 @@ end
     end
     @test phase_error isa PottsToolkit.PottsValidationError
     @test only(phase_error.diagnostics).kind === :illegal_effect_phase
+    @test only(phase_error.diagnostics).source isa SourceLocation
 end

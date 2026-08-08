@@ -4,7 +4,7 @@
         plan, workspace, control, next_mcs
     )
     index = @index(Global, Linear)
-    success = LifecycleStatusPayload()
+    success = ProgramStatus()
     open = _lifecycle_backend_open(workspace)
     open && index <= length(control.candidate_status) &&
         (@inbounds control.candidate_status[index] = success)
@@ -110,7 +110,7 @@ end
             _lifecycle_plan_matches(descriptor, plan_class) || continue
             request_workspace = _lifecycle_workspace_with_status(
                 workspace,
-                _LifecycleStatusSlot(
+                _ProgramStatusSlot(
                     control.candidate_status, Int32(request)
                 ),
             )
@@ -148,7 +148,7 @@ end
     else
         _set_lifecycle_status!(
             request_workspace,
-            LifecycleStatusInadmissible;
+            ProgramStatusInadmissible;
             source = descriptor.source_handle,
             anchor = @inbounds(workspace.anchor[request]),
             detail = _lifecycle_detail_code(reason),
@@ -186,7 +186,7 @@ end
             _lifecycle_plan_matches(descriptor, plan_class) || continue
             request_workspace = _lifecycle_workspace_with_status(
                 workspace,
-                _LifecycleStatusSlot(
+                _ProgramStatusSlot(
                     control.candidate_status, Int32(request)
                 ),
             )
@@ -206,7 +206,7 @@ end
             else
                 _set_lifecycle_status!(
                     request_workspace,
-                    LifecycleStatusStaleGeneration;
+                    ProgramStatusStaleGeneration;
                     anchor = @inbounds(workspace.anchor[request]),
                 )
                 :status_failure
@@ -238,14 +238,14 @@ end
             ]
             descriptor.effect === DivideCellLifecycleEffect || continue
             @inbounds(control.candidate_status[request].code) ===
-                LifecycleStatusSuccess || continue
+                ProgramStatusSuccess || continue
             anchor = @inbounds workspace.anchor[request]
             _lifecycle_relationships_admissible(
                 state, plan, descriptor, anchor
             ) && continue
             request_workspace = _lifecycle_workspace_with_status(
                 workspace,
-                _LifecycleStatusSlot(
+                _ProgramStatusSlot(
                     control.candidate_status, Int32(request)
                 ),
             )
@@ -278,7 +278,7 @@ end
             _lifecycle_plan_matches(descriptor, plan_class) || continue
             request_workspace = _lifecycle_workspace_with_status(
                 workspace,
-                _LifecycleStatusSlot(
+                _ProgramStatusSlot(
                     control.candidate_status, Int32(request)
                 ),
             )
@@ -295,7 +295,7 @@ end
             reason === :ok || reason === :status_failure ||
                 _set_lifecycle_status!(
                     request_workspace,
-                    LifecycleStatusInvariant;
+                    ProgramStatusInvariant;
                     source = descriptor.source_handle,
                     anchor = @inbounds(workspace.anchor[request]),
                     detail = _lifecycle_detail_code(reason),
@@ -332,7 +332,7 @@ end
         for position in 1:count
             request = Int(@inbounds workspace.canonical_order[position])
             status = @inbounds control.candidate_status[request]
-            if status.code !== LifecycleStatusSuccess
+            if status.code !== ProgramStatusSuccess
                 @inbounds workspace.status[1] = status
                 break
             end
@@ -602,7 +602,7 @@ end
             if owner > capacity
                 @inbounds control.candidate_status[site] =
                     _lifecycle_backend_status(
-                        LifecycleStatusInvariant;
+                        ProgramStatusInvariant;
                         anchor = owner,
                         detail = LifecycleDetailOwnershipExceedsCellCapacity,
                         maximum = capacity,
@@ -623,11 +623,11 @@ end
 @kernel function _reduce_lifecycle_status_kernel!(workspace, control, count)
     index = @index(Global, Linear)
     if index == 1 && _lifecycle_backend_open(workspace)
-        result = LifecycleStatusPayload()
+        result = ProgramStatus()
         found = false
         for candidate in 1:Int(count)
             status = @inbounds control.candidate_status[candidate]
-            if !found && status.code !== LifecycleStatusSuccess
+            if !found && status.code !== ProgramStatusSuccess
                 result = status
                 found = true
             end
@@ -701,7 +701,7 @@ end
     value = evaluate_lifecycle(plan.evaluators, evaluator, context)
     if value isa AbstractFloat && !isfinite(value)
         @inbounds control.candidate_status[slot] = _lifecycle_backend_status(
-            LifecycleStatusEvaluator;
+            ProgramStatusEvaluator;
             source = descriptor.source_handle,
             anchor = context.anchor,
             detail = LifecycleDetailNonfiniteResult,
@@ -735,7 +735,7 @@ end
     generation = anchor > 0 ? @inbounds(state.cell_generations[anchor]) : UInt32(0)
     if anchor > 0 && iszero(generation)
         @inbounds control.candidate_status[request] = _lifecycle_backend_status(
-            LifecycleStatusStaleGeneration; anchor
+            ProgramStatusStaleGeneration; anchor
         )
         return
     end
@@ -763,7 +763,7 @@ end
     enabled isa LifecycleEvaluationFailed && return
     if !(enabled isa Bool)
         @inbounds control.candidate_status[request] = _lifecycle_backend_status(
-            LifecycleStatusEvaluator;
+            ProgramStatusEvaluator;
             source = descriptor.source_handle,
             anchor,
             detail = LifecycleDetailTriggerNotBoolean,

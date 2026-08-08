@@ -149,6 +149,7 @@ struct CompiledPottsProgram{
         H <: Tuple,
         LP <: AbstractLifecycleExecutionPlan,
         CP <: AbstractCheckerboardPlan,
+        Q,
     }
     shape::NTuple{N, Int}
     periodic::NTuple{N, Bool}
@@ -168,7 +169,94 @@ struct CompiledPottsProgram{
     checkerboard_plan::CP
     engine::E
     backend::B
+    mechanism_authority::Q
     fingerprint::String
+    integrity_fingerprint::String
+end
+
+"""Own one compiler-supplied value before it enters a durable program."""
+_own_compiled_program_value(value) = deepcopy(value)
+
+function _compiled_program_integrity_fingerprint(
+        shape,
+        periodic,
+        proposal_offsets,
+        kind_count,
+        medium_kind,
+        medium_kinds,
+        temperature,
+        attempts_per_site,
+        parameter_defaults,
+        relationships,
+        tracker_plan,
+        descriptor_plan,
+        stage_plan,
+        ownership_change_handles,
+        lifecycle_plan,
+        checkerboard_plan,
+        engine,
+        backend,
+        mechanism_authority,
+        compiler_fingerprint,
+    )
+    payload = (
+        schema = v"1.0.0",
+        shape,
+        periodic,
+        proposal_offsets,
+        kind_count,
+        medium_kind,
+        medium_kinds,
+        temperature,
+        attempts_per_site,
+        parameter_defaults,
+        relationships,
+        tracker_plan,
+        descriptor_plan,
+        stage_plan,
+        ownership_change_handles,
+        lifecycle_plan,
+        checkerboard_plan,
+        engine,
+        backend,
+        mechanism_authority,
+        compiler_fingerprint,
+    )
+    return bytes2hex(SHA.sha256(codeunits(repr(payload))))
+end
+
+function _compiled_program_integrity_fingerprint(program::CompiledPottsProgram)
+    return _compiled_program_integrity_fingerprint(
+        program.shape,
+        program.periodic,
+        program.proposal_offsets,
+        program.kind_count,
+        program.medium_kind,
+        program.medium_kinds,
+        program.temperature,
+        program.attempts_per_site,
+        program.parameter_defaults,
+        program.relationships,
+        program.tracker_plan,
+        program.descriptor_plan,
+        program.stage_plan,
+        program.ownership_change_handles,
+        program.lifecycle_plan,
+        program.checkerboard_plan,
+        program.engine,
+        program.backend,
+        program.mechanism_authority,
+        program.fingerprint,
+    )
+end
+
+function _validate_compiled_program_integrity(program::CompiledPottsProgram)
+    actual = _compiled_program_integrity_fingerprint(program)
+    actual == program.integrity_fingerprint || throw(ArgumentError(
+        "compiled program storage was mutated after construction; rebuild " *
+        "the program through the compiler boundary"
+    ))
+    return program
 end
 
 function CompiledPottsProgram(
@@ -191,6 +279,7 @@ function CompiledPottsProgram(
         lifecycle_plan::AbstractLifecycleExecutionPlan = NoLifecycleExecutionPlan(),
         checkerboard_plan = nothing,
         ownership_change_handles::Tuple = (),
+        mechanism_authority = nothing,
     ) where {T <: AbstractFloat, N, TP, D, SP, E <: AbstractProgramEngine, B}
     all(>(0), shape) || throw(ArgumentError("program dimensions must be positive"))
     size(proposal_offsets, 1) == N ||
@@ -244,31 +333,80 @@ function CompiledPottsProgram(
         !(resolved_checkerboard_plan isa NoCheckerboardPlan) && throw(
             ArgumentError("sequential programs cannot carry a checkerboard plan")
         )
+    owned_proposal_offsets = copy(proposal_offsets)
+    owned_medium_mask = copy(medium_mask)
+    owned_parameter_defaults = copy(parameter_defaults)
+    owned_relationship_storage = _own_compiled_program_value(
+        relationship_storage
+    )
+    owned_tracker_plan = _own_compiled_program_value(tracker_plan)
+    owned_descriptor_plan = _own_compiled_program_value(descriptor_plan)
+    owned_stage_plan = _own_compiled_program_value(stage_plan)
+    owned_ownership_change_handles = _own_compiled_program_value(
+        ownership_change_handles
+    )
+    owned_lifecycle_plan = _own_compiled_program_value(lifecycle_plan)
+    owned_checkerboard_plan = _own_compiled_program_value(
+        resolved_checkerboard_plan
+    )
+    owned_engine = _own_compiled_program_value(engine)
+    owned_backend = _own_compiled_program_value(backend)
+    owned_mechanism_authority = _own_compiled_program_value(
+        mechanism_authority
+    )
+    compiler_fingerprint = String(fingerprint)
+    integrity_fingerprint = _compiled_program_integrity_fingerprint(
+        shape,
+        periodic,
+        owned_proposal_offsets,
+        Int16(kind_count),
+        Int16(medium_kind),
+        owned_medium_mask,
+        temperature,
+        Int32(attempts_per_site),
+        owned_parameter_defaults,
+        owned_relationship_storage,
+        owned_tracker_plan,
+        owned_descriptor_plan,
+        owned_stage_plan,
+        owned_ownership_change_handles,
+        owned_lifecycle_plan,
+        owned_checkerboard_plan,
+        owned_engine,
+        owned_backend,
+        owned_mechanism_authority,
+        compiler_fingerprint,
+    )
     return CompiledPottsProgram{
-        T, N, E, B, typeof(relationship_storage), TP, D, SP,
-        typeof(ownership_change_handles),
-        typeof(lifecycle_plan),
-        typeof(resolved_checkerboard_plan),
+        T, N, typeof(owned_engine), typeof(owned_backend),
+        typeof(owned_relationship_storage), typeof(owned_tracker_plan),
+        typeof(owned_descriptor_plan), typeof(owned_stage_plan),
+        typeof(owned_ownership_change_handles),
+        typeof(owned_lifecycle_plan),
+        typeof(owned_checkerboard_plan),
+        typeof(owned_mechanism_authority),
     }(
         shape,
         periodic,
-        copy(proposal_offsets),
+        owned_proposal_offsets,
         Int16(kind_count),
         Int16(medium_kind),
-        medium_mask,
+        owned_medium_mask,
         temperature,
         Int32(attempts_per_site),
-        copy(parameter_defaults),
-        relationship_storage,
-        tracker_plan,
-        descriptor_plan,
-        stage_plan,
-        ownership_change_handles,
-        lifecycle_plan,
-        resolved_checkerboard_plan,
-        engine,
-        backend,
-        String(fingerprint),
+        owned_parameter_defaults,
+        owned_relationship_storage,
+        owned_tracker_plan,
+        owned_descriptor_plan,
+        owned_stage_plan,
+        owned_ownership_change_handles,
+        owned_lifecycle_plan,
+        owned_checkerboard_plan,
+        owned_engine,
+        owned_backend,
+        owned_mechanism_authority,
+        compiler_fingerprint,
+        integrity_fingerprint,
     )
 end
 
@@ -278,6 +416,18 @@ struct ProgramInitialState{T <: AbstractFloat, N, D}
     cell_generations::Vector{UInt32}
     relationships::Vector{Any}
     descriptor_state::D
+end
+
+_program_initial_field(initial::ProgramInitialState, name::Symbol) =
+    getfield(initial, name)
+
+function Base.getproperty(initial::ProgramInitialState, name::Symbol)
+    value = _program_initial_field(initial, name)
+    name === :descriptor_state && value isa AuxiliaryState &&
+        return copy_auxiliary_state(value)
+    name === :relationships && return deepcopy(value)
+    value isa AbstractArray && return copy(value)
+    return value
 end
 
 _copy_program_value(value::AbstractArray) = copy(value)
@@ -307,13 +457,83 @@ function ProgramInitialState(
         @inbounds kinds[index] == 0 || !iszero(generations[index])
     end || throw(ArgumentError("active cell generations must be positive"))
     relationship_values = Any[deepcopy(value) for value in relationships]
+    owned_descriptor_state = descriptor_state === nothing ? nothing :
+                             descriptor_state isa AuxiliaryState ?
+                             copy_auxiliary_state(descriptor_state) :
+                             deepcopy(descriptor_state)
     return ProgramInitialState{
-        T, N, typeof(descriptor_state),
+        T, N, typeof(owned_descriptor_state),
     }(
         owned,
         kinds,
         generations,
         relationship_values,
-        descriptor_state,
+        owned_descriptor_state,
     )
+end
+
+"""
+Return an independently owned copy of the initial auxiliary descriptor state.
+
+This is a backend-integration boundary: callers may prepare coupled-component
+inputs without inspecting `ProgramInitialState` fields or aliasing the state
+that will later be used to construct a Core runtime.
+"""
+function program_initial_descriptor_state(initial::ProgramInitialState)
+    state = _program_initial_field(initial, :descriptor_state)
+    state === nothing && return nothing
+    state isa AuxiliaryState || throw(ArgumentError(
+        "the program initial descriptor state is not a CorePotts AuxiliaryState"
+    ))
+    return copy_auxiliary_state(state)
+end
+
+"""
+Rebuild a program initial state with an independently owned descriptor state.
+
+The candidate must preserve the already-validated physical bank layout. Full
+schema validation still occurs when the compiled program materializes the
+runtime; this boundary additionally rejects nonfinite floating-point payloads
+before rebuilding the immutable initial-state value.
+"""
+function with_program_initial_descriptor_state(
+        initial::ProgramInitialState{T}, candidate::AuxiliaryState
+    ) where {T <: AbstractFloat}
+    expected = _program_initial_field(initial, :descriptor_state)
+    expected isa AuxiliaryState || throw(ArgumentError(
+        "the program initial state has no CorePotts descriptor-state layout"
+    ))
+    typeof(candidate.banks) === typeof(expected.banks) || throw(ArgumentError(
+        "the replacement descriptor state has an incompatible physical layout or element type"
+    ))
+    for (candidate_bank, expected_bank) in zip(
+            candidate.banks, expected.banks
+        )
+        axes(candidate_bank.values) == axes(expected_bank.values) || throw(
+            ArgumentError(
+                "the replacement descriptor state has an incompatible bank shape"
+            )
+        )
+        if eltype(candidate_bank.values) <: AbstractFloat
+            all(isfinite, candidate_bank.values) || throw(ArgumentError(
+                "the replacement descriptor state contains a nonfinite value"
+            ))
+        end
+    end
+    return ProgramInitialState(
+        _program_initial_field(initial, :ownership),
+        _program_initial_field(initial, :cell_kinds);
+        scalar_type = T,
+        cell_generations = _program_initial_field(initial, :cell_generations),
+        relationships = _program_initial_field(initial, :relationships),
+        descriptor_state = candidate,
+    )
+end
+
+function with_program_initial_descriptor_state(
+        initial::ProgramInitialState, candidate
+    )
+    throw(ArgumentError(
+        "the replacement descriptor state must be a CorePotts AuxiliaryState"
+    ))
 end

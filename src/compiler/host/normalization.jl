@@ -55,12 +55,11 @@ end
 function _normalize_term!(
         builder::_TermGraphBuilder,
         value,
-        completed::PottsSystem,
         source_graph::FrozenSourceGraph,
         record::Int32,
         source::QualifiedStatementID,
 )
-    classified = _compiler_leaf_kind(value, completed)
+    classified = _compiler_leaf_kind(value, source_graph)
     if classified in (
             :parameter,
             :variable,
@@ -78,7 +77,7 @@ function _normalize_term!(
         )
         record_value = source_graph.records[Int(record)]
         payload = _resolve_normalized_payload(
-            classified, value, completed, source_graph, record_value
+            classified, value, source_graph, record_value
         )
         if payload === nothing
             push!(
@@ -125,7 +124,6 @@ function _normalize_term!(
         payload = _resolve_normalized_payload(
             kind,
             value,
-            completed,
             source_graph,
             source_graph.records[Int(record)],
         )
@@ -206,13 +204,13 @@ function _normalize_term!(
     end
     operands = Int32[
         _normalize_term!(
-            builder, argument, completed, source_graph, record, source
+            builder, argument, source_graph, record, source
         )
         for argument in arguments
     ]
     any(iszero, operands) && return Int32(0)
     callable = try
-        CorePotts.operation_callable(
+        CorePotts.CompilerSPI.operation_callable(
             Val(transfer.identity), transfer.schema_version
         )
     catch error
@@ -382,10 +380,7 @@ function _record_expression_roots(record::QualifiedStatement)
     return roots
 end
 
-function _normalize_source_graph(
-        graph::FrozenSourceGraph,
-        completed::PottsSystem,
-    )
+function _normalize_source_graph(graph::FrozenSourceGraph)
     builder = _TermGraphBuilder(
         NormalizedTermNode[],
         Dict{String, Int32}(),
@@ -398,7 +393,6 @@ function _normalize_source_graph(
             node = _normalize_term!(
                 builder,
                 value,
-                completed,
                 graph,
                 source_node.record,
                 source_node.identity,
@@ -431,7 +425,7 @@ function _normalize_source_graph(
     end
     for (operation, arity) in internal_operations
         transfer = operation_transfer(operation, arity)
-        callable = CorePotts.operation_callable(
+        callable = CorePotts.CompilerSPI.operation_callable(
             Val(transfer.identity), transfer.schema_version
         )
         schema = FrozenOperationSchema(operation, arity, transfer, callable)

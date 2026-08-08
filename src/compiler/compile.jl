@@ -1,17 +1,20 @@
 # Top-level compiler orchestration only.
 
 """
-    compile(completed; engine, backend, scalar_type)
+    _lower_execution_plan(scheduled, algorithm, backend, scalar_type)
 
-Lower a completed symbolic system into one immutable, reusable executable.
-All three execution choices are mandatory.
+Late-lower a structurally scheduled system for one concrete runtime profile.
+The result is private runtime materialization data, not a public authoring stage.
 """
-function compile(
-        completed::PottsSystem;
-        engine,
-        backend,
-        scalar_type,
+function _lower_execution_plan(
+        completed::PottsSystem,
+        engine::AbstractPottsAlgorithm,
+        backend::AbstractPottsBackend,
+        scalar_type::Type{<:AbstractFloat},
     )
+    is_scheduled(completed) || throw(ArgumentError(
+        "late lowering requires a scheduled PottsSystem; call mtkcompile first"
+    ))
     _validate_compilation_choices(completed, engine, backend, scalar_type)
     analyzed_ir = _analyze_completed_system(completed)
     diagnostics = PottsDiagnostic[]
@@ -51,7 +54,7 @@ function compile(
     )
     _assert_concrete_core_boundary(stage_plan; path = "stage_plan")
     _assert_concrete_core_boundary(lifecycle_plan; path = "lifecycle_plan")
-    completion_fingerprint = completed_system_fingerprint(completed)
+    completion_fingerprint = scheduled_system_fingerprint(completed)
     seed = _sha256_hex(
         "potts-executable-seed-v1",
         completion_fingerprint.hex,
@@ -129,20 +132,12 @@ function compile(
         for endpoint_policy in relationship_endpoint_policies
     )
     time = _compiled_time_contract(records)
-    external_io = _compiled_external_io(
-        completed,
-        manifest,
-        states,
-        observation_manifest,
-        core_program.shape,
-        scalar_type,
-    )
     reports = (
         execution,
         capability,
         compiler = _compiler_analysis_report(analyzed_ir),
-        descriptors = CorePotts.descriptor_plan_report(descriptor_plan),
-        lifecycle = CorePotts.lifecycle_plan_report(lifecycle_plan),
+        descriptors = CorePotts.CompilerSPI.descriptor_plan_report(descriptor_plan),
+        lifecycle = CorePotts.CompilerSPI.lifecycle_plan_report(lifecycle_plan),
         storage,
         workspace,
         statements = statement_manifest,
@@ -156,13 +151,17 @@ function compile(
             cross_engine = false,
             addressed_rng = true,
         ),
-        checkpoint = (schema = v"1.0.0", logical_only = true),
+        checkpoint = (
+            schema = v"2.0.0",
+            codec = :CorePottsProgramCheckpoint,
+            logical_only = true,
+            extension_blocks = true,
+        ),
         kinds = Tuple(entry.name for entry in kinds),
         kind_identities = kinds,
         fingerprints = completion_fingerprints,
         states,
         relationship_states,
-        external_io,
         time,
     )
     observations = observation_manifest
@@ -186,7 +185,7 @@ function compile(
         core_program.fingerprint,
         fingerprint_reports,
     ))
-    executable = PottsExecutable(
+    plan = _PottsExecutionPlan(
         core_program,
         manifest,
         relationship_endpoint_policies,
@@ -194,6 +193,6 @@ function compile(
         observations,
         fingerprint,
     )
-    _assert_concrete_core_boundary(executable; path = "executable")
-    return executable
+    _assert_concrete_core_boundary(plan; path = "execution_plan")
+    return plan
 end

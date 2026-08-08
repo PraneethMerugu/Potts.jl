@@ -30,12 +30,9 @@ end
 
 for (operation_name, result_type) in (
         (:distance, Real),
-        (:contact_measure, Real),
-        (:boundary_measure, Real),
-        (:neighbor_count, Int),
-        (:neighbor_sum, Real),
-        (:neighbor_mean, Real),
-        (:neighbor_geomean, Real),
+        (:contact_edge_count, Int),
+        (:boundary_site_count, Int),
+        (:neighbor_cell_count, Int),
         (:field_value, Real),
         (:field_gradient, Real),
         (:laplacian, Real),
@@ -49,6 +46,35 @@ for (operation_name, result_type) in (
     end
 end
 
+for (operation_name, result_type) in (
+        (:contact_measure, Real),
+        (:neighbor_property_sum, Real),
+        (:global_interface_measure, Real),
+    )
+    @eval begin
+        function $(operation_name) end
+        Symbolics.@register_symbolic $(operation_name)(x, y, z)::$(result_type)
+    end
+end
+
+# A mean is total only when its empty-neighborhood behavior is explicit. The
+# fourth argument is that policy/value; the compiler deliberately admits no
+# ambiguous three-argument spelling.
+function neighbor_property_mean end
+Symbolics.@register_symbolic neighbor_property_mean(x, y, z, empty)::Real
+
+# `neighbor_cells` is collection-valued settled-snapshot vocabulary, not a
+# scalar operation in the current executable DAG. Reject at authoring time
+# until the bounded snapshot query object exists; pretending it returns a
+# scalar would corrupt its distinct-identity semantics.
+function neighbor_cells(owner, filter)
+    throw(ArgumentError(
+        "neighbor_cells(owner, filter) is a collection-valued settled-snapshot " *
+        "query; executable collection materialization enters in G5H-4. " *
+        "Use neighbor_cell_count(owner, filter) when only cardinality is needed."
+    ))
+end
+
 function new_contact end
 function lost_contact end
 function edge_payload end
@@ -58,6 +84,7 @@ function _potts_merks_local_connectivity end
 function _potts_act_energy end
 function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
+function _potts_model_bound_state_value end
 function _potts_lifecycle_bound_state_value end
 function linked end
 

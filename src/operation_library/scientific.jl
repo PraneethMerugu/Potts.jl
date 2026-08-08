@@ -50,19 +50,19 @@ const _MERKS_CLOCKWISE_OFFSETS = (
     (-1, 0),
 )
 
-struct MerksLocalConnectivityCallable <: CorePotts.AbstractContextualOperation end
-struct ActEnergyCallable <: CorePotts.AbstractContextualOperation end
+struct MerksLocalConnectivityCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
+struct ActEnergyCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
 
-CorePotts.operation_context_supported(
+CorePotts.CompilerSPI.operation_context_supported(
     ::MerksLocalConnectivityCallable,
-    ::Type{CorePotts.AbstractProposalEvaluationContext},
+    ::Type{<:CorePotts.CompilerSPI.AbstractProposalEvaluationContext},
 ) = true
-CorePotts.operation_context_supported(
+CorePotts.CompilerSPI.operation_context_supported(
     ::ActEnergyCallable,
-    ::Type{CorePotts.AbstractProposalEvaluationContext},
+    ::Type{<:CorePotts.CompilerSPI.AbstractProposalEvaluationContext},
 ) = true
 
-function CorePotts.operation_callable(
+function CorePotts.CompilerSPI.operation_callable(
         ::Val{:merks_local_connectivity},
         version::VersionNumber,
     )
@@ -72,7 +72,7 @@ function CorePotts.operation_callable(
     return MerksLocalConnectivityCallable()
 end
 
-function CorePotts.operation_callable(
+function CorePotts.CompilerSPI.operation_callable(
         ::Val{:act_energy},
         version::VersionNumber,
     )
@@ -88,14 +88,14 @@ end
     kind = Int16(arguments[1])
     foreground = Int32(arguments[2])
     background = Int32(arguments[3])
-    CorePotts.proposal_relation_count(context, foreground) == 8 || return false
-    CorePotts.proposal_relation_count(context, background) == 4 || return false
+    CorePotts.CompilerSPI.proposal_relation_count(context, foreground) == 8 || return false
+    CorePotts.CompilerSPI.proposal_relation_count(context, background) == 4 || return false
 
-    losing = CorePotts.proposal_target_owner(context)
+    losing = CorePotts.CompilerSPI.proposal_target_owner(context)
     losing <= 0 && return true
-    CorePotts.proposal_target_kind(context) == kind || return true
+    CorePotts.CompilerSPI.proposal_target_kind(context) == kind || return true
     owners = ntuple(Val(8)) do position
-        CorePotts.proposal_relation_neighbor_owner(
+        CorePotts.CompilerSPI.proposal_relation_neighbor_owner(
             context,
             foreground,
             _MERKS_CLOCKWISE_OFFSETS[position],
@@ -139,20 +139,20 @@ end
     owner <= 0 && return zero(T)
     total = zero(T)
     count = 0
-    if CorePotts.proposal_site_owner(context, center) == owner
-        value = T(CorePotts.state_value(context, state_handle, center))
+    if CorePotts.CompilerSPI.proposal_site_owner(context, center) == owner
+        value = T(CorePotts.CompilerSPI.state_value(context, state_handle, center))
         total += log1p(max(zero(T), value))
         count += 1
     end
-    for direction in 1:CorePotts.proposal_relation_count(
+    for direction in 1:CorePotts.CompilerSPI.proposal_relation_count(
             context, relation_handle
         )
-        neighbor = CorePotts.proposal_relation_neighbor_site(
+        neighbor = CorePotts.CompilerSPI.proposal_relation_neighbor_site(
             context, relation_handle, center, direction
         )
         neighbor === nothing && continue
-        CorePotts.proposal_site_owner(context, neighbor) == owner || continue
-        value = T(CorePotts.state_value(context, state_handle, neighbor))
+        CorePotts.CompilerSPI.proposal_site_owner(context, neighbor) == owner || continue
+        value = T(CorePotts.CompilerSPI.state_value(context, state_handle, neighbor))
         total += log1p(max(zero(T), value))
         count += 1
     end
@@ -166,24 +166,24 @@ end
     maximum = arguments[4]
     strength = arguments[5]
     T = promote_type(typeof(maximum), typeof(strength))
-    new_owner = Int32(CorePotts.proposal_source_owner(context))
+    new_owner = Int32(CorePotts.CompilerSPI.proposal_source_owner(context))
     new_owner > 0 || return zero(T)
-    CorePotts.proposal_source_kind(context) == kind || return zero(T)
+    CorePotts.CompilerSPI.proposal_source_kind(context) == kind || return zero(T)
     maximum > zero(T) || return zero(T)
     source_activity = _act_local_geomean(
         context,
         state_handle,
         relation_handle,
-        CorePotts.proposal_source_site(context),
+        CorePotts.CompilerSPI.proposal_source_site(context),
         new_owner,
         T,
     )
-    old_owner = Int32(CorePotts.proposal_target_owner(context))
+    old_owner = Int32(CorePotts.CompilerSPI.proposal_target_owner(context))
     target_activity = _act_local_geomean(
         context,
         state_handle,
         relation_handle,
-        CorePotts.proposal_target_site(context),
+        CorePotts.CompilerSPI.proposal_target_site(context),
         old_owner,
         T,
     )

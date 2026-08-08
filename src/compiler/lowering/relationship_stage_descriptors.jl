@@ -48,7 +48,7 @@ function _relationship_process_stage_descriptor(
     )))
     reads = _record_state_handles(ir, record, state_handles)
     compiled_effect = if effect isa Remove
-        CorePotts.RelationshipRemoveEffect(store_slot)
+        CorePotts.CompilerSPI.RelationshipRemoveEffect(store_slot)
     else
         declared_payload = get(
             _record_options(relationship), :payload, NamedTuple()
@@ -73,23 +73,23 @@ function _relationship_process_stage_descriptor(
             )
             for name in keys(declared_payload)
         )
-        CorePotts.RelationshipRetuneEffect(store_slot, payload)
+        CorePotts.CompilerSPI.RelationshipRetuneEffect(store_slot, payload)
     end
-    return CorePotts.CompiledStageDescriptor(
+    return CorePotts.CompilerSPI.CompiledStageDescriptor(
         condition,
         _static_evaluator(
-            CorePotts.LiteralExpression(zero(T)),
-            CorePotts.AbstractRelationshipStageEvaluationContext,
+            CorePotts.CompilerSPI.LiteralExpression(zero(T)),
+            CorePotts.CompilerSPI.AbstractRelationshipStageEvaluationContext,
             record,
         ),
         compiled_effect,
-        CorePotts.AfterMCSStage(),
-        CorePotts.ResourceAccess(
+        CorePotts.CompilerSPI.AfterMCSStage(),
+        CorePotts.CompilerSPI.ResourceAccess(
             reads,
             (store_slot,),
-            CorePotts.IncidentRelationshipFootprint(maximum_degree),
-            CorePotts.EmptyFootprint(),
-            CorePotts.DeferredRequestWriteAccess(),
+            CorePotts.CompilerSPI.IncidentRelationshipFootprint(maximum_degree),
+            CorePotts.CompilerSPI.EmptyFootprint(),
+            CorePotts.CompilerSPI.DeferredRequestWriteAccess(),
         ),
         _stage_support(ir, record_index),
         record_index,

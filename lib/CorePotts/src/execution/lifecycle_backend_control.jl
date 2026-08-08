@@ -1,12 +1,17 @@
 # Backend-resident lifecycle transaction control and portable launch storage.
 
-struct NoLifecycleBackendControl end
+struct NoLifecycleBackendControl{
+        C <: AbstractVector{Int32}, U <: AbstractVector{UInt64},
+    }
+    counters::C
+    statistics::U
+end
 
 """Fixed backend storage needed to enqueue one lifecycle transaction without host polling."""
 struct LifecycleBackendControl{
         O <: AbstractVector{Int32},
         C <: AbstractVector{Int32},
-        S <: AbstractVector{LifecycleStatusPayload},
+        S <: AbstractVector{ProgramStatus},
         K <: AbstractVector{UInt64},
         U <: AbstractVector{UInt64},
     }
@@ -107,12 +112,12 @@ function _lifecycle_state_launch_payload(state, workspace)
     return runtime, lifecycle.descriptors, plan
 end
 
-struct _LifecycleStatusSlot{S} <: AbstractVector{LifecycleStatusPayload}
+struct _ProgramStatusSlot{S} <: AbstractVector{ProgramStatus}
     values::S
     slot::Int32
 end
 
-struct _LifecycleRankedStatusSlot{S, R} <: AbstractVector{LifecycleStatusPayload}
+struct _LifecycleRankedStatusSlot{S, R} <: AbstractVector{ProgramStatus}
     values::S
     ranks::R
     slot::Int32
@@ -125,11 +130,11 @@ Base.size(::_LifecycleRankedStatusSlot) = (1,)
     @inbounds status.values[Int(status.slot)]
 @inline function Base.setindex!(
         status::_LifecycleRankedStatusSlot,
-        value::LifecycleStatusPayload,
+        value::ProgramStatus,
         index::Integer,
     )
     slot = Int(status.slot)
-    if value.code !== LifecycleStatusSuccess &&
+    if value.code !== ProgramStatusSuccess &&
             status.rank < @inbounds(status.ranks[slot])
         @inbounds begin
             status.ranks[slot] = status.rank
@@ -139,12 +144,12 @@ Base.size(::_LifecycleRankedStatusSlot) = (1,)
     return value
 end
 
-Base.IndexStyle(::Type{<:_LifecycleStatusSlot}) = IndexLinear()
-Base.size(::_LifecycleStatusSlot) = (1,)
-@inline Base.getindex(status::_LifecycleStatusSlot, index::Integer) =
+Base.IndexStyle(::Type{<:_ProgramStatusSlot}) = IndexLinear()
+Base.size(::_ProgramStatusSlot) = (1,)
+@inline Base.getindex(status::_ProgramStatusSlot, index::Integer) =
     @inbounds status.values[Int(status.slot)]
 @inline function Base.setindex!(
-        status::_LifecycleStatusSlot, value, index::Integer
+        status::_ProgramStatusSlot, value, index::Integer
     )
     @inbounds status.values[Int(status.slot)] = value
     return value
@@ -277,7 +282,10 @@ function allocate_lifecycle_backend_control(
         ::NoLifecycleExecutionPlan, prototype, site_count::Integer
     )
     site_count >= 0 || throw(ArgumentError("site count must be nonnegative"))
-    return NoLifecycleBackendControl()
+    return NoLifecycleBackendControl(
+        _lifecycle_backend_filled(prototype, Int32, 0, 6),
+        _lifecycle_backend_filled(prototype, UInt64, 0, 6),
+    )
 end
 
 function allocate_lifecycle_backend_control(
@@ -306,8 +314,8 @@ function allocate_lifecycle_backend_control(
         ),
         _lifecycle_backend_filled(
             prototype,
-            LifecycleStatusPayload,
-            LifecycleStatusPayload(),
+            ProgramStatus,
+            ProgramStatus(),
             status_slots,
         ),
         _lifecycle_backend_filled(
@@ -329,7 +337,7 @@ function lifecycle_backend_status(workspace::LifecycleWorkspace)
 end
 
 @inline _lifecycle_backend_open(workspace::LifecycleWorkspace) =
-    (@inbounds workspace.status[1]).code === LifecycleStatusSuccess
+    (@inbounds workspace.status[1]).code === ProgramStatusSuccess
 @inline _lifecycle_backend_open(::NoLifecycleWorkspace) = true
 
 function _enqueue_lifecycle_array_copy!(destination, source, backend)
@@ -718,10 +726,12 @@ function _enqueue_program_state_copy!(destination, source)
 end
 
 @kernel function _publish_program_bank_kernel!(
-        workspace, control, report, bank::Int32, committed_mcs::Int32
+        workspace, control, program_status, report, bank::Int32, committed_mcs::Int32
     )
     index = @index(Global, Linear)
-    if index == 1 && _lifecycle_backend_open(workspace)
+    if index == 1 &&
+            (@inbounds program_status[1]).code === ProgramStatusSuccess &&
+            _lifecycle_backend_open(workspace)
         @inbounds begin
             control.counters[_LIFECYCLE_CONTROL_ACTIVE_BANK] = bank
             control.counters[_LIFECYCLE_CONTROL_COMMITTED_MCS] = committed_mcs
@@ -739,6 +749,7 @@ function _enqueue_program_bank_publication!(state, report, bank, committed_mcs)
     _publish_program_bank_kernel!(backend, 1)(
         state.lifecycle_workspace,
         state.lifecycle_control,
+        state.program_status,
         report,
         Int32(bank),
         Int32(committed_mcs);
@@ -748,19 +759,19 @@ function _enqueue_program_bank_publication!(state, report, bank, committed_mcs)
 end
 
 @inline function _lifecycle_backend_status(
-        code::LifecycleStatusCode;
+        code::ProgramStatusCode;
         mcs::Int32 = Int32(0),
-        stage::LifecycleExecutionStage = LifecycleStageNone,
+        stage::ProgramExecutionStage = ProgramStageNone,
         source::Int32 = Int32(0),
         action_identity::UInt64 = UInt64(0),
         secondary_source::Int32 = Int32(0),
         anchor::Int32 = Int32(0),
-        detail::LifecycleStatusDetailCode = LifecycleDetailNone,
+        detail::ProgramStatusDetailCode = LifecycleDetailNone,
         required::Int32 = Int32(0),
         available::Int32 = Int32(0),
         maximum::Int32 = Int32(0),
     )
-    return LifecycleStatusPayload(
+    return ProgramStatus(
         code,
         mcs,
         stage,
@@ -799,12 +810,12 @@ end
 end
 
 @kernel function _stamp_lifecycle_failure_kernel!(
-        plan, workspace, next_mcs::Int32, stage::LifecycleExecutionStage
+        plan, workspace, next_mcs::Int32, stage::ProgramExecutionStage
     )
     index = @index(Global, Linear)
     if index == 1
         status = @inbounds workspace.status[1]
-        if status.code !== LifecycleStatusSuccess && status.mcs == 0
+        if status.code !== ProgramStatusSuccess && status.mcs == 0
             descriptor = _lifecycle_failure_descriptor(
                 plan, workspace, status
             )
@@ -812,7 +823,7 @@ end
                      descriptor.source_handle
             action_identity = descriptor === nothing ? status.action_identity :
                               descriptor.action_identity
-            @inbounds workspace.status[1] = LifecycleStatusPayload(
+            @inbounds workspace.status[1] = ProgramStatus(
                 status.code,
                 next_mcs,
                 stage,

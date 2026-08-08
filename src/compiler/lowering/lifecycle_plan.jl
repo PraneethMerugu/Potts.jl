@@ -52,13 +52,13 @@ end
 
 function _lifecycle_context_type(role::Symbol)
     role === :lifecycle_trigger &&
-        return CorePotts.AbstractLifecycleTriggerEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecycleTriggerEvaluationContext
     role === :lifecycle_placement &&
-        return CorePotts.AbstractLifecyclePlacementEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecyclePlacementEvaluationContext
     role === :lifecycle_partition &&
-        return CorePotts.AbstractLifecyclePartitionEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecyclePartitionEvaluationContext
     role === :lifecycle_state_transform &&
-        return CorePotts.AbstractLifecycleStateTransformEvaluationContext
+        return CorePotts.CompilerSPI.AbstractLifecycleStateTransformEvaluationContext
     throw(ArgumentError("unsupported lifecycle evaluator role `$role`"))
 end
 
@@ -112,7 +112,7 @@ function _lifecycle_evaluator!(
             T,
             state_handles,
             draw_handles,
-            Dict{Int32, CorePotts.AbstractStaticExpression}(),
+            Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
             role,
             workspace_slices,
         )
@@ -140,21 +140,21 @@ end
 
 function _lifecycle_cadence(value)
     value isa EveryMCS && return (
-        CorePotts.EveryMCSLifecycleCadence, Int32(1)
+        CorePotts.CompilerSPI.EveryMCSLifecycleCadence, Int32(1)
     )
     value isa AtMCS && return (
-        CorePotts.AtMCSLifecycleCadence, Int32(value.mcs)
+        CorePotts.CompilerSPI.AtMCSLifecycleCadence, Int32(value.mcs)
     )
     value isa Every && return (
-        CorePotts.PeriodicLifecycleCadence, Int32(value.cadence)
+        CorePotts.CompilerSPI.PeriodicLifecycleCadence, Int32(value.cadence)
     )
     throw(ArgumentError("unsupported compiled lifecycle cadence $(typeof(value))"))
 end
 
 _lifecycle_disposition(::FilterInadmissible) =
-    CorePotts.FilterLifecycleInadmissible
+    CorePotts.CompilerSPI.FilterLifecycleInadmissible
 _lifecycle_disposition(::ErrorOnInadmissible) =
-    CorePotts.ErrorLifecycleInadmissible
+    CorePotts.CompilerSPI.ErrorLifecycleInadmissible
 
 function _lifecycle_kind_index(ir, record, value)
     index = _compiled_kind_index(ir, record, value)
@@ -228,10 +228,10 @@ function _lifecycle_normal(value, ::Type{T}, ::Val{N}) where {T, N}
 end
 
 function _lifecycle_rounding(value)
-    value in (:exact, :conserve) && return CorePotts.ExactLifecycleRounding
-    value === :floor && return CorePotts.FloorLifecycleRounding
-    value === :ceil && return CorePotts.CeilLifecycleRounding
-    value === :nearest && return CorePotts.NearestLifecycleRounding
+    value in (:exact, :conserve) && return CorePotts.CompilerSPI.ExactLifecycleRounding
+    value === :floor && return CorePotts.CompilerSPI.FloorLifecycleRounding
+    value === :ceil && return CorePotts.CompilerSPI.CeilLifecycleRounding
+    value === :nearest && return CorePotts.CompilerSPI.NearestLifecycleRounding
     throw(ArgumentError("unsupported conservative-split rounding policy $(repr(value))"))
 end
 
@@ -269,55 +269,55 @@ function _lifecycle_state_rule!(
     state_record === nothing && throw(ArgumentError(
         "lifecycle state rule does not resolve to a CellState"
     ))
-    action = CorePotts.UnsupportedLifecycleState
+    action = CorePotts.CompilerSPI.UnsupportedLifecycleState
     evaluator_a = Int32(0)
     evaluator_b = Int32(0)
     evaluator_c = Int32(0)
     evaluator_d = Int32(0)
     fraction = zero(T)
-    rounding = CorePotts.ExactLifecycleRounding
+    rounding = CorePotts.CompilerSPI.ExactLifecycleRounding
     parent_distribution = UInt8(0)
     daughter_distribution = UInt8(0)
     parent_draw = UInt16(0)
     daughter_draw = UInt16(0)
     if policy isa InitializeFrom
-        action = CorePotts.InitializeLifecycleState
+        action = CorePotts.CompilerSPI.InitializeLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa Unsupported
-        action = CorePotts.UnsupportedLifecycleState
+        action = CorePotts.CompilerSPI.UnsupportedLifecycleState
     elseif policy isa RetireTo
-        action = CorePotts.RetireToLifecycleState
+        action = CorePotts.CompilerSPI.RetireToLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa Preserve
-        action = CorePotts.PreserveLifecycleState
+        action = CorePotts.CompilerSPI.PreserveLifecycleState
     elseif policy isa ResetTo
-        action = CorePotts.ResetLifecycleState
+        action = CorePotts.CompilerSPI.ResetLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa Transform
-        action = CorePotts.TransformLifecycleState
+        action = CorePotts.CompilerSPI.TransformLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa CopyToDaughters
-        action = CorePotts.CopyDaughtersLifecycleState
+        action = CorePotts.CompilerSPI.CopyDaughtersLifecycleState
     elseif policy isa PreserveParentResetDaughter
-        action = CorePotts.PreserveParentResetDaughterLifecycleState
+        action = CorePotts.CompilerSPI.PreserveParentResetDaughterLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa ResetBoth
-        action = CorePotts.ResetBothLifecycleState
+        action = CorePotts.CompilerSPI.ResetBothLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
@@ -327,14 +327,14 @@ function _lifecycle_state_rule!(
             policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa SplitConservatively
-        action = CorePotts.SplitConservativelyLifecycleState
+        action = CorePotts.CompilerSPI.SplitConservativelyLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.fraction, cursor, manifest, T, state_handles, draw_handles,
         )
         rounding = _lifecycle_rounding(policy.rounding)
     elseif policy isa TransformDaughters
-        action = CorePotts.TransformDaughtersLifecycleState
+        action = CorePotts.CompilerSPI.TransformDaughtersLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
@@ -344,7 +344,7 @@ function _lifecycle_state_rule!(
             policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
         )
     elseif policy isa RedrawDaughters
-        action = CorePotts.RedrawDaughtersLifecycleState
+        action = CorePotts.CompilerSPI.RedrawDaughtersLifecycleState
         parent_distribution, parent_parameters =
             _lifecycle_distribution_parameters(policy.parent_distribution)
         daughter_distribution, daughter_parameters =
@@ -374,7 +374,7 @@ function _lifecycle_state_rule!(
     else
         throw(ArgumentError("unsupported lifecycle state policy $(typeof(policy))"))
     end
-    push!(rules, CorePotts.LifecycleStateRule(
+    push!(rules, CorePotts.CompilerSPI.LifecycleStateRule(
         handle,
         _lifecycle_hash64(state_record.identity),
         action,
@@ -394,15 +394,15 @@ end
 
 function _lifecycle_relationship_action(policy)
     policy isa RejectWhileLinked &&
-        return CorePotts.RejectWhileLinkedLifecycleRelationship
+        return CorePotts.CompilerSPI.RejectWhileLinkedLifecycleRelationship
     policy isa RemoveIncident &&
-        return CorePotts.RemoveIncidentLifecycleRelationship
+        return CorePotts.CompilerSPI.RemoveIncidentLifecycleRelationship
     policy isa PreserveCompatible &&
-        return CorePotts.PreserveCompatibleLifecycleRelationship
+        return CorePotts.CompilerSPI.PreserveCompatibleLifecycleRelationship
     policy isa RemoveIncompatible &&
-        return CorePotts.RemoveIncompatibleLifecycleRelationship
+        return CorePotts.CompilerSPI.RemoveIncompatibleLifecycleRelationship
     policy isa RejectIncompatible &&
-        return CorePotts.RejectIncompatibleLifecycleRelationship
+        return CorePotts.CompilerSPI.RejectIncompatibleLifecycleRelationship
     throw(ArgumentError(
         "unsupported lifecycle relationship policy $(typeof(policy))"
     ))
@@ -420,7 +420,7 @@ function _lifecycle_relationship_rule(
     endpoint = _relationship_endpoint_policy(
         relationship_endpoint_policies, relationship.identity
     )
-    return CorePotts.LifecycleRelationshipRule(
+    return CorePotts.CompilerSPI.LifecycleRelationshipRule(
         endpoint.slot,
         _lifecycle_relationship_action(policy),
         endpoint.kind_a,
@@ -429,27 +429,27 @@ function _lifecycle_relationship_rule(
 end
 
 function _lifecycle_effect_code(effect)
-    effect isa CreateCell && return CorePotts.CreateCellLifecycleEffect
-    effect isa RemoveCell && return CorePotts.RemoveCellLifecycleEffect
-    effect isa Retire && return CorePotts.RetireCellLifecycleEffect
-    effect isa Transition && return CorePotts.TransitionCellLifecycleEffect
-    effect isa Divide && return CorePotts.DivideCellLifecycleEffect
+    effect isa CreateCell && return CorePotts.CompilerSPI.CreateCellLifecycleEffect
+    effect isa RemoveCell && return CorePotts.CompilerSPI.RemoveCellLifecycleEffect
+    effect isa Retire && return CorePotts.CompilerSPI.RetireCellLifecycleEffect
+    effect isa Transition && return CorePotts.CompilerSPI.TransitionCellLifecycleEffect
+    effect isa Divide && return CorePotts.CompilerSPI.DivideCellLifecycleEffect
     throw(ArgumentError("unsupported lifecycle effect $(typeof(effect))"))
 end
 
 function _lifecycle_ownership_rules(layout, required::Bool)
     required || return ()
     return Tuple(
-        CorePotts.LifecycleOwnershipRule(
+        CorePotts.CompilerSPI.LifecycleOwnershipRule(
             entry.handle,
             begin
                 lifecycle = entry.schema.lifecycle
                 declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
                     lifecycle.declared : nothing
                 declared === :ClearOnOwnershipChange ?
-                    CorePotts.ClearLifecycleOwnershipState :
+                    CorePotts.CompilerSPI.ClearLifecycleOwnershipState :
                     declared === :PreserveOnOwnershipChange ?
-                    CorePotts.PreserveLifecycleOwnershipState :
+                    CorePotts.CompilerSPI.PreserveLifecycleOwnershipState :
                     throw(ArgumentError(
                         "site-owned state has no compiled ownership-change law"
                     ))
@@ -477,10 +477,10 @@ function _lower_lifecycle_plan(
     ))
     evaluators = _LifecycleEvaluatorAccumulator()
     state_rules = Any[]
-    relationship_rules = CorePotts.LifecycleRelationshipRule[]
+    relationship_rules = CorePotts.CompilerSPI.LifecycleRelationshipRule[]
     stencil_offsets = NTuple{N, Int16}[]
     relations = Matrix{Int8}[]
-    descriptors = CorePotts.LifecycleDescriptor{N, T}[]
+    descriptors = CorePotts.CompilerSPI.LifecycleDescriptor{N, T}[]
     facts_by_source = Dict(fact.source => fact for fact in ir.lifecycle)
     for (record_index, record) in enumerate(ir.source.records)
         record.kind === :LifecycleProcess || continue
@@ -505,8 +505,8 @@ function _lower_lifecycle_plan(
             always_root = true,
         )
         domain = arguments.domain isa ModelDomain ?
-            CorePotts.ModelLifecycleDomain : CorePotts.CellKindLifecycleDomain
-        domain_kind = domain === CorePotts.CellKindLifecycleDomain ?
+            CorePotts.CompilerSPI.ModelLifecycleDomain : CorePotts.CompilerSPI.CellKindLifecycleDomain
+        domain_kind = domain === CorePotts.CompilerSPI.CellKindLifecycleDomain ?
             _lifecycle_kind_index(ir, record, arguments.domain.kind) : Int16(0)
         cadence, cadence_value = _lifecycle_cadence(get(
             _record_options(record), :cadence, EveryMCS()
@@ -517,7 +517,7 @@ function _lower_lifecycle_plan(
             _lifecycle_kind_index(ir, record, effect.kind) : Int16(0)
         replacement_medium = effect isa RemoveCell ?
             _lifecycle_kind_index(ir, record, effect.replacement) : Int16(0)
-        placement = CorePotts.NoLifecyclePlacement
+        placement = CorePotts.CompilerSPI.NoLifecyclePlacement
         placement_evaluator = Int32(0)
         placement_maximum = Int32(1)
         stencil_offset = Int32(length(stencil_offsets) + 1)
@@ -525,14 +525,14 @@ function _lower_lifecycle_plan(
         relation_slot = Int32(0)
         if effect isa CreateCell
             if effect.placement isa SeedAt
-                placement = CorePotts.SeedAtLifecyclePlacement
+                placement = CorePotts.CompilerSPI.SeedAtLifecyclePlacement
                 site = _lifecycle_site_value(effect.placement.site, shape)
                 placement_evaluator = _lifecycle_evaluator!(
                     evaluators, ir, record_index, :lifecycle_placement,
                     site, cursor, manifest, T, state_handles, draw_handles,
                 )
             elseif effect.placement isa SeedStencil
-                placement = CorePotts.SeedStencilLifecyclePlacement
+                placement = CorePotts.CompilerSPI.SeedStencilLifecyclePlacement
                 site = _lifecycle_site_value(effect.placement.site, shape)
                 placement_evaluator = _lifecycle_evaluator!(
                     evaluators, ir, record_index, :lifecycle_placement,
@@ -552,7 +552,7 @@ function _lower_lifecycle_plan(
                     relations, ir, record, effect.placement.relation
                 )
             else
-                placement = CorePotts.ExternalLifecyclePlacement
+                placement = CorePotts.CompilerSPI.ExternalLifecyclePlacement
                 abi = _next_lifecycle_abi(cursor, :lifecycle_placement)
                 abi !== nothing && abi.role === :placement || throw(
                     ArgumentError(
@@ -566,12 +566,12 @@ function _lower_lifecycle_plan(
                 )
             end
         end
-        partition = CorePotts.NoLifecyclePartition
+        partition = CorePotts.CompilerSPI.NoLifecyclePartition
         partition_evaluator = Int32(0)
         point_from_centroid = true
         point = ntuple(_ -> zero(T), N)
         normal = ntuple(_ -> zero(T), N)
-        side = CorePotts.CanonicalLifecycleSide
+        side = CorePotts.CompilerSPI.CanonicalLifecycleSide
         geometry_draw = UInt16(0)
         side_draw = UInt16(0)
         parent_kind = Int16(0)
@@ -582,7 +582,7 @@ function _lower_lifecycle_plan(
             )
             geometry = effect.geometry
             if geometry isa RandomPlane
-                partition = CorePotts.RandomPlaneLifecyclePartition
+                partition = CorePotts.CompilerSPI.RandomPlaneLifecyclePartition
                 point_from_centroid, point = _lifecycle_point(
                     geometry.point, T, Val(N)
                 )
@@ -591,26 +591,26 @@ function _lower_lifecycle_plan(
                 )
             elseif geometry isa PrincipalAxisPlane
                 partition = geometry.axis === :major ?
-                    CorePotts.PrincipalMajorLifecyclePartition :
-                    CorePotts.PrincipalMinorLifecyclePartition
+                    CorePotts.CompilerSPI.PrincipalMajorLifecyclePartition :
+                    CorePotts.CompilerSPI.PrincipalMinorLifecyclePartition
                 point_from_centroid, point = _lifecycle_point(
                     geometry.point, T, Val(N)
                 )
             elseif geometry isa SpecifiedNormalPlane
-                partition = CorePotts.SpecifiedNormalLifecyclePartition
+                partition = CorePotts.CompilerSPI.SpecifiedNormalLifecyclePartition
                 point_from_centroid, point = _lifecycle_point(
                     geometry.point, T, Val(N)
                 )
                 normal = _lifecycle_normal(geometry.normal, T, Val(N))
             else
-                partition = CorePotts.ExternalLifecyclePartition
+                partition = CorePotts.CompilerSPI.ExternalLifecyclePartition
                 partition_evaluator = _lifecycle_evaluator!(
                     evaluators, ir, record_index, :lifecycle_partition,
                     geometry, cursor, manifest, T, state_handles, draw_handles,
                 )
             end
             if effect.side isa StableRandomSide
-                side = CorePotts.StableRandomLifecycleSide
+                side = CorePotts.CompilerSPI.StableRandomLifecycleSide
                 side_draw = _stable_draw_operation(
                     record.identity.path, Symbol(effect.side.draw_identity)
                 )
@@ -684,7 +684,7 @@ function _lower_lifecycle_plan(
             nameof(typeof(effect.on_inadmissible)),
         ))
         options = _record_options(record)
-        push!(descriptors, CorePotts.LifecycleDescriptor{N, T}(
+        push!(descriptors, CorePotts.CompilerSPI.LifecycleDescriptor{N, T}(
             Int32(record_index),
             _lifecycle_hash64(record.identity),
             action_identity,
@@ -733,7 +733,7 @@ function _lower_lifecycle_plan(
             get(options, :compiler_synthesized, nothing) !== nothing,
         ))
     end
-    protocol_policy = CorePotts.RejectLifecycleConflicts
+    protocol_policy = CorePotts.CompilerSPI.RejectLifecycleConflicts
     for record in ir.source.records
         record.kind === :Protocol || continue
         policy = get(
@@ -742,8 +742,8 @@ function _lower_lifecycle_plan(
             RejectLifecycleAmbiguity(),
         )
         protocol_policy = policy isa StableLifecyclePriority ?
-            CorePotts.StablePriorityLifecycleConflicts :
-            CorePotts.RejectLifecycleConflicts
+            CorePotts.CompilerSPI.StablePriorityLifecycleConflicts :
+            CorePotts.CompilerSPI.RejectLifecycleConflicts
         break
     end
     declarations = _ordered_kind_records(ir.source.records)
@@ -754,7 +754,7 @@ function _lower_lifecycle_plan(
             ForbidExtinction && (forbid_extinction[index] = true)
     end
     maximum_requests = sum(descriptor ->
-        descriptor.domain === CorePotts.ModelLifecycleDomain ? 1 : cell_capacity,
+        descriptor.domain === CorePotts.CompilerSPI.ModelLifecycleDomain ? 1 : cell_capacity,
         descriptors;
         init = 0,
     )
@@ -773,24 +773,24 @@ function _lower_lifecycle_plan(
         descriptors;
         init = 0,
     )
-    return CorePotts.LifecycleExecutionPlan(
+    return CorePotts.CompilerSPI.LifecycleExecutionPlan(
         descriptors,
-        CorePotts.LifecycleEvaluatorStorage(evaluators.values, evaluators.roles),
-        CorePotts.LifecycleStateRuleStorage(state_rules),
+        CorePotts.CompilerSPI.LifecycleEvaluatorStorage(evaluators.values, evaluators.roles),
+        CorePotts.CompilerSPI.LifecycleStateRuleStorage(state_rules),
         relationship_rules,
         _lifecycle_ownership_rules(
             state_layout,
             any(
                 descriptor -> descriptor.effect in (
-                    CorePotts.CreateCellLifecycleEffect,
-                    CorePotts.RemoveCellLifecycleEffect,
-                    CorePotts.DivideCellLifecycleEffect,
+                    CorePotts.CompilerSPI.CreateCellLifecycleEffect,
+                    CorePotts.CompilerSPI.RemoveCellLifecycleEffect,
+                    CorePotts.CompilerSPI.DivideCellLifecycleEffect,
                 ),
                 descriptors,
             ),
         ),
         stencil_offsets,
-        CorePotts.LifecycleRelationStorage(relations, Val(N)),
+        CorePotts.CompilerSPI.LifecycleRelationStorage(relations, Val(N)),
         protocol_policy,
         cell_capacity,
         maximum_requests,

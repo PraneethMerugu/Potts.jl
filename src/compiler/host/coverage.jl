@@ -8,34 +8,39 @@ function _validate_compilation_choices(
         backend,
         scalar_type,
     )
-    iscomplete(completed) ||
-        throw(ArgumentError("compile requires a completed PottsSystem"))
-    engine isa AbstractPottsEngine ||
-        throw(ArgumentError("engine must be SequentialEngine() or CheckerboardEngine()"))
+    is_scheduled(completed) || throw(ArgumentError(
+        "late lowering requires a scheduled PottsSystem"
+    ))
+    engine isa AbstractPottsAlgorithm || throw(ArgumentError(
+        "algorithm must be SequentialCPM() or CheckerboardSweepCPM()"
+    ))
     backend isa AbstractPottsBackend || throw(ArgumentError(
         "backend must be a PottsToolkit backend selector"
     ))
-    engine isa SequentialEngine && !(backend isa CPUBackend) &&
+    engine isa SequentialCPM && !(backend isa CPUBackend) &&
         throw(ArgumentError(
-            "SequentialEngine is the CPU semantic reference; accelerator " *
-            "backends require CheckerboardEngine()"
+            "SequentialCPM is the CPU semantic reference; accelerator " *
+            "backends require CheckerboardSweepCPM()"
         ))
     _validate_backend_available(backend)
     scalar_type isa Type && scalar_type <: AbstractFloat ||
         throw(ArgumentError("scalar_type must be a concrete AbstractFloat type"))
     isconcretetype(scalar_type) ||
         throw(ArgumentError("scalar_type must be concrete"))
-    capabilities = inspect(completed, Capabilities())
-    engine isa SequentialEngine && !capabilities.sequential &&
-        throw(ArgumentError("completed system is not admitted by SequentialEngine"))
-    if engine isa CheckerboardEngine && !capabilities.checkerboard
+    engine_name = engine isa SequentialCPM ? :sequential : :checkerboard
+    rejections = Tuple(
+        (record.identity, admission.reason)
+        for record in _completion_data(completed).records
+        for admission in record.engine_admission
+        if admission.engine === engine_name && !admission.admitted
+    )
+    if !isempty(rejections)
         reasons = join(
-            ("$(identity): $reason"
-             for (identity, reason) in capabilities.checkerboard_rejections),
+            ("$(identity): $reason" for (identity, reason) in rejections),
             "; ",
         )
         throw(ArgumentError(
-            "completed system is not admitted by CheckerboardEngine: $reasons"
+            "scheduled system is not admitted by $(nameof(typeof(engine))): $reasons"
         ))
     end
     return nothing
@@ -116,8 +121,13 @@ function _synchronous_rejection(statement, statements)
         return "synchronous lowering currently requires Assign"
     state = _declared_assignment_state(effect.target, statements)
     state === nothing && return "Assign must target one declared state"
-    state isa SiteState ||
-        return "synchronous Assign currently requires a SiteState target"
+    state isa SiteState && return nothing
+    state isa ModelState ||
+        return "synchronous Assign requires a SiteState or scalar ModelState target"
+    arguments = _statement_arguments(state)
+    variable = haskey(arguments, :variable) ? arguments.variable : nothing
+    variable isa Symbolics.Arr &&
+        return "synchronous ModelState assignment requires a scalar target"
     return nothing
 end
 
@@ -156,6 +166,27 @@ function _equation_process_rejection(statement, statements, system)
     )
 end
 
+function _first_interface_only_spatial_query(value)
+    unwrapped = try
+        Symbolics.unwrap(value)
+    catch
+        value
+    end
+    is_call = try
+        Symbolics.iscall(unwrapped)
+    catch
+        false
+    end
+    is_call || return nothing
+    operation = Symbolics.operation(unwrapped)
+    operation in _INTERFACE_ONLY_SPATIAL_QUERY_OPERATIONS && return operation
+    for argument in Symbolics.arguments(unwrapped)
+        found = _first_interface_only_spatial_query(argument)
+        found === nothing || return found
+    end
+    return nothing
+end
+
 function _statement_lowering_rejection(statement, statements, system)
     if statement isa SynchronousProcess
         return _synchronous_rejection(statement, statements)
@@ -167,10 +198,18 @@ function _statement_lowering_rejection(statement, statements, system)
         return _relationship_process_rejection(statement, statements)
     elseif statement isa EquationProcess
         return _equation_process_rejection(statement, statements, system)
+    elseif statement isa Observation
+        operation = _first_interface_only_spatial_query(
+            _statement_arguments(statement).expression
+        )
+        if operation !== nothing
+            return "$(nameof(operation)) is an interface-only settled-snapshot " *
+                   "spatial query; executable spatial-query lowering enters in G5H-4"
+        end
     elseif statement isa Protocol
-        all(stage -> stage isa Union{SweepStage, ObserveStage},
+        all(stage -> stage isa SweepStage,
             _statement_arguments(statement).stages) ||
-            return "Protocol contains an unsupported stage"
+            return "Protocol admits only SweepStage values"
     elseif statement isa RegisteredStatement
         return "RegisteredStatement was not lowered during completion"
     end
@@ -180,32 +219,38 @@ end
 function _validate_compilation_coverage!(
         diagnostics, system::PottsSystem, parent_path::Tuple = ()
     )
-    path = (parent_path..., nameof(system))
-    local_statements = statements(system)
-    all_statements = _all_system_statements(system)
-    for statement in local_statements
+    isempty(parent_path) || throw(ArgumentError(
+        "compilation coverage starts from the completed root authority"
+    ))
+    completion = getfield(system, :completion)::CompletedPottsData
+    records = completion.records
+    all_statements = AbstractPottsStatement[
+        record.normalized_statement for record in records
+    ]
+    for record in records
+        statement = record.normalized_statement
         reason = _statement_lowering_rejection(
             statement, all_statements, system
         )
         reason === nothing && continue
         push!(diagnostics, PottsDiagnostic(
             :unsupported_v1_lowering,
-            QualifiedStatementID(path, statement_id(statement)),
+            record.identity,
             _statement_expression(statement),
-            path,
+            record.identity.path,
             "a concrete, semantics-preserving V1 lowering",
             reason,
             (),
-            statement_source(statement),
+            record.source,
         ))
-    end
-    for child in getfield(system, :systems)
-        _validate_compilation_coverage!(diagnostics, child, path)
     end
     return diagnostics
 end
 function _validate_equation_and_event_coverage!(diagnostics, system::PottsSystem)
-    records = inspect(system, Statements())
+    # Keep the tuple snapshot at the public inspection boundary.  Compiler
+    # passes operate on the completion-owned vector so model size does not
+    # become a tuple type parameter and trigger one specialization per size.
+    records = _completion_data(system).records
     equation_records = filter(
         record -> record.kind === :EquationProcess, records
     )

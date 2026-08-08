@@ -60,9 +60,10 @@ function _reference_descriptor(name::Symbol, anchor)
     )
 end
 
-function _declared_reference_anchors(system::PottsSystem)
+function _declared_reference_anchors(records::Vector{QualifiedStatement})
     anchors = Pair{Symbol, Any}[]
-    for statement in _all_system_statements(system)
+    for record in records
+        statement = record.normalized_statement
         if statement isa LatticeDomain
             spacing = _statement_option(statement, :spacing, ())
             for (index, value) in enumerate(spacing)
@@ -105,13 +106,18 @@ function _declared_reference_anchors(system::PottsSystem)
 end
 
 function _build_reference_descriptors(system::PottsSystem)
-    option = _completion_data(system).reference_units
+    data = _completion_data(system)
+    option = data.reference_units
     anchors = if option isa ReferenceUnits
         Pair{Symbol, Any}[
             name => getproperty(option.values, name) for name in keys(option.values)
         ]
     else
-        _declared_reference_anchors(system)
+        # The frozen source graph deliberately stores a type-erased vector.
+        # Do not iterate `data.records`, whose complete heterogeneous tuple
+        # type grows with every authored statement and causes inference to
+        # unroll reference discovery at the PottsProblem boundary.
+        _declared_reference_anchors(data.source_graph.records)
     end
     descriptors = ReferenceUnitDescriptor[]
     by_dimension = Dict{String, ReferenceUnitDescriptor}()
@@ -131,6 +137,17 @@ function _build_reference_descriptors(system::PottsSystem)
     end
     sort!(descriptors; by = descriptor -> descriptor.dimension)
     return Tuple(descriptors)
+end
+
+function _completed_runtime_parameters(data::CompletedPottsData)
+    result = Any[]
+    for reference in data.source_graph.references
+        reference.kind === :parameter || continue
+        parameter = _qualified_source_reference(reference)
+        any(candidate -> isequal(candidate, parameter), result) ||
+            push!(result, parameter)
+    end
+    return result
 end
 
 function _reference_for(reference_units, value)
@@ -154,9 +171,10 @@ function _build_parameter_manifest(system::PottsSystem, ::Type{T}) where {
         T <: AbstractFloat,
     }
     reference_units = _build_reference_descriptors(system)
+    completion = _completion_data(system)
     entries = RuntimeParameter[]
     names = Set{Symbol}()
-    for (index, parameter) in enumerate(ModelingToolkitBase.parameters(system))
+    for (index, parameter) in enumerate(_completed_runtime_parameters(completion))
         name = _parameter_name(parameter)
         name in names &&
             throw(ArgumentError("duplicate runtime parameter name `$name`"))
@@ -171,7 +189,7 @@ function _build_parameter_manifest(system::PottsSystem, ::Type{T}) where {
             entry.name,
             _compiled_structural_value(entry.value, reference_units),
         )
-        for entry in _completion_data(system).parameter_roles.structural
+        for entry in completion.parameter_roles.structural
     )
     return ParameterManifest(Tuple(entries), structural, reference_units)
 end
@@ -213,7 +231,7 @@ function _compiled_scalar(
     if index !== nothing
         entry = manifest[index]
         fallback = entry.required ? zero(T) : T(entry.default)
-        return CorePotts.CompiledScalar(fallback, index)
+        return CorePotts.CompilerSPI.CompiledScalar(fallback, index)
     end
     variables = try
         Symbolics.get_variables(value)
@@ -227,7 +245,7 @@ function _compiled_scalar(
     resolved_reference = reference === nothing ?
                          _reference_for(manifest.reference_units, value) :
                          reference
-    return CorePotts.CompiledScalar(T(_numeric_value(value, resolved_reference)))
+    return CorePotts.CompilerSPI.CompiledScalar(T(_numeric_value(value, resolved_reference)))
 end
 
 function _default_parameter_buffer(manifest::ParameterManifest, ::Type{T}) where {
@@ -242,6 +260,9 @@ end
 
 function _normalize_parameter_pairs(values)
     values === nothing && return Pair[]
+    values isa PottsParameters && return Pair[
+        name => getproperty(values.named, name) for name in keys(values.named)
+    ]
     values isa NamedTuple && return Pair[
         key => getproperty(values, key) for key in keys(values)
     ]
@@ -255,10 +276,10 @@ function _normalize_parameter_pairs(values)
 end
 
 function _normalize_parameters(
-        executable::PottsExecutable, values
+        plan::_PottsExecutionPlan, values
     )
-    manifest = executable.parameter_manifest
-    T = eltype(executable.core_program.parameter_defaults)
+    manifest = plan.parameter_manifest
+    T = eltype(plan.core_program.parameter_defaults)
     buffer = _default_parameter_buffer(manifest, T)
     assigned = falses(length(manifest))
     for (key, value) in _normalize_parameter_pairs(values)
@@ -294,8 +315,8 @@ function _normalize_parameters(
     ))
     names = Tuple(entry.name for entry in manifest)
     named = NamedTuple{names}(Tuple(buffer))
-    CorePotts.validate_parameters(
-        executable.core_program.descriptor_plan, buffer
+    CorePotts.CompilerSPI.validate_parameters(
+        plan.core_program.descriptor_plan, buffer
     )
     return PottsParameters(buffer, named)
 end

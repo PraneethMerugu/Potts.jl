@@ -26,7 +26,7 @@ Base.showerror(io::IO, error::PottsKnownUnsavedError) =
 Base.showerror(io::IO, error::PottsUnsavedTimeError) =
     print(io, "MCS ", error.mcs, " is within the trajectory but was not saved")
 
-struct PottsSavedState{O, K, G, V, S, R, Q, D}
+struct PottsSavedState{O, K, G, V, S, R, Q, D, N}
     mcs::Int
     ownership::O
     cell_kinds::K
@@ -36,6 +36,7 @@ struct PottsSavedState{O, K, G, V, S, R, Q, D}
     topology::R
     observations::Q
     declared_observations::D
+    native::N
 end
 
 _copy_saved_value(value::AbstractArray) = copy(value)
@@ -47,7 +48,7 @@ end
 _copy_saved_value(value) = value
 
 function _descriptor_saved_value(descriptor_state, entry)
-    values = CorePotts.state_block(descriptor_state, entry.handle).values
+    values = CorePotts.CompilerSPI.state_block(descriptor_state, entry.handle).values
     if entry.storage === :history
         axis = ndims(values)
         return ntuple(
@@ -85,6 +86,7 @@ function _saved_state(
         snapshot::CorePotts.ProgramSnapshot,
         observations,
         declared_observations = keys(observations),
+        native = (),
 )
     states = _descriptor_saved_states(executable, snapshot)
     topology = _descriptor_saved_topology(executable, snapshot)
@@ -93,7 +95,7 @@ function _saved_state(
         copy(snapshot.ownership),
         copy(snapshot.cell_kinds),
         copy(snapshot.cell_generations),
-        copy(CorePotts.program_tracker_values(
+        copy(CorePotts.CompilerSPI.program_tracker_values(
             executable.core_program,
             snapshot,
             Val(:cell_volume),
@@ -102,6 +104,7 @@ function _saved_state(
         topology,
         observations,
         Tuple(declared_observations),
+        Tuple(_copy_native_logical_state(state) for state in native),
     )
 end
 
@@ -125,10 +128,14 @@ end
 
 Base.propertynames(state::PottsSavedState) = (
     :mcs, :ownership, :cell_kinds, :cell_generations, :volumes,
+    :native,
     keys(getfield(state, :states))...,
     keys(getfield(state, :topology))...,
     keys(state.observations)...,
 )
+
+native_state(state::PottsSavedState, path) =
+    _copy_native_logical_state(_native_state_by_path(state.native, path))
 
 struct PottsStats
     steps::Int

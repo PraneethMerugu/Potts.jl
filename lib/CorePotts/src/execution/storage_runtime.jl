@@ -240,6 +240,11 @@ function copy_auxiliary_state(::StateLayout, state::AuxiliaryState)
     return AuxiliaryState(banks)
 end
 
+function copy_auxiliary_state(state::AuxiliaryState)
+    banks = map(_copy_state_bank, state.banks)
+    return AuxiliaryState(banks)
+end
+
 @inline _copyto_auxiliary_banks!(::Tuple{}, ::Tuple{}) = nothing
 @inline function _copyto_auxiliary_banks!(destination::Tuple, source::Tuple)
     copyto!(first(destination).values, first(source).values)

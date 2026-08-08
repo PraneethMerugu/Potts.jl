@@ -21,7 +21,7 @@ function _validate_staged_lifecycle!(
     length(tracker_plan.descriptors) == length(workspace.staged_trackers.values) ||
         return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             detail = LifecycleDetailTrackerPlanStateMisalignment,
         )
     volumes = try
@@ -38,7 +38,7 @@ function _validate_staged_lifecycle!(
     catch
         return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             detail = LifecycleDetailTrackerStorageInvalid,
         )
     end
@@ -47,7 +47,7 @@ function _validate_staged_lifecycle!(
         occupied = @inbounds volumes[cell] != 0
         active == occupied || return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             anchor = cell,
             detail = LifecycleDetailActiveOccupancyMismatch,
         )
@@ -56,7 +56,7 @@ function _validate_staged_lifecycle!(
             ] && !occupied
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 anchor = cell,
                 detail = LifecycleDetailForbiddenExtinction,
             )
@@ -73,7 +73,7 @@ function _validate_staged_lifecycle!(
         catch
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 source = slot,
                 detail = LifecycleDetailRelationshipIntegrityInvalid,
             )
@@ -101,6 +101,16 @@ end
     return true
 end
 
+@inline function _relationship_incident_occurrences(state, endpoint, edge)
+    occurrences = 0
+    for position in 1:size(state.incident_edges, 1)
+        occurrences += Int(@inbounds(
+            state.incident_edges[position, endpoint] == edge
+        ))
+    end
+    return occurrences
+end
+
 @inline function _validate_relationship_integrity_backend(
         state, schema, endpoint_status, endpoint_generations
     )
@@ -126,13 +136,6 @@ end
                       state.generation_b[edge] == endpoint_generations[b]) ||
                 return false
             _relationship_payload_is_finite(state, edge) || return false
-            for prior in 1:(edge - 1)
-                @inbounds state.active[prior] || continue
-                @inbounds(
-                    state.endpoint_a[prior] == a &&
-                    state.endpoint_b[prior] == b
-                ) && return false
-            end
         else
             @inbounds(
                 iszero(state.endpoint_a[edge]) &&
@@ -147,15 +150,6 @@ end
     for endpoint in eachindex(state.degree)
         degree = Int(@inbounds state.degree[endpoint])
         0 <= degree <= Int(schema.maximum_degree) || return false
-        expected = 0
-        for edge in 1:capacity
-            expected += Int(@inbounds(
-                state.active[edge] &&
-                (state.endpoint_a[edge] == endpoint ||
-                 state.endpoint_b[edge] == endpoint)
-            ))
-        end
-        expected == degree || return false
         previous = Int32(0)
         for position in 1:Int(schema.maximum_degree)
             edge = @inbounds state.incident_edges[position, endpoint]
@@ -173,6 +167,26 @@ end
             end
         end
     end
+
+
+    for edge in 1:capacity
+        @inbounds state.active[edge] || continue
+        a = Int(@inbounds state.endpoint_a[edge])
+        b = Int(@inbounds state.endpoint_b[edge])
+        _relationship_incident_occurrences(state, a, Int32(edge)) == 1 ||
+            return false
+        _relationship_incident_occurrences(state, b, Int32(edge)) == 1 ||
+            return false
+        for position in 1:Int(@inbounds state.degree[a])
+            prior = Int(@inbounds state.incident_edges[position, a])
+            prior < edge || break
+            @inbounds state.active[prior] || continue
+            @inbounds(
+                state.endpoint_a[prior] == a &&
+                state.endpoint_b[prior] == b
+            ) && return false
+        end
+    end
     return true
 end
 
@@ -183,7 +197,7 @@ function _validate_staged_lifecycle!(
     length(tracker_plan.descriptors) == length(workspace.staged_trackers.values) ||
         return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             detail = LifecycleDetailTrackerPlanStateMisalignment,
         )
     volumes = tracker_values(
@@ -194,7 +208,7 @@ function _validate_staged_lifecycle!(
         occupied = @inbounds volumes[cell] != 0
         active == occupied || return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             anchor = cell,
             detail = LifecycleDetailActiveOccupancyMismatch,
         )
@@ -203,7 +217,7 @@ function _validate_staged_lifecycle!(
             ] && !occupied
             return _set_lifecycle_status!(
                 workspace,
-                LifecycleStatusInvariant;
+                ProgramStatusInvariant;
                 anchor = cell,
                 detail = LifecycleDetailForbiddenExtinction,
             )
@@ -217,7 +231,7 @@ function _validate_staged_lifecycle!(
             workspace.staged_cell_generations,
         ) || return _set_lifecycle_status!(
             workspace,
-            LifecycleStatusInvariant;
+            ProgramStatusInvariant;
             source = slot,
             detail = LifecycleDetailRelationshipIntegrityInvalid,
         )
@@ -249,7 +263,7 @@ function _stage_lifecycle_transactions!(
         _stage_lifecycle_request_structure!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, LifecycleStageStructure
+            runtime, plan, workspace, ProgramStageStructure
         ); -1)
     end
     for position in 1:selected_count
@@ -257,7 +271,7 @@ function _stage_lifecycle_transactions!(
         _stage_lifecycle_request_relationships!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, LifecycleStageRelationships
+            runtime, plan, workspace, ProgramStageRelationships
         ); -1)
     end
     for position in 1:selected_count
@@ -265,7 +279,7 @@ function _stage_lifecycle_transactions!(
         _stage_lifecycle_request_state!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, LifecycleStageState
+            runtime, plan, workspace, ProgramStageState
         ); -1)
     end
     retired = 0
@@ -273,13 +287,13 @@ function _stage_lifecycle_transactions!(
         request = Int(@inbounds workspace.canonical_order[position])
         result = _finalize_lifecycle_request!(plan, workspace, request)
         result < 0 && return (_stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, LifecycleStageValidation
+            runtime, plan, workspace, ProgramStageValidation
         ); -1)
         retired += result
     end
     _validate_staged_lifecycle!(runtime, plan, workspace) || return (
         _stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, LifecycleStageValidation
+            runtime, plan, workspace, ProgramStageValidation
         ); -1
     )
     return retired

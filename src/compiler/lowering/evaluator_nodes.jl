@@ -6,9 +6,9 @@ function _lower_static_node(
         node_index::Int32,
         manifest::ParameterManifest,
         ::Type{T},
-        state_handles::Dict{QualifiedStatementID, CorePotts.StateHandle},
+        state_handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
         draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
-        cache::Dict{Int32, CorePotts.AbstractStaticExpression},
+        cache::Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression},
         state_binding = nothing,
         workspace_slices = nothing,
     ) where {T <: AbstractFloat}
@@ -33,15 +33,17 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        state_expression = CorePotts.StateExpression(handle)
+        state_expression = CorePotts.CompilerSPI.StateExpression(handle)
         if state_binding === nothing
             state_expression
         else
-            operation = state_binding isa CorePotts.ProposalTargetStageSite ?
+            operation = state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
                 _potts_proposal_bound_state_value :
-                state_binding isa CorePotts.IterationStageSite ?
+            state_binding isa CorePotts.CompilerSPI.IterationStageSite ?
                 _potts_iteration_bound_state_value :
-                state_binding isa Symbol && startswith(
+            state_binding isa CorePotts.CompilerSPI.ModelStageSite ?
+                _potts_model_bound_state_value :
+            state_binding isa Symbol && startswith(
                     String(state_binding), "lifecycle_"
                 ) ?
                 _potts_lifecycle_bound_state_value :
@@ -60,7 +62,7 @@ function _lower_static_node(
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
-        CorePotts.LiteralExpression(Int32(0))
+        CorePotts.CompilerSPI.LiteralExpression(Int32(0))
     elseif node.payload_kind === :spatial_relation
         handle = _compiled_resource_leaf(
             ir,
@@ -80,7 +82,7 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        CorePotts.LiteralExpression(handle)
+        CorePotts.CompilerSPI.LiteralExpression(handle)
     elseif node.payload_kind === :relationship_set
         handle = _compiled_resource_leaf(
             ir,
@@ -100,9 +102,9 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        CorePotts.LiteralExpression(handle)
+        CorePotts.CompilerSPI.LiteralExpression(handle)
     elseif node.payload_kind === :relationship_payload
-        CorePotts.LiteralExpression(
+        CorePotts.CompilerSPI.LiteralExpression(
             _relationship_payload_slot(ir, node)
         )
     elseif node.payload_kind in (
@@ -125,7 +127,7 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        CorePotts.LiteralExpression(kind)
+        CorePotts.CompilerSPI.LiteralExpression(kind)
     elseif node.payload_kind === :draw
         draw_handle = _draw_handle_for_leaf(draw_handles, node)
         draw_handle === nothing ? throw(PottsValidationError(
@@ -140,18 +142,18 @@ function _lower_static_node(
                 (),
                 UnknownSource(),
             ),),
-        )) : CorePotts.LiteralExpression(draw_handle)
+        )) : CorePotts.CompilerSPI.LiteralExpression(draw_handle)
     else
         operation = _static_operation_callable(node)
         if workspace_slices !== nothing && haskey(workspace_slices, node_index)
             slice = workspace_slices[node_index]
-            operation = CorePotts.LifecycleWorkspaceOperation(
+            operation = CorePotts.CompilerSPI.LifecycleWorkspaceOperation(
                 operation, slice.offset, slice.maximum
             )
         end
         tracker_keys = _operation_tracker_keys(ir, node, T)
         qualified_keys = filter(
-            key -> key isa CorePotts.QualifiedTrackerKey,
+            key -> key isa CorePotts.CompilerSPI.QualifiedTrackerKey,
             tracker_keys,
         )
         if !isempty(qualified_keys)
@@ -159,7 +161,7 @@ function _lower_static_node(
                 "V1 operations admit at most one qualified tracker binding"
             ))
             key = only(qualified_keys)
-            operation = CorePotts.QualifiedTrackerOperation(
+            operation = CorePotts.CompilerSPI.QualifiedTrackerOperation(
                 operation,
                 key.quantity,
                 key.source_handle,
@@ -180,8 +182,8 @@ function _lower_static_node(
             )
             for operand in node.operands
         )
-        if operation isa CorePotts.ContextOperation
-            CorePotts.ContextExpression(operation)
+        if operation isa CorePotts.CompilerSPI.ContextOperation
+            CorePotts.CompilerSPI.ContextExpression(operation)
         else
             _bounded_static_operation(operation, arguments)
         end

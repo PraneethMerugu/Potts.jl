@@ -9,8 +9,6 @@ struct AcceptedCopy <: AbstractPottsPhase end
 struct AfterMCS <: AbstractPottsPhase end
 struct RelationshipCommit <: AbstractPottsPhase end
 struct Lifecycle <: AbstractPottsPhase end
-struct EquationStep <: AbstractPottsPhase end
-struct Observe <: AbstractPottsPhase end
 
 struct Before{P <: AbstractPottsPhase} <: AbstractPottsPhase
     phase::P
@@ -139,18 +137,11 @@ struct Undirected{A, B} <: AbstractRelationshipEndpointPolicy
     kind_a::A
     kind_b::B
 end
-struct Directed{A, B} <: AbstractRelationshipEndpointPolicy
-    kind_a::A
-    kind_b::B
-end
 struct RemoveWithEndpoint end
 struct RejectEndpointRetirement end
 
 abstract type AbstractSolverPolicy end
 struct ExplicitDiffusion <: AbstractSolverPolicy end
-struct ExplicitEuler <: AbstractSolverPolicy end
-struct Heun <: AbstractSolverPolicy end
-struct RK4 <: AbstractSolverPolicy end
 
 abstract type AbstractChemotaxisMode end
 struct ExtensionsOnly <: AbstractChemotaxisMode end
@@ -301,12 +292,6 @@ function Chemotaxis(kind, field; strength,
         mode::AbstractChemotaxisMode = ExtensionsOnly(),
         sample::AbstractInterpolationPolicy = Nearest(),
         name::Symbol = Symbol(:chemotaxis_, Symbol(statement_id(kind))))
-    mode isa ExtensionsOnly || throw(ArgumentError(
-        "V1 Chemotaxis supports ExtensionsOnly()"
-    ))
-    sample isa Nearest || throw(ArgumentError(
-        "V1 Chemotaxis supports Nearest() sampling"
-    ))
     copy = ProposalContext(:copy)
     response = -strength * (
         field_value(field, copy.target_site) - field_value(field, copy.source_site)
@@ -384,14 +369,6 @@ end
 Sweep(name::Symbol = :cpm; attempts = AttemptsPerSite(1), kwargs...) =
     SweepStage(name, attempts, (; kwargs...))
 
-struct ObserveStage{C, O}
-    name::Symbol
-    cadence::C
-    options::O
-end
-ObserveStage(name::Symbol; every::Integer = 1, kwargs...) =
-    ObserveStage(name, Every(every), (; kwargs...))
-
 function _map_symbolic_fields(f, value)
     mapped = map(
         field -> _map_symbolic_payload(f, getfield(value, field)),
@@ -412,8 +389,6 @@ _map_symbolic_payload(f, value::AbstractBoundaryPolicy) =
 _map_symbolic_payload(f, value::AbstractRelationshipEndpointPolicy) =
     _map_symbolic_fields(f, value)
 _map_symbolic_payload(f, value::SweepStage) =
-    _map_symbolic_fields(f, value)
-_map_symbolic_payload(f, value::ObserveStage) =
     _map_symbolic_fields(f, value)
 _map_symbolic_payload(f, value::SymmetricPair) =
     _map_symbolic_fields(f, value)

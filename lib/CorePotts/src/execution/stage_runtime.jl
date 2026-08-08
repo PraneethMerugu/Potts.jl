@@ -140,6 +140,10 @@ end
     ::IterationStageSite,
     context::_SiteStageEvaluationContext,
 ) = context.site
+@inline stage_site(
+    ::ModelStageSite,
+    ::_SiteStageEvaluationContext,
+) = 1
 @inline function state_value(
         context::_SiteStageEvaluationContext,
         handle::StateHandle,
@@ -290,6 +294,28 @@ end
         value, "after-MCS stage value must be finite"
     ))
     @inbounds scratch[context.site] = value
+    return scratch
+end
+
+@inline function descriptor_emit_requests!(
+        scratch::AbstractVector{StageEvaluation{T}},
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+        context::_SiteStageEvaluationContext,
+    ) where {T <: AbstractFloat, C, V, E <: ModelAssignmentEffect}
+    condition = _compiled_evaluate_static(descriptor.condition, context)
+    condition isa Bool || throw(ArgumentError(
+        "after-MCS model assignment condition must return Bool"
+    ))
+    value = condition ? T(_compiled_evaluate_static(
+        descriptor.value, context
+    )) : zero(T)
+    condition && !isfinite(value) && throw(DomainError(
+        value, "after-MCS model assignment value must be finite"
+    ))
+    @inbounds scratch[Int(descriptor.buffer_slot)] =
+        StageEvaluation(condition, value)
     return scratch
 end
 
@@ -467,6 +493,20 @@ function _emit_after_mcs_descriptor!(
     return runtime
 end
 
+function _emit_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: ModelAssignmentEffect}
+    descriptor_emit_requests!(
+        runtime.stage_buffers.after_mcs_model,
+        descriptor,
+        _SiteStageEvaluationContext(runtime, 1),
+    )
+    return runtime
+end
+
 @inline function _emit_after_mcs_descriptor!(
         runtime,
         ::CompiledStageDescriptor{
@@ -564,6 +604,24 @@ function _apply_after_mcs_descriptor!(
         Int(descriptor.buffer_slot)
     ]
     descriptor_apply_stage!(descriptor, scratch, runtime.descriptor_state)
+    return runtime
+end
+
+function _apply_after_mcs_descriptor!(
+        runtime,
+        descriptor::CompiledStageDescriptor{
+            C, V, E, AfterMCSStage,
+        },
+    ) where {C, V, E <: ModelAssignmentEffect}
+    evaluation = @inbounds runtime.stage_buffers.after_mcs_model[
+        Int(descriptor.buffer_slot)
+    ]
+    evaluation.enabled || return runtime
+    values = state_block(runtime.descriptor_state, descriptor.effect.target).values
+    length(values) == 1 || throw(ArgumentError(
+        "compiled model assignment target is not scalar"
+    ))
+    @inbounds values[firstindex(values)] = evaluation.value
     return runtime
 end
 

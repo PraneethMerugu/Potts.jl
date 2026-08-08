@@ -10,7 +10,8 @@ import Unitful
 using ModelingToolkitBase:
     @independent_variables, @named, @parameters, @variables
 
-include("test_modelingtoolkit_assimilation.jl")
+include("test_modelingtoolkit_retention_and_structural_scheduling.jl")
 include("test_modelingtoolkit_standard_library.jl")
+include("test_native_runtime.jl")
 include("test_unitful_extension.jl")
 include("test_optional_extension_loading.jl")

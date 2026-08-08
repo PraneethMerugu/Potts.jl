@@ -1,22 +1,22 @@
-# Public executable and engine/backend selections.
+# Private late-lowered execution plan and public runtime selectors.
 
-abstract type AbstractPottsEngine end
+abstract type AbstractPottsAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
 """
-    SequentialEngine()
+    SequentialCPM()
 
 The V1 stochastic reference engine. Proposal attempts are committed one at a time
 in their semantic RNG order.
 """
-struct SequentialEngine <: AbstractPottsEngine end
+struct SequentialCPM <: AbstractPottsAlgorithm end
 
 """
-    CheckerboardEngine()
+    CheckerboardSweepCPM()
 
 The V1 deterministic checkerboard engine. A compilation error is reported when
 the completed model has effects whose touched set cannot be proven.
 """
-struct CheckerboardEngine <: AbstractPottsEngine end
+struct CheckerboardSweepCPM <: AbstractPottsAlgorithm end
 
 abstract type AbstractPottsBackend end
 
@@ -26,12 +26,6 @@ struct CPUBackend <: AbstractPottsBackend end
 """Apple Metal accelerator selected through the optional Metal extension."""
 struct MetalBackend <: AbstractPottsBackend end
 
-"""NVIDIA accelerator selector reserved for the backend-neutral release matrix."""
-struct CUDABackend <: AbstractPottsBackend end
-
-"""AMD accelerator selector reserved for the backend-neutral release matrix."""
-struct ROCmBackend <: AbstractPottsBackend end
-
 _validate_backend_available(::CPUBackend) = nothing
 function _validate_backend_available(backend::AbstractPottsBackend)
     throw(ArgumentError(
@@ -40,20 +34,16 @@ function _validate_backend_available(backend::AbstractPottsBackend)
     ))
 end
 
-_core_program_backend(::CPUBackend) = CorePotts.CPUProgramBackend()
+_core_program_backend(::CPUBackend) = CorePotts.BackendSPI.CPUProgramBackend()
 _core_program_backend(::MetalBackend) =
-    CorePotts.AdaptedProgramBackend{:MetalBackend}()
-_core_program_backend(::CUDABackend) =
-    CorePotts.AdaptedProgramBackend{:CUDABackend}()
-_core_program_backend(::ROCmBackend) =
-    CorePotts.AdaptedProgramBackend{:ROCmBackend}()
+    CorePotts.BackendSPI.AdaptedProgramBackend{:MetalBackend}()
 
-_adapt_runtime_backend(::CorePotts.CPUProgramBackend, runtime) = runtime
+_adapt_runtime_backend(::CorePotts.BackendSPI.CPUProgramBackend, runtime) = runtime
 function _adapt_runtime_backend(
-        backend::CorePotts.AdaptedProgramBackend, runtime
+        backend::CorePotts.BackendSPI.AdaptedProgramBackend, runtime
     )
     throw(ArgumentError(
-        "$(CorePotts.program_backend_name(backend)) runtime adaptation " *
+        "$(CorePotts.BackendSPI.program_backend_name(backend)) runtime adaptation " *
         "requires its optional PottsToolkit backend extension"
     ))
 end
@@ -95,14 +85,15 @@ Base.getindex(manifest::ParameterManifest, index::Integer) =
 An immutable, normalized runtime-parameter buffer. Construct it through
 `PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
 """
-struct PottsParameters{T <: AbstractFloat, V <: Tuple, N <: NamedTuple}
+struct PottsParameters{T, V <: Tuple, N <: NamedTuple}
     values::V
     named::N
 end
 
-PottsParameters(values::AbstractVector{T}, named::N) where {
-        T <: AbstractFloat, N <: NamedTuple,
-    } = PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
+PottsParameters(values::AbstractVector{T}, named::N) where {T, N <: NamedTuple} =
+    PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
+PottsParameters(values::Tuple, named::N) where {N <: NamedTuple} =
+    PottsParameters{Any, typeof(values), N}(values, named)
 
 Base.getindex(parameters::PottsParameters, name::Symbol) =
     getproperty(parameters.named, name)
@@ -118,11 +109,15 @@ function _parameter_buffer(values::Tuple, ::Type{T}) where {
     return buffer
 end
 
+_parameter_buffer(parameters::PottsParameters, ::Type{T}) where {
+        T <: AbstractFloat,
+    } = _parameter_buffer(parameters.values, T)
 _parameter_buffer(parameters::PottsParameters{T}) where {T <: AbstractFloat} =
     _parameter_buffer(parameters.values, T)
+_parameter_buffer(parameters::PottsParameters) = collect(parameters.values)
 
 struct CompiledRelationshipEndpointPolicy
-    identity::CorePotts.QualifiedResourceIdentity
+    identity::CorePotts.CompilerSPI.QualifiedResourceIdentity
     slot::Int32
     direction::Symbol
     kind_a::Int16
@@ -131,7 +126,7 @@ struct CompiledRelationshipEndpointPolicy
     kind_b_name::Symbol
 end
 
-struct PottsExecutable{P, M, R, O}
+struct _PottsExecutionPlan{P, M, R, O}
     core_program::P
     parameter_manifest::M
     relationship_endpoint_policies::Vector{CompiledRelationshipEndpointPolicy}
@@ -140,11 +135,11 @@ struct PottsExecutable{P, M, R, O}
     fingerprint::ExecutableFingerprint
 end
 
-function Base.show(io::IO, executable::PottsExecutable)
-    report = executable.reports.execution
+function Base.show(io::IO, plan::_PottsExecutionPlan)
+    report = plan.reports.execution
     print(
         io,
-        "PottsExecutable(",
+        "PottsExecutionPlan(",
         report.engine,
         ", ",
         report.backend,
@@ -156,4 +151,4 @@ function Base.show(io::IO, executable::PottsExecutable)
     )
 end
 
-executable_fingerprint(executable::PottsExecutable) = executable.fingerprint
+_execution_plan_fingerprint(plan::_PottsExecutionPlan) = plan.fingerprint

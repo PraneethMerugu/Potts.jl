@@ -2,7 +2,7 @@
 
 abstract type AbstractCompiledObservationEvaluator end
 
-struct StateExportObservationEvaluator{H <: CorePotts.StateHandle} <:
+struct StateExportObservationEvaluator{H <: CorePotts.CompilerSPI.StateHandle} <:
         AbstractCompiledObservationEvaluator
     handle::H
 end
@@ -22,7 +22,7 @@ function _evaluate_observation(
         evaluator::StateExportObservationEvaluator,
         runtime,
     )
-    return copy(CorePotts.state_block(
+    return copy(CorePotts.CompilerSPI.state_block(
         runtime.descriptor_state, evaluator.handle
     ).values)
 end
@@ -32,8 +32,8 @@ function _evaluate_observation(
         runtime,
     )
     total = 0
-    for owner in CorePotts.ownership_state(runtime)
-        CorePotts.owner_kind(runtime, owner) == evaluator.kind &&
+    for owner in CorePotts.CompilerSPI.ownership_state(runtime)
+        CorePotts.CompilerSPI.owner_kind(runtime, owner) == evaluator.kind &&
             (total += 1)
     end
     return total
@@ -43,7 +43,7 @@ function _evaluate_observation(
         evaluator::RelationshipDegreeObservationEvaluator,
         runtime,
     )
-    return CorePotts.relationship_degree(
+    return CorePotts.CompilerSPI.relationship_degree(
         runtime, evaluator.relationship_slot, evaluator.endpoint
     )
 end

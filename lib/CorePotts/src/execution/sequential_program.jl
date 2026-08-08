@@ -8,7 +8,169 @@ mutable struct SequentialTransactionWorkspace{O, K, G, TS, R, D}
     relationships::R
     descriptor_state::D
 end
-struct NoSequentialTransactionWorkspace end
+
+@enum ProgramStepTransactionState::UInt8 begin
+    ProgramStepStaged = 0x01
+    ProgramStepCommitted = 0x02
+    ProgramStepAborted = 0x03
+end
+
+"""Opaque unpublished sequential-MCS candidate owned by CorePotts."""
+mutable struct ProgramStepTransaction{T <: AbstractFloat, R, W, C, L}
+    runtime::R
+    workspace::W
+    counters_before::C
+    counters_candidate::C
+    lifecycle_receipt::L
+    pending_parameters::Union{Nothing, Vector{T}}
+    state::ProgramStepTransactionState
+end
+
+function ProgramStepTransaction(
+        runtime::ProgramRuntime{T}, workspace, counters_before,
+        counters_candidate, receipt
+    ) where {T}
+    return ProgramStepTransaction{
+        T, typeof(runtime), typeof(workspace), typeof(counters_before),
+        typeof(receipt),
+    }(
+        runtime,
+        workspace,
+        counters_before,
+        counters_candidate,
+        receipt,
+        nothing,
+        ProgramStepStaged,
+    )
+end
+
+@inline function _require_staged_program_step(
+        transaction::ProgramStepTransaction
+    )
+    transaction.state === ProgramStepStaged || throw(ArgumentError(
+        "program-step transaction is no longer staged"
+    ))
+    transaction.runtime.settled && throw(ArgumentError(
+        "a staged program-step transaction cannot own a settled runtime"
+    ))
+    return transaction
+end
+
+@inline program_step_lifecycle_receipt(transaction::ProgramStepTransaction) =
+    (_require_staged_program_step(transaction); transaction.lifecycle_receipt)
+
+function program_step_snapshot(transaction::ProgramStepTransaction)
+    _require_staged_program_step(transaction)
+    runtime = transaction.runtime
+    return _materialize_program_state_snapshot(
+        runtime, transaction.workspace, runtime.mcs + 1
+    )
+end
+
+function stage_program_parameters!(
+        transaction::ProgramStepTransaction{T},
+        parameters::AbstractVector{<:Real},
+    ) where {T}
+    _require_staged_program_step(transaction)
+    transaction.pending_parameters === nothing || throw(ArgumentError(
+        "program parameters are already staged for this transaction"
+    ))
+    transaction.pending_parameters = _validated_program_parameters(
+        transaction.runtime.program, parameters
+    )
+    return transaction
+end
+
+@inline function _descriptor_state_banks_are_independent(
+        candidate::AuxiliaryState,
+        staged::AuxiliaryState,
+        published::AuxiliaryState,
+    )
+    for source_bank in candidate.banks
+        source = source_bank.values
+        for destination_bank in staged.banks
+            Base.mightalias(source, destination_bank.values) && return false
+        end
+        for destination_bank in published.banks
+            Base.mightalias(source, destination_bank.values) && return false
+        end
+    end
+    return true
+end
+
+function _validate_program_descriptor_state(
+        runtime::ProgramRuntime,
+        candidate::AuxiliaryState,
+    )
+    expected = runtime.descriptor_state
+    typeof(candidate.banks) === typeof(expected.banks) || throw(ArgumentError(
+        "descriptor state has an incompatible physical layout or element type"
+    ))
+    for (candidate_bank, expected_bank) in zip(
+            candidate.banks, expected.banks
+        )
+        axes(candidate_bank.values) == axes(expected_bank.values) || throw(
+            ArgumentError("descriptor state has an incompatible bank shape")
+        )
+    end
+    for entry in runtime.program.descriptor_plan.state_layout.entries
+        validate_state_block(
+            entry.schema, state_block(candidate, entry.handle)
+        )
+    end
+    return candidate
+end
+
+"""
+Stage an independently owned auxiliary-state candidate for coordinated commit.
+
+The supplied state is validated completely before it is copied into the
+transaction's unpublished bank. The last published bank is never mutated;
+`abort_program_step!` therefore restores it without copying.
+"""
+function stage_program_descriptor_state!(
+        transaction::ProgramStepTransaction,
+        candidate::AuxiliaryState,
+    )
+    _require_staged_program_step(transaction)
+    runtime = transaction.runtime
+    workspace = transaction.workspace
+    runtime.engine_workspace === workspace || throw(ArgumentError(
+        "program-step transaction lost its runtime workspace ownership"
+    ))
+    _descriptor_state_banks_are_independent(
+        candidate,
+        runtime.descriptor_state,
+        workspace.descriptor_state,
+    ) || throw(ArgumentError(
+        "staged descriptor state must own independent storage"
+    ))
+    _validate_program_descriptor_state(runtime, candidate)
+    copyto_auxiliary_state!(workspace.descriptor_state, candidate)
+    return transaction
+end
+
+function stage_program_descriptor_state!(
+        transaction::ProgramStepTransaction,
+        candidate,
+    )
+    _require_staged_program_step(transaction)
+    throw(ArgumentError(
+        "staged descriptor state must be a CorePotts AuxiliaryState"
+    ))
+end
+
+"""Independently owned view of parameters that would become visible at commit."""
+@inline function program_step_parameter_view(
+        transaction::ProgramStepTransaction
+    )
+    _require_staged_program_step(transaction)
+    pending = transaction.pending_parameters
+    pending === nothing && throw(ArgumentError(
+        "no unpublished program parameters are staged for this transaction"
+    ))
+    return copy(pending)
+end
 
 function allocate_sequential_transaction_workspace(
         program,
@@ -19,8 +181,6 @@ function allocate_sequential_transaction_workspace(
         relationships,
         descriptor_state,
     )
-    program.lifecycle_plan isa NoLifecycleExecutionPlan &&
-        return NoSequentialTransactionWorkspace()
     return SequentialTransactionWorkspace(
         copy(ownership),
         copy(cell_kinds),
@@ -29,61 +189,6 @@ function allocate_sequential_transaction_workspace(
         copy(relationships),
         copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
     )
-end
-
-@inline function proposal_log_acceptance_ratio(
-        evaluation::ProposalEvaluation{T},
-        temperature::Real,
-    ) where {T <: AbstractFloat}
-    converted_temperature = T(temperature)
-    isfinite(converted_temperature) && converted_temperature >= zero(T) ||
-        throw(ArgumentError(
-            "acceptance temperature must be finite and nonnegative"
-        ))
-    all(isfinite, (
-        evaluation.delta_h,
-        evaluation.drive_energy,
-        evaluation.drive_log_bias,
-        evaluation.kinetic_modifier,
-    )) || throw(ArgumentError(
-        "proposal acceptance inputs must be finite"
-    ))
-    evaluation.constraints_allowed || return -T(Inf)
-    if iszero(converted_temperature)
-        iszero(evaluation.drive_log_bias) &&
-            iszero(evaluation.kinetic_modifier) || throw(ArgumentError(
-                "nonconservative drives and proposal modifiers require positive temperature"
-            ))
-        effective_energy = evaluation.delta_h + evaluation.drive_energy
-        return effective_energy <= zero(T) ? zero(T) : -T(Inf)
-    end
-    return -(evaluation.delta_h + evaluation.drive_energy) /
-           converted_temperature +
-           evaluation.drive_log_bias + evaluation.kinetic_modifier
-end
-
-"""Exact conventional acceptance probability for a structured proposal evaluation."""
-@inline function proposal_acceptance_probability(
-        evaluation::ProposalEvaluation{T}, temperature::Real
-    ) where {T <: AbstractFloat}
-    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
-    return log_ratio >= zero(T) ? one(T) :
-           isfinite(log_ratio) ? exp(log_ratio) : zero(T)
-end
-
-"""Apply the V1 strict-threshold decision to one pre-addressed uniform draw."""
-@inline function proposal_acceptance_decision(
-        evaluation::ProposalEvaluation{T},
-        temperature::Real,
-        draw::Real,
-    ) where {T <: AbstractFloat}
-    converted_draw = T(draw)
-    zero(T) < converted_draw < one(T) || throw(ArgumentError(
-        "acceptance draws must lie strictly inside (0, 1)"
-    ))
-    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
-    return log_ratio >= zero(T) ||
-           (isfinite(log_ratio) && log(converted_draw) < log_ratio)
 end
 
 @inline function _proposal_acceptance_draw(
@@ -124,6 +229,11 @@ function _attempt_selected!(
     old_owner = @inbounds runtime.ownership[target]
     new_owner = @inbounds runtime.ownership[source]
     old_owner == new_owner && (runtime.null_attempts += 1; return false)
+    if !_extinction_copy_admitted(runtime, old_owner, new_owner)
+        runtime.constraint_rejections += 1
+        runtime.rejected += 1
+        return false
+    end
 
     context = _ProposalEvaluationContext(
         runtime,
@@ -142,13 +252,20 @@ function _attempt_selected!(
     evaluation = fold_proposal_contributions(
         program.descriptor_plan, runtime.proposal_contributions
     )
-    if !evaluation.constraints_allowed
+    temperature = compiled_scalar_value(program.temperature, runtime.parameters)
+    result = _proposal_acceptance_result(evaluation, temperature)
+    if result.code === ProposalAcceptanceConstraintRejected
         runtime.constraint_rejections += 1
         runtime.rejected += 1
         return false
     end
-    temperature = compiled_scalar_value(program.temperature, runtime.parameters)
-    log_ratio = proposal_log_acceptance_ratio(evaluation, temperature)
+    if result.code !== ProposalAcceptanceReady
+        runtime.failure_status = _acceptance_failure_status(
+            result, runtime.mcs + 1, attempt_identity
+        )
+        return false
+    end
+    log_ratio = result.log_ratio
     accepted = log_ratio >= zero(T)
     if !accepted && isfinite(log_ratio)
         draw = _proposal_acceptance_draw(
@@ -158,9 +275,7 @@ function _attempt_selected!(
             draw_mode,
             scripted_draw,
         )
-        accepted = proposal_acceptance_decision(
-            evaluation, temperature, draw
-        )
+        accepted = log(draw) < log_ratio
     end
     if accepted
         _emit_accepted_copy_stage!(runtime, context)
@@ -216,6 +331,7 @@ function _advance_sequential!(runtime::ProgramRuntime)
             runtime, ProposalRecipientStream, 1, attempt, site_count
         )
         _attempt!(runtime, indices[target_linear], attempt, 0)
+        program_failed(runtime) && return nothing
     end
     return nothing
 end
@@ -248,6 +364,11 @@ function _prepare_sequential_transaction!(runtime, workspace)
         workspace.relationships, runtime.relationships
     runtime.descriptor_state, workspace.descriptor_state =
         workspace.descriptor_state, runtime.descriptor_state
+    if runtime.lifecycle_workspace isa LifecycleWorkspace
+        runtime.lifecycle_workspace = _lifecycle_workspace_with_staged_state(
+            runtime.lifecycle_workspace, runtime
+        )
+    end
     return runtime
 end
 
@@ -262,6 +383,11 @@ function _restore_sequential_transaction!(runtime, workspace)
         workspace.relationships, runtime.relationships
     runtime.descriptor_state, workspace.descriptor_state =
         workspace.descriptor_state, runtime.descriptor_state
+    if runtime.lifecycle_workspace isa LifecycleWorkspace
+        runtime.lifecycle_workspace = _lifecycle_workspace_with_staged_state(
+            runtime.lifecycle_workspace, runtime
+        )
+    end
     return runtime
 end
 
@@ -286,37 +412,146 @@ end
     return runtime
 end
 
-function _advance_sequential_transaction!(runtime::ProgramRuntime)
+function stage_program_mcs!(runtime::ProgramRuntime)
+    _require_program_execution_capability(
+        runtime.capability_report; operation = :staged_mcs
+    )
+    runtime.program.engine isa SequentialProgramEngine || throw(ArgumentError(
+        "staged coupled execution currently requires the sequential CPU reference profile"
+    ))
+    runtime.settled || throw(ArgumentError(
+        "cannot stage an MCS while another program transaction is pending"
+    ))
+    program_failed(runtime) && throw(ArgumentError(
+        "cannot stage a program runtime after a terminal scientific failure"
+    ))
     workspace = runtime.engine_workspace
     workspace isa SequentialTransactionWorkspace || error(
         "sequential runtime has no transaction workspace"
     )
     counters = _program_counter_snapshot(runtime)
     _prepare_sequential_transaction!(runtime, workspace)
+    runtime.failure_status = ProgramStatus()
     runtime.settled = false
     try
         _advance_sequential!(runtime)
-        _after_mcs!(runtime)
-    catch error
+        program_failed(runtime) || _after_mcs!(runtime)
+        if program_failed(runtime)
+            status = runtime.failure_status
+            _restore_sequential_transaction!(runtime, workspace)
+            _restore_program_counters!(runtime, counters)
+            runtime.failure_status = status
+            runtime.settled = true
+            return nothing
+        end
+        receipt = _materialize_lifecycle_receipt(
+            runtime.program.lifecycle_plan,
+            runtime.lifecycle_workspace,
+            workspace.cell_kinds,
+            workspace.cell_generations,
+            runtime.cell_kinds,
+            runtime.cell_generations,
+            runtime.mcs + 1,
+            runtime.seed,
+            runtime.replica,
+            runtime.repeat,
+        )
+        candidate_counters = _program_counter_snapshot(runtime)
+        transaction = ProgramStepTransaction(
+            runtime, workspace, counters, candidate_counters, receipt
+        )
+        # Staging owns the inactive transaction bank.  Restore the runtime's
+        # published bank before exposing the token so no caller can observe
+        # unpublished scientific state through `ProgramRuntime` fields.
         _restore_sequential_transaction!(runtime, workspace)
         _restore_program_counters!(runtime, counters)
+        return transaction
+    catch error
         status = runtime.lifecycle_workspace isa LifecycleWorkspace ?
             lifecycle_workspace_status(runtime.lifecycle_workspace) :
-            LifecycleStatusPayload()
+            ProgramStatus()
+        _restore_sequential_transaction!(runtime, workspace)
+        _restore_program_counters!(runtime, counters)
         if error isa AbstractLifecycleFailure &&
-                status.code !== LifecycleStatusSuccess
-            if lifecycle_status_is_expected(status)
+                status.code !== ProgramStatusSuccess
+            if program_status_is_expected(status)
                 runtime.failure_status = status
                 runtime.settled = true
-                return runtime
+                return nothing
             end
         end
+        runtime.lifecycle_workspace isa LifecycleWorkspace &&
+            _reset_lifecycle_workspace!(runtime.lifecycle_workspace)
+        runtime.failure_status = ProgramStatus()
+        runtime.settled = true
         rethrow()
     end
+end
+
+"""Validate a program token completely before any coordinated publication."""
+function prevalidate_program_step_transaction(
+        transaction::ProgramStepTransaction
+    )
+    _require_staged_program_step(transaction)
+    runtime = transaction.runtime
+    runtime.engine_workspace === transaction.workspace || throw(ArgumentError(
+        "program-step transaction lost its runtime workspace ownership"
+    ))
+    pending = transaction.pending_parameters
+    if pending !== nothing
+        _validated_program_parameters(runtime.program, pending)
+    end
+    _validate_program_descriptor_state(
+        runtime, transaction.workspace.descriptor_state
+    )
+    return transaction
+end
+
+"""
+Publish a prevalidated program token using assignment-only operations.
+
+This is the no-throw half of coordinated commit and must only be called after
+`prevalidate_program_step_transaction` succeeds for every participating token.
+"""
+function publish_program_step_transaction!(
+        transaction::ProgramStepTransaction
+    )
+    runtime = transaction.runtime
+    if transaction.pending_parameters !== nothing
+        copyto!(runtime.parameters, transaction.pending_parameters)
+    end
+    # The candidate has remained isolated in the transaction workspace since
+    # staging.  Publication is the single pointer-swap that makes it active.
+    _restore_sequential_transaction!(runtime, transaction.workspace)
+    _restore_program_counters!(runtime, transaction.counters_candidate)
+    runtime.last_lifecycle_receipt = transaction.lifecycle_receipt
     runtime.mcs += 1
-    runtime.failure_status = LifecycleStatusPayload()
+    runtime.failure_status = ProgramStatus()
     runtime.settled = true
+    transaction.state = ProgramStepCommitted
     return runtime
+end
+
+function commit_program_step!(transaction::ProgramStepTransaction)
+    prevalidate_program_step_transaction(transaction)
+    return publish_program_step_transaction!(transaction)
+end
+
+function abort_program_step!(transaction::ProgramStepTransaction)
+    _require_staged_program_step(transaction)
+    runtime = transaction.runtime
+    # The runtime already points at its published bank; discarding the token
+    # leaves that state and its counters unchanged.
+    runtime.failure_status = ProgramStatus()
+    runtime.settled = true
+    transaction.state = ProgramStepAborted
+    return runtime
+end
+
+function _advance_sequential_transaction!(runtime::ProgramRuntime)
+    transaction = stage_program_mcs!(runtime)
+    transaction === nothing && return runtime
+    return commit_program_step!(transaction)
 end
 
 function _publish_program_snapshot!(runtime::ProgramRuntime, snapshot)
@@ -342,17 +577,21 @@ function _publish_program_receipt!(runtime::ProgramRuntime, receipt)
     runtime.energy_rejections = receipt.counters.energy_rejections
     runtime.retired_cells = receipt.counters.retired_cells
     runtime.failure_status = receipt.status
+    receipt.lifecycle_receipt === nothing ||
+        (runtime.last_lifecycle_receipt = receipt.lifecycle_receipt)
     runtime.settled = true
     return runtime
 end
 
 @inline function supports_queued_program_execution(runtime::ProgramRuntime)
     runtime.engine_workspace isa CheckerboardWorkspace || return false
-    runtime.program.lifecycle_plan isa LifecycleExecutionPlan || return false
     return isempty(runtime.program.stage_plan.after_mcs)
 end
 
 function enqueue_program_mcs!(runtime::ProgramRuntime)
+    _require_program_execution_capability(
+        runtime.capability_report; operation = :queued_mcs
+    )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
     ))
@@ -367,6 +606,9 @@ end
 
 function enqueue_program_through!(
         runtime::ProgramRuntime, target_mcs::Integer
+    )
+    _require_program_execution_capability(
+        runtime.capability_report; operation = :queued_mcs_through
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
@@ -384,6 +626,9 @@ end
 
 function settle_program!(
         runtime::ProgramRuntime, request::ProgramSettlementRequest
+    )
+    _require_program_execution_capability(
+        runtime.capability_report; operation = :settle_program
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS settlement"
@@ -443,25 +688,25 @@ function _advance_checkerboard_host_stage_transaction!(runtime::ProgramRuntime)
     transaction = _checkerboard_transaction_runtime(
         runtime, destination, current_mcs
     )
-    succeeded = true
-    try
-        _execute_after_mcs_stage!(
-            transaction, runtime.program.stage_plan.before_lifecycle
-        )
-        execute_lifecycle!(transaction)
-        _execute_after_mcs_stage!(
-            transaction, runtime.program.stage_plan.after_lifecycle
-        )
-    catch error
-        status = lifecycle_workspace_status(
-            transaction.lifecycle_workspace
-        )
-        if error isa AbstractLifecycleFailure &&
-                status.code !== LifecycleStatusSuccess &&
-                lifecycle_status_is_expected(status)
-            succeeded = false
-        else
-            rethrow()
+    succeeded = _program_backend_open(destination)
+    if succeeded
+        try
+            _execute_after_mcs_stage!(
+                transaction, runtime.program.stage_plan.before_lifecycle
+            )
+            execute_lifecycle!(transaction)
+            _execute_after_mcs_stage!(
+                transaction, runtime.program.stage_plan.after_lifecycle
+            )
+        catch error
+            status = @inbounds destination.program_status[1]
+            if error isa AbstractLifecycleFailure &&
+                    status.code !== ProgramStatusSuccess &&
+                    program_status_is_expected(status)
+                succeeded = false
+            else
+                rethrow()
+            end
         end
     end
     if succeeded
@@ -504,22 +749,21 @@ function _advance_checkerboard_transaction!(runtime::ProgramRuntime)
 end
 
 function advance_mcs!(runtime::ProgramRuntime)
+    _require_program_execution_capability(
+        runtime.capability_report; operation = :advance_mcs
+    )
     runtime.settled ||
         throw(ArgumentError("cannot advance an unsettled program runtime"))
     program_failed(runtime) && throw(ArgumentError(
         "cannot advance a program runtime after a terminal scientific failure"
     ))
-    if runtime.program.engine isa CheckerboardProgramEngine &&
-            runtime.program.lifecycle_plan isa LifecycleExecutionPlan
+    if runtime.program.engine isa CheckerboardProgramEngine
         return _advance_checkerboard_transaction!(runtime)
     end
     runtime.program.engine isa SequentialProgramEngine &&
-            runtime.program.lifecycle_plan isa LifecycleExecutionPlan &&
         return _advance_sequential_transaction!(runtime)
     runtime.settled = false
-    if runtime.program.engine isa SequentialProgramEngine
-        _advance_sequential!(runtime)
-    elseif runtime.program.engine isa CheckerboardProgramEngine
+    if runtime.program.engine isa CheckerboardProgramEngine
         _advance_checkerboard!(runtime)
     else
         error("unreachable program engine")
@@ -533,40 +777,20 @@ end
 @inline program_backend_name(::CPUProgramBackend) = :CPUBackend
 @inline program_backend_name(::AdaptedProgramBackend{Name}) where {Name} = Name
 
-program_execution_report(program::CompiledPottsProgram) = (
-    engine = nameof(typeof(program.engine)),
-    backend = program_backend_name(program.backend),
-    scalar_type = eltype(program.parameter_defaults),
-    shape = program.shape,
-    attempts_per_site = program.attempts_per_site,
-    trackers = tracker_plan_report(program.tracker_plan),
-    rng = :Philox4x32x10V1,
-    numerical_policy = (
-        math = :accurate,
-        reductions = :deterministic,
-        bounds = :checked,
-    ),
-)
-
-program_capability_report(program::CompiledPottsProgram) = (
-    sequential = program.engine isa SequentialProgramEngine,
-    checkerboard = program.engine isa CheckerboardProgramEngine,
-    cpu = program.backend isa CPUProgramBackend,
-    gpu = program.backend isa AdaptedProgramBackend,
-    state_domains = Tuple(unique(
-        entry.schema.domain
-        for entry in program.descriptor_plan.state_layout.entries
-    )),
-    stage_effects = Tuple(unique(
-        nameof(typeof(descriptor.effect))
-        for groups in (
-            program.stage_plan.accepted_copy,
-            program.stage_plan.after_mcs,
-        )
-        for group in groups
-        for descriptor in group.instances
-    )),
-    relationships = !isempty(program.relationships),
-    trackers = tracker_plan_report(program.tracker_plan),
-    checkerboard_plan = checkerboard_plan_report(program.checkerboard_plan),
-)
+function program_execution_report(program::CompiledPottsProgram)
+    _validate_compiled_program_integrity(program)
+    return (
+        engine = nameof(typeof(program.engine)),
+        backend = program_backend_name(program.backend),
+        scalar_type = eltype(program.parameter_defaults),
+        shape = program.shape,
+        attempts_per_site = program.attempts_per_site,
+        trackers = tracker_plan_report(program.tracker_plan),
+        rng = :Philox4x32x10V1,
+        numerical_policy = (
+            math = :accurate,
+            reductions = :deterministic,
+            bounds = :checked,
+        ),
+    )
+end
