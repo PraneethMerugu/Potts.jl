@@ -4,6 +4,10 @@ Status: measured defer
 
 Date: 2026-08-08
 
+Exact implementation candidate: `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`
+
+Exact tree: `e935bf919e59c86baa3f23a394d1eb06d497bc61`
+
 This record answers only whether Dagger should become part of PottsToolkit's trajectory-execution
 authority. It does not qualify a new public backend or change the semantics of a Potts trajectory.
 

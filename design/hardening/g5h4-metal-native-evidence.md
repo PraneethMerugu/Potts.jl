@@ -4,6 +4,10 @@ Status: qualified bounded real-device rows
 
 Date: 2026-08-08
 
+Exact implementation candidate: `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`
+
+Exact tree: `e935bf919e59c86baa3f23a394d1eb06d497bc61`
+
 ## Admitted conjunctions
 
 The Metal extension admits only 2D checkerboard CPM on a functional Apple Metal device with

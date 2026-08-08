@@ -1,8 +1,12 @@
 # G5H-4 implementation and capability matrix
 
-Status: qualification record for the active G5H-4 candidate
+Status: passed qualification record
 
 Date: 2026-08-08
+
+Exact implementation candidate: `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`
+
+Exact tree: `e935bf919e59c86baa3f23a394d1eb06d497bc61`
 
 This matrix is the authoritative disposition of the implementation produced by
 G5H-4. A row is a conjunction: evidence for one algorithm, backend, scalar,
@@ -118,6 +122,6 @@ whose native block passed 37/37.
 The quantitative records are `g5h4-native-cpu-evidence.md`,
 `g5h4-metal-native-evidence.md`, and `g5h4-dagger-evidence.md`.
 
-Formal gate closure still requires freezing these exact sources and manifests
-in a clean commit. No row in this document is a compatibility promise for an
+These exact sources and manifests are frozen in the implementation candidate
+identified above. No row in this document is a compatibility promise for an
 unsupported conjunction or an unpublished pre-V1 spelling.

@@ -1,8 +1,12 @@
 # G5H-4 native CPU component evidence
 
-Status: live H4-B quantitative record
+Status: qualified H4-B quantitative record
 
 Date: 2026-08-08
+
+Exact implementation candidate: `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`
+
+Exact tree: `e935bf919e59c86baa3f23a394d1eb06d497bc61`
 
 Environment: target Mac, `arm64`, macOS 15.6.1, Julia 1.12.1,
 `Sys.CPU_NAME == "apple-m1"`, four Julia threads. The pinned integration
