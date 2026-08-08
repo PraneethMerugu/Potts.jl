@@ -189,14 +189,32 @@ function _settlement_lifecycle_receipt(
     )
     failure === nothing || return nothing
     committed > previous_drained || return nothing
-    backend isa KernelAbstractions.CPU || return nothing
+    plan = active_state.program.lifecycle_plan
+    workspace = active_state.lifecycle_workspace
+    before_kinds = before_state.cell_kinds
+    before_generations = before_state.cell_generations
+    after_kinds = active_state.cell_kinds
+    after_generations = active_state.cell_generations
+    if !(backend isa KernelAbstractions.CPU) &&
+            !(plan isa NoLifecycleExecutionPlan)
+        # Receipt publication is part of settlement.  A device lifecycle plan
+        # therefore crosses to owned host storage here, never from a kernel or
+        # from an indexing/observation helper.  The no-lifecycle case needs no
+        # transfer and still publishes an empty transaction receipt.
+        plan = Adapt.adapt(Array, plan)
+        workspace = Adapt.adapt(Array, workspace)
+        before_kinds = Adapt.adapt(Array, before_kinds)
+        before_generations = Adapt.adapt(Array, before_generations)
+        after_kinds = Adapt.adapt(Array, after_kinds)
+        after_generations = Adapt.adapt(Array, after_generations)
+    end
     return _materialize_lifecycle_receipt(
-        active_state.program.lifecycle_plan,
-        active_state.lifecycle_workspace,
-        before_state.cell_kinds,
-        before_state.cell_generations,
-        active_state.cell_kinds,
-        active_state.cell_generations,
+        plan,
+        workspace,
+        before_kinds,
+        before_generations,
+        after_kinds,
+        after_generations,
         committed,
         active_state.seed,
         active_state.replica,
@@ -231,6 +249,7 @@ function settle_program!(
             error, previous_drained + 1, submitted
         ))
     end
+    execution.synchronization_count += 1
     execution.drained_mcs = submitted
     execution.settlement_count += 1
 
@@ -241,6 +260,7 @@ function settle_program!(
     statistic_values = Adapt.adapt(
         Array, workspace.state.lifecycle_control.statistics
     )
+    execution.control_transfer_count += 1
     status = only(status_values)
     committed = Int(counter_values[_LIFECYCLE_CONTROL_COMMITTED_MCS])
     active_bank = Int(counter_values[_LIFECYCLE_CONTROL_ACTIVE_BANK])
@@ -274,9 +294,15 @@ function settle_program!(
         previous_drained,
         failure,
     )
+    if !(backend isa KernelAbstractions.CPU) &&
+            !(active_state.program.lifecycle_plan isa NoLifecycleExecutionPlan) &&
+            lifecycle_receipt !== nothing
+        execution.lifecycle_transfer_count += 1
+    end
     snapshot = if request.full_snapshot
         value = _materialize_program_bank(active_state, committed)
         execution.materialized_mcs = committed
+        execution.snapshot_transfer_count += 1
         value
     else
         nothing

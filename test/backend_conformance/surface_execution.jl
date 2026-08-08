@@ -34,11 +34,11 @@ function _surface_backend_fixture()
         ),
         Protocol(Sweep(; temperature = 2.0f0); name = :main),
     )))
-    executable = compile(
-        complete(model);
-        engine = CheckerboardEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    executable = PottsToolkit._lower_execution_plan(
+        mtkcompile(complete(model)),
+        CheckerboardSweepCPM(),
+        CPUBackend(),
+        Float32,
     )
     labels = zeros(Int32, 6, 6)
     labels[2:5, 2:5] .= 1

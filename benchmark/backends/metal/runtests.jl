@@ -1,7 +1,11 @@
 using Metal
+using PottsToolkit
+using Test
 
 Metal.functional() || error("the selected Metal witness is not functional")
 Metal.allowscalar(false)
+
+include("native_component_execution.jl")
 
 include("../../../test/backend_conformance/descriptor_boundary.jl")
 include("../../../test/backend_conformance/checkerboard_execution.jl")
@@ -17,12 +21,15 @@ report = run_descriptor_boundary(
 )
 println(report)
 
-checkerboard_report = run_checkerboard_execution(
-    Metal.MtlArray;
-    backend_name = :metal,
-    kernel_convert = Metal.mtlconvert,
-)
-println(checkerboard_report)
+@testset "external Metal mechanisms reject without reviewed evidence" begin
+    @test_throws CorePotts.BackendSPI.ProgramCapabilityError begin
+        run_checkerboard_execution(
+            Metal.MtlArray;
+            backend_name = :metal,
+            kernel_convert = Metal.mtlconvert,
+        )
+    end
+end
 
 checkerboard_boundary_report = run_checkerboard_boundary_sizes(
     Metal.MtlArray;
@@ -31,19 +38,25 @@ checkerboard_boundary_report = run_checkerboard_boundary_sizes(
 )
 println(checkerboard_boundary_report)
 
-relationship_report = run_relationship_execution(
-    Metal.MtlArray;
-    backend_name = :metal,
-    kernel_convert = Metal.mtlconvert,
-)
-println(relationship_report)
+@testset "external relationship mechanism rejects without reviewed evidence" begin
+    @test_throws CorePotts.BackendSPI.ProgramCapabilityError begin
+        run_relationship_execution(
+            Metal.MtlArray;
+            backend_name = :metal,
+            kernel_convert = Metal.mtlconvert,
+        )
+    end
+end
 
-surface_report = run_surface_execution(
-    Metal.MtlArray;
-    backend_name = :metal,
-    kernel_convert = Metal.mtlconvert,
-)
-println(surface_report)
+@testset "external surface operation rejects without reviewed evidence" begin
+    @test_throws CorePotts.BackendSPI.ProgramCapabilityError begin
+        run_surface_execution(
+            Metal.MtlArray;
+            backend_name = :metal,
+            kernel_convert = Metal.mtlconvert,
+        )
+    end
+end
 
 lifecycle_report = run_lifecycle_execution(
     Metal.MtlArray;
@@ -108,10 +121,13 @@ forbid_extinction_report = run_forbid_extinction_execution(
 )
 println(forbid_extinction_report)
 
-external_lifecycle_report = run_external_lifecycle_operation_execution(
-    Metal.MtlArray; backend_name = :metal
-)
-println(external_lifecycle_report)
+@testset "external lifecycle mechanism rejects without reviewed evidence" begin
+    @test_throws CorePotts.BackendSPI.ProgramCapabilityError begin
+        run_external_lifecycle_operation_execution(
+            Metal.MtlArray; backend_name = :metal
+        )
+    end
+end
 
 resolution_policy_report = run_lifecycle_resolution_policy_execution(
     Metal.MtlArray; backend_name = :metal

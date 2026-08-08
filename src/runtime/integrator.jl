@@ -287,7 +287,9 @@ function _materialize_integrator(
             :outer_callbacks,
             "G5H-3 does not admit outer Potts callbacks with native components because callback identity and state are not in the capability key or checkpoint",
         ))
-    _native_runtime_preflight(problem, algorithm, backend, profiles)
+    _native_runtime_preflight(
+        problem, algorithm, backend, scalar_type, profiles
+    )
     # Evidence admission is part of preflight.  In particular, reject an
     # unqualified native profile before constructing a native problem or
     # calling SciMLBase.init in _initial_native_states!.
@@ -305,7 +307,7 @@ function _materialize_integrator(
     initial_descriptor =
         CorePotts.BackendSPI.program_initial_descriptor_state(core_initial)
     prepared_native = _initial_native_states!(
-        problem, plan, initial_descriptor, profiles
+        problem, plan, core_initial, initial_descriptor, profiles
     )
     if !isempty(prepared_native) && initial_descriptor !== nothing
         core_initial = CorePotts.BackendSPI.with_program_initial_descriptor_state(
@@ -341,7 +343,12 @@ function _materialize_integrator(
         prepared_native
     else
         _restore_checkpoint_materialization(
-            problem, plan, checkpoint, profiles, capability_report
+            problem,
+            plan,
+            checkpoint,
+            profiles,
+            capability_report,
+            prepared_native,
         )
     end
     runtime = _adapt_runtime_backend(plan.core_program.backend, host_runtime)
@@ -407,22 +414,39 @@ function _step_coupled!(integrator::PottsIntegrator)
         return integrator
     end
     candidates = nothing
+    component_transactions = Any[]
     try
         snapshot = CorePotts.BackendSPI.program_step_snapshot(transaction)
+        receipt = CorePotts.BackendSPI.program_step_lifecycle_receipt(transaction)
         components = scheduled_native_components(integrator.prob.system)
         has_ports = _native_components_have_ports(components)
         descriptor_state = has_ports ?
             CorePotts.BackendSPI.program_snapshot_descriptor_state(snapshot) :
             nothing
-        candidates, updates = _advance_native_candidates(
-            integrator, descriptor_state, integrator.t + 1
+        candidates, updates, component_transactions = _advance_native_candidates(
+            integrator,
+            descriptor_state,
+            integrator.t + 1,
+            receipt,
+            snapshot,
         )
         _publish_native_outputs!(integrator.plan, descriptor_state, updates)
         has_ports && CorePotts.BackendSPI.stage_program_descriptor_state!(
             transaction, descriptor_state
         )
+        CorePotts.BackendSPI.prevalidate_component_state_transactions(
+            component_transactions
+        )
         CorePotts.BackendSPI.prevalidate_program_step_transaction(transaction)
     catch error
+        for component_transaction in component_transactions
+            try
+                CorePotts.BackendSPI.abort_component_state_transaction!(
+                    component_transaction
+                )
+            catch
+            end
+        end
         CorePotts.BackendSPI.abort_program_step!(transaction)
         integrator.retcode = SciMLBase.ReturnCode.Failure
         integrator.failure_report = error
@@ -432,10 +456,13 @@ function _step_coupled!(integrator::PottsIntegrator)
     # All external work and validation is complete. These two publications are
     # assignment-only and cannot invoke user or solver code.
     CorePotts.BackendSPI.publish_program_step_transaction!(transaction)
+    CorePotts.BackendSPI.publish_component_state_transactions!(
+        component_transactions
+    )
     integrator.native_states = candidates
     integrator.t = integrator.runtime.mcs
     integrator.iterations += 1
-    if any(state -> state.retcode === SciMLBase.ReturnCode.Terminated, candidates)
+    if any(_native_runtime_terminated, candidates)
         integrator.terminated = true
         integrator.retcode = SciMLBase.ReturnCode.Terminated
     end
@@ -510,13 +537,46 @@ end
 function native_state(integrator::PottsIntegrator, path)
     component = _native_component_by_path(integrator.prob.system, path)
     state = _native_state_by_path(integrator.native_states, path)
+    state isa NativeCellStatePool && throw(ArgumentError(
+        "PerCell native state requires a generation-stamped CellIdentity"
+    ))
     return native_state_view(component, state)
+end
+
+function native_state(
+        integrator::PottsIntegrator, path, identity::CorePotts.CellIdentity
+    )
+    component = _native_component_by_path(integrator.prob.system, path)
+    state = _native_state_by_path(integrator.native_states, path)
+    state isa NativeCellStatePool || throw(ArgumentError(
+        "a CellIdentity may be supplied only for a PerCell native component"
+    ))
+    return native_state_view(component, native_cell_state(state, identity))
 end
 
 function native_value(integrator::PottsIntegrator, path, symbolic)
     component = _native_component_by_path(integrator.prob.system, path)
     state = _native_state_by_path(integrator.native_states, path)
+    state isa NativeCellStatePool && throw(ArgumentError(
+        "PerCell native value requires a generation-stamped CellIdentity"
+    ))
     return native_component_value(component, state, symbolic)
+end
+
+function native_value(
+        integrator::PottsIntegrator,
+        path,
+        identity::CorePotts.CellIdentity,
+        symbolic,
+    )
+    component = _native_component_by_path(integrator.prob.system, path)
+    state = _native_state_by_path(integrator.native_states, path)
+    state isa NativeCellStatePool || throw(ArgumentError(
+        "a CellIdentity may be supplied only for a PerCell native component"
+    ))
+    return native_component_value(
+        component, native_cell_state(state, identity), symbolic
+    )
 end
 
 function _set_runtime_parameters!(integrator::PottsIntegrator, values)

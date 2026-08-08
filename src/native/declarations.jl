@@ -13,6 +13,9 @@ abstract type AbstractNativeComponentScope end
 """One native system state shared by the complete Potts trajectory."""
 struct Global <: AbstractNativeComponentScope end
 
+"""One native system state for each live finite Potts cell identity."""
+struct PerCell <: AbstractNativeComponentScope end
+
 """Clock policy relating completed Potts MCS values to physical component time."""
 abstract type AbstractNativeTimePolicy end
 
@@ -95,6 +98,44 @@ abstract type AbstractNativeLifecyclePolicy end
 """A global component has no per-cell create, divide, or retire semantics."""
 struct GlobalNativeLifecycle <: AbstractNativeLifecyclePolicy end
 
+"""
+    PerCellNativeLifecycle(; creation, transition, division)
+
+Explicit lifecycle policy for a `PerCell()` native component. Removal and
+retirement always delete the corresponding native state. Every other Core
+lifecycle event must name an admitted, deterministic state action.
+"""
+struct PerCellNativeLifecycle{C, T, D} <: AbstractNativeLifecyclePolicy
+    creation::C
+    transition::T
+    division::D
+
+    function PerCellNativeLifecycle(creation::C, transition::T, division::D) where {C, T, D}
+        creation isa Union{PreserveNativeInitialization, Unsupported} ||
+            throw(ArgumentError(
+                "PerCell native creation must use " *
+                "PreserveNativeInitialization() or Unsupported()"
+            ))
+        transition isa Union{Preserve, ResetTo, Transform, Unsupported} ||
+            throw(ArgumentError(
+                "PerCell native transition must use Preserve(), ResetTo(...), " *
+                "Transform(...), or Unsupported()"
+            ))
+        division isa Union{
+            CopyToDaughters, PreserveParentResetDaughter, ResetBoth,
+            SplitConservatively, TransformDaughters, Unsupported,
+        } || throw(ArgumentError(
+            "PerCell native division must use CopyToDaughters(), " *
+            "PreserveParentResetDaughter(...), ResetBoth(...), " *
+            "SplitConservatively(...), TransformDaughters(...), or Unsupported()"
+        ))
+        return new{C, T, D}(creation, transition, division)
+    end
+end
+
+PerCellNativeLifecycle(; creation, transition, division) =
+    PerCellNativeLifecycle(creation, transition, division)
+
 """Numerical algorithms are selected at `init`, never by the declaration."""
 abstract type AbstractNativeAlgorithmPolicy end
 struct LateBoundNativeAlgorithm <: AbstractNativeAlgorithmPolicy end
@@ -102,6 +143,8 @@ struct LateBoundNativeAlgorithm <: AbstractNativeAlgorithmPolicy end
 """Capability admission is checked against the complete late runtime profile."""
 abstract type AbstractNativeCapabilityPolicy end
 struct RequireQualifiedNativeCapability <: AbstractNativeCapabilityPolicy end
+"""Internal provenance marker for components produced by MethodOfLines."""
+struct _MethodOfLinesNativeCapability <: AbstractNativeCapabilityPolicy end
 
 function _qualified_native_path(path, owner::AbstractString)
     normalized = if path isa Tuple
@@ -208,19 +251,68 @@ end
 
 """
     NativeSolveProfile(path, algorithm; profile_id=nothing,
+                       execution=SerialNativeExecution(),
                        deterministic=false, exact_replay=false, options...)
 
 Late numerical policy for exactly one native component. There is deliberately
-no default native solver. G5H-3 execution and checkpoint/restore admit only a
-closed `ReplayQualified` row: this requires `exact_replay=true`, an explicitly
-pinned `profile_id`, and the author's `deterministic=true` assertion. A profile
-with `exact_replay=false` can represent an unsupported candidate for inspection
-and preflight diagnostics, but it cannot initialize a native solver.
+no default native solver. Execution and checkpoint/restore admit only a closed
+capability row: exact replay requires `exact_replay=true`, an explicitly pinned
+`profile_id`, and the author's `deterministic=true` assertion. `execution`
+selects serial versus per-cell batched numerical lanes; it never changes CPM
+ordering or trajectory-ensemble identity. A profile with `exact_replay=false`
+can represent an unsupported candidate for inspection and preflight
+diagnostics, but it cannot initialize a native solver.
 """
-struct NativeSolveProfile{P <: Tuple, A, O <: NamedTuple}
+abstract type AbstractNativeExecutionMode end
+
+"""One native solve at a time in deterministic component/slot order."""
+struct SerialNativeExecution <: AbstractNativeExecutionMode end
+
+"""
+    BatchedNativeExecution(width)
+
+Advance fixed-shape per-cell ODE lanes in deterministic batches of at most
+`width`. Lanes may execute concurrently on CPU, but publication remains one
+ordered, atomic component transaction. This is distinct from a SciML
+`EnsembleProblem`, whose lanes are complete Potts trajectories.
+"""
+struct BatchedNativeExecution <: AbstractNativeExecutionMode
+    width::Int
+
+    function BatchedNativeExecution(width::Integer)
+        1 < width <= typemax(Int32) || throw(ArgumentError(
+            "BatchedNativeExecution width must be in 2:typemax(Int32)"
+        ))
+        return new(Int(width))
+    end
+end
+
+"""
+    MetalNativeExecution(width=1)
+
+Execute one fixed-shape ODE lane (`width == 1`, including a `Global`
+component) or a bounded group of `PerCell` lanes in one DiffEqGPU kernel on
+Apple Metal. Device transfers occur only at the documented coupled-state
+boundary; this mode never silently falls back to CPU execution.
+"""
+struct MetalNativeExecution <: AbstractNativeExecutionMode
+    width::Int
+
+    function MetalNativeExecution(width::Integer = 1)
+        1 <= width <= typemax(Int32) || throw(ArgumentError(
+            "MetalNativeExecution width must be in 1:typemax(Int32)"
+        ))
+        return new(Int(width))
+    end
+end
+
+struct NativeSolveProfile{
+        P <: Tuple, A, O <: NamedTuple, E <: AbstractNativeExecutionMode,
+    }
     path::P
     algorithm::A
     options::O
+    execution::E
     profile_id::Union{Nothing, String}
     deterministic::Bool
     exact_replay::Bool
@@ -230,6 +322,7 @@ function NativeSolveProfile(
         path,
         algorithm;
         profile_id = nothing,
+        execution::AbstractNativeExecutionMode = SerialNativeExecution(),
         deterministic::Bool = false,
         exact_replay::Bool = false,
         options...,
@@ -271,6 +364,7 @@ function NativeSolveProfile(
         normalized_path,
         algorithm,
         normalized_options,
+        execution,
         normalized_id,
         deterministic,
         exact_replay,
@@ -288,8 +382,8 @@ struct NativeInput{V, P <: AbstractPottsStatement, T}
             V, P <: AbstractPottsStatement, T,
         }
         _require_native_symbolic_reference(native_variable, "input")
-        from isa ModelState || throw(ArgumentError(
-            "G5H-3 NativeInput endpoints must be symbolic ModelState declarations"
+        from isa Union{ModelState, CellState} || throw(ArgumentError(
+            "NativeInput endpoints must be symbolic ModelState or CellState declarations"
         ))
         isconcretetype(T) || throw(ArgumentError(
             "NativeInput value type must be concrete; got $T"
@@ -309,8 +403,8 @@ struct NativeOutput{V, P <: AbstractPottsStatement, T}
             V, P <: AbstractPottsStatement, T,
         }
         _require_native_symbolic_reference(native_variable, "output")
-        to isa ModelState || throw(ArgumentError(
-            "G5H-3 NativeOutput endpoints must be symbolic ModelState declarations"
+        to isa Union{ModelState, CellState} || throw(ArgumentError(
+            "NativeOutput endpoints must be symbolic ModelState or CellState declarations"
         ))
         isconcretetype(T) || throw(ArgumentError(
             "NativeOutput value type must be concrete; got $T"
@@ -324,6 +418,56 @@ NativeInput(native_variable, from::AbstractPottsStatement; value_type::Type) =
 NativeOutput(native_variable, to::AbstractPottsStatement; value_type::Type) =
     NativeOutput(native_variable, to, value_type)
 
+"""A fixed scalarized native grid published atomically to one `FieldState`."""
+struct NativeFieldOutput{V <: Tuple, P <: FieldState, S <: Tuple, C <: Tuple, T}
+    native_variables::V
+    to::P
+    shape::S
+    coordinates::C
+    value_type::Type{T}
+end
+
+"""Extension constructor for a checked MethodOfLines field component."""
+function MethodOfLinesComponent end
+function _native_field_profile_evidence end
+
+function NativeFieldOutput(
+        variables::AbstractArray,
+        to::FieldState;
+        coordinates,
+        value_type::Type,
+    )
+    isconcretetype(value_type) || throw(ArgumentError(
+        "NativeFieldOutput value type must be concrete; got $value_type"
+    ))
+    isempty(variables) && throw(ArgumentError(
+        "NativeFieldOutput variables must be nonempty"
+    ))
+    normalized_variables = map(Symbolics.Num, variables)
+    coordinate_tuple = Tuple(Tuple(axis) for axis in coordinates)
+    length(coordinate_tuple) == ndims(variables) || throw(ArgumentError(
+        "NativeFieldOutput requires one coordinate axis per grid dimension"
+    ))
+    all(index -> length(coordinate_tuple[index]) == size(variables, index),
+        eachindex(coordinate_tuple)) || throw(ArgumentError(
+        "NativeFieldOutput coordinate lengths must equal the variable-grid shape"
+    ))
+    for axis in coordinate_tuple
+        all(value -> value isa Real && isfinite(value), axis) ||
+            throw(ArgumentError(
+                "NativeFieldOutput coordinates must be finite real values"
+            ))
+        all(index -> axis[index] < axis[index + 1], 1:(length(axis) - 1)) ||
+            throw(ArgumentError(
+                "NativeFieldOutput coordinate axes must be strictly increasing"
+            ))
+    end
+    return NativeFieldOutput(
+        Tuple(vec(normalized_variables)), to, size(variables), coordinate_tuple,
+        value_type,
+    )
+end
+
 function _require_native_symbolic_reference(value, direction::AbstractString)
     value isa Union{Symbolics.Num, Symbolics.Arr} || throw(ArgumentError(
         "Native$direction endpoints require the original MTK Num or Arr, " *
@@ -332,7 +476,7 @@ function _require_native_symbolic_reference(value, direction::AbstractString)
     return nothing
 end
 
-const _NativePort = Union{NativeInput, NativeOutput}
+const _NativePort = Union{NativeInput, NativeOutput, NativeFieldOutput}
 
 """
     CouplingEndpointSchema
@@ -363,9 +507,14 @@ struct CouplingEndpointSchema{P <: _NativePort}
     end
 end
 
-native_variable(port::_NativePort) = getfield(port, :native_variable)
+native_variable(port::Union{NativeInput, NativeOutput}) =
+    getfield(port, :native_variable)
+native_variable(port::NativeFieldOutput) = getfield(port, :native_variables)
+native_variables(port::Union{NativeInput, NativeOutput}) = (native_variable(port),)
+native_variables(port::NativeFieldOutput) = native_variable(port)
 potts_endpoint(port::NativeInput) = getfield(port, :from)
 potts_endpoint(port::NativeOutput) = getfield(port, :to)
+potts_endpoint(port::NativeFieldOutput) = getfield(port, :to)
 native_value_type(port::_NativePort) = getfield(port, :value_type)
 native_variable(endpoint::CouplingEndpointSchema) = native_variable(endpoint.port)
 potts_endpoint(endpoint::CouplingEndpointSchema) = endpoint.potts_identity
@@ -374,9 +523,11 @@ native_value_type(endpoint::CouplingEndpointSchema) = native_value_type(endpoint
 """
     NativeComponent(source; name, family, time, ...)
 
-Declare a global native ModelingToolkit component without translating it into
-Potts equations. `source` is retained by identity. Its hierarchy, defaults,
-initialization equations, observations, and events remain under MTK ownership.
+Declare a native ModelingToolkit component without translating it into Potts
+equations. `Global()` stores one state for the trajectory; `PerCell()` stores
+one state for every live finite Potts cell. `source` is retained by identity.
+Its hierarchy, defaults, initialization equations, observations, and events
+remain under MTK ownership.
 """
 struct _NativeConstructionToken end
 const _NATIVE_CONSTRUCTION_TOKEN = _NativeConstructionToken()
@@ -485,8 +636,8 @@ function NativeComponent(
     isempty(String(name)) && throw(ArgumentError(
         "NativeComponent name cannot be empty"
     ))
-    scope isa Global || throw(ArgumentError(
-        "G5H-3 admits only Global native component scope"
+    scope isa Union{Global, PerCell} || throw(ArgumentError(
+        "native component scope must be Global() or PerCell()"
     ))
     time isa FixedPhysicalTime || throw(ArgumentError(
         "G5H-3 native components require FixedPhysicalTime"
@@ -503,18 +654,29 @@ function NativeComponent(
     events isa PreserveNativeEvents || throw(ArgumentError(
         "G5H-3 preserves native MTK event semantics"
     ))
-    lifecycle isa GlobalNativeLifecycle || throw(ArgumentError(
-        "Global native components require GlobalNativeLifecycle"
-    ))
+    if scope isa Global
+        lifecycle isa GlobalNativeLifecycle || throw(ArgumentError(
+            "Global native components require GlobalNativeLifecycle()"
+        ))
+    else
+        lifecycle isa PerCellNativeLifecycle || throw(ArgumentError(
+            "PerCell native components require an explicit PerCellNativeLifecycle"
+        ))
+    end
     algorithm isa LateBoundNativeAlgorithm || throw(ArgumentError(
         "native numerical algorithms must remain late-bound"
     ))
-    capabilities isa RequireQualifiedNativeCapability || throw(ArgumentError(
-        "native execution requires late qualified capability admission"
+    capabilities isa Union{
+        RequireQualifiedNativeCapability, _MethodOfLinesNativeCapability,
+    } || throw(ArgumentError(
+        "native execution requires a package-owned late capability policy"
     ))
     input_ports = _native_port_tuple(inputs, NativeInput, "inputs")
-    output_ports = _native_port_tuple(outputs, NativeOutput, "outputs")
+    output_ports = _native_port_tuple(
+        outputs, Union{NativeOutput, NativeFieldOutput}, "outputs"
+    )
     _validate_native_ports(input_ports, output_ports)
+    _validate_native_scope_ports(scope, input_ports, output_ports)
     return NativeComponent(
         _NATIVE_CONSTRUCTION_TOKEN,
         name,
@@ -534,6 +696,28 @@ function NativeComponent(
     )
 end
 
+function _validate_native_scope_ports(scope::Global, inputs::Tuple, outputs::Tuple)
+    all(port -> potts_endpoint(port) isa ModelState, inputs) ||
+        throw(ArgumentError("Global native inputs must target ModelState declarations"))
+    all(port -> port isa NativeFieldOutput ||
+        potts_endpoint(port) isa ModelState, outputs) || throw(ArgumentError(
+        "Global native outputs must target ModelState or use NativeFieldOutput"
+    ))
+    return nothing
+end
+
+function _validate_native_scope_ports(scope::PerCell, inputs::Tuple, outputs::Tuple)
+    all(port -> potts_endpoint(port) isa Union{ModelState, CellState}, inputs) ||
+        throw(ArgumentError(
+            "PerCell native inputs must target ModelState or CellState declarations"
+        ))
+    all(port -> potts_endpoint(port) isa CellState, outputs) ||
+        throw(ArgumentError(
+            "PerCell native outputs must target CellState declarations"
+        ))
+    return nothing
+end
+
 function _native_port_tuple(values, ::Type{P}, label::AbstractString) where {P}
     tuple = values isa P ? (values,) : try
         Tuple(values)
@@ -550,8 +734,9 @@ function _validate_native_ports(inputs::Tuple, outputs::Tuple)
     _assert_unique_native_values(inputs, "input")
     _assert_unique_native_values(outputs, "output")
     for input in inputs, output in outputs
-        isequal(native_variable(input), native_variable(output)) || continue
-        throw(ArgumentError(
+        isempty(intersect(
+            collect(native_variables(input)), collect(native_variables(output))
+        )) || throw(ArgumentError(
             "an MTK symbolic value cannot be both a NativeInput and NativeOutput"
         ))
     end
@@ -566,8 +751,9 @@ end
 
 function _assert_unique_native_values(ports::Tuple, label::AbstractString)
     for (index, port) in pairs(ports), prior in Iterators.take(ports, index - 1)
-        isequal(native_variable(port), native_variable(prior)) || continue
-        throw(ArgumentError("duplicate native $label symbolic value"))
+        isempty(intersect(
+            collect(native_variables(port)), collect(native_variables(prior))
+        )) || throw(ArgumentError("duplicate native $label symbolic value"))
     end
     return nothing
 end
@@ -608,7 +794,14 @@ function _map_native_potts_endpoints(f, component::NativeComponent; name = nameo
         for port in native_inputs(component)
     )
     outputs = Tuple(
-        NativeOutput(native_variable(port), f(potts_endpoint(port)), native_value_type(port))
+        port isa NativeFieldOutput ? NativeFieldOutput(
+            reshape(collect(native_variables(port)), getfield(port, :shape)),
+            f(potts_endpoint(port));
+            coordinates = getfield(port, :coordinates),
+            value_type = native_value_type(port),
+        ) : NativeOutput(
+            native_variable(port), f(potts_endpoint(port)), native_value_type(port)
+        )
         for port in native_outputs(component)
     )
     return _rebuild_native_component(component; name, inputs, outputs)
@@ -645,7 +838,8 @@ function native_time_interval(component::NativeComponent, completed_mcs::Integer
 end
 
 function _assert_single_native_writers(endpoints)
-    outputs = filter(endpoint -> endpoint.port isa NativeOutput, endpoints)
+    outputs = filter(endpoint ->
+        endpoint.port isa Union{NativeOutput, NativeFieldOutput}, endpoints)
     for (index, endpoint) in pairs(outputs), prior in Iterators.take(outputs, index - 1)
         isequal(potts_endpoint(endpoint), potts_endpoint(prior)) || continue
         throw(ArgumentError(
@@ -795,6 +989,26 @@ function native_state_view end
 
 """Closed-suite solver evidence lookup; implemented by the full-MTK extension."""
 function _native_profile_evidence end
+
+# Full ModelingToolkit owns compilation of symbolic per-cell lifecycle maps.
+# Base declares only this late extension seam so lifecycle events consume an
+# already-compiled fixed-shape policy.
+function _lower_native_cell_state_policy end
+
+# Full ModelingToolkit owns the numerical lane implementation for an admitted
+# batched per-cell profile. Base owns deterministic lane selection/publication.
+function _advance_native_cell_batch end
+
+# Full MTK constructs the standard continuation problem; backend extensions
+# consume it without copying or reimplementing MTK initialization semantics.
+function _native_continuation_problem end
+
+# Full MTK constructs the standard initialization problem for backend
+# extensions whose numerical algorithm is device-only.
+function _native_initial_problem end
+
+# Full MTK maps a solver result back into the stable logical checkpoint schema.
+function _native_logical_from_problem_solution end
 
 """Exact package stack behind a native runtime row; extension-owned."""
 function _native_runtime_stack_identity end

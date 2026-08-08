@@ -4,6 +4,10 @@ using Symbolics
 
 import CorePotts
 
+_lower_lifecycle_benchmark(system) = PottsToolkit._lower_execution_plan(
+    mtkcompile(complete(system)), SequentialCPM(), CPUBackend(), Float32
+)
+
 const SAMPLE_COUNT = parse(Int, get(ENV, "POTTS_LIFECYCLE_SAMPLES", "9"))
 
 function runtime_for(executable, initial; mcs = 0, seed = 0x63a1)
@@ -60,12 +64,7 @@ function cadence_fixture(side)
             Protocol(Sweep(); name = :main),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = ones(Int, side, side)
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [cell], medium
@@ -85,12 +84,7 @@ function no_lifecycle_fixture(side)
             Protocol(Sweep(); name = :main),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     initial = PottsInitialState(ownership = LabelledCells(
         ones(Int, side, side); cells = [cell], medium
     ))
@@ -130,12 +124,7 @@ function division_fixture(area)
             Protocol(Sweep(); name = :main),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = zeros(Int, side, side)
     remaining = area
     for site in CartesianIndices(labels)
@@ -181,12 +170,7 @@ function request_fixture(count; conflicting)
             ),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     initial = PottsInitialState(ownership = LabelledCells(
         zeros(Int, side, side); cells = [], medium
     ))
@@ -220,12 +204,7 @@ function active_scan_fixture(capacity)
             Protocol(Sweep(); name = :main),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = zeros(Int, side, side)
     labels[1] = 1
     initial = PottsInitialState(ownership = LabelledCells(
@@ -284,12 +263,7 @@ function cell_request_fixture(cell_count; competitors = 1)
             ),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = zeros(Int, side, side)
     for cell in 1:cell_count
         labels[cell] = cell
@@ -341,12 +315,7 @@ function competing_division_fixture(area, competitors)
             ),
         )),
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = zeros(Int, side, side)
     for linear in 1:area
         labels[linear] = 1
@@ -397,12 +366,7 @@ function staging_fixture(side, capacity)
         unknowns = [staging_value],
         independent_variables = [staging_time],
     )
-    executable = compile(
-        complete(system);
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
-    )
+    executable = _lower_lifecycle_benchmark(system)
     labels = zeros(Int, side, side)
     labels[1] = 1
     initial = PottsInitialState(ownership = LabelledCells(

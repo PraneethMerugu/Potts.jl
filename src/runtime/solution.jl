@@ -86,6 +86,21 @@ function native_state(
     checkbounds(solution.u, index)
     component = _native_component_by_path(solution.prob.system, path)
     logical = _native_state_by_path(solution.u[index].native, path)
+    logical isa NativeCellStateSnapshot && throw(ArgumentError(
+        "PerCell native state requires a generation-stamped CellIdentity"
+    ))
+    return native_state_view(component, logical)
+end
+
+function native_state(
+        solution::PottsSolution,
+        path,
+        identity::CorePotts.CellIdentity;
+        index::Integer = lastindex(solution),
+    )
+    checkbounds(solution.u, index)
+    component = _native_component_by_path(solution.prob.system, path)
+    logical = native_state(solution.u[index], path, identity)
     return native_state_view(component, logical)
 end
 
@@ -98,6 +113,22 @@ function native_value(
     checkbounds(solution.u, index)
     component = _native_component_by_path(solution.prob.system, path)
     logical = _native_state_by_path(solution.u[index].native, path)
+    logical isa NativeCellStateSnapshot && throw(ArgumentError(
+        "PerCell native value requires a generation-stamped CellIdentity"
+    ))
+    return native_component_value(component, logical, symbolic)
+end
+
+function native_value(
+        solution::PottsSolution,
+        path,
+        identity::CorePotts.CellIdentity,
+        symbolic;
+        index::Integer = lastindex(solution),
+    )
+    checkbounds(solution.u, index)
+    component = _native_component_by_path(solution.prob.system, path)
+    logical = native_state(solution.u[index], path, identity)
     return native_component_value(component, logical, symbolic)
 end
 

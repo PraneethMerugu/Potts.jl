@@ -430,6 +430,12 @@ end
     @test length(pool) == 4
     @test CorePotts.component_identity(pool, 1) == CorePotts.CellIdentity(1, 1, 1)
     @test CorePotts.component_identity(pool, 3) === nothing
+    metadata = CorePotts.BackendSPI.component_metadata_snapshot(pool)
+    @test metadata.active == Bool[true, true, false, false]
+    @test metadata.generations == UInt32[1, 1, 0, 0]
+    @test metadata.kinds == Int16[1, 2, 0, 0]
+    metadata.generations[1] = 99
+    @test CorePotts.BackendSPI.component_metadata_snapshot(pool).generations[1] == 1
 
     transition = CorePotts.TransitionLifecycleEvent(
         CorePotts.QualifiedLifecycleRequestIdentity(1, 1, 1, 1),

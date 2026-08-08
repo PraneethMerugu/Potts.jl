@@ -220,6 +220,37 @@ end
     end
     @test unsupported !== nothing
     @test occursin("Float16", sprint(showerror, unsupported))
+
+    three_d_cell = CellKind(:three_d_cell; extinction = RetireAtZero())
+    three_d_medium = MediumKind(:three_d_medium)
+    three_d_system = mtkcompile(PottsSystem(
+        name = :three_d_unsupported,
+        statements = StatementSet((
+            Lattice((3, 3, 3); boundary = Periodic()),
+            three_d_cell,
+            three_d_medium,
+            Protocol(Sweep(; temperature = 1.0); name = :main),
+        )),
+    ))
+    three_d_problem = PottsProblem(
+        three_d_system,
+        PottsInitialState(ownership = LabelledCells(
+            zeros(Int, 3, 3, 3);
+            cells = CellKind[],
+            medium = three_d_medium,
+        )),
+        (0, 1);
+        seed = 0x5203,
+    )
+    three_d_error = try
+        init(three_d_problem, SequentialCPM())
+        nothing
+    catch caught
+        caught
+    end
+    @test three_d_error isa
+        PottsToolkit.CorePotts.BackendSPI.ProgramCapabilityError
+    @test occursin("dimension=3", sprint(showerror, three_d_error))
     @test fieldnames(typeof(problem)) == problem_fields
 end
 

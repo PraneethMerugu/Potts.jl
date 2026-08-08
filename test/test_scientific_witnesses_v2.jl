@@ -690,7 +690,7 @@ end
                 :merks_field_dynamics,
                 [equation];
                 writes = [merks_field],
-                solver = ExplicitDiffusion(),
+                solver = DiscreteFieldEuler(),
                 cadence = EveryMCS(),
                 duration_per_mcs = 1.0,
                 substeps = 2,
@@ -749,6 +749,114 @@ end
     @test all(isfinite, final[:merks_field])
     @test sum(final[:merks_field]) > 0
     @test final[:merks_field_snapshot] == final[:merks_field]
+end
+
+@testset "discrete-field Euler boundary oracle and restart" begin
+    function field_oracle_problem(boundary, suffix)
+        time = only(@variables oracle_time)
+        field_variable = only(@variables oracle_field(oracle_time))
+        diffusion = only(@parameters oracle_diffusion = 0.1)
+        cell = CellKind(
+            Symbol(:oracle_cell_, suffix); extinction = RetireAtZero()
+        )
+        medium = MediumKind(Symbol(:oracle_medium_, suffix))
+        boundary_policy = boundary === :frozen ? FrozenBorder(cell) : boundary
+        field = FieldState(
+            field_variable;
+            name = Symbol(:oracle_field_, suffix),
+            initial = 0.0,
+            diffusion,
+            decay = 0.0,
+            secretion = 0.0,
+            substeps = 1,
+            duration_per_mcs = 1.0,
+            stencil = :field_stencil,
+        )
+        equation = Differential(time)(field_variable) ~
+            diffusion * field_variable
+        source = PottsSystem(
+            name = Symbol(:oracle_model_, suffix),
+            statements = StatementSet((
+                Lattice(
+                    (3, 3);
+                    boundary = boundary_policy,
+                    relations = (field_stencil = VonNeumann(),),
+                ),
+                cell,
+                medium,
+                field,
+                EquationProcess(
+                    Symbol(:oracle_process_, suffix),
+                    [equation];
+                    writes = [field_variable],
+                    solver = DiscreteFieldEuler(),
+                    cadence = EveryMCS(),
+                    duration_per_mcs = 1.0,
+                    substeps = 1,
+                ),
+                ProposalConstraint(Symbol(:freeze_oracle_, suffix), false),
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )),
+            equations = [equation],
+            unknowns = [field_variable],
+            independent_variables = [time],
+            parameters = [diffusion],
+        )
+        initial_field = zeros(3, 3)
+        initial_field[1, 1] = 1.0
+        initial = PottsInitialState(
+            ownership = LabelledCells(
+                zeros(Int, 3, 3); cells = CellKind[], medium
+            ),
+            values = (field_variable => initial_field,),
+        )
+        problem = PottsProblem(
+            mtkcompile(source), initial, (0, 2); seed = 0x3304
+        )
+        return problem, Symbol(:oracle_field_, suffix)
+    end
+
+    periodic_problem, periodic_name = field_oracle_problem(
+        Periodic(), :periodic
+    )
+    periodic = init(
+        periodic_problem, SequentialCPM(); scalar_type = Float32
+    )
+    step!(periodic)
+    periodic_expected = zeros(3, 3)
+    periodic_expected[1, 1] = 0.6
+    periodic_expected[2, 1] = 0.1
+    periodic_expected[3, 1] = 0.1
+    periodic_expected[1, 2] = 0.1
+    periodic_expected[1, 3] = 0.1
+    @test periodic.u[periodic_name] ≈ periodic_expected
+
+    closed_problem, closed_name = field_oracle_problem(Closed(), :closed)
+    closed = init(closed_problem, SequentialCPM(); scalar_type = Float32)
+    step!(closed)
+    closed_expected = zeros(3, 3)
+    closed_expected[1, 1] = 0.8
+    closed_expected[2, 1] = 0.1
+    closed_expected[1, 2] = 0.1
+    @test closed.u[closed_name] ≈ closed_expected
+
+    frozen_problem, frozen_name = field_oracle_problem(
+        :frozen, :frozen
+    )
+    frozen = init(frozen_problem, SequentialCPM(); scalar_type = Float32)
+    step!(frozen)
+    @test frozen.u[frozen_name] ≈ closed_expected
+
+    saved = checkpoint(periodic)
+    restored = init(
+        periodic_problem,
+        SequentialCPM();
+        scalar_type = Float32,
+        checkpoint = saved,
+    )
+    step!(periodic)
+    step!(restored)
+    @test periodic.u[periodic_name] == restored.u[periodic_name]
 end
 
 @testset "scheduled focal relationship and restart witness" begin

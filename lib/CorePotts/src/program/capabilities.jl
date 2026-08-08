@@ -771,14 +771,23 @@ function _cpu_capability_disposition(key::ProgramCapabilityKey)
     )
 end
 
+function adapted_device_capability_disposition(
+        ::Val, key::ProgramCapabilityKey
+    )
+    return (
+        Unsupported,
+        InterfaceOnly,
+        "Adaptation establishes storage transport only; no real-device evidence row qualifies this backend/device profile.",
+        nothing,
+    )
+end
+
+capability_key_fingerprint(key::ProgramCapabilityKey) =
+    _capability_key_fingerprint(key)
+
 function _capability_disposition(key::ProgramCapabilityKey)
     if key.backend === AdaptedBackend
-        return (
-            Unsupported,
-            InterfaceOnly,
-            "Adaptation establishes storage transport only; no real-device evidence row qualifies this backend/device profile.",
-            nothing,
-        )
+        return adapted_device_capability_disposition(Val(key.device), key)
     end
     return _cpu_capability_disposition(key)
 end

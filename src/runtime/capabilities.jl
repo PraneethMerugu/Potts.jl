@@ -289,7 +289,18 @@ function _native_logical_state_schema(state::NativeLogicalState)
     )
 end
 
-function _native_capability_fact(component, profile, state)
+function _native_logical_state_schema(state::NativeCellStatePool)
+    return merge(
+        _native_logical_state_schema(state.policy.template),
+        (
+            storage = :fixed_capacity_structure_of_arrays,
+            capacity = length(state),
+            lifecycle = nameof(typeof(getfield(state.policy, :division))),
+        ),
+    )
+end
+
+function _native_capability_fact(component, profile, state, evidence_row)
     declaration = getfield(component, :declaration)
     events = _native_event_contract(component)
     native_stack = applicable(_native_runtime_stack_identity, component) ?
@@ -314,6 +325,17 @@ function _native_capability_fact(component, profile, state)
         replay_schema,
         logical_state_schema = _native_logical_state_schema(state),
         algorithm = _native_algorithm_identity(profile),
+        execution = profile.execution isa MetalNativeExecution ? (
+            mode = :metal_kernel,
+            width = profile.execution.width,
+            transfer_boundary = :coupled_component_interval,
+        ) : profile.execution isa BatchedNativeExecution ? (
+            mode = :batched_cpu,
+            width = profile.execution.width,
+        ) : (
+            mode = :serial,
+            width = 1,
+        ),
         profile_fingerprint = _native_profile_fingerprint(profile),
         options_class = _native_profile_options_class(profile),
         endpoints,
@@ -328,6 +350,13 @@ function _native_capability_fact(component, profile, state)
             :logical_u_p_build_initializeprob_false,
         logical_checkpoint = (:u, :p, :t, :du),
         requested_exact_replay = profile.exact_replay,
+        evidence = evidence_row === nothing ? nothing : (
+            authority = evidence_row.evidence.authority,
+            suite = evidence_row.evidence.suite,
+            revision = evidence_row.evidence.revision,
+            profile_fingerprint =
+                evidence_row.evidence.profile_fingerprint,
+        ),
     )
 end
 
@@ -356,30 +385,45 @@ function _compose_runtime_capability(
     components = scheduled_native_components(problem.system)
     length(components) == length(profiles) == length(native_states) ||
         error("native capability composition requires aligned components, profiles, and prepared logical states")
+    native_rows = Tuple(
+        applicable(_native_profile_evidence, component, profile) ?
+            _native_profile_evidence(component, profile) : nothing
+        for (component, profile) in zip(components, profiles)
+    )
     facts = Tuple(
-        _native_capability_fact(component, profile, state)
-        for (component, profile, state) in
-            zip(components, profiles, native_states)
+        _native_capability_fact(component, profile, state, evidence_row)
+        for (component, profile, state, evidence_row) in
+            zip(components, profiles, native_states, native_rows)
     )
     events = Tuple(fact.events for fact in facts)
     outer_events = _outer_event_fact(callbacks)
     observation_save = _observation_save_fact(policy)
     outer_event_row = _outer_event_evidence(outer_events)
     observation_save_row = _observation_save_evidence(observation_save)
-    native_rows = Tuple(
-        applicable(_native_profile_evidence, component, profile) ?
-            _native_profile_evidence(component, profile) : nothing
-        for (component, profile) in zip(components, profiles)
-    )
+    runtime_profile_admitted =
+        (algorithm isa SequentialCPM && backend isa CPUBackend &&
+            scalar_type === Float64 && all(profile ->
+                profile.execution isa Union{
+                    SerialNativeExecution, BatchedNativeExecution,
+                }, profiles)) ||
+        (algorithm isa CheckerboardSweepCPM && backend isa MetalBackend &&
+            scalar_type === Float32 && all(profile ->
+                profile.execution isa MetalNativeExecution, profiles))
     profile_shape_admitted =
-        algorithm isa SequentialCPM && backend isa CPUBackend &&
-        scalar_type === Float64 &&
-        all(component -> getfield(getfield(component, :declaration), :scope) isa Global,
-            components) &&
-        all(fact -> all(endpoint ->
-            endpoint.potts_kind === :ModelState &&
-            endpoint.value_type <: Real,
-            fact.endpoints), facts)
+        runtime_profile_admitted &&
+        all(component -> begin
+            declaration = getfield(component, :declaration)
+            scope = getfield(declaration, :scope)
+            endpoints = native_coupling_endpoints(component)
+            scope isa Global ? all(endpoint ->
+                (endpoint.potts_kind === :ModelState ||
+                    endpoint.potts_kind === :FieldState &&
+                    endpoint.port isa NativeFieldOutput) &&
+                native_value_type(endpoint) <: Real, endpoints) :
+            scope isa PerCell && all(endpoint ->
+                endpoint.potts_kind in (:ModelState, :CellState) &&
+                native_value_type(endpoint) <: Real, endpoints)
+        end, components)
     native_statuses = isempty(components) ?
         (core.status,) :
         Tuple(

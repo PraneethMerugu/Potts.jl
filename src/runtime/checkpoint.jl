@@ -10,15 +10,15 @@ function _native_checkpoint_blocks(integrator::PottsIntegrator)
     length(components) == length(integrator.native_states) ==
         length(integrator.native_profiles) || error(
             "native component, logical-state, and profile vectors are misaligned"
-        )
+    )
     return Tuple(
         let state = integrator.native_states[index]
             profile = integrator.native_profiles[index]
             component = components[index]
             evidence = integrator.capability_report.evidence.native[index]
-            (
+            common = (
                 schema = _NATIVE_CHECKPOINT_BLOCK_SCHEMA,
-                path = state.path,
+                path = _native_runtime_path(state),
                 original_fingerprint =
                     native_original_fingerprint(component).hex,
                 scheduled_fingerprint =
@@ -34,12 +34,45 @@ function _native_checkpoint_blocks(integrator::PottsIntegrator)
                     profile_fingerprint = evidence.profile_fingerprint,
                 ),
                 replay_class = :exact_pinned_deterministic_profile,
-                u = state.u,
-                p = state.p,
-                du = state.du,
-                t = state.t,
-                retcode = state.retcode,
             )
+            if state isa NativeLogicalState
+                merge(common, (
+                    scope = :global,
+                    u = state.u,
+                    p = state.p,
+                    du = state.du,
+                    t = state.t,
+                    retcode = state.retcode,
+                ))
+            else
+                logical = native_cell_state_snapshot(state)
+                merge(common, (
+                    scope = :per_cell,
+                    capacity = logical.capacity,
+                    completed_mcs = logical.completed_mcs,
+                    last_transaction_identity =
+                        logical.last_transaction_identity,
+                    active = logical.active,
+                    generations = logical.generations,
+                    kinds = logical.kinds,
+                    identities = Tuple(
+                        identity === nothing ? nothing : (
+                            slot = identity.slot,
+                            generation = identity.generation,
+                            kind = identity.kind,
+                        ) for identity in logical.identities
+                    ),
+                    states = Tuple(
+                        value === nothing ? nothing : (
+                            u = value.u,
+                            p = value.p,
+                            du = value.du,
+                            t = value.t,
+                            retcode = value.retcode,
+                        ) for value in logical.states
+                    ),
+                ))
+            end
         end
         for index in eachindex(components)
     )
@@ -165,6 +198,7 @@ function _restore_native_states(
         profiles,
         completed_mcs::Integer,
         capability_report::PottsCapabilityReport,
+        prepared_native,
     )
     components = scheduled_native_components(problem.system)
     block.capability_fingerprint == capability_report.key.fingerprint ||
@@ -197,13 +231,13 @@ function _restore_native_states(
         component = components[index]
         profile = profiles[index]
         path = native_component_path(component)
-        required = (
+        common_required = (
             :schema, :path, :original_fingerprint, :scheduled_fingerprint,
             :profile_fingerprint, :profile_id, :deterministic,
-            :exact_replay, :replay_evidence, :replay_class,
-            :u, :p, :du, :t, :retcode,
+            :exact_replay, :replay_evidence, :replay_class, :scope,
         )
-        entry isa NamedTuple && all(name -> hasproperty(entry, name), required) ||
+        entry isa NamedTuple &&
+            all(name -> hasproperty(entry, name), common_required) ||
             throw(ArgumentError(
                 "incomplete native checkpoint block for $(_native_path_string(path))"
             ))
@@ -255,18 +289,110 @@ function _restore_native_states(
         stride = native_cadence_stride(declaration)
         last_due = completed_mcs - mod(completed_mcs, stride)
         expected_time = native_time_at(declaration, last_due)
-        isequal(entry.t, expected_time) || throw(ArgumentError(
-            "checkpoint native time does not match completed MCS at " *
-            _native_path_string(path)
-        ))
-        push!(states, NativeLogicalState(
-            path,
-            Tuple(entry.u),
-            Tuple(entry.p),
-            entry.du === nothing ? nothing : Tuple(entry.du),
-            entry.t,
-            entry.retcode,
-        ))
+        if getfield(declaration, :scope) isa Global
+            entry.scope === :global || throw(ArgumentError(
+                "checkpoint native scope mismatch at $(_native_path_string(path))"
+            ))
+            all(name -> hasproperty(entry, name), (:u, :p, :du, :t, :retcode)) ||
+                throw(ArgumentError("incomplete global native checkpoint state"))
+            isequal(entry.t, expected_time) || throw(ArgumentError(
+                "checkpoint native time does not match completed MCS at " *
+                _native_path_string(path)
+            ))
+            push!(states, NativeLogicalState(
+                path,
+                Tuple(entry.u),
+                Tuple(entry.p),
+                entry.du === nothing ? nothing : Tuple(entry.du),
+                entry.t,
+                entry.retcode,
+            ))
+        else
+            entry.scope === :per_cell || throw(ArgumentError(
+                "checkpoint native scope mismatch at $(_native_path_string(path))"
+            ))
+            required = (
+                :capacity, :completed_mcs, :last_transaction_identity,
+                :active, :generations, :kinds, :identities, :states,
+            )
+            all(name -> hasproperty(entry, name), required) || throw(
+                ArgumentError("incomplete per-cell native checkpoint state")
+            )
+            template_pool = prepared_native[index]
+            template_pool isa NativeCellStatePool || error(
+                "prepared per-cell native state is not a fixed-capacity pool"
+            )
+            entry.capacity == length(template_pool) || throw(ArgumentError(
+                "checkpoint per-cell native capacity mismatch"
+            ))
+            entry.completed_mcs == completed_mcs || throw(ArgumentError(
+                "checkpoint per-cell native publication boundary mismatch"
+            ))
+            0 <= entry.last_transaction_identity <= typemax(UInt64) ||
+                throw(ArgumentError(
+                    "checkpoint per-cell transaction identity is invalid"
+                ))
+            encoded_identities = Tuple(entry.identities)
+            encoded_states = Tuple(entry.states)
+            identities = Tuple(
+                value === nothing ? nothing : CorePotts.CellIdentity(
+                    value.slot, value.generation, value.kind
+                ) for value in encoded_identities
+            )
+            logical_states = Tuple(
+                value === nothing ? nothing : NativeLogicalState(
+                    path,
+                    Tuple(value.u),
+                    Tuple(value.p),
+                    value.du === nothing ? nothing : Tuple(value.du),
+                    value.t,
+                    value.retcode,
+                ) for value in encoded_states
+            )
+            length(identities) == length(logical_states) == entry.capacity ||
+                throw(ArgumentError("checkpoint per-cell native tables have wrong width"))
+            active = BitVector(entry.active)
+            generations = UInt32.(entry.generations)
+            kinds = Int16.(entry.kinds)
+            length(active) == length(generations) == length(kinds) ==
+                entry.capacity || throw(ArgumentError(
+                    "checkpoint per-cell metadata tables have wrong width"
+                ))
+            all(eachindex(identities)) do slot
+                identity = identities[slot]
+                active[slot] == (identity !== nothing) &&
+                    (identity === nothing || (
+                        identity.generation == generations[slot] &&
+                        identity.kind == kinds[slot]
+                    ))
+            end || throw(ArgumentError(
+                "checkpoint per-cell identities disagree with slot metadata"
+            ))
+            bank = NativeCellStateBank(
+                template_pool.policy.template, entry.capacity
+            )
+            for slot in eachindex(logical_states)
+                logical_states[slot] === nothing && continue
+                value = logical_states[slot]
+                value isa NativeLogicalState || throw(ArgumentError(
+                    "checkpoint per-cell state has an invalid logical value"
+                ))
+                isequal(value.t, expected_time) || throw(ArgumentError(
+                    "checkpoint per-cell native time does not match completed MCS"
+                ))
+                _write_native_cell_state!(bank, slot, value)
+            end
+            push!(states, NativeCellStatePool(
+                path,
+                active,
+                generations,
+                kinds,
+                bank,
+                template_pool.policy;
+                completed_mcs = entry.completed_mcs,
+                last_transaction_identity = entry.last_transaction_identity,
+            ))
+        end
     end
     expected_outer = isempty(entries) ?
         :exact_same_scheduled_system_and_profile :
@@ -334,6 +460,7 @@ function _restore_checkpoint_materialization(
         checkpoint_value::PottsCheckpoint,
         profiles,
         capability_report::PottsCapabilityReport,
+        prepared_native,
     )
     # Validate the one outer checksum, Core-program identity, and PottsToolkit
     # profile block before allocating either runtime domain.
@@ -350,6 +477,7 @@ function _restore_checkpoint_materialization(
         profiles,
         checkpoint_value.snapshot.mcs,
         capability_report,
+        prepared_native,
     )
     _parameter_buffer(last(history).second) == checkpoint_value.parameters ||
         throw(ArgumentError(

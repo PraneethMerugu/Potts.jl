@@ -7,9 +7,10 @@ import CorePotts
 
 function _lifecycle_backend_fixture(;
         max_cells = 2,
-        engine = CheckerboardEngine(),
+        engine = CheckerboardSweepCPM(),
         backend = CPUBackend(),
         division_mcs::Integer = 1,
+        lower::Bool = true,
     )
     @variables lifecycle_payload
     @parameters lifecycle_division_threshold = 4.0f0
@@ -57,17 +58,16 @@ function _lifecycle_backend_fixture(;
         unknowns = [lifecycle_payload],
         parameters = [lifecycle_division_threshold],
     )
-    executable = compile(
-        complete(system);
-        engine,
-        backend,
-        scalar_type = Float32,
-    )
+    scheduled = mtkcompile(complete(system))
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [cell], medium
     ))
+    lower || return scheduled, initial
+    executable = PottsToolkit._lower_execution_plan(
+        scheduled, engine, backend, Float32
+    )
     return executable, PottsToolkit._core_initial_state(
         executable, initial, UInt64(0x71), UInt32(1)
     )
@@ -213,17 +213,18 @@ function run_lifecycle_canonical_state_failure(
         completed, initial = _canonical_state_failure_fixture(
             reverse_declarations
         )
-        sequential = compile(
-            completed;
-            engine = SequentialEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float32,
+        scheduled = mtkcompile(completed)
+        sequential = PottsToolkit._lower_execution_plan(
+            scheduled,
+            SequentialCPM(),
+            CPUBackend(),
+            Float32,
         )
-        checkerboard = compile(
-            completed;
-            engine = CheckerboardEngine(),
-            backend = CPUBackend(),
-            scalar_type = Float32,
+        checkerboard = PottsToolkit._lower_execution_plan(
+            scheduled,
+            CheckerboardSweepCPM(),
+            CPUBackend(),
+            Float32,
         )
         push!(program_types, typeof(checkerboard.core_program))
 
@@ -294,7 +295,11 @@ function run_lifecycle_canonical_state_failure(
         @test device_status.stage === CorePotts.ProgramStageState
         @test device_status.source > 0
         @test device_status.action_identity != 0
-        @test device_status.anchor == 1
+        # The public mtkcompile schedule canonically orders the model-scoped
+        # create failure before the cell-scoped divide failure.  Its created
+        # slot is therefore the reported failing anchor, independent of source
+        # declaration order.
+        @test device_status.anchor == 2
         @test device_status.detail ===
             CorePotts.LifecycleDetailNonfiniteResult
         push!(statuses, device_status)
@@ -311,28 +316,42 @@ function run_lifecycle_canonical_state_failure(
 end
 
 function run_public_device_lifecycle_execution(backend_selector)
-    executable, _ = _lifecycle_backend_fixture(backend = backend_selector)
-    reference_executable, _ = _lifecycle_backend_fixture()
+    scheduled, _ = _lifecycle_backend_fixture(lower = false)
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [:lifecycle_cell], medium = :lifecycle_medium
     ))
-    problem = PottsProblem(executable, initial, (0, 2); seed = 0x71)
-    reference_problem = PottsProblem(
-        reference_executable, initial, (0, 2); seed = 0x71
-    )
+    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x71)
 
-    stepped = init(problem; save_start = false)
+    stepped = init(
+        problem,
+        CheckerboardSweepCPM();
+        backend = backend_selector,
+        scalar_type = Float32,
+        save_start = false,
+    )
     @test !(stepped.runtime.engine_workspace.state.ownership isa Array)
     step!(stepped)
     @test stepped.t == 1
     @test stepped.runtime.engine_workspace.execution.settlement_count == 1
     captured = checkpoint(stepped)
 
-    device_integrator = init(problem; save_start = false)
+    device_integrator = init(
+        problem,
+        CheckerboardSweepCPM();
+        backend = backend_selector,
+        scalar_type = Float32,
+        save_start = false,
+    )
     device_solution = solve!(device_integrator)
-    reference_solution = solve(reference_problem; save_start = false)
+    reference_solution = solve(
+        problem,
+        CheckerboardSweepCPM();
+        backend = CPUBackend(),
+        scalar_type = Float32,
+        save_start = false,
+    )
     @test device_solution.retcode === PottsToolkit.SciMLBase.ReturnCode.Success
     @test device_integrator.t == 2
     @test device_integrator.runtime.engine_workspace.execution.settlement_count == 1
@@ -343,7 +362,10 @@ function run_public_device_lifecycle_execution(backend_selector)
         reference_solution.stats.null_attempts
 
     resumed = init(
-        problem;
+        problem,
+        CheckerboardSweepCPM();
+        backend = backend_selector,
+        scalar_type = Float32,
         checkpoint = captured,
         save_start = false,
     )
@@ -354,7 +376,13 @@ function run_public_device_lifecycle_execution(backend_selector)
     @test only(resumed_solution.u).ownership ==
         only(device_solution.u).ownership
 
-    updated = init(problem; save_start = false)
+    updated = init(
+        problem,
+        CheckerboardSweepCPM();
+        backend = backend_selector,
+        scalar_type = Float32,
+        save_start = false,
+    )
     setter = PottsToolkit.SymbolicIndexingInterface.setp(
         updated, :lifecycle_division_threshold
     )
@@ -365,13 +393,19 @@ function run_public_device_lifecycle_execution(backend_selector)
     @test count(!iszero, only(updated_solution.u).cell_kinds) == 1
     @test updated.runtime.engine_workspace.execution.settlement_count == 1
 
-    capacity_executable, _ = _lifecycle_backend_fixture(
-        max_cells = 1, backend = backend_selector
+    capacity_scheduled, _ = _lifecycle_backend_fixture(
+        max_cells = 1, lower = false
     )
     capacity_problem = PottsProblem(
-        capacity_executable, initial, (0, 2); seed = 0x71
+        capacity_scheduled, initial, (0, 2); seed = 0x71
     )
-    failed = init(capacity_problem; save_start = false)
+    failed = init(
+        capacity_problem,
+        CheckerboardSweepCPM();
+        backend = backend_selector,
+        scalar_type = Float32,
+        save_start = false,
+    )
     failed_solution = solve!(failed)
     @test failed_solution.retcode === PottsToolkit.SciMLBase.ReturnCode.Failure
     @test failed.t == 0
@@ -393,22 +427,24 @@ function run_public_device_lifecycle_execution(backend_selector)
 end
 
 function run_public_lifecycle_late_capacity_failure()
-    executable, _ = _lifecycle_backend_fixture(
-        max_cells = 1, division_mcs = 37
+    scheduled, _ = _lifecycle_backend_fixture(
+        max_cells = 1, division_mcs = 37, lower = false
     )
     labels = fill(1, 6, 6)
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [:lifecycle_cell], medium = :lifecycle_medium
     ))
-    problem = PottsProblem(executable, initial, (0, 100); seed = 0x71)
+    problem = PottsProblem(scheduled, initial, (0, 100); seed = 0x71)
 
-    reference = init(problem; save_start = false)
+    reference = init(
+        problem, CheckerboardSweepCPM(); save_start = false
+    )
     for _ in 1:36
         step!(reference)
     end
     reference_snapshot = CorePotts.program_snapshot(reference.runtime)
 
-    queued = init(problem; save_start = false)
+    queued = init(problem, CheckerboardSweepCPM(); save_start = false)
     solution = solve!(queued)
     @test solution.retcode === PottsToolkit.SciMLBase.ReturnCode.Failure
     @test queued.retcode === PottsToolkit.SciMLBase.ReturnCode.Failure
@@ -437,15 +473,17 @@ function run_public_lifecycle_late_capacity_failure()
 end
 
 function run_public_settlement_consumers()
-    executable, _ = _lifecycle_backend_fixture()
+    scheduled, _ = _lifecycle_backend_fixture(lower = false)
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [:lifecycle_cell], medium = :lifecycle_medium
     ))
-    problem = PottsProblem(executable, initial, (0, 2); seed = 0x71)
+    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x71)
 
-    checkpoint_integrator = init(problem; save_start = false)
+    checkpoint_integrator = init(
+        problem, CheckerboardSweepCPM(); save_start = false
+    )
     CorePotts.enqueue_program_mcs!(checkpoint_integrator.runtime)
     @test !checkpoint_integrator.runtime.settled
     captured = checkpoint(checkpoint_integrator)
@@ -454,7 +492,9 @@ function run_public_settlement_consumers()
     @test captured.core.snapshot.mcs == 1
     @test checkpoint_integrator.runtime.engine_workspace.execution.settlement_count == 1
 
-    index_integrator = init(problem; save_start = false)
+    index_integrator = init(
+        problem, CheckerboardSweepCPM(); save_start = false
+    )
     CorePotts.enqueue_program_mcs!(index_integrator.runtime)
     observed_time = PottsToolkit.SymbolicIndexingInterface.current_time(
         index_integrator
@@ -462,7 +502,9 @@ function run_public_settlement_consumers()
     @test observed_time == 1
     @test index_integrator.runtime.engine_workspace.execution.settlement_count == 1
 
-    statistics_integrator = init(problem; save_start = false)
+    statistics_integrator = init(
+        problem, CheckerboardSweepCPM(); save_start = false
+    )
     CorePotts.enqueue_program_mcs!(statistics_integrator.runtime)
     statistics = PottsToolkit.runtime_statistics(statistics_integrator)
     @test statistics.steps == 1
@@ -713,16 +755,18 @@ function _lifecycle_workspace_scratch(workspace, to_host)
 end
 
 function run_public_lifecycle_capacity_failure(;
-        engine = CheckerboardEngine()
+        engine = CheckerboardSweepCPM()
     )
-    executable, _ = _lifecycle_backend_fixture(max_cells = 1; engine)
+    scheduled, _ = _lifecycle_backend_fixture(
+        max_cells = 1; engine, lower = false
+    )
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [:lifecycle_cell], medium = :lifecycle_medium
     ))
-    problem = PottsProblem(executable, initial, (0, 2); seed = 0x71)
-    integrator = init(problem)
+    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x71)
+    integrator = init(problem, engine)
     initial_ownership = copy(integrator.runtime.ownership)
 
     step!(integrator)
@@ -738,18 +782,18 @@ function run_public_lifecycle_capacity_failure(;
     @test integrator.failure_report.mcs == 1
     @test integrator.failure_report.code ===
         CorePotts.ProgramStatusCellCapacity
-    settlements = engine isa CheckerboardEngine ?
+    settlements = engine isa CheckerboardSweepCPM ?
         integrator.runtime.engine_workspace.execution.settlement_count : 0
-    engine isa CheckerboardEngine && @test settlements == 1
+    engine isa CheckerboardSweepCPM && @test settlements == 1
 
-    solve_integrator = init(problem)
+    solve_integrator = init(problem, engine)
     solution = solve!(solve_integrator)
     @test solution.retcode === PottsToolkit.SciMLBase.ReturnCode.Failure
     @test !PottsToolkit.SciMLBase.successful_retcode(solution)
     @test solution.t == [0]
     @test solution.failure_report !== nothing
     @test solution.failure_report.mcs == 1
-    engine isa CheckerboardEngine && @test(
+    engine isa CheckerboardSweepCPM && @test(
         solve_integrator.runtime.engine_workspace.execution.settlement_count == 1
     )
     return (
@@ -761,22 +805,22 @@ function run_public_lifecycle_capacity_failure(;
 end
 
 function run_public_lifecycle_settlement_schedule()
-    executable, _ = _lifecycle_backend_fixture()
+    scheduled, _ = _lifecycle_backend_fixture(lower = false)
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [:lifecycle_cell], medium = :lifecycle_medium
     ))
-    long_problem = PottsProblem(executable, initial, (0, 100); seed = 0x71)
+    long_problem = PottsProblem(scheduled, initial, (0, 100); seed = 0x71)
 
-    frequent = init(long_problem; save_start = false)
+    frequent = init(long_problem, CheckerboardSweepCPM(); save_start = false)
     for _ in 1:100
         step!(frequent)
     end
     frequent_state = CorePotts.program_snapshot(frequent.runtime)
     @test frequent.runtime.engine_workspace.execution.settlement_count == 100
 
-    chunked = init(long_problem; save_start = false)
+    chunked = init(long_problem, CheckerboardSweepCPM(); save_start = false)
     chunked_solution = solve!(chunked)
     @test chunked_solution.retcode === PottsToolkit.SciMLBase.ReturnCode.Success
     @test chunked.t == 100
@@ -803,7 +847,8 @@ function run_public_lifecycle_settlement_schedule()
     )
 
     saved = init(
-        long_problem;
+        long_problem,
+        CheckerboardSweepCPM();
         save_start = false,
         saveat = (25, 50, 75, 100),
     )
@@ -813,7 +858,9 @@ function run_public_lifecycle_settlement_schedule()
     @test saved.runtime.engine_workspace.execution.settlement_count == 4
 
     step_problem = remake(long_problem; tspan = (0, 4))
-    stepped = init(step_problem; save_start = false)
+    stepped = init(
+        step_problem, CheckerboardSweepCPM(); save_start = false
+    )
     for _ in 1:4
         step!(stepped)
     end

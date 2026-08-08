@@ -11,17 +11,18 @@ end
 using .LifecycleOperationFixtures
 
 function _direct_lifecycle_runtimes(completed, initial, device_array; seed)
-    reference_executable = compile(
-        completed;
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    scheduled = mtkcompile(completed)
+    reference_executable = PottsToolkit._lower_execution_plan(
+        scheduled,
+        SequentialCPM(),
+        CPUBackend(),
+        Float32,
     )
-    device_executable = compile(
-        completed;
-        engine = CheckerboardEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    device_executable = PottsToolkit._lower_execution_plan(
+        scheduled,
+        CheckerboardSweepCPM(),
+        CPUBackend(),
+        Float32,
     )
     reference_initial = PottsToolkit._core_initial_state(
         reference_executable, initial, UInt64(seed), UInt32(1)
@@ -46,6 +47,12 @@ function _direct_lifecycle_runtimes(completed, initial, device_array; seed)
     workspace = CorePotts.adapt_checkerboard_workspace(
         device_array, host_candidate.engine_workspace
     )
+    if device_array !== Array
+        CorePotts._require_program_execution_capability(
+            workspace.capability_report;
+            operation = :backend_direct_lifecycle_conformance,
+        )
+    end
     return reference_executable, reference, device_executable, workspace
 end
 
@@ -553,6 +560,10 @@ function run_lifecycle_retirement_execution(
     workspace = CorePotts.adapt_checkerboard_workspace(
         device_array, host_workspace
     )
+    CorePotts._require_program_execution_capability(
+        workspace.capability_report;
+        operation = :backend_direct_lifecycle_conformance,
+    )
     _enqueue_direct_lifecycle_sequence!(reference, workspace, (1,))
     _assert_direct_lifecycle_equivalence(reference, workspace, to_host)
     @test all(iszero, reference.cell_kinds)
@@ -579,11 +590,11 @@ function _forbid_extinction_fixture()
     initial = PottsInitialState(ownership = LabelledCells(
         labels; cells = [cell], medium
     ))
-    executable = compile(
-        complete(system);
-        engine = CheckerboardEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    executable = PottsToolkit._lower_execution_plan(
+        mtkcompile(complete(system)),
+        CheckerboardSweepCPM(),
+        CPUBackend(),
+        Float32,
     )
     return executable, PottsToolkit._core_initial_state(
         executable, initial, UInt64(1), UInt32(1)

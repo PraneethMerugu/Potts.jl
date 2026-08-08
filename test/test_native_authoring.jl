@@ -1,8 +1,112 @@
 struct NativeAuthoringFixtureSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol
 end
+struct NativeAuthoringAlgorithm end
 
 Base.nameof(system::NativeAuthoringFixtureSystem) = system.name
+
+@testset "per-cell native component authoring" begin
+    @variables native_cell_input native_cell_output
+    @variables potts_model_input potts_cell_input potts_cell_output
+    model_input = ModelState(
+        potts_model_input; name = :per_cell_model_input, initial = 1.0
+    )
+    cell_input = CellState(
+        potts_cell_input; name = :per_cell_input, initial = 2.0
+    )
+    cell_output = CellState(
+        potts_cell_output; name = :per_cell_output, initial = 0.0
+    )
+    source = NativeAuthoringFixtureSystem(:per_cell_source)
+    lifecycle = PerCellNativeLifecycle(
+        creation = PreserveNativeInitialization(),
+        transition = Preserve(),
+        division = CopyToDaughters(),
+    )
+    component = NativeComponent(
+        source;
+        name = :per_cell_component,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 0.5),
+        inputs = (
+            NativeInput(native_cell_input, model_input; value_type = Float64),
+            NativeInput(native_cell_output, cell_input; value_type = Float64),
+        ),
+        outputs = (
+            NativeOutput(native_cell_output + native_cell_input, cell_output;
+                value_type = Float64),
+        ),
+        lifecycle,
+    )
+    @test getfield(component, :scope) isa PerCell
+    @test getfield(component, :lifecycle) === lifecycle
+
+    @named named_per_cell = NativeComponent(
+        source;
+        family = DAEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 1.0),
+        lifecycle = PerCellNativeLifecycle(
+            creation = Unsupported(),
+            transition = ResetTo((native_cell_output => 0.0,)),
+            division = TransformDaughters(
+                (native_cell_output => native_cell_output,),
+                (native_cell_output => 0.0,),
+            ),
+        ),
+    )
+    @test nameof(named_per_cell) === :named_per_cell
+
+    serial_profile = NativeSolveProfile(
+        (:root, :component), NativeAuthoringAlgorithm()
+    )
+    @test serial_profile.execution isa SerialNativeExecution
+    batched_profile = NativeSolveProfile(
+        (:root, :component),
+        NativeAuthoringAlgorithm();
+        execution = BatchedNativeExecution(8),
+    )
+    @test batched_profile.execution.width == 8
+    @test_throws ArgumentError BatchedNativeExecution(1)
+
+    @test_throws ArgumentError NativeComponent(
+        source;
+        name = :implicit_lifecycle,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 1.0),
+    )
+    @test_throws ArgumentError NativeComponent(
+        source;
+        name = :global_cell_port,
+        family = ODEComponent(),
+        time = FixedPhysicalTime(0.0, 1.0),
+        inputs = NativeInput(native_cell_input, cell_input; value_type = Float64),
+    )
+    @test_throws ArgumentError NativeComponent(
+        source;
+        name = :per_cell_model_output,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 1.0),
+        outputs = NativeOutput(native_cell_output, model_input; value_type = Float64),
+        lifecycle,
+    )
+    @test_throws ArgumentError PerCellNativeLifecycle(
+        creation = Preserve(), transition = Preserve(),
+        division = CopyToDaughters(),
+    )
+    @test_throws ArgumentError PerCellNativeLifecycle(
+        creation = PreserveNativeInitialization(), transition = RetireTo(0.0),
+        division = CopyToDaughters(),
+    )
+    @test_throws ArgumentError PerCellNativeLifecycle(
+        creation = PreserveNativeInitialization(), transition = Preserve(),
+        division = RedrawDaughters(Normal(0.0, 1.0), Normal(0.0, 1.0);
+            parent_draw = :parent, daughter_draw = :daughter),
+    )
+end
 
 @testset "native component authoring and composition" begin
     @variables native_fixture_input native_fixture_output

@@ -10,6 +10,458 @@ function g5h3_impure_identity(value)
     G5H3_IMPURE_CALL_COUNT[] += 1
     return value
 end
+
+@testset "G5H-4 per-cell serial native ODE runtime" begin
+    @independent_variables cell_ode_t
+    @variables cell_ode_x(cell_ode_t) = 1.0 cell_ode_drive(cell_ode_t)
+    cell_ode_D = ModelingToolkitBase.Differential(cell_ode_t)
+    @named cell_ode_system = ModelingToolkit.System(
+        [cell_ode_D(cell_ode_x) ~ cell_ode_drive], cell_ode_t
+    )
+    @variables potts_cell_drive potts_cell_output
+    drive_state = CellState(
+        potts_cell_drive;
+        name = :potts_cell_drive,
+        initial = 2.0,
+        retirement = RetireTo(0.0),
+    )
+    output_state = CellState(
+        potts_cell_output;
+        name = :potts_cell_output,
+        initial = 0.0,
+        retirement = RetireTo(0.0),
+    )
+    component = NativeComponent(
+        cell_ode_system;
+        name = :cell_island,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 0.1),
+        inputs = (NativeInput(
+            cell_ode_drive, drive_state; value_type = Float64
+        ),),
+        outputs = (NativeOutput(
+            cell_ode_x, output_state; value_type = Float64
+        ),),
+        lifecycle = PerCellNativeLifecycle(
+            creation = PreserveNativeInitialization(),
+            transition = ResetTo((cell_ode_x => cell_ode_x + 3.0,)),
+            division = TransformDaughters(
+                (cell_ode_x => cell_ode_x / 2,),
+                (cell_ode_x => cell_ode_x / 2,),
+            ),
+        ),
+    )
+    cell = CellKind(:cell; extinction = RetireAtZero())
+    medium = MediumKind(:medium)
+    source = PottsSystem(
+        name = :per_cell_coupled,
+        statements = StatementSet((
+            Lattice((3, 3); boundary = Closed(), max_cells = 4),
+            cell,
+            medium,
+            drive_state,
+            output_state,
+            ProposalConstraint(:freeze_per_cell_native, false),
+            Protocol(Sweep(; temperature = 1.0); name = :main),
+        )),
+        unknowns = [potts_cell_drive, potts_cell_output],
+        native_components = (component,),
+    )
+    scheduled = mtkcompile(source)
+    path = (:per_cell_coupled, :cell_island)
+    labels = zeros(Int, 3, 3)
+    labels[2, 2] = 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        native = (NativeOperatingPoint(
+            path; values = (cell_ode_x => 1.0,)
+        ),),
+    )
+    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x504)
+    profile = NativeSolveProfile(
+        path,
+        Tsit5();
+        profile_id = "tsit5-per-cell-fixed-v1",
+        deterministic = true,
+        exact_replay = true,
+        adaptive = false,
+        dt = 0.01,
+    )
+    checkerboard_error = try
+        init(
+            problem,
+            CheckerboardSweepCPM();
+            native_profiles = (profile,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test checkerboard_error isa PottsToolkit.NativeCapabilityError
+    @test checkerboard_error.capability === :execution_profile
+    integrator = init(
+        problem, SequentialCPM(); native_profiles = (profile,)
+    )
+    identity = CellIdentity(
+        1, integrator.u.cell_generations[1], integrator.u.cell_kinds[1]
+    )
+    @test native_value(integrator, path, identity, cell_ode_x) == 1.0
+    @test integrator.u.potts_cell_output[1] == 1.0
+    policy = integrator.native_states[1].policy
+    candidate_bank = PottsToolkit.CorePotts.BackendSPI.component_state_snapshot(
+        integrator.native_states[1].storage
+    )
+    transition_event = PottsToolkit.CorePotts.TransitionLifecycleEvent(
+        PottsToolkit.CorePotts.QualifiedLifecycleRequestIdentity(1, 1, 1, 1),
+        identity,
+        CellIdentity(identity.slot, identity.generation, identity.kind + 1),
+    )
+    PottsToolkit.transition_component_state!(
+        policy, candidate_bank, transition_event
+    )
+    @test PottsToolkit.native_cell_state(policy, candidate_bank, 1).u == (4.0,)
+    divide_event = PottsToolkit.CorePotts.DivideLifecycleEvent(
+        PottsToolkit.CorePotts.QualifiedLifecycleRequestIdentity(2, 1, 1, 1),
+        identity,
+        identity,
+        CellIdentity(2, 1, identity.kind),
+    )
+    PottsToolkit.divide_component_state!(policy, candidate_bank, divide_event)
+    @test PottsToolkit.native_cell_state(policy, candidate_bank, 1).u == (2.0,)
+    @test PottsToolkit.native_cell_state(policy, candidate_bank, 2).u == (2.0,)
+    step!(integrator)
+    @test native_value(integrator, path, identity, cell_ode_x) ≈ 1.2
+    @test integrator.u.potts_cell_output[1] ≈ 1.2
+    saved = checkpoint(integrator)
+    restored = init(
+        problem,
+        SequentialCPM();
+        checkpoint = saved,
+        native_profiles = (profile,),
+    )
+    @test native_value(restored, path, identity, cell_ode_x) ≈ 1.2
+    step!(integrator)
+    step!(restored)
+    @test native_value(restored, path, identity, cell_ode_x) ==
+        native_value(integrator, path, identity, cell_ode_x)
+    @test restored.u.potts_cell_output == integrator.u.potts_cell_output
+    @test native_state(restored.u, path, identity).u ==
+        native_state(integrator.u, path, identity).u
+    stale_identity = CellIdentity(
+        identity.slot, identity.generation + 1, identity.kind
+    )
+    @test_throws ArgumentError native_state(restored.u, path, stale_identity)
+    @test_throws ArgumentError native_value(restored, path, cell_ode_x)
+    solution = solve(
+        problem, SequentialCPM(); native_profiles = (profile,)
+    )
+    @test native_value(solution, path, identity, cell_ode_x) ≈ 1.4
+    @test_throws ArgumentError native_value(solution, path, cell_ode_x)
+
+    adaptive_batch = NativeSolveProfile(
+        path,
+        Tsit5();
+        profile_id = "adaptive-batch-rejected",
+        execution = BatchedNativeExecution(4),
+        deterministic = true,
+        adaptive = true,
+    )
+    adaptive_error = try
+        init(
+            problem,
+            SequentialCPM();
+            native_profiles = (adaptive_batch,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test adaptive_error isa PottsToolkit.NativeCapabilityError
+    @test adaptive_error.capability === :native_execution_mode
+
+    failing_batch = NativeSolveProfile(
+        path,
+        Tsit5();
+        profile_id = "tsit5-per-cell-batch-failure-v1",
+        execution = BatchedNativeExecution(4),
+        deterministic = true,
+        exact_replay = true,
+        adaptive = false,
+        dt = 0.01,
+        maxiters = 1,
+    )
+    failing = init(
+        problem,
+        SequentialCPM();
+        native_profiles = (failing_batch,),
+    )
+    before_failure = failing.u
+    @test_throws PottsToolkit.NativeSolveFailure step!(failing)
+    @test failing.t == 0
+    @test failing.retcode == SciMLBase.ReturnCode.Failure
+    @test failing.u.ownership == before_failure.ownership
+    @test only(failing.u.native).active == only(before_failure.native).active
+    @test map(value -> value === nothing ? nothing : value.u,
+        only(failing.u.native).states) ==
+        map(value -> value === nothing ? nothing : value.u,
+            only(before_failure.native).states)
+end
+
+@testset "G5H-4 per-cell lifecycle receipts and slot reuse" begin
+    @independent_variables lifecycle_native_t
+    @variables lifecycle_native_x(lifecycle_native_t) = 1.0
+    @parameters lifecycle_native_rate = 0.0
+    lifecycle_native_D = ModelingToolkitBase.Differential(lifecycle_native_t)
+    @named lifecycle_native_system = ModelingToolkit.System(
+        [lifecycle_native_D(lifecycle_native_x) ~ lifecycle_native_rate],
+        lifecycle_native_t,
+    )
+    component = NativeComponent(
+        lifecycle_native_system;
+        name = :lifecycle_island,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 0.1),
+        lifecycle = PerCellNativeLifecycle(
+            creation = PreserveNativeInitialization(),
+            transition = ResetTo((
+                lifecycle_native_x => lifecycle_native_x + 3.0,
+            )),
+            division = TransformDaughters(
+                (lifecycle_native_x => lifecycle_native_x / 2,),
+                (lifecycle_native_x => lifecycle_native_x / 2,),
+            ),
+        ),
+    )
+    cell = CellKind(:lifecycle_native_cell; extinction = RetireAtZero())
+    daughter = CellKind(
+        :lifecycle_native_daughter; extinction = RetireAtZero()
+    )
+    medium = MediumKind(:lifecycle_native_medium)
+    relation = SpatialRelation(
+        :lifecycle_native_division; neighborhood = VonNeumann()
+    )
+    anchor = CellBinding(:lifecycle_native_anchor)
+    create_site = LinearIndices((6, 6))[CartesianIndex(5, 2)]
+    reuse_site = LinearIndices((6, 6))[CartesianIndex(2, 2)]
+    create = LifecycleProcess(
+        :lifecycle_native_create;
+        domain = model(),
+        expression = true,
+        effects = (CreateCell(
+            cell;
+            placement = SeedStencil(
+                create_site, ((0, 0), (1, 0)); relation
+            ),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(1),
+    )
+    transition = LifecycleProcess(
+        :lifecycle_native_transition;
+        domain = cells(cell),
+        anchor,
+        expression = true,
+        effects = (Transition(
+            anchor,
+            daughter;
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(2),
+    )
+    divide = LifecycleProcess(
+        :lifecycle_native_divide;
+        domain = cells(daughter),
+        anchor,
+        expression = true,
+        effects = (Divide(
+            anchor;
+            geometry = SpecifiedNormalPlane((1.0, 0.0)),
+            relation,
+            side = CanonicalSide(),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(3),
+    )
+    remove = LifecycleProcess(
+        :lifecycle_native_remove;
+        domain = cells(daughter),
+        anchor,
+        expression = true,
+        effects = (RemoveCell(
+            anchor;
+            replacement = medium,
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(4),
+    )
+    reuse = LifecycleProcess(
+        :lifecycle_native_reuse;
+        domain = model(),
+        expression = true,
+        effects = (CreateCell(
+            daughter;
+            placement = SeedAt(reuse_site),
+            on_inadmissible = ErrorOnInadmissible(),
+        ),),
+        cadence = AtMCS(5),
+    )
+    source = PottsSystem(
+        name = :per_cell_lifecycle_model,
+        statements = StatementSet((
+            Lattice((6, 6); max_cells = 4),
+            cell,
+            daughter,
+            medium,
+            relation,
+            ProposalConstraint(:freeze_native_lifecycle, false),
+            create,
+            transition,
+            divide,
+            remove,
+            reuse,
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        native_components = (component,),
+    )
+    scheduled = mtkcompile(source)
+    path = (:per_cell_lifecycle_model, :lifecycle_island)
+    labels = zeros(Int, 6, 6)
+    labels[2:5, 4] .= 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        native = (NativeOperatingPoint(
+            path; values = (
+                lifecycle_native_x => 1.0,
+                lifecycle_native_rate => 0.0,
+            )
+        ),),
+    )
+    problem = PottsProblem(scheduled, initial, (0, 5); seed = 0x505)
+    profile = NativeSolveProfile(
+        path,
+        Tsit5();
+        profile_id = "tsit5-per-cell-lifecycle-v1",
+        deterministic = true,
+        exact_replay = true,
+        adaptive = false,
+        dt = 0.01,
+    )
+    batched_profile = NativeSolveProfile(
+        path,
+        Tsit5();
+        profile_id = "tsit5-per-cell-lifecycle-batched-v1",
+        execution = BatchedNativeExecution(3),
+        deterministic = true,
+        exact_replay = true,
+        adaptive = false,
+        dt = 0.01,
+    )
+    solution = solve(
+        problem,
+        SequentialCPM();
+        native_profiles = (profile,),
+        save_everystep = true,
+    )
+    batched_solution = solve(
+        problem,
+        SequentialCPM();
+        native_profiles = (batched_profile,),
+        save_everystep = true,
+    )
+    logical_tuple = value -> value === nothing ? nothing : (
+        value.u, value.p, value.du, value.t, value.retcode
+    )
+    for index in eachindex(solution.u, batched_solution.u)
+        serial_saved = solution.u[index]
+        batched_saved = batched_solution.u[index]
+        @test batched_saved.ownership == serial_saved.ownership
+        @test batched_saved.cell_kinds == serial_saved.cell_kinds
+        @test batched_saved.cell_generations == serial_saved.cell_generations
+        serial_native = only(serial_saved.native)
+        batched_native = only(batched_saved.native)
+        @test batched_native.active == serial_native.active
+        @test batched_native.generations == serial_native.generations
+        @test batched_native.kinds == serial_native.kinds
+        @test logical_tuple.(batched_native.states) ==
+            logical_tuple.(serial_native.states)
+    end
+    first_identity = CellIdentity(
+        1, solution(0).cell_generations[1], solution(0).cell_kinds[1]
+    )
+    @test native_value(
+        solution, path, first_identity, lifecycle_native_x; index = 1
+    ) == 1.0
+    @test count(!iszero, solution(1).cell_kinds) == 2
+    for slot in findall(!iszero, solution(2).cell_kinds)
+        identity = CellIdentity(
+            slot,
+            solution(2).cell_generations[slot],
+            solution(2).cell_kinds[slot],
+        )
+        @test native_value(
+            solution, path, identity, lifecycle_native_x; index = 3
+        ) == 4.0
+    end
+    @test count(!iszero, solution(3).cell_kinds) == 4
+    for slot in findall(!iszero, solution(3).cell_kinds)
+        identity = CellIdentity(
+            slot,
+            solution(3).cell_generations[slot],
+            solution(3).cell_kinds[slot],
+        )
+        @test native_value(
+            solution, path, identity, lifecycle_native_x; index = 4
+        ) == 2.0
+    end
+    @test all(iszero, solution(4).cell_kinds)
+    reused_slot = only(findall(!iszero, solution(5).cell_kinds))
+    reused_identity = CellIdentity(
+        reused_slot,
+        solution(5).cell_generations[reused_slot],
+        solution(5).cell_kinds[reused_slot],
+    )
+    @test reused_identity.generation == 2
+    @test native_value(
+        solution, path, reused_identity, lifecycle_native_x; index = 6
+    ) == 1.0
+    @test_throws ArgumentError native_state(
+        solution, path, first_identity; index = 6
+    )
+
+    checkpointed = init(
+        problem,
+        SequentialCPM();
+        native_profiles = (batched_profile,),
+        save_everystep = true,
+    )
+    step!(checkpointed)
+    step!(checkpointed)
+    step!(checkpointed)
+    captured = checkpoint(checkpointed)
+    resumed = solve!(init(
+        problem,
+        SequentialCPM();
+        checkpoint = captured,
+        native_profiles = (batched_profile,),
+        save_everystep = true,
+    ))
+    @test last(resumed).ownership == batched_solution(5).ownership
+    @test last(resumed).cell_kinds == batched_solution(5).cell_kinds
+    @test last(resumed).cell_generations == batched_solution(5).cell_generations
+    resumed_native = only(last(resumed).native)
+    expected_native = only(batched_solution(5).native)
+    @test resumed_native.active == expected_native.active
+    @test resumed_native.generations == expected_native.generations
+    @test resumed_native.kinds == expected_native.kinds
+    @test resumed_native.identities == expected_native.identities
+    @test logical_tuple.(resumed_native.states) ==
+        logical_tuple.(expected_native.states)
+    @test resumed_native.completed_mcs == expected_native.completed_mcs
+    @test resumed_native.last_transaction_identity ==
+        expected_native.last_transaction_identity
+end
 Symbolics.@register_symbolic g5h3_impure_identity(value)
 
 function _native_runtime_fixture(
@@ -213,6 +665,27 @@ end
     )
     @test point_forward.values == point_reverse.values
     @test_throws ArgumentError init(problem, SequentialCPM())
+    global_batch = NativeSolveProfile(
+        fixture.path,
+        Tsit5();
+        profile_id = "global-batch-rejected",
+        execution = BatchedNativeExecution(4),
+        deterministic = true,
+        adaptive = false,
+        dt = 0.01,
+    )
+    global_batch_error = try
+        init(
+            problem,
+            SequentialCPM();
+            native_profiles = (global_batch,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test global_batch_error isa PottsToolkit.NativeCapabilityError
+    @test global_batch_error.capability === :native_execution_mode
     unqualified_profile = NativeSolveProfile(
         fixture.path,
         Tsit5();
@@ -266,6 +739,8 @@ end
     report = inspect(integrator, Capabilities())
     @test report.evidence.conjunction.profile_fingerprint ==
         report.key.fingerprint
+    @test only(report.key.native).evidence.profile_fingerprint ==
+        only(report.evidence.native).profile_fingerprint
     @test only(report.key.native).native_stack.ModelingToolkit.version ==
         v"11.37.1"
     @test report.key.outer_events.mode === :none

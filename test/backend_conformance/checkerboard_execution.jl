@@ -66,11 +66,11 @@ function _external_checkerboard_fixture()
         unknowns = [checkerboard_activity, checkerboard_memory],
         parameters = [checkerboard_weight],
     )
-    executable = compile(
-        complete(model; registry = NeutralExternalTerms.registry());
-        engine = CheckerboardEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    executable = PottsToolkit._lower_execution_plan(
+        mtkcompile(complete(model; registry = NeutralExternalTerms.registry())),
+        CheckerboardSweepCPM(),
+        CPUBackend(),
+        Float32,
     )
     labels = zeros(Int, 6, 6)
     labels[2:5, 2:5] .= 1

@@ -17,10 +17,15 @@ mutable struct ProgramExecutionPosition
     committed_mcs::Int
     materialized_mcs::Int
     settlement_count::Int
+    synchronization_count::Int
+    control_transfer_count::Int
+    snapshot_transfer_count::Int
+    lifecycle_transfer_count::Int
 end
 
 ProgramExecutionPosition(initial_mcs::Integer = 0) = ProgramExecutionPosition(
-    Int(initial_mcs), Int(initial_mcs), Int(initial_mcs), Int(initial_mcs), 0
+    Int(initial_mcs), Int(initial_mcs), Int(initial_mcs), Int(initial_mcs),
+    0, 0, 0, 0, 0,
 )
 
 struct CheckerboardKernelProgram{T, N, O, R, TP, D, S, L, H, C}
@@ -541,6 +546,10 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
         workspace.execution.committed_mcs,
         workspace.execution.materialized_mcs,
         workspace.execution.settlement_count,
+        workspace.execution.synchronization_count,
+        workspace.execution.control_transfer_count,
+        workspace.execution.snapshot_transfer_count,
+        workspace.execution.lifecycle_transfer_count,
     )
     capability_report = _adapted_program_capability_report(
         workspace.capability_report, to

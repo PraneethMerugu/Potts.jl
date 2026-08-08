@@ -299,6 +299,16 @@ function component_state_snapshot(pool::BulkComponentStatePool)
     return clone_component_state(pool.policy, _active_component_bank(pool).state)
 end
 
+"""Return independently owned active, generation, and kind slot metadata."""
+function component_metadata_snapshot(pool::BulkComponentStatePool)
+    bank = _active_component_bank(pool)
+    return (
+        active = copy(bank.active),
+        generations = copy(bank.generations),
+        kinds = copy(bank.kinds),
+    )
+end
+
 function _component_slot_index(
         bank::BulkComponentStateBank,
         identity::CellIdentity,

@@ -17,8 +17,9 @@ deliberately excluded from the active documentation build. They are not a migrat
 compatibility promise.
 
 This temporary manual documents only the current architecture, runtime boundary, and honest
-capability state. The complete Learn, Examples, Published Models, and API manual will return after
-the public authoring lifecycle and native MTK integration pass the G5H hardening gates.
+capability state. The authoring lifecycle and G5H-4 implementation matrix now have executable CPU,
+Metal, MethodOfLines, and ensemble rows; the complete Learn, Examples, Published Models, and API
+manual returns in G5H-5 after the final interface is frozen.
 
 ## Target public lifecycle
 
@@ -36,13 +37,13 @@ construct / @named / compose
 or runtime state. Native ModelingToolkit systems remain native component islands with explicit IO,
 scope, cadence, and coupling semantics. CorePotts remains independent of ModelingToolkit.
 
-## What is not yet a stable user claim
+## Implemented but not yet a final stable user claim
 
 - the final constructor vocabulary and exported API;
-- native global or per-cell MTK component execution;
-- MethodOfLines field coupling;
-- first-class whole-trajectory ensembles and per-cell vectorization;
-- a complete CPU/GPU component capability matrix;
+- the final documentation and spelling freeze for global/per-cell native MTK components;
+- broader MethodOfLines support than the exact checked CPU grid/solver row;
+- broader Metal support than the exact 2D `Float32` fixed-step rows;
+- CUDA, ROCm, adaptive native GPU solves, GPU remeshing, or unrestricted graph rewriting;
 - executable Wortel and Merks documentation through the final interface; and
 - API compatibility with any earlier unpublished authoring surface.
 

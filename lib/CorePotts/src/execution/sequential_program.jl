@@ -23,6 +23,7 @@ mutable struct ProgramStepTransaction{T <: AbstractFloat, R, W, C, L}
     counters_candidate::C
     lifecycle_receipt::L
     pending_parameters::Union{Nothing, Vector{T}}
+    candidate_snapshot::Any
     state::ProgramStepTransactionState
 end
 
@@ -39,6 +40,7 @@ function ProgramStepTransaction(
         counters_before,
         counters_candidate,
         receipt,
+        nothing,
         nothing,
         ProgramStepStaged,
     )
@@ -61,6 +63,8 @@ end
 
 function program_step_snapshot(transaction::ProgramStepTransaction)
     _require_staged_program_step(transaction)
+    transaction.candidate_snapshot === nothing ||
+        return transaction.candidate_snapshot
     runtime = transaction.runtime
     return _materialize_program_state_snapshot(
         runtime, transaction.workspace, runtime.mcs + 1
@@ -138,6 +142,15 @@ function stage_program_descriptor_state!(
     runtime.engine_workspace === workspace || throw(ArgumentError(
         "program-step transaction lost its runtime workspace ownership"
     ))
+    if workspace isa CheckerboardWorkspace
+        snapshot = transaction.candidate_snapshot
+        snapshot === nothing && error(
+            "checkerboard transaction has no materialized candidate snapshot"
+        )
+        _validate_program_descriptor_state(runtime, candidate)
+        copyto_auxiliary_state!(snapshot.descriptor_state, candidate)
+        return transaction
+    end
     _descriptor_state_banks_are_independent(
         candidate,
         runtime.descriptor_state,
@@ -416,8 +429,11 @@ function stage_program_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
         runtime.capability_report; operation = :staged_mcs
     )
+    if runtime.program.engine isa CheckerboardProgramEngine
+        return _stage_checkerboard_program_mcs!(runtime)
+    end
     runtime.program.engine isa SequentialProgramEngine || throw(ArgumentError(
-        "staged coupled execution currently requires the sequential CPU reference profile"
+        "staged coupled execution requires a sequential or checkerboard program"
     ))
     runtime.settled || throw(ArgumentError(
         "cannot stage an MCS while another program transaction is pending"
@@ -488,6 +504,42 @@ function stage_program_mcs!(runtime::ProgramRuntime)
     end
 end
 
+function _stage_checkerboard_program_mcs!(runtime::ProgramRuntime)
+    supports_queued_program_execution(runtime) || throw(ArgumentError(
+        "staged checkerboard coupling requires the device-total queued MCS path"
+    ))
+    runtime.settled || throw(ArgumentError(
+        "cannot stage an MCS while another program transaction is pending"
+    ))
+    before = _program_counter_snapshot(runtime)
+    enqueue_program_mcs!(runtime)
+    receipt = settle_program!(
+        runtime.engine_workspace,
+        ProgramSettlementRequest(PublicStepSettlement; full_snapshot = true),
+    )
+    if receipt.failure !== nothing
+        _publish_program_receipt!(runtime, receipt)
+        return nothing
+    end
+    candidate = (
+        receipt.counters.accepted,
+        receipt.counters.rejected,
+        receipt.counters.null_attempts,
+        receipt.counters.constraint_rejections,
+        receipt.counters.energy_rejections,
+        receipt.counters.retired_cells,
+    )
+    transaction = ProgramStepTransaction(
+        runtime,
+        runtime.engine_workspace,
+        before,
+        candidate,
+        receipt.lifecycle_receipt,
+    )
+    transaction.candidate_snapshot = receipt.snapshot
+    return transaction
+end
+
 """Validate a program token completely before any coordinated publication."""
 function prevalidate_program_step_transaction(
         transaction::ProgramStepTransaction
@@ -501,9 +553,25 @@ function prevalidate_program_step_transaction(
     if pending !== nothing
         _validated_program_parameters(runtime.program, pending)
     end
-    _validate_program_descriptor_state(
-        runtime, transaction.workspace.descriptor_state
-    )
+    if transaction.workspace isa CheckerboardWorkspace
+        snapshot = transaction.candidate_snapshot
+        _validate_program_descriptor_state(runtime, snapshot.descriptor_state)
+        _, destination, _ = _checkerboard_transaction_banks(
+            transaction.workspace, runtime.mcs
+        )
+        copyto_auxiliary_state!(
+            destination.descriptor_state, snapshot.descriptor_state
+        )
+        pending === nothing || copyto!(destination.parameters, pending)
+        KernelAbstractions.synchronize(
+            KernelAbstractions.get_backend(destination.ownership)
+        )
+        transaction.workspace.execution.synchronization_count += 1
+    else
+        _validate_program_descriptor_state(
+            runtime, transaction.workspace.descriptor_state
+        )
+    end
     return transaction
 end
 
@@ -519,6 +587,15 @@ function publish_program_step_transaction!(
     runtime = transaction.runtime
     if transaction.pending_parameters !== nothing
         copyto!(runtime.parameters, transaction.pending_parameters)
+    end
+    if transaction.workspace isa CheckerboardWorkspace
+        _publish_program_snapshot!(runtime, transaction.candidate_snapshot)
+        _restore_program_counters!(runtime, transaction.counters_candidate)
+        runtime.last_lifecycle_receipt = transaction.lifecycle_receipt
+        runtime.failure_status = ProgramStatus()
+        runtime.settled = true
+        transaction.state = ProgramStepCommitted
+        return runtime
     end
     # The candidate has remained isolated in the transaction workspace since
     # staging.  Publication is the single pointer-swap that makes it active.
@@ -540,11 +617,64 @@ end
 function abort_program_step!(transaction::ProgramStepTransaction)
     _require_staged_program_step(transaction)
     runtime = transaction.runtime
-    # The runtime already points at its published bank; discarding the token
+    if transaction.workspace isa CheckerboardWorkspace
+        _rollback_checkerboard_program_step!(transaction)
+    end
+    # The host runtime already points at its published bank; discarding the token
     # leaves that state and its counters unchanged.
     runtime.failure_status = ProgramStatus()
     runtime.settled = true
     transaction.state = ProgramStepAborted
+    return runtime
+end
+
+@kernel function _rollback_checkerboard_program_step_kernel!(
+        control, status, bank::Int32, committed::Int32,
+        accepted::UInt64, rejected::UInt64, null_attempts::UInt64,
+        constraint_rejections::UInt64, energy_rejections::UInt64,
+        retired::UInt64,
+    )
+    if @index(Global, Linear) == 1
+        @inbounds begin
+            control.counters[_LIFECYCLE_CONTROL_ACTIVE_BANK] = bank
+            control.counters[_LIFECYCLE_CONTROL_COMMITTED_MCS] = committed
+            control.statistics[_PROGRAM_STAT_ACCEPTED] = accepted
+            control.statistics[_PROGRAM_STAT_REJECTED] = rejected
+            control.statistics[_PROGRAM_STAT_NULL] = null_attempts
+            control.statistics[_PROGRAM_STAT_CONSTRAINT] = constraint_rejections
+            control.statistics[_PROGRAM_STAT_ENERGY] = energy_rejections
+            control.statistics[_PROGRAM_STAT_RETIRED] = retired
+            status[1] = ProgramStatus()
+        end
+    end
+end
+
+function _rollback_checkerboard_program_step!(transaction)
+    runtime = transaction.runtime
+    workspace = transaction.workspace
+    source, _, destination_bank = _checkerboard_transaction_banks(
+        workspace, runtime.mcs
+    )
+    # `_checkerboard_transaction_banks` returns the destination bank as its
+    # third result; the source bank is the opposite bank.
+    published_bank = destination_bank == 1 ? Int32(2) : Int32(1)
+    backend = KernelAbstractions.get_backend(source.ownership)
+    counters = transaction.counters_before
+    _rollback_checkerboard_program_step_kernel!(backend, 1)(
+        source.lifecycle_control,
+        source.program_status,
+        published_bank,
+        Int32(runtime.mcs),
+        counters...;
+        ndrange = 1,
+    )
+    KernelAbstractions.synchronize(backend)
+    workspace.execution.synchronization_count += 1
+    execution = workspace.execution
+    execution.submitted_mcs = runtime.mcs
+    execution.drained_mcs = runtime.mcs
+    execution.committed_mcs = runtime.mcs
+    execution.materialized_mcs = runtime.mcs
     return runtime
 end
 

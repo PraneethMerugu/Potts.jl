@@ -61,14 +61,14 @@ function run_descriptor_boundary(
     descriptor_count > 0 || throw(ArgumentError(
         "descriptor_count must be positive"
     ))
-    executable = compile(
-        complete(
+    executable = PottsToolkit._lower_execution_plan(
+        mtkcompile(complete(
             _external_site_model(descriptor_count);
             registry = NeutralExternalTerms.registry(),
-        );
-        engine = SequentialEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+        )),
+        SequentialCPM(),
+        CPUBackend(),
+        Float32,
     )
     plan = executable.core_program.descriptor_plan
     group = only(plan.groups)

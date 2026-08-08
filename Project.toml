@@ -22,9 +22,12 @@ DynamicQuantities = "1"
 ExplicitImports = "1"
 LinearAlgebra = "1"
 Metal = "1"
+DiffEqGPU = "3.16"
 ModelingToolkit = "11"
 ModelingToolkitBase = "1.51"
+MethodOfLines = "0.11.12"
 SciMLBase = "3"
+StaticArrays = "1"
 SHA = "0.7"
 SymbolicIndexingInterface = "0.3"
 Symbolics = "7"
@@ -34,13 +37,18 @@ Unitful = "1"
 julia = "1.12"
 
 [weakdeps]
+DiffEqGPU = "071ae1c0-96b5-11e9-1965-c90190d839ea"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [extensions]
 PottsToolkitMetalExt = "Metal"
+PottsToolkitMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
 PottsToolkitModelingToolkitExt = "ModelingToolkit"
+PottsToolkitMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
 PottsToolkitUnitfulExt = "Unitful"
 
 [extras]

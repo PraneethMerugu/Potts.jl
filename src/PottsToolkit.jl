@@ -132,7 +132,7 @@ export RetireAtZero, ForbidExtinction
 export Periodic, Closed, FrozenBorder, VonNeumann, Moore
 export ClearOnOwnershipChange, PreserveOnOwnershipChange
 export Undirected, RemoveWithEndpoint, RejectEndpointRetirement
-export ExplicitDiffusion
+export DiscreteFieldEuler
 export ExtensionsOnly, RetractionsOnly, ExtensionsAndRetractions
 export Nearest, Multilinear, CellCentered, AttemptsPerSite
 export Lattice, Volume, ContactEnergy, Elongation, Chemotaxis, LocalConnectivity
@@ -143,15 +143,17 @@ export Capabilities, Fingerprints
 export ParameterSchema, StateSchema, Observations, ExternalIO, ReplayContract
 export LifecyclePlans
 export semantic_fingerprint, completed_system_fingerprint, scheduled_system_fingerprint
-export NativeComponent, ODEComponent, DAEComponent, Global
+export NativeComponent, ODEComponent, DAEComponent, Global, PerCell
 export FixedPhysicalTime, CPMThenComponents, NativeInput, NativeOutput
+export NativeFieldOutput, MethodOfLinesComponent
 export NativeOperatingPoint, NativeSolveProfile
+export SerialNativeExecution, BatchedNativeExecution, MetalNativeExecution
 export CouplingEndpointSchema, native_components, scheduled_native_components
 export native_component_path
 export native_time_at, native_cadence_stride, native_due, native_time_interval
 export native_state, native_value
 export PreserveNativeInitialization, PreserveNativeEvents
-export GlobalNativeLifecycle, LateBoundNativeAlgorithm
+export GlobalNativeLifecycle, PerCellNativeLifecycle, LateBoundNativeAlgorithm
 export RequireQualifiedNativeCapability
 
 public map_symbolics, statement_kind, with_source

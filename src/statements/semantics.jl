@@ -141,7 +141,8 @@ struct RemoveWithEndpoint end
 struct RejectEndpointRetirement end
 
 abstract type AbstractSolverPolicy end
-struct ExplicitDiffusion <: AbstractSolverPolicy end
+"""Built-in fixed-grid forward-Euler diffusion/decay/source field component."""
+struct DiscreteFieldEuler <: AbstractSolverPolicy end
 
 abstract type AbstractChemotaxisMode end
 struct ExtensionsOnly <: AbstractChemotaxisMode end

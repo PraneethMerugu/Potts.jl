@@ -45,11 +45,11 @@ function _external_relationship_fixture()
         )),
         parameters = [relationship_weight],
     )
-    executable = compile(
-        complete(model; registry = NeutralExternalTerms.registry());
-        engine = CheckerboardEngine(),
-        backend = CPUBackend(),
-        scalar_type = Float32,
+    executable = PottsToolkit._lower_execution_plan(
+        mtkcompile(complete(model; registry = NeutralExternalTerms.registry())),
+        CheckerboardSweepCPM(),
+        CPUBackend(),
+        Float32,
     )
     labels = zeros(Int, 5, 5)
     labels[2, 2] = 1

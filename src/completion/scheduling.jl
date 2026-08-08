@@ -278,12 +278,12 @@ function _scheduled_capability_requirements(
         push!(native_requirements, (
             path = component.path,
             family = nameof(typeof(native_family(component.declaration))),
-            scope = nameof(typeof(getfield(component.declaration, :scope))),
+            scope = getfield(component.declaration, :scope),
             split = nameof(typeof(getfield(component.declaration, :split))),
             cadence = native_cadence_stride(component.declaration),
             initialization = nameof(typeof(getfield(component.declaration, :initialization))),
             events = nameof(typeof(getfield(component.declaration, :events))),
-            lifecycle = nameof(typeof(getfield(component.declaration, :lifecycle))),
+            lifecycle = getfield(component.declaration, :lifecycle),
             algorithm = nameof(typeof(getfield(component.declaration, :algorithm))),
             capability_policy = nameof(typeof(getfield(component.declaration, :capabilities))),
         ))

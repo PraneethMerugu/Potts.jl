@@ -134,8 +134,28 @@ Base.propertynames(state::PottsSavedState) = (
     keys(state.observations)...,
 )
 
-native_state(state::PottsSavedState, path) =
-    _copy_native_logical_state(_native_state_by_path(state.native, path))
+function native_state(state::PottsSavedState, path)
+    value = _native_state_by_path(state.native, path)
+    value isa NativeCellStateSnapshot && throw(ArgumentError(
+        "PerCell native state requires a generation-stamped CellIdentity"
+    ))
+    return _copy_native_logical_state(value)
+end
+
+function native_state(
+        state::PottsSavedState, path, identity::CorePotts.CellIdentity
+    )
+    value = _native_state_by_path(state.native, path)
+    value isa NativeCellStateSnapshot || throw(ArgumentError(
+        "a CellIdentity may be supplied only for a PerCell native component"
+    ))
+    slot = Int(identity.slot)
+    checkbounds(value.identities, slot)
+    value.identities[slot] == identity || throw(ArgumentError(
+        "stale CellIdentity for saved PerCell native state"
+    ))
+    return _copy_native_logical_state(value.states[slot])
+end
 
 struct PottsStats
     steps::Int

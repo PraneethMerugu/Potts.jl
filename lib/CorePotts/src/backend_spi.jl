@@ -86,6 +86,7 @@ import ..CorePotts:
     Supported,
     Unsupported,
     abort_component_state_transaction!,
+    adapted_device_capability_disposition,
     abort_program_step!,
     adapt_checkerboard_workspace,
     adapt_program_runtime,
@@ -96,12 +97,14 @@ import ..CorePotts:
     bulk_component_last_transaction_identity,
     capability_authorizes_execution,
     capability_authorizes_replay,
+    capability_key_fingerprint,
     checkerboard_plan_report,
     clone_component_state,
     commit_component_state_transaction!,
     commit_component_state_transactions!,
     commit_program_step!,
     component_identity,
+    component_metadata_snapshot,
     component_state_snapshot,
     component_transaction_state,
     copy_component_state!,
@@ -158,6 +161,7 @@ public CapabilityComponentStateProfile, CapabilityMechanismProfile
 public ProgramCapabilityKey
 public CapabilityEvidenceIdentity, ProgramCapabilityReport, ProgramCapabilityError
 public capability_authorizes_execution, capability_authorizes_replay
+public adapted_device_capability_disposition, capability_key_fingerprint
 public ProgramExecutionPosition, ProgramSettlementReason, ProgramSettlementRequest
 public FinalizationSettlement, PublicStepSettlement, SaveSettlement
 public HostCallbackSettlement, CheckpointSettlement
@@ -200,6 +204,7 @@ public publish_component_state_transaction!, publish_component_state_transaction
 public commit_component_state_transaction!, commit_component_state_transactions!
 public abort_component_state_transaction!, apply_lifecycle_receipt!
 public component_identity, component_state_snapshot
+public component_metadata_snapshot
 public bulk_component_completed_mcs, bulk_component_last_transaction_identity
 public validate_program_checkpoint
 

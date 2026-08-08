@@ -1,10 +1,10 @@
 # Numerical stage operation admissions owned outside biological mechanisms.
 
-function _potts_explicit_field_euler end
+function _potts_discrete_field_euler end
 
-operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
+operation_transfer(::typeof(_potts_discrete_field_euler), ::Int) =
     _transfer(
-        :explicit_field_euler,
+        :discrete_field_euler,
         7,
         :real,
         :declared;
@@ -18,24 +18,24 @@ operation_transfer(::typeof(_potts_explicit_field_euler), ::Int) =
         owner = :PottsToolkitNumerics,
     )
 
-struct ExplicitFieldEulerCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
+struct DiscreteFieldEulerCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
 
 CorePotts.CompilerSPI.operation_context_supported(
-    ::ExplicitFieldEulerCallable,
+    ::DiscreteFieldEulerCallable,
     ::Type{CorePotts.CompilerSPI.AbstractSiteStageEvaluationContext},
 ) = true
 
 function CorePotts.CompilerSPI.operation_callable(
-        ::Val{:explicit_field_euler},
+        ::Val{:discrete_field_euler},
         version::VersionNumber,
     )
     version == v"1.0.0" || throw(ArgumentError(
-        "unsupported explicit-field-Euler operation version $version"
+        "unsupported discrete-field-Euler operation version $version"
     ))
-    return ExplicitFieldEulerCallable()
+    return DiscreteFieldEulerCallable()
 end
 
-@inline function (operation::ExplicitFieldEulerCallable)(
+@inline function (operation::DiscreteFieldEulerCallable)(
         arguments::Tuple, context
     )
     state_handle = arguments[1]
@@ -72,11 +72,11 @@ end
     )
 end
 
-numerical_operation_requirements(::ExplicitDiffusion) =
-    ((_potts_explicit_field_euler, 7),)
+numerical_operation_requirements(::DiscreteFieldEuler) =
+    ((_potts_discrete_field_euler, 7),)
 
 function numerical_process_rejection(
-        ::ExplicitDiffusion, statement, statements, system
+        ::DiscreteFieldEuler, statement, statements, system
     )
     arguments = _statement_arguments(statement)
     fields = filter(candidate -> candidate isa FieldState, statements)
@@ -94,7 +94,7 @@ function numerical_process_rejection(
 end
 
 function numerical_field_stage_descriptor(
-        ::ExplicitDiffusion,
+        ::DiscreteFieldEuler,
         ir,
         record_index::Integer,
         process_index::Integer,
@@ -169,7 +169,7 @@ function numerical_field_stage_descriptor(
     value = _static_evaluator(
         _compiler_synthesized_operation_expression(
             ir.graph,
-            _potts_explicit_field_euler,
+            _potts_discrete_field_euler,
             (
                 CorePotts.CompilerSPI.StateExpression(target),
                 CorePotts.CompilerSPI.LiteralExpression(Int32(relation_handle)),

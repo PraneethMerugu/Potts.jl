@@ -60,7 +60,7 @@
         :ForbidExtinction, :Periodic, :Closed, :FrozenBorder, :VonNeumann,
         :Moore, :ClearOnOwnershipChange, :PreserveOnOwnershipChange,
         :Undirected, :RemoveWithEndpoint, :RejectEndpointRetirement,
-        :ExplicitDiffusion, :ExtensionsOnly, :RetractionsOnly,
+        :DiscreteFieldEuler, :ExtensionsOnly, :RetractionsOnly,
         :ExtensionsAndRetractions, :Nearest, :Multilinear, :CellCentered,
         :AttemptsPerSite, :Lattice, :Volume, :ContactEnergy, :Elongation,
         :Chemotaxis, :LocalConnectivity, :ActEnergy, :Synchronous, :Sweep,
@@ -72,14 +72,16 @@
         :LifecyclePlans, :semantic_fingerprint, :completed_system_fingerprint,
         :scheduled_system_fingerprint,
 
-        :NativeComponent, :ODEComponent, :DAEComponent, :Global,
+        :NativeComponent, :ODEComponent, :DAEComponent, :Global, :PerCell,
         :FixedPhysicalTime, :CPMThenComponents, :NativeInput, :NativeOutput,
+        :NativeFieldOutput, :MethodOfLinesComponent,
         :NativeOperatingPoint, :NativeSolveProfile, :NativeLogicalState,
+        :SerialNativeExecution, :BatchedNativeExecution, :MetalNativeExecution,
         :CouplingEndpointSchema, :native_components,
         :scheduled_native_components, :native_component_path, :native_time_at,
         :native_cadence_stride, :native_due, :native_time_interval,
         :native_state, :native_value, :PreserveNativeInitialization,
-        :PreserveNativeEvents, :GlobalNativeLifecycle,
+        :PreserveNativeEvents, :GlobalNativeLifecycle, :PerCellNativeLifecycle,
         :LateBoundNativeAlgorithm, :RequireQualifiedNativeCapability,
 
         :map_symbolics, :statement_kind, :with_source,
@@ -128,9 +130,8 @@
         :neighbor_geomean, :EquationStep, :Observe, :Directed,
         :ExplicitEuler, :Heun, :RK4, :ObserveStage, :compile,
         :PottsExecutable, :SequentialEngine, :CheckerboardEngine,
-        :TiledCheckerboard,
+        :TiledCheckerboard, :ExplicitDiffusion, :CUDABackend, :ROCmBackend,
     ))
     @test isempty(intersect(actual, retired))
     @test all(name -> !isdefined(PottsToolkit, name), retired)
-    @test :ExplicitDiffusion in actual # Retired only in G5H-4.
 end

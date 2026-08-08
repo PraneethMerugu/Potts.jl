@@ -490,7 +490,7 @@ conceptual spelling is:
 EquationProcess(
     :chemoattractant,
     field_equations;
-    solver = ExplicitDiffusion(),
+    solver = DiscreteFieldEuler(),
     substeps = 15,
     phase = EquationStep(),
 )
@@ -791,7 +791,7 @@ The canonical call shape is:
         :chemoattractant,
         equations(external_system);
         writes = [c],
-        solver = ExplicitDiffusion(),
+        solver = DiscreteFieldEuler(),
         cadence = EveryMCS(),
         duration_per_mcs = 30us"s",
         substeps = 15,
