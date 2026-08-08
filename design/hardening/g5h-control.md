@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-3 passed; R2H-A and R2H-B passed; G5H-4 not begun
+Status: G5H-0 through G5H-3 passed; R2H-A and R2H-B passed; G5H-4 matrix complete and implementation not begun
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -17,7 +17,7 @@ repeat or amend gate requirements.
 | G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | Corrected candidate `f2d438acf3707125d2f839c3834d505535e627ea`, tree `1f3dc10e3814e43e69dd20c10d634d81d23bdf89`, passed the complete 1,348-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
 | G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
 | R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
-| G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Unblocked by R2H-B; no G5H-4 implementation has begun. |
+| G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Unblocked by R2H-B. The implementation matrix below is complete; no G5H-4 implementation has begun. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
@@ -114,6 +114,82 @@ separately cleared by the independent decision recorded above.
 | G5H-1 | Shared acceptance; consolidated traversal/facts/lifecycle/capability/checkpoint authorities; receipts and bulk component state; honest profile admission; Core-owned settlement/rejection suites; named compiler/backend SPIs and narrow Core API; measured memory/scaling. | `lib/CorePotts/src/{compiler_spi,backend_spi}.jl`, the split Core program/execution sources, all 952 Core assertions, `test/test_source_traversal_authority.jl`, `test/test_core_spi_boundary.jl`, public API and runner-closure tests, the three live qualifier results, and the exact quantitative record. |
 | G5H-2 | One functional and `@named` authoring path; composition/namespacing/completion/diagnostics/inspection; base-package structural `mtkcompile`; scheduled system → problem → SciML lifecycle; late profile selection; remake/SII/saving/callback/checkpoint/restore; one API inventory. | `test/test_{system_contract,statements_and_traversal,completion_and_diagnostics,mtkcompile,fresh_process_v2,sciml_lifecycle_v2,lifecycle_public_v2,public_api_v2}.jl` plus the scheduled scientific witnesses, all within the corrected 1,348/1,348 root result. Major invalid construction families assert source-located diagnostics. |
 | G5H-3 | Native declarations and typed ports; hierarchy/default/event/observed/SII retention; upstream `mtkcompile` and native problems; explicit MCS/time/order semantics; bidirectional ODE coupling; honest DAE/event boundary; MTKStandardLibrary and Catalyst; coupled restart/remake/error/cancellation/atomicity. | `src/native/*`, `ext/PottsToolkitModelingToolkitExt.jl`, `integration/test_modelingtoolkit_retention_and_structural_scheduling.jl`, `integration/test_modelingtoolkit_standard_library.jl`, and `integration/test_native_runtime.jl`, all within the corrected 141/141 pinned result. Copied `EquationComponent` assimilation is deleted; the Core fresh-load boundary remains MTK free. |
+
+## G5H-4 implementation matrix
+
+This matrix is the implementation plan for G5H-4. It specializes the accepted contract without
+creating another semantic authority. The hold points are bounded implementation reviews inside
+G5H-4, not new formal R2H gates and not substitutes for G5H-5 or R2H-C. Work may move within one
+slice to keep it coherent, but a dependent slice does not claim support before its hold point
+passes on an exact commit.
+
+Existing authorities remain authoritative:
+
+- CorePotts owns lifecycle requests, conflict resolution, generation-safe receipts, generic bulk
+  slot movement, settlement, backend status, and the logical checkpoint envelope;
+- PottsToolkit owns native component values, component policies, fields, coupled publication,
+  public capability composition, SciML lifecycle, SII, and ensembles;
+- `PottsSystem` remains the only public model, integer completed MCS remains the master time, and
+  `CPMThenComponents` remains the default coupled order;
+- the existing `NativeComponent` declaration is extended with per-cell and field scopes and their
+  policies; G5H-4 does not add parallel component constructors or another subsystem inventory;
+- fixed-capacity lifecycle operations are the admitted structural-rewrite boundary; G5H-4 does not
+  introduce an unrestricted graph-rewrite engine; and
+- the current serial/threaded `EnsembleProblem` implementation is extended, not replaced, while
+  per-cell batching remains a separate execution-profile dimension.
+
+### Ordered slices and hold points
+
+| Slice | State | Owned delivery | Planned implementation authority | Mandatory executable evidence | Hold point |
+|:--|:--|:--|:--|:--|:--|
+| H4-A — component identity and pools | `pending` | Extend the existing native declaration with a namespaced per-cell scope and explicit lifecycle policy; compile-once fixed-capacity structure-of-arrays pools keyed by Core slot and generation; active/generation/kind masks; initial component state; create, delete/remove, retire, divide/duplicate, and transition behavior; stale-generation rejection; one inactive candidate bank and atomic publication. Policies admit only explicit initialize, delete, copy, reset, transform, split, or reject behavior. | Reuse `lib/CorePotts/src/program/{bulk_component_state,lifecycle_receipt}.jl` unchanged as the generic seam. Potts-owned authority is confined to new focused files under `src/native/` for component-pool schema/policy and under `src/runtime/` for coupled component state/publication. Existing completion/namespacing owns declaration validation. `src/runtime/{integrator,checkpoint,saved_state,symbolic_indexing}.jl` integrate the result without adding another lifecycle or codec. | Core receipt/bulk-state suites remain green; new root authoring/pool/lifecycle tests cover functional and `@named` construction, composition/namespacing, capacity exhaustion, generation reuse, every lifecycle variant and policy, division parent/daughter roles, transition transforms, exact-once receipt application, failed-batch atomicity, observation/SII visibility, checkpoint/restore, and source-located invalid declarations. A coupled integration witness proves Core and component candidates publish together. | H4-A passes only when no runtime lifecycle event compiles code or resizes storage; stale identities cannot read/write/inherit state; every reachable settled state checkpoints; failure preserves the prior published bank and emits no receipt/observation. This freezes the component state layout consumed by H4-B/H4-C. |
+| H4-B — serial and vectorized CPU components | `pending` | One serial CPU semantic reference for global and per-cell components and one explicitly named vectorized/batched CPU mode for per-cell pools; multiple global islands share the existing simultaneous-island schedule rather than pretending to be a cell batch. The first admitted subset is fixed-shape fixed-step ODE, with deterministic lane assignment, observation/checkpoint parity, and clear separation from trajectory ensembles. | New focused component execution/lowering files under `src/native/`; late selection remains in `src/runtime/integrator.jl`; public conjunctions remain in `src/runtime/capabilities.jl`; MTK construction remains in `ext/PottsToolkitModelingToolkitExt.jl`. No public executable or per-cell `PottsSystem` copy is introduced. | Black-box global and per-cell fixtures compare serial and vectorized per-cell results against an independent small-system oracle across create/delete/divide/transition and checkpoint continuation. Tests cover zero/one/capacity live cells, partial final batches, kind transitions, callback/event/DAE/adaptive/shape rejections, allocation bounds after warmup, and failure atomicity. Benchmarks record compile-once behavior, memory by capacity/state width, and throughput by live density/batch width. | H4-B passes only after serial semantics are complete, vectorized CPU parity is demonstrated for the admitted per-cell subset, model size remains data rather than generated type topology, and all unsupported numerical/lifecycle combinations reject before native problem or solver execution. This freezes the batched execution contract consumed by Metal. |
+| H4-C — real GPU and backend profiles | `pending` | Bounded real-Metal component execution for both global and per-cell scopes, using the compile-once fixed-shape device-total fixed-step subset; checkerboard CPM integration; device-resident lifecycle/component requests where admitted; complete negative dispositions for unsupported algorithms, scalars, callbacks, events, allocation, and vendors. | `ext/PottsToolkitMetalExt.jl`, `lib/CorePotts/src/backend_spi.jl`, the existing Core lifecycle/backend kernels, `test/backend_conformance/*`, `scripts/qualify_descriptor_metal.jl`, and `benchmark/backends/metal/runtests.jl`. CUDA/AMDGPU runners remain evidence environments only and cannot create public support without equivalent extensions and rows. | Target-Mac Metal witnesses cover global and per-cell correctness, lifecycle receipts, component pools, relationship/component request publication, checkpoint continuation, 2D and admitted 3D cases, device failure status, no scalar indexing, no host fallback, no hidden transfer, bounded synchronization, warmed allocations, memory, and throughput. CPU reference and Metal results use the same independent scientific oracle without claiming sequential/checkerboard trajectory identity. Missing Metal, CUDA, ROCm, adaptive, DAE, root-event, callback, dynamic-dispatch, unsupported-scalar, and capacity combinations have typed preflight rejections. | H4-C passes only when at least one exact real-GPU row for each global and per-cell scope is `ReplayQualified`, performance claims have measurements, and transfer/synchronization instrumentation proves the advertised device boundary. Compilation alone is never support. CUDA/ROCm remain unsupported unless they independently meet the same bar. |
+| H4-D — fields and MethodOfLines | `pending` | Native prescribed fields; an honestly named built-in discrete-field component; explicit coordinate/boundary/topology semantics; CPU and applicable Metal field profiles; a separate MethodOfLines weak extension using `symbolic_discretize`, real upstream `mtkcompile`, standard problem construction, and an explicit checked coordinate-to-lattice grid map. | New field declaration/grid-map/runtime authority under `src/fields/`; migrate the Euler stencil from `src/operation_library/numerics.jl` behind the built-in discrete-field component; add `MethodOfLines` as a weak dependency and `ext/PottsToolkitMethodOfLinesExt.jl` rather than placing PDE dependencies in base. Native MTK ownership remains in the ModelingToolkit extension and the field component supplies only the cross-domain map/schedule. | Prescribed/discrete-field tests cover periodic/closed/frozen boundaries, dimensions, topology, units, interpolation/read/write phases, atomic CPM-field publication, checkpoint/SII/observations, CPU/Metal parity for advertised rows, and an independent stencil oracle. Integration constructs a real MethodOfLines discretization, runs `symbolic_discretize` then upstream structural compilation and a standard problem, proves every grid-map coordinate, and rejects name/shape coincidence, incompatible grids, unsupported events/solvers/backends, and hidden remeshing. | H4-D passes only after the old explicit diffusion behavior has an equivalence witness through the discrete-field component. The standalone kernel/spelling may then be removed if no other accepted witness owns it. MethodOfLines CPU support is promoted only for exact evidenced rows; GPU MethodOfLines remains explicitly unsupported unless separately qualified. |
+| H4-E — SciML ensembles and Dagger disposition | `pending` | Complete whole-trajectory `EnsembleProblem` behavior for serial, threaded, and distributed execution; `prob_func`, `output_func`, reduction, retry, failure, cancellation, and deterministic replica/repeat identity; an evidence-based Dagger adopt-or-defer decision that cannot change runtime semantics. | Extend the existing authority in `src/runtime/{problem,solution}.jl` and `test/test_sciml_lifecycle_v2.jl`; add distributed clean-worker/load-order witnesses without introducing a second ensemble wrapper. Dagger evaluation lives in an isolated benchmark environment. Adoption, if justified, requires an optional extension; defer requires no package dependency. | Serial/threaded/distributed results agree per replica under addressed RNG and preserve replica/repeat through remake, checkpoint, retry, output, and reduction. Tests cover worker initialization, worker loss/error propagation, cancellation, nonserializable callbacks, nested unsupported profiles, and prove that ensemble execution neither changes per-cell batch identity nor implies GPU support. Dagger measurements compare representative independent trajectories and coarse islands against SciML/stdlib baselines and record overhead, scaling, memory, failure, and semantic fit. | H4-E passes with all three SciML ensemble lanes qualified and one measured Dagger decision. Dagger may own only optional coarse scheduling; it never owns MCS order, coupling visibility, lifecycle commit, RNG identity, or checkpoint meaning. A measured defer is a complete result. |
+| H4-Q — gate qualification | `pending` | One exhaustive capability/support matrix and exact-candidate evidence for every advertised algorithm × backend/device × dimension/topology × scalar policy × component scope/family × lifecycle feature × checkpoint/replay × observation/event mode conjunction. Preserve all G5H-1–G5H-3 witnesses touched by the work. | `src/runtime/capabilities.jl`, `src/inspection.jl`, Core backend reports, root/integration/backend tests, qualification scripts, benchmark evidence, and this living control record. New stable public names must be the minimal author-facing set and join the authoritative API inventory; compatibility aliases and duplicate constructors are forbidden. | Full root/Core/Makie/integration suites; strict docs landing; fresh base/Core/extension orders; Aqua/ExplicitImports; all CPU/Metal conformance lanes; operation/static-evaluator/specialization checks; exact memory, allocation, synchronization, transfer, compile-time, checkpoint, and throughput records; stale-name/private-upstream scans; explicit negative tests for every unqualified row. | G5H-4 passes only on a clean exact commit with no unsupported public claim, silent fallback, unresolved touched-preservation row, or known in-scope correctness defect. G5H-5 then owns final-interface documentation, Wortel/Merks product programs, final performance comparison, and R2H-C preparation. |
+
+### Minimum capability dispositions
+
+Every row below must end G5H-4 as either an evidenced supported/experimental conjunction or an
+explicit tested rejection. The required rows cannot be satisfied by combining evidence from
+different algorithms, devices, component scopes, or replay classes.
+
+| Profile family | Required G5H-4 disposition |
+|:--|:--|
+| Existing global native CPU | Preserve the G5H-3 exact fixed-step ODE row and rerun it after component-pool/capability changes; do not broaden DAE/event support by implication. |
+| Per-cell serial CPU | Required functional and replay-qualified reference with full admitted lifecycle, observation, SII, and checkpoint behavior. |
+| Per-cell vectorized CPU | Required separately identified functional and replay-qualified fixed-shape row, with parity and measured benefit relative to the serial component reference. |
+| Global native Metal | Required bounded real-Metal row for the fixed-shape device-total fixed-step subset, or G5H-4 does not satisfy the global GPU target. |
+| Per-cell native Metal | Required bounded real-Metal batched row with fixed capacity and lifecycle masks, or G5H-4 does not satisfy the per-cell GPU target. |
+| Checkerboard CPU with components | Must be independently qualified or explicitly rejected for each component scope; sequential evidence cannot be reused as checkerboard evidence. |
+| Built-in prescribed/discrete fields | Required CPU reference and applicable real-Metal row with explicit boundary/topology/grid semantics. The Euler stencil is a named component implementation, not a generic PDE solver. |
+| MethodOfLines | Required exact CPU extension row using `symbolic_discretize`, upstream compilation, a standard problem, and a checked grid map. GPU, remeshing, unsupported PDE/event, and solver combinations reject unless independently qualified. |
+| SciML trajectory ensembles | Serial, threaded, and distributed CPU lanes are required. Their inner trajectory must itself be an admitted profile; distributed or threaded execution does not imply component batching or GPU support. |
+| CUDA and ROCm | Remain publicly unsupported until their own extensions pass the same correctness, replay, no-fallback, transfer, synchronization, and performance evidence as Metal. Vendor runner compilation is insufficient. |
+| Dagger | Must end with a measured adopt-or-defer record. Adoption is optional and coarse-grained; deferral is nonblocking. |
+
+### Cross-slice acceptance and preservation
+
+- H4-A owns F06/F07 and PR02/PR06/PR09/PR11/PR24/PR29 for component state. H4-B/H4-C may
+  optimize application of the receipt but may not reinterpret lifecycle identity, ordering, or
+  publication.
+- H4-B/H4-C own F08/F09/F13/F14 and PR04/PR17/PR22/PR24/PR28/PR30 for their exact CPU/GPU
+  conjunctions. The sequential CPU oracle remains decisive for shared laws; stochastic algorithms
+  retain distinct trajectory semantics.
+- H4-D owns F17 and PR14/PR20/PR27, while preserving the field-related scientific witnesses in
+  PR15/PR30. Grid identity joins scheduled-system, capability, checkpoint, and provenance
+  fingerprints.
+- H4-E owns F16/F17/F18 and PR10/PR12/PR24. Replica identifies a trajectory and repeat identifies
+  its retry in every execution lane; worker or scheduler order never supplies semantic identity.
+- H4-Q must close PR28's 2D/3D dispositions and every touched PR row as preserved, replaced by a
+  passing witness, removed by an already accepted disposition, or explicitly left unsupported.
+- Applicable correctness, replay, allocation, synchronization, transfer, and performance evidence
+  is conjunctive. A fast row with missing semantics, a correct compile-only row, or a CPU fallback
+  cannot be promoted.
+- Performance thresholds and measurement fixtures are frozen before optimization for each slice;
+  thresholds are not selected after seeing the optimized result. Evidence records exact commit,
+  tree, Julia/package/device identity, commands, warmup, sample definition, and claim boundary.
 
 ### Intentional stable public-API delta from G5H-0
 
