@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-3 passed; R2H-A passed; R2H-B repair qualification in progress
+Status: G5H-0 through G5H-3 passed; R2H-A passed; corrected R2H-B candidate awaits rereview
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -13,10 +13,10 @@ repeat or amend gate requirements.
 |:--|:--|:--|
 | G5H-0 — authority, baseline, preservation | `passed` | Corrected candidate `9afcf6f1ec44cf84525d8b023c2d1b705560e365`, tree `a8b0ce43489e558e1770f4982dece97ef4c6eca7`, cleared R2H-A with no carried finding. |
 | R2H-A — authority and preservation review | `passed` | Fresh independent read-only review of the exact corrected candidate returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
-| G5H-1 — semantic and CorePotts consolidation | `passed` | Exact candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree `b5ef897a3872a2262112375278ca87d348886668`; CorePotts 952/952, retained package witnesses, named SPIs, exact quantitative evidence, and qualification tools passed. |
-| G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | The same exact candidate passed the complete 1,355-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
-| G5H-3 — native global MTK integration | `passed` | The pinned full-MTK suite passed 135/135, covering native retention, upstream structural compilation, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
-| R2H-B — cohesion and real-MTK review | `open` | The first review failed with P1=1 and P2=1. Both G5H-3 findings have a bounded repair; corrected-candidate qualification and fresh rereview remain required before G5H-4. |
+| G5H-1 — semantic and CorePotts consolidation | `passed` | Exact implementation candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree `b5ef897a3872a2262112375278ca87d348886668`; CorePotts 952/952, retained package witnesses, named SPIs, exact quantitative evidence, and qualification tools passed. The bounded G5H-3 correction does not touch those authorities. |
+| G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | Corrected candidate `f2d438acf3707125d2f839c3834d505535e627ea`, tree `1f3dc10e3814e43e69dd20c10d634d81d23bdf89`, passed the complete 1,348-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
+| G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
+| R2H-B — cohesion and real-MTK review | `open` | The first review failed with P1=1 and P2=1. Both findings are repaired and exact-candidate qualification passes; a fresh independent rereview is the only remaining boundary before G5H-4. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Blocked by R2H-B. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
@@ -65,13 +65,21 @@ The bounded correction moves closed native evidence admission ahead of native pr
 and solver initialization, adds an adversarial invalid-solver-option witness proving preflight
 rejection wins, and makes the public inspection, solution provenance, and checkpoint codec state
 the exact-configuration-only native contract. Focused pinned integration passes 141/141 after the
-repair. This is not R2H-B clearance: the correction still requires exact-candidate qualification
-and a fresh independent rereview.
+repair. The correction is frozen as exact candidate
+`f2d438acf3707125d2f839c3834d505535e627ea`, tree
+`1f3dc10e3814e43e69dd20c10d634d81d23bdf89`. Its root suite passed runner closure 325/325 and
+the authoritative surface 1,348/1,348 in 17m40.8s; pinned integration passed 141/141; strict docs,
+fresh PottsToolkit/CorePotts boundaries, 258 Julia parses, 148 TOML parses, the retired-name scan,
+and diff integrity passed. This is not R2H-B clearance: a fresh independent rereview remains
+required.
 
 ## G5H-1 through G5H-3 exact-candidate evidence
 
-Every row below refers to the exact candidate identified above. Together they close the normative
-G5H-1 through G5H-3 exit conditions; passing R2H-B remains a separate review decision.
+Rows below name the corrected candidate when they were rerun after review. Unaffected CorePotts,
+MakiePotts, quantitative, and compiler-qualifier rows remain exact evidence from implementation
+candidate `354469ec82f0daa481a82d982d975d7046f4b71e`; the bounded correction does not touch their
+authorities. Together the rows close the normative G5H-1 through G5H-3 exit conditions; passing
+R2H-B remains a separate review decision.
 
 | Obligation | Implemented authority | Exact result | Scope boundary |
 |:--|:--|:--|:--|
@@ -81,22 +89,22 @@ G5H-1 through G5H-3 exit conditions; passing R2H-B remains a separate review dec
 
 | Lane | Reproduction command | Exact result |
 |:--|:--|:--|
-| PottsToolkit package | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=. --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("PottsToolkit")'` | Runner closure 325/325; authoritative G5H-1 through G5H-3 surface 1,355/1,355 in 17m11.5s. The re-resolved compatibility lane used ModelingToolkit 11.38.0, ModelingToolkitBase 1.59.0, SciMLBase 3.41.0, Symbolics 7.35.0, and Unitful 1.28.0. |
+| PottsToolkit package | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=. --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("PottsToolkit")'` | Corrected candidate: runner closure 325/325; authoritative G5H-1 through G5H-3 surface 1,348/1,348 in 17m40.8s. The re-resolved compatibility lane used ModelingToolkit 11.38.0, ModelingToolkitBase 1.59.0, SciMLBase 3.41.0, Symbolics 7.35.0, and Unitful 1.28.0. |
 | CorePotts package | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=lib/CorePotts --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("CorePotts")'` | 952/952 passed, including 10 Aqua assertions; no PottsToolkit, MTK, SciML solver, Makie, or vendor dependency is present. |
-| Pinned full-MTK integration | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=integration --startup-file=no --threads=1 integration/runtests.jl` | 135/135 passed on ModelingToolkit 11.37.1, ModelingToolkitBase 1.58.1, ModelingToolkitStandardLibrary 2.29.5, SciMLBase 3.39.1, Symbolics 7.34.1, DynamicQuantities 1.13.0, and Unitful 1.28.0. |
+| Pinned full-MTK integration | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=integration --startup-file=no --threads=1 integration/runtests.jl` | Corrected candidate: 141/141 passed, including the adversarial preflight-before-initialization and exact-only inspection/checkpoint witnesses, on ModelingToolkit 11.37.1, ModelingToolkitBase 1.58.1, ModelingToolkitStandardLibrary 2.29.5, SciMLBase 3.39.1, Symbolics 7.34.1, DynamicQuantities 1.13.0, and Unitful 1.28.0. |
 | MakiePotts preservation | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=lib/MakiePotts --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("MakiePotts")'` | 501/501 passed after rebinding its fixture to the final public lifecycle; its 3D frame witness remains independent of the intentionally unsupported 3D CPM runtime row. |
 | Quantitative evidence | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=. --startup-file=no --threads=1 scripts/measure_g5h1_memory_and_scaling.jl` plus four fresh 1/6/24/128-declaration processes | `pass`, `bounded_cpu_evidence_only`; clean commit and tree matched; relationship validation and transaction preparation allocated 0 B after warmup and stayed below the 10x guard; the 128-declaration four-phase path completed in 100.354s. Exact tables are in `g5h1-quantitative-memory-and-scaling-evidence.md`. |
 | Compiler/operation qualifiers | The same Julia prefix with `scripts/check_v1_operation_inventory.jl`, `scripts/qualify_specialization_growth.jl`, and `scripts/qualify_static_evaluator.jl` | 68 operations qualified; specialization growth 12/12; independent static evaluator exited zero with exact ordered semantics, inferred `Float32`, zero warmed allocation for the selected representation, fixed occurrence specialization through 1,024 occurrences, and bounded group growth. |
-| Strict documentation | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=docs --startup-file=no --threads=1 docs/make.jl` | Doctests, cross-references, document checks, and HTML rendering passed with `warnonly=false`. |
-| Static and fresh boundaries | `git diff --check HEAD^..HEAD`; parse every tracked `.jl` with `Meta.parseall`; parse every tracked TOML; retired-name scan; explicit fresh PottsToolkit/CorePotts load commands | Clean diff; 258 tracked Julia files and 148 tracked TOMLs parsed; no active retired-package match; no empty maintained directory; PottsToolkit loaded without full ModelingToolkit and CorePotts loaded without PottsToolkit, MTK, SciML, Makie, or the retired package. |
+| Strict documentation | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=docs --startup-file=no --threads=1 docs/make.jl` | Corrected candidate: doctests, cross-references, document checks, and HTML rendering passed with `warnonly=false`. |
+| Static and fresh boundaries | `git diff --check HEAD^..HEAD`; parse every tracked `.jl` with `Meta.parseall`; parse every tracked TOML; retired-name scan; explicit fresh PottsToolkit/CorePotts load commands | Corrected candidate: clean diff; 258 tracked Julia files and 148 tracked TOMLs parsed; no active retired-package match; no empty maintained directory; PottsToolkit loaded without full ModelingToolkit and CorePotts loaded without PottsToolkit, MTK, SciML, Makie, or the retired package. |
 
 ### Gate-specific closure
 
 | Gate | Normative delivery | Authoritative evidence |
 |:--|:--|:--|
 | G5H-1 | Shared acceptance; consolidated traversal/facts/lifecycle/capability/checkpoint authorities; receipts and bulk component state; honest profile admission; Core-owned settlement/rejection suites; named compiler/backend SPIs and narrow Core API; measured memory/scaling. | `lib/CorePotts/src/{compiler_spi,backend_spi}.jl`, the split Core program/execution sources, all 952 Core assertions, `test/test_source_traversal_authority.jl`, `test/test_core_spi_boundary.jl`, public API and runner-closure tests, the three live qualifier results, and the exact quantitative record. |
-| G5H-2 | One functional and `@named` authoring path; composition/namespacing/completion/diagnostics/inspection; base-package structural `mtkcompile`; scheduled system → problem → SciML lifecycle; late profile selection; remake/SII/saving/callback/checkpoint/restore; one API inventory. | `test/test_{system_contract,statements_and_traversal,completion_and_diagnostics,mtkcompile,fresh_process_v2,sciml_lifecycle_v2,lifecycle_public_v2,public_api_v2}.jl` plus the scheduled scientific witnesses, all within the 1,355/1,355 root result. Major invalid construction families assert source-located diagnostics. |
-| G5H-3 | Native declarations and typed ports; hierarchy/default/event/observed/SII retention; upstream `mtkcompile` and native problems; explicit MCS/time/order semantics; bidirectional ODE coupling; honest DAE/event boundary; MTKStandardLibrary and Catalyst; coupled restart/remake/error/cancellation/atomicity. | `src/native/*`, `ext/PottsToolkitModelingToolkitExt.jl`, `integration/test_modelingtoolkit_retention_and_structural_scheduling.jl`, `integration/test_modelingtoolkit_standard_library.jl`, and `integration/test_native_runtime.jl`, all within the 135/135 pinned result. Copied `EquationComponent` assimilation is deleted; the Core fresh-load boundary remains MTK free. |
+| G5H-2 | One functional and `@named` authoring path; composition/namespacing/completion/diagnostics/inspection; base-package structural `mtkcompile`; scheduled system → problem → SciML lifecycle; late profile selection; remake/SII/saving/callback/checkpoint/restore; one API inventory. | `test/test_{system_contract,statements_and_traversal,completion_and_diagnostics,mtkcompile,fresh_process_v2,sciml_lifecycle_v2,lifecycle_public_v2,public_api_v2}.jl` plus the scheduled scientific witnesses, all within the corrected 1,348/1,348 root result. Major invalid construction families assert source-located diagnostics. |
+| G5H-3 | Native declarations and typed ports; hierarchy/default/event/observed/SII retention; upstream `mtkcompile` and native problems; explicit MCS/time/order semantics; bidirectional ODE coupling; honest DAE/event boundary; MTKStandardLibrary and Catalyst; coupled restart/remake/error/cancellation/atomicity. | `src/native/*`, `ext/PottsToolkitModelingToolkitExt.jl`, `integration/test_modelingtoolkit_retention_and_structural_scheduling.jl`, `integration/test_modelingtoolkit_standard_library.jl`, and `integration/test_native_runtime.jl`, all within the corrected 141/141 pinned result. Copied `EquationComponent` assimilation is deleted; the Core fresh-load boundary remains MTK free. |
 
 ### Intentional stable public-API delta from G5H-0
 
