@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-3 passed; R2H-A passed; corrected R2H-B candidate awaits rereview
+Status: G5H-0 through G5H-3 passed; R2H-A and R2H-B passed; G5H-4 not begun
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -16,8 +16,8 @@ repeat or amend gate requirements.
 | G5H-1 — semantic and CorePotts consolidation | `passed` | Exact implementation candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree `b5ef897a3872a2262112375278ca87d348886668`; CorePotts 952/952, retained package witnesses, named SPIs, exact quantitative evidence, and qualification tools passed. The bounded G5H-3 correction does not touch those authorities. |
 | G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | Corrected candidate `f2d438acf3707125d2f839c3834d505535e627ea`, tree `1f3dc10e3814e43e69dd20c10d634d81d23bdf89`, passed the complete 1,348-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
 | G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
-| R2H-B — cohesion and real-MTK review | `open` | The first review failed with P1=1 and P2=1. Both findings are repaired and exact-candidate qualification passes; a fresh independent rereview is the only remaining boundary before G5H-4. |
-| G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Blocked by R2H-B. |
+| R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
+| G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Unblocked by R2H-B; no G5H-4 implementation has begun. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
@@ -70,16 +70,25 @@ repair. The correction is frozen as exact candidate
 `1f3dc10e3814e43e69dd20c10d634d81d23bdf89`. Its root suite passed runner closure 325/325 and
 the authoritative surface 1,348/1,348 in 17m40.8s; pinned integration passed 141/141; strict docs,
 fresh PottsToolkit/CorePotts boundaries, 258 Julia parses, 148 TOML parses, the retired-name scan,
-and diff integrity passed. This is not R2H-B clearance: a fresh independent rereview remains
-required.
+and diff integrity passed.
+
+The fresh formal R2H-B rereview then inspected corrected evidence-record candidate
+`c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree
+`355e8fdaa0dc11dd5130b786b3e8229ea2372693`, read-only and returned `PASS` with P0=0, P1=0,
+P2=0, and P3=0. It independently reran pinned integration at 141/141. Static and dynamic review
+proved that closed native evidence is now required before native problem construction or
+`SciMLBase.init`, and that public inspection, capability composition, solution provenance,
+checkpoint creation, validation, and restoration expose only the reachable exact-configuration
+native replay class. No regression, weakened admission semantic, or carried P2 remains. R2H-B
+therefore clears and G5H-4 is unblocked but not begun.
 
 ## G5H-1 through G5H-3 exact-candidate evidence
 
 Rows below name the corrected candidate when they were rerun after review. Unaffected CorePotts,
 MakiePotts, quantitative, and compiler-qualifier rows remain exact evidence from implementation
 candidate `354469ec82f0daa481a82d982d975d7046f4b71e`; the bounded correction does not touch their
-authorities. Together the rows close the normative G5H-1 through G5H-3 exit conditions; passing
-R2H-B remains a separate review decision.
+authorities. Together the rows close the normative G5H-1 through G5H-3 exit conditions; R2H-B was
+separately cleared by the independent decision recorded above.
 
 | Obligation | Implemented authority | Exact result | Scope boundary |
 |:--|:--|:--|:--|
