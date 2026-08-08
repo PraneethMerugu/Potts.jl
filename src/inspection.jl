@@ -134,7 +134,7 @@ function inspect(system::PottsSystem, ::ReplayContract)
         native_components = Tuple((
             path = native_component_path(component),
             logical_state = (:u, :p, :t, :du),
-            restart = :portable_logical,
+            restart = :exact_configuration_only,
             exact_requires = (
                 :pinned_profile_id,
                 :deterministic_profile_assertion,

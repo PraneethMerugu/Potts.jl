@@ -211,10 +211,11 @@ end
                        deterministic=false, exact_replay=false, options...)
 
 Late numerical policy for exactly one native component. There is deliberately
-no default native solver. An exact-replay claim requires an explicitly pinned
-`profile_id` and the author's `deterministic=true` assertion; otherwise
-checkpoint restore is a portable logical restart and never claims bitwise
-continuation.
+no default native solver. G5H-3 execution and checkpoint/restore admit only a
+closed `ReplayQualified` row: this requires `exact_replay=true`, an explicitly
+pinned `profile_id`, and the author's `deterministic=true` assertion. A profile
+with `exact_replay=false` can represent an unsupported candidate for inspection
+and preflight diagnostics, but it cannot initialize a native solver.
 """
 struct NativeSolveProfile{P <: Tuple, A, O <: NamedTuple}
     path::P

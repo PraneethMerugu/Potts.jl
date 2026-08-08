@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-3 passed; R2H-A passed; R2H-B open
+Status: G5H-0 through G5H-3 passed; R2H-A passed; R2H-B repair qualification in progress
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -16,7 +16,7 @@ repeat or amend gate requirements.
 | G5H-1 — semantic and CorePotts consolidation | `passed` | Exact candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree `b5ef897a3872a2262112375278ca87d348886668`; CorePotts 952/952, retained package witnesses, named SPIs, exact quantitative evidence, and qualification tools passed. |
 | G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | The same exact candidate passed the complete 1,355-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
 | G5H-3 — native global MTK integration | `passed` | The pinned full-MTK suite passed 135/135, covering native retention, upstream structural compilation, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
-| R2H-B — cohesion and real-MTK review | `open` | G5H-1 through G5H-3 are qualified on the exact candidate; independent read-only review is the only remaining boundary before G5H-4. |
+| R2H-B — cohesion and real-MTK review | `open` | The first review failed with P1=1 and P2=1. Both G5H-3 findings have a bounded repair; corrected-candidate qualification and fresh rereview remain required before G5H-4. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Blocked by R2H-B. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
@@ -50,6 +50,23 @@ candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree
 `b5ef897a3872a2262112375278ca87d348886668`. The complete matrix below ran on that clean commit on
 the target Mac with Julia 1.12.1 on 2026-08-08. R2H-B reviews this vertical slice; no G5H-4 work
 has begun.
+
+The first formal R2H-B review inspected candidate
+`e979b6982b000d3f87cf70a3907e3e64bb12e1ad`, tree
+`f7711112f1f78284a62452b4cc6bb3a677b37847`, read-only and returned `FAIL` with P0=0, P1=1,
+P2=1, and P3=0. It independently reran the pinned full-MTK integration suite at 135/135 and
+confirmed the remainder of the vertical slice, but found that an unqualified native solve profile
+could reach upstream problem construction and `SciMLBase.init` before evidence rejection. It also
+found that the public `NativeSolveProfile` documentation and replay inspection/checkpoint branches
+advertised a portable native restart class that no G5H-3 executable evidence row admits. Both
+findings belong to G5H-3 and affect the profile interface consumed by G5H-4, so neither is carried.
+
+The bounded correction moves closed native evidence admission ahead of native problem construction
+and solver initialization, adds an adversarial invalid-solver-option witness proving preflight
+rejection wins, and makes the public inspection, solution provenance, and checkpoint codec state
+the exact-configuration-only native contract. Focused pinned integration passes 141/141 after the
+repair. This is not R2H-B clearance: the correction still requires exact-candidate qualification
+and a fresh independent rereview.
 
 ## G5H-1 through G5H-3 exact-candidate evidence
 

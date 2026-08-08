@@ -33,10 +33,7 @@ function _native_checkpoint_blocks(integrator::PottsIntegrator)
                     revision = evidence.revision,
                     profile_fingerprint = evidence.profile_fingerprint,
                 ),
-                replay_class = integrator.capability_report.key.replay ===
-                    CorePotts.BackendSPI.ExactConfigurationReplay ?
-                    :exact_pinned_deterministic_profile :
-                    :portable_logical_restart,
+                replay_class = :exact_pinned_deterministic_profile,
                 u = state.u,
                 p = state.p,
                 du = state.du,
@@ -56,10 +53,7 @@ function _potts_checkpoint_block(integrator::PottsIntegrator)
     native_blocks = _native_checkpoint_blocks(integrator)
     replay_class = isempty(native_blocks) ?
         :exact_same_scheduled_system_and_profile :
-        integrator.capability_report.key.replay ===
-            CorePotts.BackendSPI.ExactConfigurationReplay ?
-            :exact_pinned_native_profiles :
-            :portable_logical_native_restart
+        :exact_pinned_native_profiles
     conjunction = integrator.capability_report.evidence.conjunction
     return (
         schema = _POTTS_CHECKPOINT_BLOCK_SCHEMA,
@@ -151,7 +145,6 @@ function _validate_checkpoint(
     block.replay_class in (
         :exact_same_scheduled_system_and_profile,
         :exact_pinned_native_profiles,
-        :portable_logical_native_restart,
     ) ||
         throw(ArgumentError("unsupported checkpoint replay class"))
     checkpoint_value.seed == problem.seed ||
@@ -253,9 +246,7 @@ function _restore_native_states(
             "checkpoint native evidence identity mismatch at " *
             _native_path_string(path)
         ))
-        expected_class = capability_report.key.replay ===
-            CorePotts.BackendSPI.ExactConfigurationReplay ?
-            :exact_pinned_deterministic_profile : :portable_logical_restart
+        expected_class = :exact_pinned_deterministic_profile
         entry.replay_class === expected_class || throw(ArgumentError(
             "checkpoint native replay class mismatch at " *
             _native_path_string(path)
@@ -279,10 +270,7 @@ function _restore_native_states(
     end
     expected_outer = isempty(entries) ?
         :exact_same_scheduled_system_and_profile :
-        capability_report.key.replay ===
-            CorePotts.BackendSPI.ExactConfigurationReplay ?
-            :exact_pinned_native_profiles :
-            :portable_logical_native_restart
+        :exact_pinned_native_profiles
     block.replay_class === expected_outer || throw(ArgumentError(
         "checkpoint outer and native replay classes disagree"
     ))

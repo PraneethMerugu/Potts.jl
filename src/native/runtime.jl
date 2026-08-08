@@ -271,7 +271,7 @@ function _require_native_replay_evidence(system::PottsSystem, profiles)
             throw(NativeCapabilityError(
                 native_component_path(component),
                 :closed_replay_evidence,
-                "the standard native problem constructs and initializes, but this system/solver/event profile has no closed exact-replay evidence row",
+                "this system/solver/event profile has no closed exact-replay evidence row; native problem construction and solver initialization were not attempted",
             ))
     end
     return nothing

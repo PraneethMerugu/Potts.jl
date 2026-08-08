@@ -40,10 +40,7 @@ function PottsSolution(integrator::PottsIntegrator)
         backend = nameof(typeof(integrator.backend)),
         scalar_type = integrator.scalar_type,
         replay = isempty(integrator.native_profiles) ? plan.reports.replay : (
-            class = integrator.capability_report.key.replay ===
-                    CorePotts.BackendSPI.ExactConfigurationReplay ?
-                    :exact_pinned_native_profiles :
-                    :portable_logical_native_restart,
+            class = :exact_pinned_native_profiles,
             cross_engine = false,
             addressed_rng = true,
         ),

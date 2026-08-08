@@ -389,15 +389,8 @@ function _compose_runtime_capability(
                 CorePotts.BackendSPI.Unsupported
             for row in native_rows
         )
-    exact_qualified = !isempty(components) && profile_shape_admitted &&
-        all(zip(profiles, native_rows)) do (profile, row)
-            profile.exact_replay && row !== nothing &&
-                Int(row.maturity) >=
-                Int(CorePotts.BackendSPI.ReplayQualified)
-        end
     replay = isempty(components) ? core.key.replay :
-        exact_qualified ? CorePotts.BackendSPI.ExactConfigurationReplay :
-        CorePotts.BackendSPI.PortableLogicalRestart
+        CorePotts.BackendSPI.ExactConfigurationReplay
     maturity_values = Any[core.maturity]
     for index in eachindex(components)
         push!(maturity_values,

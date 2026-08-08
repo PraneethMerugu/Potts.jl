@@ -288,6 +288,10 @@ function _materialize_integrator(
             "G5H-3 does not admit outer Potts callbacks with native components because callback identity and state are not in the capability key or checkpoint",
         ))
     _native_runtime_preflight(problem, algorithm, backend, profiles)
+    # Evidence admission is part of preflight.  In particular, reject an
+    # unqualified native profile before constructing a native problem or
+    # calling SciMLBase.init in _initial_native_states!.
+    _require_native_replay_evidence(problem.system, profiles)
     parameters = _normalize_parameters(plan, problem.p)
     policy = _save_policy(problem, plan; solve_controls...)
 
@@ -308,7 +312,6 @@ function _materialize_integrator(
             core_initial, initial_descriptor
         )
     end
-    _require_native_replay_evidence(problem.system, profiles)
     capability_report = _require_runtime_capability(
         _compose_runtime_capability(
             problem,

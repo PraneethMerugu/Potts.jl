@@ -213,6 +213,27 @@ end
     )
     @test point_forward.values == point_reverse.values
     @test_throws ArgumentError init(problem, SequentialCPM())
+    unqualified_profile = NativeSolveProfile(
+        fixture.path,
+        Tsit5();
+        definitely_not_a_solver_option = true,
+    )
+    preflight_error = try
+        init(
+            problem,
+            SequentialCPM();
+            native_profiles = (unqualified_profile,),
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test preflight_error isa PottsToolkit.NativeCapabilityError
+    @test preflight_error.capability === :closed_replay_evidence
+    @test occursin(
+        "solver initialization were not attempted",
+        sprint(showerror, preflight_error),
+    )
     integrator = init(
         problem, SequentialCPM(); native_profiles = (profile,),
         save_everystep = true,
@@ -238,6 +259,10 @@ end
     )
     @test inspect(problem, Capabilities()).support_status ===
         :requires_concrete_runtime_profile
+    replay_contract = only(
+        inspect(fixture.scheduled, ReplayContract()).native_components
+    )
+    @test replay_contract.restart === :exact_configuration_only
     report = inspect(integrator, Capabilities())
     @test report.evidence.conjunction.profile_fingerprint ==
         report.key.fingerprint
@@ -269,6 +294,9 @@ end
     step!(uninterrupted)
     captured = checkpoint(uninterrupted)
     checkpoint_block = captured.extensions.PottsToolkit
+    @test checkpoint_block.replay_class === :exact_pinned_native_profiles
+    @test only(checkpoint_block.native_components).replay_class ===
+        :exact_pinned_deterministic_profile
     @test checkpoint_block.capability_fingerprint ==
         uninterrupted.capability_report.key.fingerprint
     @test checkpoint_block.conjunction_evidence.profile_fingerprint ==
