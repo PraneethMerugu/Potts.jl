@@ -1,8 +1,8 @@
 # G5H-1 quantitative memory and scaling evidence
 
-Status: provisional working-tree evidence
+Status: passed on exact G5H-1 through G5H-3 candidate
 
-Recorded: 2026-08-06
+Recorded: 2026-08-08
 
 Authority: G5H-1 in `spec/symbolic-potts-v1-hardening.md`, with particular coverage of DC08, PR07, F06, and F07 in `design/hardening/g5h0-baseline-and-preservation.md`
 
@@ -28,9 +28,10 @@ state-scalar-by-capacity-slot before solver caches or other native-runtime stora
 scalars per cell project to about 1.49 GiB. G5H-4 therefore still needs explicit state-capacity,
 layout, device-residency, and solver-workspace evidence.
 
-This record satisfies the quantitative evidence lane for the present working tree. It is not a
-G5H-1 exit certificate: the run was dirty and must be repeated on the exact clean candidate commit.
-It makes no GPU, throughput, latency, or `PerformanceQualified` claim.
+This record satisfies the G5H-1 quantitative evidence lane on exact clean candidate commit
+`354469ec82f0daa481a82d982d975d7046f4b71e`, tree
+`b5ef897a3872a2262112375278ca87d348886668`. It makes no GPU, throughput, latency, or
+`PerformanceQualified` claim.
 
 ## Reproduction
 
@@ -101,15 +102,15 @@ Package loading and precompilation occur before the timers. The fixture is
 
 | External declarations | Qualified records | Model construction | `complete` | `mtkcompile` | `PottsProblem` | Four-phase total |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1 | 9 | 0.798 s | 6.030 s | 0.182 s | 0.134 s | 7.144 s |
-| 6 | 14 | 0.896 s | 6.893 s | 0.354 s | 0.137 s | 8.279 s |
-| 24 | 32 | 1.742 s | 10.985 s | 1.330 s | 0.139 s | 14.196 s |
-| 128 | 136 | 13.663 s | 70.796 s | 21.654 s | 0.147 s | 106.260 s |
+| 1 | 9 | 0.786 s | 6.141 s | 0.175 s | 0.224 s | 7.326 s |
+| 6 | 14 | 0.875 s | 6.576 s | 0.344 s | 0.220 s | 8.014 s |
+| 24 | 32 | 1.661 s | 10.628 s | 1.364 s | 0.213 s | 13.867 s |
+| 128 | 136 | 12.515 s | 64.333 s | 23.200 s | 0.306 s | 100.354 s |
 
 The formerly infeasible 128-declaration point now completes. From one to 128 external declarations,
-the complete four-phase path grows 14.9-fold for a 128-fold declaration increase; `PottsProblem`
+the complete four-phase path grows 13.7-fold for a 128-fold declaration increase; `PottsProblem`
 construction remains essentially flat. At the directly comparable 24-declaration stress point,
-canonical `complete` is 11.5 times faster and `mtkcompile` is 73.2 times faster than the earlier
+canonical `complete` is 11.9 times faster and `mtkcompile` is 71.3 times faster than the earlier
 noncanonical diagnostic values. Because the Julia patch versions differ, those speedups are useful
 regression magnitude rather than benchmark-grade cross-version ratios.
 
@@ -117,7 +118,7 @@ This closes the host-specialization slope blocker: model size remains data and n
 completed or scheduled carrier types. The 128-declaration result is a cold stress point, not an
 interactive-latency target or a general complexity proof. Its absolute latency remains eligible for
 future fingerprint-throughput optimization, but it no longer blocks G5H-1's bounded host-scaling
-disposition. Final timing evidence must still be repeated on the exact clean candidate commit.
+disposition. The table above is the required fresh-process repetition on the exact clean candidate.
 
 ## Recorded environment
 
@@ -130,14 +131,15 @@ disposition. Final timing evidence must still be repeated on the exact clean can
 | Julia threads | 1 |
 | Word size | 64 |
 | Physical memory | 17,179,869,184 bytes (16 GiB) |
-| Git HEAD | `9f3877d82db7ca95d2c89700bb7de1b6f4c0c7d1` |
-| Working tree | dirty |
+| Git HEAD | `354469ec82f0daa481a82d982d975d7046f4b71e` |
+| Git tree | `b5ef897a3872a2262112375278ca87d348886668` |
+| Working tree | clean |
 | Script result | `pass`, `bounded_cpu_evidence_only` |
 
 ### Exact replay qualification identity
 
 Replay qualification is deliberately narrower than functional execution. The only reviewed exact
-environment row in this working tree is produced by:
+environment row in this evidence is produced by:
 
 ```sh
 env JULIA_DEPOT_PATH=/private/tmp/potts-julia-1121-depot:/Users/praneethmerugu/.julia \
@@ -178,9 +180,9 @@ Cell and relationship capacities are fixed at 256.
 
 | Sites | Runtime | Active bank | Candidate bank | Lifecycle incremental | Snapshot | Checkpoint | Serialized checkpoint |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 4,096 | 234,514 B | 63,376 B | 63,264 B | 95,220 B | 63,272 B | 63,705 B | 63,681 B |
-| 9,216 | 454,674 B | 124,816 B | 124,704 B | 192,500 B | 124,712 B | 125,145 B | 125,129 B |
-| 16,384 | 762,899 B | 210,832 B | 210,720 B | 328,692 B | 210,728 B | 211,162 B | 211,138 B |
+| 4,096 | 236,966 B | 63,376 B | 63,264 B | 95,220 B | 63,272 B | 64,859 B | 65,199 B |
+| 9,216 | 457,126 B | 124,816 B | 124,704 B | 192,500 B | 124,712 B | 126,299 B | 126,631 B |
+| 16,384 | 765,351 B | 210,832 B | 210,720 B | 328,692 B | 210,728 B | 212,316 B | 212,652 B |
 
 The measured site slopes at the upper two points are 43.0001 bytes/site for the complete runtime,
 12 bytes/site for either scientific bank, and 19 bytes/site for incremental lifecycle workspace.
@@ -194,9 +196,9 @@ maximum degree is four.
 
 | Cell/edge capacity | Runtime | Active bank | Candidate bank | Lifecycle incremental | Snapshot | Checkpoint |
 |---:|---:|---:|---:|---:|---:|---:|
-| 256 | 762,899 B | 210,832 B | 210,720 B | 328,692 B | 210,728 B | 211,162 B |
-| 1,024 | 919,861 B | 250,864 B | 250,752 B | 376,308 B | 250,760 B | 251,196 B |
-| 4,096 | 1,547,701 B | 410,992 B | 410,880 B | 566,772 B | 410,888 B | 411,324 B |
+| 256 | 765,351 B | 210,832 B | 210,720 B | 328,692 B | 210,728 B | 212,316 B |
+| 1,024 | 922,313 B | 250,864 B | 250,752 B | 376,308 B | 250,760 B | 252,350 B |
+| 4,096 | 1,550,153 B | 410,992 B | 410,880 B | 566,772 B | 410,888 B | 412,478 B |
 
 The upper measured capacity slopes are 204.375 bytes/capacity slot for the runtime, 52.125
 bytes/slot for either scientific bank, and 62 bytes/slot for incremental lifecycle workspace.
@@ -208,13 +210,13 @@ cell and relationship slots gives:
 
 | Object | Projected bytes | Approximate size |
 |---|---:|---:|
-| Complete Core runtime | 13,322,045 | 12.71 MiB |
+| Complete Core runtime | 13,324,497 | 12.71 MiB |
 | Active scientific bank | 3,667,858 | 3.50 MiB |
 | Candidate scientific bank | 3,667,746 | 3.50 MiB |
 | Incremental lifecycle workspace | 5,602,260 | 5.34 MiB |
 | Logical snapshot | 3,667,754 | 3.50 MiB |
-| Checkpoint heap graph | 3,668,224 | 3.50 MiB |
-| Serialized checkpoint | 3,667,961 | 3.50 MiB |
+| Checkpoint heap graph | 3,669,378 | 3.50 MiB |
+| Serialized checkpoint | 3,669,859 | 3.50 MiB |
 
 This is a capacity-planning projection, not a benchmark or a whole-cell model estimate. It assumes
 the measured fixed layouts and degree bound; it excludes native components and their solvers.
@@ -276,11 +278,11 @@ duplicate scan. Scalar checks are omitted from the count.
 
 | Vertices | Edges | Maximum degree | State | Work bound | Median validation | Warmed allocation |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1,024 | 1,024 | 2 | 27,120 B | 10,240 | 8,663 ns | 0 B |
-| 2,048 | 2,048 | 2 | 53,872 B | 20,480 | 16,864 ns | 0 B |
-| 4,096 | 4,096 | 2 | 107,376 B | 40,960 | 33,131 ns | 0 B |
+| 1,024 | 1,024 | 2 | 27,120 B | 10,240 | 8,159 ns | 0 B |
+| 2,048 | 2,048 | 2 | 53,872 B | 20,480 | 16,118 ns | 0 B |
+| 4,096 | 4,096 | 2 | 107,376 B | 40,960 | 32,441 ns | 0 B |
 
-Fourfold `E` and `V` produced a fourfold structural work bound and a 3.824x observed timing ratio.
+Fourfold `E` and `V` produced a fourfold structural work bound and a 3.976x observed timing ratio.
 The gate's loose tripwire is 10x. Fixed-degree evidence does not prove linear behavior when `D`
 grows; relationship-capacity and maximum-degree admission must therefore remain explicit.
 
@@ -300,11 +302,11 @@ endpoint-degree work.
 
 | Vertices | Edges | Requests | Maximum degree | Transaction object | Work bound | Median preparation | Warmed allocation |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1,024 | 1,024 | 1,024 | 2 | 73,312 B | 15,360 | 84,645 ns | 0 B |
-| 2,048 | 2,048 | 2,048 | 2 | 146,144 B | 32,768 | 187,343 ns | 0 B |
-| 4,096 | 4,096 | 4,096 | 2 | 291,808 B | 69,632 | 424,916 ns | 0 B |
+| 1,024 | 1,024 | 1,024 | 2 | 73,312 B | 15,360 | 82,948 ns | 0 B |
+| 2,048 | 2,048 | 2,048 | 2 | 146,144 B | 32,768 | 183,750 ns | 0 B |
+| 4,096 | 4,096 | 4,096 | 2 | 291,808 B | 69,632 | 403,864 ns | 0 B |
 
-Fourfold `E`, `V`, and `Q` produced the stated `Q*log(Q)` structural bound and a 5.020x observed
+Fourfold `E`, `V`, and `Q` produced the stated `Q*log(Q)` structural bound and a 4.869x observed
 timing ratio, below the 10x regression tripwire. This evidence covers the transaction preparation
 path that the integrity-only measurement does not exercise.
 
@@ -322,7 +324,7 @@ the previously published runtime rather than exposing the candidate.
 Those two names are the intentional `+2` stable PottsToolkit public-API delta from G5H-0. They
 implement the frozen F11 host boundary and are not compatibility aliases or parallel authorities.
 
-Focused dirty-working-tree evidence is:
+Exact-candidate evidence is:
 
 - `test/test_relationship_host_transactions_v2.jl`: 22/22 passed, covering create, retune,
   remove, payload schema ordering, checkpoint continuation, batch rollback, stale generation,
@@ -333,9 +335,9 @@ Focused dirty-working-tree evidence is:
   rejection, and cross-store all-or-nothing failure.
 
 This closes the F11 settled-host implementation gap for G5H-1/G5H-2. It is functional evidence,
-not a new scaling or GPU claim. Final closure still requires the full root and CorePotts suites on
-the exact clean candidate. Device-resident compiled requests and no-hidden-transfer qualification
-remain owned by G5H-4.
+not a new scaling or GPU claim. The full root and CorePotts suites passed on the exact clean
+candidate. Device-resident compiled requests and no-hidden-transfer qualification remain owned by
+G5H-4.
 
 ## Interpretation and limits
 

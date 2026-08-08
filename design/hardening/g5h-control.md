@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: active; G5H-0 and R2H-A passed; G5H-1 through G5H-3 implementation in progress
+Status: G5H-0 through G5H-3 passed; R2H-A passed; R2H-B open
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -13,10 +13,10 @@ repeat or amend gate requirements.
 |:--|:--|:--|
 | G5H-0 — authority, baseline, preservation | `passed` | Corrected candidate `9afcf6f1ec44cf84525d8b023c2d1b705560e365`, tree `a8b0ce43489e558e1770f4982dece97ef4c6eca7`, cleared R2H-A with no carried finding. |
 | R2H-A — authority and preservation review | `passed` | Fresh independent read-only review of the exact corrected candidate returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
-| G5H-1 — semantic and CorePotts consolidation | `active` | Implemented on the uncommitted working candidate; F11's single Core host-candidate transaction and atomic runtime rebuild are focused-green, while final authoritative qualification is pending. |
-| G5H-2 — pure-Potts authoring and SciML lifecycle | `active` | Implemented together with G5H-1; F11 now has one public settled host transaction with generation-safe identities and callback rollback, while the remaining preservation closure and final qualification are pending. |
-| G5H-3 — native global MTK integration | `active` | Native declarations, real upstream MTK compilation, and the coupled runtime are under executable qualification; R2H-B is not yet open. |
-| R2H-B — cohesion and real-MTK review | `pending` | Opens only after G5H-1 through G5H-3 pass. |
+| G5H-1 — semantic and CorePotts consolidation | `passed` | Exact candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree `b5ef897a3872a2262112375278ca87d348886668`; CorePotts 952/952, retained package witnesses, named SPIs, exact quantitative evidence, and qualification tools passed. |
+| G5H-2 — pure-Potts authoring and SciML lifecycle | `passed` | The same exact candidate passed the complete 1,355-assertion authoring, completion, scheduling, problem, SciML lifecycle, SII, checkpoint, diagnostics, scientific-witness, and API surface. |
+| G5H-3 — native global MTK integration | `passed` | The pinned full-MTK suite passed 135/135, covering native retention, upstream structural compilation, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
+| R2H-B — cohesion and real-MTK review | `open` | G5H-1 through G5H-3 are qualified on the exact candidate; independent read-only review is the only remaining boundary before G5H-4. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `pending` | Blocked by R2H-B. |
 | G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
@@ -43,21 +43,43 @@ The fresh formal rereview then inspected corrected candidate
 P2=0, and P3=0. It independently reproduced the authority order, complete preservation and
 tooling partitions, all 356 deletion/recovery witnesses, the archive hash and entry count, public
 declaration ranges and digests, active-link/TOML/local-path checks, fresh package boundaries, and
-closure of every first-review finding. G5H-0 and R2H-A therefore pass with no carried P2. G5H-1
-through G5H-3 are now active on branch `codex/symbolic-potts-v1` from HEAD
-`9f3877d82db7ca95d2c89700bb7de1b6f4c0c7d1`; the working tree is intentionally uncommitted and
-does not become gate evidence until the final matrix, exact candidate identity, and R2H-B review
-are recorded below.
+closure of every first-review finding. G5H-0 and R2H-A therefore pass with no carried P2.
 
-## G5H-1/G5H-2 working-candidate evidence
+G5H-1 through G5H-3 were then implemented and frozen on branch `codex/symbolic-potts-v1` as exact
+candidate `354469ec82f0daa481a82d982d975d7046f4b71e`, tree
+`b5ef897a3872a2262112375278ca87d348886668`. The complete matrix below ran on that clean commit on
+the target Mac with Julia 1.12.1 on 2026-08-08. R2H-B reviews this vertical slice; no G5H-4 work
+has begun.
 
-This section records provisional focused results on the dirty working candidate. It closes an
-implementation gap for the named obligation, but it does not mark either gate passed and does not
-replace the final exact-candidate matrix.
+## G5H-1 through G5H-3 exact-candidate evidence
 
-| Obligation | Implemented authority | Focused result | Remaining qualification |
+Every row below refers to the exact candidate identified above. Together they close the normative
+G5H-1 through G5H-3 exit conditions; passing R2H-B remains a separate review decision.
+
+| Obligation | Implemented authority | Exact result | Scope boundary |
 |:--|:--|:--|:--|
-| F11 settled host relationship mutation | Public `CellIdentity` and `relationship_transaction!(integrator, effects...)` reuse the existing `Create`, `Remove`, and `Retune` effects. Endpoint-pair remove/retune, exact generation checks, integer endpoint auto-stamping, canonical Core validation, one host-candidate rebuild, backend adaptation, and pointer publication form one atomic boundary. Callback failure retains the previously published runtime. | `test/test_relationship_host_transactions_v2.jl`: 22/22 passed. The public API and Core SPI boundary selection passed 550/550. `lib/CorePotts/test/test_program_v1_relationships_checkpoint.jl` contains the package-owned settled-host rebuild, invalid-batch, stale-generation, unsettled-runtime, and cross-store all-or-nothing unit witnesses. | Repeat the complete root and CorePotts suites on the exact clean candidate and record their totals before either gate passes. GPU-resident descriptor requests and no-hidden-transfer backend claims remain G5H-4 obligations; this row proves only the settled host path. |
+| F11 settled host relationship mutation | Public `CellIdentity` and `relationship_transaction!(integrator, effects...)` reuse the existing `Create`, `Remove`, and `Retune` effects. Endpoint-pair remove/retune, exact generation checks, integer endpoint auto-stamping, canonical Core validation, one host-candidate rebuild, backend adaptation, and pointer publication form one atomic boundary. Callback failure retains the previously published runtime. | `test/test_relationship_host_transactions_v2.jl`: 22/22 passed. The public API and Core SPI boundary selection passed 550/550. `lib/CorePotts/test/test_program_v1_relationships_checkpoint.jl` supplies package-owned settled-host rebuild, invalid-batch, stale-generation, unsettled-runtime, and cross-store all-or-nothing witnesses. | GPU-resident descriptor requests and no-hidden-transfer backend claims remain G5H-4 obligations; this row proves the settled host path. |
+
+### Exact qualification matrix
+
+| Lane | Reproduction command | Exact result |
+|:--|:--|:--|
+| PottsToolkit package | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=. --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("PottsToolkit")'` | Runner closure 325/325; authoritative G5H-1 through G5H-3 surface 1,355/1,355 in 17m11.5s. The re-resolved compatibility lane used ModelingToolkit 11.38.0, ModelingToolkitBase 1.59.0, SciMLBase 3.41.0, Symbolics 7.35.0, and Unitful 1.28.0. |
+| CorePotts package | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=lib/CorePotts --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("CorePotts")'` | 952/952 passed, including 10 Aqua assertions; no PottsToolkit, MTK, SciML solver, Makie, or vendor dependency is present. |
+| Pinned full-MTK integration | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=integration --startup-file=no --threads=1 integration/runtests.jl` | 135/135 passed on ModelingToolkit 11.37.1, ModelingToolkitBase 1.58.1, ModelingToolkitStandardLibrary 2.29.5, SciMLBase 3.39.1, Symbolics 7.34.1, DynamicQuantities 1.13.0, and Unitful 1.28.0. |
+| MakiePotts preservation | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=lib/MakiePotts --startup-file=no --threads=1 -e 'using Pkg; Pkg.test("MakiePotts")'` | 501/501 passed after rebinding its fixture to the final public lifecycle; its 3D frame witness remains independent of the intentionally unsupported 3D CPM runtime row. |
+| Quantitative evidence | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=. --startup-file=no --threads=1 scripts/measure_g5h1_memory_and_scaling.jl` plus four fresh 1/6/24/128-declaration processes | `pass`, `bounded_cpu_evidence_only`; clean commit and tree matched; relationship validation and transaction preparation allocated 0 B after warmup and stayed below the 10x guard; the 128-declaration four-phase path completed in 100.354s. Exact tables are in `g5h1-quantitative-memory-and-scaling-evidence.md`. |
+| Compiler/operation qualifiers | The same Julia prefix with `scripts/check_v1_operation_inventory.jl`, `scripts/qualify_specialization_growth.jl`, and `scripts/qualify_static_evaluator.jl` | 68 operations qualified; specialization growth 12/12; independent static evaluator exited zero with exact ordered semantics, inferred `Float32`, zero warmed allocation for the selected representation, fixed occurrence specialization through 1,024 occurrences, and bounded group growth. |
+| Strict documentation | `/Applications/Julia-1.12.app/Contents/Resources/julia/bin/julia --project=docs --startup-file=no --threads=1 docs/make.jl` | Doctests, cross-references, document checks, and HTML rendering passed with `warnonly=false`. |
+| Static and fresh boundaries | `git diff --check HEAD^..HEAD`; parse every tracked `.jl` with `Meta.parseall`; parse every tracked TOML; retired-name scan; explicit fresh PottsToolkit/CorePotts load commands | Clean diff; 258 tracked Julia files and 148 tracked TOMLs parsed; no active retired-package match; no empty maintained directory; PottsToolkit loaded without full ModelingToolkit and CorePotts loaded without PottsToolkit, MTK, SciML, Makie, or the retired package. |
+
+### Gate-specific closure
+
+| Gate | Normative delivery | Authoritative evidence |
+|:--|:--|:--|
+| G5H-1 | Shared acceptance; consolidated traversal/facts/lifecycle/capability/checkpoint authorities; receipts and bulk component state; honest profile admission; Core-owned settlement/rejection suites; named compiler/backend SPIs and narrow Core API; measured memory/scaling. | `lib/CorePotts/src/{compiler_spi,backend_spi}.jl`, the split Core program/execution sources, all 952 Core assertions, `test/test_source_traversal_authority.jl`, `test/test_core_spi_boundary.jl`, public API and runner-closure tests, the three live qualifier results, and the exact quantitative record. |
+| G5H-2 | One functional and `@named` authoring path; composition/namespacing/completion/diagnostics/inspection; base-package structural `mtkcompile`; scheduled system → problem → SciML lifecycle; late profile selection; remake/SII/saving/callback/checkpoint/restore; one API inventory. | `test/test_{system_contract,statements_and_traversal,completion_and_diagnostics,mtkcompile,fresh_process_v2,sciml_lifecycle_v2,lifecycle_public_v2,public_api_v2}.jl` plus the scheduled scientific witnesses, all within the 1,355/1,355 root result. Major invalid construction families assert source-located diagnostics. |
+| G5H-3 | Native declarations and typed ports; hierarchy/default/event/observed/SII retention; upstream `mtkcompile` and native problems; explicit MCS/time/order semantics; bidirectional ODE coupling; honest DAE/event boundary; MTKStandardLibrary and Catalyst; coupled restart/remake/error/cancellation/atomicity. | `src/native/*`, `ext/PottsToolkitModelingToolkitExt.jl`, `integration/test_modelingtoolkit_retention_and_structural_scheduling.jl`, `integration/test_modelingtoolkit_standard_library.jl`, and `integration/test_native_runtime.jl`, all within the 135/135 pinned result. Copied `EquationComponent` assimilation is deleted; the Core fresh-load boundary remains MTK free. |
 
 ### Intentional stable public-API delta from G5H-0
 
