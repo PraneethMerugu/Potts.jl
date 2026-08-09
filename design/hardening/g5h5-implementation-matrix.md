@@ -1,6 +1,6 @@
 # G5H-5 implementation matrix
 
-Status: passed on exact corrected implementation candidate; R2H-C rereview pending
+Status: passed; R2H-C cleared on the exact corrected candidate
 
 Date: 2026-08-08
 
@@ -21,7 +21,7 @@ passed.
 | H5-F | Quantitative comparison with the exact G5H-0 baseline | `g5h5-quantitative-evidence.md` and `benchmark/src/g5h5_comparison_probe.jl` | Exact G5H-0 and final source paths measured on target Mac: total construction 0.877x, median MCS 0.934x, allocations and checkpoint regressions explicitly retained; component-pool baseline correctly recorded as absent | passed |
 | H5-G | Exact support and limitations matrix | Final manual capability pages plus the G5H-4 conjunction matrix | Capability, runtime, extension, and API pages restrict claims to checked conjunctions and preserve explicit 3D/vendor/MOL-GPU/adaptive/graph-rewrite limitations; docs/API agreement checks passed | passed |
 | H5-Q | Full product qualification and freeze | Living control record and exact candidate commit/tree | Root 411/411 + 2,189/2,189; Core 956/956; Makie 503/503; integration 278/278; complete Metal, strict docs, inventory 68, specialization 12/12, static evaluator, 251 tracked Julia parses, 150 tracked TOML parses, diff, retired-surface, and empty-directory checks passed | passed: `06741e681cc1a5cacbbc4f56ac8a412401e4ee52` / `19a8ca73145412b0efa060845ae56fd929605a19` |
-| R2H-C | Independent hardening exit review | Fresh read-only review record | First review returned FAIL: P0=0, P1=1 (`EquationProcess` false public surface), P2=1 (incorrect category count), P3=0. The first rereview closed the implementation and owner-added substrate criteria but returned P2=1 because the corrected category count omitted the home page. The exact 16-page set is now recorded; a fresh rereview remains mandatory. | rereview pending |
+| R2H-C | Independent hardening exit review | Fresh read-only review record | Fresh rereview of implementation `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, and qualification record `f3e527cf1bb1c083574fd682b6fd4576ebccf120`, tree `6b6701159a425de2c1c6832d935b75bb26b0d8a7`, returned PASS: P0=0, P1=0, P2=0, P3=0. It closed both prior findings, passed the owner-added substrate/connection audit, and re-audited PR01--PR30. | passed |
 
 ## Claim discipline
 
