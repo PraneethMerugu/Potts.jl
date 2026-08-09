@@ -1,6 +1,6 @@
 # G5H-5 preservation and removal closure
 
-Status: corrected qualification passed; exact freeze and R2H-C rereview pending
+Status: corrected candidate frozen; R2H-C rereview pending
 
 Date: 2026-08-08
 
@@ -64,6 +64,7 @@ Implementation candidate `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree
 `cda132fbeec402a159ce6a9552a63d3a77d9764d`, was rejected by R2H-C because
 `EquationProcess` remained a stable public copied-equation surrogate. The
 repair above removes it and preserves the narrower successors. Every affected
-qualification lane now passes on the corrected worktree. This record becomes
-passed again only after the implementation is frozen as a new exact candidate
-and a fresh R2H-C rereview clears it.
+qualification lane now passes on corrected implementation candidate
+`06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree
+`19a8ca73145412b0efa060845ae56fd929605a19`. This record becomes passed again
+only after a fresh R2H-C rereview clears that exact candidate.

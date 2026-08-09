@@ -1,6 +1,6 @@
 # G5H-5 implementation matrix
 
-Status: corrected qualification passed; implementation freeze pending
+Status: passed on exact corrected implementation candidate; R2H-C rereview pending
 
 Date: 2026-08-08
 
@@ -20,7 +20,7 @@ passed.
 | H5-E | Preservation and removal closure | `g5h5-preservation-closure.md` | PR01--PR30 have passing successor witnesses or explicit owner-deferred dispositions; `EquationProcess` is absent from implementation and public API, with only explicit retirement assertions remaining | passed; R2H-C audits |
 | H5-F | Quantitative comparison with the exact G5H-0 baseline | `g5h5-quantitative-evidence.md` and `benchmark/src/g5h5_comparison_probe.jl` | Exact G5H-0 and final source paths measured on target Mac: total construction 0.877x, median MCS 0.934x, allocations and checkpoint regressions explicitly retained; component-pool baseline correctly recorded as absent | passed |
 | H5-G | Exact support and limitations matrix | Final manual capability pages plus the G5H-4 conjunction matrix | Capability, runtime, extension, and API pages restrict claims to checked conjunctions and preserve explicit 3D/vendor/MOL-GPU/adaptive/graph-rewrite limitations; docs/API agreement checks passed | passed |
-| H5-Q | Full product qualification and freeze | Living control record and exact candidate commit/tree | Root 411/411 + 2,189/2,189; Core 956/956; Makie 503/503; integration 278/278; complete Metal, strict docs, inventory 68, specialization 12/12, static evaluator, 251 tracked Julia parses, 150 tracked TOML parses, diff, retired-surface, and empty-directory checks passed | qualification passed; exact commit/tree pending |
+| H5-Q | Full product qualification and freeze | Living control record and exact candidate commit/tree | Root 411/411 + 2,189/2,189; Core 956/956; Makie 503/503; integration 278/278; complete Metal, strict docs, inventory 68, specialization 12/12, static evaluator, 251 tracked Julia parses, 150 tracked TOML parses, diff, retired-surface, and empty-directory checks passed | passed: `06741e681cc1a5cacbbc4f56ac8a412401e4ee52` / `19a8ca73145412b0efa060845ae56fd929605a19` |
 | R2H-C | Independent hardening exit review | Fresh read-only review record | First review returned FAIL: P0=0, P1=1 (`EquationProcess` false public surface), P2=1 (incorrect page count), P3=0. Both findings are repaired; the owner-added Wortel/Merks substrate criterion is recorded for a fresh exact-candidate rereview. | rereview pending |
 
 ## Claim discipline
