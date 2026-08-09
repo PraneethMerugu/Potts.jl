@@ -67,4 +67,7 @@ repair above removes it and preserves the narrower successors. Every affected
 qualification lane now passes on corrected implementation candidate
 `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree
 `19a8ca73145412b0efa060845ae56fd929605a19`. This record becomes passed again
-only after a fresh R2H-C rereview clears that exact candidate.
+only after a fresh R2H-C rereview clears that exact candidate. The first
+corrected-candidate rereview closed the implementation and substrate findings
+but returned P2=1 because H5-A omitted the home page from its exact inventory;
+the record now states the complete 16-page set.

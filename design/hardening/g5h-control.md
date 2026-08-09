@@ -19,7 +19,7 @@ repeat or amend gate requirements.
 | R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `passed` | Exact implementation candidate `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`, tree `e935bf919e59c86baa3f23a394d1eb06d497bc61`; H4-A through H4-E passed their implementation hold points, and H4-Q froze the exhaustive conjunction matrix with passing qualification evidence. |
 | G5H-5 — product qualification and docs | `passed` | Corrected implementation candidate `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, removes the surviving `EquationProcess` surrogate, corrects the page count, records the owner-required Wortel/Merks substrate dispositions, and passes every affected qualification lane. |
-| R2H-C — hardening exit review | `rereview pending` | First review: P0=0, P1=1, P2=1, P3=0; no cleared checkpoint. Both findings are repaired; the fresh review must also audit upstream substrate and MTK connection ownership in the product programs. |
+| R2H-C — hardening exit review | `rereview pending` | First review: P0=0, P1=1, P2=1, P3=0. First corrected-candidate rereview: P0=0, P1=0, P2=1, P3=0; it passed the implementation and substrate audit but found that the exact docs inventory omitted the home page. The record now states all 16 pages; no checkpoint has cleared. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
 
 ## Review results
@@ -147,7 +147,8 @@ The first formal R2H-C review inspected implementation candidate
 with P0=0, P1=1, P2=1, and P3=0. It found that `EquationProcess` survived as
 an exported generic copied-equation surrogate despite PT01's accepted
 replacement disposition, and that H5-A said twelve learn/concept pages when
-the exact set is ten learn/concept, two published-model, and three API pages.
+the exact category set is ten learn/concept, two published-model, and three
+API pages.
 No checkpoint cleared. The earliest repair boundary is H4-D/G5H-5; a new
 candidate and fresh independent rereview are mandatory.
 
@@ -161,6 +162,16 @@ intrinsically site/copy/MCS-owned, while Merks retains the bounded stencil
 because the qualified MethodOfLines adapter is output-only and cannot accept
 its moving-occupancy secretion forcing. The published pages record that
 disposition; formal R2H-C must verify it on the exact corrected candidate.
+
+The first corrected-candidate rereview inspected implementation candidate
+`06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree
+`19a8ca73145412b0efa060845ae56fd929605a19`, and returned `FAIL` with P0=0,
+P1=0, P2=1, and P3=0. It closed the `EquationProcess` finding, passed the
+owner-added Wortel/Merks substrate audit, and confirmed MTK ownership of
+native internal connections. Its sole finding was record-only: the corrected
+H5-A category count omitted `docs/src/index.md`. The exact curated source set
+is one home page, ten learn/concept pages, two published-model pages, and three
+API pages, for 16 total. No checkpoint cleared; a fresh rereview is required.
 
 ## G5H-4 implementation matrix
 
