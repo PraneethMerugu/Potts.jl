@@ -1,6 +1,10 @@
 # G5H-R0 current-state and impact freeze
 
-Status: candidate freeze; exact candidate binding pending
+Status: passed on exact R0 candidate
+
+Exact candidate: `6cb6847a2ee408a3920be0c8d2d1dae661c7cb61`
+
+Exact tree: `5b2063924941b53721f588d104d3f7302f721750`
 
 Date: 2026-08-09
 
@@ -21,9 +25,10 @@ candidate establish Decision 0045, the G5H-R contract and control record, author
 pointers, and this audit. No file under `src/`, `ext/`, `lib/`, `examples/`, `test/`, `integration/`,
 `docs/src/`, `benchmark/`, or any `Project.toml`/`Manifest.toml` is modified.
 
-The exact R0 candidate commit and tree are written into this record by a subsequent record-only
-binding commit, following the existing G5H freeze protocol. Until then this artifact is a candidate,
-not a passed checkpoint.
+The exact R0 candidate is commit `6cb6847a2ee408a3920be0c8d2d1dae661c7cb61`, tree
+`5b2063924941b53721f588d104d3f7302f721750`. This subsequent record-only binding follows the
+existing G5H freeze protocol and makes the candidate a passed checkpoint without changing any
+production, package, test, example, or environment file.
 
 ## Target machine and resolved environments
 
@@ -326,8 +331,22 @@ changes stops R1 and reports that requirement to the committee; it does not cros
 | Research-only mutation boundary recorded | Complete |
 | Current Merks, product, and MOL witnesses reproduced | Complete |
 | Production/public/capability behavior changed | No |
-| Exact candidate commit and tree bound | Pending record-only binding commit |
+| Exact candidate commit and tree bound | Complete: `6cb6847a2ee408a3920be0c8d2d1dae661c7cb61` / `5b2063924941b53721f588d104d3f7302f721750` |
 
-R0 may become `passed` only after the exact candidate is committed, the binding values replace the
-pending status above, static integrity checks pass on that candidate, and the living control record
-opens G5H-R1. No R1 technical conclusion is required or implied by R0 passage.
+R0 passes because the exact candidate is committed, the binding values are recorded, static
+integrity checks pass on that candidate, and the living control record opens G5H-R1. No R1
+technical conclusion is required or implied by R0 passage.
+
+## Exact-candidate integrity closure
+
+The exact candidate passed:
+
+- `git diff --check`;
+- an empty production/path diff from the R2H-C predecessor across `src`, `ext`, `lib`, `examples`,
+  `test`, `integration`, `docs/src`, `benchmark`, and root package/environment files;
+- all 16 frozen SHA-256 identities above;
+- local-link resolution for all 231 Markdown files visible to Git;
+- parse of all 150 tracked TOML files; and
+- the three reproduced current-behavior witnesses recorded above.
+
+These checks qualify the R0 freeze only. They do not qualify a candidate native field input.
