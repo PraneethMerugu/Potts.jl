@@ -37,15 +37,14 @@ The package family supports Julia 1.12 and later Julia 1.x releases. See
 
 ## Documentation
 
-The repository is currently in pre-1.0 authoring and ModelingToolkit hardening. The active manual
-is temporarily narrowed to architecture and capability status; legacy `PottsModel` tutorials are
-retained only as rewrite material and are not current API documentation.
+The repository is currently in pre-1.0 authoring and ModelingToolkit hardening. G5H and its product
+manual cleared on an exact candidate; the active G5H-R gate now researches a compile-once native
+MethodOfLines input for moving CPM occupancy before G6. Research artifacts are not support claims.
 
 ```bash
 julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
 julia --project=docs --startup-file=no docs/make.jl
 ```
 
-The status manual builds strictly. The complete Learn, Examples, Published Models, and API manual
-returns at the G5H product gate after it executes against the final public interface. There is no
-compatibility promise for unpublished pre-V1 authoring names.
+The complete Learn, Published Models, and API manual builds strictly against the qualified public
+interface. There is no compatibility promise for unpublished pre-V1 authoring names.

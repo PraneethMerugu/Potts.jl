@@ -5,6 +5,9 @@ corresponding specification document.
 
 ## Current disposition
 
+- Decision 0045 inserts the active G5H-R native moving-field research and amendment gate after the
+  cleared R2H-C checkpoint. It keeps G6 closed until a four-role committee reviews the research,
+  any resulting G5H amendment is accepted, and all reopened work clears.
 - Decision 0044 governs the active pre-G6 hardening program and supersedes conflicting authoring,
   compilation, coupled-scheduling, capability-promotion, simultaneous-vendor,
   documentation-order, and phase-order portions of Decisions 0013, 0016, 0025, 0026, and 0029
@@ -57,6 +60,7 @@ corresponding specification document.
 - [0041: Semantic-preserving repository consolidation (repository-wide principles only)](0041-semantic-preserving-repository-consolidation.md)
 - [0043: Retire ProcessBigraphs and restore the PottsToolkit/CorePotts focus](0043-retire-processbigraphs.md)
 - [0044: Insert pre-G6 cohesion, MTK, and product hardening](0044-pre-g6-cohesion-and-mtk-hardening.md)
+- [0045: Insert a committee-reviewed native moving-field research gate](0045-native-moving-field-research-gate.md)
 
 ## Record Template
 

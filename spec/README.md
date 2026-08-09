@@ -15,7 +15,9 @@ Apply authority in this order:
 
 1. the accepted [Project Charter](project-charter.md) and the latest accepted decision that
    explicitly changes a product or architecture choice;
-2. the [G5H Hardening Contract](symbolic-potts-v1-hardening.md) for post-G5 work order, MTK/SciML
+2. the
+   [G5H-R Native Moving-Field Research Gate](symbolic-potts-v1-native-moving-field-research.md)
+   and [G5H Hardening Contract](symbolic-potts-v1-hardening.md) for post-G5 work order, MTK/SciML
    integration, component scheduling, late lowering, capability profiles, and the G6 entry gate;
 3. accepted scientific contracts for state, CPM transitions, lifecycle, randomness, persistence,
    topology, observation, and numerical meaning;
@@ -77,8 +79,11 @@ behavior before source cleanup.
 
 ## Current construction program
 
+- [Symbolic Potts V1 Native Moving-Field Research and Amendment Gate](symbolic-potts-v1-native-moving-field-research.md)
+  — authoritative for the current committee-reviewed pre-G6 research and any resulting bounded
+  G5H amendment
 - [Symbolic Potts V1 G5H Hardening](symbolic-potts-v1-hardening.md) — authoritative for the current
-  post-G5 phase and G6 entry
+  passed post-G5 implementation record and, as amended after G5H-R review, G6 entry
 - [Symbolic Potts V1 Compiler Construction](symbolic-potts-v1-compiler-construction.md) —
   authoritative for cleared G0--G5 and future G6--G9 as amended by G5H
 - [Symbolic Potts V1](symbolic-potts-v1.md)

@@ -1,6 +1,6 @@
 # Symbolic Potts V1 Cohesion, MTK, and Product Hardening Contract
 
-Date: 2026-08-06
+Date: 2026-08-06; G5H-R insertion accepted 2026-08-09
 
 Status: Accepted
 
@@ -11,6 +11,12 @@ Phase: `G5H`, after cleared G5/R2 and before G6
 This contract is the sole authority for the work inserted between the cleared G5 execution
 boundary and the unopened G6 public-integration boundary. It is accepted by
 [Decision 0044](decisions/0044-pre-g6-cohesion-and-mtk-hardening.md).
+
+[Decision 0045](decisions/0045-native-moving-field-research-gate.md) subsequently inserts the
+[G5H-R Native Moving-Field Research and Amendment Gate](symbolic-potts-v1-native-moving-field-research.md)
+after the cleared R2H-C checkpoint. The passed clauses below remain the exact authority reviewed by
+R2H-C until a committee-reviewed, owner-accepted G5H-R amendment changes them. G6 is closed while
+that gate is active.
 
 The earlier Symbolic Potts contracts remain authority for compatible scientific and compiler
 requirements. Where they conflict, this contract supersedes:
@@ -287,6 +293,9 @@ cleared G5/R2
     -> G5H-0 -> R2H-A
     -> G5H-1 -> G5H-2 -> G5H-3 -> R2H-B
     -> G5H-4 -> G5H-5 -> R2H-C
+    -> G5H-R research -> R2H-D committee review
+    -> post-review amendment or no-change disposition
+    -> all accepted reopened work and reviews
     -> explicit owner send-off -> G6
 ```
 
@@ -430,14 +439,30 @@ Exit requires:
 - every preservation row marked preserved, replaced with a passing witness, removed by accepted
   disposition, or explicitly owner-deferred;
 - no unsupported public claim; and
-- an exact cleared checkpoint followed by explicit owner authorization to begin G6.
+- an exact cleared checkpoint. Decision 0045 subsequently requires G5H-R, any accepted reopened
+  work and reviews, and explicit owner authorization before G6.
 
 R2H-C does not replace the G7 scientific review or G9 terminal review. It qualifies cohesion and
 integration before the public surface is frozen.
 
+### G5H-R — Native moving-field research and post-review amendment
+
+G5H-R follows the cleared R2H-C checkpoint but precedes G6. Its separate
+[research-gate contract](symbolic-potts-v1-native-moving-field-research.md) requires primary-source
+research, executable alternatives, compile-frequency instrumentation, CPU/backend evidence,
+scientific and replay probes, and a four-role committee review before this contract may be amended.
+
+G5H-R does not presume that the current MethodOfLines or Merks disposition is wrong. Before the
+committee verdict it cannot change production behavior, public API, capability claims, stable
+documentation, or passed evidence. After review it may produce only the bounded amendment or
+terminal no-change/defer disposition defined by its contract. Any accepted amendment names the
+earliest reopened G5H gate and every required rereview.
+
 ## Shared review and recovery protocol
 
-All three G5H reviews reuse the existing compiler-construction review policy:
+The three completed G5H implementation reviews reused the existing compiler-construction review
+policy. The G5H-R committee additionally follows its four-role protocol while reusing the severity,
+exact-candidate, and recovery rules below:
 
 - the reviewer did not author the reviewed slice and works read-only from a fresh context;
 - the review names the exact commit, environment, specifications, diff, and commands;
@@ -459,15 +484,17 @@ case.
 
 There is intentionally no independent review after every subgate. G5H-1 through G5H-3 form one
 end-to-end architecture proof, and G5H-4 becomes truthfully reviewable only with G5H-5's models,
-documentation, and backend evidence.
+documentation, and backend evidence. G5H-R adds one committee because it may reopen that completed
+proof; it does not establish a recurring review after each repair.
 
 ## G6 handoff
 
-G6 begins only after R2H-C and explicit owner send-off. Its job is to stabilize, classify, and
-freeze the already functionally complete public integration spine, not finish missing G5H behavior
-or redesign it. The scheduled `PottsSystem`, `PottsProblem`, algorithms, integrator, solution,
-checkpoint, inspection, and SII lifecycle must already pass at G5H exit. Any executable lowering
-type remains private unless a later accepted decision proves a public need.
+G6 begins only after R2H-C, G5H-R, every gate and review reopened by an accepted G5H-R amendment,
+and explicit owner send-off. Its job is to stabilize, classify, and freeze the already functionally
+complete public integration spine, not finish missing G5H behavior or redesign it. The scheduled
+`PottsSystem`, `PottsProblem`, algorithms, integrator, solution, checkpoint, inspection, and SII
+lifecycle must already pass at G5H exit. Any executable lowering type remains private unless a
+later accepted decision proves a public need.
 
 ## Research basis
 
