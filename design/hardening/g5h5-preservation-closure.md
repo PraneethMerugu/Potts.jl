@@ -1,6 +1,6 @@
 # G5H-5 preservation and removal closure
 
-Status: implementation qualification passed; exact G5H-5 commit and R2H-C pending
+Status: G5H-5 passed on exact candidate; R2H-C audit pending
 
 Date: 2026-08-08
 
@@ -59,9 +59,9 @@ unstated compatibility surface.
 
 ## Final closure rule
 
-Implementation qualification passed with root runner closure 411/411 and
+Implementation candidate `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree
+`cda132fbeec402a159ce6a9552a63d3a77d9764d`, passed with root runner closure 411/411 and
 authoritative surface 2,190/2,190, CorePotts 956/956, MakiePotts 503/503,
 pinned integration 278/278, the complete real-Metal runner, strict docs, and
-all static qualifiers. This record becomes final only when the exact G5H-5
-implementation candidate and R2H-C disposition are attached. Any R2H-C
-finding against a row above reopens its earliest owning gate.
+all static qualifiers. R2H-C now audits every disposition. Any finding against
+a row above reopens its earliest owning gate.

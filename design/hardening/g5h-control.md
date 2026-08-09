@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-4 passed; R2H-A and R2H-B passed
+Status: G5H-0 through G5H-5 passed; R2H-A and R2H-B passed; R2H-C open
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -18,8 +18,8 @@ repeat or amend gate requirements.
 | G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
 | R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `passed` | Exact implementation candidate `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`, tree `e935bf919e59c86baa3f23a394d1eb06d497bc61`; H4-A through H4-E passed their implementation hold points, and H4-Q froze the exhaustive conjunction matrix with passing qualification evidence. |
-| G5H-5 — product qualification and docs | `qualified; freeze pending` | Final manual, product programs, preservation/removal closure, baseline comparison, package quality, and all implementation qualification lanes passed; exact candidate commit/tree still must be bound. |
-| R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
+| G5H-5 — product qualification and docs | `passed` | Exact implementation candidate `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree `cda132fbeec402a159ce6a9552a63d3a77d9764d`; final manual, product programs, preservation/removal closure, baseline comparison, package quality, and every implementation qualification lane passed. |
+| R2H-C — hardening exit review | `open` | Independent review of the exact G5H-5 candidate is pending. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
 
 ## Review results
@@ -134,9 +134,11 @@ product/integration witnesses, not G7 paper-source reproduction claims.
 | Quantitative comparison | Exact G5H-0 source candidate and final worktree measured through one common 32 x 32 fixture. Four-phase first-use time is 0.877x baseline and median MCS time 0.934x; allocation and checkpoint regressions remain explicitly reported. Final component-pool and lifecycle absolute evidence is attached. |
 | Static/repository integrity | Operation inventory 68; specialization growth 12/12; independent static evaluator exited zero; 251 active Julia files and 154 TOMLs parsed; `git diff --check` passed; no maintained empty directory remains. |
 
-The implementation content now freezes before its hash is added to this
-record, the G5H-5 matrix, preservation closure, and quantitative evidence.
-R2H-C remains closed until that exact commit exists.
+The implementation content is frozen as exact candidate
+`08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree
+`cda132fbeec402a159ce6a9552a63d3a77d9764d`. This record, the G5H-5 matrix,
+preservation closure, and quantitative evidence bind that immutable tree.
+R2H-C is now open.
 
 ## G5H-4 implementation matrix
 

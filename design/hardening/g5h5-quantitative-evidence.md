@@ -1,6 +1,6 @@
 # G5H-5 quantitative comparison
 
-Status: measured candidate evidence; exact G5H-5 commit pending
+Status: passed on exact G5H-5 implementation candidate
 
 Date: 2026-08-08
 
@@ -132,7 +132,7 @@ risk without inventing a cross-feature ratio.
 | Julia threads | 1 |
 | Bound checks | yes |
 | G5H-0 commit/tree | `9afcf6f1ec44cf84525d8b023c2d1b705560e365` / `a8b0ce43489e558e1770f4982dece97ef4c6eca7` |
-| Final commit/tree | pending implementation freeze |
+| Final commit/tree | `08b2bf0707810461c6f5a970fd2e1aee7ba81806` / `cda132fbeec402a159ce6a9552a63d3a77d9764d` |
 
 `@timed` allocation is process-local Julia allocation, not RSS. Reachable heap
 uses `Base.summarysize`; serialized size uses Julia `Serialization` and is not
