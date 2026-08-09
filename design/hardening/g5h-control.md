@@ -1,6 +1,6 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-5 passed; R2H-A and R2H-B passed; R2H-C open
+Status: G5H-0 through G5H-4 passed; corrected G5H-5 qualification passed, freeze pending
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -18,8 +18,8 @@ repeat or amend gate requirements.
 | G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
 | R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `passed` | Exact implementation candidate `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`, tree `e935bf919e59c86baa3f23a394d1eb06d497bc61`; H4-A through H4-E passed their implementation hold points, and H4-Q froze the exhaustive conjunction matrix with passing qualification evidence. |
-| G5H-5 — product qualification and docs | `passed` | Exact implementation candidate `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree `cda132fbeec402a159ce6a9552a63d3a77d9764d`; final manual, product programs, preservation/removal closure, baseline comparison, package quality, and every implementation qualification lane passed. |
-| R2H-C — hardening exit review | `open` | Independent review of the exact G5H-5 candidate is pending. |
+| G5H-5 — product qualification and docs | `freeze pending` | The corrected worktree removes the surviving `EquationProcess` surrogate, corrects the page count, records the owner-required Wortel/Merks substrate dispositions, and passes every affected qualification lane. Exact candidate commit/tree binding is pending. |
+| R2H-C — hardening exit review | `rereview pending` | First review: P0=0, P1=1, P2=1, P3=0; no cleared checkpoint. Both findings are repaired; the fresh review must also audit upstream substrate and MTK connection ownership in the product programs. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
 
 ## Review results
@@ -122,23 +122,45 @@ The final manual is a curated replacement, not a translation of unpublished
 obsolete model scripts and empty documentation directories are removed.
 Complete Wortel and Merks programs use only the final public lifecycle and are
 product/integration witnesses, not G7 paper-source reproduction claims.
+Their successful execution is not by itself sufficient for H5-B: the owner
+reopened the row for a mechanism-by-mechanism substrate audit. R2H-C must
+verify that only CPM/lattice semantics remain Potts-native, that applicable
+equation-defined biology uses ModelingToolkit, Catalyst, or MethodOfLines, and
+that MTK composition owns connections internal to native symbolic systems.
+Every retained PottsToolkit numerical component requires an exact limitation
+or missing-adapter disposition and an explicit block/non-block decision.
 
 | Lane | Exact result on the freeze worktree |
 |:--|:--|
-| PottsToolkit package | Runner closure 411/411 and authoritative surface 2,190/2,190 passed in 16m34.0s. The product programs contribute 9/9. Aqua, ExplicitImports, retired invocation, private-upstream, dependency/weakdep, exact docs-set, fresh-process, scientific, and public API checks are included. |
+| PottsToolkit package | Corrected runner closure 411/411 and authoritative surface 2,189/2,189 passed in 17m38.2s. Aqua, ExplicitImports, retired invocation, private-upstream, dependency/weakdep, exact docs-set, fresh-process, scientific, and public API checks are included. |
 | CorePotts package | 956/956 passed, including package-owned scientific, lifecycle, relationship, checkpoint, capability, allocation, API, and Aqua evidence. |
 | Pinned MTK integration | 278/278 passed: retained MTK/MTKStandardLibrary, native runtime and batching, MethodOfLines, distributed ensembles, Unitful, optional loading, and CPU weak-extension orders 3/3. |
 | MakiePotts | 503/503 passed, including Aqua, downstream/adversarial/allocation suites and both fresh load orders in the exact resolved test environment. |
 | Real Metal | Complete runner exited zero. Fresh extension orders passed 2/2 and the native component block 37/37; all retained lifecycle, relationship, surface, replay, transfer, synchronization, rejection, and performance witnesses passed without fallback. |
 | Strict manual | Doctests, executable expansion, cross-references, document checks, index population, and HTML rendering passed with `warnonly=false`; the exact Wortel and Merks files execute inside their pages. |
 | Quantitative comparison | Exact G5H-0 source candidate and final worktree measured through one common 32 x 32 fixture. Four-phase first-use time is 0.877x baseline and median MCS time 0.934x; allocation and checkpoint regressions remain explicitly reported. Final component-pool and lifecycle absolute evidence is attached. |
-| Static/repository integrity | Operation inventory 68; specialization growth 12/12; independent static evaluator exited zero; 251 active Julia files and 154 TOMLs parsed; `git diff --check` passed; no maintained empty directory remains. |
+| Static/repository integrity | Operation inventory 68; specialization growth 12/12; independent static evaluator exited zero; 251 tracked Julia files and 150 tracked TOMLs parsed; `git diff --check` passed; no maintained empty directory remains. Only explicit negative retirement assertions mention `EquationProcess`. |
 
-The implementation content is frozen as exact candidate
+The first formal R2H-C review inspected implementation candidate
 `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree
-`cda132fbeec402a159ce6a9552a63d3a77d9764d`. This record, the G5H-5 matrix,
-preservation closure, and quantitative evidence bind that immutable tree.
-R2H-C is now open.
+`cda132fbeec402a159ce6a9552a63d3a77d9764d`, read-only and returned `FAIL`
+with P0=0, P1=1, P2=1, and P3=0. It found that `EquationProcess` survived as
+an exported generic copied-equation surrogate despite PT01's accepted
+replacement disposition, and that H5-A said twelve learn/concept pages when
+the exact set is ten learn/concept, two published-model, and three API pages.
+No checkpoint cleared. The earliest repair boundary is H4-D/G5H-5; a new
+candidate and fresh independent rereview are mandatory.
+
+The corrected worktree then passed root 411/411 + 2,189/2,189, CorePotts
+956/956, pinned integration 278/278, MakiePotts 503/503, strict docs, the
+complete real-Metal runner including 2/2 extension orders and 37/37 native
+components, operation inventory 68, specialization growth 12/12, the static
+evaluator, both direct product executions, and repository integrity. A fresh
+advisory audit found no product-code substrate blocker: Wortel's activity is
+intrinsically site/copy/MCS-owned, while Merks retains the bounded stencil
+because the qualified MethodOfLines adapter is output-only and cannot accept
+its moving-occupancy secretion forcing. The published pages record that
+disposition; formal R2H-C must verify it on the exact corrected candidate.
 
 ## G5H-4 implementation matrix
 

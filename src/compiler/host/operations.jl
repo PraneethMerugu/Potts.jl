@@ -314,9 +314,9 @@ _transfer(identity, arity, result_rule, unit_rule;
 function numerical_operation_requirements end
 numerical_operation_requirements(::Any) = ()
 
-function numerical_process_rejection end
-numerical_process_rejection(::Any, statement, statements, system) =
-    "V1 executable equation lowering does not admit the selected solver policy"
+function numerical_field_rejection end
+numerical_field_rejection(::Any, statement, statements, system) =
+    "V1 executable field lowering does not admit the selected evolution policy"
 
 function numerical_field_stage_descriptor end
 

@@ -65,6 +65,7 @@
         r"\bPottsExecutable\s*\(",
         r"\bSequentialEngine\s*\(",
         r"\bCheckerboardEngine\s*\(",
+        r"\bEquationProcess\s*\(",
         r"\bExplicitDiffusion\s*\(",
         r"\bCUDABackend\s*\(",
         r"\bROCmBackend\s*\(",

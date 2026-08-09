@@ -10,7 +10,7 @@
         :FieldState, :HistoryState, :RelationshipState, :HamiltonianTerm,
         :ProposalDrive, :ProposalConstraint, :ProposalModifier,
         :SynchronousProcess, :AcceptedCopyProcess, :RelationshipProcess,
-        :LifecycleProcess, :EquationProcess, :Observation, :Protocol,
+        :LifecycleProcess, :Observation, :Protocol,
         :RegisteredStatement, :StatementRegistry, :default_statement_registry,
         :register_statement, :statements, :statement_id, :statement_source,
         :compose, :extend, :flatten, :complete, :iscomplete, :is_scheduled,
@@ -130,7 +130,8 @@
         :neighbor_geomean, :EquationStep, :Observe, :Directed,
         :ExplicitEuler, :Heun, :RK4, :ObserveStage, :compile,
         :PottsExecutable, :SequentialEngine, :CheckerboardEngine,
-        :TiledCheckerboard, :ExplicitDiffusion, :CUDABackend, :ROCmBackend,
+        :TiledCheckerboard, :EquationProcess, :ExplicitDiffusion,
+        :CUDABackend, :ROCmBackend,
     ))
     @test isempty(intersect(actual, retired))
     @test all(name -> !isdefined(PottsToolkit, name), retired)

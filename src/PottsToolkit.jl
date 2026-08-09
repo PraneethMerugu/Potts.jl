@@ -85,7 +85,7 @@ export SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
 export RelationshipState
 export HamiltonianTerm, ProposalDrive, ProposalConstraint, ProposalModifier
 export SynchronousProcess, AcceptedCopyProcess, RelationshipProcess, LifecycleProcess
-export EquationProcess, Observation, Protocol, RegisteredStatement
+export Observation, Protocol, RegisteredStatement
 export StatementRegistry, default_statement_registry, register_statement
 export statements, statement_id, statement_source, @statements
 export compose, extend, flatten, complete, iscomplete, is_scheduled

@@ -159,11 +159,11 @@ function _lifecycle_process_rejection(statement, statements)
     return _relationship_process_rejection(statement, statements)
 end
 
-function _equation_process_rejection(statement, statements, system)
+function _field_evolution_rejection(statement, statements, system)
     options = _statement_options(statement)
-    return numerical_process_rejection(
-        get(options, :solver, nothing), statement, statements, system
-    )
+    evolution = get(options, :evolution, nothing)
+    evolution === nothing && return nothing
+    return numerical_field_rejection(evolution, statement, statements, system)
 end
 
 function _first_interface_only_spatial_query(value)
@@ -196,8 +196,8 @@ function _statement_lowering_rejection(statement, statements, system)
         return _lifecycle_process_rejection(statement, statements)
     elseif statement isa RelationshipProcess
         return _relationship_process_rejection(statement, statements)
-    elseif statement isa EquationProcess
-        return _equation_process_rejection(statement, statements, system)
+    elseif statement isa FieldState
+        return _field_evolution_rejection(statement, statements, system)
     elseif statement isa Observation
         operation = _first_interface_only_spatial_query(
             _statement_arguments(statement).expression
@@ -251,58 +251,16 @@ function _validate_equation_and_event_coverage!(diagnostics, system::PottsSystem
     # passes operate on the completion-owned vector so model size does not
     # become a tuple type parameter and trigger one specialization per size.
     records = _completion_data(system).records
-    equation_records = filter(
-        record -> record.kind === :EquationProcess, records
-    )
     for equation in ModelingToolkitBase.equations(system)
-        owners = filter(equation_records) do record
-            arguments = first(record.normalized_payload)
-            any(candidate -> isequal(candidate, equation), arguments.equations)
-        end
-        if isempty(owners)
-            push!(diagnostics, PottsDiagnostic(
-                :unowned_equation,
-                _try_symbolic_name(equation.lhs),
-                string(equation),
-                (nameof(system),),
-                "exactly one explicit EquationProcess owner",
-                "no owner",
-                (),
-                UnknownSource(),
-            ))
-        elseif length(owners) > 1
-            for owner in owners
-                push!(diagnostics, PottsDiagnostic(
-                    :duplicate_equation_owner,
-                    owner.identity,
-                    string(equation),
-                    owner.identity.path,
-                    "exactly one explicit EquationProcess owner",
-                    join(string.(getfield.(owners, :identity)), ", "),
-                    (),
-                    owner.source,
-                ))
-            end
-        end
-    end
-    written = Tuple(
-        (record, value)
-        for record in equation_records
-        for value in first(record.normalized_payload).writes
-    )
-    for (record, value) in written
-        owners = filter(item -> isequal(last(item), value), written)
-        length(owners) <= 1 && continue
         push!(diagnostics, PottsDiagnostic(
-            :duplicate_equation_write_owner,
-            record.identity,
-            record.source isa SourceLocation ?
-            record.source.expression : string(record.identity),
-            record.identity.path,
-            "one EquationProcess writer per phase",
-            join((string(item[1].identity) for item in owners), ", "),
+            :unowned_equation,
+            _try_symbolic_name(equation.lhs),
+            string(equation),
+            (nameof(system),),
+            "a native MTK component or bounded FieldState evolution policy",
+            "a copied root equation with no native owner",
             (),
-            record.source,
+            UnknownSource(),
         ))
     end
     for (kind, events) in (

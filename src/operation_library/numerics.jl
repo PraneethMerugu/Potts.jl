@@ -75,21 +75,11 @@ end
 numerical_operation_requirements(::DiscreteFieldEuler) =
     ((_potts_discrete_field_euler, 7),)
 
-function numerical_process_rejection(
+function numerical_field_rejection(
         ::DiscreteFieldEuler, statement, statements, system
     )
-    arguments = _statement_arguments(statement)
-    fields = filter(candidate -> candidate isa FieldState, statements)
-    length(fields) == 1 ||
-        return "equation lowering requires exactly one FieldState"
-    variable = _statement_arguments(only(fields)).variable
-    length(arguments.writes) == 1 && isequal(only(arguments.writes), variable) ||
-        return "EquationProcess writes must identify the compiled FieldState"
-    isempty(arguments.equations) &&
-        return "EquationProcess requires at least one equation"
-    all(equation -> any(isequal(equation), ModelingToolkitBase.equations(system)),
-        arguments.equations) ||
-        return "EquationProcess equations must be present in PottsSystem.equations"
+    statement isa FieldState ||
+        return "DiscreteFieldEuler must be owned by a FieldState declaration"
     return nothing
 end
 
@@ -97,7 +87,6 @@ function numerical_field_stage_descriptor(
         ::DiscreteFieldEuler,
         ir,
         record_index::Integer,
-        process_index::Integer,
         manifest,
         ::Type{T},
         state_handles,
@@ -106,13 +95,11 @@ function numerical_field_stage_descriptor(
     record = ir.source.records[record_index]
     options = _record_options(record)
     target = state_handles[record.identity]
-    process = ir.source.records[process_index]
-    process_options = _record_options(process)
-    substeps = Int(get(process_options, :substeps, 1))
+    substeps = Int(get(options, :substeps, 1))
     substeps > 0 || throw(ArgumentError(
         "field evolution substeps must be positive"
     ))
-    duration_value = get(process_options, :duration_per_mcs, 1.0)
+    duration_value = get(options, :duration_per_mcs, 1.0)
     duration = T(_numeric_value(
         duration_value,
         _reference_for(manifest.reference_units, duration_value),
@@ -204,8 +191,8 @@ function numerical_field_stage_descriptor(
             _site_write_footprint(ir, CorePotts.CompilerSPI.AfterMCSStage()),
             CorePotts.CompilerSPI.ExclusiveWriteAccess(),
         ),
-        _stage_support(ir, process_index),
-        process_index,
+        _stage_support(ir, record_index),
+        record_index,
         slot,
     )
 end

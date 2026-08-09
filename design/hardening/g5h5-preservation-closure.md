@@ -1,6 +1,6 @@
 # G5H-5 preservation and removal closure
 
-Status: G5H-5 passed on exact candidate; R2H-C audit pending
+Status: corrected qualification passed; exact freeze and R2H-C rereview pending
 
 Date: 2026-08-08
 
@@ -27,8 +27,8 @@ unstated compatibility surface.
 | PR11 | preserved/merged | One Core logical checkpoint plus the Potts extension block covers trackers, relationships, generations, replica/repeat, native global/per-cell/field state, and explicit replay rejection. |
 | PR12 | preserved | Standard SciML `EnsembleProblem` serial/threaded/distributed, retry, reduction, early-stop, and failure witnesses; per-cell batching remains distinct. |
 | PR13 | replaced | Typed `NativeInput`/`NativeOutput`/`NativeFieldOutput`, simultaneous island staging, atomic publication, failure, and restart replace external staged-input assimilation. |
-| PR14 | replaced | `DiscreteFieldEuler` CPU topology/restart oracle and checked Metal native-field row replace the falsely generic diffusion spelling; MethodOfLines is a separate checked extension. |
-| PR15 | replaced | Final black-box Wortel, Merks, and focal witnesses plus complete serial Wortel/Merks reusable programs executed by root tests, strict docs, fresh processes, and directly on the target Mac. No G7 scientific claim is made. |
+| PR14 | replaced | Direct `FieldState(...; evolution=DiscreteFieldEuler())` CPU topology/restart oracle and checked Metal native-field row replace both the falsely generic diffusion spelling and the copied `EquationProcess` surrogate; MethodOfLines is a separate checked extension. |
+| PR15 | repaired; formal review pending | Final black-box Wortel, Merks, and focal witnesses plus complete serial Wortel/Merks reusable programs execute. A mechanism-level substrate audit finds Wortel's site/copy/MCS activity intrinsically CPM-owned and Merks' moving-occupancy secretion incompatible with the qualified output-only MethodOfLines adapter; the published pages record the exact dispositions. No G7 scientific claim is made. |
 | PR16 | preserved | MakiePotts package, downstream, adversarial, channel, multiple-media, generation, allocation, and recipe suites consume only public settled host frames/solutions. |
 | PR17 | preserved/merged | Independent Core load/test, structured conjunction reports, explicit unsupported preflight, CPU/Metal evidence identities, device transfer/synchronization counters, and no-fallback rows. |
 | PR18 | preserved | Unit inference/errors, DynamicQuantities/Unitful conversion, parameter update/remake, integration extension behavior, and both Unitful load orders. |
@@ -40,7 +40,7 @@ unstated compatibility surface.
 | PR24 | preserved/merged | Core submit/settle/fail/cancel receipts, lifecycle/component publication barriers, host mutation boundaries, and measured Metal synchronization/transfer counts. |
 | PR25 | preserved | Aqua, ExplicitImports, platform smoke, isolated Core/base/Makie loads, CPU and Metal extension-order matrices, strict docs, manifests, precompile, and dependency-boundary checks. |
 | PR26 | owner-deferred experimental | Makie explorer/rerun controller remains explicitly experimental. Its package tests cover rerun, cancellation, failure, closure, and retained result/error ownership; it is absent from stable docs and gains no support claim. |
-| PR27 | replaced | Base `ModelingToolkitBase.mtkcompile(::PottsSystem)`, full-MTK retained native islands, MTKStandardLibrary, Catalyst conversion, and checked MethodOfLines extension replace lossy equation assimilation. |
+| PR27 | repaired; formal review pending | Base `ModelingToolkitBase.mtkcompile(::PottsSystem)`, full-MTK retained native islands, MTKStandardLibrary, Catalyst conversion, and checked MethodOfLines extension replace lossy equation assimilation. `EquationProcess` is removed rather than retained as a second equation authority. The product substrate audit confirms that MTK owns equations, hierarchy, and connections internal to native systems while PottsToolkit owns only the typed CPM boundary; formal R2H-C must independently confirm this disposition. |
 | PR28 | replaced by narrower explicit capability | Runtime is qualified only for 2D. Public 3D construction reaches structural compilation and then rejects at `init`; Makie 3D rendering remains separately supported. No rank-generic implementation fact is a 3D execution claim. |
 | PR29 | substrate preserved; new named physics owner-deferred | Generic auxiliary/component state, lifecycle transfer, RNG identity, checkpoint, CPU batching, and applicable Metal component storage are preserved. No prior named fluctuating-pressure/tension model existed; adding and scientifically naming such physics is deferred rather than presenting a generic component as equilibrium evidence. |
 | PR30 | preserved | Independent scientific operation oracles and scheduled volume, contact, elongation, chemotaxis, connectivity, activity, relationship-energy/constraint, Wortel, Merks, and focal black-box witnesses across each admitted profile. |
@@ -53,6 +53,7 @@ unstated compatibility surface.
 | `PottsModel` and the unpublished legacy manual | Removed without migration compatibility. All excluded `docs/models` and stale Markdown pages were deleted; every remaining docs page is in the strict curated build. |
 | Public `compile` / `PottsExecutable` / early engine constructors | Removed; `mtkcompile` plus late `init`/`solve` specialization is the only public lifecycle, enforced by API inventory and stale-invocation scans. |
 | `ExplicitDiffusion` and generic PDE implication | Removed; `DiscreteFieldEuler` and the separately qualified MethodOfLines adapter are documented and tested. |
+| `EquationProcess` copied-equation surrogate | Removed from the type system, constructor, exports, compiler, API inventory, docs, and product programs. Bounded built-in fields declare `evolution=DiscreteFieldEuler()` directly on `FieldState`; native equations remain native component islands. |
 | `CUDABackend` / `ROCmBackend` | Removed until real extensions qualify them; vendor projects cannot create public support by compilation. |
 | `Directed`, unqualified integrator spellings, observation stages, and other retired V1 names | Absent from the authoritative public inventory and tested as undefined. |
 | Dagger execution authority | Deferred after measurement; isolated benchmark dependency only, with SciML retaining ensemble semantics. |
@@ -60,8 +61,9 @@ unstated compatibility surface.
 ## Final closure rule
 
 Implementation candidate `08b2bf0707810461c6f5a970fd2e1aee7ba81806`, tree
-`cda132fbeec402a159ce6a9552a63d3a77d9764d`, passed with root runner closure 411/411 and
-authoritative surface 2,190/2,190, CorePotts 956/956, MakiePotts 503/503,
-pinned integration 278/278, the complete real-Metal runner, strict docs, and
-all static qualifiers. R2H-C now audits every disposition. Any finding against
-a row above reopens its earliest owning gate.
+`cda132fbeec402a159ce6a9552a63d3a77d9764d`, was rejected by R2H-C because
+`EquationProcess` remained a stable public copied-equation surrogate. The
+repair above removes it and preserves the narrower successors. Every affected
+qualification lane now passes on the corrected worktree. This record becomes
+passed again only after the implementation is frozen as a new exact candidate
+and a fresh R2H-C rereview clears it.

@@ -52,20 +52,19 @@
         ),
     )
     tail = (
-        EquationProcess(:equations, [x ~ k]; writes = [x]),
         Observation(:observation, x),
         Protocol(:protocol; stages = (Sweep(),)),
         RegisteredStatement(:registered, :example, v"1.0.0", x),
     )
     all_statements = (declarations..., states..., proposals..., processes..., tail...)
 
-    @test length(all_statements) == 23
-    @test length(unique(PottsToolkit.statement_kind.(all_statements))) == 23
+    @test length(all_statements) == 22
+    @test length(unique(PottsToolkit.statement_kind.(all_statements))) == 22
     @test all(statement -> statement_source(statement) isa UnknownSource, all_statements)
 
     set = StatementSet((Lattice((4, 4); relations = (proposal = Moore(),)),
         all_statements...))
-    @test length(set) == 25
+    @test length(set) == 24
     @test all(statement -> statement isa AbstractPottsStatement, set)
 
     captured = @statements begin
@@ -168,19 +167,14 @@
             Lattice((2, 2)),
             phase_cell,
             phase_medium,
-            EquationProcess(:field_update, ()),
             Observation(:settled_metadata, 1.0),
             Protocol(Sweep(); name = :phase_protocol),
         )),
     ))
     phase_records = inspect(phase_completed, Schedule())
-    equation_record = only(filter(
-        record -> record.kind === :EquationProcess, phase_records
-    ))
     observation_record = only(filter(
         record -> record.kind === :Observation, phase_records
     ))
-    @test equation_record.phase isa AfterMCS
     @test observation_record.phase === nothing
     @test isempty(observation_record.ordering_dependencies)
 

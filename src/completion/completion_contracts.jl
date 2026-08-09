@@ -123,12 +123,6 @@ function _completion_reference_anchors(normalized_statements, option)
             )
             duration isa DynamicQuantities.UnionAbstractQuantity &&
                 push!(anchors, Symbol(:time_, statement_id(statement)) => duration)
-        elseif statement isa EquationProcess
-            value = _statement_option(
-                statement, :duration_per_mcs, nothing
-            )
-            value isa DynamicQuantities.UnionAbstractQuantity &&
-                push!(anchors, Symbol(:time_, statement_id(statement)) => value)
         elseif statement isa Union{
                 SiteState, CellState, MediumState, ModelState, FieldState,
                 HistoryState,
@@ -136,6 +130,9 @@ function _completion_reference_anchors(normalized_statements, option)
             value = _statement_arguments(statement).initial
             value isa DynamicQuantities.UnionAbstractQuantity &&
                 push!(anchors, Symbol(:state_, statement_id(statement)) => value)
+            duration = _statement_option(statement, :duration_per_mcs, nothing)
+            duration isa DynamicQuantities.UnionAbstractQuantity &&
+                push!(anchors, Symbol(:time_, statement_id(statement)) => duration)
         end
     end
     return anchors
@@ -450,7 +447,7 @@ function _record_result_type(statement)
     end
     statement isa Union{
         SynchronousProcess, AcceptedCopyProcess, RelationshipProcess,
-        LifecycleProcess, EquationProcess, Protocol,
+        LifecycleProcess, Protocol,
     } && return Nothing
     statement isa Union{
         SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
@@ -528,8 +525,6 @@ function _phase_contract(statement, phase)
         return phase isa RelationshipCommit
     statement isa LifecycleProcess &&
         return phase isa Lifecycle
-    statement isa EquationProcess &&
-        return phase isa AfterMCS
     statement isa Observation &&
         return phase === nothing
     return true
@@ -575,7 +570,7 @@ function _validate_statement_draws!(diagnostics, statement, identity, path)
     statement isa Union{
         ProposalDrive, ProposalConstraint, ProposalModifier,
         SynchronousProcess, AcceptedCopyProcess, RelationshipProcess,
-        LifecycleProcess, EquationProcess, Observation, RegisteredStatement,
+        LifecycleProcess, Observation, RegisteredStatement,
     } || push!(diagnostics, PottsDiagnostic(
         :illegal_random_operation_context,
         identity,

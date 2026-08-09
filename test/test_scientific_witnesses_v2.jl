@@ -643,7 +643,7 @@ end
 end
 
 @testset "scheduled Merks discrete-field witness" begin
-    @variables merks_time merks_field(merks_time)
+    @variables merks_field
     @parameters begin
         merks_target = 6.0
         merks_volume_strength = 1.0
@@ -659,6 +659,7 @@ end
         merks_field;
         name = :merks_field,
         initial = 0.0,
+        evolution = DiscreteFieldEuler(),
         diffusion = merks_diffusion,
         secretion = merks_secretion,
         decay = merks_decay,
@@ -667,9 +668,6 @@ end
         source_kind = endothelial,
         stencil = :field_stencil,
     )
-    equation = Differential(merks_time)(merks_field) ~
-               merks_diffusion * merks_field -
-               merks_decay * merks_field + merks_secretion
     source = PottsSystem(
         name = :merks_black_box,
         statements = StatementSet((
@@ -686,15 +684,6 @@ end
             endothelial,
             extracellular,
             field,
-            EquationProcess(
-                :merks_field_dynamics,
-                [equation];
-                writes = [merks_field],
-                solver = DiscreteFieldEuler(),
-                cadence = EveryMCS(),
-                duration_per_mcs = 1.0,
-                substeps = 2,
-            ),
             Volume(
                 endothelial;
                 target = merks_target,
@@ -714,9 +703,7 @@ end
             ),
             Observation(:merks_field_snapshot, merks_field),
         )),
-        equations = [equation],
         unknowns = [merks_field],
-        independent_variables = [merks_time],
         parameters = [
             merks_target,
             merks_volume_strength,
@@ -753,8 +740,7 @@ end
 
 @testset "discrete-field Euler boundary oracle and restart" begin
     function field_oracle_problem(boundary, suffix)
-        time = only(@variables oracle_time)
-        field_variable = only(@variables oracle_field(oracle_time))
+        field_variable = only(@variables oracle_field)
         diffusion = only(@parameters oracle_diffusion = 0.1)
         cell = CellKind(
             Symbol(:oracle_cell_, suffix); extinction = RetireAtZero()
@@ -765,6 +751,7 @@ end
             field_variable;
             name = Symbol(:oracle_field_, suffix),
             initial = 0.0,
+            evolution = DiscreteFieldEuler(),
             diffusion,
             decay = 0.0,
             secretion = 0.0,
@@ -772,8 +759,6 @@ end
             duration_per_mcs = 1.0,
             stencil = :field_stencil,
         )
-        equation = Differential(time)(field_variable) ~
-            diffusion * field_variable
         source = PottsSystem(
             name = Symbol(:oracle_model_, suffix),
             statements = StatementSet((
@@ -785,21 +770,10 @@ end
                 cell,
                 medium,
                 field,
-                EquationProcess(
-                    Symbol(:oracle_process_, suffix),
-                    [equation];
-                    writes = [field_variable],
-                    solver = DiscreteFieldEuler(),
-                    cadence = EveryMCS(),
-                    duration_per_mcs = 1.0,
-                    substeps = 1,
-                ),
                 ProposalConstraint(Symbol(:freeze_oracle_, suffix), false),
                 Protocol(Sweep(; temperature = 0.0); name = :main),
             )),
-            equations = [equation],
             unknowns = [field_variable],
-            independent_variables = [time],
             parameters = [diffusion],
         )
         initial_field = zeros(3, 3)

@@ -56,20 +56,11 @@ function _compiler_synthesized_operation_requirements(
     requirements = Pair{Any, Int}[]
 
     for record in source.records
-        if record.kind === :EquationProcess
-            arguments = _record_arguments(record)
-            writes = haskey(arguments, :writes) ? arguments.writes : ()
-            has_field = any(source.records) do candidate
-                candidate.kind === :FieldState || return false
-                variable = _state_record_variable(candidate)
-                variable !== nothing && any(write -> isequal(write, variable), writes)
-            end
-            if has_field
-                solver = get(_record_options(record), :solver, nothing)
-                for (operation, arity) in numerical_operation_requirements(solver)
-                    _push_operation_requirement!(
-                        requirements, operation, arity
-                    )
+        if record.kind === :FieldState
+            evolution = get(_record_options(record), :evolution, nothing)
+            if evolution !== nothing
+                for (operation, arity) in numerical_operation_requirements(evolution)
+                    _push_operation_requirement!(requirements, operation, arity)
                 end
             end
         end

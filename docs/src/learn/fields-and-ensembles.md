@@ -2,10 +2,13 @@
 
 ## Fields
 
-`DiscreteFieldEuler()` is the built-in prescribed lattice stencil. Its
+`DiscreteFieldEuler()` is an explicit `FieldState` evolution policy and the
+built-in prescribed lattice stencil. Its
 boundary, neighborhood, substeps, duration per MCS, secretion source, and
 ownership semantics are explicit. It is not presented as a generic PDE
-solver.
+solver and does not copy a symbolic equation into a Potts process surrogate.
+The complete public form is exercised by the
+[Merks program](@ref merks-2006-integration).
 
 `MethodOfLinesComponent` is the checked CPU PDE adapter. It calls
 `symbolic_discretize`, retains the upstream compiled system, constructs a

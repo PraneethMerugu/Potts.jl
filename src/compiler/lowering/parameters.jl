@@ -85,21 +85,15 @@ function _declared_reference_anchors(records::Vector{QualifiedStatement})
                     anchors,
                     Symbol(:time_, statement_id(statement)) => duration,
                 )
-        elseif statement isa EquationProcess
-            duration = _statement_option(
-                statement, :duration_per_mcs, nothing
-            )
-            _is_quantity(duration) &&
-                push!(
-                    anchors,
-                    Symbol(:time_, statement_id(statement)) => duration,
-                )
         elseif statement isa Union{
                 SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
             }
             initial = _statement_arguments(statement).initial
             _is_quantity(initial) &&
                 push!(anchors, Symbol(:state_, statement_id(statement)) => initial)
+            duration = _statement_option(statement, :duration_per_mcs, nothing)
+            _is_quantity(duration) &&
+                push!(anchors, Symbol(:time_, statement_id(statement)) => duration)
         end
     end
     return anchors

@@ -114,7 +114,6 @@ end
 @_define_statement_type AcceptedCopyProcess
 @_define_statement_type RelationshipProcess
 @_define_statement_type LifecycleProcess
-@_define_statement_type EquationProcess
 @_define_statement_type Observation
 @_define_statement_type Protocol
 @_define_statement_type RegisteredStatement
@@ -212,18 +211,6 @@ function (::Type{T})(id::Union{Symbol, StatementID};
         id,
         (; domain, expression, effects = _defensive_tuple(effects)),
         (; phase, kwargs...),
-        source,
-    ))
-end
-
-function EquationProcess(id::Union{Symbol, StatementID}, equations;
-        writes = (), solver = nothing, cadence = nothing, duration_per_mcs = nothing,
-        substeps::Integer = 1, phase = nothing, source = UnknownSource(), kwargs...)
-    substeps > 0 || throw(ArgumentError("EquationProcess substeps must be positive"))
-    return EquationProcess(_statement_core(
-        id,
-        (; equations = _defensive_tuple(equations), writes = _defensive_tuple(writes)),
-        (; solver, cadence, duration_per_mcs, substeps = Int(substeps), phase, kwargs...),
         source,
     ))
 end

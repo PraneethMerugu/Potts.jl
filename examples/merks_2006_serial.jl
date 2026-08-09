@@ -16,7 +16,7 @@ review.
 function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
     mcs >= 1 || throw(ArgumentError("mcs must be positive"))
 
-    @variables physical_time concentration(physical_time)
+    @variables concentration
     @parameters begin
         target_volume = 6.0
         volume_strength = 1.0
@@ -33,6 +33,7 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
         concentration;
         name=:concentration,
         initial=0.0,
+        evolution=DiscreteFieldEuler(),
         diffusion,
         secretion,
         decay,
@@ -41,10 +42,6 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
         source_kind=endothelial,
         stencil=:field_stencil,
     )
-    field_equation =
-        Differential(physical_time)(concentration) ~
-        diffusion * concentration - decay * concentration + secretion
-
     source = PottsSystem(
         name=:merks_2006,
         statements=StatementSet((
@@ -61,15 +58,6 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
             endothelial,
             extracellular,
             field,
-            EquationProcess(
-                :field_dynamics,
-                [field_equation];
-                writes=[concentration],
-                solver=DiscreteFieldEuler(),
-                cadence=EveryMCS(),
-                duration_per_mcs=1.0,
-                substeps=2,
-            ),
             Volume(endothelial; target=target_volume, strength=volume_strength),
             Chemotaxis(
                 endothelial,
@@ -82,9 +70,7 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
             Protocol(Sweep(; temperature); name=:main),
             Observation(:field_snapshot, concentration),
         )),
-        equations=[field_equation],
         unknowns=[concentration],
-        independent_variables=[physical_time],
         parameters=[
             target_volume,
             volume_strength,

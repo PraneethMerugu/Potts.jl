@@ -8,6 +8,25 @@ energy, local connectivity, observation, and exact semantic RNG addressing.
 It is an integration witness, not a reproduction of the paper's full
 parameter campaign or its speed-persistence claims.
 
+## Substrate disposition
+
+This program does not replace an applicable ModelingToolkit, Catalyst, or
+MethodOfLines subsystem with a Potts-specific numerical component. Its
+mechanisms are tied to CPM events and spatial identity:
+
+| Mechanism | Owner | Reason |
+|:--|:--|:--|
+| volume, contact, surface, connectivity, and copy energy | PottsToolkit | These are CPM lattice and proposal semantics. |
+| site activity and ownership-change clearing | PottsToolkit | Activity belongs to individual occupied lattice sites, not one continuous state per cell. |
+| activation | PottsToolkit | It occurs only when an extension copy is accepted. |
+| activity aging and history | PottsToolkit | They advance at the completed-MCS boundary and retain site-field history. |
+
+A per-cell MTK ODE or Catalyst reaction network would lose the per-site
+activity distribution, accepted-copy trigger, and ownership-change behavior.
+MethodOfLines would instead describe an independently evolving PDE field.
+Those are different models, so the final Wortel witness keeps these mechanisms
+on the CPM substrate.
+
 The complete reusable source is
 [`examples/wortel_2021_serial.jl`](https://github.com/PraneethMerugu/Potts.jl/blob/main/examples/wortel_2021_serial.jl).
 The strict documentation build executes that exact file:

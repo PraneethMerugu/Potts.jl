@@ -78,12 +78,6 @@ function _statement_writes(statement::AbstractPottsStatement)
             any(isequal(value), writes) || push!(writes, value)
         end
     end
-    if statement isa EquationProcess && arguments isa NamedTuple &&
-            haskey(arguments, :writes)
-        for value in arguments.writes
-            any(isequal(value), writes) || push!(writes, value)
-        end
-    end
     return Tuple(writes)
 end
 
@@ -99,7 +93,7 @@ _statement_effect(::Union{
     CellKind, MediumKind, LatticeDomain, SpatialRelation,
     SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
     RelationshipState, HamiltonianTerm, ProposalDrive, ProposalConstraint,
-    ProposalModifier, EquationProcess, Observation, Protocol,
+    ProposalModifier, Observation, Protocol,
 }) = PureRead()
 _statement_effect(::SynchronousProcess) = SynchronousAssign()
 _statement_effect(::AcceptedCopyProcess) = AcceptedCopyEffect()
@@ -117,7 +111,6 @@ function _statement_phase(statement)
     statement isa SynchronousProcess && return AfterMCS()
     statement isa RelationshipProcess && return RelationshipCommit()
     statement isa LifecycleProcess && return Lifecycle()
-    statement isa EquationProcess && return AfterMCS()
     # Observations are settled-boundary save metadata. They do not introduce
     # an executable semantic phase or protocol stage.
     statement isa Observation && return nothing
