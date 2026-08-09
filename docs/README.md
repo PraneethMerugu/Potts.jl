@@ -1,14 +1,11 @@
 # Potts.jl documentation
 
-Status: temporary pre-1.0 hardening manual
-
-The active build is intentionally limited to the current architecture, runtime boundary, and
-capability status. The previous Learn, Examples, and API corpus uses the retired `PottsModel`
-surface. Those Markdown files remain rewrite material but are excluded from active navigation and
-are not support or compatibility claims.
-
-G5H-5 rebuilds the complete executable manual against the final `PottsSystem` lifecycle, including
-serial Wortel and Merks authoring/integration programs on the target Mac.
+The active manual is the executable final-interface documentation product. It
+covers symbolic authoring, structural compilation, the SciML lifecycle,
+dynamic identity and relationships, native ModelingToolkit components,
+fields, batching, ensembles, replay, package boundaries, and the exact support
+matrix. The Wortel and Merks integration pages execute their complete reusable
+programs during the strict build.
 
 ## Build locally
 
@@ -19,16 +16,14 @@ julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_ve
 julia --project=docs --startup-file=no docs/make.jl
 ```
 
-The active status build remains strict: doctest, example, and cross-reference failures are errors.
+Doctest, example, cross-reference, and document checks are errors.
 `docs/build/` is generated and ignored.
 
 ## Source-of-truth rules
 
-- The normative specification and accepted decisions outrank implementation and documentation.
-- Export status is not a stability or scientific-support claim.
-- Backend compatibility and scientific qualification are documented separately.
-- A draft page excluded from `docs/make.jl` is not user-facing documentation.
-- When the complete manual returns, every user-facing example must use the final public spelling
-  and run in the documentation build.
-- Literature-derived examples disclose provenance. Only admitted, evidence-backed work appears
-  under Published Models.
+- The normative specification and accepted decisions outrank documentation.
+- Export status alone is not a stability or scientific-support claim.
+- Support is an evidenced conjunction; compilation alone never broadens it.
+- Published-model integration programs do not claim G7 scientific reproduction.
+- The manual documents only the final public lifecycle and has no migration
+  guide for unpublished APIs.

@@ -1,6 +1,6 @@
 # [Architecture](@id architecture)
 
-Status: target architecture under pre-G6 hardening
+Status: qualified G5H architecture
 
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
@@ -52,5 +52,5 @@ objects are not the master scheduler.
 MakiePotts consumes explicit public observations and solutions. It cannot mutate simulation state,
 advance time, trigger synchronization implicitly, or redefine scientific semantics.
 
-This page describes the accepted target boundary, not a claim that every part has completed
-qualification. See [Capability status](@ref capability-status).
+See [Capability status](@ref capability-status) for the exact admitted
+conjunctions. Architecture does not broaden a backend or solver claim.

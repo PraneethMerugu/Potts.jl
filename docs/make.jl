@@ -1,11 +1,12 @@
 using Documenter
 using CorePotts
 using PottsToolkit
+using MakiePotts
 
 makedocs(
     sitename = "Potts.jl",
     authors = "Praneeth Merugu",
-    modules = [CorePotts, PottsToolkit],
+    modules = [CorePotts, PottsToolkit, MakiePotts],
     format = Documenter.HTML(
         prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
@@ -27,10 +28,28 @@ makedocs(
     remotes = nothing,
     pages = [
         "Home" => "index.md",
-        "Hardening status" => [
+        "Learn" => [
+            "Author and compose" => "learn/authoring.md",
+            "Initialize and execute" => "learn/execution.md",
+            "Lifecycle and relationships" => "learn/state-lifecycle.md",
+            "Native MTK components" => "learn/native-components.md",
+            "Fields, batching, and ensembles" => "learn/fields-and-ensembles.md",
+            "Observe, checkpoint, and reproduce" => "learn/reproducibility.md",
+        ],
+        "Published-model integration" => [
+            "Wortel 2021" => "published-models/wortel-2021.md",
+            "Merks 2006" => "published-models/merks-2006.md",
+        ],
+        "Concepts and support" => [
             "Architecture" => "concepts/architecture.md",
             "Runtime boundary" => "concepts/runtime-boundary.md",
             "Capability status" => "concepts/capability-status.md",
+            "Extension boundary" => "concepts/extension-boundary.md",
+        ],
+        "API" => [
+            "PottsToolkit" => "api/pottstoolkit.md",
+            "CorePotts" => "api/corepotts.md",
+            "MakiePotts" => "api/makiepotts.md",
         ],
     ],
 )

@@ -2,6 +2,8 @@ using Metal
 using PottsToolkit
 using Test
 
+include("extension_load_order.jl")
+
 Metal.functional() || error("the selected Metal witness is not functional")
 Metal.allowscalar(false)
 

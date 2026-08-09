@@ -297,6 +297,34 @@ end
     @test isempty(Docs.undocumented_names(MakiePotts; private = false))
 end
 
+@testset "fresh-process MakiePotts load orders" begin
+    # Pkg.test owns a resolved temporary environment. Reuse that exact graph
+    # rather than a developer's ignored package-local Manifest.toml.
+    project = dirname(Base.active_project())
+    orders = (
+        raw"""
+        using MakiePotts
+        loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
+        @assert "PottsToolkit" in loaded
+        @assert !("ModelingToolkit" in loaded)
+        print("makie-first-ok")
+        """,
+        raw"""
+        using PottsToolkit
+        using MakiePotts
+        loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
+        @assert "PottsToolkit" in loaded
+        @assert "MakiePotts" in loaded
+        @assert !("ModelingToolkit" in loaded)
+        print("potts-first-ok")
+        """,
+    )
+    for (script, output) in zip(orders, ("makie-first-ok", "potts-first-ok"))
+        command = `$(Base.julia_cmd()) --startup-file=no --project=$(project) -e $script`
+        @test read(command, String) == output
+    end
+end
+
 include("test_downstream_conformance.jl")
 include("test_adversarial.jl")
 include("test_allocations.jl")

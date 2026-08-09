@@ -1,6 +1,6 @@
 # [Runtime boundary](@id runtime-boundary)
 
-Status: target contract under pre-G6 hardening
+Status: qualified G5H runtime contract
 
 PottsToolkit and CorePotts have one downward numerical boundary:
 
@@ -53,8 +53,9 @@ SciML discrete callback is a Functional-only in-process host protocol: its code 
 a process-local identity, but it has no state codec and therefore cannot be checkpointed. Native
 islands currently reject outer callbacks altogether.
 
-## Documentation boundary
+## Capability boundary
 
-During G5H, only this narrow status manual is active. Legacy authoring pages are drafts and are not
-support claims. Stable tutorials and API pages return only after they execute against the final
-public surface in the strict documentation build.
+Structural compilation, successful storage adaptation, or a working profile
+for another algorithm, component scope, scalar type, or device is not runtime
+evidence. Consult [Capability status](@ref capability-status) before choosing
+an execution profile.

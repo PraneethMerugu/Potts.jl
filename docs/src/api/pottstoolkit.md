@@ -1,67 +1,47 @@
 # [PottsToolkit API](@id pottstoolkit-api)
 
-PottsToolkit is the preferred biological authoring interface. Use this page as a task map first and
-an exhaustive symbol index second.
+The exported API is organized by lifecycle rather than implementation files.
 
-## Find the API by task
+| Task | Primary names |
+|:--|:--|
+| Author and compose | `PottsSystem`, `StatementSet`, `@statements`, `@named`, `compose`, `extend`, `flatten`, `complete`, `mtkcompile` |
+| Declare domains and state | `Lattice`, `CellKind`, `MediumKind`, `SpatialRelation`, `SiteState`, `CellState`, `MediumState`, `ModelState`, `FieldState`, `HistoryState`, `RelationshipState` |
+| Declare behavior | `HamiltonianTerm`, `ProposalDrive`, `ProposalConstraint`, `ProposalModifier`, `Synchronous`, `AcceptedCopy`, `LifecycleProcess`, `RelationshipProcess`, `EquationProcess`, `Observation`, `Protocol` |
+| Initialize | `PottsInitialState`, `LabelledCells`, `OwnershipLayout`, `CellPlacement`, `MediumPlacement`, `RandomSitePlacement` |
+| Execute | `PottsProblem`, `SequentialCPM`, `CheckerboardSweepCPM`, `CPUBackend`, `MetalBackend`, `init`, `solve`, `step!`, `solve!`, `terminate!`, `remake` |
+| Persist and inspect | `checkpoint`, `PottsCheckpoint`, `inspect`, `StateSchema`, `Observations`, `Capabilities`, `ReplayContract`, `runtime_statistics` |
+| Native coupling | `NativeComponent`, `NativeInput`, `NativeOutput`, `NativeFieldOutput`, `MethodOfLinesComponent`, `NativeOperatingPoint`, `NativeSolveProfile`, `SerialNativeExecution`, `BatchedNativeExecution`, `MetalNativeExecution` |
+| Dynamic identity | `CellIdentity`, `relationship_transaction!`, `CreateCell`, `RemoveCell`, `Transition`, `Divide`, `Retire`, `Create`, `Remove`, `Retune` |
 
-| I need to… | Start with | See it used |
-|:--|:--|:--|
-| name media and cells | [`Medium`](@ref), [`CellType`](@ref) | [Compose a biological model](@ref build-model) |
-| declare volume, shape, or contacts | `Volume`, `Surface`, [`Elongation`](@ref), [`Adhesion`](@ref) | [Adhesion and mechanics](@ref adhesion-and-mechanics) |
-| couple a prescribed field | [`Field`](@ref), [`Chemotaxis`](@ref) | [A cell follows a gradient](@ref chemotaxis-example) |
-| add growth or lifecycle behavior | [`Growth`](@ref), [`Division`](@ref), [`Transition`](@ref), [`ImmediateDeath`](@ref) | [Cells grow, divide, and retire](@ref growth-division-example) |
-| create an executable problem | `CartesianDomain`, [`Layout`](@ref), [`Place`](@ref), `PottsProblem` | [Your first simulation](@ref first-simulation) |
-| validate before running | `validate`, `isvalid`, [`backend_report`](@ref) | [Backends and performance](@ref backends-and-performance) |
-| retain scientific observations | `ObservationSet`, `CellVolume`, [`observation_policy`](@ref), `observe` | [Observe and analyze](@ref observe-and-analyze) |
-| identify a model or run | `semantic_fingerprint`, [`execution_fingerprint`](@ref), [`semantic_manifest`](@ref) | [Compose a biological model](@ref build-model) |
+The exact inventory is executable and rejects additions or retired aliases in
+the package test suite. A public compiler artifact, early engine selection,
+and unpublished compatibility spellings are intentionally absent.
 
-## The normal construction order
-
-```julia
-medium = Medium(:Medium)
-cell = CellType(:Cell)
-model = PottsModel(
-    medium,
-    cell,
-    Volume(cell => (target = 36, strength = 2)),
-)
-problem = PottsProblem(
-    model,
-    CartesianDomain((64, 64)),
-    Layout(Place(cell, initial_mask; identity = 1));
-    capacity = 16,
-    tspan = (0, 100),
-    seed = 42,
-)
-report = backend_report(problem, SequentialCPM())
+```@example pottstoolkit_inventory
+using PottsToolkit
+exported = Set(names(PottsToolkit))
+required = Set((
+    :PottsSystem,
+    :mtkcompile,
+    :PottsProblem,
+    :SequentialCPM,
+    :CheckerboardSweepCPM,
+    :checkpoint,
+    :NativeComponent,
+    :MethodOfLinesComponent,
+))
+retired = Set((
+    :PottsModel,
+    :PottsExecutable,
+    :SequentialEngine,
+    :CheckerboardEngine,
+    :ExplicitDiffusion,
+    :CUDABackend,
+    :ROCmBackend,
+))
+(issubset(required, exported), isempty(intersect(retired, exported)))
 ```
 
-The model remains reusable; domain, layout, capacity, duration, seed, algorithm, backend, and
-observation policy are explicit experiment choices.
-
-Execution algorithms are re-exported for convenient scripts, but CorePotts owns their semantics,
-integrators, checkpoints, and guarantee profiles.
-
-## Stable authoring index
-
-```@autodocs
-Modules = [PottsToolkit.Authoring]
-Order = [:type, :function, :macro]
-Filter = is_stable_pottstoolkit
-```
-
-## Stable reference-model index
-
-Reference constructors are reusable fixtures and shortcuts after you understand the declarations
-they package. The Learn path and gallery intentionally use the direct API so these helpers never
-hide the mechanism being taught. They are not automatically published-model reproductions.
-
-```@autodocs
-Modules = [PottsToolkit.ReferenceModels]
-Order = [:type, :function]
-Filter = is_stable_pottstoolkit
-```
-
-The index is filtered through the owner-approved frozen stability inventory. Internal and
-experimental exports do not appear here; see [Experimental API](@ref experimental-api).
+Unexported but `public` names form the supported extension and inspection SPI;
+they are not additional authoring constructors. See [Extension boundary](@ref
+extension-boundary).

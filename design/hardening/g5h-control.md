@@ -18,7 +18,7 @@ repeat or amend gate requirements.
 | G5H-3 — native global MTK integration | `passed` | The corrected candidate's pinned full-MTK suite passed 141/141, covering native retention, upstream structural compilation, preflight-before-execution, exact-only replay reporting, bidirectional ODE coupling, order, restart/remake/failure behavior, MTKStandardLibrary, Catalyst, Unitful, event retention/rejection, and honest DAE runtime rejection. |
 | R2H-B — cohesion and real-MTK review | `passed` | Fresh independent read-only rereview of corrected candidate `c0f9f3dc91d2bb29557e36abfab3ec3417ba14d4`, tree `355e8fdaa0dc11dd5130b786b3e8229ea2372693`, returned `PASS`: P0=0, P1=0, P2=0, P3=0. |
 | G5H-4 — dynamic components, fields, ensembles, profiles | `passed` | Exact implementation candidate `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`, tree `e935bf919e59c86baa3f23a394d1eb06d497bc61`; H4-A through H4-E passed their implementation hold points, and H4-Q froze the exhaustive conjunction matrix with passing qualification evidence. |
-| G5H-5 — product qualification and docs | `pending` | Depends on G5H-4. |
+| G5H-5 — product qualification and docs | `qualified; freeze pending` | Final manual, product programs, preservation/removal closure, baseline comparison, package quality, and all implementation qualification lanes passed; exact candidate commit/tree still must be bound. |
 | R2H-C — hardening exit review | `pending` | Opens only after G5H-5 passes. |
 | G6 owner decision | `pending` | G6 remains closed; it requires cleared R2H-C and explicit owner send-off. |
 
@@ -114,6 +114,29 @@ separately cleared by the independent decision recorded above.
 | G5H-1 | Shared acceptance; consolidated traversal/facts/lifecycle/capability/checkpoint authorities; receipts and bulk component state; honest profile admission; Core-owned settlement/rejection suites; named compiler/backend SPIs and narrow Core API; measured memory/scaling. | `lib/CorePotts/src/{compiler_spi,backend_spi}.jl`, the split Core program/execution sources, all 952 Core assertions, `test/test_source_traversal_authority.jl`, `test/test_core_spi_boundary.jl`, public API and runner-closure tests, the three live qualifier results, and the exact quantitative record. |
 | G5H-2 | One functional and `@named` authoring path; composition/namespacing/completion/diagnostics/inspection; base-package structural `mtkcompile`; scheduled system → problem → SciML lifecycle; late profile selection; remake/SII/saving/callback/checkpoint/restore; one API inventory. | `test/test_{system_contract,statements_and_traversal,completion_and_diagnostics,mtkcompile,fresh_process_v2,sciml_lifecycle_v2,lifecycle_public_v2,public_api_v2}.jl` plus the scheduled scientific witnesses, all within the corrected 1,348/1,348 root result. Major invalid construction families assert source-located diagnostics. |
 | G5H-3 | Native declarations and typed ports; hierarchy/default/event/observed/SII retention; upstream `mtkcompile` and native problems; explicit MCS/time/order semantics; bidirectional ODE coupling; honest DAE/event boundary; MTKStandardLibrary and Catalyst; coupled restart/remake/error/cancellation/atomicity. | `src/native/*`, `ext/PottsToolkitModelingToolkitExt.jl`, `integration/test_modelingtoolkit_retention_and_structural_scheduling.jl`, `integration/test_modelingtoolkit_standard_library.jl`, and `integration/test_native_runtime.jl`, all within the corrected 141/141 pinned result. Copied `EquationComponent` assimilation is deleted; the Core fresh-load boundary remains MTK free. |
+
+## G5H-5 implementation qualification
+
+The final manual is a curated replacement, not a translation of unpublished
+`PottsModel` pages. Every remaining Markdown source is in `docs/make.jl`; the
+obsolete model scripts and empty documentation directories are removed.
+Complete Wortel and Merks programs use only the final public lifecycle and are
+product/integration witnesses, not G7 paper-source reproduction claims.
+
+| Lane | Exact result on the freeze worktree |
+|:--|:--|
+| PottsToolkit package | Runner closure 411/411 and authoritative surface 2,190/2,190 passed in 16m34.0s. The product programs contribute 9/9. Aqua, ExplicitImports, retired invocation, private-upstream, dependency/weakdep, exact docs-set, fresh-process, scientific, and public API checks are included. |
+| CorePotts package | 956/956 passed, including package-owned scientific, lifecycle, relationship, checkpoint, capability, allocation, API, and Aqua evidence. |
+| Pinned MTK integration | 278/278 passed: retained MTK/MTKStandardLibrary, native runtime and batching, MethodOfLines, distributed ensembles, Unitful, optional loading, and CPU weak-extension orders 3/3. |
+| MakiePotts | 503/503 passed, including Aqua, downstream/adversarial/allocation suites and both fresh load orders in the exact resolved test environment. |
+| Real Metal | Complete runner exited zero. Fresh extension orders passed 2/2 and the native component block 37/37; all retained lifecycle, relationship, surface, replay, transfer, synchronization, rejection, and performance witnesses passed without fallback. |
+| Strict manual | Doctests, executable expansion, cross-references, document checks, index population, and HTML rendering passed with `warnonly=false`; the exact Wortel and Merks files execute inside their pages. |
+| Quantitative comparison | Exact G5H-0 source candidate and final worktree measured through one common 32 x 32 fixture. Four-phase first-use time is 0.877x baseline and median MCS time 0.934x; allocation and checkpoint regressions remain explicitly reported. Final component-pool and lifecycle absolute evidence is attached. |
+| Static/repository integrity | Operation inventory 68; specialization growth 12/12; independent static evaluator exited zero; 251 active Julia files and 154 TOMLs parsed; `git diff --check` passed; no maintained empty directory remains. |
+
+The implementation content now freezes before its hash is added to this
+record, the G5H-5 matrix, preservation closure, and quantitative evidence.
+R2H-C remains closed until that exact commit exists.
 
 ## G5H-4 implementation matrix
 

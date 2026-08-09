@@ -1,56 +1,39 @@
 # Potts.jl
 
-Potts.jl is in an intentional pre-1.0 cohesion and ModelingToolkit hardening phase. The active
-package family is:
+Potts.jl is a ModelingToolkit-native cellular Potts stack with three explicit
+package responsibilities:
 
 | Package | Responsibility |
 |:--|:--|
-| `PottsToolkit` | Symbolic Potts authoring, ModelingToolkit integration, component scheduling, and the public SciML problem lifecycle |
-| `CorePotts` | MTK-free CPM state, transitions, lifecycle, checkpoints, reproducibility, and CPU/GPU execution |
-| `MakiePotts` | Visualization over explicit public observations and solutions |
+| `PottsToolkit` | Symbolic authoring, composition, structural compilation, native MTK coupling, and the SciML lifecycle |
+| `CorePotts` | MTK-free CPM execution, identity, lifecycle, relationships, checkpoints, and CPU/GPU backend contracts |
+| `MakiePotts` | Visualization from public saved observations and solutions |
 
-## Current documentation status
-
-The earlier manual described the removed `PottsModel` API while the source had already moved to
-`PottsSystem`. Those pages are retained in the repository as rewrite material, but they are
-deliberately excluded from the active documentation build. They are not a migration guide or a
-compatibility promise.
-
-This temporary manual documents only the current architecture, runtime boundary, and honest
-capability state. The authoring lifecycle and G5H-4 implementation matrix now have executable CPU,
-Metal, MethodOfLines, and ensemble rows; the complete Learn, Examples, Published Models, and API
-manual returns in G5H-5 after the final interface is frozen.
-
-## Target public lifecycle
+The public lifecycle is:
 
 ```text
-construct / @named / compose
-        -> complete
-        -> mtkcompile
-        -> scheduled PottsSystem
-        -> PottsProblem
-        -> init or solve with an algorithm and backend
-        -> PottsIntegrator / PottsSolution
+PottsSystem -> complete / mtkcompile -> PottsProblem
+            -> init / solve -> PottsIntegrator / PottsSolution
 ```
 
-`mtkcompile` is structural. It must not choose the CPM engine, backend, scalar type, device, seed,
-or runtime state. Native ModelingToolkit systems remain native component islands with explicit IO,
-scope, cadence, and coupling semantics. CorePotts remains independent of ModelingToolkit.
+Algorithm, backend, scalar type, seed, and runtime state are late choices.
+`mtkcompile` is structural and does not select a device or create a public
+executable artifact.
 
-## Implemented but not yet a final stable user claim
+## Start here
 
-- the final constructor vocabulary and exported API;
-- the final documentation and spelling freeze for global/per-cell native MTK components;
-- broader MethodOfLines support than the exact checked CPU grid/solver row;
-- broader Metal support than the exact 2D `Float32` fixed-step rows;
-- CUDA, ROCm, adaptive native GPU solves, GPU remeshing, or unrestricted graph rewriting;
-- executable Wortel and Merks documentation through the final interface; and
-- API compatibility with any earlier unpublished authoring surface.
+- [Author and compose](@ref author-and-compose) introduces the symbolic model.
+- [Initialize and execute](@ref initialize-and-execute) runs the model through
+  the standard SciML lifecycle.
+- [Native MTK components](@ref native-mtk-components) embeds global or
+  generation-safe per-cell systems without copying their equations into a
+  second representation.
+- [Capability status](@ref capability-status) is the exact support and
+  limitations table.
+- [Wortel 2021](@ref wortel-2021-integration) and [Merks 2006](@ref
+  merks-2006-integration) execute complete final-interface integration
+  programs during this documentation build.
 
-See [Architecture](@ref architecture), [Runtime boundary](@ref runtime-boundary), and
-[Capability status](@ref capability-status) for the current boundary.
-
-## Development
-
-Package and integration commands remain in the repository `CONTRIBUTING.md`. The normative phase
-sequence is maintained under `spec/`; public documentation never overrides it.
+The published-model programs are API and integration witnesses. They do not
+claim the paper-source scientific qualification reserved for the later G7
+review.

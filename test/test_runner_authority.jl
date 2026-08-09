@@ -16,6 +16,7 @@ const AUTHORITATIVE_G5H_TESTS = (
     "test_external_compiler_spi_v2.jl",
     "test_scientific_operation_spi.jl",
     "test_scientific_witnesses_v2.jl",
+    "test_product_programs.jl",
     "test_fresh_process_v2.jl",
     "test_core_spi_boundary.jl",
     "test_package_quality.jl",
