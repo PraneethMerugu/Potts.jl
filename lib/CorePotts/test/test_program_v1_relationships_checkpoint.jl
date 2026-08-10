@@ -419,7 +419,7 @@ end
             CorePotts.SequentialProgramEngine(),
             CorePotts.CheckerboardProgramEngine(),
         )
-        program = test_program(engine; attempts_per_site = 2)
+        program = test_program(engine; attempts_per_site = 1)
         uninterrupted = CorePotts.initialize_program(
             program, test_initial(), Float64[], UInt64(0x55), UInt32(1)
         )

@@ -5,7 +5,7 @@ Date: 2026-07-30
 Branch: `codex/symbolic-potts-v1`
 
 Status: implementation-grade through cleared R2 and the complete G5 execution boundary; G5H and
-R2H-C cleared on their exact candidates; G5H-R is active and G6 remains closed
+R2H-C cleared on their exact candidates; LocalWorksets LW-0 is next and G6 remains closed
 
 ## Authority
 
@@ -891,18 +891,19 @@ failure.
 
 ### G5H — Cohesion, MTK, and product hardening
 
-G5H is governed by the [G5H Hardening Contract](symbolic-potts-v1-hardening.md). Decision 0045 and
-the [G5H-R Research Gate](symbolic-potts-v1-native-moving-field-research.md) extend its
-authoritative order after R2H-C:
+G5H is governed exclusively by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Its authoritative order is:
 
 ```text
 G5H-0 -> R2H-A -> G5H-1 -> G5H-2 -> G5H-3 -> R2H-B
       -> G5H-4 -> G5H-5 -> R2H-C
-      -> G5H-R -> R2H-D committee -> amendment/no-change disposition
-      -> accepted reopened work and reviews -> owner G6 decision
+      -> LocalWorksets LW-0 through LW-R1 -> LW-4 disposition
+      -> owner G6 decision
 ```
 
-G6 MUST NOT begin until G5H-R and every route it accepts clear and the owner explicitly opens G6.
+The [LocalWorksets Implementation and Review Gate](localworksets-v1-implementation-gate.md) is the
+authority for the inserted route. G6 MUST NOT begin until R2H-C, LW-R1, an LW-4 disposition, and
+explicit owner opening clear.
 
 ### G6 — Public integration stabilization and freeze
 

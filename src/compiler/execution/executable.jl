@@ -13,8 +13,10 @@ struct SequentialCPM <: AbstractPottsAlgorithm end
 """
     CheckerboardSweepCPM()
 
-The V1 deterministic checkerboard engine. A compilation error is reported when
-the completed model has effects whose touched set cannot be proven.
+The V1 checkerboard sweep process. Every mutable site is scheduled once without
+replacement and colors execute in an unbiased semantic-RNG permutation per MCS.
+A compilation error is reported when the completed model has effects whose
+touched set cannot be proven.
 """
 struct CheckerboardSweepCPM <: AbstractPottsAlgorithm end
 

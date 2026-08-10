@@ -21,11 +21,20 @@
             operation = 5,
             entity = 29,
         ),
+        CorePotts.RNGAddress(
+            stream = CorePotts.CheckerboardColorOrderStream,
+            mcs = 23,
+            subround = 1,
+            operation = 5,
+            entity_kind = CorePotts.GlobalEntity,
+            entity = 4,
+        ),
     )
     expected = (
         (0xd5435ca6, 0xe6f8d826, 0x0a5be497, 0x655d2e74),
         (0x4bbab362, 0xc294cc98, 0xbc40f1d2, 0x1ee62536),
         (0x1da796db, 0xbb662cea, 0x65d4ed06, 0x91036c89),
+        (0x3719387b, 0x66108d4d, 0x3c826416, 0xb29ecb59),
     )
 
     # This is intentionally Core-owned. Raw words are part of the versioned
@@ -45,6 +54,7 @@
             CorePotts.ProposalRecipientStream,
             CorePotts.ProposalDirectionStream,
             CorePotts.AcceptanceStream,
+            CorePotts.CheckerboardColorOrderStream,
         )
         for mcs in 0:2
         for subround in 0:1

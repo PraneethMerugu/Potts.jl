@@ -99,7 +99,7 @@ end
 end
 
 struct CheckerboardWorkspace{
-        S, C, E, T, O, N, P, D, M, I, R, Q, U, A, Z, X, EP,
+        S, C, E, T, O, N, P, D, M, I, R, Q, U, A, Z, CO, X, EP,
     }
     state::S
     alternate_state::S
@@ -117,6 +117,7 @@ struct CheckerboardWorkspace{
     report::U
     capability_report::A
     color_sizes::Z
+    color_order::CO
     source_table::X
     execution::EP
 end
@@ -338,11 +339,52 @@ function _checkerboard_color_sizes(plan::CheckerboardPlan)
     ]
 end
 
+const _CHECKERBOARD_COLOR_ORDER_OPERATION = UInt16(5)
+
+"""Fill one preallocated unbiased semantic-RNG permutation of realized colors."""
+function _checkerboard_color_order!(
+        order::Vector{Int32}, state, attempt_round::Integer
+    )
+    color_count = Int(state.program.checkerboard_plan.color_count)
+    length(order) == color_count || throw(ArgumentError(
+        "checkerboard color-order workspace has the wrong size"
+    ))
+    0 <= state.mcs < typemax(Int) || throw(ArgumentError(
+        "checkerboard MCS is outside the semantic RNG domain"
+    ))
+    1 <= attempt_round <= typemax(UInt8) || throw(ArgumentError(
+        "checkerboard attempt round is outside the semantic RNG domain"
+    ))
+    for color in 1:color_count
+        @inbounds order[color] = Int32(color)
+    end
+    seed = _trajectory_seed(state.seed, state.replica, state.repeat)
+    for position in color_count:-1:2
+        address = RNGAddress(
+            stream = CheckerboardColorOrderStream,
+            mcs = state.mcs + 1,
+            subround = attempt_round,
+            operation = _CHECKERBOARD_COLOR_ORDER_OPERATION,
+            entity_kind = GlobalEntity,
+            entity = position,
+        )
+        selected = Int(bounded_uint(
+            Philox4x32x10V1(), seed, address, UInt32(position)
+        )) + 1
+        @inbounds order[position], order[selected] =
+            order[selected], order[position]
+    end
+    return order
+end
+
 function _allocate_checkerboard_workspace(
         state::CheckerboardExecutionState;
         capability_report,
         color_sizes = _checkerboard_color_sizes(
             state.program.checkerboard_plan
+        ),
+        color_order = collect(
+            Int32, 1:Int(state.program.checkerboard_plan.color_count)
         ),
         source_table = (),
         alternate_state = nothing,
@@ -415,6 +457,7 @@ function _allocate_checkerboard_workspace(
         report,
         capability_report,
         color_sizes,
+        color_order,
         source_table,
         execution,
     )
@@ -590,6 +633,7 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
             adapted;
             capability_report,
             color_sizes = workspace.color_sizes,
+            color_order = copy(workspace.color_order),
             source_table = workspace.source_table,
             alternate_state = alternate,
             execution,
@@ -648,6 +692,7 @@ function adapt_checkerboard_workspace(to, workspace::CheckerboardWorkspace)
         adapted;
         capability_report,
         color_sizes = workspace.color_sizes,
+        color_order = copy(workspace.color_order),
         source_table = workspace.source_table,
         alternate_state = alternate,
         execution,
@@ -850,12 +895,16 @@ function execute_checkerboard_mcs!(
     acceptance_status_kernel = _checkerboard_acceptance_status_kernel!(backend)
     commit_kernel = launch(_checkerboard_commit_kernel!)
     report_kernel = _checkerboard_report_kernel!(backend)
-    # Attempts-per-site are semantic sweep rounds. Finish every color in one
-    # round before constructing candidates for the next round so a target is
-    # never represented by multiple concurrent candidates and later rounds
-    # observe the committed state of earlier rounds.
+    # The accepted CheckerboardSweep process uses one normalized sweep. Its
+    # realized colors execute in an unbiased semantic-RNG permutation. The
+    # preallocated host order is safe for queued CPU/Metal launches because
+    # each kernel receives its color as a copied scalar argument.
     for attempt_round in 1:Int(state.program.attempts_per_site)
-        for color in 1:Int(plan.color_count)
+        color_order = _checkerboard_color_order!(
+            workspace.color_order, state, attempt_round
+        )
+        for color_position in 1:Int(plan.color_count)
+            color = Int(@inbounds color_order[color_position])
             color_size = Int(@inbounds workspace.color_sizes[color])
             batch_size = color_size
             candidate_kernel(

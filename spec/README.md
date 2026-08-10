@@ -6,7 +6,8 @@ Status: Draft
 
 ## Authority
 
-This specification defines the observable scientific behavior of PottsToolkit and CorePotts.
+This specification defines the observable scientific behavior of PottsToolkit and CorePotts and the
+accepted mechanism contract for the pre-implementation LocalWorksets substrate.
 A conforming implementation may change storage layouts, kernel organization, parallel scheduling,
 backend libraries, and other internal mechanisms, but it must preserve accepted observable
 behavior.
@@ -15,15 +16,16 @@ Apply authority in this order:
 
 1. the accepted [Project Charter](project-charter.md) and the latest accepted decision that
    explicitly changes a product or architecture choice;
-2. the
-   [G5H-R Native Moving-Field Research Gate](symbolic-potts-v1-native-moving-field-research.md)
-   and [G5H Hardening Contract](symbolic-potts-v1-hardening.md) for post-G5 work order, MTK/SciML
+2. the [LocalWorksets V1 Contract](localworksets-v1.md) and
+   [Implementation and Review Gate](localworksets-v1-implementation-gate.md) for the accepted
+   post-G5H execution-substrate contract, corrected CorePotts baseline, and pre-G6 work order;
+3. the [G5H Hardening Contract](symbolic-potts-v1-hardening.md) for the cleared post-G5 work order, MTK/SciML
    integration, component scheduling, late lowering, capability profiles, and the G6 entry gate;
-3. accepted scientific contracts for state, CPM transitions, lifecycle, randomness, persistence,
+4. accepted scientific contracts for state, CPM transitions, lifecycle, randomness, persistence,
    topology, observation, and numerical meaning;
-4. earlier construction contracts only where the current index or a later decision has not marked
+5. earlier construction contracts only where the current index or a later decision has not marked
    them superseded; and
-5. implementation, tests, tutorials, examples, and historical design evidence.
+6. implementation, tests, tutorials, examples, and historical design evidence.
 
 A more specific later accepted decision wins only in the scope it names. Historical audits,
 superseded clauses, and working code are evidence, not authority to restore an obsolete API or
@@ -35,6 +37,7 @@ The specification covers:
 
 - PottsToolkit model authoring, composition, completion, validation, and compilation;
 - CorePotts state, transition, lifecycle, observation, checkpoint, and execution semantics;
+- LocalWorksets local-work declaration, validation, preparation, execution, and inspection semantics;
 - SciML problem, algorithm, integrator, solution, remake, and ensemble behavior;
 - ModelingToolkit completion and compilation integration;
 - CPU and accelerator backend guarantees;
@@ -79,11 +82,12 @@ behavior before source cleanup.
 
 ## Current construction program
 
-- [Symbolic Potts V1 Native Moving-Field Research and Amendment Gate](symbolic-potts-v1-native-moving-field-research.md)
-  — authoritative for the current committee-reviewed pre-G6 research and any resulting bounded
-  G5H amendment
-- [Symbolic Potts V1 G5H Hardening](symbolic-potts-v1-hardening.md) — authoritative for the current
-  passed post-G5 implementation record and, as amended after G5H-R review, G6 entry
+- [LocalWorksets V1 Normative Contract](localworksets-v1.md) — authoritative for the closed
+  LocalWorksets architecture and LW-A1–LW-A14
+- [LocalWorksets V1 Implementation and Review Gate](localworksets-v1-implementation-gate.md) —
+  authoritative for CP-B1–CP-B3 correction, the internal-first vertical, and direct-parity review
+- [Symbolic Potts V1 G5H Hardening](symbolic-potts-v1-hardening.md) — authoritative for the cleared
+  post-G5 implementation record and G6 entry
 - [Symbolic Potts V1 Compiler Construction](symbolic-potts-v1-compiler-construction.md) —
   authoritative for cleared G0--G5 and future G6--G9 as amended by G5H
 - [Symbolic Potts V1](symbolic-potts-v1.md)
@@ -96,6 +100,12 @@ implemented.
 Any clause in those documents that assumes the retired orchestration package is superseded by
 [Decision 0043](decisions/0043-retire-processbigraphs.md). PottsToolkit and CorePotts must remain
 independently loadable and testable without that retired package or its API.
+
+## Deferred upstream integrations
+
+- [MethodOfLines Input-Field Integration](methodoflines-input-field-integration.md) — preserves the
+  intended fixed-grid MTK input authoring experience and its reopening criteria without creating an
+  active phase gate or capability claim
 
 ## Decision records
 

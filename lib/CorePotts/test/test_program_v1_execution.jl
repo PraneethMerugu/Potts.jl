@@ -76,31 +76,123 @@ function test_initial()
     )
 end
 
-@testset "checkerboard attempts are ordered sweep rounds" begin
-    program = test_program(
-        CorePotts.CheckerboardProgramEngine(); attempts_per_site = 2
+@testset "current algorithm identities reject nonunit attempt budgets" begin
+    for engine in (
+            CorePotts.SequentialProgramEngine(),
+            CorePotts.CheckerboardProgramEngine(),
+        )
+        error = try
+            test_program(engine; attempts_per_site = 2)
+            nothing
+        catch caught
+            caught
+        end
+        @test error isa ArgumentError
+        @test occursin(
+            "separately named and qualified algorithm",
+            sprint(showerror, error),
+        )
+    end
+end
+
+@testset "checkerboard colors use the versioned unbiased permutation" begin
+    program = test_program(CorePotts.CheckerboardProgramEngine())
+    runtime_a = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xc010), UInt32(3);
+        repeat = UInt32(2),
     )
-    first = CorePotts.initialize_program(
-        program, test_initial(), Float64[], UInt64(0xa77e), UInt32(1)
+    runtime_b = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xc010), UInt32(3);
+        repeat = UInt32(2),
     )
-    second = CorePotts.initialize_program(
-        program, test_initial(), Float64[], UInt64(0xa77e), UInt32(1)
+    foreign_replica = CorePotts.initialize_program(
+        program, test_initial(), Float64[], UInt64(0xc010), UInt32(4);
+        repeat = UInt32(2),
     )
-    CorePotts.advance_mcs!(first)
-    CorePotts.advance_mcs!(second)
-    attempts = length(first.ownership) * Int(program.attempts_per_site)
-    @test first.accepted + first.rejected + first.null_attempts == attempts
-    @test CorePotts.program_snapshot(first).ownership ==
-          CorePotts.program_snapshot(second).ownership
-    @test CorePotts.program_tracker_values(first, Val(:cell_volume)) ==
-          CorePotts.program_tracker_values(second, Val(:cell_volume))
-    @test CorePotts.validate_tracker_state!(
-        program.tracker_plan,
-        first.trackers,
-        first.ownership,
-        first.cell_kinds,
-        program,
-    ) === first.trackers
+    first_workspace = runtime_a.engine_workspace
+    second_workspace = runtime_b.engine_workspace
+    foreign_workspace = foreign_replica.engine_workspace
+    color_count = Int(program.checkerboard_plan.color_count)
+    canonical = collect(Int32, 1:color_count)
+
+    orders = Tuple[]
+    foreign_orders = Tuple[]
+    first_counts = zeros(Int, color_count)
+    sample_count = 8192
+    for mcs in 0:sample_count-1
+        first_state = CorePotts._checkerboard_state_at_mcs(
+            first_workspace.state, mcs
+        )
+        second_state = CorePotts._checkerboard_state_at_mcs(
+            second_workspace.state, mcs
+        )
+        foreign_state = CorePotts._checkerboard_state_at_mcs(
+            foreign_workspace.state, mcs
+        )
+        first_order = CorePotts._checkerboard_color_order!(
+            first_workspace.color_order, first_state, 1
+        )
+        second_order = CorePotts._checkerboard_color_order!(
+            second_workspace.color_order, second_state, 1
+        )
+        foreign_order = CorePotts._checkerboard_color_order!(
+            foreign_workspace.color_order, foreign_state, 1
+        )
+        @test sort(first_order) == canonical
+        @test first_order == second_order
+        first_counts[Int(first(first_order))] += 1
+        mcs < 16 && push!(orders, Tuple(first_order))
+        mcs < 16 && push!(foreign_orders, Tuple(foreign_order))
+    end
+    expected = sample_count / color_count
+    @test maximum(abs.(first_counts .- expected)) < 0.06 * expected
+    @test orders != foreign_orders
+
+    state = CorePotts._checkerboard_state_at_mcs(
+        first_workspace.state, sample_count
+    )
+    CorePotts._checkerboard_color_order!(
+        first_workspace.color_order, state, 1
+    )
+    @test @allocated(CorePotts._checkerboard_color_order!(
+        first_workspace.color_order, state, 1
+    )) == 0
+    @test CorePotts.RNG_CONTRACT_VERSION == v"1.2.0"
+    @test CorePotts.RNG_LOWERING_IDENTITY ===
+          :philox4x32x10_semantic_address_fisher_yates_v1
+end
+
+@testset "sequential and checkerboard share units, not trajectories" begin
+    initial = test_initial()
+    sequential = CorePotts.initialize_program(
+        test_program(CorePotts.SequentialProgramEngine()),
+        initial,
+        Float64[],
+        UInt64(0x5c1e),
+        UInt32(1),
+    )
+    checkerboard = CorePotts.initialize_program(
+        test_program(CorePotts.CheckerboardProgramEngine()),
+        initial,
+        Float64[],
+        UInt64(0x5c1e),
+        UInt32(1),
+    )
+    mcs_count = 12
+    for _ in 1:mcs_count
+        CorePotts.advance_mcs!(sequential)
+        CorePotts.advance_mcs!(checkerboard)
+    end
+    expected_attempts = UInt64(mcs_count * length(initial.ownership))
+    for runtime in (sequential, checkerboard)
+        @test runtime.accepted + runtime.rejected + runtime.null_attempts ==
+              expected_attempts
+        @test only(CorePotts.program_tracker_values(
+            runtime, Val(:cell_volume)
+        )) == count(==(Int32(1)), runtime.ownership)
+        @test runtime.mcs == mcs_count
+    end
+    @test sequential.ownership != checkerboard.ownership
 end
 
 @testset "successful runtime boundaries publish deterministic lifecycle receipts" begin

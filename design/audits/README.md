@@ -7,10 +7,9 @@ removed.
 
 Current authority lives in the [`spec/` index](../../spec/README.md), accepted
 [decision records](../../spec/decisions/README.md), and, for current pre-G6 work, the
-[G5H-R Native Moving-Field Research Gate](../../spec/symbolic-potts-v1-native-moving-field-research.md)
-plus the [G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md). The repository
-architecture standard and roadmap are subordinate contributor guidance, not semantic or phase
-authority.
+[LocalWorksets Implementation Gate](../../spec/localworksets-v1-implementation-gate.md) following the
+cleared [G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md). The repository architecture
+standard and roadmap are subordinate contributor guidance, not semantic or phase authority.
 
 Do not use a historical audit to restore a dependency, API, or product boundary superseded by a
 later decision. Claiming current qualification from a historical conclusion requires a new

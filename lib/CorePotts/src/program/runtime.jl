@@ -42,13 +42,17 @@ struct ProgramCheckpoint{S, P, E}
     checksum::String
 end
 
-const _CORE_CHECKPOINT_CAPABILITY_SCHEMA = v"1.0.0"
+const _CORE_CHECKPOINT_CAPABILITY_SCHEMA = v"1.1.0"
 
 function _core_checkpoint_capability_block(program::CompiledPottsProgram)
     key = program_capability_report(program).key
     return (
         schema = _CORE_CHECKPOINT_CAPABILITY_SCHEMA,
         capability_fingerprint = _capability_key_fingerprint(key),
+        rng = (
+            contract_version = RNG_CONTRACT_VERSION,
+            lowering_identity = RNG_LOWERING_IDENTITY,
+        ),
         environment = key.environment,
     )
 end
@@ -79,7 +83,7 @@ function _validate_checkpoint_capability(
     block isa NamedTuple &&
         all(
             name -> hasproperty(block, name),
-            (:schema, :capability_fingerprint, :environment),
+            (:schema, :capability_fingerprint, :rng, :environment),
         ) || throw(ArgumentError(
             "checkpoint has an incomplete CorePotts capability block"
         ))
@@ -87,6 +91,13 @@ function _validate_checkpoint_capability(
         "unsupported CorePotts checkpoint capability schema"
     ))
     key = program_capability_report(program).key
+    expected_rng = (
+        contract_version = key.mechanisms.rng_contract_version,
+        lowering_identity = key.mechanisms.rng_lowering_identity,
+    )
+    block.rng == expected_rng || throw(ArgumentError(
+        "checkpoint RNG contract version or lowering identity mismatch"
+    ))
     block.environment == key.environment || throw(ArgumentError(
         "checkpoint exact-configuration execution environment mismatch"
     ))

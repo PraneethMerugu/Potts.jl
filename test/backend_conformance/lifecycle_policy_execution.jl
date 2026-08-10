@@ -646,6 +646,32 @@ function run_forbid_extinction_execution(
     @test count(==(Int32(1)), reference.engine_workspace.state.ownership) == 1
     @test CorePotts.Adapt.adapt(Array, workspace.state.trackers).values ==
         reference.engine_workspace.state.trackers.values
+
+    # A lifecycle plan may own extinction policy while declaring no emitted
+    # lifecycle requests. Its zero-capacity request scan is a valid no-op on
+    # the complete queued path, not a mismatched-workspace failure.
+    queued_candidate = CorePotts.initialize_program(
+        program,
+        initial,
+        program.parameter_defaults,
+        something(selected_seed),
+        UInt32(1),
+    )
+    queued_workspace = CorePotts.adapt_checkerboard_workspace(
+        device_array, queued_candidate.engine_workspace
+    )
+    CorePotts.BackendSPI.enqueue_checkerboard_mcs!(queued_workspace, 0)
+    receipt = CorePotts.BackendSPI.settle_program!(
+        queued_workspace,
+        CorePotts.BackendSPI.ProgramSettlementRequest(
+            CorePotts.BackendSPI.PublicStepSettlement;
+            full_snapshot = true,
+        ),
+    )
+    @test receipt.submitted_mcs == receipt.drained_mcs ==
+          receipt.committed_mcs == receipt.materialized_mcs == 1
+    @test receipt.failure === nothing
+    @test receipt.snapshot !== nothing
     return (
         backend = backend_name,
         seed = something(selected_seed),

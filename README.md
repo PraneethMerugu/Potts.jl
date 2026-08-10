@@ -38,8 +38,7 @@ The package family supports Julia 1.12 and later Julia 1.x releases. See
 ## Documentation
 
 The repository is currently in pre-1.0 authoring and ModelingToolkit hardening. G5H and its product
-manual cleared on an exact candidate; the active G5H-R gate now researches a compile-once native
-MethodOfLines input for moving CPM occupancy before G6. Research artifacts are not support claims.
+manual cleared on an exact candidate; LocalWorksets LW-0 is next and G6 remains closed.
 
 ```bash
 julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'

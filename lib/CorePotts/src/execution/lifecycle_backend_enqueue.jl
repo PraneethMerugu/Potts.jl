@@ -78,7 +78,7 @@ function enqueue_lifecycle_backend_index!(
         ndrange = length(state.cell_kinds),
     )
     @debug "enqueue lifecycle backend stage" stage = :emit_requests
-    emit(
+    isempty(workspace.active) || emit(
         state,
         workspace,
         control,
@@ -91,13 +91,13 @@ function enqueue_lifecycle_backend_index!(
     )
     _enqueue_lifecycle_failure_stamp!(state, ProgramStageEmission)
     @debug "enqueue lifecycle backend stage" stage = :mark_requests
-    mark_requests(
+    isempty(control.request_scan) || mark_requests(
         workspace, control; ndrange = length(control.request_scan)
     )
     @debug "enqueue lifecycle backend stage" stage = :scan_requests
     _enqueue_lifecycle_scan!(workspace, control, backend, launch)
     @debug "enqueue lifecycle backend stage" stage = :compact_requests
-    compact_requests(
+    isempty(control.request_scan) || compact_requests(
         workspace, control; ndrange = length(control.request_scan)
     )
     @debug "enqueue lifecycle backend stage" stage = :sort_requests

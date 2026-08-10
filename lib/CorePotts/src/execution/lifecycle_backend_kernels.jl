@@ -536,6 +536,7 @@ end
 function _enqueue_lifecycle_scan!(workspace, control, backend, launch)
     source = control.request_scan
     scratch = control.request_scan_scratch
+    isempty(source) && return nothing
     length(source) == length(scratch) || throw(ArgumentError(
         "lifecycle scan buffers must have equal lengths"
     ))

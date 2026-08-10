@@ -296,8 +296,11 @@ function CompiledPottsProgram(
         throw(ArgumentError("the medium-kind table has the wrong size"))
     medium_mask[medium_kind] ||
         throw(ArgumentError("the default medium must be a declared medium kind"))
-    attempts_per_site > 0 ||
-        throw(ArgumentError("attempts per site must be positive"))
+    attempts_per_site == 1 || throw(ArgumentError(
+        "SequentialProgramEngine and CheckerboardProgramEngine implement " *
+        "only the normalized AttemptsPerSite(1) process; a different " *
+        "budget requires a separately named and qualified algorithm"
+    ))
     relationship_storage = relationships isa RelationshipStorage ?
                            relationships : RelationshipStorage(relationships)
     checkerboard_plan === nothing && engine isa CheckerboardProgramEngine &&

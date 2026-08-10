@@ -13,6 +13,7 @@ struct Philox4x32x10V1 end
     LifecyclePlacementStream = 10
     LifecyclePartitionStream = 11
     LifecycleStateStream = 12
+    CheckerboardColorOrderStream = 13
 end
 
 @enum RNGEntityKind::UInt8 begin

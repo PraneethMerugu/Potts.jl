@@ -48,16 +48,20 @@ CorePotts.tracker_contract(::UnqualifiedCapabilityTracker) =
 )
 
 @testset "structured program capability profiles" begin
+    @test CorePotts.BackendSPI.rng_contract_identity() == (
+        contract_version = CorePotts.RNG_CONTRACT_VERSION,
+        lowering_identity = CorePotts.RNG_LOWERING_IDENTITY,
+    )
     for (engine, expected_engine, suite) in (
             (
                 CorePotts.SequentialProgramEngine(),
                 CorePotts.SequentialEngine,
-                :sequential_cpu_functional_v1,
+                :lw0_sequential_cpu_exact_replay_v1,
             ),
             (
                 CorePotts.CheckerboardProgramEngine(),
                 CorePotts.CheckerboardEngine,
-                :checkerboard_cpu_functional_v1,
+                :lw0_checkerboard_random_color_cpu_exact_replay_v1,
             ),
         )
         program = test_program(engine)
@@ -84,6 +88,10 @@ CorePotts.tracker_contract(::UnqualifiedCapabilityTracker) =
         @test isempty(report.key.component_state.domains)
         @test report.key.component_state.schema_fingerprint == "none"
         @test report.key.mechanisms isa CorePotts.CapabilityMechanismProfile
+        @test report.key.mechanisms.rng_contract_version ==
+              CorePotts.RNG_CONTRACT_VERSION
+        @test report.key.mechanisms.rng_lowering_identity ===
+              CorePotts.RNG_LOWERING_IDENTITY
         @test report.key.mechanisms.qualification_family ===
               :core_execution_protocol_v1
         @test !isempty(report.key.mechanisms.proposal_fingerprint)
@@ -162,11 +170,75 @@ end
     key = CorePotts.program_capability_report(program).key
 
     @test checkpoint.extensions.CorePotts.environment == key.environment
+    @test checkpoint.extensions.CorePotts.rng == (
+        contract_version = CorePotts.RNG_CONTRACT_VERSION,
+        lowering_identity = CorePotts.RNG_LOWERING_IDENTITY,
+    )
     @test checkpoint.extensions.CorePotts.capability_fingerprint ==
           CorePotts._capability_key_fingerprint(key)
     @test_throws ArgumentError CorePotts.program_checkpoint(
         runtime; extensions = (CorePotts = (forged = true,),)
     )
+
+    function checkpoint_with_extensions(extensions)
+        checksum = CorePotts._program_checkpoint_checksum(
+            checkpoint.schema,
+            checkpoint.program_fingerprint,
+            checkpoint.snapshot,
+            checkpoint.parameters,
+            checkpoint.seed,
+            checkpoint.replica,
+            checkpoint.repeat,
+            checkpoint.accepted,
+            checkpoint.rejected,
+            checkpoint.null_attempts,
+            checkpoint.constraint_rejections,
+            checkpoint.energy_rejections,
+            checkpoint.retired_cells,
+            extensions,
+        )
+        return CorePotts.ProgramCheckpoint(
+            checkpoint.schema,
+            checkpoint.program_fingerprint,
+            checkpoint.snapshot,
+            checkpoint.parameters,
+            checkpoint.seed,
+            checkpoint.replica,
+            checkpoint.repeat,
+            checkpoint.accepted,
+            checkpoint.rejected,
+            checkpoint.null_attempts,
+            checkpoint.constraint_rejections,
+            checkpoint.energy_rejections,
+            checkpoint.retired_cells,
+            extensions,
+            checksum,
+        )
+    end
+
+    for foreign_rng in (
+            merge(checkpoint.extensions.CorePotts.rng, (
+                contract_version = v"99.0.0",
+            )),
+            merge(checkpoint.extensions.CorePotts.rng, (
+                lowering_identity = :foreign_rng_lowering,
+            )),
+        )
+        extensions = merge(checkpoint.extensions, (
+            CorePotts = merge(checkpoint.extensions.CorePotts, (
+                rng = foreign_rng,
+            )),
+        ))
+        forged = checkpoint_with_extensions(extensions)
+        error = try
+            CorePotts.validate_program_checkpoint(program, forged)
+            nothing
+        catch caught
+            caught
+        end
+        @test error isa ArgumentError
+        @test occursin("RNG contract", sprint(showerror, error))
+    end
 
     foreign_environment = merge(
         key.environment, (architecture = :foreign_test_architecture,)

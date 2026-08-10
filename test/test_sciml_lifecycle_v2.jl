@@ -7,7 +7,11 @@ const G5H2V2_SII = SymbolicIndexingInterface
 end
 @variables g5h2v2_marker
 
-function _g5h2v2_fixture(name::Symbol; marker_value = 1.25)
+function _g5h2v2_fixture(
+        name::Symbol;
+        marker_value = 1.25,
+        attempts = AttemptsPerSite(1),
+    )
     cell = CellKind(:g5h2v2_cell; extinction = RetireAtZero())
     medium = MediumKind(:g5h2v2_medium)
     source = PottsSystem(
@@ -33,7 +37,7 @@ function _g5h2v2_fixture(name::Symbol; marker_value = 1.25)
             ),
             Observation(:g5h2v2_marker_snapshot, g5h2v2_marker),
             Protocol(
-                Sweep(; temperature = g5h2v2_temperature);
+                Sweep(; temperature = g5h2v2_temperature, attempts);
                 name = :g5h2v2_protocol,
             ),
         )),
@@ -88,6 +92,24 @@ function _g5h2v2_problem(
         replica,
         repeat,
     )
+end
+
+@testset "current public algorithms reject nonunit attempt budgets" begin
+    fixture = _g5h2v2_fixture(
+        :g5h2v2_nonunit_attempts;
+        attempts = AttemptsPerSite(2),
+    )
+    problem = _g5h2v2_problem(fixture; tspan = (0, 1))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        error = try
+            init(problem, algorithm; save_start = false)
+            nothing
+        catch caught
+            caught
+        end
+        @test error isa ArgumentError
+        @test occursin("separately named and qualified", sprint(showerror, error))
+    end
 end
 
 function _g5h2v2_same_state(left, right)

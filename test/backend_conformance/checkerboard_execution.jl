@@ -267,7 +267,7 @@ function _boundary_program(
         2,
         1,
         CorePotts.CompiledScalar(2.0f0),
-        2,
+        1,
         Float32[],
         (),
         tracker_plan,
@@ -351,7 +351,7 @@ function _run_boundary_shape(
         device_runtime.energy_rejections,
     )
     @test device_report == cpu_report
-    @test sum(cpu_report[1:3]) == 2 * prod(shape)
+    @test sum(cpu_report[1:3]) == prod(shape)
     @test program.checkerboard_plan.color_count == 1
     @test program.checkerboard_plan.maximum_color_size == prod(shape)
     return (; shape, workgroup_size, branch, cpu_report)

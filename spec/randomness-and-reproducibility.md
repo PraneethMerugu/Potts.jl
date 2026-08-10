@@ -50,9 +50,13 @@ Any change that can alter generated values for an existing address MUST introduc
 version. Implementations SHOULD retain selectable historical versions needed to reproduce published
 work. A package version alone is not an adequate RNG version.
 
-`Philox4x32x10V1` is the accepted default RNG contract. Its Philox4x32-10 primitive, Potts semantic
-address packing, and version `1.0.0` have known-answer and raw-word qualification on CPU, Metal, and
-ROCm. Later changes that alter any mapped word require a new RNG contract version.
+`Philox4x32x10V1` is the accepted default generator and address-packing contract. The current RNG
+contract version is `1.2.0`, with lowering identity
+`philox4x32x10_semantic_address_fisher_yates_v1`. Version `1.2.0` preserves all previously admitted
+raw words and adds the checkerboard color-order stream plus a fixed unbiased Fisher--Yates lowering.
+Known-answer and raw-word qualification covers the accepted CPU and qualified accelerator profiles;
+later changes that alter a mapped word, stream encoding, or permutation lowering require a new RNG
+contract version or lowering identity as applicable.
 
 ## Counter-Based Addressing
 
@@ -264,6 +268,13 @@ random streams.
 scheduled exactly once without replacement, and each MCS uses an unbiased random permutation of
 colors. A color observes one common snapshot, commits through its documented transaction, and the
 next color observes the committed state.
+
+The color permutation is the canonical in-place Fisher--Yates algorithm over color IDs `1:C`, with
+positions visited from `C` through `2`. Position `p` selects an unbiased integer from `1:p` using
+`CheckerboardColorOrderStream`, semantic MCS `completed_mcs + 1`, subround `1`, operation `5`,
+`GlobalEntity`, and entity `p`. The trajectory seed includes the master seed, replica, and repeat.
+This address and lowering are shared by CPU and qualified Metal execution; color is passed to each
+queued kernel as a scalar, so backend launch geometry cannot change the permutation.
 
 Checkerboard equilibrium correctness remains under `SEM-ALG-001`. It MUST NOT be described as
 equilibrium-exact until its transition kernel is derived for shared cell state, trackers, boundaries,

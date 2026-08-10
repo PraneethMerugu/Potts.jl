@@ -72,6 +72,8 @@ struct CapabilityMechanismProfile
     relationship_fingerprint::String
     tracker_fingerprint::String
     checkerboard_fingerprint::String
+    rng_contract_version::VersionNumber
+    rng_lowering_identity::Symbol
     code_identities::Tuple
     authority::Any
     qualification_family::Symbol
@@ -101,6 +103,13 @@ const _REVIEWED_EXACT_ENVIRONMENT_DIGESTS = (
     # a separate closed row preserves the exact-environment replay boundary;
     # the test process does not acquire evidence by hashing itself.
     "80d86547549b8803a75311c347e74e4e44fbe1c550e1f20bc937003d850baefe",
+    # LW-0 qualification candidate on the same Apple M1 Pro host under Julia
+    # 1.12.6, one thread, default bounds policy. This row remains subject to
+    # the exact-candidate LW-R0 preservation review.
+    "281cfbf41f362e63ec7005a8b5b9f536b67cd51d1d79a6847d60e63069f1f38b",
+    # The matching Julia 1.12.6 `Pkg.test` process with `--check-bounds=yes`.
+    # It is a separate closed identity rather than a wildcarded environment.
+    "0b1726268dbde8e3f38c9186ed2eb07a684bc04818c3ba38793da886eb035d1a",
 )
 
 function _capability_package_identity(module_value)
@@ -547,6 +556,8 @@ function _capability_mechanism_profile(program::CompiledPottsProgram)
         _capability_digest(Tuple(program.relationships)),
         _capability_digest(program.tracker_plan),
         checkerboard === nothing ? "none" : _capability_digest(checkerboard),
+        RNG_CONTRACT_VERSION,
+        RNG_LOWERING_IDENTITY,
         identities,
         authority,
         qualification,
@@ -590,19 +601,19 @@ end
 
 const _SEQUENTIAL_CPU_QUALIFIED_EVIDENCE = CapabilityEvidenceIdentity(
     :CorePotts,
-    :sequential_cpu_functional_v1,
+    :lw0_sequential_cpu_exact_replay_v1,
     v"1.0.0",
     bytes2hex(SHA.sha256(codeunits(
-        "CorePotts/sequential-cpu/core-execution-protocol-v1"
+        "CorePotts/lw0/sequential-cpu/core-execution-protocol-v1"
     ))),
 )
 
 const _CHECKERBOARD_CPU_QUALIFIED_EVIDENCE = CapabilityEvidenceIdentity(
     :CorePotts,
-    :checkerboard_cpu_functional_v1,
+    :lw0_checkerboard_random_color_cpu_exact_replay_v1,
     v"1.0.0",
     bytes2hex(SHA.sha256(codeunits(
-        "CorePotts/checkerboard-cpu/core-execution-protocol-v1"
+        "CorePotts/lw0/checkerboard-random-color-cpu/core-execution-protocol-v1"
     ))),
 )
 
@@ -628,6 +639,8 @@ const _QUALIFIED_CAPABILITY_FAMILIES = (
             :core_execution_protocol_v1,
             :evidenced_execution_protocol_v1,
         ),
+        rng_contract_versions = (RNG_CONTRACT_VERSION,),
+        rng_lowering_identities = (RNG_LOWERING_IDENTITY,),
         environment_digests = _REVIEWED_EXACT_ENVIRONMENT_DIGESTS,
         replay = ExactConfigurationReplay,
         evidence = _SEQUENTIAL_CPU_QUALIFIED_EVIDENCE,
@@ -651,6 +664,8 @@ const _QUALIFIED_CAPABILITY_FAMILIES = (
             :core_execution_protocol_v1,
             :evidenced_execution_protocol_v1,
         ),
+        rng_contract_versions = (RNG_CONTRACT_VERSION,),
+        rng_lowering_identities = (RNG_LOWERING_IDENTITY,),
         environment_digests = _REVIEWED_EXACT_ENVIRONMENT_DIGESTS,
         replay = ExactConfigurationReplay,
         evidence = _CHECKERBOARD_CPU_QUALIFIED_EVIDENCE,
@@ -708,6 +723,10 @@ function _qualified_capability_family(key::ProgramCapabilityKey)
         key.lifecycle.family in family.lifecycle_families || continue
         key.component_state.scope in family.component_scopes || continue
         key.mechanisms.qualification_family in family.mechanism_families || continue
+        key.mechanisms.rng_contract_version in
+            family.rng_contract_versions || continue
+        key.mechanisms.rng_lowering_identity in
+            family.rng_lowering_identities || continue
         _capability_digest(key.environment) in family.environment_digests || continue
         key.replay === family.replay || continue
         return family

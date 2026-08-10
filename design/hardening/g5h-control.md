@@ -1,15 +1,11 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-5 passed; R2H-C cleared on its exact candidate; G5H-R active; G6 blocked
+Status: G5H-0 through G5H-5 passed; R2H-C and LW-R0 cleared; LW-1 next; G6 closed
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
 This is the sole living status record for G5H. It records outcomes and exact evidence; it does not
 repeat or amend gate requirements.
-
-Decision 0045 preserves these passed rows as exact historical evidence and moves live pre-G6 work
-to the [G5H-R control record](g5h-r-control.md). No row below claims qualification for the candidate
-native moving-field design.
 
 ## Gate state
 
@@ -24,8 +20,9 @@ native moving-field design.
 | G5H-4 — dynamic components, fields, ensembles, profiles | `passed` | Exact implementation candidate `901faa546d0b21acca5dd56ecfd42f1ffae8dd64`, tree `e935bf919e59c86baa3f23a394d1eb06d497bc61`; H4-A through H4-E passed their implementation hold points, and H4-Q froze the exhaustive conjunction matrix with passing qualification evidence. |
 | G5H-5 — product qualification and docs | `passed` | Corrected implementation candidate `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, removes the surviving `EquationProcess` surrogate, corrects the page count, records the owner-required Wortel/Merks substrate dispositions, and passes every affected qualification lane. |
 | R2H-C — hardening exit review | `passed` | Final fresh rereview cleared implementation `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, against record `f3e527cf1bb1c083574fd682b6fd4576ebccf120`, tree `6b6701159a425de2c1c6832d935b75bb26b0d8a7`: P0=0, P1=0, P2=0, P3=0. |
-| G5H-R — native moving-field research and amendment | `active` | Governed by the separate `g5h-r-control.md`; production and capability changes remain prohibited before committee review and owner-ratified amendment. |
-| G6 owner decision | `blocked` | G6 now requires G5H-R closure, all work and rereviews required by any accepted amendment, and explicit owner send-off. |
+| LocalWorksets LW-0 and LW-R0 | `passed` | CP-B1--CP-B3, complete CorePotts CPU, qualified real Metal, quantitative baselines, and the exact preservation review passed with P0=0, P1=0, P2=0, P3=0 and no dissent. Evidence: [LW-0 corrected CorePotts baseline](lw0-corrected-corepotts-baseline.md). |
+| LocalWorksets LW-1 through LW-R1 | `next` | Governed by the accepted [LocalWorksets contract](../../spec/localworksets-v1.md) and [implementation/review gate](../../spec/localworksets-v1-implementation-gate.md). LW-1 has not begun. |
+| G6 owner decision | `blocked` | G6 requires LW-R1, an LW-4 disposition, and explicit owner send-off. |
 
 ## Review results
 
@@ -186,9 +183,8 @@ P1=0, P2=0, and P3=0. It independently reproduced the complete 16-page
 inventory, closure of `EquationProcess`, the 9/9 product suite, the
 Wortel/Merks upstream-substrate disposition, MTK ownership of native internal
 connections, PR01--PR30 closure, and the fail-closed capability boundary.
-R2H-C is cleared for that exact candidate. Decision 0045 subsequently inserted G5H-R, so G6 now
-remains closed until the research gate and any accepted reopened route clear before explicit owner
-authorization.
+R2H-C is cleared. LocalWorksets LW-0 is next; G6 remains closed until the accepted implementation
+route and explicit owner authorization clear.
 
 ## G5H-4 implementation matrix
 

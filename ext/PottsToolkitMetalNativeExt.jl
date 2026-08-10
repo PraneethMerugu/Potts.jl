@@ -20,7 +20,7 @@ function _package_identity(module_value)
     )
 end
 
-const _G5H4_TESTED_METAL_NATIVE_STACK = (
+const _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1 = (
     DiffEqGPU = (
         package = "DiffEqGPU",
         uuid = "071ae1c0-96b5-11e9-1965-c90190d839ea",
@@ -68,6 +68,22 @@ const _G5H4_TESTED_METAL_NATIVE_STACK = (
         word_size = 64,
         machine = "arm64-apple-darwin24.0.0",
     ),
+)
+
+const _G5H4_TESTED_METAL_NATIVE_STACK = merge(
+    _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1,
+    (Julia = (
+        version = v"1.12.6",
+        kernel = :Darwin,
+        architecture = :aarch64,
+        word_size = 64,
+        machine = "arm64-apple-darwin24.0.0",
+    ),),
+)
+
+const _G5H4_TESTED_METAL_NATIVE_STACKS = (
+    _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1,
+    _G5H4_TESTED_METAL_NATIVE_STACK,
 )
 
 function _metal_native_stack_identity()
@@ -132,7 +148,7 @@ function PottsToolkit.preflight_native_component(
         component, :device_available,
         "MetalNativeExecution was requested but Metal is not functional",
     ))
-    _metal_native_stack_identity() == _G5H4_TESTED_METAL_NATIVE_STACK ||
+    _metal_native_stack_identity() in _G5H4_TESTED_METAL_NATIVE_STACKS ||
         throw(_metal_error(
             component,
             :native_runtime_stack,
@@ -163,7 +179,7 @@ function PottsToolkit._native_profile_evidence(
         },
     ) where {P <: Tuple, A, O <: NamedTuple}
     declaration = getfield(component, :declaration)
-    _metal_native_stack_identity() == _G5H4_TESTED_METAL_NATIVE_STACK ||
+    _metal_native_stack_identity() in _G5H4_TESTED_METAL_NATIVE_STACKS ||
         return nothing
     getfield(declaration, :capabilities) isa
         PottsToolkit._MethodOfLinesNativeCapability && return nothing

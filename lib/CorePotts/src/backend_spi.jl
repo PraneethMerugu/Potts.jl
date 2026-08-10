@@ -62,6 +62,8 @@ import ..CorePotts:
     RelationshipTransactionBuffer,
     CreateRelationshipRequest,
     RemoveRelationshipRequest,
+    RNG_CONTRACT_VERSION,
+    RNG_LOWERING_IDENTITY,
     RetuneRelationshipRequest,
     ProgramRelationshipRequest,
     ProgramRelationshipState,
@@ -207,5 +209,12 @@ public component_identity, component_state_snapshot
 public component_metadata_snapshot
 public bulk_component_completed_mcs, bulk_component_last_transaction_identity
 public validate_program_checkpoint
+
+"""Return the exact RNG contract and lowering identity admitted by this Core build."""
+rng_contract_identity() = (
+    contract_version = RNG_CONTRACT_VERSION,
+    lowering_identity = RNG_LOWERING_IDENTITY,
+)
+public rng_contract_identity
 
 end

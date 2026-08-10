@@ -452,6 +452,11 @@ function _lower_core_program(
         ir.source, domain, :contact, dimensions, Moore()
     )
     attempts, temperature = _protocol_settings(records, manifest, T)
+    attempts == 1 || throw(ArgumentError(
+        "$(nameof(typeof(engine))) implements only AttemptsPerSite(1); " *
+        "a different attempt budget requires a separately named and " *
+        "qualified Potts algorithm"
+    ))
     relationships = _lower_relationships(
         ir, relationship_endpoint_policies, manifest, T
     )
