@@ -7,10 +7,13 @@ using AcceleratedKernels
 using Adapt
 using Atomix
 using KernelAbstractions
+import LocalWorksets
 
 const RNG_CONTRACT_VERSION = v"1.2.0"
 const RNG_LOWERING_IDENTITY =
     :philox4x32x10_semantic_address_fisher_yates_v1
+
+public LocalWorksets
 
 # Declared before program/types.jl so the compiled program can own the generic
 # lifecycle boundary while its concrete plan is defined with the execution IR.

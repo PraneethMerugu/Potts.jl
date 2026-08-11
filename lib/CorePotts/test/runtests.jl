@@ -1,6 +1,7 @@
 using Aqua
 using Test
 import CorePotts
+import LocalWorksets
 
 include("test_api_boundary.jl")
 include("test_rng_contract.jl")

@@ -122,6 +122,307 @@ struct CheckerboardWorkspace{
     execution::EP
 end
 
+abstract type _AbstractCheckerboardClaimExecution end
+struct _DirectCheckerboardClaimExecution <:
+       _AbstractCheckerboardClaimExecution end
+
+"""Read-only device projection of the exact Core program/lifecycle open state."""
+struct _CheckerboardOpenGate{P, L} <: AbstractVector{Bool}
+    program_status::P
+    lifecycle_status::L
+end
+
+"""Read-only device projection for a checkerboard with no lifecycle workspace."""
+struct _CheckerboardNoLifecycleOpenGate{P} <: AbstractVector{Bool}
+    program_status::P
+end
+
+Base.IndexStyle(::Type{<:_CheckerboardOpenGate}) = IndexLinear()
+Base.IndexStyle(::Type{<:_CheckerboardNoLifecycleOpenGate}) = IndexLinear()
+Base.size(::_CheckerboardOpenGate) = (1,)
+Base.size(::_CheckerboardNoLifecycleOpenGate) = (1,)
+Base.length(::_CheckerboardOpenGate) = 1
+Base.length(::_CheckerboardNoLifecycleOpenGate) = 1
+Base.strides(::_CheckerboardOpenGate) = (1,)
+Base.strides(::_CheckerboardNoLifecycleOpenGate) = (1,)
+
+@inline function Base.getindex(gate::_CheckerboardOpenGate, index::Int)
+    @boundscheck index == 1 || throw(BoundsError(gate, index))
+    return (@inbounds gate.program_status[1]).code === ProgramStatusSuccess &&
+           (@inbounds gate.lifecycle_status[1]).code === ProgramStatusSuccess
+end
+
+@inline function Base.getindex(
+        gate::_CheckerboardNoLifecycleOpenGate, index::Int
+    )
+    @boundscheck index == 1 || throw(BoundsError(gate, index))
+    return (@inbounds gate.program_status[1]).code === ProgramStatusSuccess
+end
+
+function KernelAbstractions.get_backend(gate::_CheckerboardOpenGate)
+    backend = KernelAbstractions.get_backend(gate.program_status)
+    KernelAbstractions.get_backend(gate.lifecycle_status) == backend ||
+        throw(ArgumentError(
+            "checkerboard open-gate parents belong to different backends"
+        ))
+    return backend
+end
+
+
+KernelAbstractions.get_backend(gate::_CheckerboardNoLifecycleOpenGate) =
+    KernelAbstractions.get_backend(gate.program_status)
+
+function Adapt.adapt_structure(to, gate::_CheckerboardOpenGate)
+    return _CheckerboardOpenGate(
+        Adapt.adapt(to, gate.program_status),
+        Adapt.adapt(to, gate.lifecycle_status),
+    )
+end
+
+function Adapt.adapt_structure(to, gate::_CheckerboardNoLifecycleOpenGate)
+    return _CheckerboardNoLifecycleOpenGate(
+        Adapt.adapt(to, gate.program_status)
+    )
+end
+
+function _checkerboard_open_gate(state::CheckerboardExecutionState)
+    workspace = state.lifecycle_workspace
+    workspace isa NoLifecycleWorkspace &&
+        return _CheckerboardNoLifecycleOpenGate(state.program_status)
+    workspace isa LifecycleWorkspace || throw(ArgumentError(
+        "checkerboard state has an unsupported lifecycle gate"
+    ))
+    return _CheckerboardOpenGate(state.program_status, workspace.status)
+end
+
+mutable struct _LocalWorksetsTrustedAdapter
+    trusted_world::UInt
+    run_method::Method
+    wait_method::Method
+end
+
+function _prepare_localworksets_trusted_adapter()
+    run_signature = Tuple{LocalWorksets.PreparedWork, NamedTuple}
+    run_method = which(LocalWorksets.run!, run_signature)
+    run_method.module === LocalWorksets || throw(ArgumentError(
+        "LocalWorksets.run! is not owned by LocalWorksets"
+    ))
+    wait_signature = Tuple{LocalWorksets.WorkEvent}
+    wait_method = which(Base.wait, wait_signature)
+    wait_method.module === LocalWorksets || throw(ArgumentError(
+        "Base.wait(::LocalWorksets.WorkEvent) is not owned by LocalWorksets"
+    ))
+    return _LocalWorksetsTrustedAdapter(
+        Base.get_world_counter(), run_method, wait_method
+    )
+end
+
+function _validate_localworksets_trusted_adapter!(
+        adapter::_LocalWorksetsTrustedAdapter
+    )
+    world = Base.get_world_counter()
+    world == adapter.trusted_world && return nothing
+    which(
+        LocalWorksets.run!,
+        Tuple{LocalWorksets.PreparedWork, NamedTuple},
+    ) === adapter.run_method || throw(ArgumentError(
+        "the trusted LocalWorksets.run! adapter changed after preparation"
+    ))
+    which(
+        Base.wait, Tuple{LocalWorksets.WorkEvent}
+    ) === adapter.wait_method || throw(ArgumentError(
+        "the trusted LocalWorksets WorkEvent wait adapter changed after preparation"
+    ))
+    adapter.trusted_world = world
+    return nothing
+end
+
+function _run_localworksets_trusted!(
+        adapter::_LocalWorksetsTrustedAdapter,
+        prepared::LocalWorksets.PreparedWork,
+        submission::NamedTuple,
+    )
+    invoke(
+        _validate_localworksets_trusted_adapter!,
+        Tuple{_LocalWorksetsTrustedAdapter},
+        adapter,
+    )
+    return invoke(
+        LocalWorksets.run!,
+        Tuple{LocalWorksets.PreparedWork, NamedTuple},
+        prepared,
+        submission,
+    )
+end
+
+function _wait_localworksets_trusted!(
+        adapter::_LocalWorksetsTrustedAdapter,
+        event::LocalWorksets.WorkEvent,
+    )
+    invoke(
+        _validate_localworksets_trusted_adapter!,
+        Tuple{_LocalWorksetsTrustedAdapter},
+        adapter,
+    )
+    return invoke(
+        Base.wait,
+        Tuple{LocalWorksets.WorkEvent},
+        event,
+    )
+end
+
+mutable struct _LocalWorksetsCheckerboardWorkspace{W, P, G, A} <:
+               _AbstractCheckerboardClaimExecution
+    direct::W
+    prepared::P
+    gates::G
+    lease_capacity::Int
+    last_event::Union{Nothing, LocalWorksets.WorkEvent}
+    execution::ProgramExecutionPosition
+    mechanism_identity::Symbol
+    trusted_adapter::A
+end
+
+function _validate_checkerboard_identity_order(plan::CheckerboardPlan)
+    for color in 1:Int(plan.color_count)
+        first_index = Int(plan.color_offsets[color])
+        stop_index = Int(plan.color_offsets[color + 1]) - 1
+        sites = @view plan.sites[first_index:stop_index]
+        issorted(sites; lt = <) && all(>(Int32(0)), sites) ||
+            throw(ArgumentError(
+                "LocalWorksets candidate requires canonical increasing color sites"
+            ))
+    end
+    return nothing
+end
+
+function _prepare_localworksets_checkerboard_candidate(
+        workspace::CheckerboardWorkspace;
+        queue_mcs_capacity::Integer = 12,
+        canonical_plan = nothing,
+    )
+    queue_mcs_capacity >= 12 || throw(ArgumentError(
+        "the reviewed LocalWorksets candidate requires capacity for twelve MCSs"
+    ))
+    state = workspace.state
+    state.program.stage_plan.accepted_count == 0 || throw(ArgumentError(
+        "accepted-copy checkerboard stages remain on the direct path"
+    ))
+    state.program.attempts_per_site == 1 || throw(ArgumentError(
+        "the LocalWorksets checkerboard candidate admits one attempt per site"
+    ))
+    plan = state.program.checkerboard_plan
+    plan isa CheckerboardPlan || throw(ArgumentError(
+        "the LocalWorksets checkerboard candidate requires a realized plan"
+    ))
+    host_plan = canonical_plan === nothing ? plan : canonical_plan
+    host_plan isa CheckerboardPlan || throw(ArgumentError(
+        "the LocalWorksets checkerboard candidate requires a host canonical plan"
+    ))
+    _validate_checkerboard_identity_order(host_plan)
+    host_plan.shape == plan.shape &&
+        host_plan.periodic == plan.periodic &&
+        host_plan.color_count == plan.color_count &&
+        host_plan.maximum_color_size == plan.maximum_color_size ||
+        throw(ArgumentError(
+            "host and adapted checkerboard plan capacities disagree"
+        ))
+    maximum_batch = Int(plan.maximum_color_size)
+    destination_count = length(state.cell_kinds)
+    output = LocalWorksets.resolved(
+        (:old_owners, :new_owners);
+        empty = _PROGRAM_CHECKERBOARD_CONFLICT,
+        rank = (
+            type = UInt32,
+            order = :max,
+            lower = UInt32(0),
+            upper = typemax(UInt32),
+        ),
+        tie_break = (
+            input_type = Int32,
+            type = UInt32,
+            order = :min,
+            transform = :checked_unsigned,
+            proof = :strictly_increasing_active_prefix,
+        ),
+        capacity = maximum_batch,
+        key_type = Int32,
+        value_type = UInt8,
+        skipped_keys = :nonpositive,
+        result = (
+            layout = :items,
+            selection = :all,
+            zero_claim = :selected,
+            selected = :preserve,
+            ineligible = :preserve,
+        ),
+    )
+    work = LocalWorksets.localwork(
+        (
+            family = :resolved_conjunctive_selection,
+            eligible = _PROGRAM_CHECKERBOARD_ACCEPTED,
+        ),
+        1:maximum_batch;
+        read = (
+            key_a = :old_owners,
+            key_b = :new_owners,
+            rank = :priorities,
+            identity = :semantic_ids,
+            value = :dispositions,
+            gate = :execution_open,
+        ),
+        outputs = (; dispositions = output),
+        active = :active_count,
+    )
+    topology = (
+        item_count = Int32(maximum_batch),
+        destination_count = Int32(destination_count),
+        epoch = UInt64(1),
+    )
+    backend = KernelAbstractions.get_backend(workspace.dispositions)
+    workplan = LocalWorksets.plan(work, topology; backend)
+    gates = (
+        _checkerboard_open_gate(workspace.state),
+        _checkerboard_open_gate(workspace.alternate_state),
+    )
+    storage = (
+        old_owners = workspace.old_owners,
+        new_owners = workspace.new_owners,
+        priorities = workspace.priorities,
+        semantic_ids = workspace.semantic_ids,
+        dispositions = workspace.dispositions,
+    )
+    lease_capacity = queue_mcs_capacity *
+                     Int(state.program.attempts_per_site) *
+                     Int(plan.color_count)
+    local_workspace = (
+        winner_ranks = workspace.cell_max_priority,
+        winner_identities = workspace.cell_min_identity,
+        leases = Any[nothing for _ in 1:lease_capacity],
+    )
+    submission = (
+        execution_open = LocalWorksets.storage_slot(
+            first(gates); access = :read
+        ),
+        active_count = LocalWorksets.value_slot(
+            Int32; bounds = Int32(0):Int32(maximum_batch)
+        ),
+    )
+    prepared = LocalWorksets.prepare(
+        workplan, storage; workspace = local_workspace, submission
+    )
+    return _LocalWorksetsCheckerboardWorkspace(
+        workspace,
+        prepared,
+        gates,
+        lease_capacity,
+        nothing,
+        workspace.execution,
+        :corepotts_checkerboard_conjunctive_localworksets_v1,
+        _prepare_localworksets_trusted_adapter(),
+    )
+end
+
 @inline function _checkerboard_state_with_science(
         state,
         ownership,
@@ -853,10 +1154,113 @@ function _publish_checkerboard_accepted_stage!(
     return nothing
 end
 
-function execute_checkerboard_mcs!(
+function _prepare_checkerboard_claim_runtime(
+        ::_DirectCheckerboardClaimExecution, backend, launch
+    )
+    return (
+        priority = launch(_checkerboard_claim_priorities_kernel!),
+        identity = launch(_checkerboard_claim_identities_kernel!),
+        select = launch(_checkerboard_select_kernel!),
+    )
+end
+
+_prepare_checkerboard_claim_runtime(
+    ::_LocalWorksetsCheckerboardWorkspace, backend, launch
+) = nothing
+
+function _execute_checkerboard_claim_block!(
+        ::_DirectCheckerboardClaimExecution,
+        runtime,
+        workspace,
+        state,
+        batch_size,
+    )
+    _clear_checkerboard_claims!(workspace, state)
+    runtime.priority(
+        workspace.old_owners,
+        workspace.new_owners,
+        workspace.priorities,
+        workspace.dispositions,
+        workspace.cell_max_priority,
+        state,
+        Int32(batch_size);
+        ndrange = batch_size,
+    )
+    runtime.identity(
+        workspace.old_owners,
+        workspace.new_owners,
+        workspace.priorities,
+        workspace.semantic_ids,
+        workspace.dispositions,
+        workspace.cell_max_priority,
+        workspace.cell_min_identity,
+        state,
+        Int32(batch_size);
+        ndrange = batch_size,
+    )
+    runtime.select(
+        workspace.old_owners,
+        workspace.new_owners,
+        workspace.priorities,
+        workspace.semantic_ids,
+        workspace.dispositions,
+        workspace.cell_max_priority,
+        workspace.cell_min_identity,
+        state,
+        Int32(batch_size);
+        ndrange = batch_size,
+    )
+    return nothing
+end
+
+function _checkerboard_candidate_gate(candidate, state)
+    if state.program_status === candidate.direct.state.program_status
+        return candidate.gates[1]
+    elseif state.program_status ===
+            candidate.direct.alternate_state.program_status
+        return candidate.gates[2]
+    end
+    throw(ArgumentError(
+        "checkerboard state does not belong to the candidate's prepared banks"
+    ))
+end
+
+function _execute_checkerboard_claim_block!(
+        candidate::_LocalWorksetsCheckerboardWorkspace,
+        runtime,
+        workspace,
+        state,
+        batch_size,
+    )
+    gate = _checkerboard_candidate_gate(candidate, state)
+    try
+        candidate.last_event = invoke(
+            _run_localworksets_trusted!,
+            Tuple{
+                _LocalWorksetsTrustedAdapter,
+                LocalWorksets.PreparedWork,
+                NamedTuple,
+            },
+            candidate.trusted_adapter,
+            candidate.prepared,
+            (
+                execution_open = gate,
+                active_count = Int32(batch_size),
+            ),
+        )
+    catch error
+        error isa LifecycleBackendFailure && rethrow()
+        throw(LifecycleBackendFailure(error, state.mcs + 1, state.mcs + 1))
+    end
+    return nothing
+end
+
+function _execute_checkerboard_mcs!(
         workspace::CheckerboardWorkspace,
         mcs::Integer = workspace.state.mcs,
         state_bank::CheckerboardExecutionState = workspace.state,
+        claims::_AbstractCheckerboardClaimExecution =
+            _DirectCheckerboardClaimExecution(),
         ;
         workgroup_size::Union{Nothing, Integer} = nothing,
     )
@@ -888,9 +1292,9 @@ function execute_checkerboard_mcs!(
     launch(kernel) = workgroup_size === nothing ? kernel(backend) :
                      kernel(backend, Int(workgroup_size))
     candidate_kernel = launch(_checkerboard_candidates_kernel!)
-    claim_priority_kernel = launch(_checkerboard_claim_priorities_kernel!)
-    claim_identity_kernel = launch(_checkerboard_claim_identities_kernel!)
-    select_kernel = launch(_checkerboard_select_kernel!)
+    claim_runtime = _prepare_checkerboard_claim_runtime(
+        claims, backend, launch
+    )
     evaluate_kernel = launch(_checkerboard_evaluate_kernel!)
     acceptance_status_kernel = _checkerboard_acceptance_status_kernel!(backend)
     commit_kernel = launch(_checkerboard_commit_kernel!)
@@ -940,40 +1344,12 @@ function execute_checkerboard_mcs!(
                 Int32(batch_size);
                 ndrange = 1,
             )
-            _clear_checkerboard_claims!(workspace, state)
-            claim_priority_kernel(
-                workspace.old_owners,
-                workspace.new_owners,
-                workspace.priorities,
-                workspace.dispositions,
-                workspace.cell_max_priority,
+            _execute_checkerboard_claim_block!(
+                claims,
+                claim_runtime,
+                workspace,
                 state,
-                Int32(batch_size);
-                ndrange = batch_size,
-            )
-            claim_identity_kernel(
-                workspace.old_owners,
-                workspace.new_owners,
-                workspace.priorities,
-                workspace.semantic_ids,
-                workspace.dispositions,
-                workspace.cell_max_priority,
-                workspace.cell_min_identity,
-                state,
-                Int32(batch_size);
-                ndrange = batch_size,
-            )
-            select_kernel(
-                workspace.old_owners,
-                workspace.new_owners,
-                workspace.priorities,
-                workspace.semantic_ids,
-                workspace.dispositions,
-                workspace.cell_max_priority,
-                workspace.cell_min_identity,
-                state,
-                Int32(batch_size);
-                ndrange = batch_size,
+                batch_size,
             )
             staged_commit && _prepare_checkerboard_accepted_stage!(
                 workspace, state, color, batch_size
@@ -1000,6 +1376,38 @@ function execute_checkerboard_mcs!(
         end
     end
     return workspace
+end
+
+function execute_checkerboard_mcs!(
+        workspace::CheckerboardWorkspace,
+        mcs::Integer = workspace.state.mcs,
+        state_bank::CheckerboardExecutionState = workspace.state;
+        workgroup_size::Union{Nothing, Integer} = nothing,
+    )
+    return _execute_checkerboard_mcs!(
+        workspace,
+        mcs,
+        state_bank,
+        _DirectCheckerboardClaimExecution();
+        workgroup_size,
+    )
+end
+
+
+function execute_checkerboard_mcs!(
+        candidate::_LocalWorksetsCheckerboardWorkspace,
+        mcs::Integer = candidate.direct.state.mcs,
+        state_bank::CheckerboardExecutionState = candidate.direct.state;
+        workgroup_size::Union{Nothing, Integer} = nothing,
+    )
+    _execute_checkerboard_mcs!(
+        candidate.direct,
+        mcs,
+        state_bank,
+        candidate;
+        workgroup_size,
+    )
+    return candidate
 end
 
 @inline function _checkerboard_transaction_banks(
@@ -1034,6 +1442,58 @@ function enqueue_checkerboard_mcs!(
     _enqueue_program_state_copy!(destination, source)
     execute_checkerboard_mcs!(
         workspace,
+        current_mcs,
+        destination;
+        workgroup_size,
+    )
+    enqueue_lifecycle_backend_index!(destination; workgroup_size)
+    _enqueue_program_bank_publication!(
+        destination, workspace.report, destination_bank, current_mcs + 1
+    )
+    workspace.execution.submitted_mcs = Int(current_mcs) + 1
+    return destination
+end
+
+function _require_candidate_mcs_lease_capacity(
+        candidate::_LocalWorksetsCheckerboardWorkspace
+    )
+    required = Int(
+        candidate.direct.state.program.attempts_per_site
+    ) * Int(candidate.direct.state.program.checkerboard_plan.color_count)
+    position = candidate.execution
+    outstanding_mcs = position.submitted_mcs - position.drained_mcs
+    available = candidate.lease_capacity - outstanding_mcs * required
+    available >= required || throw(ArgumentError(
+        "LocalWorksets checkerboard lease capacity cannot encode one complete MCS"
+    ))
+    return nothing
+end
+
+function enqueue_checkerboard_mcs!(
+        candidate::_LocalWorksetsCheckerboardWorkspace,
+        current_mcs::Integer;
+        workgroup_size::Union{Nothing, Integer} = nothing,
+    )
+    workspace = candidate.direct
+    _require_program_execution_capability(
+        workspace.capability_report;
+        operation = :backend_enqueue_checkerboard_mcs,
+    )
+    current_mcs >= 0 || throw(ArgumentError(
+        "current MCS must be nonnegative"
+    ))
+    current_mcs == workspace.execution.submitted_mcs || throw(ArgumentError(
+        "checkerboard submission must be contiguous: expected current MCS " *
+        "$(workspace.execution.submitted_mcs), received $current_mcs"
+    ))
+    _require_candidate_mcs_lease_capacity(candidate)
+    source, destination, destination_bank = _checkerboard_transaction_banks(
+        workspace, current_mcs
+    )
+    destination = _checkerboard_state_at_mcs(destination, current_mcs)
+    _enqueue_program_state_copy!(destination, source)
+    execute_checkerboard_mcs!(
+        candidate,
         current_mcs,
         destination;
         workgroup_size,

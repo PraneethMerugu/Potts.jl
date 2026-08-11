@@ -427,7 +427,9 @@ end
 
 function stage_program_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
-        runtime.capability_report; operation = :staged_mcs
+        runtime.capability_report;
+        operation = :staged_mcs,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     if runtime.program.engine isa CheckerboardProgramEngine
         return _stage_checkerboard_program_mcs!(runtime)
@@ -714,13 +716,272 @@ function _publish_program_receipt!(runtime::ProgramRuntime, receipt)
 end
 
 @inline function supports_queued_program_execution(runtime::ProgramRuntime)
-    runtime.engine_workspace isa CheckerboardWorkspace || return false
+    runtime.engine_workspace isa Union{
+        CheckerboardWorkspace, _LocalWorksetsCheckerboardWorkspace,
+    } || return false
     return isempty(runtime.program.stage_plan.after_mcs)
+end
+
+function _construct_localworksets_candidate_runtime(
+        runtime::ProgramRuntime;
+        queue_mcs_capacity::Integer = 12,
+        maturity::CapabilityMaturity,
+    )
+    runtime.settled || throw(ArgumentError(
+        "LocalWorksets candidate construction requires a settled runtime"
+    ))
+    runtime.engine_workspace isa CheckerboardWorkspace ||
+        throw(ArgumentError(
+            "LocalWorksets candidate construction requires the direct checkerboard oracle"
+        ))
+    isempty(runtime.program.stage_plan.after_mcs) || throw(ArgumentError(
+        "host after-MCS stages remain on the direct path"
+    ))
+    candidate = _prepare_localworksets_checkerboard_candidate(
+        runtime.engine_workspace;
+        queue_mcs_capacity,
+        canonical_plan = runtime.program.checkerboard_plan,
+    )
+    capability_report = _localworksets_candidate_capability_report(
+        runtime.capability_report, candidate.prepared, maturity
+    )
+    return ProgramRuntime{
+        eltype(runtime.parameters),
+        ndims(runtime.ownership),
+        typeof(runtime.program),
+        typeof(capability_report),
+        typeof(runtime.relationships),
+        typeof(runtime.trackers),
+        typeof(runtime.descriptor_state),
+        typeof(runtime.stage_buffers),
+        typeof(candidate),
+        typeof(runtime.lifecycle_workspace),
+    }(
+        runtime.program,
+        capability_report,
+        runtime.ownership,
+        runtime.cell_kinds,
+        runtime.cell_generations,
+        runtime.trackers,
+        runtime.relationships,
+        runtime.descriptor_state,
+        runtime.proposal_contributions,
+        runtime.stage_buffers,
+        candidate,
+        runtime.lifecycle_workspace,
+        runtime.parameters,
+        runtime.seed,
+        runtime.replica,
+        runtime.repeat,
+        runtime.mcs,
+        runtime.accepted,
+        runtime.rejected,
+        runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
+        runtime.settled,
+        runtime.failure_status,
+        runtime.last_lifecycle_receipt,
+    )
+end
+
+function _localworksets_candidate_runtime(
+        runtime::ProgramRuntime;
+        queue_mcs_capacity::Integer = 12,
+    )
+    return _construct_localworksets_candidate_runtime(
+        runtime; queue_mcs_capacity, maturity = Functional
+    )
+end
+
+function _localworksets_candidate_capability_report(
+        direct::ProgramCapabilityReport,
+        prepared::LocalWorksets.PreparedWork,
+        maturity::CapabilityMaturity,
+    )
+    maturity in (Functional, ReplayQualified) || throw(ArgumentError(
+        "the private LocalWorksets candidate is admitted only as Functional or ReplayQualified"
+    ))
+    base_authorized = maturity === Functional ?
+        capability_authorizes_execution(direct) :
+        capability_authorizes_replay(direct)
+    base_authorized && direct.evidence !== nothing ||
+        throw(ProgramCapabilityError(:localworksets_candidate, direct))
+    source = direct.key
+    base = source.mechanisms
+    inspect_signature = Tuple{LocalWorksets.PreparedWork}
+    inspect_method = which(LocalWorksets.inspect, inspect_signature)
+    inspect_method.module === LocalWorksets || throw(ArgumentError(
+        "the LocalWorksets inspection boundary is not package-owned"
+    ))
+    facts = invoke(LocalWorksets.inspect, inspect_signature, prepared)
+    provider = facts.provider
+    mechanism_identity = :corepotts_checkerboard_conjunctive_localworksets_v1
+    authority = (
+        authority = :CorePotts,
+        suite = maturity === Functional ?
+            :lw2_localworksets_functional_v1 :
+            :lw3_localworksets_replay_v1,
+        revision = v"1.0.0",
+    )
+    mechanisms = CapabilityMechanismProfile(
+        base.proposal_fingerprint,
+        base.descriptor_fingerprint,
+        base.stage_fingerprint,
+        base.relationship_fingerprint,
+        base.tracker_fingerprint,
+        _capability_digest((
+            direct = base.checkerboard_fingerprint,
+            mechanism_identity,
+            lowering_identity = facts.lowering,
+            provider,
+            provider_compiler = facts.capability.compiler,
+        )),
+        base.rng_contract_version,
+        base.rng_lowering_identity,
+        (base.code_identities..., (
+            identity = mechanism_identity,
+            lowering = facts.lowering,
+            provider,
+        )),
+        authority,
+        :localworksets_experimental_v1,
+    )
+    key = ProgramCapabilityKey(
+        source.engine,
+        source.backend,
+        source.device,
+        source.topology,
+        source.scalar_type,
+        source.math_policy,
+        source.lifecycle,
+        source.component_state,
+        mechanisms,
+        source.replay;
+        environment = source.environment,
+    )
+    evidence_profile = (
+        capability_fingerprint = _capability_key_fingerprint(key),
+        authority,
+        mechanism_identity,
+        lowering_identity = facts.lowering,
+        provider_compiler = facts.capability.compiler,
+        maturity,
+    )
+    evidence = CapabilityEvidenceIdentity(
+        :CorePotts,
+        authority.suite,
+        authority.revision,
+        bytes2hex(SHA.sha256(repr(evidence_profile))),
+    )
+    reason = maturity === Functional ?
+        "Private bounded LocalWorksets claim lowering has functional CPU/Metal evidence; replay and performance qualification are not claimed." :
+        "Private bounded LocalWorksets claim lowering has exact continuation and LW-3 parity evidence; performance qualification is not claimed."
+    return ProgramCapabilityReport(
+        key,
+        Experimental,
+        maturity,
+        reason,
+        evidence,
+        direct.state_domains,
+        direct.stage_effects,
+        direct.relationships,
+        direct.trackers,
+        direct.checkerboard_plan,
+    )
+end
+
+function _localworksets_replay_candidate_runtime(
+        runtime::ProgramRuntime;
+        queue_mcs_capacity::Integer = 12,
+    )
+    return _construct_localworksets_candidate_runtime(
+        runtime; queue_mcs_capacity, maturity = ReplayQualified
+    )
+end
+
+function _runtime_uses_experimental_capability(
+        runtime::ProgramRuntime{T, N, P, C, R, TS, D, SB, EW, LW}
+    ) where {
+        T, N, P, C, R, TS, D, SB,
+        EW <: _LocalWorksetsCheckerboardWorkspace, LW,
+    }
+    return true
+end
+
+function _checkpoint_execution_block(
+        runtime::ProgramRuntime{T, N, P, C, R, TS, D, SB, EW, LW}
+    ) where {
+        T, N, P, C, R, TS, D, SB,
+        EW <: _LocalWorksetsCheckerboardWorkspace, LW,
+    }
+    candidate = runtime.engine_workspace
+    inspect_signature = Tuple{LocalWorksets.PreparedWork}
+    inspect_method = which(LocalWorksets.inspect, inspect_signature)
+    inspect_method.module === LocalWorksets || throw(ArgumentError(
+        "the LocalWorksets inspection boundary is not package-owned"
+    ))
+    facts = invoke(
+        LocalWorksets.inspect, inspect_signature, candidate.prepared
+    )
+    color_count = Int(runtime.program.checkerboard_plan.color_count)
+    queue_mcs_capacity = div(
+        candidate.lease_capacity,
+        Int(runtime.program.attempts_per_site) * color_count,
+    )
+    profile = (
+        schema = v"1.0.0",
+        mechanism_identity = candidate.mechanism_identity,
+        lowering_identity = facts.lowering,
+        wrapper_identity = :corepotts_private_claim_block_v1,
+        provider = :KernelAbstractions,
+        provider_compiler = facts.capability.compiler,
+        queue_mcs_capacity,
+        capability_status = runtime.capability_report.status,
+        capability_maturity = runtime.capability_report.maturity,
+        capability_fingerprint = _capability_key_fingerprint(
+            runtime.capability_report.key
+        ),
+        capability_evidence = (
+            authority = runtime.capability_report.evidence.authority,
+            suite = runtime.capability_report.evidence.suite,
+            revision = runtime.capability_report.evidence.revision,
+            profile_fingerprint =
+                runtime.capability_report.evidence.profile_fingerprint,
+        ),
+    )
+    return merge(profile, (
+        evidence_fingerprint = bytes2hex(SHA.sha256(repr(profile))),
+    ))
+end
+
+function _restore_localworksets_checkpoint(
+        program::CompiledPottsProgram,
+        checkpoint::ProgramCheckpoint,
+    )
+    expected = :corepotts_checkerboard_conjunctive_localworksets_v1
+    _validate_program_checkpoint(program, checkpoint, expected)
+    block = checkpoint.extensions.CorePotts.execution_lowering
+    block.schema == v"1.0.0" && block.queue_mcs_capacity >= 12 ||
+        throw(ArgumentError(
+            "candidate checkpoint has an unsupported execution profile"
+        ))
+    runtime = _restore_validated_program_checkpoint(program, checkpoint)
+    candidate = _localworksets_replay_candidate_runtime(
+        runtime; queue_mcs_capacity = block.queue_mcs_capacity
+    )
+    _checkpoint_execution_block(candidate) == block || throw(ArgumentError(
+        "candidate checkpoint evidence does not match this execution environment"
+    ))
+    return candidate
 end
 
 function enqueue_program_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
-        runtime.capability_report; operation = :queued_mcs
+        runtime.capability_report;
+        operation = :queued_mcs,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
@@ -738,7 +999,9 @@ function enqueue_program_through!(
         runtime::ProgramRuntime, target_mcs::Integer
     )
     _require_program_execution_capability(
-        runtime.capability_report; operation = :queued_mcs_through
+        runtime.capability_report;
+        operation = :queued_mcs_through,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
@@ -758,7 +1021,9 @@ function settle_program!(
         runtime::ProgramRuntime, request::ProgramSettlementRequest
     )
     _require_program_execution_capability(
-        runtime.capability_report; operation = :settle_program
+        runtime.capability_report;
+        operation = :settle_program,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS settlement"
@@ -862,7 +1127,9 @@ end
 
 function _advance_checkerboard_transaction!(runtime::ProgramRuntime)
     workspace = runtime.engine_workspace
-    workspace isa CheckerboardWorkspace || error(
+    workspace isa Union{
+        CheckerboardWorkspace, _LocalWorksetsCheckerboardWorkspace,
+    } || error(
         "checkerboard runtime has no portable execution workspace"
     )
     isempty(runtime.program.stage_plan.after_mcs) ||
@@ -880,7 +1147,9 @@ end
 
 function advance_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
-        runtime.capability_report; operation = :advance_mcs
+        runtime.capability_report;
+        operation = :advance_mcs,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     runtime.settled ||
         throw(ArgumentError("cannot advance an unsettled program runtime"))

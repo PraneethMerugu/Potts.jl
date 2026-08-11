@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.1"
+julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "ea0b4dbd9de3a127de4e6444ea1a01fe389da742"
+project_hash = "bb66832b79ff82d9c0a6a0550a90e6ae8519ca3f"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "0a81a018463de6c3f4f2c9360121c562e5add9e4"
@@ -334,7 +334,7 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
     ConstructionBaseStaticArraysExt = "StaticArrays"
 
 [[deps.CorePotts]]
-deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "SHA"]
+deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalWorksets", "SHA"]
 path = "../../../lib/CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0"
@@ -545,7 +545,7 @@ version = "0.8.1"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
+version = "1.7.0"
 
 [[deps.DynamicPolynomials]]
 deps = ["LinearAlgebra", "MultivariatePolynomials", "MutableArithmetics", "Reexport", "StarAlgebras", "Test"]
@@ -926,7 +926,7 @@ version = "0.6.4"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.11.1+1"
+version = "8.15.0+0"
 
 [[deps.LibGit2]]
 deps = ["LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -1060,6 +1060,12 @@ version = "5.4.0"
     blis_jll = "6136c539-28a5-5bf0-87cc-b183200dce32"
     cuSOLVER = "887afef0-6a32-4de5-add4-7827692ba8fc"
 
+[[deps.LocalWorksets]]
+deps = ["Adapt", "Atomix", "KernelAbstractions", "SHA"]
+path = "../../../lib/LocalWorksets"
+uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
+version = "0.1.0"
+
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
 git-tree-sha1 = "bba2d9aa057d8f126415de240573e86a8f39d2a1"
@@ -1188,7 +1194,7 @@ version = "0.3.12"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2025.5.20"
+version = "2025.11.4"
 
 [[deps.MuladdMacro]]
 deps = ["PrecompileTools"]
@@ -1288,7 +1294,7 @@ version = "0.8.7+0"
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.1+0"
+version = "3.5.4+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1326,7 +1332,7 @@ version = "0.13.1"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.12.0"
+version = "1.12.1"
 weakdeps = ["REPL"]
 
     [deps.Pkg.extensions]
@@ -1347,12 +1353,14 @@ version = "0.2.0"
     [deps.PottsToolkit.extensions]
     PottsToolkitMetalExt = "Metal"
     PottsToolkitMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
+    PottsToolkitMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
     PottsToolkitModelingToolkitExt = "ModelingToolkit"
     PottsToolkitUnitfulExt = "Unitful"
 
     [deps.PottsToolkit.weakdeps]
     DiffEqGPU = "071ae1c0-96b5-11e9-1965-c90190d839ea"
     Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+    MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
     ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
     StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
@@ -1973,6 +1981,6 @@ uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
 version = "2022.3.0+0"
 
 [[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.5.0+2"
+version = "17.7.0+0"

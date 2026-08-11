@@ -230,25 +230,14 @@ status and cumulative counters, and optionally materialize the last coherent sci
 This is the only production operation permitted to synchronize or transfer checkerboard program
 state to the host.
 """
-function settle_program!(
+function _settle_program_after_wait!(
         workspace::CheckerboardWorkspace,
         request::ProgramSettlementRequest,
-    )
-    _require_program_execution_capability(
-        workspace.capability_report;
-        operation = :backend_settle_program,
     )
     execution = workspace.execution
     submitted = execution.submitted_mcs
     previous_drained = execution.drained_mcs
     backend = KernelAbstractions.get_backend(workspace.state.ownership)
-    try
-        KernelAbstractions.synchronize(backend)
-    catch error
-        throw(LifecycleBackendFailure(
-            error, previous_drained + 1, submitted
-        ))
-    end
     execution.synchronization_count += 1
     execution.drained_mcs = submitted
     execution.settlement_count += 1
@@ -318,4 +307,62 @@ function settle_program!(
         lifecycle_receipt,
         snapshot,
     )
+end
+
+function settle_program!(
+        workspace::CheckerboardWorkspace,
+        request::ProgramSettlementRequest,
+    )
+    _require_program_execution_capability(
+        workspace.capability_report;
+        operation = :backend_settle_program,
+    )
+    execution = workspace.execution
+    submitted = execution.submitted_mcs
+    previous_drained = execution.drained_mcs
+    backend = KernelAbstractions.get_backend(workspace.state.ownership)
+    try
+        KernelAbstractions.synchronize(backend)
+    catch error
+        throw(LifecycleBackendFailure(
+            error, previous_drained + 1, submitted
+        ))
+    end
+    return _settle_program_after_wait!(workspace, request)
+end
+
+function settle_program!(
+        candidate::_LocalWorksetsCheckerboardWorkspace,
+        request::ProgramSettlementRequest,
+    )
+    workspace = candidate.direct
+    _require_program_execution_capability(
+        workspace.capability_report;
+        operation = :backend_settle_program,
+    )
+    execution = workspace.execution
+    submitted = execution.submitted_mcs
+    previous_drained = execution.drained_mcs
+    backend = KernelAbstractions.get_backend(workspace.state.ownership)
+    try
+        event = candidate.last_event
+        if event === nothing
+            KernelAbstractions.synchronize(backend)
+        else
+            invoke(
+                _wait_localworksets_trusted!,
+                Tuple{
+                    _LocalWorksetsTrustedAdapter,
+                    LocalWorksets.WorkEvent,
+                },
+                candidate.trusted_adapter,
+                event,
+            )
+        end
+    catch error
+        throw(LifecycleBackendFailure(
+            error, previous_drained + 1, submitted
+        ))
+    end
+    return _settle_program_after_wait!(workspace, request)
 end

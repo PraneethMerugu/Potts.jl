@@ -57,15 +57,25 @@ function _core_checkpoint_capability_block(program::CompiledPottsProgram)
     )
 end
 
-function _owned_checkpoint_extensions(program, extensions)
+_checkpoint_execution_block(runtime) = nothing
+_runtime_uses_experimental_capability(runtime) = false
+
+function _owned_checkpoint_extensions(
+        program, extensions, execution_block = nothing
+    )
     extensions isa NamedTuple || throw(ArgumentError(
         "checkpoint extensions must be a named tuple"
     ))
     hasproperty(extensions, :CorePotts) && throw(ArgumentError(
         "checkpoint extension owner `CorePotts` is reserved"
     ))
+    core_block = _core_checkpoint_capability_block(program)
+    execution_block === nothing ||
+        (core_block = merge(
+            core_block, (; execution_lowering = execution_block)
+        ))
     return merge(
-        (CorePotts = _core_checkpoint_capability_block(program),),
+        (CorePotts = core_block,),
         deepcopy(extensions),
     )
 end
@@ -245,7 +255,9 @@ function program_checkpoint(runtime; extensions = NamedTuple())
     ))
     _validate_compiled_program_integrity(runtime.program)
     _require_program_replay_capability(
-        runtime.capability_report; operation = :checkpoint
+        runtime.capability_report;
+        operation = :checkpoint,
+        experimental = _runtime_uses_experimental_capability(runtime),
     )
     schema = v"2.0.0"
     logical_snapshot = program_snapshot(runtime)
@@ -277,7 +289,9 @@ function program_checkpoint(runtime; extensions = NamedTuple())
     # cross-package checkpoint rather than layering a second codec around Core.
     _checkpoint_extension_payload(extensions)
     owned_extensions = _owned_checkpoint_extensions(
-        runtime.program, extensions
+        runtime.program,
+        extensions,
+        _checkpoint_execution_block(runtime),
     )
     checksum = _program_checkpoint_checksum(
         schema,
@@ -314,8 +328,34 @@ function program_checkpoint(runtime; extensions = NamedTuple())
     )
 end
 
-function validate_program_checkpoint(
-        program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
+function _validate_checkpoint_execution_lowering(
+        extensions, expected_execution
+    )
+    block = getproperty(extensions, :CorePotts)
+    has_execution = hasproperty(block, :execution_lowering)
+    if expected_execution === nothing
+        has_execution && throw(ArgumentError(
+            "candidate checkpoint cannot restore into direct execution"
+        ))
+        return nothing
+    end
+    has_execution || throw(ArgumentError(
+        "direct checkpoint cannot restore into candidate execution"
+    ))
+    execution = block.execution_lowering
+    execution isa NamedTuple &&
+        hasproperty(execution, :mechanism_identity) &&
+        execution.mechanism_identity === expected_execution ||
+        throw(ArgumentError(
+            "checkpoint execution-lowering identity mismatch"
+        ))
+    return execution
+end
+
+function _validate_program_checkpoint(
+        program::CompiledPottsProgram,
+        checkpoint::ProgramCheckpoint,
+        expected_execution,
     )
     _validate_compiled_program_integrity(program)
     _require_program_replay_capability(
@@ -344,13 +384,21 @@ function validate_program_checkpoint(
     expected == checkpoint.checksum ||
         throw(ArgumentError("checkpoint integrity checksum mismatch"))
     _validate_checkpoint_capability(program, checkpoint.extensions)
+    _validate_checkpoint_execution_lowering(
+        checkpoint.extensions, expected_execution
+    )
     return checkpoint
 end
 
-function restore_program_checkpoint(
+function validate_program_checkpoint(
         program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
     )
-    validate_program_checkpoint(program, checkpoint)
+    return _validate_program_checkpoint(program, checkpoint, nothing)
+end
+
+function _restore_validated_program_checkpoint(
+        program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
+    )
     descriptor_state = reconstruct_auxiliary_state(
         program.descriptor_plan.state_layout,
         checkpoint.snapshot.descriptor_state,
@@ -381,6 +429,13 @@ function restore_program_checkpoint(
             retired_cells = checkpoint.retired_cells,
         ),
     )
+end
+
+function restore_program_checkpoint(
+        program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
+    )
+    validate_program_checkpoint(program, checkpoint)
+    return _restore_validated_program_checkpoint(program, checkpoint)
 end
 
 function _accepted_copy_batch_bound(program::CompiledPottsProgram)

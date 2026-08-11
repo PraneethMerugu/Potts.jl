@@ -14,13 +14,16 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [sources]
 CorePotts = {path = "lib/CorePotts"}
+LocalWorksets = {path = "lib/LocalWorksets"}
 
 [compat]
 Aqua = "0.8"
 CorePotts = "0.2"
 DynamicQuantities = "1"
 ExplicitImports = "1"
+KernelAbstractions = "0.9.42"
 LinearAlgebra = "1"
+LocalWorksets = "0.1"
 Metal = "1"
 DiffEqGPU = "3.16"
 ModelingToolkit = "11"
@@ -54,11 +57,13 @@ PottsToolkitUnitfulExt = "Unitful"
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LocalWorksets = "82808884-8acc-4a5c-a056-be440a0fbea1"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "LinearAlgebra", "ModelingToolkit", "Test", "TOML", "Unitful"]
+test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalWorksets", "ModelingToolkit", "Test", "TOML", "Unitful"]

@@ -150,11 +150,13 @@ function _maximum_covariance_eigenvalue(::Val{N}, covariance) where {N}
 end
 
 function _cell_length(
-        runtime::ProgramRuntime{T, N},
+        runtime,
         cell::Int32;
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
-    ) where {T, N}
+    )
+    T = eltype(runtime.parameters)
+    N = length(runtime.program.shape)
     statistics = _cell_shape_statistics(
         runtime, cell; replaced_site, replacement_owner
     )

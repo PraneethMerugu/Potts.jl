@@ -1,4 +1,5 @@
 using Metal
+using LocalWorksets
 using PottsToolkit
 using Test
 
@@ -6,6 +7,60 @@ include("extension_load_order.jl")
 
 Metal.functional() || error("the selected Metal witness is not functional")
 Metal.allowscalar(false)
+
+include("../../../test/localworksets_witnesses/lbm_d2q9.jl")
+include("../../../test/localworksets_witnesses/lattice_spring.jl")
+include("../../../test/localworksets_witnesses/matrix_free_fem.jl")
+include("../../../test/localworksets_witnesses/zbuffer.jl")
+include("../../../test/localworksets_witnesses/performance.jl")
+
+lw4b_witness_cache_before = length(Metal.compiler_cache(Metal.device()))
+@testset "LocalWorksets cross-domain real-Metal witnesses" begin
+    backend = Metal.MetalBackend()
+    lbm = run_lw_d2q9_witness(Metal.MtlArray; backend)
+    spring_deterministic = run_lw_lattice_spring_witness(
+        Metal.MtlArray; backend
+    )
+    spring_fast = run_lw_lattice_spring_witness(
+        Metal.MtlArray; backend, force_mode = :fast
+    )
+    fem = run_lw_matrix_free_fem_witness(Metal.MtlArray; backend)
+    zbuffer = run_lw_zbuffer_witness(Metal.MtlArray; backend)
+
+    @test lbm.launches == 1
+    @test spring_deterministic.launches == 2
+    @test spring_fast.launches == 3
+    @test fem.launches == 2
+    @test zbuffer.launches == 2
+    @test all(report -> report.waits == 2, (
+        lbm, spring_deterministic, spring_fast, fem, zbuffer,
+    ))
+    @test all(report -> report.invalid_rejected, (
+        lbm, spring_deterministic, spring_fast, fem, zbuffer,
+    ))
+    @test spring_fast.determinism.same_run_replay.guarantee ==
+        :not_claimed_for_fast_ports
+end
+lw4b_witness_cache_after = length(Metal.compiler_cache(Metal.device()))
+lw4b_witness_cache_report = (
+    before = lw4b_witness_cache_before,
+    after = lw4b_witness_cache_after,
+    compiled = lw4b_witness_cache_after - lw4b_witness_cache_before,
+)
+println(lw4b_witness_cache_report)
+@test lw4b_witness_cache_after >= lw4b_witness_cache_before
+
+lw4b_d2q9_performance = run_lw4b_d2q9_performance(
+    Metal.MtlArray; backend = Metal.MetalBackend()
+)
+println(lw4b_d2q9_performance)
+@test lw4b_d2q9_performance.passed
+
+lw4b_zbuffer_performance = run_lw4b_zbuffer_performance(
+    Metal.MtlArray; backend = Metal.MetalBackend()
+)
+println(lw4b_zbuffer_performance)
+@test lw4b_zbuffer_performance.passed
 
 include("native_component_execution.jl")
 
@@ -15,6 +70,58 @@ include("../../../test/backend_conformance/relationship_execution.jl")
 include("../../../test/backend_conformance/surface_execution.jl")
 include("../../../test/backend_conformance/lifecycle_execution.jl")
 include("../../../test/backend_conformance/lifecycle_policy_execution.jl")
+include("../../../lib/LocalWorksets/test/backend_conformance.jl")
+include("../../../test/backend_conformance/localworksets_execution.jl")
+
+localworksets_report = run_localworksets_execution(
+    Metal.MtlArray;
+    backend_name = :metal,
+    compiler_cache_size = () -> length(
+        Metal.compiler_cache(Metal.device())
+    ),
+)
+println(localworksets_report)
+
+localworksets_failure_task = Task() do
+    run_localworksets_device_failure(
+        Metal.MtlArray;
+        backend_name = :metal,
+    )
+end
+schedule(localworksets_failure_task)
+localworksets_failure_report = fetch(localworksets_failure_task)
+println(localworksets_failure_report)
+
+localworksets_shared_failure_task = Task() do
+    run_localworksets_shared_failure_scope(
+        Metal.MtlArray;
+        backend_name = :metal,
+    )
+end
+schedule(localworksets_shared_failure_task)
+localworksets_shared_failure_report = fetch(
+    localworksets_shared_failure_task
+)
+println(localworksets_shared_failure_report)
+
+localworksets_checkerboard_report = run_localworksets_checkerboard_vertical(
+    Metal.MtlArray;
+    backend_name = :metal,
+    kernel_convert = Metal.mtlconvert,
+)
+println(localworksets_checkerboard_report)
+
+localworksets_checkerboard_failure_task = Task() do
+    run_localworksets_checkerboard_failures(
+        Metal.MtlArray;
+        backend_name = :metal,
+    )
+end
+schedule(localworksets_checkerboard_failure_task)
+localworksets_checkerboard_failure_report = fetch(
+    localworksets_checkerboard_failure_task
+)
+println(localworksets_checkerboard_failure_report)
 
 report = run_descriptor_boundary(
     Metal.MtlArray,
@@ -135,3 +242,5 @@ resolution_policy_report = run_lifecycle_resolution_policy_execution(
     Metal.MtlArray; backend_name = :metal
 )
 println(resolution_policy_report)
+
+include("lw3_localworksets_parity.jl")

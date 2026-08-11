@@ -217,6 +217,11 @@ function _boundary_descriptor_plan(branch::Symbol)
             CorePotts.StaticEvaluator(CorePotts.LiteralExpression(1.0f6)),
             CorePotts.ProposalEnergyDriveRole(),
         )
+    elseif branch === :nonfinite
+        (
+            CorePotts.StaticEvaluator(CorePotts.LiteralExpression(Float32(NaN))),
+            CorePotts.ProposalDriveRole(),
+        )
     else
         throw(ArgumentError("unknown checkerboard boundary branch `$branch`"))
     end
