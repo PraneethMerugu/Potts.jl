@@ -247,7 +247,9 @@ function _run_localworksets_trusted!(
         Tuple{_LocalWorksetsTrustedAdapter},
         adapter,
     )
-    return invoke(
+    return Base.invoke_in_world(
+        adapter.trusted_world,
+        invoke,
         LocalWorksets.run!,
         Tuple{LocalWorksets.PreparedWork, NamedTuple},
         prepared,
@@ -259,12 +261,12 @@ function _wait_localworksets_trusted!(
         adapter::_LocalWorksetsTrustedAdapter,
         event::LocalWorksets.WorkEvent,
     )
-    invoke(
-        _validate_localworksets_trusted_adapter!,
-        Tuple{_LocalWorksetsTrustedAdapter},
-        adapter,
-    )
-    return invoke(
+    # Settlement must remain able to drain work already admitted by the last
+    # successful submission even if a later world replaces a public adapter
+    # method. New submissions still revalidate both public entrypoints above.
+    return Base.invoke_in_world(
+        adapter.trusted_world,
+        invoke,
         Base.wait,
         Tuple{LocalWorksets.WorkEvent},
         event,
@@ -294,6 +296,36 @@ function _validate_checkerboard_identity_order(plan::CheckerboardPlan)
             ))
     end
     return nothing
+end
+
+function _checked_checkerboard_capacity_mul(
+        left::Integer, right::Integer, quantity::Symbol
+    )
+    try
+        return Base.Checked.checked_mul(Int(left), Int(right))
+    catch error
+        error isa Union{OverflowError, InexactError} || rethrow()
+        throw(ArgumentError(
+            "LocalWorksets checkerboard $quantity exceeds the bounded Int capacity"
+        ))
+    end
+end
+
+function _checked_checkerboard_capacity_sub(
+        left::Integer, right::Integer, quantity::Symbol
+    )
+    try
+        value = Base.Checked.checked_sub(Int(left), Int(right))
+        value >= 0 || throw(ArgumentError(
+            "LocalWorksets checkerboard $quantity cannot be negative"
+        ))
+        return value
+    catch error
+        error isa Union{OverflowError, InexactError} || rethrow()
+        throw(ArgumentError(
+            "LocalWorksets checkerboard $quantity exceeds the bounded Int capacity"
+        ))
+    end
 end
 
 function _prepare_localworksets_checkerboard_candidate(
@@ -392,9 +424,16 @@ function _prepare_localworksets_checkerboard_candidate(
         semantic_ids = workspace.semantic_ids,
         dispositions = workspace.dispositions,
     )
-    lease_capacity = queue_mcs_capacity *
-                     Int(state.program.attempts_per_site) *
-                     Int(plan.color_count)
+    leases_per_mcs = _checked_checkerboard_capacity_mul(
+        Int(state.program.attempts_per_site),
+        Int(plan.color_count),
+        :leases_per_mcs,
+    )
+    lease_capacity = _checked_checkerboard_capacity_mul(
+        queue_mcs_capacity,
+        leases_per_mcs,
+        :queued_lease_capacity,
+    )
     local_workspace = (
         winner_ranks = workspace.cell_max_priority,
         winner_identities = workspace.cell_min_identity,
@@ -1457,12 +1496,27 @@ end
 function _require_candidate_mcs_lease_capacity(
         candidate::_LocalWorksetsCheckerboardWorkspace
     )
-    required = Int(
-        candidate.direct.state.program.attempts_per_site
-    ) * Int(candidate.direct.state.program.checkerboard_plan.color_count)
+    required = _checked_checkerboard_capacity_mul(
+        Int(candidate.direct.state.program.attempts_per_site),
+        Int(candidate.direct.state.program.checkerboard_plan.color_count),
+        :leases_per_mcs,
+    )
     position = candidate.execution
-    outstanding_mcs = position.submitted_mcs - position.drained_mcs
-    available = candidate.lease_capacity - outstanding_mcs * required
+    outstanding_mcs = _checked_checkerboard_capacity_sub(
+        position.submitted_mcs,
+        position.drained_mcs,
+        :outstanding_mcs,
+    )
+    occupied = _checked_checkerboard_capacity_mul(
+        outstanding_mcs,
+        required,
+        :occupied_leases,
+    )
+    available = _checked_checkerboard_capacity_sub(
+        candidate.lease_capacity,
+        occupied,
+        :available_leases,
+    )
     available >= required || throw(ArgumentError(
         "LocalWorksets checkerboard lease capacity cannot encode one complete MCS"
     ))

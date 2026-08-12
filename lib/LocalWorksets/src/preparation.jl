@@ -67,10 +67,15 @@ function _validate_static_bindings(
     expected_static = Tuple(
         name for name in binding_names if !(name in dynamic)
     )
-    Set(keys(storage)) == Set(expected_static) ||
-        throw(LocalWorkValidationError(
-            "static storage must exactly bind declared names $(expected_static)"
-        ))
+    actual = Tuple(keys(storage))
+    missing = Tuple(name for name in expected_static if !(name in actual))
+    extra = Tuple(name for name in actual if !(name in expected_static))
+    isempty(missing) && isempty(extra) || throw(LocalWorkValidationError(
+        "static storage binding mismatch: missing=$(missing), extra=$(extra), expected=$(expected_static)";
+        stage = :prepare, contract = :storage_binding_names,
+        expected = expected_static, actual = actual,
+        hint = "bind every static logical read and output exactly once",
+    ))
     for name in expected_static
         invoke(
             _validate_array_backend,
@@ -85,17 +90,28 @@ end
 
 function _workspace_leases(workspace)
     hasproperty(workspace, :leases) || throw(LocalWorkValidationError(
-        "prepared workspace requires prebound host lease slots"
+        "prepared workspace requires prebound host lease slots";
+        stage = :prepare, contract = :workspace_lease_capacity,
+        workspace_leaf = :leases,
+        expected = :positive_prebound_vector, actual = :missing,
     ))
     leases = getproperty(workspace, :leases)
     leases isa Vector{Any} || throw(LocalWorkValidationError(
-        "prepared lease slots must be a Vector{Any}"
+        "prepared lease slots must be a Vector{Any}";
+        stage = :prepare, contract = :workspace_lease_storage,
+        workspace_leaf = :leases,
+        expected = Vector{Any}, actual = typeof(leases),
     ))
     isempty(leases) && throw(LocalWorkValidationError(
-        "prepared lease capacity must be positive"
+        "prepared lease capacity must be positive";
+        stage = :prepare, contract = :workspace_lease_capacity,
+        workspace_leaf = :leases, expected = :positive, actual = 0,
     ))
     all(isnothing, leases) || throw(LocalWorkValidationError(
-        "prepared lease slots must initially be empty"
+        "prepared lease slots must initially be empty";
+        stage = :prepare, contract = :workspace_lease_initial_state,
+        workspace_leaf = :leases,
+        expected = :all_empty, actual = :occupied,
     ))
     return leases
 end
@@ -113,16 +129,29 @@ function _validate_distinct_aliases(bindings::NamedTuple, access::NamedTuple)
             getproperty(bindings, first_name),
             getproperty(bindings, second_name),
         ) && throw(LocalWorkValidationError(
-            "logical bindings $first_name and $second_name illegally alias"
+            "logical bindings $first_name and $second_name illegally alias";
+            stage = :prepare, contract = :storage_alias,
+            binding = first_name,
+            expected = :nonaliasing_writable_bindings,
+            actual = (first_name, second_name),
         ))
     end
     return nothing
 end
 
 function _workspace_arrays(lowering, work, workspace)
-    throw(LocalWorkValidationError(
-        "the admitted lowering does not expose its workspace arrays"
-    ))
+    spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        work,
+    )
+    return invoke(
+        _workspace_arrays_from_spec,
+        Tuple{Any, Tuple},
+        workspace,
+        spec,
+    )
 end
 
 function _validate_workspace_structure(value, path = :workspace)
@@ -151,16 +180,21 @@ function _workspace_arrays(lowering::_SequenceLowering, work, workspace)
         workspace,
         length(lowering.stages),
     )
-    stage_arrays = map(
-        lowering.stages, work.operation.works, stages
-    ) do stage, stage_work, stage_workspace
-        invoke(
+    stage_arrays = map(eachindex(lowering.stages)) do index
+        arrays = invoke(
             _centrally_admitted_lowering_call,
             Tuple{Function, Tuple, Symbol},
             _workspace_arrays,
-            (stage, stage_work, stage_workspace),
+            (
+                lowering.stages[index],
+                work.operation.works[index],
+                stages[index],
+            ),
             :workspace_arrays,
         )
+        return map(arrays) do pair
+            Symbol(:stage, index, :_, first(pair)) => last(pair)
+        end
     end
     return reduce((left, right) -> (left..., right...), stage_arrays;
                   init = ())
@@ -178,7 +212,12 @@ function _validate_workspace_aliases(bindings, lowering, work, workspace)
         for (workspace_name, scratch) in arrays
             Base.mightalias(binding, scratch) &&
                 throw(LocalWorkValidationError(
-                    "logical binding $binding_name aliases workspace $workspace_name"
+                    "logical binding $binding_name aliases workspace $workspace_name";
+                    stage = :prepare, contract = :workspace_alias,
+                    binding = binding_name,
+                    workspace_leaf = workspace_name,
+                    expected = :nonaliasing,
+                    actual = (binding_name, workspace_name),
                 ))
         end
     end
@@ -320,17 +359,22 @@ function _validate_prepared_array_fact(array, fact, name, role)
 end
 
 """
-    prepare(workplan::WorkPlan, storage; workspace, submission=(;))
+    prepare(workplan::WorkPlan, storage; workspace=nothing,
+            lease_capacity=nothing, submission=(;))
 
-Bind a validated plan to concrete storage, preallocated workspace, submission
-slots, and one provider lane. Preparation validates topology freshness,
-backend/device/layout coherence, access and alias contracts, and fixed lease
+Bind a validated plan to concrete storage, workspace, submission slots, and
+one provider lane. When `workspace` is omitted, bounded algorithmic arrays are
+allocated exactly once during preparation with `KernelAbstractions.allocate`;
+`lease_capacity` defaults to one. An explicit caller workspace remains
+supported and owns its `leases`. Preparation validates topology freshness,
+backend/device/layout coherence, access and alias contracts, and fixed queue
 capacity before execution.
 """
 function prepare(
         workplan::WorkPlan,
         storage::NamedTuple;
-        workspace,
+        workspace = nothing,
+        lease_capacity::Union{Nothing, Integer} = nothing,
         submission::NamedTuple = (;),
     )
     owned = function (callback::Function, signature::Type{<:Tuple}, args...)
@@ -400,6 +444,36 @@ function prepare(
         storage,
         static_access,
     )
+    workspace_ownership = workspace === nothing ? :package : :caller
+    if workspace === nothing
+        capacity = lease_capacity === nothing ? 1 : owned(
+            _bounded_count,
+            Tuple{Any, Any},
+            lease_capacity,
+            :lease_capacity,
+        )
+        capacity > 0 || throw(LocalWorkValidationError(
+            "lease_capacity must be positive";
+            stage = :prepare, contract = :workspace_lease_capacity,
+            workspace_leaf = :leases,
+            expected = :positive, actual = capacity,
+        ))
+        workspace = owned(
+            _automatic_workspace,
+            Tuple{Any, Any, Any, Int},
+            workplan.lowering,
+            workplan.work,
+            workplan.backend,
+            capacity,
+        )
+    elseif lease_capacity !== nothing
+        throw(LocalWorkValidationError(
+            "lease_capacity is only valid when workspace is omitted";
+            stage = :prepare, contract = :workspace_ownership,
+            workspace_leaf = :leases,
+            expected = :automatic_workspace, actual = :caller_workspace,
+        ))
+    end
     owned(
         _centrally_admitted_lowering_call,
         Tuple{Function, Tuple, Symbol},
@@ -478,6 +552,11 @@ function prepare(
             _validate_lane_current!,
             Tuple{typeof(lane)},
             :lane_validation,
+        ),
+        wait = trusted(
+            _wait_lane!,
+            Tuple{typeof(lane)},
+            :wait,
         ),
         workspace = trusted(
             _validate_workspace,
@@ -608,6 +687,7 @@ function prepare(
             workplan.lowering, workplan.work, workspace
         ),
         workspace_arrays,
+        workspace_ownership,
         trusted_callbacks,
         operation_callbacks,
         world,

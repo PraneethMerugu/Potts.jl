@@ -29,23 +29,6 @@ function run_lw_lattice_spring_witness(
     edge_route = reshape(Int32[4, 1, 3, 2], 1, 4)
     force_route = Int32[1 2 3 1; 2 3 4 4]
     fracture_route = reshape(Int32[1, 1, 2, 2], 1, 4)
-    topology = (
-        epoch = UInt64(2),
-        item_count = 4,
-        routes = (
-            edge_route = edge_route,
-            force_route = force_route,
-            fracture_route = fracture_route,
-        ),
-        destination_counts = (
-            edge_state = 4,
-            force = 5,
-            fracture = 3,
-        ),
-        semantic_ids = (
-            fracture = reshape(UInt32[40, 10, 30, 20], 1, 4),
-        ),
-    )
     force_law = force_mode === :deterministic ?
         LocalWorksets.deterministic(+, Float32(0)) :
         force_mode === :fast ? LocalWorksets.fast(+, Float32(0)) :
@@ -77,6 +60,23 @@ function run_lw_lattice_spring_witness(
                 ),
                 tie_break = (type = UInt32, order = :min),
             ),
+        ),
+    )
+    topology = LocalWorksets.topology(
+        work;
+        epoch = UInt64(2),
+        routes = (
+            edge_route = edge_route,
+            force_route = force_route,
+            fracture_route = fracture_route,
+        ),
+        destination_counts = (
+            edge_state = 4,
+            force = 5,
+            fracture = 3,
+        ),
+        semantic_ids = (
+            fracture = reshape(UInt32[40, 10, 30, 20], 1, 4),
         ),
     )
     workplan = LocalWorksets.plan(work, topology; backend)
@@ -120,20 +120,9 @@ function run_lw_lattice_spring_witness(
         force = array_type(fill(Float32(0), 5)),
         fracture = array_type(fill(UInt32(0), 3)),
     )
-    force_records = (
-        values = array_type(fill(Float32(0), 8)),
-        valid = array_type(fill(false, 8)),
+    prepared = LocalWorksets.prepare(
+        workplan, storage; lease_capacity = 3
     )
-    fracture_records = (
-        ranks = array_type(fill(Int32(0), 4)),
-        values = array_type(fill(UInt32(0), 4)),
-        valid = array_type(fill(false, 4)),
-    )
-    records = force_mode === :deterministic ?
-        (force = force_records, fracture = fracture_records) :
-        (fracture = fracture_records,)
-    workspace = (records, leases = Any[nothing, nothing, nothing])
-    prepared = LocalWorksets.prepare(workplan, storage; workspace)
     event = LocalWorksets.run!(prepared)
     wait(event)
     actual_edge = Array(storage.edge_state)
@@ -152,6 +141,7 @@ function run_lw_lattice_spring_witness(
         warm_event = LocalWorksets.run!(prepared)
         wait(warm_event)
     end
+    prepared_facts = LocalWorksets.inspect(prepared)
     return (
         name = :lattice_spring,
         force_mode,
@@ -159,9 +149,15 @@ function run_lw_lattice_spring_witness(
         force = actual_force,
         fracture = actual_fracture,
         launches = planned.launches,
-        waits = LocalWorksets.inspect(prepared).wait_count,
+        waits = prepared_facts.wait_count,
         transfer_bytes = planned.topology_transfer_bytes,
         workspace_bytes = planned.workspace.total_bytes,
+        workspace_ownership = prepared_facts.workspace_ownership,
+        workspace_identities = Tuple(
+            name => getproperty(prepared_facts.workspace_facts, name).identity
+            for name in keys(prepared_facts.workspace_facts)
+        ),
+        lease_identity = prepared_facts.lease_identity,
         warm_allocations,
         determinism = planned.determinism,
         invalid_rejected,

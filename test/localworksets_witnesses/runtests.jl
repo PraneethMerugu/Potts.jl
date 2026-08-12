@@ -12,3 +12,8 @@ reports = (
 )
 
 foreach(println, reports)
+
+if haskey(ENV, "LW4_MACHINE_RESULTS")
+    import Serialization
+    Serialization.serialize(ENV["LW4_MACHINE_RESULTS"], reports)
+end

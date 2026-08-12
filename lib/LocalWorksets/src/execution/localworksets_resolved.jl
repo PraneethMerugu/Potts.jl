@@ -41,6 +41,37 @@ mutable struct _PreparedResolvedWinner{K1, K2, K3, K4, K, I}
     device_identities::I
 end
 
+function _static_topology_payload(lowering::_ResolvedWinnerLowering)
+    return (
+        keys = getproperty(lowering.topology, lowering.reads.key),
+        identities = getproperty(
+            lowering.topology, lowering.reads.identity
+        ),
+    )
+end
+
+
+function _workspace_spec(lowering::_ResolvedWinnerLowering, work)
+    return (
+        _workspace_leaf(
+            :winner_ranks,
+            (:winner_ranks,),
+            lowering.output.rank.type,
+            (lowering.destination_count,);
+            strides = (1,),
+            role = :winner_rank,
+        ),
+        _workspace_leaf(
+            :winner_identities,
+            (:winner_identities,),
+            lowering.output.tie_break.type,
+            (lowering.destination_count,);
+            strides = (1,),
+            role = :winner_identity,
+        ),
+    )
+end
+
 function _central_admission(work::LocalWork, topology, backend)
     if work.operation isa _SequenceOperation
         admission_signature = Tuple{LocalWork, Any, Any}
@@ -286,10 +317,13 @@ end
 
 function _resolved_topology(work, topology, output, operation)
     required = (:item_count, :destination_count, :epoch)
-    all(name -> hasproperty(topology, name), required) ||
-        throw(LocalWorkValidationError(
-            "resolved topology requires item_count, destination_count, and epoch"
-        ))
+    invoke(
+        _require_properties,
+        Tuple{Any, Tuple, Any},
+        topology,
+        required,
+        :resolved_topology,
+    )
     reads = invoke(_resolved_reads, Tuple{LocalWork}, work)
     expected_read_roles = operation.emission.mask === :mask ?
         (:key, :rank, :identity, :value, :mask) :
@@ -323,37 +357,22 @@ function _resolved_topology(work, topology, output, operation)
         ))
     end
 
-    typeof(topology.epoch) === UInt64 || throw(LocalWorkValidationError(
-        "resolved topology epoch must be exactly UInt64"
-    ))
-    item_count = try
-        Int(topology.item_count)
-    catch
-        throw(LocalWorkValidationError(
-            "resolved item_count must be exactly representable as Int"
-        ))
-    end
-    destination_count = try
-        Int(topology.destination_count)
-    catch
-        throw(LocalWorkValidationError(
-            "resolved destination_count must be exactly representable as Int"
-        ))
-    end
-    item_count >= 0 && destination_count >= 0 ||
-        throw(LocalWorkValidationError(
-            "resolved topology counts must be nonnegative"
-        ))
     invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        item_count,
+        _validate_topology_epoch,
+        Tuple{Any, Any},
+        topology,
+        :resolved,
+    )
+    item_count = invoke(
+        _bounded_count,
+        Tuple{Any, Any},
+        topology.item_count,
         :resolved_item_count,
     )
-    invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        destination_count,
+    destination_count = invoke(
+        _bounded_count,
+        Tuple{Any, Any},
+        topology.destination_count,
         :resolved_destination_count,
     )
     invoke(
@@ -362,9 +381,13 @@ function _resolved_topology(work, topology, output, operation)
         output.capacity,
         :resolved_output_capacity,
     )
-    work.items == (1:item_count) || throw(LocalWorkValidationError(
-        "LocalWork items must exactly cover the planned topology items"
-    ))
+    invoke(
+        _validate_item_domain,
+        Tuple{LocalWork, Int, Any},
+        work,
+        item_count,
+        :resolved_topology,
+    )
     output.capacity >= item_count || throw(LocalWorkValidationError(
         "resolved capacity is smaller than the topology item count"
     ))
@@ -523,47 +546,47 @@ function _validate_binding_schema(
     )
     reads = invoke(_resolved_reads, Tuple{LocalWork}, work)
     expected = (
-        reads.rank => (
-            type = lowering.output.rank.type,
-            length = lowering.item_count,
-            access = :read,
+        _binding_requirement(
+            reads.rank,
+            lowering.output.rank.type,
+            (lowering.item_count,),
+            :read;
+            allow_readwrite = true,
+            role = :rank,
         ),
-        reads.value => (
-            type = lowering.output.value_type,
-            length = lowering.item_count,
-            access = :read,
+        _binding_requirement(
+            reads.value,
+            lowering.output.value_type,
+            (lowering.item_count,),
+            :read;
+            allow_readwrite = true,
+            role = :value,
         ),
-        lowering.output_name => (
-            type = lowering.output.value_type,
-            length = lowering.destination_count,
-            access = :write,
+        _binding_requirement(
+            lowering.output_name,
+            lowering.output.value_type,
+            (lowering.destination_count,),
+            :write;
+            allow_readwrite = true,
+            role = :resolved_output,
         ),
     )
     mask_expected = lowering.operation.emission.mask === :mask ?
-        (reads.mask => (
-            type = Bool,
-            length = lowering.item_count,
-            access = :read,
+        (_binding_requirement(
+            reads.mask,
+            Bool,
+            (lowering.item_count,),
+            :read;
+            allow_readwrite = true,
+            role = :mask,
         ),) : ()
-    for (name, requirement) in (expected..., mask_expected...)
-        facts = invoke(
-            _binding_facts, Tuple{Any, Any, Any}, storage, schema, name
-        )
-        facts.element_type === requirement.type ||
-            throw(LocalWorkValidationError(
-                "logical binding $name has the wrong element type"
-            ))
-        facts.dimensions == 1 && facts.size == (requirement.length,) ||
-            throw(LocalWorkValidationError(
-                "logical binding $name has the wrong layout or length"
-            ))
-        facts.access === nothing || facts.access === requirement.access ||
-            facts.access === :readwrite ||
-            throw(LocalWorkValidationError(
-                "submission storage $name has the wrong access role"
-            ))
-    end
-    return nothing
+    return invoke(
+        _validate_binding_requirements,
+        Tuple{Any, Any, Tuple},
+        storage,
+        schema,
+        (expected..., mask_expected...),
+    )
 end
 
 function _validate_binding_schema(
@@ -616,74 +639,31 @@ function _validate_workspace(lowering::_ResolvedWinnerLowering, work, workspace,
         throw(LocalWorkValidationError(
             "resolved workspace requires winner_ranks and winner_identities"
         ))
-    ranks = workspace.winner_ranks
-    identities = workspace.winner_identities
-    eltype(ranks) === lowering.output.rank.type ||
-        throw(LocalWorkValidationError(
-            "winner-rank workspace has the wrong element type"
-        ))
-    eltype(identities) === lowering.output.tie_break.type ||
-        throw(LocalWorkValidationError(
-            "winner-identity workspace has the wrong element type"
-        ))
-    length(ranks) == lowering.destination_count ||
-        throw(LocalWorkValidationError(
-            "winner-rank workspace has the wrong exact capacity"
-        ))
-    length(identities) == lowering.destination_count ||
-        throw(LocalWorkValidationError(
-            "winner-identity workspace has the wrong exact capacity"
-        ))
-    ndims(ranks) == 1 && size(ranks) == (lowering.destination_count,) &&
-        strides(ranks) == (1,) || throw(LocalWorkValidationError(
-            "winner-rank workspace must be a dense one-dimensional buffer"
-        ))
-    ndims(identities) == 1 &&
-        size(identities) == (lowering.destination_count,) &&
-        strides(identities) == (1,) || throw(LocalWorkValidationError(
-            "winner-identity workspace must be a dense one-dimensional buffer"
-        ))
-    invoke(
-        _validate_array_backend,
-        Tuple{Any, Any, Any},
-        ranks,
+    return invoke(
+        _validate_workspace_spec,
+        Tuple{Any, Tuple, Any},
+        workspace,
+        invoke(
+            _centrally_owned_workspace_spec,
+            Tuple{Any, Any},
+            lowering,
+            work,
+        ),
         backend,
-        :winner_ranks,
     )
-    invoke(
-        _validate_array_backend,
-        Tuple{Any, Any, Any},
-        identities,
-        backend,
-        :winner_identities,
-    )
-    Base.mightalias(ranks, identities) && throw(LocalWorkValidationError(
-        "resolved scratch buffers must be disjoint"
-    ))
-    return nothing
 end
 
-_workspace_arrays(lowering::_ResolvedWinnerLowering, work, workspace) = (
-    :winner_ranks => workspace.winner_ranks,
-    :winner_identities => workspace.winner_identities,
-)
-
 function _prepare_lowering(lowering::_ResolvedWinnerLowering, work, storage, workspace, backend)
-    reads = invoke(_resolved_reads, Tuple{LocalWork}, work)
-    copy_signature = backend isa KernelAbstractions.CPU ?
-        Tuple{KernelAbstractions.CPU, Any} :
-        Tuple{KernelAbstractions.Backend, Any}
-    device_keys = invoke(
-        _device_copy,
-        copy_signature,
-        backend,
-        getproperty(lowering.topology, reads.key),
+    payload = invoke(
+        _centrally_owned_static_topology_payload,
+        Tuple{Any},
+        lowering,
     )
-    device_identities = invoke(
-        _device_copy,
-        copy_signature,
+    device_payload = invoke(
+        _centrally_copy_topology_payload,
+        Tuple{Any, Any},
         backend,
-        getproperty(lowering.topology, reads.identity),
+        payload,
     )
     return _PreparedResolvedWinner(
         invoke(
@@ -710,19 +690,9 @@ function _prepare_lowering(lowering::_ResolvedWinnerLowering, work, storage, wor
             _resolved_publish_kernel!,
             backend,
         ),
-        device_keys,
-        device_identities,
+        device_payload.keys,
+        device_payload.identities,
     )
-end
-
-@inline function _rank_claim!(winners, destination, rank, ::Val{:min})
-    Atomix.@atomic min(winners[destination], rank)
-    return nothing
-end
-
-@inline function _rank_claim!(winners, destination, rank, ::Val{:max})
-    Atomix.@atomic max(winners[destination], rank)
-    return nothing
 end
 
 @inline _emits(::Nothing, item) = true
@@ -785,12 +755,13 @@ end
     if item <= active_count && _emits(mask, item)
         destination = Int(@inbounds keys[item])
         if 1 <= destination <= length(winner_ranks)
-            @inbounds if ranks[item] == winner_ranks[destination]
-                identity = identities[item]
-                Atomix.@atomic min(
-                    winner_identities[destination], identity
-                )
-            end
+            _identity_claim!(
+                winner_ranks,
+                winner_identities,
+                destination,
+                @inbounds(ranks[item]),
+                @inbounds(identities[item]),
+            )
         else
             error("resolved destination is outside the prepared key domain")
         end
@@ -812,11 +783,14 @@ end
     if item <= active_count && _emits(mask, item)
         destination = Int(@inbounds keys[item])
         if 1 <= destination <= length(output)
-            @inbounds begin
-                wins = ranks[item] == winner_ranks[destination] &&
-                       identities[item] == winner_identities[destination]
-                wins && (output[destination] = values[item])
-            end
+            wins = _is_winner(
+                winner_ranks,
+                winner_identities,
+                destination,
+                @inbounds(ranks[item]),
+                @inbounds(identities[item]),
+            )
+            wins && (@inbounds output[destination] = values[item])
         else
             error("resolved destination is outside the prepared key domain")
         end
@@ -908,6 +882,12 @@ function _lowering_inspection(
         workspace,
     )
     reads = invoke(_resolved_reads, Tuple{LocalWork}, work)
+    workspace_spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        work,
+    )
     return (
         family = :resolved_selection,
         phases = (
@@ -927,17 +907,23 @@ function _lowering_inspection(
         device_topology = (
             keys_identity = objectid(runtime.device_keys),
             identities_identity = objectid(runtime.device_identities),
-            transfer_bytes = lowering.item_count *
-                (sizeof(lowering.output.key_type) +
-                 sizeof(lowering.output.tie_break.type)),
+            transfer_bytes = invoke(
+                _centrally_count_topology_payload_bytes,
+                Tuple{Any},
+                invoke(
+                    _centrally_owned_static_topology_payload,
+                    Tuple{Any},
+                    lowering,
+                ),
+            ),
         ),
-        workspace = (
-            rank_identity = objectid(workspace.winner_ranks),
-            identity_identity = objectid(workspace.winner_identities),
-            rank_bytes = sizeof(eltype(workspace.winner_ranks)) *
-                length(workspace.winner_ranks),
-            identity_bytes = sizeof(eltype(workspace.winner_identities)) *
-                length(workspace.winner_identities),
+        workspace = invoke(
+            _winner_workspace_inspection,
+            Tuple{Any, Tuple, Symbol, Symbol},
+            workspace,
+            workspace_spec,
+            :winner_ranks,
+            :winner_identities,
         ),
     )
 end

@@ -17,7 +17,7 @@ function (operation::_LWD2Q9Collision)(item::Int32, reads, values)
     end,)
 end
 
-function _lw_d2q9_topology(nx::Int, ny::Int)
+function _lw_d2q9_routes(nx::Int, ny::Int)
     velocities = (
         (0, 0), (1, 0), (0, 1), (-1, 0), (0, -1),
         (1, 1), (-1, 1), (-1, -1), (1, -1),
@@ -34,12 +34,7 @@ function _lw_d2q9_topology(nx::Int, ny::Int)
             routes[lane, cell] = Int32(lane + 9 * (target_cell - 1))
         end
     end
-    return (
-        epoch = UInt64(1),
-        item_count = cells,
-        routes = (stream = routes,),
-        destination_counts = (populations = 9 * cells,),
-    )
+    return routes
 end
 
 function run_lw_d2q9_witness(
@@ -47,12 +42,13 @@ function run_lw_d2q9_witness(
         backend = KernelAbstractions.CPU(),
     )
     nx, ny = 4, 3
-    topology = _lw_d2q9_topology(nx, ny)
+    cells = nx * ny
+    routes = _lw_d2q9_routes(nx, ny)
     equilibrium = ntuple(lane -> Float32(lane) / 20f0, 9)
     operation = _LWD2Q9Collision(equilibrium, 0.75f0)
     work = LocalWorksets.localwork(
         operation,
-        1:topology.item_count;
+        1:cells;
         read = (populations = :source_populations,),
         outputs = (
             populations = LocalWorksets.independent(
@@ -61,6 +57,12 @@ function run_lw_d2q9_witness(
                 maximum = 9,
             ),
         ),
+    )
+    topology = LocalWorksets.topology(
+        work;
+        epoch = UInt64(1),
+        routes = (stream = routes,),
+        destination_counts = (populations = 9 * cells,),
     )
     workplan = LocalWorksets.plan(work, topology; backend)
     invalid_routes = copy(topology.routes.stream)
@@ -98,8 +100,8 @@ function run_lw_d2q9_witness(
     prepared = LocalWorksets.prepare(
         workplan,
         storage;
-        workspace = (leases = Any[nothing, nothing, nothing],),
         submission,
+        lease_capacity = 3,
     )
     event = LocalWorksets.run!(prepared, (; source_populations = source_storage))
     wait(event)
@@ -116,14 +118,21 @@ function run_lw_d2q9_witness(
         )
         wait(warm_event)
     end
+    prepared_facts = LocalWorksets.inspect(prepared)
     return (
         name = :lbm_d2q9,
         result = actual,
         reference = expected,
         launches = planned.launches,
-        waits = LocalWorksets.inspect(prepared).wait_count,
+        waits = prepared_facts.wait_count,
         transfer_bytes = planned.topology_transfer_bytes,
         workspace_bytes = planned.workspace.algorithmic_bytes,
+        workspace_ownership = prepared_facts.workspace_ownership,
+        workspace_identities = Tuple(
+            name => getproperty(prepared_facts.workspace_facts, name).identity
+            for name in keys(prepared_facts.workspace_facts)
+        ),
+        lease_identity = prepared_facts.lease_identity,
         warm_allocations,
         invalid_rejected,
     )

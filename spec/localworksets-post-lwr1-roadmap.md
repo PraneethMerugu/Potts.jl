@@ -1,5 +1,9 @@
 # LocalWorksets Post-LW-R1 Extraction and Adoption Roadmap
 
+Qualification and review mechanics are governed by
+`design/hardening/lw4q-qualification.md`. LW-4Q does not change this roadmap's
+architecture or phase boundaries.
+
 Date: 2026-08-10
 
 Status: LW-4A complete and LW-R2A cleared; LW-4B complete and LW-R2B passed; LW-4C open;
@@ -270,6 +274,33 @@ LW-5 is the downstream value test: real CorePotts/PottsToolkit operations must b
 smaller, clearer and easier to inspect. If adoption still requires large custom adapters per
 operation, simplify the abstraction or authoring surface before adding mechanisms.
 
+### Required order inside LW-4C
+
+LW-4C is not one undifferentiated API pass. The qualified LW-R2B candidate is first preserved as
+the behavioral and performance baseline, then work proceeds in this order:
+
+1. **LW-4C0 — internal complexity audit.** Map duplicated validation, topology handling, binding,
+   workspace calculation, evidence construction and lowering machinery. Every abstraction and
+   specialization must state its safety, performance or multi-consumer justification. C0 changes
+   no production execution.
+2. **LW-4C1 — implementation consolidation.** Consolidate common internal machinery while
+   preserving semantics, admission, launch counts, allocations, KernelAbstractions implicit
+   ordering, determinism and controlled CPU/Metal performance. A specialization is removed only
+   after an executable replacement proves its complete behavior and performance obligations.
+3. **LW-4C2 — construction and authoring simplification.** Make topology, storage, workspace and
+   binding construction substantially easier without hiding topology epochs, access, aliases,
+   output laws, capacities, device ownership or queue bounds.
+4. **LW-4C3 — public API reconciliation.** Finalize Level 1, Level 2 and extension APIs,
+   diagnostics, inspection, examples and JuliaGPU ergonomics against complete witnesses.
+5. **LW-R2 — fresh committee freeze review.** No public production promotion or LW-5 adoption
+   begins until this review clears.
+
+Line reduction is an outcome of clearer ownership, not an admission criterion. Proven safeguards
+must not be weakened to shrink the package, and performance-qualified specialization is retained
+where measurements justify it. Priority C1 seams are shared per-port evidence, checked count/byte/
+route/capacity validation, binding and workspace specifications, topology copy/fingerprint/
+transfer accounting, common arbitration primitives, and obsolete specialized lowerings.
+
 ### Three authoring levels
 
 **Level 1 conveniences** cover common single- and multi-output work through ordinary Julia
@@ -305,7 +336,10 @@ metadata but no opaque executor or self-issued qualification.
 - `Adapt`-compatible device representations;
 - KernelAbstractions backends and implicit ordering, with no vendor branch in core execution;
 - central selection of qualified atomics/reductions;
-- prelaunch rejection of non-device-compilable operations;
+- prelaunch rejection of every statically knowable declaration, schema,
+  capability, binding and workspace fault; selected-device compiler rejection
+  before launch is required only when the provider exposes a separately
+  reviewed, backend-neutral compile-validation protocol;
 - no scalar indexing, dynamic dispatch, host fallback or warm workspace growth;
 - asynchronous `run!` where supported and exactly the promised portable wait behavior; and
 - `inspect` reports launches, workspace, transfers, determinism and qualification without waiting.
@@ -337,7 +371,11 @@ The API candidate must prove:
 - CPU-to-GPU movement changes backend/storage, not the scientific operation;
 - common automatic workspace preparation is bounded and inspectable;
 - multi-output work is materially clearer than separate hidden passes;
-- invalid GPU code fails during planning/preparation rather than after partial execution;
+- invalid GPU code is rejected during planning/preparation when it is
+  statically knowable through the portable interface; otherwise a
+  selected-device compiler failure at first provider invocation is reported as
+  a backend failure, conservatively poisons the cumulative scope, and obeys the
+  inspected partial-visibility contract;
 - error messages identify the exact rejected port/operation;
 - an external package adds a qualified operation without editing LocalWorksets source;
 - `@inferred`, device compilation, warm allocation and specialization-count tests pass; and

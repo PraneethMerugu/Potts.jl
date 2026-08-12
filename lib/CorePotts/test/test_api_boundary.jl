@@ -3,6 +3,7 @@
         :CorePotts,
         :CompilerSPI,
         :BackendSPI,
+        :LocalWorksets,
         :ProgramInitialState,
         :ProgramSnapshot,
         :ProgramRuntime,
@@ -39,6 +40,7 @@
         :program_lifecycle_receipt,
     ))
     @test Set(names(CorePotts)) == expected
+    @test CorePotts.LocalWorksets === LocalWorksets
 
     @test CorePotts.CompilerSPI.CompiledPottsProgram ===
           CorePotts.CompiledPottsProgram

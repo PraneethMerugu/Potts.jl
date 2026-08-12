@@ -15,7 +15,7 @@ include("../../../test/localworksets_witnesses/zbuffer.jl")
 include("../../../test/localworksets_witnesses/performance.jl")
 
 lw4b_witness_cache_before = length(Metal.compiler_cache(Metal.device()))
-@testset "LocalWorksets cross-domain real-Metal witnesses" begin
+lw4b_cross_domain_reports = let
     backend = Metal.MetalBackend()
     lbm = run_lw_d2q9_witness(Metal.MtlArray; backend)
     spring_deterministic = run_lw_lattice_spring_witness(
@@ -27,19 +27,23 @@ lw4b_witness_cache_before = length(Metal.compiler_cache(Metal.device()))
     fem = run_lw_matrix_free_fem_witness(Metal.MtlArray; backend)
     zbuffer = run_lw_zbuffer_witness(Metal.MtlArray; backend)
 
-    @test lbm.launches == 1
-    @test spring_deterministic.launches == 2
-    @test spring_fast.launches == 3
-    @test fem.launches == 2
-    @test zbuffer.launches == 2
-    @test all(report -> report.waits == 2, (
-        lbm, spring_deterministic, spring_fast, fem, zbuffer,
-    ))
-    @test all(report -> report.invalid_rejected, (
-        lbm, spring_deterministic, spring_fast, fem, zbuffer,
-    ))
-    @test spring_fast.determinism.same_run_replay.guarantee ==
-        :not_claimed_for_fast_ports
+    @testset "LocalWorksets cross-domain real-Metal witnesses" begin
+        @test lbm.launches == 1
+        @test spring_deterministic.launches == 2
+        @test spring_fast.launches == 3
+        @test fem.launches == 2
+        @test zbuffer.launches == 2
+        @test all(report -> report.waits == 2, (
+            lbm, spring_deterministic, spring_fast, fem, zbuffer,
+        ))
+        @test all(report -> report.invalid_rejected, (
+            lbm, spring_deterministic, spring_fast, fem, zbuffer,
+        ))
+        @test spring_fast.determinism.same_run_replay.guarantee ==
+            :not_claimed_for_fast_ports
+    end
+
+    (; lbm, spring_deterministic, spring_fast, fem, zbuffer)
 end
 lw4b_witness_cache_after = length(Metal.compiler_cache(Metal.device()))
 lw4b_witness_cache_report = (
@@ -244,3 +248,25 @@ resolution_policy_report = run_lifecycle_resolution_policy_execution(
 println(resolution_policy_report)
 
 include("lw3_localworksets_parity.jl")
+
+if haskey(ENV, "LW4_MACHINE_RESULTS")
+    import Serialization
+    Serialization.serialize(ENV["LW4_MACHINE_RESULTS"], (
+        environment = (
+            julia = string(VERSION),
+            kernel = string(Sys.KERNEL),
+            architecture = string(Sys.ARCH),
+            machine = Sys.MACHINE,
+            metal = sprint(io -> Metal.versioninfo(io)),
+        ),
+        cross_domain = lw4b_cross_domain_reports,
+        d2q9_performance = lw4b_d2q9_performance,
+        zbuffer_performance = lw4b_zbuffer_performance,
+        localworksets = localworksets_report,
+        localworksets_failure = localworksets_failure_report,
+        shared_failure = localworksets_shared_failure_report,
+        checkerboard = localworksets_checkerboard_report,
+        checkerboard_failure = localworksets_checkerboard_failure_report,
+        lw3_parity = lw3_localworksets_parity_report,
+    ))
+end

@@ -83,6 +83,36 @@
           first.stats.constraint_rejections + first.stats.energy_rejections
 end
 
+include("localworksets_witnesses/lbm_d2q9.jl")
+include("localworksets_witnesses/lattice_spring.jl")
+include("localworksets_witnesses/matrix_free_fem.jl")
+include("localworksets_witnesses/zbuffer.jl")
+
+@testset "external LocalWorksets cross-domain witnesses" begin
+    lbm = run_lw_d2q9_witness()
+    spring_deterministic = run_lw_lattice_spring_witness()
+    spring_fast = run_lw_lattice_spring_witness(; force_mode = :fast)
+    fem = run_lw_matrix_free_fem_witness()
+    zbuffer = run_lw_zbuffer_witness()
+
+    @test lbm.launches == 1
+    @test lbm.workspace_bytes == 0
+    @test spring_deterministic.launches == 2
+    @test spring_fast.launches == 3
+    @test fem.launches == 2
+    @test zbuffer.launches == 2
+    @test all(report -> report.waits == 2, (
+        lbm, spring_deterministic, spring_fast, fem, zbuffer,
+    ))
+    @test all(report -> report.invalid_rejected, (
+        lbm, spring_deterministic, spring_fast, fem, zbuffer,
+    ))
+    @test spring_deterministic.determinism.
+        bucket_order_invariance.guarantee == :canonical_item_local_slot
+    @test spring_fast.determinism.same_run_replay.guarantee ==
+        :not_claimed_for_fast_ports
+end
+
 @testset "scheduled chemotaxis follows the independent gradient sign" begin
     @variables chemotaxis_field chemotaxis_gate
     cell = CellKind(:chemotaxis_cell; extinction = RetireAtZero())

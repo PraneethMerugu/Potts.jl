@@ -18,3 +18,7 @@ include("test_lifecycle_receipts.jl")
 @testset "CorePotts package quality" begin
     Aqua.test_all(CorePotts; ambiguities = false)
 end
+
+# Exact broad-method replacements are irreversible in a Julia process. Run
+# each post-submission adapter attack in a fresh process after all other tests.
+include("test_localworksets_adapter_worlds.jl")

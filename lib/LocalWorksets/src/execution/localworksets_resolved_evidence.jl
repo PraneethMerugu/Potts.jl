@@ -30,51 +30,32 @@ function _resolved_determinism(backend, lowering)
         :exact_for_declared_integer_order,
         :domain_owned,
     )
-    return NamedTuple{_DETERMINISM_DIMENSIONS}(
-        map(guarantee -> merge(qualifier, (; guarantee)), guarantees)
+    return invoke(
+        _determinism_report,
+        Tuple{NamedTuple, NTuple{8, Symbol}},
+        qualifier,
+        guarantees,
     )
 end
 
 function _lowering_evidence(
         lowering::_ResolvedWinnerLowering, work, topology, backend
     )
+    workspace_spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        work,
+    )
     rank_type = lowering.output.rank.type
     identity_type = lowering.output.tie_break.type
-    rank_bytes = invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
+    workspace = invoke(
+        _winner_workspace_evidence,
+        Tuple{Tuple, Int, Symbol, Symbol},
+        workspace_spec,
         lowering.destination_count,
-        sizeof(rank_type),
-        :resolved_rank_workspace_bytes,
-    )
-    identity_bytes = invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
-        lowering.destination_count,
-        sizeof(identity_type),
-        :resolved_identity_workspace_bytes,
-    )
-    workspace = (
-        destination_count = lowering.destination_count,
-        rank = (
-            element_type = rank_type,
-            length = lowering.destination_count,
-            alignment = Base.datatype_alignment(rank_type),
-            bytes = rank_bytes,
-        ),
-        identity = (
-            element_type = identity_type,
-            length = lowering.destination_count,
-            alignment = Base.datatype_alignment(identity_type),
-            bytes = identity_bytes,
-        ),
-        total_bytes = invoke(
-            _checked_int_sum,
-            Tuple{Integer, Integer, Any},
-            rank_bytes,
-            identity_bytes,
-            :resolved_total_workspace_bytes,
-        ),
+        :winner_ranks,
+        :winner_identities,
     )
     capability = (
         backend = typeof(backend),
@@ -99,13 +80,18 @@ function _lowering_evidence(
         backend,
         lowering,
     )
-    port = (
-        family = :resolved,
-        route = lowering.output.destinations,
-        destination_count = lowering.destination_count,
-        maximum_emissions = 1,
-        coverage = :not_applicable,
-        law = (
+    port = invoke(
+        _port_evidence,
+        Tuple{
+            Symbol, Any, Int, Int, Symbol, NamedTuple, Symbol,
+            Symbol, Any, NamedTuple, NamedTuple,
+        },
+        :resolved,
+        lowering.output.destinations,
+        lowering.destination_count,
+        1,
+        :not_applicable,
+        (
             kind = :resolved,
             rank = lowering.output.rank,
             tie_break = lowering.output.tie_break,
@@ -113,10 +99,11 @@ function _lowering_evidence(
             emission_mask = lowering.operation.emission.mask,
             mask_binding = lowering.output.mask,
         ),
-        publication_phase = :publication,
-        post_launch_failure_visibility = :publication_phase_is_not_transactional,
-        empty_destination = lowering.output.empty,
+        :publication,
+        :publication_phase_is_not_transactional,
+        lowering.output.empty,
         determinism,
+        (;),
     )
     return (
         family = :resolved_selection,
@@ -130,17 +117,13 @@ function _lowering_evidence(
         ),
         workspace,
         topology_transfer_bytes = invoke(
-            _checked_int_product,
-            Tuple{Integer, Integer, Any},
-            lowering.item_count,
+            _centrally_count_topology_payload_bytes,
+            Tuple{Any},
             invoke(
-                _checked_int_sum,
-                Tuple{Integer, Integer, Any},
-                sizeof(lowering.output.key_type),
-                sizeof(identity_type),
-                :resolved_transfer_record_bytes,
+                _centrally_owned_static_topology_payload,
+                Tuple{Any},
+                lowering,
             ),
-            :resolved_topology_transfer_bytes,
         ),
         capability,
         determinism,

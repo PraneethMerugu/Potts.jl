@@ -17,13 +17,6 @@ function run_lw_zbuffer_witness(
     )
     pixel = reshape(Int32[1, 1, 2, 2, 3], 1, 5)
     identities = reshape(UInt32[50, 10, 30, 20, 40], 1, 5)
-    topology = (
-        epoch = UInt64(4),
-        item_count = 5,
-        routes = (pixel = pixel,),
-        destination_counts = (color = 4,),
-        semantic_ids = (color = identities,),
-    )
     work = LocalWorksets.localwork(
         _LWZBufferOperation(),
         1:5;
@@ -48,6 +41,13 @@ function run_lw_zbuffer_witness(
             ),
         ),
     )
+    topology = LocalWorksets.topology(
+        work;
+        epoch = UInt64(4),
+        routes = (pixel = pixel,),
+        destination_counts = (color = 4,),
+        semantic_ids = (color = identities,),
+    )
     workplan = LocalWorksets.plan(work, topology; backend)
     duplicate_identities = copy(identities)
     duplicate_identities[1, 1] = duplicate_identities[1, 2]
@@ -71,17 +71,9 @@ function run_lw_zbuffer_witness(
         fragment_depths = array_type(depths),
         color = array_type(fill(UInt32(0xff), 4)),
     )
-    workspace = (
-        records = (
-            color = (
-                ranks = array_type(fill(Int32(0), 5)),
-                values = array_type(fill(UInt32(0), 5)),
-                valid = array_type(fill(false, 5)),
-            ),
-        ),
-        leases = Any[nothing, nothing],
+    prepared = LocalWorksets.prepare(
+        workplan, storage; lease_capacity = 2
     )
-    prepared = LocalWorksets.prepare(workplan, storage; workspace)
     event = LocalWorksets.run!(prepared)
     wait(event)
     actual = Array(storage.color)
@@ -91,14 +83,21 @@ function run_lw_zbuffer_witness(
         warm_event = LocalWorksets.run!(prepared)
         wait(warm_event)
     end
+    prepared_facts = LocalWorksets.inspect(prepared)
     return (
         name = :zbuffer,
         result = actual,
         reference = expected,
         launches = planned.launches,
-        waits = LocalWorksets.inspect(prepared).wait_count,
+        waits = prepared_facts.wait_count,
         transfer_bytes = planned.topology_transfer_bytes,
         workspace_bytes = planned.workspace.total_bytes,
+        workspace_ownership = prepared_facts.workspace_ownership,
+        workspace_identities = Tuple(
+            name => getproperty(prepared_facts.workspace_facts, name).identity
+            for name in keys(prepared_facts.workspace_facts)
+        ),
+        lease_identity = prepared_facts.lease_identity,
         warm_allocations,
         determinism = planned.determinism,
         invalid_rejected,

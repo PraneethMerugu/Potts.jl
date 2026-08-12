@@ -79,6 +79,17 @@ function _device_copy(backend::KernelAbstractions.Backend, values)
     return Adapt.adapt(backend, values)
 end
 
+function _centrally_owned_device_copy(backend, values)
+    signature = backend isa KernelAbstractions.CPU ?
+        Tuple{KernelAbstractions.CPU, Any} :
+        Tuple{KernelAbstractions.Backend, Any}
+    method = which(_device_copy, signature)
+    method.module === (@__MODULE__) || throw(LocalWorkValidationError(
+        "the topology device-copy implementation is not package-owned"
+    ))
+    return invoke(_device_copy, signature, backend, values)
+end
+
 function _owned_kernel_factory(kernel::Function, backend)
     signature = Tuple{Any}
     method = which(kernel, signature)

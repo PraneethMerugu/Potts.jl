@@ -67,6 +67,20 @@ function _settle_full!(runtime)
     )
 end
 
+@testset "LocalWorksets checkerboard queue capacity is checked" begin
+    @test CorePotts._checked_checkerboard_capacity_mul(12, 7, :test) == 84
+    @test CorePotts._checked_checkerboard_capacity_sub(84, 7, :test) == 77
+    @test_throws ArgumentError CorePotts._checked_checkerboard_capacity_mul(
+        typemax(Int), 2, :test
+    )
+    @test_throws ArgumentError CorePotts._checked_checkerboard_capacity_mul(
+        big(typemax(Int)) + 1, 1, :test
+    )
+    @test_throws ArgumentError CorePotts._checked_checkerboard_capacity_sub(
+        1, 2, :test
+    )
+end
+
 @testset "private LocalWorksets claim vertical preserves queued CPU execution" begin
     program, direct = _localworksets_vertical_runtime()
     _, candidate_base = _localworksets_vertical_runtime()
@@ -253,11 +267,25 @@ end
     CorePotts.enqueue_program_through!(candidate_continuation, 16)
     continued_direct = _settle_full!(direct_continuation)
     continued_candidate = _settle_full!(candidate_continuation)
+    @test continued_direct.submitted_mcs == continued_candidate.submitted_mcs == 16
+    @test continued_direct.drained_mcs == continued_candidate.drained_mcs == 16
+    @test continued_direct.committed_mcs == continued_candidate.committed_mcs == 16
+    @test continued_direct.materialized_mcs == continued_candidate.materialized_mcs == 16
     @test continued_direct.counters == continued_candidate.counters
+    @test continued_direct.status == continued_candidate.status
+    @test continued_direct.failure === continued_candidate.failure === nothing
     @test continued_direct.snapshot.ownership ==
           continued_candidate.snapshot.ownership
+    @test continued_direct.snapshot.cell_kinds ==
+          continued_candidate.snapshot.cell_kinds
+    @test continued_direct.snapshot.cell_generations ==
+          continued_candidate.snapshot.cell_generations
     @test continued_direct.snapshot.trackers.values ==
           continued_candidate.snapshot.trackers.values
+    @test collect(continued_direct.snapshot.relationships) ==
+          collect(continued_candidate.snapshot.relationships)
+    @test continued_direct.snapshot.descriptor_state ==
+          continued_candidate.snapshot.descriptor_state
 end
 
 @testset "LocalWorksets evidence remains conjunctive with Core authority" begin

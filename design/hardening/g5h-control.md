@@ -1,6 +1,7 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-5 passed; R2H-C and LW-R0 cleared; LW-1 next; G6 closed
+Status: G5H-0 through G5H-5 and LocalWorksets LW-R1 passed; LW-4 standalone extraction authorized;
+G6 closed
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -21,8 +22,10 @@ repeat or amend gate requirements.
 | G5H-5 — product qualification and docs | `passed` | Corrected implementation candidate `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, removes the surviving `EquationProcess` surrogate, corrects the page count, records the owner-required Wortel/Merks substrate dispositions, and passes every affected qualification lane. |
 | R2H-C — hardening exit review | `passed` | Final fresh rereview cleared implementation `06741e681cc1a5cacbbc4f56ac8a412401e4ee52`, tree `19a8ca73145412b0efa060845ae56fd929605a19`, against record `f3e527cf1bb1c083574fd682b6fd4576ebccf120`, tree `6b6701159a425de2c1c6832d935b75bb26b0d8a7`: P0=0, P1=0, P2=0, P3=0. |
 | LocalWorksets LW-0 and LW-R0 | `passed` | CP-B1--CP-B3, complete CorePotts CPU, qualified real Metal, quantitative baselines, and the exact preservation review passed with P0=0, P1=0, P2=0, P3=0 and no dissent. Evidence: [LW-0 corrected CorePotts baseline](lw0-corrected-corepotts-baseline.md). |
-| LocalWorksets LW-1 through LW-R1 | `next` | Governed by the accepted [LocalWorksets contract](../../spec/localworksets-v1.md) and [implementation/review gate](../../spec/localworksets-v1-implementation-gate.md). LW-1 has not begun. |
-| G6 owner decision | `blocked` | G6 requires LW-R1, an LW-4 disposition, and explicit owner send-off. |
+| LocalWorksets LW-1 through LW-R1 | `passed` | The fresh exact-hash committee separately passed bounded LW-1 correctness, found no future-library obstruction, passed the bounded two-key conjunction and LW-3 Q01--Q10 on qualified CPU/Metal, and cleared LW-R1 with P0=0, P1=0, P2=0 and no dissent. Evidence: [implementation matrix](lw1-implementation-matrix.md), [bounded amendment](lw2-bounded-conjunctive-amendment.md), [LW-3 parity](lw3-localworksets-parity.md), and [LW-R1 review](lwr1-localworksets-review.md). |
+| LocalWorksets LW-4 through LW-R2 | `authorized` | The owner selected standalone extraction, bounded general mechanism completion, and an implementation-backed Julian/JuliaGPU API reconciliation. The exact [LW-4A extraction matrix](lw4a-extraction-implementation-matrix.md) is complete; source work must follow E0–E5 and clear LW-R2A before LW-4B. Authority: [post-LW-R1 roadmap](../../spec/localworksets-post-lwr1-roadmap.md). |
+| LocalWorksets LW-5 through LW-R3 | `blocked` | Compiled local-operation adoption begins only after LW-R2 freezes the standalone package and public surface. Domain semantics remain in PottsToolkit/CorePotts. |
+| G6 owner decision | `blocked` | G6 requires LW-R2, LW-R3, disposition of every carried finding, and a separate explicit owner send-off. |
 
 ## Review results
 
@@ -183,8 +186,9 @@ P1=0, P2=0, and P3=0. It independently reproduced the complete 16-page
 inventory, closure of `EquationProcess`, the 9/9 product suite, the
 Wortel/Merks upstream-substrate disposition, MTK ownership of native internal
 connections, PR01--PR30 closure, and the fail-closed capability boundary.
-R2H-C is cleared. LocalWorksets LW-0 is next; G6 remains closed until the accepted implementation
-route and explicit owner authorization clear.
+R2H-C is cleared. LocalWorksets subsequently passed LW-0 through LW-R1; its owner-authorized LW-4
+and LW-5 successor route is now governed by the post-LW-R1 roadmap. G6 remains closed until that
+route and a separate explicit owner authorization clear.
 
 ## G5H-4 implementation matrix
 

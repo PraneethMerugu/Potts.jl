@@ -1,0 +1,154 @@
+threshold = 1.05
+subsets_per_source = 100
+bootstrap_samples_per_subset = 2000
+subset_method = "SHA-256-seeded without-replacement permutations"
+input_sha256 = "2e5c52bc2b745776d77072bd0dfd859ca45ef75151e0179dbecc78b0b8a4e841"
+schema_version = 1
+input = "design/hardening/lw4q-subsampling-inputs.jls"
+bootstrap_method = "paired SHA-256-seeded resampling; median ratio upper 95th percentile"
+
+[counts.1000.metal_zbuffer]
+decisions = 500
+p95_upper = 1.0223012472281596
+failures = 0
+worst_upper = 1.0238263882120324
+
+[counts.1000.cpu_zbuffer]
+decisions = 500
+p95_upper = 1.0058903545306142
+failures = 0
+worst_upper = 1.0059994014949372
+
+[counts.1000.metal_d2q9]
+decisions = 500
+p95_upper = 1.0267969964184995
+failures = 0
+worst_upper = 1.027035366193261
+
+[counts.1000.cpu_d2q9]
+decisions = 500
+p95_upper = 0.9793960287575958
+failures = 0
+worst_upper = 0.9794353420408276
+
+[counts.100.metal_zbuffer]
+decisions = 500
+p95_upper = 1.0929697338619226
+failures = 144
+worst_upper = 1.2399957890941218
+
+[counts.100.cpu_zbuffer]
+decisions = 500
+p95_upper = 1.010100648936899
+failures = 0
+worst_upper = 1.0144800455917096
+
+[counts.100.metal_d2q9]
+decisions = 500
+p95_upper = 1.0501375983541856
+failures = 26
+worst_upper = 1.0859334599478403
+
+[counts.100.cpu_d2q9]
+decisions = 500
+p95_upper = 0.9824943859584117
+failures = 0
+worst_upper = 0.9847604609325001
+
+[counts.50.metal_zbuffer]
+decisions = 500
+p95_upper = 1.1711894839901367
+failures = 232
+worst_upper = 1.2925690740519533
+
+[counts.50.cpu_zbuffer]
+decisions = 500
+p95_upper = 1.012219122239584
+failures = 0
+worst_upper = 1.0176425683059926
+
+[counts.50.metal_d2q9]
+decisions = 500
+p95_upper = 1.0795753978910327
+failures = 63
+worst_upper = 1.4756630925507899
+
+[counts.50.cpu_d2q9]
+decisions = 500
+p95_upper = 0.9838041487545242
+failures = 0
+worst_upper = 0.986622199621534
+
+[counts.200.metal_zbuffer]
+decisions = 500
+p95_upper = 1.0694160671869035
+failures = 73
+worst_upper = 1.1081180269635456
+
+[counts.200.cpu_zbuffer]
+decisions = 500
+p95_upper = 1.0085075096208571
+failures = 0
+worst_upper = 1.0110462145926966
+
+[counts.200.metal_d2q9]
+decisions = 500
+p95_upper = 1.0380145177942899
+failures = 4
+worst_upper = 1.057184268844679
+
+[counts.200.cpu_d2q9]
+decisions = 500
+p95_upper = 0.9814003817490121
+failures = 0
+worst_upper = 0.9834280265798161
+
+[counts.500.metal_zbuffer]
+decisions = 500
+p95_upper = 1.0439183264933187
+failures = 13
+worst_upper = 1.0680504737331564
+
+[counts.500.cpu_zbuffer]
+decisions = 500
+p95_upper = 1.0070703590613437
+failures = 0
+worst_upper = 1.0092954994583887
+
+[counts.500.metal_d2q9]
+decisions = 500
+p95_upper = 1.0307828003874708
+failures = 0
+worst_upper = 1.0352176078002049
+
+[counts.500.cpu_d2q9]
+decisions = 500
+p95_upper = 0.9801164318780673
+failures = 0
+worst_upper = 0.9811705433545856
+
+[[sources]]
+name = "lw4-final-qualification-bundle-obsolete-20260811"
+cpu_result_sha256 = "2e8e7bbb488d7d20fc44e4129f35e0f64401365b8898b2094c3e5b17614157e5"
+source_digest = "25e2b7e40d126d8b7767d40043583bc55e322d9e09e1670963add4a3fcec45c7"
+metal_result_sha256 = "c7cec5cd64b4439f1927b162ae64b61baea4b2e2109f1c78c9cca653c90ff08a"
+[[sources]]
+name = "lw4-final-qualification-bundle-valid-runtime-stale-driver-20260812"
+cpu_result_sha256 = "a50655495b66f1442c553ba235ccbd6443e191631e6bf086cc037a5d60691a67"
+source_digest = "831ac7fd7187776b4118e6dbbeeb3b426aa36dc8be52f8964b7d599752b23716"
+metal_result_sha256 = "fbbaade88864c29d763a850dc86db6ceab171b0744e5abffdfefb070d46be374"
+[[sources]]
+name = "lw4-final-qualification-bundle-blocked-wait-dispatch-20260812"
+cpu_result_sha256 = "0678b3c6217a3ddb2d994e8e0ff3b907b45f6cc51e7492983df2eddcbf9779b8"
+source_digest = "6906fe5a06dc1fbc6a290f47d0f0c44405e83097824ce3fce7b50e66d22dce72"
+metal_result_sha256 = "bf120981f81eef976f3674c234737b9f6cc44a0727ef6c153e8adf8a10ddcda2"
+[[sources]]
+name = "lw4-final-qualification-bundle-blocked-release-dispatch-20260812"
+cpu_result_sha256 = "08fb9db2c2d672ecd907709fbaa354320414c2887227472e887f11f8246932c0"
+source_digest = "ca55b961752130b9c107014a7abaea0be89b8792cc0435734717e802739953d4"
+metal_result_sha256 = "ed4d8d39dd9bad0a8802402fe49ecc6c30f06f20b278dc83e2e61c8834541d37"
+[[sources]]
+name = "lw4-final-qualification-bundle-blocked-core-adapter-20260812"
+cpu_result_sha256 = "5c9fcdf6b038258d1c7e33a68ede6cb4785a42620a86201ff2740858d8de0a40"
+source_digest = "c4839ec240812c17d69c8a7ecd4db007aa2344973511d5d4019d9fc925843b52"
+metal_result_sha256 = "3a99cbf31078b1ae4cdbb310a3956c91b1db46b1b42fbfc03f52d9a0b400299f"

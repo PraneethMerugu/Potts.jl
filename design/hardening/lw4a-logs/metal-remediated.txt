@@ -1,0 +1,23 @@
+LW-4A post-LW-R2A-remediation qualified real-Metal run
+Date: 2026-08-10
+Command: julia --project=benchmark/backends/metal benchmark/backends/metal/runtests.jl
+Exit: 0
+Fresh-process extension load orders: 2/2
+G5H-4 real Metal native components: 37/37
+Resolved launches/workspace/topology transfer: 4 / 32 bytes / 40 bytes
+Ordered sequence launches: 8
+Compiler cache entries: 324 -> 324
+Isolated failure: KernelException; poisoned=true
+Shared failure scope: both preparations observed KernelException; both poisoned; drained=(0,0)
+Core vertical: 12 submitted/committed MCS; 12 claim submissions; 1 synchronization
+Scientific/provider failure: 0 commit and no poison / LifecycleBackendFailure and poison
+Direct median: 0.1107828535 s
+Candidate median: 0.1109990625 s
+Median ratio: 1.0019516468
+Paired bootstrap upper 95%: 1.0052174352 <= 1.05
+Direct median allocation: 17,678,968 bytes
+Candidate median allocation: 17,149,648 bytes
+Delta: -529,320 bytes
+Settlements/waits/submitted/drained: 60/60/600/600
+Poison: false
+Final ownership checksum: 3,507,575

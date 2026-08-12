@@ -2,7 +2,8 @@
 
 Date: 2026-08-09
 
-Status: Accepted; LW-0 and LW-R0 passed, LW-1 not begun, G6 remains closed
+Status: Complete through LW-R1; owner selected standalone extraction for LW-4; successor roadmap
+active; G6 remains closed
 
 Authority: [LocalWorksets V1 Normative Contract](localworksets-v1.md)
 
@@ -23,8 +24,8 @@ LW-0 corrected CorePotts baseline -> LW-R0
   -> LW-4 bounded expansion decision
 ```
 
-No later gate may begin early. G6 remains closed until this route, its reviews, and explicit owner
-send-off clear.
+No later gate may begin early. G6 remains closed until this route, its successor reviews, and
+explicit owner send-off clear.
 
 ## Frozen evidence boundary
 
@@ -58,8 +59,10 @@ prepared = prepare(workplan, storage; workspace)
 ```
 
 `WorkPlan` owns topology identity, epoch, bounds, and backend-qualified lowering. `PreparedWork`
-fixes concrete storage, workspace, device/context, and one execution lane without redefining that
-topology. No competing `prepare(work, backend; ...)` public spelling is admitted by this gate.
+fixes concrete storage, workspace, device/context, and one logical submission/wait adapter without
+redefining that topology. For the accepted KA provider, exact backend/device/owner-task adapters
+share one cumulative completion and failure scope. No competing `prepare(work, backend; ...)`
+public spelling is admitted by this gate.
 
 ### CP-B1 — Checkerboard color order
 
@@ -110,7 +113,9 @@ freeze the direct implementation baseline used by LW-3. P0/P1 findings block ent
 Recorded outcome: the fresh independent read-only review passed the exact LW-0 candidate with
 P0=0, P1=0, P2=0, P3=0, and no substantive dissent. The frozen evidence is recorded in
 [LW-0 corrected CorePotts baseline](../design/hardening/lw0-corrected-corepotts-baseline.md).
-LW-1 is eligible to begin but has not begun.
+LW-1 subsequently passed its exact-candidate implementation and semantic-portability review. The
+result and hashes are recorded in
+[LW-1 implementation review](../design/hardening/lw1-review.md).
 
 ## LW-1 — Smallest internal-first slice
 
@@ -126,7 +131,8 @@ The slice is limited to:
 - the one output mechanism needed by the selected checkerboard sequence;
 - static storage, named value slots, and only the submission storage slots required by conformance;
 - active-item selection distinct from eager output-lane masking;
-- one bound lane using KernelAbstractions implicit ordering;
+- one bound logical adapter using KernelAbstractions implicit ordering and the reviewed shared
+  backend/device/owner-task completion scope;
 - prebound workspace, submission leases, poison state, and inspection; and
 - central validation/lowering with no external opaque execution hook.
 
@@ -134,17 +140,22 @@ Every unused generality remains unimplemented. Domain semantics stay in CorePott
 
 ## LW-2 — One checkerboard stage sequence
 
+The owner-approved dual-destination amendment is
+[LW-2 bounded conjunctive-resolution amendment](../design/hardening/lw2-bounded-conjunctive-amendment.md).
+It authorizes only the existing four-launch claim block after the amended rows pass; it does not
+authorize a whole checkerboard rewrite or imply that LW-2 has passed.
+
 Migrate exactly one existing CorePotts checkerboard stage sequence. Preserve its current
 evaluate/accept-before-arbitration order and Core-owned RNG, acceptance, claims, trackers,
 double-buffer publication, sticky failure, checkpoint, and commit semantics.
 
-The vertical MUST exercise:
+The vertical MUST exercise, as qualified by the bounded amendment:
 
 - dynamic named bindings for MCS, RNG address, bank, count/ordinal, and status epoch;
 - at least ten queued MCSs before one settlement;
 - deterministic early failure with later work already encoded;
 - active/destination banks and failure-atomic Core publication;
-- same-lane shared-workspace reuse;
+- same-adapter shared-workspace reuse;
 - CPU and real Metal; and
 - every rejection currently enforced by CorePotts capability admission.
 
@@ -169,14 +180,23 @@ Required parity rows are:
 | throughput | statistically indistinguishable, or a bounded explained regression accepted by owner |
 | capability/rejections | no promoted backend, type, operation, address space, or scientific claim |
 
-Invalid binding, stale topology, alias, cross-device, wrong-lane, poison, abandoned-event,
-active-selection, eager-output-mask, and external-mutation-contract cases MUST be executable tests.
+Invalid binding, stale topology, alias, cross-device, wrong-owner/adapter, shared-scope poison,
+abandoned-event, active-selection, eager-output-mask, and external-mutation-contract cases MUST be
+executable tests.
 
 ### LW-R1 review
 
 A fresh reviewer evaluates the exact LW-0 baseline and LW-3 candidate. The review MUST preserve
 substantive performance, determinism, lifecycle, and scientific dissent. P0/P1 findings block LW-4;
 P2 findings require an explicit disposition before expansion.
+
+Recorded outcome: a fresh exact-hash committee independently reviewed the API/package boundary,
+CorePotts semantics and determinism, and KernelAbstractions/Metal portability and performance. The
+committee unanimously cleared LW-R1 with P0=0, P1=0, P2=0 and no substantive dissent. It separately
+ruled that bounded LW-1 is correct and that no present choice materially obstructs a future general
+LocalWorksets library. The bounded LW-2 conjunction and LW-3 Q01--Q10 passed only for qualified CPU
+and real Metal. This authorizes an owner LW-4 disposition, not automatic promotion, extraction or
+further migration. See the [LW-R1 exact-candidate review](../design/hardening/lwr1-localworksets-review.md).
 
 ## LW-4 — Bounded expansion decision
 
@@ -190,6 +210,14 @@ After LW-R1, the owner may authorize only one of:
 Expansion to LBM, lattice-spring, FEM, graph, particle, or cellular-automata conformance requires
 separate implementation evidence but not renewed architecture or naming research.
 
+Recorded owner disposition: select option 2, standalone extraction, followed by bounded general
+mechanism completion and an implementation-backed Julian/JuliaGPU API reconciliation before any
+Potts operation adoption. The authoritative continuation is the
+[post-LW-R1 extraction and adoption roadmap](localworksets-post-lwr1-roadmap.md). That roadmap
+defines LW-4A through LW-R2 and LW-5 through LW-R3. The completed extraction matrix authorizes LW-4A
+implementation through its ordered holds; it does not promote the current candidate, begin LW-4B
+or LW-5, delete the direct oracle or open G6.
+
 ## Scope vetoes
 
 This phase MUST NOT add distributed memory, multi-GPU scheduling, cancellation, a general AD
@@ -198,6 +226,8 @@ SciMLOperators/MTK dependencies, or broad CorePotts migration before parity.
 
 ## Exit and closure
 
-The architecture and API-language audit program is closed. This gate is complete only when LW-R1
-passes and the owner records an LW-4 disposition. Until then, LocalWorksets is accepted architecture,
-not a qualified production capability.
+The architecture and API-language audit program is closed and this implementation gate is complete:
+LW-R1 passed and the owner recorded standalone extraction as the LW-4 disposition. LocalWorksets
+remains an accepted, internally qualified bounded candidate rather than a promoted general
+production capability. All further work is governed by the
+[post-LW-R1 roadmap](localworksets-post-lwr1-roadmap.md).

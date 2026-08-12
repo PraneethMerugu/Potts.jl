@@ -1,0 +1,1470 @@
+^D]0;Julia]0;Julia[?25lPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit
+[2A[1G[0JPrecompiling packages  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1/1
+[1A[1G[0J[?25hPrecompiling PottsToolkit finished.
+  1 dependency successfully precompiled in 48 seconds. 269 already precompiled.
+[?25lPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalExt
+[2A[1G[0JPrecompiling packages  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1/1
+[1A[1G[0J[?25hPrecompiling PottsToolkit → PottsToolkitMetalExt finished.
+  1 dependency successfully precompiled in 9 seconds. 300 already precompiled.
+[?25lPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitModelingToolkitExt
+[2A[1G[0JPrecompiling packages  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1/1
+[1A[1G[0J[?25hPrecompiling PottsToolkit → PottsToolkitModelingToolkitExt finished.
+  1 dependency successfully precompiled in 8 seconds. 273 already precompiled.
+[?25lPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◐ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◓ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◑ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0/1
+  ◒ PottsToolkit → PottsToolkitMetalNativeExt
+[2A[1G[0JPrecompiling packages  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1/1
+[1A[1G[0J[?25hPrecompiling PottsToolkit → PottsToolkitMetalNativeExt finished.
+  1 dependency successfully precompiled in 10 seconds. 331 already precompiled.
+Test Summary:                             | Pass  Total   Time
+fresh-process Metal extension load orders |    2      2  36.7s
+Test Summary:                      | Pass  Total     Time
+G5H-4 real Metal native components |   37     37  3m01.4s
+(backend = :metal, lowering = :resolved_selection_min_Int32_UInt32_v1, launches = 4, workspace_bytes = 32, topology_transfer_bytes = 40, lease_capacity = 12, sequence_launches = 8, event_scope = :backend_implicit_order_tail, asynchronous_error_observation = (synchronization = :kernelabstractions_backend_contract, asynchronous_failures = :backend_defined, failure_scope = :backend_owner_task), same_schema_plan_reused = true, same_schema_compiler_cache_entries = (before = 324, after = 324))
+(backend = :metal, failure_type = :KernelException, poisoned = true, observation = (synchronization = :kernelabstractions_backend_contract, asynchronous_failures = :backend_defined, failure_scope = :backend_owner_task))
+(backend = :metal, scope = :backend_owner_task, good_failure = :KernelException, bad_failure = :KernelException, good_poisoned = true, bad_poisoned = true, drained = (0x0000000000000000, 0x0000000000000000))
+(backend = :metal, submitted_mcs = 12, committed_mcs = 12, claim_submissions = 12, synchronizations = 1, ownership_checksum = 8)
+(backend = :metal, expected_failure_commit = 0, expected_failure_poisoned = false, provider_failure_type = :LifecycleBackendFailure, provider_poisoned = true)
+(backend = :metal, descriptors = 32, descriptor_buffer = :MtlArray, state_buffer = :BlockView, workspace_buffer = :BlockView, value = 17.5f0)
+Test Summary:                                              | Pass  Total   Time
+external Metal mechanisms reject without reviewed evidence |    2      2  11.7s
+(backend = :metal, shapes = ((1, 1), (255, 1), (256, 1), (257, 1), (17, 19)), workgroup_sizes = (32, 64, 128, 256), reports = @NamedTuple{shape::Tuple{Int64, Int64}, workgroup_size::Int64, branch::Symbol, cpu_report::NTuple{5, UInt64}}[(shape = (1, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)); (shape = (255, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)); (shape = (256, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)); (shape = (257, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)); (shape = (17, 19), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000))], constraint_report = (shape = (257, 1), workgroup_size = 64, branch = :constraint, cpu_report = (0x0000000000000000, 0x000000000000008e, 0x0000000000000073, 0x000000000000008e, 0x0000000000000000)), energy_report = (shape = (257, 1), workgroup_size = 64, branch = :energy, cpu_report = (0x0000000000000000, 0x000000000000008e, 0x0000000000000073, 0x0000000000000000, 0x000000000000008e)))
+Test Summary:                                                     | Pass  Total   Time
+external relationship mechanism rejects without reviewed evidence |    3      3  23.7s
+Test Summary:                                                | Pass  Total   Time
+external surface operation rejects without reviewed evidence |    2      2  13.2s
+(backend = :metal, selected = 1, active_cells = 2, ownership_checksum = 95)
+(backend = :metal, committed_mcs = 2, settlements = 1, ownership_checksum = 104)
+(backend = :metal, status = CorePotts.ProgramStatusCellCapacity, failure_mcs = 1, failure_stage = CorePotts.ProgramStageSelection, committed_mcs = 0, settlements = 1)
+(backend = :metal, permutations = 2, selected = (2, 2), status = CorePotts.ProgramStatus(CorePotts.ProgramStatusEvaluator, 1, CorePotts.ProgramStageState, 10, 0xc4a7b640da82b267, 0, 2, CorePotts.LifecycleDetailNonfiniteResult, 0, 0, 0))
+(backend = :MetalBackend, stepped_mcs = 1, solved_mcs = 2, settlements = 1, resumed_mcs = 2, updated_cells = 1, failure_mcs = 1)
+(backend = :metal, boundaries = 4, active_cells = 0)
+(backend = :metal, parent = 10.0f0, daughter = 20.0f0)
+(backend = :metal, variants = 8, active_cells = 16)
+(backend = :metal, active_relationships = 3, filtered = 2)
+(backend = :metal, retired = 1)
+(backend = :metal, seed = 0x0000000000000001, constraint_rejections = 1)
+Test Summary:                                                  | Pass  Total   Time
+external lifecycle mechanism rejects without reviewed evidence |    1      1  18.6s
+(backend = :metal, filtered = 1, rejected_conflict = true)
+┌ Info: LW-3 paired noninferiority diagnostic
+│   backend = :metal
+│   median_ratio = 1.001047561804304
+│   upper_95 = 1.0108509934776095
+│   direct_median = 0.110991542
+└   candidate_median = 0.1111078125
+(schema = :lw3_localworksets_parity_v1, backend = :metal, registered_external_hamiltonian = false, side = 128, batch_mcs = 10, warm_batches = 10, measured_batches = 50, bootstrap_samples = 10000, bootstrap_seed = 0x6c77335f626f6f74, candidate_first = Bool[1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0], direct_seconds = [0.110456791, 0.1105025, 0.110258791, 0.111159541, 0.109940625, 0.113479417, 0.11088425, 0.111264792, 0.108674, 0.108941541, 0.108821541, 0.111019584, 0.107904208, 0.11613325, 0.112562458, 0.110177375, 0.111018959, 0.110783708, 0.113649708, 0.115105667, 0.110964125, 0.112168291, 0.1099645, 0.116001167, 0.114479291, 0.115490291, 0.112300958, 0.111445625, 0.113188959, 0.11349925, 0.115069333, 0.111564167, 0.111589083, 0.112297792, 0.110339709, 0.109586125, 0.1098955, 0.108998, 0.109361125, 0.109769167, 0.11153, 0.117965584, 0.109480583, 0.109827208, 0.119557625, 0.108932042, 0.10776025, 0.115425, 0.11034025, 0.107945167], candidate_seconds = [0.110473459, 0.109257416, 0.1110175, 0.110285625, 0.12998125, 0.110450625, 0.108606042, 0.110176292, 0.109875459, 0.12599625, 0.110669625, 0.108624125, 0.109589209, 0.111976584, 0.122785333, 0.112121875, 0.112223625, 0.113049416, 0.115547333, 0.111708042, 0.110110417, 0.115386833, 0.111285959, 0.112509833, 0.119450458, 0.115949792, 0.114813834, 0.120378125, 0.12950875, 0.111198125, 0.111783459, 0.117807, 0.110853209, 0.115735208, 0.113403875, 0.110962792, 0.109225917, 0.108738333, 0.113548041, 0.113173917, 0.109676375, 0.108385125, 0.108798792, 0.108725791, 0.1095655, 0.109558084, 0.108963833, 0.115964208, 0.108947875, 0.110497666], direct_allocated_bytes = [17679248, 17678960, 17679264, 17678960, 17678976, 17678960, 17679248, 17678960, 17679248, 17678960, 17678960, 17678960, 17678960, 17678976, 17678896, 17678960, 17678960, 17678976, 17679248, 17678960, 17679104, 17678976, 17678960, 17678960, 17678960, 17678960, 17679248, 17679040, 17679248, 17678960, 17678960, 17678960, 17678960, 17678976, 17679248, 17678976, 17679168, 17678960, 17678960, 17678880, 17679248, 17686928, 17687808, 17687808, 17687808, 17687808, 17688096, 17687728, 17687728, 17759632], candidate_allocated_bytes = [17141376, 17141376, 17141376, 17141312, 17141664, 17141376, 17141376, 17141392, 17141376, 17141280, 17141664, 17141296, 17141664, 17141376, 17141648, 17141376, 17141664, 17141360, 17141216, 17141376, 17141376, 17141456, 17141664, 17141392, 17141664, 17141376, 17141376, 17141376, 17141296, 17141376, 17141584, 17141296, 17141680, 17141392, 17141360, 17141376, 17141376, 17141376, 17141712, 17141376, 17141392, 17149344, 17150512, 17150240, 17150512, 17150224, 17150224, 17150256, 17150512, 17222336], direct_median_allocated_bytes = 1.7678976e7, candidate_median_allocated_bytes = 1.7141376e7, median_allocated_byte_delta = -537600.0, allocation_comparison = :raw_candidate_including_leases_and_events_vs_unadjusted_direct, direct_median_seconds = 0.110991542, candidate_median_seconds = 0.1111078125, median_ratio = 1.001047561804304, paired_bootstrap_upper_95 = 1.0108509934776095, threshold = 1.05, color_count = 1, checkerboard_body_launches_per_mcs = 10, localworksets_claim_launches_per_color = 4, direct_settlements = 60, candidate_settlements = 60, direct_synchronizations = 60, candidate_synchronizations = 60, localworksets_waits = 60, localworksets_submitted = 0x0000000000000258, localworksets_drained = 0x0000000000000258, localworksets_workspace = (rank_identity = 0x5fcb38c0952face8, identity_identity = 0x6712a0cb23be7aed, rank_bytes = 16, identity_bytes = 16), localworksets_topology_transfer_bytes = 0, localworksets_record_capacity = 12, localworksets_poisoned = false, final_ownership_checksum = 3507575)

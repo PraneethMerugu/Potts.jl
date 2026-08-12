@@ -1,0 +1,18 @@
+LW-4A post-LW-R2A-remediation fixed CPU parity
+Date: 2026-08-10
+Command: julia --project=. benchmark/src/lw3_localworksets_parity.jl
+Exit: 0
+Backend: cpu
+Direct median: 0.0256941670 s
+Candidate median: 0.0259340415 s
+Median ratio: 1.0093357570
+Paired bootstrap upper 95%: 1.0123282545 <= 1.05
+Direct median allocation: 1,318,176 bytes
+Candidate median allocation: 1,303,296 bytes
+Delta: -14,880 bytes
+Settlements/waits/submitted/drained: 60/60/600/600
+Claim launches per color: 4
+Topology transfer: 0 bytes
+Lease capacity: 12
+Poison: false
+Final ownership checksum: 3,507,575

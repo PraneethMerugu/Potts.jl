@@ -2,6 +2,20 @@ const _WAIT_DRAIN_FIXTURE = _zbuffer_fixture()
 const _WAIT_DRAIN_EVENT = LW.run!(
     _WAIT_DRAIN_FIXTURE.prepared, (; fragment_count = Int32(5))
 )
+const _WAIT_PRELAUNCH_FIXTURE = _zbuffer_fixture()
+const _RELEASE_DRAIN_FIXTURE = _zbuffer_fixture()
+const _RELEASE_DRAIN_EVENT = LW.run!(
+    _RELEASE_DRAIN_FIXTURE.prepared, (; fragment_count = Int32(5))
+)
+const _RELEASE_PRELAUNCH_FIXTURE = _zbuffer_fixture()
+const _LEASE_INDEX_DRAIN_FIXTURE = _zbuffer_fixture()
+const _LEASE_INDEX_FIRST_EVENT = LW.run!(
+    _LEASE_INDEX_DRAIN_FIXTURE.prepared, (; fragment_count = Int32(5))
+)
+const _LEASE_INDEX_DRAIN_EVENT = LW.run!(
+    _LEASE_INDEX_DRAIN_FIXTURE.prepared, (; fragment_count = Int32(5))
+)
+const _LEASE_INDEX_PRELAUNCH_FIXTURE = _zbuffer_fixture()
 
 @testset "source-level generic substrate contains no resolved mechanism" begin
     source_root = dirname(pathof(LW))
@@ -24,6 +38,9 @@ const _WAIT_DRAIN_EVENT = LW.run!(
     substrate_source = join(read.(substrate_paths, String), '\n')
     resolved_source = read(joinpath(
         dirname(pathof(LW)), "execution", "localworksets_resolved.jl"
+    ), String)
+    arbitration_source = read(joinpath(
+        dirname(pathof(LW)), "execution", "arbitration_support.jl"
     ), String)
     provider_source = read(joinpath(
         dirname(pathof(LW)),
@@ -70,7 +87,8 @@ const _WAIT_DRAIN_EVENT = LW.run!(
         end, eachline(path)) <= 1_000
     end
     @test occursin("@kernel", resolved_source)
-    @test occursin("Atomix.@atomic", resolved_source)
+    @test occursin("Atomix.@atomic", arbitration_source)
+    @test !occursin("Atomix.@atomic", resolved_source)
     @test occursin("_centrally_qualified_atomic_capability", resolved_source)
     @test occursin("_centrally_qualified_value_capability", resolved_source)
 end
@@ -181,6 +199,40 @@ const _EXACT_EXECUTION_FIXTURE = _zbuffer_fixture()
     )
 end
 
+@testset "single-output convenience freezes the user callback" begin
+    work = LW.localwork(
+        _LateLevel1PublicOperation(),
+        1:2,
+        :result => LW.independent(:route; value_type = Int32);
+        read = (source = :source,),
+    )
+    topology = LW.topology(
+        work;
+        epoch = UInt64(91),
+        routes = (route = reshape(Int32[1, 2], 1, 2),),
+        destination_counts = (result = 2,),
+    )
+    storage = (
+        source = Int32[7, 8],
+        result = fill(Int32(-1), 2),
+    )
+    prepared = LW.prepare(
+        LW.plan(work, topology; backend = KA.CPU()), storage
+    )
+    read_type = NamedTuple{(:source,), Tuple{Vector{Int32}}}
+    value_type = NamedTuple{(), Tuple{}}
+    @eval function (::_LateLevel1PublicOperation)(
+            item::Int32, reads::$read_type, values::$value_type
+        )
+        return LW.emit(Int32(0x55))
+    end
+
+    @test_throws LW.LocalWorkValidationError LW.run!(prepared)
+    @test prepared.submitted == UInt64(0)
+    @test !LW.inspect(prepared).poisoned
+    @test storage.result == fill(Int32(-1), 2)
+end
+
 @testset "reviewed compiler evidence cannot be pirated" begin
     declaration = _zbuffer_declaration()
     LW._provider_compiler_identity(::KA.CPU) = (forged = true,)
@@ -224,6 +276,40 @@ end
     @test_throws LW.LocalWorkValidationError LW.plan(
         unauthorized, declaration.topology; backend = KA.CPU()
     )
+end
+
+@testset "preexisting provider-wait piracy rejects before preparation" begin
+    lane_type = typeof(_WAIT_DRAIN_FIXTURE.prepared.lane)
+    @eval function LW._wait_lane!(lane::$lane_type)
+        error("hostile preexisting provider wait")
+    end
+    error = try
+        LW.prepare(
+            _WAIT_DRAIN_FIXTURE.prepared.workplan,
+            _WAIT_DRAIN_FIXTURE.storage;
+            submission = _WAIT_DRAIN_FIXTURE.prepared.submission_schema,
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test error isa LW.LocalWorkValidationError
+    @test occursin("wait implementation", sprint(showerror, error))
+    @test_throws LW.LocalWorkValidationError LW.run!(
+        _WAIT_PRELAUNCH_FIXTURE.prepared, (; fragment_count = Int32(5))
+    )
+    @test _WAIT_PRELAUNCH_FIXTURE.prepared.submitted == UInt64(0)
+    @test _WAIT_PRELAUNCH_FIXTURE.prepared.drained == UInt64(0)
+    @test !LW.inspect(_WAIT_PRELAUNCH_FIXTURE.prepared).poisoned
+    @test all(isnothing, _WAIT_PRELAUNCH_FIXTURE.prepared.leases)
+    @test _WAIT_PRELAUNCH_FIXTURE.storage.framebuffer_color == fill(
+        UInt32(0xff), 4
+    )
+    @test _WAIT_DRAIN_FIXTURE.prepared.submitted == UInt64(1)
+    @test _WAIT_DRAIN_FIXTURE.prepared.drained == UInt64(0)
+    @test count(
+        value -> !isnothing(value), _WAIT_DRAIN_FIXTURE.prepared.leases
+    ) == 1
 end
 
 @testset "post-submission method changes cannot strand the provider tail" begin
@@ -289,4 +375,58 @@ end
     @test_throws LW.LocalWorkValidationError LW.plan(
         declaration.work, declaration.topology; backend = KA.CPU()
     )
+end
+
+@testset "lease release replacement cannot strand a synchronized tail" begin
+    function LW._release_through!(
+            prepared::LW.PreparedWork, serial::UInt64
+        )
+        return nothing
+    end
+    @test_throws LW.LocalWorkValidationError LW.prepare(
+        _RELEASE_DRAIN_FIXTURE.prepared.workplan,
+        _RELEASE_DRAIN_FIXTURE.storage;
+        submission = _RELEASE_DRAIN_FIXTURE.prepared.submission_schema,
+    )
+    @test_throws LW.LocalWorkValidationError LW.run!(
+        _RELEASE_PRELAUNCH_FIXTURE.prepared, (; fragment_count = Int32(5))
+    )
+    @test _RELEASE_PRELAUNCH_FIXTURE.prepared.submitted == UInt64(0)
+    @test _RELEASE_PRELAUNCH_FIXTURE.prepared.drained == UInt64(0)
+    @test !LW.inspect(_RELEASE_PRELAUNCH_FIXTURE.prepared).poisoned
+    @test all(isnothing, _RELEASE_PRELAUNCH_FIXTURE.prepared.leases)
+
+    wait(_RELEASE_DRAIN_EVENT)
+    @test _RELEASE_DRAIN_FIXTURE.prepared.submitted == UInt64(1)
+    @test _RELEASE_DRAIN_FIXTURE.prepared.drained == UInt64(1)
+    @test all(isnothing, _RELEASE_DRAIN_FIXTURE.prepared.leases)
+    @test _RELEASE_DRAIN_FIXTURE.storage.framebuffer_color ==
+        UInt32[0x22, 0x33, 0x55, 0]
+end
+
+@testset "lease-index replacement cannot strand a synchronized tail" begin
+    function LW._lease_index(
+            prepared::LW.PreparedWork, serial::UInt64
+        )
+        error("hostile post-submission lease index")
+    end
+    @test_throws LW.LocalWorkValidationError LW.prepare(
+        _LEASE_INDEX_DRAIN_FIXTURE.prepared.workplan,
+        _LEASE_INDEX_DRAIN_FIXTURE.storage;
+        submission = _LEASE_INDEX_DRAIN_FIXTURE.prepared.submission_schema,
+    )
+    @test_throws LW.LocalWorkValidationError LW.run!(
+        _LEASE_INDEX_PRELAUNCH_FIXTURE.prepared, (; fragment_count = Int32(5))
+    )
+    @test _LEASE_INDEX_PRELAUNCH_FIXTURE.prepared.submitted == UInt64(0)
+    @test _LEASE_INDEX_PRELAUNCH_FIXTURE.prepared.drained == UInt64(0)
+    @test !LW.inspect(_LEASE_INDEX_PRELAUNCH_FIXTURE.prepared).poisoned
+    @test all(isnothing, _LEASE_INDEX_PRELAUNCH_FIXTURE.prepared.leases)
+
+    wait(_LEASE_INDEX_DRAIN_EVENT)
+    @test _LEASE_INDEX_DRAIN_FIXTURE.prepared.submitted == UInt64(2)
+    @test _LEASE_INDEX_DRAIN_FIXTURE.prepared.drained == UInt64(2)
+    @test all(isnothing, _LEASE_INDEX_DRAIN_FIXTURE.prepared.leases)
+    @test _LEASE_INDEX_DRAIN_FIXTURE.storage.framebuffer_color ==
+        UInt32[0x22, 0x33, 0x55, 0]
 end

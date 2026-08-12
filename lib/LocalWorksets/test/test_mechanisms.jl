@@ -330,10 +330,25 @@ end
         catch error
             error
         end
-        (; failure, poisoned = LW.inspect(failing.prepared).poisoned)
+        poison_rejection = try
+            LW.run!(failing.prepared, (; fragment_count = Int32(5)))
+            nothing
+        catch error
+            error
+        end
+        (;
+            failure,
+            poison_rejection,
+            poisoned = LW.inspect(failing.prepared).poisoned,
+        )
     end)
     @test facts.failure !== nothing
     @test facts.poisoned
+    @test facts.poison_rejection isa LW.LocalWorkValidationError
+    @test facts.poison_rejection.stage == :run
+    @test facts.poison_rejection.contract == :provider_poison_state
+    @test facts.poison_rejection.expected == :healthy
+    @test facts.poison_rejection.actual !== nothing
 end
 
 @testset "logical names derive physical storage and workspace is real" begin
@@ -349,12 +364,23 @@ end
         fixture.workspace,
         (; winner_ranks = Vector{Int32}(undef, 3)),
     )
-    @test_throws Exception LW.prepare(
-        fixture.workplan,
-        fixture.storage;
-        workspace = short_rank_workspace,
-        submission = fixture.submission,
-    )
+    workspace_error = try
+        LW.prepare(
+            fixture.workplan,
+            fixture.storage;
+            workspace = short_rank_workspace,
+            submission = fixture.submission,
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test workspace_error isa LW.LocalWorkValidationError
+    @test workspace_error.stage == :prepare
+    @test workspace_error.contract == :workspace_leaf_shape
+    @test workspace_error.workspace_leaf == :winner_ranks
+    @test workspace_error.expected == (4,)
+    @test workspace_error.actual == (3,)
     short_identity_workspace = merge(
         fixture.workspace,
         (; winner_identities = Vector{UInt32}(undef, 3)),
@@ -495,7 +521,7 @@ end
         rank_order = :max,
         mask_binding = :second_coverage,
     )
-    work = LW.sequence(first_stage, second_stage)
+    work = LW.sequence((first_stage, second_stage))
     workplan = LW.plan(work, topology; backend = KA.CPU())
     fingerprint_bypass_topology = _FingerprintBypassTopology(
         copy(topology.pixel_indices),
@@ -539,6 +565,25 @@ end
     @test LW.inspect(prepared).wait_count == 1
     @test LW.inspect(workplan).stages isa Tuple
     @test LW.inspect(prepared).lowering_detail.stages isa Tuple
+
+    automatic_storage = (
+        source_colors = UInt32[1, 2, 3, 4],
+        first_depths = Int32[0, 0, 0, 0],
+        visible_colors = fill(UInt32(99), 4),
+        second_depths = Int32[1, 1, 1, 1],
+        second_coverage = Bool[true, true, true, true],
+        copied_colors = fill(UInt32(88), 4),
+    )
+    automatic = LW.prepare(
+        workplan, automatic_storage; lease_capacity = 2
+    )
+    automatic_facts = LW.inspect(automatic)
+    @test automatic_facts.workspace_ownership == :package
+    @test automatic_facts.algorithmic_workspace_bytes == 64
+    @test length(automatic.workspace.stages) == 2
+    wait(LW.run!(automatic))
+    @test automatic_storage.visible_colors == UInt32[1, 2, 3, 4]
+    @test automatic_storage.copied_colors == UInt32[1, 2, 3, 4]
 
     reversed = LW.sequence(second_stage, first_stage)
     @test_throws Exception LW.plan(

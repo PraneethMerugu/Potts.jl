@@ -48,6 +48,46 @@ function (::_HeterogeneousOperation)(item::Int32, reads, values)
     )
 end
 
+struct _WrongHeterogeneousArity end
+function (::_WrongHeterogeneousArity)(item::Int32, reads, values)
+    value = @inbounds reads.source[item]
+    return (
+        edge = LW.emit(value),
+        force = LW.emit(value),
+        fracture = LW.candidate(value, UInt32(item)),
+    )
+end
+
+struct _WrongHeterogeneousResolvedForm end
+function (::_WrongHeterogeneousResolvedForm)(item::Int32, reads, values)
+    value = @inbounds reads.source[item]
+    return (
+        edge = LW.emit(value),
+        force = (LW.emit(value), LW.emit(-value)),
+        fracture = LW.emit(UInt32(item)),
+    )
+end
+
+struct _WrongHeterogeneousResolvedTypes end
+function (::_WrongHeterogeneousResolvedTypes)(item::Int32, reads, values)
+    value = @inbounds reads.source[item]
+    return (
+        edge = LW.emit(value),
+        force = (LW.emit(value), LW.emit(-value)),
+        fracture = LW.candidate(Float32(value), Int32(item)),
+    )
+end
+
+struct _WrongHeterogeneousCoverage end
+function (::_WrongHeterogeneousCoverage)(item::Int32, reads, values)
+    value = @inbounds reads.source[item]
+    return (
+        edge = LW.emit(value, true),
+        force = (LW.emit(value), LW.emit(-value)),
+        fracture = LW.candidate(value, UInt32(item)),
+    )
+end
+
 
 @testset "LW-4B heterogeneous independent combined resolved work" begin
     backend = KA.CPU()
@@ -158,6 +198,31 @@ end
     @test_throws LW.LocalWorkValidationError LW.plan(
         work, wrong_ids; backend
     )
+
+    for (operation, rejected_port) in (
+            (_WrongHeterogeneousArity(), :force),
+            (_WrongHeterogeneousResolvedForm(), :fracture),
+            (_WrongHeterogeneousResolvedTypes(), :fracture),
+            (_WrongHeterogeneousCoverage(), :edge),
+        )
+        invalid_work = LW.localwork(
+            operation,
+            1:3;
+            read = (source = :source,),
+            outputs,
+        )
+        invalid_plan = LW.plan(invalid_work, topology; backend)
+        error = try
+            LW.prepare(invalid_plan, storage; workspace)
+            nothing
+        catch exception
+            exception
+        end
+        @test error isa LW.LocalWorkValidationError
+        @test occursin(
+            "output port :$(rejected_port)", sprint(showerror, error)
+        )
+    end
 end
 
 @testset "LW-4B heterogeneous operation executes once per CPU item" begin
@@ -478,6 +543,43 @@ struct _WrongValueOperation end
     @test_throws LW.LocalWorkValidationError LW.plan(
         work, out_of_range; backend
     )
+    zero_lane = LW.localwork(
+        _CombinedIntegerOperation(),
+        1:1;
+        read = (source = :source,),
+        outputs = (
+            canonical = LW.independent(
+                :route; value_type = Int32, maximum = 2
+            ),
+        ),
+    )
+    zero_lane_topology = (
+        epoch = UInt64(21),
+        item_count = 1,
+        routes = (route = reshape(Int32[1, 0], 2, 1),),
+        destination_counts = (canonical = 1,),
+    )
+    zero_error = try
+        LW.plan(zero_lane, zero_lane_topology; backend)
+        nothing
+    catch exception
+        exception
+    end
+    @test zero_error isa LW.LocalWorkValidationError
+    @test zero_error.stage == :plan
+    @test zero_error.contract == :independent_output_coverage
+    @test zero_error.port == :canonical
+    @test zero_error.expected == :strictly_positive_exact_permutation
+    @test zero_error.actual == :contains_zero
+    @test occursin("destination zero", sprint(showerror, zero_error))
+
+    all_zero_topology = merge(zero_lane_topology, (
+        routes = (route = reshape(Int32[0, 0], 2, 1),),
+        destination_counts = (canonical = 0,),
+    ))
+    @test_throws LW.LocalWorkValidationError LW.plan(
+        zero_lane, all_zero_topology; backend
+    )
 
     full_conditional = LW.localwork(
         _ConditionalFullOperation(),
@@ -494,11 +596,21 @@ struct _WrongValueOperation end
         destination_counts = (output = 4,),
     )
     full_plan = LW.plan(full_conditional, full_topology; backend)
-    @test_throws LW.LocalWorkValidationError LW.prepare(
-        full_plan,
-        (source = Int32[1, 2, 3, 4], output = zeros(Int32, 4));
-        workspace = (leases = Any[nothing],),
-    )
+    coverage_error = try
+        LW.prepare(
+            full_plan,
+            (source = Int32[1, 2, 3, 4], output = zeros(Int32, 4));
+            workspace = (leases = Any[nothing],),
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test coverage_error isa LW.LocalWorkValidationError
+    @test coverage_error.stage == :prepare
+    @test coverage_error.contract == :independent_output_coverage
+    @test coverage_error.port == :output
+    @test coverage_error.expected == :unconditional_emission
 
     wrong_value = LW.localwork(
         _WrongValueOperation(),
@@ -509,11 +621,43 @@ struct _WrongValueOperation end
         ),
     )
     wrong_plan = LW.plan(wrong_value, full_topology; backend)
-    @test_throws LW.LocalWorkValidationError LW.prepare(
-        wrong_plan,
-        (source = Int32[1, 2, 3, 4], output = zeros(Int32, 4));
-        workspace = (leases = Any[nothing],),
+    value_error = try
+        LW.prepare(
+            wrong_plan,
+            (source = Int32[1, 2, 3, 4], output = zeros(Int32, 4));
+            workspace = (leases = Any[nothing],),
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test value_error isa LW.LocalWorkValidationError
+    @test value_error.stage == :prepare
+    @test value_error.contract == :operation_result_value_type
+    @test value_error.port == :output
+    @test value_error.expected === Int32
+    @test value_error.actual === Float32
+
+    unsupported = LW.localwork(
+        _WrongValueOperation(),
+        1:4;
+        read = (source = :source,),
+        outputs = (
+            output = LW.independent(:route; value_type = Float64),
+        ),
     )
+    capability_error = try
+        LW.plan(unsupported, full_topology; backend)
+        nothing
+    catch exception
+        exception
+    end
+    @test capability_error isa LW.LocalWorkValidationError
+    @test capability_error.stage == :plan
+    @test capability_error.contract == :backend_capability
+    @test capability_error.port == :output
+    @test capability_error.expected == :centrally_qualified_store
+    @test capability_error.actual.value_type === Float64
 end
 
 struct _DynamicReadOperation end

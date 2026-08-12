@@ -22,7 +22,7 @@ function _combined_determinism(backend, lowering)
         :not_claimed_for_fast_ports,
         :not_claimed_for_fast_ports,
         :not_claimed,
-        :qualified_atomic_or_canonical_fold,
+        :not_claimed_for_fast_ports,
         :domain_owned,
     ) : (
         :canonical_item_local_slot,
@@ -34,8 +34,11 @@ function _combined_determinism(backend, lowering)
         :canonical_declared_operation,
         :domain_owned,
     )
-    return NamedTuple{_DETERMINISM_DIMENSIONS}(
-        map(guarantee -> merge(qualifier, (; guarantee)), guarantees)
+    return invoke(
+        _determinism_report,
+        Tuple{NamedTuple, NTuple{8, Symbol}},
+        qualifier,
+        guarantees,
     )
 end
 
@@ -56,7 +59,7 @@ function _combined_port_determinism(backend, lowering, name, output)
         :not_claimed,
         :not_claimed,
         :not_claimed,
-        :qualified_atomic_operation,
+        :not_claimed,
         :domain_owned,
     ) : mode === :independent ? (
         :qualified_disjoint_publication,
@@ -78,8 +81,11 @@ function _combined_port_determinism(backend, lowering, name, output)
         :canonical_declared_operation,
         :domain_owned,
     )
-    return NamedTuple{_DETERMINISM_DIMENSIONS}(
-        map(guarantee -> merge(qualifier, (; guarantee)), guarantees)
+    return invoke(
+        _determinism_report,
+        Tuple{NamedTuple, NTuple{8, Symbol}},
+        qualifier,
+        guarantees,
     )
 end
 
@@ -103,6 +109,12 @@ function _combined_port_law(output)
 end
 
 function _combined_workspace_evidence(lowering)
+    spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        nothing,
+    )
     ports = NamedTuple{keys(lowering.segments)}(map(
         keys(lowering.segments)
     ) do name
@@ -118,41 +130,43 @@ function _combined_workspace_evidence(lowering)
             capacity,
             value_type = output.value_type,
             value_bytes = invoke(
-                _checked_int_product,
-                Tuple{Integer, Integer, Any},
-                capacity,
-                sizeof(output.value_type),
-                Symbol(name, :_record_value_bytes),
+                _workspace_leaf_bytes,
+                Tuple{_WorkspaceLeaf},
+                invoke(
+                    _workspace_leaf_by_name,
+                    Tuple{Tuple, Symbol},
+                    spec,
+                    Symbol(name, :_record_values),
+                ),
             ),
             rank_bytes = output isa _GenericResolvedOutput ?
                 invoke(
-                    _checked_int_product,
-                    Tuple{Integer, Integer, Any},
-                    capacity,
-                    sizeof(output.rank.type),
-                    Symbol(name, :_record_rank_bytes),
+                    _workspace_leaf_bytes,
+                    Tuple{_WorkspaceLeaf},
+                    invoke(
+                        _workspace_leaf_by_name,
+                        Tuple{Tuple, Symbol},
+                        spec,
+                        Symbol(name, :_record_ranks),
+                    ),
                 ) : 0,
             validity_bytes = invoke(
-                _checked_int_product,
-                Tuple{Integer, Integer, Any},
-                capacity,
-                sizeof(Bool),
-                Symbol(name, :_record_validity_bytes),
+                _workspace_leaf_bytes,
+                Tuple{_WorkspaceLeaf},
+                invoke(
+                    _workspace_leaf_by_name,
+                    Tuple{Tuple, Symbol},
+                    spec,
+                    Symbol(name, :_record_valid),
+                ),
             ),
         )
     end)
-    total_bytes = 0
-    for port in values(ports)
-        for bytes in (port.value_bytes, port.rank_bytes, port.validity_bytes)
-            total_bytes = invoke(
-                _checked_int_sum,
-                Tuple{Integer, Integer, Any},
-                total_bytes,
-                bytes,
-                :combined_workspace_bytes,
-            )
-        end
-    end
+    total_bytes = invoke(
+        _workspace_spec_bytes,
+        Tuple{Tuple},
+        spec,
+    )
     return (; ports, total_bytes)
 end
 
@@ -164,40 +178,41 @@ function _lowering_evidence(
     ) do name
         output = getproperty(lowering.outputs, name)
         route = getproperty(lowering.topology.routes, name)
-        (
-            family = output isa _IndependentOutput ? :independent :
-                output isa _GenericResolvedOutput ? :resolved : :combined,
-            route = output.route,
-            mode = output isa _IndependentOutput ? :disjoint :
-                output isa _GenericResolvedOutput ? :resolved :
-                typeof(output.combine).parameters[1],
-            coverage = output isa _IndependentOutput ?
-                typeof(output).parameters[4] : :not_applicable,
-            law = invoke(_combined_port_law, Tuple{Any}, output),
-            maximum_emissions = typeof(output).parameters[2],
-            destination_count = getproperty(lowering.destination_counts, name),
-            route_bytes = invoke(
-                _checked_int_product,
-                Tuple{Integer, Integer, Any},
-                length(route),
-                sizeof(eltype(route)),
-                Symbol(name, :_route_bytes),
-            ),
-            publication_phase = output isa _IndependentOutput ? :apply :
-                output isa _CombinedOutput &&
-                    typeof(output.combine).parameters[1] === :fast ?
-                    :apply : :publish_canonical,
-            post_launch_failure_visibility = output isa _IndependentOutput ||
-                output isa _CombinedOutput &&
-                    typeof(output.combine).parameters[1] === :fast ?
-                    :may_be_partially_visible :
-                    :publication_phase_is_not_transactional,
-            empty_destination = output isa _IndependentOutput ?
-                typeof(output).parameters[4] === :all ?
-                    :not_possible_by_total_coverage : :preserve_existing :
-                output isa _GenericResolvedOutput ? output.empty :
-                output.combine.identity,
-            determinism = invoke(
+        family = output isa _IndependentOutput ? :independent :
+            output isa _GenericResolvedOutput ? :resolved : :combined
+        mode = output isa _IndependentOutput ? :disjoint :
+            output isa _GenericResolvedOutput ? :resolved :
+            typeof(output.combine).parameters[1]
+        coverage = output isa _IndependentOutput ?
+            typeof(output).parameters[4] : :not_applicable
+        publication_phase = output isa _IndependentOutput ? :apply :
+            output isa _CombinedOutput && mode === :fast ?
+                :apply : :publish_canonical
+        failure_visibility = output isa _IndependentOutput ||
+            output isa _CombinedOutput && mode === :fast ?
+                :may_be_partially_visible :
+                :publication_phase_is_not_transactional
+        empty_destination = output isa _IndependentOutput ?
+            coverage === :all ?
+                :not_possible_by_total_coverage : :preserve_existing :
+            output isa _GenericResolvedOutput ? output.empty :
+            output.combine.identity
+        invoke(
+            _port_evidence,
+            Tuple{
+                Symbol, Any, Int, Int, Symbol, NamedTuple, Symbol,
+                Symbol, Any, NamedTuple, NamedTuple,
+            },
+            family,
+            output.route,
+            getproperty(lowering.destination_counts, name),
+            typeof(output).parameters[2],
+            coverage,
+            invoke(_combined_port_law, Tuple{Any}, output),
+            publication_phase,
+            failure_visibility,
+            empty_destination,
+            invoke(
                 _combined_port_determinism,
                 Tuple{Any, Any, Any, Any},
                 backend,
@@ -205,54 +220,18 @@ function _lowering_evidence(
                 name,
                 output,
             ),
+            (;
+                mode,
+                route_bytes = invoke(
+                    _checked_int_product,
+                    Tuple{Integer, Integer, Any},
+                    length(route),
+                    sizeof(eltype(route)),
+                    Symbol(name, :_route_bytes),
+                ),
+            ),
         )
     end)
-    segment_bytes = foldl(keys(lowering.segments); init = 0) do total, name
-        segment = getproperty(lowering.segments, name)
-        offset_bytes = invoke(
-            _checked_int_product,
-            Tuple{Integer, Integer, Any},
-            sizeof(eltype(segment.offsets)),
-            length(segment.offsets),
-            Symbol(name, :_segment_offset_bytes),
-        )
-        record_bytes = invoke(
-            _checked_int_product,
-            Tuple{Integer, Integer, Any},
-            sizeof(eltype(segment.records)),
-            length(segment.records),
-            Symbol(name, :_segment_record_bytes),
-        )
-        invoke(
-            _checked_int_sum,
-            Tuple{Integer, Integer, Any},
-            total,
-            invoke(
-                _checked_int_sum,
-                Tuple{Integer, Integer, Any},
-                offset_bytes,
-                record_bytes,
-                Symbol(name, :_segment_bytes),
-            ),
-            :combined_segment_bytes,
-        )
-    end
-    identity_bytes = foldl(keys(lowering.semantic_ids); init = 0) do total, name
-        identities = getproperty(lowering.semantic_ids, name)
-        invoke(
-            _checked_int_sum,
-            Tuple{Integer, Integer, Any},
-            total,
-            invoke(
-                _checked_int_product,
-                Tuple{Integer, Integer, Any},
-                sizeof(eltype(identities)),
-                length(identities),
-                Symbol(name, :_identity_bytes),
-            ),
-            :combined_identity_bytes,
-        )
-    end
     launch_count = 1 + Int(lowering.has_fast) +
         Int(lowering.has_deterministic)
     return (
@@ -270,22 +249,15 @@ function _lowering_evidence(
         workspace = invoke(
             _combined_workspace_evidence, Tuple{Any}, lowering
         ),
-        topology_transfer_bytes = foldl(
-            (
-                (port.route_bytes for port in values(ports))...,
-                segment_bytes,
-                identity_bytes,
-            );
-            init = 0,
-        ) do total, bytes
+        topology_transfer_bytes = invoke(
+            _centrally_count_topology_payload_bytes,
+            Tuple{Any},
             invoke(
-                _checked_int_sum,
-                Tuple{Integer, Integer, Any},
-                total,
-                bytes,
-                :combined_topology_transfer_bytes,
-            )
-        end,
+                _centrally_owned_static_topology_payload,
+                Tuple{Any},
+                lowering,
+            ),
+        ),
         capability = (
             backend = typeof(backend),
             compiler = merge(invoke(

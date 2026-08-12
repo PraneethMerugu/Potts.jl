@@ -1,8 +1,3 @@
-public LocalWork, WorkPlan, PreparedWork, WorkEvent
-public localwork, plan, prepare, run!, sequence, inspect
-public value_slot, storage_slot, resolved, masked
-public independent, combined, deterministic, fast, emit, candidate
-
 const _DETERMINISM_DIMENSIONS = (
     :same_run_replay,
     :workgroup_size_invariance,
@@ -53,6 +48,14 @@ struct _SequenceLowering{L}
     stages::L
 end
 
+struct _SingleOutputOperation{Name, F}
+    operation::F
+end
+
+@inline function (operation::_SingleOutputOperation{Name})(args...) where {Name}
+    return NamedTuple{(Name,)}((operation.operation(args...),))
+end
+
 """
     WorkPlan
 
@@ -101,6 +104,7 @@ mutable struct PreparedWork{P, S, W, Q, L, R, N, A, SI, WI, WA, TC, OC}
     const static_identities::SI
     const workspace_identities::WI
     const workspace_arrays::WA
+    const workspace_ownership::Symbol
     const trusted_callbacks::TC
     const operation_callbacks::OC
     trusted_world::UInt
@@ -132,6 +136,7 @@ mutable struct PreparedWork{P, S, W, Q, L, R, N, A, SI, WI, WA, TC, OC}
             static_identities::SI,
             workspace_identities::WI,
             workspace_arrays::WA,
+            workspace_ownership::Symbol,
             trusted_callbacks::TC,
             operation_callbacks::OC,
             trusted_world::UInt,
@@ -162,6 +167,7 @@ mutable struct PreparedWork{P, S, W, Q, L, R, N, A, SI, WI, WA, TC, OC}
             static_identities,
             workspace_identities,
             workspace_arrays,
+            workspace_ownership,
             trusted_callbacks,
             operation_callbacks,
             trusted_world,
@@ -294,19 +300,68 @@ struct _ConditionalCandidate{R, T}
     when::Bool
 end
 
+"""
+    LocalWorkValidationError
+
+Exception raised when a `LocalWork`, topology, binding, workspace, submission,
+or selected backend profile violates a centrally validated contract. Stable
+diagnostic fields name the lifecycle `stage`, rejected `contract`, optional
+`port`/`binding`/`workspace_leaf`, `expected` and `actual` facts, and an
+optional recovery `hint`. Nonapplicable fields are `nothing`.
+"""
 struct LocalWorkValidationError <: Exception
     message::String
+    stage::Union{Nothing, Symbol}
+    contract::Union{Nothing, Symbol}
+    port::Union{Nothing, Symbol}
+    binding::Union{Nothing, Symbol}
+    workspace_leaf::Union{Nothing, Symbol}
+    expected::Any
+    actual::Any
+    hint::Union{Nothing, String}
+end
+
+function LocalWorkValidationError(
+        message::AbstractString;
+        stage::Union{Nothing, Symbol} = nothing,
+        contract::Union{Nothing, Symbol} = nothing,
+        port::Union{Nothing, Symbol} = nothing,
+        binding::Union{Nothing, Symbol} = nothing,
+        workspace_leaf::Union{Nothing, Symbol} = nothing,
+        expected = nothing,
+        actual = nothing,
+        hint::Union{Nothing, AbstractString} = nothing,
+    )
+    return LocalWorkValidationError(
+        String(message),
+        stage,
+        contract,
+        port,
+        binding,
+        workspace_leaf,
+        expected,
+        actual,
+        hint === nothing ? nothing : String(hint),
+    )
 end
 
 Base.showerror(io::IO, error::LocalWorkValidationError) =
-    print(io, error.message)
+    begin
+        print(io, error.message)
+        error.hint === nothing || print(io, ". Hint: ", error.hint)
+    end
 
 function _checked_int_product(left::Integer, right::Integer, purpose)
     try
         return Base.Checked.checked_mul(Int(left), Int(right))
     catch error
         error isa OverflowError || rethrow()
-        throw(LocalWorkValidationError("$purpose exceeds host Int capacity"))
+        throw(LocalWorkValidationError(
+            "$purpose exceeds host Int capacity";
+            contract = :integer_capacity,
+            expected = (typemin(Int), typemax(Int)),
+            actual = (left, right, operation = :multiply),
+        ))
     end
 end
 
@@ -315,14 +370,21 @@ function _checked_int_sum(left::Integer, right::Integer, purpose)
         return Base.Checked.checked_add(Int(left), Int(right))
     catch error
         error isa OverflowError || rethrow()
-        throw(LocalWorkValidationError("$purpose exceeds host Int capacity"))
+        throw(LocalWorkValidationError(
+            "$purpose exceeds host Int capacity";
+            contract = :integer_capacity,
+            expected = (typemin(Int), typemax(Int)),
+            actual = (left, right, operation = :add),
+        ))
     end
 end
 
 function _checked_int32_count(value::Integer, purpose; terminal::Bool = false)
     upper = terminal ? Int(typemax(Int32)) - 1 : Int(typemax(Int32))
     0 <= value <= upper || throw(LocalWorkValidationError(
-        "$purpose exceeds the bounded Int32 kernel ABI"
+        "$purpose exceeds the bounded Int32 kernel ABI";
+        contract = :kernel_abi_capacity,
+        expected = 0:upper, actual = value,
     ))
     return Int(value)
 end
@@ -524,8 +586,96 @@ function localwork(
     )
 end
 
+function _declared_item_count(work::LocalWork)
+    if work.operation isa _SequenceOperation
+        domains = work.items
+        all(==(first(domains)), domains) || throw(ArgumentError(
+            "ordered LocalWork stages require one item domain"
+        ))
+        return length(first(domains))
+    end
+    return length(work.items)
+end
+
+"""
+    topology(work; epoch, routes, destination_counts, semantic_ids=(;))
+
+Construct the canonical topology record for direct and buffered local work.
+Only `item_count` is derived, from the declaration's one-based item domain;
+the epoch, routes, per-output destination counts, and resolved semantic
+identities remain explicit and are fully validated by [`plan`](@ref).
+"""
+function topology(
+        work::LocalWork;
+        epoch,
+        routes::NamedTuple,
+        destination_counts::NamedTuple,
+        semantic_ids::NamedTuple = (;),
+    )
+    typeof(epoch) === UInt64 || throw(ArgumentError(
+        "topology epoch must be exactly UInt64"
+    ))
+    return (;
+        epoch,
+        item_count = invoke(
+            _declared_item_count,
+            Tuple{LocalWork},
+            work,
+        ),
+        routes,
+        destination_counts,
+        semantic_ids,
+    )
+end
+
 localwork(operation; items, read = (;), outputs = (;), active = nothing) =
     localwork(operation, items; read, outputs, active)
+
+"""
+    localwork(operation, items, name => output; read=(;), active=nothing)
+
+Concise single-output form. The local operation returns one `emit(...)` or
+`candidate(...)` value directly; LocalWorksets preserves the explicit port
+name by wrapping it into the same named-output declaration used by Level 2.
+
+```julia
+work = localwork(1:4, :result => independent(
+    :route; value_type = Int32
+); read = (source = :source,)) do item, reads, values
+    emit(@inbounds reads.source[item] + Int32(1))
+end
+```
+"""
+function localwork(
+        operation,
+        items,
+        output::Pair{Symbol, <: _AbstractOutputDeclaration};
+        read = (;),
+        active = nothing,
+    )
+    name, declaration = output
+    isempty(String(name)) && throw(ArgumentError(
+        "single-output LocalWork port name must be nonempty"
+    ))
+    wrapped = _SingleOutputOperation{name, typeof(operation)}(operation)
+    return localwork(
+        wrapped,
+        items;
+        read,
+        outputs = NamedTuple{(name,)}((declaration,)),
+        active,
+    )
+end
+
+Base.propertynames(work::LocalWork, private::Bool = false) =
+    fieldnames(typeof(work))
+Base.propertynames(plan::WorkPlan, private::Bool = false) = private ?
+    fieldnames(typeof(plan)) : (:work, :topology, :backend)
+Base.propertynames(prepared::PreparedWork, private::Bool = false) = private ?
+    fieldnames(typeof(prepared)) :
+    (:workplan, :storage, :workspace, :submission_schema)
+Base.propertynames(event::WorkEvent, private::Bool = false) = private ?
+    fieldnames(typeof(event)) : (:serial,)
 
 """
     sequence(works::LocalWork...)
@@ -547,6 +697,8 @@ function sequence(works::LocalWork...)
         _SequenceOperation(works),
     )
 end
+
+sequence(works::Tuple{Vararg{LocalWork}}) = sequence(works...)
 
 """
     value_slot(T; bounds=nothing)

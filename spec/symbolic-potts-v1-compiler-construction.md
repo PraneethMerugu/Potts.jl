@@ -4,8 +4,8 @@ Date: 2026-07-30
 
 Branch: `codex/symbolic-potts-v1`
 
-Status: implementation-grade through cleared R2 and the complete G5 execution boundary; G5H and
-R2H-C cleared on their exact candidates; LocalWorksets LW-0 is next and G6 remains closed
+Status: implementation-grade through cleared R2, G5H and LocalWorksets LW-R1; standalone
+LocalWorksets LW-4 is authorized under the post-LW-R1 roadmap; G6 remains closed
 
 ## Authority
 
@@ -897,13 +897,16 @@ G5H is governed exclusively by the
 ```text
 G5H-0 -> R2H-A -> G5H-1 -> G5H-2 -> G5H-3 -> R2H-B
       -> G5H-4 -> G5H-5 -> R2H-C
-      -> LocalWorksets LW-0 through LW-R1 -> LW-4 disposition
+      -> LocalWorksets LW-0 through LW-R1
+      -> LW-4 extraction/capability/API -> LW-R2
+      -> LW-5 compiled local-operation adoption -> LW-R3
       -> owner G6 decision
 ```
 
-The [LocalWorksets Implementation and Review Gate](localworksets-v1-implementation-gate.md) is the
-authority for the inserted route. G6 MUST NOT begin until R2H-C, LW-R1, an LW-4 disposition, and
-explicit owner opening clear.
+The [LocalWorksets Implementation and Review Gate](localworksets-v1-implementation-gate.md) governs
+the completed route through LW-R1. The
+[post-LW-R1 roadmap](localworksets-post-lwr1-roadmap.md) governs LW-4 through LW-R3. G6 MUST NOT
+begin until R2H-C, LW-R2, LW-R3, all carried dispositions, and an explicit owner opening clear.
 
 ### G6 — Public integration stabilization and freeze
 

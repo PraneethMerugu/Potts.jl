@@ -17,6 +17,12 @@ mutable struct _PreparedDirectIndependent{K, R}
     device_routes::R
 end
 
+_static_topology_payload(lowering::_DirectIndependentLowering) = (
+    routes = lowering.topology.routes,
+)
+
+_workspace_spec(::_DirectIndependentLowering, work) = ()
+
 @inline _emission_value(emission::_Emission) = emission.value
 @inline _emission_value(emission::_ConditionalEmission) = emission.value
 @inline _emission_enabled(::_Emission) = true
@@ -70,6 +76,8 @@ end
             full_unconditional = declaration.parameters[4] === :all &&
                 first(port_result.parameters) <: _Emission
             publication = full_unconditional ? quote
+                # Planning proves this branch contains no zero destinations,
+                # and preparation freezes/copies the validated route.
                 @inbounds port_output[destination] = emission.value
             end : quote
                 if destination != 0 && _emission_enabled(emission)
@@ -136,10 +144,12 @@ end
 
 function _generic_topology_header(work, topology)
     required = (:epoch, :item_count, :routes, :destination_counts)
-    all(name -> hasproperty(topology, name), required) || throw(
-        LocalWorkValidationError(
-            "generic topology requires epoch, item_count, routes, and destination_counts"
-        )
+    invoke(
+        _require_properties,
+        Tuple{Any, Tuple, Any},
+        topology,
+        required,
+        :generic_topology,
     )
     topology.routes isa NamedTuple || throw(LocalWorkValidationError(
         "generic topology routes must be a named tuple"
@@ -149,28 +159,25 @@ function _generic_topology_header(work, topology)
             "generic topology destination_counts must be a named tuple"
         )
     )
-    typeof(topology.epoch) === UInt64 || throw(LocalWorkValidationError(
-        "generic topology epoch must be exactly UInt64"
-    ))
-    item_count = try
-        Int(topology.item_count)
-    catch
-        throw(LocalWorkValidationError(
-            "generic topology item_count must be exactly representable as Int"
-        ))
-    end
-    item_count >= 0 || throw(LocalWorkValidationError(
-        "generic topology item_count must be nonnegative"
-    ))
     invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        item_count,
+        _validate_topology_epoch,
+        Tuple{Any, Any},
+        topology,
+        :generic,
+    )
+    item_count = invoke(
+        _bounded_count,
+        Tuple{Any, Any},
+        topology.item_count,
         :generic_item_count,
     )
-    work.items == (1:item_count) || throw(LocalWorkValidationError(
-        "LocalWork items must exactly cover the generic topology items"
-    ))
+    invoke(
+        _validate_item_domain,
+        Tuple{LocalWork, Int, Any},
+        work,
+        item_count,
+        :generic_topology,
+    )
     return item_count
 end
 
@@ -178,68 +185,20 @@ function _validate_independent_route(
         work, topology, name, output::_IndependentOutput{T, K, R, C},
         item_count,
     ) where {T, K, R, C}
-    hasproperty(topology.routes, output.route) || throw(
-        LocalWorkValidationError(
-            "independent port $name has no topology route $(output.route)"
-        )
+    route, destination_count = invoke(
+        _validate_dense_route,
+        Tuple{Any, Symbol, Any, Int},
+        topology,
+        name,
+        output,
+        item_count;
+        context = :independent,
+        terminal_capacity = false,
     )
-    hasproperty(topology.destination_counts, name) || throw(
-        LocalWorkValidationError(
-            "independent port $name has no destination count"
-        )
-    )
-    route = getproperty(topology.routes, output.route)
-    route isa AbstractMatrix || throw(LocalWorkValidationError(
-        "independent route $(output.route) must be a matrix"
-    ))
-    isconcretetype(eltype(route)) && eltype(route) <: Integer || throw(
-        LocalWorkValidationError(
-            "independent route $(output.route) requires a concrete integer element type"
-        )
-    )
-    size(route) == (K, item_count) || throw(LocalWorkValidationError(
-        "independent route $(output.route) must have exact shape ($K, $item_count)"
-    ))
-    destination_count = try
-        Int(getproperty(topology.destination_counts, name))
-    catch
-        throw(LocalWorkValidationError(
-            "destination count for port $name must be exactly representable as Int"
-        ))
-    end
-    destination_count >= 0 || throw(LocalWorkValidationError(
-        "destination count for port $name must be nonnegative"
-    ))
-    invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        destination_count,
-        Symbol(name, :_destination_count),
-    )
-    invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
-        item_count,
-        K,
-        Symbol(name, :_route_capacity),
-    ) == length(route) || throw(LocalWorkValidationError(
-        "independent route $(output.route) has inconsistent capacity"
-    ))
     destinations = Int[]
     sizehint!(destinations, length(route))
     for value in route
-        destination = try
-            Int(value)
-        catch
-            throw(LocalWorkValidationError(
-                "route $(output.route) contains an unrepresentable destination"
-            ))
-        end
-        0 <= destination <= destination_count || throw(
-            LocalWorkValidationError(
-                "route $(output.route) contains a negative or out-of-domain destination"
-            )
-        )
+        destination = Int(value)
         destination == 0 || push!(destinations, destination)
     end
     length(unique(destinations)) == length(destinations) || throw(
@@ -251,10 +210,24 @@ function _validate_independent_route(
         work.active === nothing || throw(LocalWorkValidationError(
             "full-coverage independent work cannot use active truncation"
         ))
+        all(!=(Int32(0)), route) || throw(LocalWorkValidationError(
+            "full-coverage independent port $name cannot contain a no-emission destination zero";
+            stage = :plan,
+            contract = :independent_output_coverage,
+            port = name,
+            expected = :strictly_positive_exact_permutation,
+            actual = :contains_zero,
+            hint = "use coverage=:partial when a fixed lane may emit nothing",
+        ))
         length(destinations) == destination_count &&
             sort(destinations) == collect(1:destination_count) || throw(
                 LocalWorkValidationError(
-                    "full-coverage independent port $name must be an exact destination permutation"
+                    "full-coverage independent port $name must be an exact destination permutation";
+                    stage = :plan,
+                    contract = :independent_output_coverage,
+                    port = name,
+                    expected = collect(1:destination_count),
+                    actual = sort(destinations),
                 )
             )
     end
@@ -285,13 +258,22 @@ function _lower_direct_independent(work::LocalWork, topology, backend)
     end
     route_tuple = NamedTuple{keys(work.outputs)}(first.(validated))
     destination_counts = NamedTuple{keys(work.outputs)}(last.(validated))
-    for output in values(work.outputs)
+    for (name, output) in pairs(work.outputs)
         invoke(
             _centrally_qualified_value_capability,
             Tuple{Any, Type, Symbol, Symbol},
             backend, output.value_type, :store, :global,
         ) || throw(LocalWorkValidationError(
-            "backend x output type x store operation x address space is not qualified"
+            "backend x output type x store operation x address space is not qualified";
+            stage = :plan, contract = :backend_capability,
+            port = name,
+            expected = :centrally_qualified_store,
+            actual = (
+                backend = typeof(backend),
+                value_type = output.value_type,
+                operation = :store,
+                address_space = :global,
+            ),
         ))
     end
     return _DirectIndependentLowering(
@@ -426,6 +408,26 @@ function _operation_result_type(work, storage, schema)
     return Core.Compiler.return_type(work.operation, signature)
 end
 
+function _operation_callback_facts(operation, signature)
+    wrapper = (
+        callback = operation,
+        signature,
+        method = which(operation, signature),
+        purpose = :local_operation,
+    )
+    operation isa _SingleOutputOperation || return (wrapper,)
+    inner = operation.operation
+    return (
+        wrapper,
+        (
+            callback = inner,
+            signature,
+            method = which(inner, signature),
+            purpose = :single_output_operation,
+        ),
+    )
+end
+
 function _operation_call_facts(
         lowering::_DirectIndependentLowering,
         work,
@@ -439,12 +441,12 @@ function _operation_call_facts(
         storage,
         schema,
     )
-    return ((
-        callback = work.operation,
+    return invoke(
+        _operation_callback_facts,
+        Tuple{Any, Any},
+        work.operation,
         signature,
-        method = which(work.operation, signature),
-        purpose = :local_operation,
-    ),)
+    )
 end
 
 function _emission_result_type(type, ::Val{1})
@@ -458,17 +460,21 @@ end
 
 function _validate_independent_result_type(work, result_type)
     result_type <: NamedTuple || throw(LocalWorkValidationError(
-        "generic operation result must infer as a concrete NamedTuple"
+        "generic operation result must infer as a concrete NamedTuple";
+        stage = :prepare, contract = :operation_result_form,
+        expected = NamedTuple, actual = result_type,
     ))
     result_type === Union{} && throw(LocalWorkValidationError(
         "generic operation call has no inferred return"
     ))
     result_names = result_type.parameters[1]
     result_names == Base.keys(work.outputs) || throw(LocalWorkValidationError(
-        "generic operation result names must exactly match output port names"
+        "generic operation result names must exactly match output port names";
+        stage = :prepare, contract = :operation_result_ports,
+        expected = Base.keys(work.outputs), actual = result_names,
     ))
     result_types = result_type.parameters[2].parameters
-    for (index, output) in pairs(values(work.outputs))
+    for (index, (name, output)) in enumerate(pairs(work.outputs))
         port_type = invoke(
             _emission_result_type,
             Tuple{Any, Val{typeof(output).parameters[2]}},
@@ -476,25 +482,44 @@ function _validate_independent_result_type(work, result_type)
             Val(typeof(output).parameters[2]),
         )
         port_type === nothing && throw(LocalWorkValidationError(
-            "operation result has the wrong fixed emission arity"
+            "output port :$(name) has the wrong fixed emission arity";
+            stage = :prepare,
+            contract = :operation_result_arity,
+            port = name,
+            expected = typeof(output).parameters[2],
+            actual = result_types[index],
         ))
         lane_types = typeof(output).parameters[2] == 1 ?
             (port_type,) : port_type.parameters
         for lane_type in lane_types
             lane_type <: Union{_Emission, _ConditionalEmission} || throw(
                 LocalWorkValidationError(
-                    "independent operation results must use emit(value[, when])"
+                    "independent output port :$(name) must use emit(value[, when])";
+                    stage = :prepare,
+                    contract = :operation_result_form,
+                    port = name,
+                    expected = Union{_Emission, _ConditionalEmission},
+                    actual = lane_type,
                 )
             )
             lane_type.parameters[1] === output.value_type || throw(
                 LocalWorkValidationError(
-                    "emitted value type does not match its independent port"
+                    "emitted value type for independent output port :$(name) must be $(output.value_type), got $(lane_type.parameters[1])";
+                    stage = :prepare,
+                    contract = :operation_result_value_type,
+                    port = name,
+                    expected = output.value_type,
+                    actual = lane_type.parameters[1],
                 )
             )
             coverage = typeof(output).parameters[4]
             coverage === :all && lane_type <: _ConditionalEmission && throw(
                 LocalWorkValidationError(
-                    "full-coverage independent ports require unconditional emissions"
+                    "full-coverage independent output port :$(name) requires unconditional emissions";
+                    stage = :prepare,
+                    contract = :independent_output_coverage,
+                    port = name, expected = :unconditional_emission,
+                    actual = lane_type,
                 )
             )
         end
@@ -509,21 +534,23 @@ function _validate_binding_schema(
         schema,
         backend,
     )
-    for (name, output) in pairs(work.outputs)
-        facts = invoke(
-            _binding_facts, Tuple{Any, Any, Any}, storage, schema, name
-        )
-        facts.element_type === output.value_type || throw(
-            LocalWorkValidationError(
-                "independent output binding $name has the wrong element type"
-            )
-        )
-        facts.dimensions == 1 && facts.size == (
-            getproperty(lowering.destination_counts, name),
-        ) || throw(LocalWorkValidationError(
-            "independent output binding $name has the wrong shape"
-        ))
-    end
+    requirements = Tuple(
+        _binding_requirement(
+            name,
+            output.value_type,
+            (getproperty(lowering.destination_counts, name),),
+            :write;
+            allow_readwrite = true,
+            role = :independent_output,
+        ) for (name, output) in pairs(work.outputs)
+    )
+    invoke(
+        _validate_binding_requirements,
+        Tuple{Any, Any, Tuple},
+        storage,
+        schema,
+        requirements,
+    )
     result_type = invoke(
         _operation_result_type,
         Tuple{Any, Any, Any},
@@ -540,10 +567,19 @@ end
 function _validate_workspace(
         lowering::_DirectIndependentLowering, work, workspace, backend
     )
-    return nothing
+    return invoke(
+        _validate_workspace_spec,
+        Tuple{Any, Tuple, Any},
+        workspace,
+        invoke(
+            _centrally_owned_workspace_spec,
+            Tuple{Any, Any},
+            lowering,
+            work,
+        ),
+        backend,
+    )
 end
-
-_workspace_arrays(lowering::_DirectIndependentLowering, work, workspace) = ()
 
 function _prepare_lowering(
         lowering::_DirectIndependentLowering,
@@ -552,19 +588,17 @@ function _prepare_lowering(
         workspace,
         backend,
     )
-    copy_signature = backend isa KernelAbstractions.CPU ?
-        Tuple{KernelAbstractions.CPU, Any} :
-        Tuple{KernelAbstractions.Backend, Any}
-    device_routes = NamedTuple{keys(lowering.outputs)}(map(
-        keys(lowering.outputs)
-    ) do name
-        invoke(
-            _device_copy,
-            copy_signature,
-            backend,
-            getproperty(lowering.topology.routes, name),
-        )
-    end)
+    payload = invoke(
+        _centrally_owned_static_topology_payload,
+        Tuple{Any},
+        lowering,
+    )
+    device_payload = invoke(
+        _centrally_copy_topology_payload,
+        Tuple{Any, Any},
+        backend,
+        payload,
+    )
     return _PreparedDirectIndependent(
         invoke(
             _owned_kernel_factory,
@@ -572,7 +606,7 @@ function _prepare_lowering(
             _direct_independent_kernel!,
             backend,
         ),
-        device_routes,
+        device_payload.routes,
     )
 end
 
@@ -653,8 +687,11 @@ function _direct_determinism(backend, lowering)
         :caller_operation_responsibility,
         :domain_owned,
     )
-    return NamedTuple{_DETERMINISM_DIMENSIONS}(
-        map(guarantee -> merge(qualifier, (; guarantee)), guarantees)
+    return invoke(
+        _determinism_report,
+        Tuple{NamedTuple, NTuple{8, Symbol}},
+        qualifier,
+        guarantees,
     )
 end
 
@@ -672,41 +709,44 @@ function _lowering_evidence(
     ) do name
         output = getproperty(lowering.outputs, name)
         route = getproperty(lowering.topology.routes, name)
-        (
-            family = :independent,
-            route = output.route,
-            maximum_emissions = typeof(output).parameters[2],
-            coverage = typeof(output).parameters[4],
-            law = (
+        invoke(
+            _port_evidence,
+            Tuple{
+                Symbol, Any, Int, Int, Symbol, NamedTuple, Symbol,
+                Symbol, Any, NamedTuple, NamedTuple,
+            },
+            :independent,
+            output.route,
+            getproperty(lowering.destination_counts, name),
+            typeof(output).parameters[2],
+            typeof(output).parameters[4],
+            (
                 kind = :independent,
                 coverage = typeof(output).parameters[4],
             ),
-            destination_count = getproperty(
-                lowering.destination_counts, name
-            ),
-            route_bytes = invoke(
+            :apply_publish,
+            :may_be_partially_visible,
+            typeof(output).parameters[4] === :all ?
+                :not_possible_by_total_coverage : :preserve_existing,
+            determinism,
+            (; route_bytes = invoke(
                 _checked_int_product,
                 Tuple{Integer, Integer, Any},
                 sizeof(eltype(route)),
                 length(route),
                 Symbol(name, :_route_bytes),
-            ),
-            publication_phase = :apply_publish,
-            post_launch_failure_visibility = :may_be_partially_visible,
-            empty_destination = typeof(output).parameters[4] === :all ?
-                :not_possible_by_total_coverage : :preserve_existing,
-            determinism,
+            )),
         )
     end)
-    transfer = foldl(values(ports); init = 0) do total, port
+    transfer = invoke(
+        _centrally_count_topology_payload_bytes,
+        Tuple{Any},
         invoke(
-            _checked_int_sum,
-            Tuple{Integer, Integer, Any},
-            total,
-            port.route_bytes,
-            :direct_topology_transfer_bytes,
-        )
-    end
+            _centrally_owned_static_topology_payload,
+            Tuple{Any},
+            lowering,
+        ),
+    )
     return (
         family = :direct,
         lowering_identity = lowering.lowering_identity,

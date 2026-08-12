@@ -1,5 +1,6 @@
 include("test_program_v1_support.jl")
 include("test_program_v1_execution.jl")
+include("test_program_v1_localworksets_vertical.jl")
 include("test_program_v1_state.jl")
 include("test_program_v1_parallel_trackers.jl")
 include("test_program_v1_relationships_checkpoint.jl")

@@ -1,3 +1,31 @@
+struct _LocalWorksetsLevel1Scale
+    factor::Int32
+end
+
+function (operation::_LocalWorksetsLevel1Scale)(item::Int32, reads, values)
+    return LocalWorksets.emit(
+        @inbounds(reads.source[item]) * operation.factor
+    )
+end
+
+struct _LocalWorksetsSequenceAdd end
+(::_LocalWorksetsSequenceAdd)(item::Int32, reads, values) = (
+    middle = LocalWorksets.emit(@inbounds(reads.source[item]) + Int32(1)),
+)
+
+struct _LocalWorksetsSequenceDouble end
+(::_LocalWorksetsSequenceDouble)(item::Int32, reads, values) = (
+    result = LocalWorksets.emit(@inbounds(reads.middle[item]) * Int32(2)),
+)
+
+struct _LocalWorksetsTwoLane end
+(::_LocalWorksetsTwoLane)(item::Int32, reads, values) = (
+    output = (
+        LocalWorksets.emit(@inbounds(reads.source[item])),
+        LocalWorksets.emit(@inbounds(reads.source[item]) + Int32(10)),
+    ),
+)
+
 function _localworksets_zbuffer_declaration()
     LW = LocalWorksets
     topology = (
@@ -76,7 +104,7 @@ function _localworksets_zbuffer_fixture(
         workplan, storage; workspace, submission
     )
     return merge(declaration, (;
-        LW, backend, workplan, prepared, storage, workspace,
+        LW, backend, workplan, prepared, storage, workspace, submission,
     ))
 end
 
@@ -248,6 +276,125 @@ function run_localworksets_execution(
     fixture = _localworksets_zbuffer_fixture(array_convert)
     LW = fixture.LW
 
+    # The concise single-output wrapper must remain a normal concrete device
+    # callable. This is the real-Metal compilation/execution witness; the
+    # wrapper introduces neither a distinct lowering nor a host callback.
+    level1_work = LW.localwork(
+        _LocalWorksetsLevel1Scale(Int32(3)),
+        1:3,
+        :scaled => LW.independent(:route; value_type = Int32);
+        read = (source = :level1_source,),
+    )
+    level1_topology = LW.topology(
+        level1_work;
+        epoch = UInt64(71),
+        routes = (route = reshape(Int32[2, 3, 1], 1, 3),),
+        destination_counts = (scaled = 3,),
+    )
+    level1_storage = (
+        level1_source = array_convert(Int32[4, 5, 6]),
+        scaled = array_convert(fill(Int32(-1), 3)),
+    )
+    level1_prepared = LW.prepare(
+        LW.plan(level1_work, level1_topology; backend = fixture.backend),
+        level1_storage,
+    )
+    wait(LW.run!(level1_prepared))
+    @test Array(level1_storage.scaled) == Int32[18, 12, 15]
+    @test LW.inspect(level1_work).authoring == :single_output
+    @test LW.inspect(level1_prepared).workspace_ownership == :package
+
+    # Distinct generic stages own distinct routes/fingerprints but one ordered
+    # topology epoch. They must compose without an intermediate host wait.
+    sequence_first = LW.localwork(
+        _LocalWorksetsSequenceAdd(),
+        1:3;
+        read = (source = :sequence_source,),
+        outputs = (
+            middle = LW.independent(:middle_route; value_type = Int32),
+        ),
+    )
+    sequence_second = LW.localwork(
+        _LocalWorksetsSequenceDouble(),
+        1:3;
+        read = (middle = :middle,),
+        outputs = (
+            result = LW.independent(:result_route; value_type = Int32),
+        ),
+    )
+    generic_sequence = LW.sequence(sequence_first, sequence_second)
+    sequence_topology = (
+        epoch = UInt64(72),
+        item_count = 3,
+        routes = (
+            middle_route = reshape(Int32[1, 2, 3], 1, 3),
+            result_route = reshape(Int32[3, 1, 2], 1, 3),
+        ),
+        destination_counts = (middle = 3, result = 3),
+        semantic_ids = (;),
+    )
+    sequence_storage = (
+        sequence_source = array_convert(Int32[2, 4, 6]),
+        middle = array_convert(fill(Int32(-1), 3)),
+        result = array_convert(fill(Int32(-1), 3)),
+    )
+    sequence_prepared = LW.prepare(
+        LW.plan(generic_sequence, sequence_topology; backend = fixture.backend),
+        sequence_storage,
+    )
+    sequence_event = LW.run!(sequence_prepared)
+    @test LW.inspect(sequence_prepared).wait_count == 0
+    wait(sequence_event)
+    @test Array(sequence_storage.middle) == Int32[3, 5, 7]
+    @test Array(sequence_storage.result) == Int32[10, 14, 6]
+    @test LW.inspect(sequence_prepared).wait_count == 1
+    @test LW.inspect(sequence_prepared).launches == 2
+
+    full_zero = LW.localwork(
+        _LocalWorksetsTwoLane(),
+        1:1;
+        read = (source = :zero_source,),
+        outputs = (
+            output = LW.independent(
+                :zero_route; value_type = Int32, maximum = 2
+            ),
+        ),
+    )
+    full_zero_topology = (
+        epoch = UInt64(73),
+        item_count = 1,
+        routes = (zero_route = reshape(Int32[1, 0], 2, 1),),
+        destination_counts = (output = 1,),
+        semantic_ids = (;),
+    )
+    @test_throws LW.LocalWorkValidationError LW.plan(
+        full_zero, full_zero_topology; backend = fixture.backend
+    )
+
+    partial_zero = LW.localwork(
+        _LocalWorksetsTwoLane(),
+        1:1;
+        read = (source = :zero_source,),
+        outputs = (
+            output = LW.independent(
+                :zero_route;
+                value_type = Int32,
+                maximum = 2,
+                coverage = :partial,
+            ),
+        ),
+    )
+    partial_storage = (
+        zero_source = array_convert(Int32[7]),
+        output = array_convert(fill(Int32(-1), 1)),
+    )
+    partial_prepared = LW.prepare(
+        LW.plan(partial_zero, full_zero_topology; backend = fixture.backend),
+        partial_storage,
+    )
+    wait(LW.run!(partial_prepared))
+    @test Array(partial_storage.output) == Int32[7]
+
     event = LW.run!(
         fixture.prepared, (; fragment_count = Int32(5))
     )
@@ -258,6 +405,29 @@ function run_localworksets_execution(
     @test Array(fixture.workspace.winner_ranks) == Int32[-2, -1, 4, 100]
     @test Array(fixture.workspace.winner_identities) ==
           UInt32[10, 30, 40, typemax(UInt32)]
+
+    automatic = _localworksets_zbuffer_fixture(array_convert)
+    automatic_prepared = LW.prepare(
+        automatic.workplan,
+        automatic.storage;
+        submission = automatic.submission,
+        lease_capacity = 2,
+    )
+    automatic_before = Array(automatic.storage.framebuffer_color)
+    automatic_facts = LW.inspect(automatic_prepared)
+    @test automatic_facts.workspace_ownership == :package
+    @test automatic_facts.allocation_class == :allocated_once_during_prepare
+    @test automatic_facts.submitted == 0
+    @test automatic_facts.wait_count == 0
+    @test Array(automatic.storage.framebuffer_color) == automatic_before
+    @test LW.KernelAbstractions.get_backend(
+        automatic_prepared.workspace.winner_ranks
+    ) == automatic.backend
+    wait(LW.run!(
+        automatic_prepared, (; fragment_count = Int32(5))
+    ))
+    @test Array(automatic.storage.framebuffer_color) ==
+          UInt32[0x22, 0x33, 0x55, 0]
 
     facts = LW.inspect(fixture.prepared)
     planned = LW.inspect(fixture.workplan)
@@ -275,6 +445,12 @@ function run_localworksets_execution(
     @test planned.workspace.total_bytes == 32
     @test planned.topology_transfer_bytes == 40
     @test planned.capability.backend == typeof(fixture.backend)
+    @test planned.qualification.operation_structure == :validated
+    @test planned.qualification.provider_environment == :reviewed
+    @test planned.qualification.selected_device_compilation ==
+          :deferred_to_first_run
+    @test planned.qualification.provider_compile_validation == :not_available
+    @test planned.qualification.host_fallback == :forbidden
     @test planned.capability.compiler == (
         julia = VERSION,
         kernelabstractions = Base.pkgversion(LW.KernelAbstractions),

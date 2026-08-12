@@ -5,7 +5,9 @@
         :WorkPlan,
         :PreparedWork,
         :WorkEvent,
+        :LocalWorkValidationError,
         :localwork,
+        :topology,
         :plan,
         :prepare,
         :run!,
@@ -22,11 +24,17 @@
         :emit,
         :candidate,
     ))
-    expected_exports = Set((:LocalWorksets,))
-    expected_types = Set((:LocalWork, :WorkPlan, :PreparedWork, :WorkEvent))
-    expected_functions = setdiff(expected, union(
-        expected_exports, expected_types
+    expected_exports = setdiff(expected, Set((:inspect,)))
+    expected_types = Set((
+        :LocalWork,
+        :WorkPlan,
+        :PreparedWork,
+        :WorkEvent,
+        :LocalWorkValidationError,
     ))
+    expected_functions = setdiff(
+        expected, union(Set((:LocalWorksets,)), expected_types)
+    )
     @test Set(names(LW)) == expected
     @test all(name -> Base.ispublic(LW, name), expected)
     @test Set(filter(
@@ -47,7 +55,6 @@
         expected,
     )
     private_inventory = (
-        :LocalWorkValidationError,
         :_ConstructionToken,
         :_ValueSlot,
         :_StorageSlot,
@@ -63,6 +70,7 @@
         :_ConditionalCandidate,
         :_SequenceOperation,
         :_SequenceLowering,
+        :_SingleOutputOperation,
         :_ResolvedOutput,
         :_ResolvedSelection,
         :_ResolvedWinnerLowering,
@@ -76,6 +84,24 @@
     @test all(name -> isdefined(LW, name), private_inventory)
     @test all(name -> !Base.ispublic(LW, name), private_inventory)
     @test all(name -> !Base.isexported(LW, name), private_inventory)
+    diagnostic = LW.LocalWorkValidationError(
+        "bad route";
+        stage = :plan,
+        contract = :route_shape,
+        port = :force,
+        expected = (2, 4),
+        actual = (1, 4),
+        hint = "declare two lanes",
+    )
+    @test diagnostic.stage == :plan
+    @test diagnostic.contract == :route_shape
+    @test diagnostic.port == :force
+    @test diagnostic.binding === nothing
+    @test diagnostic.workspace_leaf === nothing
+    @test diagnostic.expected == (2, 4)
+    @test diagnostic.actual == (1, 4)
+    @test sprint(showerror, diagnostic) ==
+          "bad route. Hint: declare two lanes"
     @test !isdefined(LW, :CorePotts)
     operation = (family = :declaration_only,)
     declaration_output =
@@ -103,6 +129,11 @@
     @test ordered_a.outputs == ordered_b.outputs
     @test keys(ordered_a.reads) == (:a, :z)
     @test keys(ordered_a.outputs) == (:left, :right)
+    ordered_sequence = LW.sequence(ordered_a, ordered_b)
+    @test sprint(show, ordered_sequence) ==
+          "LocalWork(family=ordered_sequence, stages=2)"
+    @test LW.inspect(ordered_sequence).family == :ordered_sequence
+    @test length(LW.inspect(ordered_sequence).stages) == 2
     raw_constructor_calls = (
         (LW.LocalWork, (1:1, (;), (;), nothing, operation)),
         (LW.WorkPlan, (nothing, nothing, nothing, nothing, nothing)),
@@ -141,6 +172,208 @@
     for (constructor, args) in raw_constructor_calls
         @test_throws MethodError constructor(args...)
     end
+end
+
+struct _Level1IndependentOperation end
+(::_Level1IndependentOperation)(item, reads, values) =
+    LW.emit(@inbounds(reads.source[item]) + Int32(2))
+
+struct _Level1CombinedOperation end
+(::_Level1CombinedOperation)(item, reads, values) =
+    LW.emit(@inbounds(reads.source[item]))
+
+struct _Level1ResolvedOperation end
+(::_Level1ResolvedOperation)(item, reads, values) = LW.candidate(
+    @inbounds(reads.rank[item]),
+    @inbounds(reads.value[item]),
+    @inbounds(reads.enabled[item]),
+)
+
+struct _LateLevel1PublicOperation end
+(::_LateLevel1PublicOperation)(item::Int32, reads, values) =
+    LW.emit(@inbounds(reads.source[item]))
+
+module _ExternalWorkAuthor
+import LocalWorksets
+
+struct Scale
+    factor::Int32
+end
+
+function (operation::Scale)(item::Int32, reads, values)
+    return LocalWorksets.emit(
+        @inbounds(reads.source[item]) * operation.factor
+    )
+end
+end
+
+@testset "LW-4C3 concise single-output authoring desugars exactly" begin
+    backend = LW.KernelAbstractions.CPU()
+
+    direct = LW.localwork(
+        _Level1IndependentOperation(),
+        1:3,
+        :result => LW.independent(:route; value_type = Int32);
+        read = (source = :source,),
+    )
+    @test isbitstype(typeof(direct.operation))
+    @test LW.inspect(direct).authoring == :single_output
+    @test LW.inspect(direct).family == :independent
+    @test LW.inspect(direct).operation isa _Level1IndependentOperation
+    direct_topology = LW.topology(
+        direct;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[3, 1, 2], 1, 3),),
+        destination_counts = (result = 3,),
+    )
+    direct_storage = (
+        source = Int32[1, 2, 3],
+        result = fill(Int32(-1), 3),
+    )
+    @test @inferred(direct.operation(
+        Int32(1), (source = direct_storage.source,), (;)
+    )) == (result = LW.emit(Int32(3)),)
+    direct_plan = LW.plan(direct, direct_topology; backend)
+    @test LW.inspect(direct_plan).qualification == (
+        operation_structure = :validated,
+        provider_environment = :reviewed,
+        selected_device_compilation = :host_runtime_compiler,
+        provider_compile_validation = :not_available,
+        host_fallback = :forbidden,
+    )
+    plan_facts = LW.inspect(direct_plan)
+    @test plan_facts.summary == (
+        lifecycle = :WorkPlan,
+        family = plan_facts.family,
+        backend = plan_facts.backend,
+    )
+    @test plan_facts.outputs === plan_facts.ports
+    @test plan_facts.execution.launches == plan_facts.launches
+    @test plan_facts.execution.phases == plan_facts.phases
+    @test plan_facts.memory.workspace === plan_facts.workspace
+    @test plan_facts.memory.topology_transfer_bytes ==
+          plan_facts.topology_transfer_bytes
+    direct_prepared = LW.prepare(direct_plan, direct_storage)
+    direct_event = LW.run!(direct_prepared)
+    wait(direct_event)
+    prepared_facts = LW.inspect(direct_prepared)
+    event_facts = LW.inspect(direct_event)
+    @test prepared_facts.summary.poisoned == prepared_facts.poisoned
+    @test prepared_facts.execution.provider == prepared_facts.provider
+    @test prepared_facts.memory.workspace_facts ===
+          prepared_facts.workspace_facts
+    @test event_facts.execution.event_serial == event_facts.event_serial
+    @test event_facts.execution.receipt_scope == :lane_tail
+    @test direct_storage.result == Int32[4, 5, 3]
+
+    combined = LW.localwork(
+        _Level1CombinedOperation(),
+        1:3,
+        :total => LW.combined(
+            :route;
+            value_type = Int32,
+            combine = LW.deterministic(+, Int32(0)),
+        );
+        read = (source = :source,),
+    )
+    combined_topology = LW.topology(
+        combined;
+        epoch = UInt64(2),
+        routes = (route = reshape(Int32[1, 1, 2], 1, 3),),
+        destination_counts = (total = 3,),
+    )
+    combined_storage = (
+        source = Int32[2, 3, 7],
+        total = fill(Int32(-1), 3),
+    )
+    combined_prepared = LW.prepare(
+        LW.plan(combined, combined_topology; backend), combined_storage
+    )
+    wait(LW.run!(combined_prepared))
+    @test combined_storage.total == Int32[5, 7, 0]
+
+    resolved = LW.localwork(
+        _Level1ResolvedOperation(),
+        1:3,
+        :winner => LW.resolved(
+            :route;
+            value_type = UInt32,
+            maximum = 1,
+            empty = UInt32(0),
+            rank = (
+                type = Int32,
+                order = :min,
+                lower = Int32(-10),
+                upper = Int32(10),
+            ),
+            tie_break = (type = UInt32, order = :min),
+        );
+        read = (
+            enabled = :enabled,
+            rank = :rank,
+            value = :value,
+        ),
+    )
+    resolved_topology = LW.topology(
+        resolved;
+        epoch = UInt64(3),
+        routes = (route = reshape(Int32[1, 1, 2], 1, 3),),
+        destination_counts = (winner = 3,),
+        semantic_ids = (
+            winner = reshape(UInt32[20, 10, 30], 1, 3),
+        ),
+    )
+    resolved_storage = (
+        enabled = Bool[true, true, false],
+        rank = Int32[-2, -2, -4],
+        value = UInt32[11, 22, 33],
+        winner = fill(UInt32(99), 3),
+    )
+    resolved_prepared = LW.prepare(
+        LW.plan(resolved, resolved_topology; backend), resolved_storage
+    )
+    wait(LW.run!(resolved_prepared))
+    @test resolved_storage.winner == UInt32[22, 0, 0]
+
+    @test propertynames(direct_plan) == (:work, :topology, :backend)
+    @test !(:lowering in propertynames(direct_plan))
+    @test propertynames(direct_prepared) ==
+        (:workplan, :storage, :workspace, :submission_schema)
+    property_event = LW.run!(direct_prepared)
+    @test propertynames(property_event) == (:serial,)
+    wait(property_event)
+    @test occursin("outputs=(:result,)", sprint(show, direct))
+    @test occursin("workspace=package", sprint(show, direct_prepared))
+end
+
+@testset "external concrete operations use the central lifecycle" begin
+    backend = LW.KernelAbstractions.CPU()
+    work = LW.localwork(
+        _ExternalWorkAuthor.Scale(Int32(3)),
+        1:3,
+        :scaled => LW.independent(:route; value_type = Int32);
+        read = (source = :source,),
+    )
+    topo = LW.topology(
+        work;
+        epoch = UInt64(4),
+        routes = (route = reshape(Int32[2, 3, 1], 1, 3),),
+        destination_counts = (scaled = 3,),
+    )
+    storage = (
+        source = Int32[4, 5, 6],
+        scaled = fill(Int32(-1), 3),
+    )
+    workplan = LW.plan(work, topo; backend)
+    prepared = LW.prepare(workplan, storage)
+    event = LW.run!(prepared)
+    wait(event)
+
+    @test storage.scaled == Int32[18, 12, 15]
+    @test LW.inspect(work).operation isa _ExternalWorkAuthor.Scale
+    @test LW.inspect(workplan).capability.compiler.qualification ==
+          :centrally_reviewed_environment
+    @test LW.inspect(prepared).provider === :KernelAbstractions
 end
 
 struct _B1ScaleOperation

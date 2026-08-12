@@ -25,6 +25,65 @@ mutable struct _PreparedBufferedCombined{K1, K2, K3, R, S, I}
     device_semantic_ids::I
 end
 
+function _static_topology_payload(lowering::_BufferedCombinedLowering)
+    semantic_ids = NamedTuple{keys(lowering.semantic_ids)}(map(
+        name -> vec(getproperty(lowering.semantic_ids, name)),
+        keys(lowering.semantic_ids),
+    ))
+    return (
+        routes = lowering.topology.routes,
+        segments = lowering.segments,
+        semantic_ids,
+    )
+end
+
+function _workspace_spec(lowering::_BufferedCombinedLowering, work)
+    leaves = ()
+    for name in keys(lowering.segments)
+        output = getproperty(lowering.outputs, name)
+        capacity = invoke(
+            _checked_int_product,
+            Tuple{Integer, Integer, Any},
+            lowering.item_count,
+            typeof(output).parameters[2],
+            Symbol(name, :_record_capacity),
+        )
+        if output isa _GenericResolvedOutput
+            leaves = (
+                leaves...,
+                _workspace_leaf(
+                    Symbol(name, :_record_ranks),
+                    (:records, name, :ranks),
+                    output.rank.type,
+                    (capacity,);
+                    role = :record_rank,
+                ),
+            )
+        end
+        leaves = (
+            leaves...,
+            _workspace_leaf(
+                Symbol(name, :_record_values),
+                (:records, name, :values),
+                output.value_type,
+                (capacity,);
+                role = :record_value,
+            ),
+        )
+        leaves = (
+            leaves...,
+            _workspace_leaf(
+                Symbol(name, :_record_valid),
+                (:records, name, :valid),
+                Bool,
+                (capacity,);
+                role = :record_validity,
+            ),
+        )
+    end
+    return leaves
+end
+
 @inline function _atomic_add!(output, destination, value)
     Atomix.@atomic output[destination] += value
     return nothing
@@ -325,75 +384,16 @@ end
 end
 
 function _validate_combined_route(topology, name, output, item_count)
-    hasproperty(topology.routes, output.route) || throw(
-        LocalWorkValidationError(
-            "combined port $name has no topology route $(output.route)"
-        )
+    return invoke(
+        _validate_dense_route,
+        Tuple{Any, Symbol, Any, Int},
+        topology,
+        name,
+        output,
+        item_count;
+        context = :combined,
+        terminal_capacity = true,
     )
-    hasproperty(topology.destination_counts, name) || throw(
-        LocalWorkValidationError(
-            "combined port $name has no destination count"
-        )
-    )
-    route = getproperty(topology.routes, output.route)
-    maximum = typeof(output).parameters[2]
-    route isa AbstractMatrix && size(route) == (maximum, item_count) ||
-        throw(LocalWorkValidationError(
-            "combined route $(output.route) has the wrong matrix shape"
-        ))
-    isconcretetype(eltype(route)) && eltype(route) <: Integer || throw(
-        LocalWorkValidationError(
-            "combined route $(output.route) requires a concrete integer type"
-        )
-    )
-    destination_count = try
-        Int(getproperty(topology.destination_counts, name))
-    catch
-        throw(LocalWorkValidationError(
-            "combined destination count is not representable as Int"
-        ))
-    end
-    destination_count >= 0 || throw(LocalWorkValidationError(
-        "combined destination count must be nonnegative"
-    ))
-    invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        destination_count,
-        Symbol(name, :_destination_count),
-    )
-    capacity = invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
-        item_count,
-        maximum,
-        Symbol(name, :_record_capacity),
-    )
-    capacity == length(route) || throw(LocalWorkValidationError(
-        "combined route $(output.route) has inconsistent capacity"
-    ))
-    invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        capacity,
-        Symbol(name, :_record_capacity);
-        terminal = true,
-    )
-    for value in route
-        destination = try
-            Int(value)
-        catch
-            throw(LocalWorkValidationError(
-                "combined route contains an unrepresentable destination"
-            ))
-        end
-        0 <= destination <= destination_count || throw(
-            LocalWorkValidationError(
-                "combined route contains a negative or out-of-domain destination"
-            )
-        )
-    end
-    return route, destination_count
 end
 
 function _canonical_segments(route, destination_count)
@@ -430,7 +430,9 @@ function _canonical_segments(route, destination_count)
     return (; offsets, records)
 end
 
-function _validate_combination_capability(backend, output::_CombinedOutput)
+function _validate_combination_capability(
+        backend, name::Symbol, output::_CombinedOutput
+    )
     law = output.combine
     mode = typeof(law).parameters[1]
     law isa _CombinationLaw && mode in (:deterministic, :fast) || throw(
@@ -455,7 +457,16 @@ function _validate_combination_capability(backend, output::_CombinedOutput)
             Tuple{Any, Type, Symbol, Symbol},
             backend, output.value_type, :add, :global,
         ) || throw(LocalWorkValidationError(
-            "backend x value type x atomic add x address space is not qualified"
+            "backend x value type x atomic add x address space is not qualified";
+            stage = :plan, contract = :backend_capability,
+            port = name,
+            expected = :centrally_qualified_atomic_add,
+            actual = (
+                backend = typeof(backend),
+                value_type = output.value_type,
+                operation = :add,
+                address_space = :global,
+            ),
         ))
     elseif mode === :deterministic
         invoke(
@@ -463,7 +474,16 @@ function _validate_combination_capability(backend, output::_CombinedOutput)
             Tuple{Any, Type, Symbol, Symbol},
             backend, output.value_type, :store, :global,
         ) || throw(LocalWorkValidationError(
-            "backend x combined type x store x address space is not qualified"
+            "backend x combined type x store x address space is not qualified";
+            stage = :plan, contract = :backend_capability,
+            port = name,
+            expected = :centrally_qualified_store,
+            actual = (
+                backend = typeof(backend),
+                value_type = output.value_type,
+                operation = :store,
+                address_space = :global,
+            ),
         ))
     else
         throw(LocalWorkValidationError(
@@ -561,11 +581,11 @@ function _lower_combined(work::LocalWork, topology, backend)
         end
         identities
     end)
-    for output in values(work.outputs)
+    for (name, output) in pairs(work.outputs)
         if output isa _CombinedOutput
             invoke(
                 _validate_combination_capability,
-                Tuple{Any, _CombinedOutput}, backend, output,
+                Tuple{Any, Symbol, _CombinedOutput}, backend, name, output,
             )
         elseif output isa _IndependentOutput
             invoke(
@@ -573,7 +593,16 @@ function _lower_combined(work::LocalWork, topology, backend)
                 Tuple{Any, Type, Symbol, Symbol},
                 backend, output.value_type, :store, :global,
             ) || throw(LocalWorkValidationError(
-                "independent port store profile is not centrally qualified"
+                "independent port store profile is not centrally qualified";
+                stage = :plan, contract = :backend_capability,
+                port = name,
+                expected = :centrally_qualified_store,
+                actual = (
+                    backend = typeof(backend),
+                    value_type = output.value_type,
+                    operation = :store,
+                    address_space = :global,
+                ),
             ))
         else
             output.rank.type in (Int32, UInt32) || throw(
@@ -596,7 +625,16 @@ function _lower_combined(work::LocalWork, topology, backend)
                 Tuple{Any, Type, Symbol, Symbol},
                 backend, output.value_type, :store, :global,
             ) || throw(LocalWorkValidationError(
-                "generic resolved value store profile is not qualified"
+                "generic resolved value store profile is not qualified";
+                stage = :plan, contract = :backend_capability,
+                port = name,
+                expected = :centrally_qualified_store,
+                actual = (
+                    backend = typeof(backend),
+                    value_type = output.value_type,
+                    operation = :store,
+                    address_space = :global,
+                ),
             ))
         end
     end
@@ -674,15 +712,20 @@ end
 
 function _validate_emission_result_type(work, result_type)
     result_type <: NamedTuple || throw(LocalWorkValidationError(
-        "generic operation result must infer as a concrete NamedTuple"
+        "generic operation result must infer as a concrete NamedTuple";
+        stage = :prepare, contract = :operation_result_form,
+        expected = NamedTuple, actual = result_type,
     ))
     result_type.parameters[1] == keys(work.outputs) || throw(
         LocalWorkValidationError(
-            "generic operation result names must exactly match output port names"
+            "generic operation result names must exactly match output port names";
+            stage = :prepare, contract = :operation_result_ports,
+            expected = keys(work.outputs),
+            actual = result_type.parameters[1],
         )
     )
     result_types = result_type.parameters[2].parameters
-    for (index, output) in pairs(values(work.outputs))
+    for (index, (name, output)) in enumerate(pairs(work.outputs))
         maximum = typeof(output).parameters[2]
         port_type = invoke(
             _emission_result_type,
@@ -690,31 +733,55 @@ function _validate_emission_result_type(work, result_type)
             result_types[index], Val(maximum),
         )
         port_type === nothing && throw(LocalWorkValidationError(
-            "operation result has the wrong fixed emission arity"
+            "output port :$(name) has the wrong fixed emission arity";
+            stage = :prepare,
+            contract = :operation_result_arity,
+            port = name,
+            expected = maximum,
+            actual = result_types[index],
         ))
         lane_types = maximum == 1 ? (port_type,) : port_type.parameters
         for lane_type in lane_types
             if output isa _GenericResolvedOutput
                 lane_type <: Union{_Candidate, _ConditionalCandidate} ||
                     throw(LocalWorkValidationError(
-                        "resolved operation results must use candidate(rank, value[, when])"
+                        "resolved output port :$(name) must use candidate(rank, value[, when])";
+                        stage = :prepare,
+                        contract = :operation_result_form,
+                        port = name,
+                        expected = Union{_Candidate, _ConditionalCandidate},
+                        actual = lane_type,
                     ))
                 lane_type.parameters[1] === output.rank.type &&
                     lane_type.parameters[2] === output.value_type || throw(
                         LocalWorkValidationError(
-                            "candidate rank/value types do not match the resolved port"
+                            "candidate rank/value types for resolved output port :$(name) must be $(output.rank.type)/$(output.value_type), got $(lane_type.parameters[1])/$(lane_type.parameters[2])";
+                            stage = :prepare,
+                            contract = :operation_result_rank_value_types,
+                            port = name,
+                            expected = (output.rank.type, output.value_type),
+                            actual = (lane_type.parameters[1], lane_type.parameters[2]),
                         )
                     )
             else
                 if !(lane_type <:
                         Union{_Emission, _ConditionalEmission})
                     throw(LocalWorkValidationError(
-                        "combined/independent operation results must use emit(value[, when])"
+                        "combined/independent output port :$(name) must use emit(value[, when])";
+                        stage = :prepare,
+                        contract = :operation_result_form,
+                        port = name,
+                        expected = Union{_Emission, _ConditionalEmission},
+                        actual = lane_type,
                     ))
                 end
                 if lane_type.parameters[1] !== output.value_type
                     throw(LocalWorkValidationError(
-                        "emitted value type does not match its output port"
+                        "emitted value type for output port :$(name) must be $(output.value_type), got $(lane_type.parameters[1])";
+                        stage = :prepare,
+                        contract = :operation_result_value_type,
+                        port = name, expected = output.value_type,
+                        actual = lane_type.parameters[1],
                     ))
                 end
                 if output isa _IndependentOutput &&
@@ -722,7 +789,12 @@ function _validate_emission_result_type(work, result_type)
                         lane_type <: _ConditionalEmission
                     throw(
                         LocalWorkValidationError(
-                            "full-coverage independent ports require unconditional emissions"
+                            "full-coverage independent output port :$(name) requires unconditional emissions";
+                            stage = :prepare,
+                            contract = :independent_output_coverage,
+                            port = name,
+                            expected = :unconditional_emission,
+                            actual = lane_type,
                         )
                     )
                 end
@@ -739,21 +811,23 @@ function _validate_binding_schema(
         schema,
         backend,
     )
-    for (name, output) in pairs(work.outputs)
-        facts = invoke(
-            _binding_facts, Tuple{Any, Any, Any}, storage, schema, name
-        )
-        facts.element_type === output.value_type || throw(
-            LocalWorkValidationError(
-                "output binding $name has the wrong element type"
-            )
-        )
-        facts.dimensions == 1 && facts.size == (
-            getproperty(lowering.destination_counts, name),
-        ) || throw(LocalWorkValidationError(
-            "output binding $name has the wrong shape"
-        ))
-    end
+    requirements = Tuple(
+        _binding_requirement(
+            name,
+            output.value_type,
+            (getproperty(lowering.destination_counts, name),),
+            :write;
+            allow_readwrite = true,
+            role = :output,
+        ) for (name, output) in pairs(work.outputs)
+    )
+    invoke(
+        _validate_binding_requirements,
+        Tuple{Any, Any, Tuple},
+        storage,
+        schema,
+        requirements,
+    )
     result_type = invoke(
         _operation_result_type,
         Tuple{Any, Any, Any}, work, storage, schema,
@@ -775,11 +849,11 @@ function _operation_call_facts(
         storage,
         schema,
     )
-    operation_fact = (
-        callback = work.operation,
+    operation_facts = invoke(
+        _operation_callback_facts,
+        Tuple{Any, Any},
+        work.operation,
         signature,
-        method = which(work.operation, signature),
-        purpose = :local_operation,
     )
     law_facts = Tuple(
         (
@@ -795,7 +869,7 @@ function _operation_call_facts(
         if output isa _CombinedOutput &&
             typeof(output.combine).parameters[1] === :deterministic
     )
-    return (operation_fact, law_facts...)
+    return (operation_facts..., law_facts...)
 end
 
 function _prepare_lowering(
@@ -805,38 +879,20 @@ function _prepare_lowering(
         workspace,
         backend,
     )
-    copy_signature = backend isa KernelAbstractions.CPU ?
-        Tuple{KernelAbstractions.CPU, Any} :
-        Tuple{KernelAbstractions.Backend, Any}
-    routes = NamedTuple{keys(lowering.outputs)}(map(
-        keys(lowering.outputs)
-    ) do name
-        invoke(
-            _device_copy, copy_signature, backend,
-            getproperty(lowering.topology.routes, name),
-        )
-    end)
-    segments = NamedTuple{keys(lowering.segments)}(map(
-        keys(lowering.segments)
-    ) do name
-        segment = getproperty(lowering.segments, name)
-        (
-            offsets = invoke(
-                _device_copy, copy_signature, backend, segment.offsets
-            ),
-            records = invoke(
-                _device_copy, copy_signature, backend, segment.records
-            ),
-        )
-    end)
-    semantic_ids = NamedTuple{keys(lowering.semantic_ids)}(map(
-        keys(lowering.semantic_ids)
-    ) do name
-        invoke(
-            _device_copy, copy_signature, backend,
-            vec(getproperty(lowering.semantic_ids, name)),
-        )
-    end)
+    payload = invoke(
+        _centrally_owned_static_topology_payload,
+        Tuple{Any},
+        lowering,
+    )
+    device_payload = invoke(
+        _centrally_copy_topology_payload,
+        Tuple{Any, Any},
+        backend,
+        payload,
+    )
+    routes = device_payload.routes
+    segments = device_payload.segments
+    semantic_ids = device_payload.semantic_ids
     if length(lowering.outputs) == 1 &&
             first(values(lowering.outputs)) isa _GenericResolvedOutput
         return invoke(

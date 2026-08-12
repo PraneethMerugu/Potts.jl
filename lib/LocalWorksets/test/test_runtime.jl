@@ -143,16 +143,25 @@
     )
 
     aliased_workspace = (
-        winner_ranks = fixture.storage.fragment_depths,
-        winner_identities = Vector{UInt32}(undef, 4),
+        winner_ranks = Vector{Int32}(undef, 4),
+        winner_identities = fixture.storage.framebuffer_color,
         leases = Any[nothing],
     )
-    @test_throws Exception LW.prepare(
-        fixture.workplan,
-        fixture.storage;
-        workspace = aliased_workspace,
-        submission = fixture.submission,
-    )
+    alias_error = try
+        LW.prepare(
+            fixture.workplan,
+            fixture.storage;
+            workspace = aliased_workspace,
+            submission = fixture.submission,
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test alias_error isa LW.LocalWorkValidationError
+    @test alias_error.stage == :prepare
+    @test alias_error.contract == :workspace_alias
+    @test alias_error.workspace_leaf == :winner_identities
 
     opaque_topology = _OpaqueZTopology(
         copy(fixture.topology.pixel_indices),
@@ -167,16 +176,26 @@
     @test LW.inspect(opaque_plan).lowering ==
           LW.inspect(fixture.workplan).lowering
     opaque_topology.pixel_indices[1] = Int32(3)
-    @test_throws Exception LW.prepare(
-        opaque_plan,
-        fixture.storage;
-        workspace = (
-            winner_ranks = Vector{Int32}(undef, 4),
-            winner_identities = Vector{UInt32}(undef, 4),
-            leases = Any[nothing],
-        ),
-        submission = fixture.submission,
-    )
+    topology_error = try
+        LW.prepare(
+            opaque_plan,
+            fixture.storage;
+            workspace = (
+                winner_ranks = Vector{Int32}(undef, 4),
+                winner_identities = Vector{UInt32}(undef, 4),
+                leases = Any[nothing],
+            ),
+            submission = fixture.submission,
+        )
+        nothing
+    catch exception
+        exception
+    end
+    @test topology_error isa LW.LocalWorkValidationError
+    @test topology_error.stage == :prepare
+    @test topology_error.contract == :topology_fingerprint
+    @test topology_error.expected != topology_error.actual
+    @test topology_error.hint isa String
 
     frozen_fixture = _zbuffer_fixture()
     frozen_fixture.topology.pixel_indices[1] = Int32(3)
@@ -225,11 +244,28 @@ end
         (; fragment_count = Int64(5)),
         (; fragment_count = Int32(6)),
     )
-    for submission in cases
+    expected_contracts = (
+        :submission_slot_names,
+        :submission_slot_names,
+        :submission_value_type,
+        :submission_value_bounds,
+    )
+    for (submission, expected_contract) in zip(cases, expected_contracts)
         fixture = _zbuffer_fixture()
-        @test_throws LW.LocalWorkValidationError LW.run!(
-            fixture.prepared, submission
-        )
+        diagnostic = try
+            LW.run!(fixture.prepared, submission)
+            nothing
+        catch exception
+            exception
+        end
+        @test diagnostic isa LW.LocalWorkValidationError
+        @test diagnostic.stage == :run
+        @test diagnostic.contract == expected_contract
+        if expected_contract in (
+                :submission_value_type, :submission_value_bounds
+            )
+            @test diagnostic.binding == :fragment_count
+        end
         facts = LW.inspect(fixture.prepared)
         @test facts.submitted == UInt64(0)
         @test facts.drained == UInt64(0)

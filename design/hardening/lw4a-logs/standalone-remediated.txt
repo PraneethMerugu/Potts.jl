@@ -1,0 +1,13 @@
+LW-4A post-LW-R2A-remediation standalone qualification
+Date: 2026-08-10
+Command: julia --project=lib/LocalWorksets -e 'using Pkg; Pkg.test()'
+Exit: 0
+Result: LocalWorksets tests passed
+Total: 355/355
+New witnesses:
+- package quality and explicit recursive ambiguity check: 11/11
+- direct/do-block construction and declaration rejection: 19/19
+- typed slot bounds, storage templates and closed resolved destination profiles: 11/11
+- generated submission rejection is exact and prelaunch: 25/25
+- synchronous failure poisons the shared implicit-order scope: 10/10
+- full-source generic substrate/portability boundary: 29/29

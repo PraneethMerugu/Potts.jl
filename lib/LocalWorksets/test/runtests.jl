@@ -13,6 +13,7 @@ include("support.jl")
 include("test_api.jl")
 include("test_mechanisms.jl")
 include("test_generic.jl")
+include("test_consolidation.jl")
 include("test_runtime.jl")
 
 # These tests deliberately install hostile external methods. Keep them last so

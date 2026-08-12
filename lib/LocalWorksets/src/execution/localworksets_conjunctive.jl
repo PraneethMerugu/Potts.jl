@@ -39,6 +39,29 @@ mutable struct _PreparedConjunctiveResolved{K1, K2, K3, K4}
     select_kernel::K4
 end
 
+_static_topology_payload(::_ConjunctiveResolvedLowering) = (;)
+
+function _workspace_spec(lowering::_ConjunctiveResolvedLowering, work)
+    return (
+        _workspace_leaf(
+            :winner_ranks,
+            (:winner_ranks,),
+            UInt32,
+            (lowering.destination_count,);
+            strides = (1,),
+            role = :winner_rank,
+        ),
+        _workspace_leaf(
+            :winner_identities,
+            (:winner_identities,),
+            UInt32,
+            (lowering.destination_count,);
+            strides = (1,),
+            role = :winner_identity,
+        ),
+    )
+end
+
 function resolved(
         destinations::NTuple{2, Symbol};
         empty,
@@ -176,46 +199,40 @@ end
 
 function _conjunctive_topology(work, topology, output)
     required = (:item_count, :destination_count, :epoch)
-    all(name -> hasproperty(topology, name), required) ||
-        throw(LocalWorkValidationError(
-            "conjunctive topology requires item_count, destination_count, and epoch"
-        ))
-    typeof(topology.epoch) === UInt64 || throw(LocalWorkValidationError(
-        "conjunctive topology epoch must be exactly UInt64"
-    ))
-    item_count = try
-        Int(topology.item_count)
-    catch
-        throw(LocalWorkValidationError(
-            "conjunctive item_count must be exactly representable as Int"
-        ))
-    end
-    destination_count = try
-        Int(topology.destination_count)
-    catch
-        throw(LocalWorkValidationError(
-            "conjunctive destination_count must be exactly representable as Int"
-        ))
-    end
-    item_count > 0 && destination_count > 0 ||
-        throw(LocalWorkValidationError(
-            "conjunctive topology capacities must be positive"
-        ))
     invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        item_count,
+        _require_properties,
+        Tuple{Any, Tuple, Any},
+        topology,
+        required,
+        :conjunctive_topology,
+    )
+    invoke(
+        _validate_topology_epoch,
+        Tuple{Any, Any},
+        topology,
+        :conjunctive,
+    )
+    item_count = invoke(
+        _bounded_count,
+        Tuple{Any, Any},
+        topology.item_count,
         :conjunctive_item_count,
+        positive = true,
+    )
+    destination_count = invoke(
+        _bounded_count,
+        Tuple{Any, Any},
+        topology.destination_count,
+        :conjunctive_destination_count,
+        positive = true,
     )
     invoke(
-        _checked_int32_count,
-        Tuple{Integer, Any},
-        destination_count,
-        :conjunctive_destination_count,
+        _validate_item_domain,
+        Tuple{LocalWork, Int, Any},
+        work,
+        item_count,
+        :conjunctive_topology,
     )
-    work.items == (1:item_count) || throw(LocalWorkValidationError(
-        "LocalWork items must exactly cover the conjunctive item capacity"
-    ))
     output.capacity == item_count || throw(LocalWorkValidationError(
         "conjunctive output capacity must exactly equal item capacity"
     ))
@@ -329,31 +346,38 @@ function _validate_binding_schema(
     )
     reads = lowering.reads
     requirements = (
-        reads.key_a => (type = Int32, length = lowering.item_count, access = :read),
-        reads.key_b => (type = Int32, length = lowering.item_count, access = :read),
-        reads.rank => (type = UInt32, length = lowering.item_count, access = :read),
-        reads.identity => (type = Int32, length = lowering.item_count, access = :read),
-        reads.value => (type = UInt8, length = lowering.item_count, access = :readwrite),
-        reads.gate => (type = Bool, length = 1, access = :read),
+        _binding_requirement(
+            reads.key_a, Int32, (lowering.item_count,), :read;
+            role = :first_key,
+        ),
+        _binding_requirement(
+            reads.key_b, Int32, (lowering.item_count,), :read;
+            role = :second_key,
+        ),
+        _binding_requirement(
+            reads.rank, UInt32, (lowering.item_count,), :read;
+            role = :rank,
+        ),
+        _binding_requirement(
+            reads.identity, Int32, (lowering.item_count,), :read;
+            role = :identity,
+        ),
+        _binding_requirement(
+            reads.value, UInt8, (lowering.item_count,), :readwrite;
+            role = :item_result,
+        ),
+        _binding_requirement(
+            reads.gate, Bool, (1,), :read;
+            role = :gate,
+        ),
     )
-    for (name, requirement) in requirements
-        facts = invoke(
-            _binding_facts, Tuple{Any, Any, Any}, storage, schema, name
-        )
-        facts.element_type === requirement.type ||
-            throw(LocalWorkValidationError(
-                "logical binding $name has the wrong element type"
-            ))
-        facts.dimensions == 1 && facts.size == (requirement.length,) ||
-            throw(LocalWorkValidationError(
-                "logical binding $name has the wrong layout or length"
-            ))
-        facts.access === nothing || facts.access === requirement.access ||
-            throw(LocalWorkValidationError(
-                "submission storage $name has the wrong access role"
-            ))
-    end
-    return nothing
+    return invoke(
+        _validate_binding_requirements,
+        Tuple{Any, Any, Tuple},
+        storage,
+        schema,
+        requirements,
+    )
 end
 
 function _required_bindings(lowering::_ConjunctiveResolvedLowering, work)
@@ -392,36 +416,19 @@ function _validate_workspace(
         throw(LocalWorkValidationError(
             "conjunctive workspace requires winner_ranks and winner_identities"
         ))
-    ranks = workspace.winner_ranks
-    identities = workspace.winner_identities
-    for (name, array) in ((:winner_ranks, ranks), (:winner_identities, identities))
-        eltype(array) === UInt32 || throw(LocalWorkValidationError(
-            "$name workspace must use UInt32"
-        ))
-        ndims(array) == 1 && size(array) == (lowering.destination_count,) &&
-            strides(array) == (1,) || throw(LocalWorkValidationError(
-                "$name workspace has the wrong exact dense layout"
-            ))
+    return invoke(
+        _validate_workspace_spec,
+        Tuple{Any, Tuple, Any},
+        workspace,
         invoke(
-            _validate_array_backend,
-            Tuple{Any, Any, Any},
-            array,
-            backend,
-            name,
-        )
-    end
-    Base.mightalias(ranks, identities) && throw(LocalWorkValidationError(
-        "conjunctive scratch buffers must be disjoint"
-    ))
-    return nothing
+            _centrally_owned_workspace_spec,
+            Tuple{Any, Any},
+            lowering,
+            work,
+        ),
+        backend,
+    )
 end
-
-_workspace_arrays(
-    lowering::_ConjunctiveResolvedLowering, work, workspace
-) = (
-    :winner_ranks => workspace.winner_ranks,
-    :winner_identities => workspace.winner_identities,
-)
 
 function _prepare_lowering(
         lowering::_ConjunctiveResolvedLowering,
@@ -468,26 +475,21 @@ end
 
 @inline function _conjunctive_rank_claim!(winners, destination, rank)
     destination == 0 && return nothing
-    Atomix.@atomic max(winners[destination], rank)
-    return nothing
+    return _rank_claim!(winners, destination, rank, Val(:max))
 end
 
 @inline function _conjunctive_identity_claim!(
         ranks, identities, destination, rank, identity
     )
     destination == 0 && return nothing
-    if @inbounds ranks[destination] == rank
-        Atomix.@atomic min(identities[destination], identity)
-    end
-    return nothing
+    return _identity_claim!(ranks, identities, destination, rank, identity)
 end
 
 @inline function _conjunctive_wins(
         ranks, identities, destination, rank, identity
     )
     destination == 0 && return true
-    return @inbounds ranks[destination] == rank &&
-                     identities[destination] == identity
+    return _is_winner(ranks, identities, destination, rank, identity)
 end
 
 @inline function _checked_conjunctive_identity(identities, item::Int)
@@ -659,49 +661,30 @@ function _conjunctive_determinism(backend, lowering)
         :exact_for_declared_integer_order,
         :domain_owned,
     )
-    return NamedTuple{_DETERMINISM_DIMENSIONS}(
-        map(guarantee -> merge(qualifier, (; guarantee)), guarantees)
+    return invoke(
+        _determinism_report,
+        Tuple{NamedTuple, NTuple{8, Symbol}},
+        qualifier,
+        guarantees,
     )
 end
 
 function _lowering_evidence(
         lowering::_ConjunctiveResolvedLowering, work, topology, backend
     )
-    rank_bytes = invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
-        lowering.destination_count,
-        sizeof(UInt32),
-        :conjunctive_rank_workspace_bytes,
+    workspace_spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        work,
     )
-    identity_bytes = invoke(
-        _checked_int_product,
-        Tuple{Integer, Integer, Any},
+    workspace = invoke(
+        _winner_workspace_evidence,
+        Tuple{Tuple, Int, Symbol, Symbol},
+        workspace_spec,
         lowering.destination_count,
-        sizeof(UInt32),
-        :conjunctive_identity_workspace_bytes,
-    )
-    workspace = (
-        destination_count = lowering.destination_count,
-        rank = (
-            element_type = UInt32,
-            length = lowering.destination_count,
-            alignment = Base.datatype_alignment(UInt32),
-            bytes = rank_bytes,
-        ),
-        identity = (
-            element_type = UInt32,
-            length = lowering.destination_count,
-            alignment = Base.datatype_alignment(UInt32),
-            bytes = identity_bytes,
-        ),
-        total_bytes = invoke(
-            _checked_int_sum,
-            Tuple{Integer, Integer, Any},
-            rank_bytes,
-            identity_bytes,
-            :conjunctive_total_workspace_bytes,
-        ),
+        :winner_ranks,
+        :winner_identities,
     )
     capability = (
         backend = typeof(backend),
@@ -728,31 +711,38 @@ function _lowering_evidence(
         backend,
         lowering,
     )
-    port = (
-        family = :resolved,
-        route = lowering.output.destinations,
-        destination_count = lowering.destination_count,
-        result_count = lowering.item_count,
-        maximum_emissions = 2,
-        coverage = :not_applicable,
-        law = (
+    port = invoke(
+        _port_evidence,
+        Tuple{
+            Symbol, Any, Int, Int, Symbol, NamedTuple, Symbol,
+            Symbol, Any, NamedTuple, NamedTuple,
+        },
+        :resolved,
+        lowering.output.destinations,
+        lowering.destination_count,
+        2,
+        :not_applicable,
+        (
             kind = :conjunctive_resolved,
             rank = lowering.output.rank,
             tie_break = lowering.output.tie_break,
             skipped_keys = lowering.output.skipped_keys,
             result = lowering.output.result,
         ),
-        publication_target = :item_result,
-        result_layout = lowering.output.result.layout,
-        publication_phase = :publication,
-        post_launch_failure_visibility = :publication_phase_is_not_transactional,
-        empty_destination = :not_published_for_private_claim_destinations,
-        empty_result = lowering.output.empty,
-        private_key_no_winner_state = (
-            rank = lowering.sentinel_rank,
-            identity = lowering.sentinel_identity,
-        ),
+        :publication,
+        :publication_phase_is_not_transactional,
+        :not_published_for_private_claim_destinations,
         determinism,
+        (;
+            result_count = lowering.item_count,
+            publication_target = :item_result,
+            result_layout = lowering.output.result.layout,
+            empty_result = lowering.output.empty,
+            private_key_no_winner_state = (
+                rank = lowering.sentinel_rank,
+                identity = lowering.sentinel_identity,
+            ),
+        ),
     )
     return (
         family = :resolved_conjunctive_selection,
@@ -765,7 +755,15 @@ function _lowering_evidence(
             :publication,
         ),
         workspace,
-        topology_transfer_bytes = 0,
+        topology_transfer_bytes = invoke(
+            _centrally_count_topology_payload_bytes,
+            Tuple{Any},
+            invoke(
+                _centrally_owned_static_topology_payload,
+                Tuple{Any},
+                lowering,
+            ),
+        ),
         capability,
         determinism,
         ports = NamedTuple{(lowering.output_name,)}((port,)),
@@ -850,6 +848,12 @@ function _lowering_inspection(
         work,
         workspace,
     )
+    workspace_spec = invoke(
+        _centrally_owned_workspace_spec,
+        Tuple{Any, Any},
+        lowering,
+        work,
+    )
     return (
         family = :resolved_conjunctive_selection,
         phases = (
@@ -877,12 +881,22 @@ function _lowering_inspection(
         unselected_publication = :empty,
         alias_proof = :proven_pointwise_readwrite,
         launches = 4,
-        topology_transfer_bytes = 0,
-        workspace = (
-            rank_identity = objectid(workspace.winner_ranks),
-            identity_identity = objectid(workspace.winner_identities),
-            rank_bytes = sizeof(UInt32) * length(workspace.winner_ranks),
-            identity_bytes = sizeof(UInt32) * length(workspace.winner_identities),
+        topology_transfer_bytes = invoke(
+            _centrally_count_topology_payload_bytes,
+            Tuple{Any},
+            invoke(
+                _centrally_owned_static_topology_payload,
+                Tuple{Any},
+                lowering,
+            ),
+        ),
+        workspace = invoke(
+            _winner_workspace_inspection,
+            Tuple{Any, Tuple, Symbol, Symbol},
+            workspace,
+            workspace_spec,
+            :winner_ranks,
+            :winner_identities,
         ),
     )
 end

@@ -1,0 +1,10 @@
+LW-4A post-LW-R2A-remediation authoritative PottsToolkit qualification
+Date: 2026-08-10
+Command: julia --project=. -e 'using Pkg; Pkg.test("PottsToolkit")'
+Exit: 0
+Result: PottsToolkit tests passed
+Authoritative runner closure: 412/412
+G5H-1 through G5H-3 authoritative package surface: 2,198/2,198
+Time: 18m35.9s
+The disposable test sandbox re-resolved the same compatible SciML patch set documented in the
+command record, including ModelingToolkit 11.38.2 and ModelingToolkitBase 1.62.0.

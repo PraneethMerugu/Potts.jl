@@ -31,11 +31,18 @@ function _topology_fingerprint(topology, lowering::_SequenceLowering)
         ),
         lowering.stages,
     )
-    all(==(first(fingerprints)), fingerprints) ||
-        throw(LocalWorkValidationError(
-            "ordered stages disagree about structural topology evidence"
-        ))
-    return first(fingerprints)
+    # Each stage may legitimately own different routes, destinations and
+    # output names. The ordered declaration owns their ordered composition,
+    # not an artificial requirement that the stage fingerprints coincide.
+    io = IOBuffer()
+    write(io, Int64(length(fingerprints)))
+    for (index, fingerprint) in pairs(fingerprints)
+        encoded = codeunits(string(fingerprint))
+        write(io, Int64(index))
+        write(io, Int64(length(encoded)))
+        write(io, encoded)
+    end
+    return bytes2hex(SHA.sha256(take!(io)))
 end
 
 function _validate_fresh_topology(
@@ -47,7 +54,22 @@ function _validate_fresh_topology(
         invoke(_topology_epoch, Tuple{Any}, workplan.topology) ==
         evidence.topology_epoch ||
         throw(LocalWorkValidationError(
-            "the WorkPlan topology identity or epoch is stale"
+            "the WorkPlan topology identity or epoch is stale";
+            stage = structural ? :prepare : :run,
+            contract = :topology_epoch,
+            expected = (
+                identity = evidence.topology_identity,
+                epoch = evidence.topology_epoch,
+            ),
+            actual = (
+                identity = invoke(
+                    _topology_identity, Tuple{Any}, workplan.topology
+                ),
+                epoch = invoke(
+                    _topology_epoch, Tuple{Any}, workplan.topology
+                ),
+            ),
+            hint = "rebuild the WorkPlan from the current topology",
         ))
     structural && invoke(
         _centrally_qualified_topology_fingerprint,
@@ -56,7 +78,16 @@ function _validate_fresh_topology(
         workplan.lowering,
     ) != evidence.topology_fingerprint &&
         throw(LocalWorkValidationError(
-            "the WorkPlan structural topology fingerprint is stale"
+            "the WorkPlan structural topology fingerprint is stale";
+            stage = :prepare, contract = :topology_fingerprint,
+            expected = evidence.topology_fingerprint,
+            actual = invoke(
+                _centrally_qualified_topology_fingerprint,
+                Tuple{Any, Any},
+                workplan.topology,
+                workplan.lowering,
+            ),
+            hint = "rebuild the WorkPlan after changing topology arrays",
         ))
     return nothing
 end
@@ -449,7 +480,10 @@ end
 
 function _make_provider_lane(backend, storage)
     throw(LocalWorkValidationError(
-        "no centrally admitted provider-lane adapter exists for $(typeof(backend))"
+        "no centrally admitted provider-lane adapter exists for $(typeof(backend))";
+        stage = :prepare, contract = :backend_capability,
+        expected = :centrally_qualified_provider,
+        actual = typeof(backend),
     ))
 end
 

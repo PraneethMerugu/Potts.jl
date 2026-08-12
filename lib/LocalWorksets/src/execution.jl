@@ -1,40 +1,60 @@
 function _validate_value(slot::_ValueSlot{T}, value, name) where {T}
     typeof(value) === T || throw(LocalWorkValidationError(
-        "submission value $name has type $(typeof(value)); expected $T"
+        "submission value $name has type $(typeof(value)); expected $T";
+        stage = :run, contract = :submission_value_type,
+        binding = name, expected = T, actual = typeof(value),
     ))
     slot.bounds === nothing || value in slot.bounds ||
         throw(LocalWorkValidationError(
-            "submission value $name is outside its prepared bounds"
+            "submission value $name is outside its prepared bounds";
+            stage = :run, contract = :submission_value_bounds,
+            binding = name, expected = slot.bounds, actual = value,
         ))
     return nothing
 end
 
 function _validate_storage(slot::_StorageSlot{T, N}, value, name) where {T, N}
     typeof(value) === slot.array_type || throw(LocalWorkValidationError(
-        "submission storage $name has the wrong concrete array type"
+        "submission storage $name has the wrong concrete array type";
+        stage = :run, contract = :submission_storage_type,
+        binding = name, expected = slot.array_type, actual = typeof(value),
     ))
     eltype(value) === T || throw(LocalWorkValidationError(
-        "submission storage $name has the wrong element type"
+        "submission storage $name has the wrong element type";
+        stage = :run, contract = :submission_storage_element_type,
+        binding = name, expected = T, actual = eltype(value),
     ))
     ndims(value) == N || throw(LocalWorkValidationError(
-        "submission storage $name has the wrong dimensionality"
+        "submission storage $name has the wrong dimensionality";
+        stage = :run, contract = :submission_storage_dimensions,
+        binding = name, expected = N, actual = ndims(value),
     ))
     size(value) == slot.size || throw(LocalWorkValidationError(
-        "submission storage $name has the wrong shape"
+        "submission storage $name has the wrong shape";
+        stage = :run, contract = :submission_storage_shape,
+        binding = name, expected = slot.size, actual = size(value),
     ))
     strides(value) == slot.strides || throw(LocalWorkValidationError(
-        "submission storage $name has the wrong layout"
+        "submission storage $name has the wrong layout";
+        stage = :run, contract = :submission_storage_strides,
+        binding = name, expected = slot.strides, actual = strides(value),
     ))
     backend = KernelAbstractions.get_backend(value)
     typeof(backend) === slot.backend_type ||
         throw(LocalWorkValidationError(
-            "submission storage $name belongs to a different backend"
+            "submission storage $name belongs to a different backend";
+            stage = :run, contract = :submission_storage_backend,
+            binding = name, expected = slot.backend_type,
+            actual = typeof(backend),
         ))
     (backend isa KernelAbstractions.CPU ||
         invoke(_array_device_identity, Tuple{Any}, value) ==
             slot.device_identity) ||
         throw(LocalWorkValidationError(
-            "submission storage $name belongs to a different device/context"
+            "submission storage $name belongs to a different device/context";
+            stage = :run, contract = :submission_storage_device,
+            binding = name, expected = slot.device_identity,
+            actual = invoke(_array_device_identity, Tuple{Any}, value),
         ))
     return nothing
 end
@@ -47,7 +67,9 @@ end
     length(schema_names) == length(submission_names) &&
         Set(schema_names) == Set(submission_names) || return :(
         throw(LocalWorkValidationError(
-            "submission names do not exactly match the prepared schema"
+            "submission names do not exactly match the prepared schema";
+            stage = :run, contract = :submission_slot_names,
+            expected = $schema_names, actual = $submission_names,
         ))
     )
     slot_types = S.parameters[2].parameters
@@ -69,12 +91,18 @@ end
             push!(validations, quote
                 typeof($value) === $expected_type || throw(
                     LocalWorkValidationError(
-                        $("submission value $name has the wrong type")
+                        $("submission value $name has the wrong type");
+                        stage = :run, contract = :submission_value_type,
+                        binding = $(QuoteNode(name)),
+                        expected = $expected_type, actual = typeof($value),
                     )
                 )
                 $slot.bounds === nothing || $value in $slot.bounds || throw(
                     LocalWorkValidationError(
-                        $("submission value $name is outside its prepared bounds")
+                        $("submission value $name is outside its prepared bounds");
+                        stage = :run, contract = :submission_value_bounds,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.bounds, actual = $value,
                     )
                 )
             end)
@@ -84,47 +112,81 @@ end
             push!(validations, quote
                 typeof($value) === $slot.array_type || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name has the wrong concrete array type")
+                        $("submission storage $name has the wrong concrete array type");
+                        stage = :run, contract = :submission_storage_type,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.array_type, actual = typeof($value),
                     )
                 )
                 eltype($value) === $expected_type || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name has the wrong element type")
+                        $("submission storage $name has the wrong element type");
+                        stage = :run,
+                        contract = :submission_storage_element_type,
+                        binding = $(QuoteNode(name)),
+                        expected = $expected_type, actual = eltype($value),
                     )
                 )
                 ndims($value) == $expected_dimensions || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name has the wrong dimensionality")
+                        $("submission storage $name has the wrong dimensionality");
+                        stage = :run,
+                        contract = :submission_storage_dimensions,
+                        binding = $(QuoteNode(name)),
+                        expected = $expected_dimensions,
+                        actual = ndims($value),
                     )
                 )
                 size($value) == $slot.size || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name has the wrong shape")
+                        $("submission storage $name has the wrong shape");
+                        stage = :run, contract = :submission_storage_shape,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.size, actual = size($value),
                     )
                 )
                 strides($value) == $slot.strides || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name has the wrong layout")
+                        $("submission storage $name has the wrong layout");
+                        stage = :run,
+                        contract = :submission_storage_strides,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.strides, actual = strides($value),
                     )
                 )
                 local backend = KernelAbstractions.get_backend($value)
                 typeof(backend) === $slot.backend_type || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name belongs to a different backend")
+                        $("submission storage $name belongs to a different backend");
+                        stage = :run,
+                        contract = :submission_storage_backend,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.backend_type,
+                        actual = typeof(backend),
                     )
                 )
                 (backend isa KernelAbstractions.CPU || invoke(
                     _array_device_identity, Tuple{Any}, $value
                 ) == $slot.device_identity) || throw(
                     LocalWorkValidationError(
-                        $("submission storage $name belongs to a different device/context")
+                        $("submission storage $name belongs to a different device/context");
+                        stage = :run,
+                        contract = :submission_storage_device,
+                        binding = $(QuoteNode(name)),
+                        expected = $slot.device_identity,
+                        actual = invoke(
+                            _array_device_identity, Tuple{Any}, $value
+                        ),
                     )
                 )
             end)
         else
             return :(
                 throw(LocalWorkValidationError(
-                    $("submission slot $name is not centrally recognized")
+                    $("submission slot $name is not centrally recognized");
+                    stage = :run, contract = :submission_slot_kind,
+                    binding = $(QuoteNode(name)),
+                    expected = (:value, :storage), actual = $slot_type,
                 ))
             )
         end
@@ -174,13 +236,22 @@ function _validate_dynamic_aliases(prepared::PreparedWork, bindings)
             dynamic_access === :read && other_access === :read && continue
             Base.mightalias(binding, getproperty(bindings, other_name)) &&
                 throw(LocalWorkValidationError(
-                    "logical bindings $dynamic_name and $other_name illegally alias"
+                    "logical bindings $dynamic_name and $other_name illegally alias";
+                    stage = :run, contract = :storage_alias,
+                    binding = dynamic_name,
+                    expected = :nonaliasing_writable_bindings,
+                    actual = (dynamic_name, other_name),
                 ))
         end
         for (workspace_name, scratch) in prepared.workspace_arrays
             Base.mightalias(binding, scratch) && throw(
                 LocalWorkValidationError(
-                    "logical binding $dynamic_name aliases workspace $workspace_name"
+                    "logical binding $dynamic_name aliases workspace $workspace_name";
+                    stage = :run, contract = :workspace_alias,
+                    binding = dynamic_name,
+                    workspace_leaf = workspace_name,
+                    expected = :nonaliasing,
+                    actual = (dynamic_name, workspace_name),
                 )
             )
         end
@@ -219,7 +290,10 @@ function run!(prepared::PreparedWork, submission::NamedTuple = (;))
         "PreparedWork submission is bound to its preparing host task"
     ))
     prepared.poisoned && throw(LocalWorkValidationError(
-        "PreparedWork is poisoned; inspect and drain before re-preparing"
+        "PreparedWork is poisoned; inspect and drain before re-preparing";
+        stage = :run, contract = :provider_poison_state,
+        expected = :healthy, actual = prepared.poison_reason,
+        hint = "create a fresh preparation after the provider scope is discarded",
     ))
     world = Base.get_world_counter()
     if world != prepared.operation_world
@@ -330,7 +404,11 @@ function run!(prepared::PreparedWork, submission::NamedTuple = (;))
     outstanding = prepared.submitted - prepared.drained
     outstanding < UInt64(length(prepared.leases)) ||
         throw(LocalWorkValidationError(
-            "PreparedWork submission lease capacity is exhausted"
+            "PreparedWork submission lease capacity is exhausted";
+            stage = :run, contract = :workspace_lease_capacity,
+            workspace_leaf = :leases,
+            expected = length(prepared.leases), actual = outstanding,
+            hint = "wait for a cumulative WorkEvent before submitting again",
         ))
 
     lock(prepared.append_lock)
@@ -414,19 +492,20 @@ function Base.wait(event::WorkEvent)
         # cannot strand the already submitted asynchronous tail.
         Base.invoke_in_world(
             prepared.trusted_world,
-            _centrally_admitted_provider_call,
             _wait_lane!,
-            (prepared.lane,),
-            :wait,
+            prepared.lane,
         )
     catch error
         prepared.poisoned = true
         prepared.poison_reason = error
         rethrow()
     end
-    invoke(
+    # Reclaim the synchronized prefix in the same last-admitted world as the
+    # provider wait. This freezes both _release_through! and its nested
+    # package-owned helpers against method-table changes after submission.
+    Base.invoke_in_world(
+        prepared.trusted_world,
         _release_through!,
-        Tuple{PreparedWork, UInt64},
         prepared,
         target,
     )

@@ -16,12 +16,6 @@ function run_lw_matrix_free_fem_witness(
         backend = KernelAbstractions.CPU(),
     )
     route = Int32[1 2 3; 2 3 5; 4 4 6; 5 6 7]
-    topology = (
-        epoch = UInt64(3),
-        item_count = 3,
-        routes = (element_nodes = route,),
-        destination_counts = (residual = 8,),
-    )
     work = LocalWorksets.localwork(
         _LWFEMElementApply(),
         1:3;
@@ -34,6 +28,12 @@ function run_lw_matrix_free_fem_witness(
                 combine = LocalWorksets.deterministic(+, Float32(0)),
             ),
         ),
+    )
+    topology = LocalWorksets.topology(
+        work;
+        epoch = UInt64(3),
+        routes = (element_nodes = route,),
+        destination_counts = (residual = 8,),
     )
     workplan = LocalWorksets.plan(work, topology; backend)
     local_values = Float32[
@@ -50,15 +50,10 @@ function run_lw_matrix_free_fem_witness(
         local_values = array_type(local_values),
         residual = array_type(fill(Float32(-1), 8)),
     )
-    workspace = (
-        records = (
-            residual = (
-                values = array_type(fill(Float32(0), 12)),
-                valid = array_type(fill(false, 12)),
-            ),
-        ),
-        leases = Any[nothing, nothing],
+    prepared = LocalWorksets.prepare(
+        workplan, storage; lease_capacity = 2
     )
+    workspace = prepared.workspace
     invalid_workspace = (
         records = (
             residual = (
@@ -77,7 +72,6 @@ function run_lw_matrix_free_fem_witness(
         true
     end
     invalid_rejected || error("one-short FEM workspace was admitted")
-    prepared = LocalWorksets.prepare(workplan, storage; workspace)
     event = LocalWorksets.run!(prepared)
     wait(event)
     actual = Array(storage.residual)
@@ -88,14 +82,21 @@ function run_lw_matrix_free_fem_witness(
         warm_event = LocalWorksets.run!(prepared)
         wait(warm_event)
     end
+    prepared_facts = LocalWorksets.inspect(prepared)
     return (
         name = :matrix_free_fem,
         result = actual,
         reference = expected,
         launches = planned.launches,
-        waits = LocalWorksets.inspect(prepared).wait_count,
+        waits = prepared_facts.wait_count,
         transfer_bytes = planned.topology_transfer_bytes,
         workspace_bytes = planned.workspace.total_bytes,
+        workspace_ownership = prepared_facts.workspace_ownership,
+        workspace_identities = Tuple(
+            name => getproperty(prepared_facts.workspace_facts, name).identity
+            for name in keys(prepared_facts.workspace_facts)
+        ),
+        lease_identity = prepared_facts.lease_identity,
         warm_allocations,
         determinism = planned.determinism,
         invalid_rejected,

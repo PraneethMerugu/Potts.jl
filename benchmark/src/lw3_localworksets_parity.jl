@@ -192,6 +192,7 @@ function _lw3_run_batch!(
     return (
         seconds = sample.time,
         bytes = sample.bytes,
+        allocations = Base.gc_alloc_count(sample.gcstats),
         receipt = sample.value,
     )
 end
@@ -292,8 +293,10 @@ function run_lw3_localworksets_parity(
 
     direct_samples = Vector{Float64}(undef, Int(measured_batches))
     candidate_samples = similar(direct_samples)
-    direct_allocations = Vector{Int}(undef, Int(measured_batches))
-    candidate_allocations = similar(direct_allocations)
+    direct_allocated_bytes = Vector{Int}(undef, Int(measured_batches))
+    candidate_allocated_bytes = similar(direct_allocated_bytes)
+    direct_allocation_counts = similar(direct_allocated_bytes)
+    candidate_allocation_counts = similar(direct_allocated_bytes)
     order_rng = Xoshiro(UInt64(0x6c77335f6f726465))
     candidate_first = rand(order_rng, Bool, Int(measured_batches))
     final_direct = nothing
@@ -309,8 +312,10 @@ function run_lw3_localworksets_parity(
         end
         direct_samples[index] = direct_sample.seconds
         candidate_samples[index] = candidate_sample.seconds
-        direct_allocations[index] = direct_sample.bytes
-        candidate_allocations[index] = candidate_sample.bytes
+        direct_allocated_bytes[index] = direct_sample.bytes
+        candidate_allocated_bytes[index] = candidate_sample.bytes
+        direct_allocation_counts[index] = direct_sample.allocations
+        candidate_allocation_counts[index] = candidate_sample.allocations
         if full_snapshot
             final_direct = direct_sample.receipt
             final_candidate = candidate_sample.receipt
@@ -329,8 +334,8 @@ function run_lw3_localworksets_parity(
           initial_facts.lowering_detail.workspace.identity_identity
     @test facts.lease_identity == initial_facts.lease_identity
     color_count = Int(fixture.program.checkerboard_plan.color_count)
-    direct_median_allocation = median(direct_allocations)
-    candidate_median_allocation = median(candidate_allocations)
+    direct_median_allocation = median(direct_allocated_bytes)
+    candidate_median_allocation = median(candidate_allocated_bytes)
     report = (
         schema = :lw3_localworksets_parity_v1,
         backend = backend_name,
@@ -344,14 +349,18 @@ function run_lw3_localworksets_parity(
         candidate_first,
         direct_seconds = direct_samples,
         candidate_seconds = candidate_samples,
-        direct_allocated_bytes = direct_allocations,
-        candidate_allocated_bytes = candidate_allocations,
+        direct_allocated_bytes,
+        candidate_allocated_bytes,
+        direct_allocation_counts,
+        candidate_allocation_counts,
+        direct_median_allocation_count = median(direct_allocation_counts),
+        candidate_median_allocation_count =
+            median(candidate_allocation_counts),
         direct_median_allocated_bytes = direct_median_allocation,
         candidate_median_allocated_bytes = candidate_median_allocation,
         median_allocated_byte_delta =
             candidate_median_allocation - direct_median_allocation,
-        allocation_comparison =
-            :raw_candidate_including_leases_and_events_vs_unadjusted_direct,
+        allocation_comparison = :complete_runtime_batch_scope,
         direct_median_seconds = median(direct_samples),
         candidate_median_seconds = median(candidate_samples),
         median_ratio = median(candidate_samples) / median(direct_samples),
@@ -369,6 +378,14 @@ function run_lw3_localworksets_parity(
         localworksets_submitted = facts.submitted,
         localworksets_drained = facts.drained,
         localworksets_workspace = facts.lowering_detail.workspace,
+        localworksets_algorithmic_workspace_bytes =
+            facts.algorithmic_workspace_bytes,
+        localworksets_workspace_ownership = facts.workspace_ownership,
+        localworksets_workspace_identities = Tuple(
+            name => getproperty(facts.workspace_facts, name).identity
+            for name in keys(facts.workspace_facts)
+        ),
+        localworksets_lease_identity = facts.lease_identity,
         localworksets_topology_transfer_bytes = facts.topology_transfer_bytes,
         localworksets_record_capacity = facts.record_capacity,
         localworksets_poisoned = facts.poisoned,

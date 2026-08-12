@@ -1,0 +1,44 @@
+^D]0;Julia]0;JuliaTest Summary:                             | Pass  Total   Time
+fresh-process Metal extension load orders |    2      2  17.6s
+Test Summary:                      | Pass  Total     Time
+G5H-4 real Metal native components |   37     37  2m59.3s
+(backend = :metal, lowering = :resolved_selection_min_Int32_UInt32_v1, launches = 4, workspace_bytes = 32, topology_transfer_bytes = 40, lease_capacity = 12, sequence_launches = 8, event_scope = :backend_implicit_order_tail, asynchronous_error_observation = (synchronization = :kernelabstractions_backend_contract, asynchronous_failures = :backend_defined, failure_scope = :backend_owner_task), same_schema_plan_reused = true, same_schema_compiler_cache_entries = (before = 324, after = 324))
+(backend = :metal, failure_type = :KernelException, poisoned = true, observation = (synchronization = :kernelabstractions_backend_contract, asynchronous_failures = :backend_defined, failure_scope = :backend_owner_task))
+(backend = :metal, scope = :backend_owner_task, good_failure = :KernelException, bad_failure = :KernelException, good_poisoned = true, bad_poisoned = true, drained = (0x0000000000000000, 0x0000000000000000))
+(backend = :metal, submitted_mcs = 12, committed_mcs = 12, claim_submissions = 12, synchronizations = 1, ownership_checksum = 8)
+(backend = :metal, expected_failure_commit = 0, expected_failure_poisoned = false, provider_failure_type = :LifecycleBackendFailure, provider_poisoned = true)
+(backend = :metal, descriptors = 32, descriptor_buffer = :MtlArray, state_buffer = :BlockView, workspace_buffer = :BlockView, value = 17.5f0)
+Test Summary:                                              | Pass  Total   Time
+external Metal mechanisms reject without reviewed evidence |    2      2  13.0s
+(backend = :metal, shapes = ((1, 1), (255, 1), (256, 1), (257, 1), (17, 19)), workgroup_sizes = (32, 64, 128, 256), reports = @NamedTuple{shape::Tuple{Int64, Int64}, workgroup_size::Int64, branch::Symbol, cpu_report::NTuple{5, UInt64}}[(shape = (1, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)) (shape = (1, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000000, 0x0000000000000000, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000)); (shape = (255, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)) (shape = (255, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000071, 0x0000000000000000, 0x0000000000000000)); (shape = (256, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)) (shape = (256, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000072, 0x0000000000000000, 0x0000000000000000)); (shape = (257, 1), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)) (shape = (257, 1), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x000000000000008d, 0x0000000000000073, 0x0000000000000000, 0x0000000000000000)); (shape = (17, 19), workgroup_size = 32, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 64, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 128, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000)) (shape = (17, 19), workgroup_size = 256, branch = :neutral, cpu_report = (0x0000000000000001, 0x0000000000000010, 0x0000000000000132, 0x0000000000000000, 0x0000000000000000))], constraint_report = (shape = (257, 1), workgroup_size = 64, branch = :constraint, cpu_report = (0x0000000000000000, 0x000000000000008e, 0x0000000000000073, 0x000000000000008e, 0x0000000000000000)), energy_report = (shape = (257, 1), workgroup_size = 64, branch = :energy, cpu_report = (0x0000000000000000, 0x000000000000008e, 0x0000000000000073, 0x0000000000000000, 0x000000000000008e)))
+Test Summary:                                                     | Pass  Total   Time
+external relationship mechanism rejects without reviewed evidence |    3      3  25.1s
+Test Summary:                                                | Pass  Total   Time
+external surface operation rejects without reviewed evidence |    2      2  13.7s
+(backend = :metal, selected = 1, active_cells = 2, ownership_checksum = 95)
+(backend = :metal, committed_mcs = 2, settlements = 1, ownership_checksum = 104)
+(backend = :metal, status = CorePotts.ProgramStatusCellCapacity, failure_mcs = 1, failure_stage = CorePotts.ProgramStageSelection, committed_mcs = 0, settlements = 1)
+(backend = :metal, permutations = 2, selected = (2, 2), status = CorePotts.ProgramStatus(CorePotts.ProgramStatusEvaluator, 1, CorePotts.ProgramStageState, 10, 0xc4a7b640da82b267, 0, 2, CorePotts.LifecycleDetailNonfiniteResult, 0, 0, 0))
+(backend = :MetalBackend, stepped_mcs = 1, solved_mcs = 2, settlements = 1, resumed_mcs = 2, updated_cells = 1, failure_mcs = 1)
+(backend = :metal, boundaries = 4, active_cells = 0)
+(backend = :metal, parent = 10.0f0, daughter = 20.0f0)
+(backend = :metal, variants = 8, active_cells = 16)
+(backend = :metal, active_relationships = 3, filtered = 2)
+(backend = :metal, retired = 1)
+(backend = :metal, seed = 0x0000000000000001, constraint_rejections = 1)
+Test Summary:                                                  | Pass  Total   Time
+external lifecycle mechanism rejects without reviewed evidence |    1      1  18.4s
+(backend = :metal, filtered = 1, rejected_conflict = true)
+┌ Info: LW-3 paired noninferiority diagnostic
+│   backend = :metal
+│   median_ratio = 1.1040792691301247
+│   upper_95 = 1.1133430596836071
+│   direct_median = 0.111409271
+└   candidate_median = 0.1230046665
+Test Failed at /Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/benchmark/src/lw3_localworksets_parity.jl:392
+  Expression: report.candidate_median_allocated_bytes <= report.direct_median_allocated_bytes
+   Evaluated: 3.4920776e7 <= 1.7678968e7
+
+ERROR: LoadError: There was an error during testing
+in expression starting at /Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/benchmark/backends/metal/lw3_localworksets_parity.jl:5
+in expression starting at /Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/benchmark/backends/metal/runtests.jl:192
