@@ -5,7 +5,7 @@
 > `design/hardening/lw4q-qualification.md`. Its production findings remain
 > audit history; this file is not a competing workflow authority.
 
-Status: corrected candidate under validation; not yet frozen
+Status: historical production contract fulfilled; final LW-R2 Freeze sealed
 
 Date: 2026-08-11
 
@@ -134,4 +134,5 @@ context only and is excluded from performance evidence, including the earlier
 travel-affected run.
 
 MethodOfLines input-field integration remains deferred exactly as documented.
-LW-5 remains closed until fresh LW-R2 passes the sealed candidate.
+Fresh LW-R2 passed the sealed candidate. The authoritative final record is
+`lw4-final-qualification-bundle`, committed at `a65622a2`; LW-5 is open.

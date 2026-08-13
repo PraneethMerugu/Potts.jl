@@ -1,7 +1,7 @@
 # LW-4C3 public API reconciliation
 
 Status: implementation complete; final all-layer CPU/Metal qualification and
-fresh LW-R2 review remain required before freeze.
+fresh LW-R2 review passed; API frozen by the sealed final record.
 
 Baseline authority: commit `44389fc` and
 `design/hardening/lw4b-b5-final-hashes.sha256`.
@@ -226,7 +226,7 @@ belong to the final LW-4C evidence record after the candidate stops changing.
 | Implementation | retained four-launch legacy resolved adapter duplicates generic obligations | Keep isolated until a source-compatible replacement proves all named-family/topology/workspace/inspection obligations; no new adoption. |
 | Usability | complete inspection was compiler-oriented when read flat | Resolved additively with derived author groups; complete flat machine evidence remains authoritative. |
 | Usability | message-only lifecycle failures were brittle to test and hard to recover from | Stable public diagnostic fields now cover high-value routes/results/bindings/aliases/submissions/workspace/capability/topology/poison paths; rare internal invariants may be enriched after freeze. |
-| Implementation | final exact CPU/Metal timing and footprint evidence pending | Blocks LW-R2. |
+| Implementation | final exact CPU/Metal timing and footprint evidence complete | Sealed LW-R2 bundle passed. |
 
 ## API-freeze checklist
 
@@ -242,6 +242,6 @@ belong to the final LW-4C evidence record after the candidate stops changing.
 - [x] public/private names, docstrings, property discovery, `show` and
   `inspect` are tested;
 - [x] complete CPU authoring examples are runnable;
-- [ ] complete final standalone/Core/root/CPU/Metal qualification;
-- [ ] exact hashes and footprint disposition;
-- [ ] fresh independent LW-R2 memos, contradiction round and ballots.
+- [x] complete final standalone/Core/root/CPU/Metal qualification;
+- [x] exact hashes and footprint disposition;
+- [x] fresh independent LW-R2 memos, contradiction round and ballots.

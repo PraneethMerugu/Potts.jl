@@ -1,6 +1,6 @@
 # LW-4C consolidation and API-freeze implementation matrix
 
-Status: authoritative working matrix
+Status: complete; final LW-R2 passed and LW-4 frozen
 
 Baseline: commit `44389fc`, manifest `design/hardening/lw4b-b5-final-hashes.sha256`
 
@@ -12,7 +12,8 @@ Baseline: commit `44389fc`, manifest `design/hardening/lw4b-b5-final-hashes.sha2
 - C2/C3 conveniences desugar into the same lifecycle and centrally admitted lowerings.
 - No automatic allocation occurs in `plan`, `run!` or `inspect`; warm execution never grows.
 - No new execution family is admitted without two unrelated complete consumers.
-- LW-5 and G6 remain closed until fresh LW-R2 passes.
+- LW-5 opens only after fresh LW-R2 passes and the exact bundle is sealed,
+  committed, and accepted by `--verify-final`; G6 remains separately closed.
 
 ## LW-4C0 — internal complexity audit
 
@@ -79,7 +80,9 @@ Status: implementation complete; exact evidence:
 ## Pre-freeze usability and maintainability lens
 
 Status: classifications and bounded remediation complete; exact-bundle ballots
-remain open. Authority: `lw4c-usability-maintainability-audit.md`.
+passed and the final record is sealed. Pre-freeze authority:
+`lw4c-usability-maintainability-audit.md`; final authority:
+`lw4-final-qualification-bundle`.
 
 | ID | Required behavior | Tests/evidence |
 |---|---|---|
@@ -108,3 +111,13 @@ Fresh reviewers independently ballot on standalone independence, boundedness of 
 Level 1 readability, Level 2 completeness, extension safety, CPU/Metal qualification, CorePotts
 parity/ownership and readiness for LW-5. Require independent memos before contradiction/red-team
 deliberation. P0/P1 findings block; substantive P2 dissent is preserved with an explicit owner.
+
+## Final disposition
+
+All C0-C3 and Q-01-Q-07 obligations are complete. The sealed Freeze binds
+product `ee395bd2f70d210fe98a0fb748e6530824c50671` to evidence digest
+`49002d9542b64c4c03388ab9bbe30632dfe20a64eac6c2e4bbcb89c50a486641`.
+All five specialty ballots passed with P0=0 and P1=0; the chair disposition is
+`freeze`. Final seal commit `a65622a2` passes `--verify-final`. Two nonblocking
+diagnostic P2s are carried into LW-5. LW-4 is complete and LW-5 is open; G6
+remains closed.

@@ -6,8 +6,8 @@ architecture or phase boundaries.
 
 Date: 2026-08-10
 
-Status: LW-4A complete and LW-R2A cleared; LW-4B complete and LW-R2B passed; LW-4C open;
-LW-5 and G6 closed
+Status: LW-4A, LW-4B, LW-4C, and final LW-R2 complete; LW-4 frozen; LW-5 open;
+G6 closed
 
 Authority:
 

@@ -195,13 +195,15 @@ remain portability intent until real hardware jobs pass.
 
 ## Current bundle determination
 
-Completed historical 1,000-pair bundles remain valid for their exact recorded
+Historical 1,000-pair bundles remain valid only for their exact recorded
 product/workload/environment identities and for the content-addressed
-sample-sizing analysis. They do **not** qualify the current product candidate:
-production and tests changed afterward to close the exact-method adapter
-finding. LW-4Q tooling changes alone would not require a rerun, but those
-product changes do. The next Freeze is therefore one final normal 1,000-pair
-run against a clean committed candidate.
+sample-sizing analysis. The final normal 1,000-pair Freeze qualifies product
+`ee395bd2f70d210fe98a0fb748e6530824c50671` with evidence digest
+`49002d9542b64c4c03388ab9bbe30632dfe20a64eac6c2e4bbcb89c50a486641`.
+Qualification-tool-only hardening at `3c406285` revalidated the preserved raw
+evidence without rerunning product workloads. The five-role committee and
+chair passed, seal commit `a65622a2` passes `--verify-final`, and LW-R2 is
+frozen.
 
-LW-5 may use focused per-operation Development/Check cycles followed by one
-integration Freeze. It does not begin until LW-R2 freezes.
+LW-5 may now use focused per-operation Development/Check cycles followed by
+one integration Freeze.
