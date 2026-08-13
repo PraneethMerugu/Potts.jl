@@ -450,23 +450,38 @@ function _operation_call_facts(
 end
 
 function _emission_result_type(type, ::Val{1})
+    type isa DataType && isconcretetype(type) || return nothing
     return type
 end
 
 function _emission_result_type(type, ::Val{K}) where {K}
-    type <: Tuple && length(type.parameters) == K || return nothing
+    type isa DataType && isconcretetype(type) && type <: Tuple &&
+        length(type.parameters) == K || return nothing
     return type
 end
 
-function _validate_independent_result_type(work, result_type)
-    result_type <: NamedTuple || throw(LocalWorkValidationError(
-        "generic operation result must infer as a concrete NamedTuple";
-        stage = :prepare, contract = :operation_result_form,
-        expected = NamedTuple, actual = result_type,
-    ))
+function _validate_operation_result_form(result_type)
     result_type === Union{} && throw(LocalWorkValidationError(
-        "generic operation call has no inferred return"
+        "generic operation call has no applicable inferred return";
+        stage = :prepare,
+        contract = :operation_result_form,
+        expected = :concrete_named_tuple,
+        actual = result_type,
+        hint = "define (operation)(item::Int32, reads, values)",
     ))
+    result_type isa DataType && isconcretetype(result_type) &&
+        result_type <: NamedTuple || throw(LocalWorkValidationError(
+            "generic operation result must infer as one concrete NamedTuple";
+            stage = :prepare,
+            contract = :operation_result_form,
+            expected = :concrete_named_tuple,
+            actual = result_type,
+        ))
+    return nothing
+end
+
+function _validate_independent_result_type(work, result_type)
+    invoke(_validate_operation_result_form, Tuple{Any}, result_type)
     result_names = result_type.parameters[1]
     result_names == Base.keys(work.outputs) || throw(LocalWorkValidationError(
         "generic operation result names must exactly match output port names";
@@ -475,6 +490,17 @@ function _validate_independent_result_type(work, result_type)
     ))
     result_types = result_type.parameters[2].parameters
     for (index, (name, output)) in enumerate(pairs(work.outputs))
+        result_types[index] isa DataType &&
+            isconcretetype(result_types[index]) || throw(
+                LocalWorkValidationError(
+                    "output port :$(name) must infer one concrete emission form";
+                    stage = :prepare,
+                    contract = :operation_result_form,
+                    port = name,
+                    expected = :concrete_emission,
+                    actual = result_types[index],
+                )
+            )
         port_type = invoke(
             _emission_result_type,
             Tuple{Any, Val{typeof(output).parameters[2]}},
@@ -522,6 +548,107 @@ function _validate_independent_result_type(work, result_type)
                     actual = lane_type,
                 )
             )
+        end
+    end
+    return nothing
+end
+
+function _validate_emission_result_type(work, result_type)
+    invoke(_validate_operation_result_form, Tuple{Any}, result_type)
+    result_type.parameters[1] == keys(work.outputs) || throw(
+        LocalWorkValidationError(
+            "generic operation result names must exactly match output port names";
+            stage = :prepare, contract = :operation_result_ports,
+            expected = keys(work.outputs),
+            actual = result_type.parameters[1],
+        )
+    )
+    result_types = result_type.parameters[2].parameters
+    for (index, (name, output)) in enumerate(pairs(work.outputs))
+        maximum = typeof(output).parameters[2]
+        result_types[index] isa DataType &&
+            isconcretetype(result_types[index]) || throw(
+                LocalWorkValidationError(
+                    "output port :$(name) must infer one concrete emission form";
+                    stage = :prepare,
+                    contract = :operation_result_form,
+                    port = name,
+                    expected = :concrete_emission,
+                    actual = result_types[index],
+                )
+            )
+        port_type = invoke(
+            _emission_result_type,
+            Tuple{Any, Val{maximum}},
+            result_types[index], Val(maximum),
+        )
+        port_type === nothing && throw(LocalWorkValidationError(
+            "output port :$(name) has the wrong fixed emission arity";
+            stage = :prepare,
+            contract = :operation_result_arity,
+            port = name,
+            expected = maximum,
+            actual = result_types[index],
+        ))
+        lane_types = maximum == 1 ? (port_type,) : port_type.parameters
+        for lane_type in lane_types
+            if output isa _GenericResolvedOutput
+                lane_type <: Union{_Candidate, _ConditionalCandidate} ||
+                    throw(LocalWorkValidationError(
+                        "resolved output port :$(name) must use candidate(rank, value[, when])";
+                        stage = :prepare,
+                        contract = :operation_result_form,
+                        port = name,
+                        expected = Union{_Candidate, _ConditionalCandidate},
+                        actual = lane_type,
+                    ))
+                lane_type.parameters[1] === output.rank.type &&
+                    lane_type.parameters[2] === output.value_type || throw(
+                        LocalWorkValidationError(
+                            "candidate rank/value types for resolved output port :$(name) must be $(output.rank.type)/$(output.value_type), got $(lane_type.parameters[1])/$(lane_type.parameters[2])";
+                            stage = :prepare,
+                            contract = :operation_result_rank_value_types,
+                            port = name,
+                            expected = (output.rank.type, output.value_type),
+                            actual = (lane_type.parameters[1], lane_type.parameters[2]),
+                        )
+                    )
+            else
+                if !(lane_type <:
+                        Union{_Emission, _ConditionalEmission})
+                    throw(LocalWorkValidationError(
+                        "combined/independent output port :$(name) must use emit(value[, when])";
+                        stage = :prepare,
+                        contract = :operation_result_form,
+                        port = name,
+                        expected = Union{_Emission, _ConditionalEmission},
+                        actual = lane_type,
+                    ))
+                end
+                if lane_type.parameters[1] !== output.value_type
+                    throw(LocalWorkValidationError(
+                        "emitted value type for output port :$(name) must be $(output.value_type), got $(lane_type.parameters[1])";
+                        stage = :prepare,
+                        contract = :operation_result_value_type,
+                        port = name, expected = output.value_type,
+                        actual = lane_type.parameters[1],
+                    ))
+                end
+                if output isa _IndependentOutput &&
+                        typeof(output).parameters[4] === :all &&
+                        lane_type <: _ConditionalEmission
+                    throw(
+                        LocalWorkValidationError(
+                            "full-coverage independent output port :$(name) requires unconditional emissions";
+                            stage = :prepare,
+                            contract = :independent_output_coverage,
+                            port = name,
+                            expected = :unconditional_emission,
+                            actual = lane_type,
+                        )
+                    )
+                end
+            end
         end
     end
     return nothing

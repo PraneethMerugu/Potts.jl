@@ -1,6 +1,6 @@
-tests = ["bootstrap reconstruction", "bundle tamper rejection", "review rejection", "exact ledger/schema/inventory rejection", "forbidden profile rejection", "minimal validate/seal path", "post-seal review drift rejection", "tool-record tamper rejection", "revalidation-record tamper rejection"]
+tests = ["bootstrap reconstruction", "bundle tamper rejection", "outer Julia flag canonicalization", "fixed scientific comparison policy", "review rejection", "exact ledger/schema/inventory rejection", "forbidden profile rejection", "minimal validate/seal path", "post-seal review drift rejection", "tool-record tamper rejection", "revalidation-record tamper rejection"]
 julia = "1.12.6"
 disposition = "pass"
-validated_utc = "2026-08-12T23:27:50.159"
+validated_utc = "2026-08-13T01:32:40.711"
 schema_version = 1
-qualification_tool_sha256 = "41cfb88dbaef0bd981a3e3f103e1d4b68050b7c82311630101926555917d5a67"
+qualification_tool_sha256 = "8a99ff0e698a635396899596d07f04b9667ca8b393701c540b0f6037f560f4ee"

@@ -437,19 +437,27 @@ function _validate_combination_capability(
     mode = typeof(law).parameters[1]
     law isa _CombinationLaw && mode in (:deterministic, :fast) || throw(
         LocalWorkValidationError(
-            "combined output requires a centrally declared deterministic or fast law"
+            "combined output requires a centrally declared deterministic or fast law";
+            stage = :plan, contract = :combination_profile, port = name,
+            expected = (:deterministic, :fast), actual = mode,
         )
     )
     output.value_type in (Int32, UInt32, Float32) || throw(
         LocalWorkValidationError(
-            "combined value type is outside the centrally qualified profile"
+            "combined value type is outside the centrally qualified profile";
+            stage = :plan, contract = :combination_value_type, port = name,
+            expected = (Int32, UInt32, Float32), actual = output.value_type,
         )
     )
     law.operation === (+) || throw(LocalWorkValidationError(
-        "the initial combined profile centrally qualifies addition only"
+        "the initial combined profile centrally qualifies addition only";
+        stage = :plan, contract = :combination_operation, port = name,
+        expected = +, actual = law.operation,
     ))
     iszero(law.identity) || throw(LocalWorkValidationError(
-        "qualified addition requires its exact zero identity"
+        "qualified addition requires its exact zero identity";
+        stage = :plan, contract = :combination_identity, port = name,
+        expected = zero(output.value_type), actual = law.identity,
     ))
     if mode === :fast
         invoke(
@@ -487,7 +495,9 @@ function _validate_combination_capability(
         ))
     else
         throw(LocalWorkValidationError(
-            "combined output has an unrecognized combination mode"
+            "combined output has an unrecognized combination mode";
+            stage = :plan, contract = :combination_profile, port = name,
+            expected = (:deterministic, :fast), actual = mode,
         ))
     end
     return nothing
@@ -708,100 +718,6 @@ function _binding_access(lowering::_BufferedCombinedLowering, work)
     return NamedTuple{names}(map(
         name -> name in output_names ? :write : :read, names
     ))
-end
-
-function _validate_emission_result_type(work, result_type)
-    result_type <: NamedTuple || throw(LocalWorkValidationError(
-        "generic operation result must infer as a concrete NamedTuple";
-        stage = :prepare, contract = :operation_result_form,
-        expected = NamedTuple, actual = result_type,
-    ))
-    result_type.parameters[1] == keys(work.outputs) || throw(
-        LocalWorkValidationError(
-            "generic operation result names must exactly match output port names";
-            stage = :prepare, contract = :operation_result_ports,
-            expected = keys(work.outputs),
-            actual = result_type.parameters[1],
-        )
-    )
-    result_types = result_type.parameters[2].parameters
-    for (index, (name, output)) in enumerate(pairs(work.outputs))
-        maximum = typeof(output).parameters[2]
-        port_type = invoke(
-            _emission_result_type,
-            Tuple{Any, Val{maximum}},
-            result_types[index], Val(maximum),
-        )
-        port_type === nothing && throw(LocalWorkValidationError(
-            "output port :$(name) has the wrong fixed emission arity";
-            stage = :prepare,
-            contract = :operation_result_arity,
-            port = name,
-            expected = maximum,
-            actual = result_types[index],
-        ))
-        lane_types = maximum == 1 ? (port_type,) : port_type.parameters
-        for lane_type in lane_types
-            if output isa _GenericResolvedOutput
-                lane_type <: Union{_Candidate, _ConditionalCandidate} ||
-                    throw(LocalWorkValidationError(
-                        "resolved output port :$(name) must use candidate(rank, value[, when])";
-                        stage = :prepare,
-                        contract = :operation_result_form,
-                        port = name,
-                        expected = Union{_Candidate, _ConditionalCandidate},
-                        actual = lane_type,
-                    ))
-                lane_type.parameters[1] === output.rank.type &&
-                    lane_type.parameters[2] === output.value_type || throw(
-                        LocalWorkValidationError(
-                            "candidate rank/value types for resolved output port :$(name) must be $(output.rank.type)/$(output.value_type), got $(lane_type.parameters[1])/$(lane_type.parameters[2])";
-                            stage = :prepare,
-                            contract = :operation_result_rank_value_types,
-                            port = name,
-                            expected = (output.rank.type, output.value_type),
-                            actual = (lane_type.parameters[1], lane_type.parameters[2]),
-                        )
-                    )
-            else
-                if !(lane_type <:
-                        Union{_Emission, _ConditionalEmission})
-                    throw(LocalWorkValidationError(
-                        "combined/independent output port :$(name) must use emit(value[, when])";
-                        stage = :prepare,
-                        contract = :operation_result_form,
-                        port = name,
-                        expected = Union{_Emission, _ConditionalEmission},
-                        actual = lane_type,
-                    ))
-                end
-                if lane_type.parameters[1] !== output.value_type
-                    throw(LocalWorkValidationError(
-                        "emitted value type for output port :$(name) must be $(output.value_type), got $(lane_type.parameters[1])";
-                        stage = :prepare,
-                        contract = :operation_result_value_type,
-                        port = name, expected = output.value_type,
-                        actual = lane_type.parameters[1],
-                    ))
-                end
-                if output isa _IndependentOutput &&
-                        typeof(output).parameters[4] === :all &&
-                        lane_type <: _ConditionalEmission
-                    throw(
-                        LocalWorkValidationError(
-                            "full-coverage independent output port :$(name) requires unconditional emissions";
-                            stage = :prepare,
-                            contract = :independent_output_coverage,
-                            port = name,
-                            expected = :unconditional_emission,
-                            actual = lane_type,
-                        )
-                    )
-                end
-            end
-        end
-    end
-    return nothing
 end
 
 function _validate_binding_schema(

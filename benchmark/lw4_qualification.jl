@@ -27,6 +27,8 @@ const RESULT_FILES = (
 )
 const TOOL_SELF_TESTS = (
     "bootstrap reconstruction", "bundle tamper rejection",
+    "outer Julia flag canonicalization",
+    "fixed scientific comparison policy",
     "review rejection", "exact ledger/schema/inventory rejection",
     "forbidden profile rejection", "minimal validate/seal path",
     "post-seal review drift rejection", "tool-record tamper rejection",
@@ -100,6 +102,13 @@ end
 
 function _command_string(command::Cmd)
     return join(Base.shell_escape.(command.exec), " ")
+end
+
+function _canonical_julia_command(command::Cmd = Base.julia_cmd())
+    arguments = filter(command.exec) do argument
+        !startswith(argument, "--startup-file=")
+    end
+    return Cmd(arguments)
 end
 
 function _recorded_command(command::Cmd, environment)
@@ -320,8 +329,49 @@ end
 function _validate_cross_domain(reports)
     length(reports) == 5 || error("missing cross-domain witnesses")
     for report in reports
-        hasproperty(report, :result) && report.result != report.reference &&
-            error("scientific witness mismatch: $(report.name)")
+        if hasproperty(report, :comparison)
+            comparison = report.comparison
+            report.name == :lattice_spring ||
+                error("unexpected scientific comparison report: $(report.name)")
+            keys(comparison) == (:edge_state, :force, :fracture) ||
+                error("invalid scientific comparison schema: $(report.name)")
+            comparison.edge_state == (policy = :exact,) ||
+                error("edge-state comparison must be exact: $(report.name)")
+            comparison.fracture == (policy = :exact,) ||
+                error("fracture comparison must be exact: $(report.name)")
+            keys(comparison.force) ==
+                (:policy, :rtol, :maximum_absolute_error) ||
+                error("invalid force comparison schema: $(report.name)")
+            report.result.edge_state == report.reference.edge_state ||
+                error("scientific edge-state mismatch: $(report.name)")
+            report.result.fracture == report.reference.fracture ||
+                error("scientific fracture mismatch: $(report.name)")
+            if report.force_mode == :deterministic
+                comparison.force.policy == :exact &&
+                    comparison.force.rtol == Float32(0) ||
+                    error("deterministic force comparison must be exact")
+                report.result.force == report.reference.force ||
+                    error("scientific force mismatch: $(report.name)")
+            elseif report.force_mode == :fast
+                tolerance = 8eps(Float32)
+                comparison.force.policy == :rtol &&
+                    comparison.force.rtol == tolerance ||
+                    error("fast force comparison has the wrong fixed tolerance")
+                all(isapprox.(
+                    report.result.force, report.reference.force; rtol = tolerance,
+                )) || error("scientific force tolerance failed: $(report.name)")
+            else
+                error("unknown spring force mode: $(report.force_mode)")
+            end
+            error_ = maximum(abs.(report.result.force .- report.reference.force))
+            error_ == comparison.force.maximum_absolute_error ||
+                error("scientific force error does not reconstruct: $(report.name)")
+        elseif hasproperty(report, :result)
+            report.result == report.reference ||
+                error("scientific witness mismatch: $(report.name)")
+        else
+            error("scientific witness has no reconstructible result: $(report.name)")
+        end
         report.launches > 0 && report.waits > 0 || error("missing launch/wait facts")
         report.workspace_bytes >= 0 && report.transfer_bytes >= 0 ||
             error("invalid witness memory facts")
@@ -494,7 +544,7 @@ function _require_unchanged_candidate(bundle)
 end
 
 function _freeze_commands(bundle, samples)
-    julia = Base.julia_cmd()
+    julia = _canonical_julia_command()
     result(name) = joinpath(bundle, "results", "$name.jls")
     perf_env = Dict("LW4_PERF_SAMPLES" => string(samples))
     return (
@@ -508,7 +558,7 @@ function _freeze_commands(bundle, samples)
 end
 
 function _check()
-    julia = Base.julia_cmd()
+    julia = _canonical_julia_command()
     commands = (
         ("standalone", `$julia --startup-file=no --project=lib/LocalWorksets -e 'using Pkg; Pkg.test()'`),
         ("corepotts", `$julia --startup-file=no --project=lib/CorePotts -e 'using Pkg; Pkg.test()'`),
@@ -978,6 +1028,61 @@ end
 function _tool_self_test(record)
     @assert _bootstrap_upper(fill(1.0, 20), fill(1.01, 20);
         samples = 100, seed = 1) ≈ 1.01
+    base = Cmd(["julia", "-g1"])
+    inherited = Cmd([
+        "julia", "--startup-file=yes", "--startup-file=no", "-g1",
+    ])
+    _canonical_julia_command(base).exec ==
+        _canonical_julia_command(inherited).exec ||
+        error("Julia child command depends on inherited startup-file flags")
+    _canonical_julia_command(Cmd(["julia", "--check-bounds=yes"])).exec !=
+        _canonical_julia_command(base).exec ||
+        error("material Julia flags were canonicalized away")
+    common_report = (
+        result = Int32(1), reference = Int32(1), launches = 1, waits = 1,
+        workspace_bytes = 0, transfer_bytes = 0, invalid_rejected = true,
+    )
+    spring_result = (
+        edge_state = UInt32[1], force = Float32[2], fracture = UInt32[0],
+    )
+    spring_report = merge(common_report, (
+        name = :lattice_spring,
+        force_mode = :deterministic,
+        result = spring_result,
+        reference = spring_result,
+        comparison = (
+            edge_state = (policy = :exact,),
+            force = (
+                policy = :exact,
+                rtol = Float32(0),
+                maximum_absolute_error = Float32(0),
+            ),
+            fracture = (policy = :exact,),
+        ),
+    ))
+    reports = (
+        merge(common_report, (name = :one,)),
+        spring_report,
+        merge(common_report, (name = :three,)),
+        merge(common_report, (name = :four,)),
+        merge(common_report, (name = :five,)),
+    )
+    _validate_cross_domain(reports)
+    altered_force = merge(spring_result, (force = Float32[102],))
+    permissive = merge(spring_report, (
+        result = altered_force,
+        comparison = merge(spring_report.comparison, (
+            force = (
+                policy = :rtol,
+                rtol = Float32(1e6),
+                maximum_absolute_error = Float32(100),
+            ),
+        )),
+    ))
+    altered_reports = ntuple(
+        index -> index == 2 ? permissive : reports[index], length(reports)
+    )
+    @assert _rejected(() -> _validate_cross_domain(altered_reports))
     mktempdir() do directory
         mkpath(joinpath(directory, "logs"))
         write(joinpath(directory, "identity.toml"), "x = 1\n")

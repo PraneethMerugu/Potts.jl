@@ -222,7 +222,8 @@ host fallback, synchronization, allocation, or a new lowering. The central
 planner must recognize and qualify the exact backend × element type × operation
 × address-space profile.
 
-The implementation source is vendor-neutral. The current runtime qualification
+The provider and lowering execution source is vendor-neutral; reviewed
+qualification metadata is intentionally provider-specific. Current runtime qualification
 is intentionally narrower: CPU and Apple M1 Metal are tested; CUDA and ROCm are
 not claimed merely because the kernels use JuliaGPU-compatible source.
 

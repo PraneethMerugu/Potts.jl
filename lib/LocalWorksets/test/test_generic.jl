@@ -88,6 +88,228 @@ function (::_WrongHeterogeneousCoverage)(item::Int32, reads, values)
     )
 end
 
+struct _UnionIndependentResult end
+function (::_UnionIndependentResult)(item::Int32, reads, values)
+    item == Int32(1) && return (output = LW.emit(Int32(1)),)
+    return (output = LW.emit(UInt32(1)),)
+end
+
+struct _UnionBufferedResult end
+function (::_UnionBufferedResult)(item::Int32, reads, values)
+    item == Int32(1) && return (output = LW.emit(Int32(1)),)
+    return (output = LW.emit(UInt32(1)),)
+end
+
+struct _UnionHeterogeneousResult end
+function (::_UnionHeterogeneousResult)(item::Int32, reads, values)
+    item == Int32(1) && return (
+        edge = LW.emit(Int32(1)),
+        force = LW.emit(Int32(1)),
+    )
+    return (
+        edge = LW.emit(Int32(1)),
+        force = LW.emit(UInt32(1)),
+    )
+end
+
+struct _MissingInt32Method end
+(::_MissingInt32Method)(item::Float32, reads, values) =
+    (output = LW.emit(Int32(item)),)
+
+@testset "invalid external operation results have structured prelaunch errors" begin
+    backend = KA.CPU()
+    direct_output = fill(Int32(91), 2)
+    direct = LW.localwork(
+        _UnionIndependentResult(), 1:2;
+        outputs = (output = LW.independent(:route; value_type = Int32),),
+    )
+    direct_topology = LW.topology(
+        direct;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[1, 2], 1, 2),),
+        destination_counts = (output = 2,),
+    )
+    direct_error = try
+        LW.prepare(LW.plan(direct, direct_topology; backend), (output = direct_output,))
+        nothing
+    catch error
+        error
+    end
+    @test direct_error isa LW.LocalWorkValidationError
+    @test direct_error.stage == :prepare
+    @test direct_error.contract == :operation_result_form
+    @test direct_error.expected == :concrete_named_tuple
+    @test !isconcretetype(direct_error.actual)
+    @test direct_output == fill(Int32(91), 2)
+
+    direct_missing = LW.localwork(
+        _MissingInt32Method(), 1:2;
+        outputs = (output = LW.independent(:route; value_type = Int32),),
+    )
+    direct_missing_error = try
+        LW.prepare(
+            LW.plan(direct_missing, direct_topology; backend),
+            (output = direct_output,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test direct_missing_error isa LW.LocalWorkValidationError
+    @test direct_missing_error.stage == :prepare
+    @test direct_missing_error.contract == :operation_result_form
+    @test direct_missing_error.expected == :concrete_named_tuple
+    @test direct_missing_error.actual === Union{}
+    @test occursin("item::Int32", direct_missing_error.hint)
+    @test direct_output == fill(Int32(91), 2)
+
+    buffered_output = fill(Int32(73), 2)
+    buffered = LW.localwork(
+        _UnionBufferedResult(), 1:2;
+        outputs = (
+            output = LW.combined(
+                :route;
+                value_type = Int32,
+                combine = LW.deterministic(+, Int32(0)),
+            ),
+        ),
+    )
+    buffered_topology = LW.topology(
+        buffered;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[1, 2], 1, 2),),
+        destination_counts = (output = 2,),
+    )
+    buffered_error = try
+        LW.prepare(
+            LW.plan(buffered, buffered_topology; backend),
+            (output = buffered_output,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test buffered_error isa LW.LocalWorkValidationError
+    @test buffered_error.stage == :prepare
+    @test buffered_error.contract == :operation_result_form
+    @test buffered_error.expected == :concrete_named_tuple
+    @test !isconcretetype(buffered_error.actual)
+    @test buffered_output == fill(Int32(73), 2)
+
+    mixed_edge = fill(Int32(61), 2)
+    mixed_force = fill(Int32(62), 2)
+    mixed = LW.localwork(
+        _UnionHeterogeneousResult(), 1:2;
+        outputs = (
+            edge = LW.independent(:edge_route; value_type = Int32),
+            force = LW.combined(
+                :force_route;
+                value_type = Int32,
+                combine = LW.deterministic(+, Int32(0)),
+            ),
+        ),
+    )
+    mixed_topology = LW.topology(
+        mixed;
+        epoch = UInt64(1),
+        routes = (
+            edge_route = reshape(Int32[1, 2], 1, 2),
+            force_route = reshape(Int32[1, 2], 1, 2),
+        ),
+        destination_counts = (edge = 2, force = 2),
+    )
+    mixed_error = try
+        LW.prepare(
+            LW.plan(mixed, mixed_topology; backend),
+            (edge = mixed_edge, force = mixed_force),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test mixed_error isa LW.LocalWorkValidationError
+    @test mixed_error.stage == :prepare
+    @test mixed_error.contract == :operation_result_form
+    @test !isconcretetype(mixed_error.actual)
+    @test mixed_edge == fill(Int32(61), 2)
+    @test mixed_force == fill(Int32(62), 2)
+
+    missing = LW.localwork(
+        _MissingInt32Method(), 1:2;
+        outputs = (
+            output = LW.combined(
+                :route;
+                value_type = Int32,
+                combine = LW.deterministic(+, Int32(0)),
+            ),
+        ),
+    )
+    missing_error = try
+        LW.prepare(
+            LW.plan(missing, buffered_topology; backend),
+            (output = buffered_output,),
+        )
+        nothing
+    catch error
+        error
+    end
+    @test missing_error isa LW.LocalWorkValidationError
+    @test missing_error.stage == :prepare
+    @test missing_error.contract == :operation_result_form
+    @test missing_error.expected == :concrete_named_tuple
+    @test missing_error.actual === Union{}
+    @test occursin("item::Int32", missing_error.hint)
+    @test buffered_output == fill(Int32(73), 2)
+
+    unsupported = LW.localwork(
+        _UnionBufferedResult(), 1:2;
+        outputs = (
+            output = LW.combined(
+                :route;
+                value_type = Int32,
+                combine = LW.deterministic(*, Int32(1)),
+            ),
+        ),
+    )
+    unsupported_error = try
+        LW.plan(unsupported, buffered_topology; backend)
+        nothing
+    catch error
+        error
+    end
+    @test unsupported_error isa LW.LocalWorkValidationError
+    @test unsupported_error.stage == :plan
+    @test unsupported_error.contract == :combination_operation
+    @test unsupported_error.port == :output
+    @test unsupported_error.expected === (+)
+    @test unsupported_error.actual === (*)
+    @test buffered_output == fill(Int32(73), 2)
+
+    wrong_identity = LW.localwork(
+        _UnionBufferedResult(), 1:2;
+        outputs = (
+            output = LW.combined(
+                :route;
+                value_type = Int32,
+                combine = LW.deterministic(+, Int32(1)),
+            ),
+        ),
+    )
+    identity_error = try
+        LW.plan(wrong_identity, buffered_topology; backend)
+        nothing
+    catch error
+        error
+    end
+    @test identity_error isa LW.LocalWorkValidationError
+    @test identity_error.stage == :plan
+    @test identity_error.contract == :combination_identity
+    @test identity_error.port == :output
+    @test identity_error.expected == Int32(0)
+    @test identity_error.actual == Int32(1)
+    @test buffered_output == fill(Int32(73), 2)
+end
+
 
 @testset "LW-4B heterogeneous independent combined resolved work" begin
     backend = KA.CPU()

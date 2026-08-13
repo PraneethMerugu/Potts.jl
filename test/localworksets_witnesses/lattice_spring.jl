@@ -136,6 +136,9 @@ function run_lw_lattice_spring_witness(
             error("fast spring force mismatch")
     end
     actual_fracture == expected_fracture || error("spring fracture mismatch")
+    force_policy = force_mode === :deterministic ? :exact : :rtol
+    force_rtol = force_mode === :deterministic ? Float32(0) : 8eps(Float32)
+    maximum_force_error = maximum(abs.(actual_force .- expected_force))
     planned = LocalWorksets.inspect(workplan)
     warm_allocations = @allocated begin
         warm_event = LocalWorksets.run!(prepared)
@@ -145,6 +148,25 @@ function run_lw_lattice_spring_witness(
     return (
         name = :lattice_spring,
         force_mode,
+        result = (
+            edge_state = actual_edge,
+            force = actual_force,
+            fracture = actual_fracture,
+        ),
+        reference = (
+            edge_state = expected_edge,
+            force = expected_force,
+            fracture = expected_fracture,
+        ),
+        comparison = (
+            edge_state = (policy = :exact,),
+            force = (
+                policy = force_policy,
+                rtol = force_rtol,
+                maximum_absolute_error = maximum_force_error,
+            ),
+            fracture = (policy = :exact,),
+        ),
         edge_state = actual_edge,
         force = actual_force,
         fracture = actual_fracture,
