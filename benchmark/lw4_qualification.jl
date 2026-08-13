@@ -29,6 +29,7 @@ const TOOL_SELF_TESTS = (
     "bootstrap reconstruction", "bundle tamper rejection",
     "outer Julia flag canonicalization",
     "fixed scientific comparison policy",
+    "fixed witness roster and determinism claims",
     "review rejection", "exact ledger/schema/inventory rejection",
     "forbidden profile rejection", "minimal validate/seal path",
     "post-seal review drift rejection", "tool-record tamper rejection",
@@ -326,8 +327,79 @@ function _validate_performance(report, witness, samples)
     return (ratio = report.ratio, upper95 = upper, samples)
 end
 
+const DETERMINISM_DIMENSIONS = (
+    :same_run_replay,
+    :workgroup_size_invariance,
+    :bucket_order_invariance,
+    :scheduling_invariance,
+    :same_backend_bitwise,
+    :cross_backend_bitwise,
+    :numerical_bound,
+    :rng_trajectory,
+)
+
+function _expected_witness_determinism(name, mode, backend)
+    backend in (:CPU, :MetalBackend) || error("unqualified witness backend")
+    if name == :lattice_spring && mode == :deterministic
+        lowering = :buffered_combined_canonical_v1
+        ports = (edge_state = :independent, force = :deterministic, fracture = :resolved)
+        guarantees = (
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :qualified_same_backend_operation, :not_claimed,
+            :canonical_declared_operation, :domain_owned,
+        )
+    elseif name == :lattice_spring && mode == :fast
+        lowering = :buffered_combined_canonicalfast_v1
+        ports = (edge_state = :independent, force = :fast, fracture = :resolved)
+        guarantees = (
+            :not_claimed_for_fast_ports, :not_claimed_for_fast_ports,
+            :canonical_for_deterministic_ports, :not_claimed_for_fast_ports,
+            :not_claimed_for_fast_ports, :not_claimed,
+            :not_claimed_for_fast_ports, :domain_owned,
+        )
+    elseif name == :matrix_free_fem && mode === nothing
+        lowering = :buffered_combined_canonical_v1
+        ports = (residual = :deterministic,)
+        guarantees = (
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :qualified_same_backend_operation, :not_claimed,
+            :canonical_declared_operation, :domain_owned,
+        )
+    elseif name == :zbuffer && mode === nothing
+        lowering = :buffered_combined_canonical_v1
+        ports = (color = :resolved,)
+        guarantees = (
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :canonical_item_local_slot, :canonical_item_local_slot,
+            :qualified_same_backend_operation, :not_claimed,
+            :canonical_declared_operation, :domain_owned,
+        )
+    else
+        error("unexpected determinism witness")
+    end
+    values = ntuple(length(DETERMINISM_DIMENSIONS)) do index
+        (; backend, lowering_identity = lowering, port_modes = ports,
+         guarantee = guarantees[index])
+    end
+    return NamedTuple{DETERMINISM_DIMENSIONS}(values)
+end
+
 function _validate_cross_domain(reports)
     length(reports) == 5 || error("missing cross-domain witnesses")
+    roster = Tuple((
+        report.name,
+        hasproperty(report, :force_mode) ? report.force_mode : nothing,
+    ) for report in reports)
+    roster == (
+        (:lbm_d2q9, nothing),
+        (:lattice_spring, :deterministic),
+        (:lattice_spring, :fast),
+        (:matrix_free_fem, nothing),
+        (:zbuffer, nothing),
+    ) || error("wrong ordered cross-domain witness roster")
+    backends = Symbol[]
     for report in reports
         if hasproperty(report, :comparison)
             comparison = report.comparison
@@ -376,7 +448,21 @@ function _validate_cross_domain(reports)
         report.workspace_bytes >= 0 && report.transfer_bytes >= 0 ||
             error("invalid witness memory facts")
         report.invalid_rejected || error("invalid witness input was accepted")
+        if report.name == :lbm_d2q9
+            hasproperty(report, :determinism) &&
+                error("LBM witness has an unexpected determinism claim")
+        else
+            hasproperty(report, :determinism) ||
+                error("missing witness determinism report")
+            backend = report.determinism.same_run_replay.backend
+            push!(backends, backend)
+            mode = hasproperty(report, :force_mode) ? report.force_mode : nothing
+            report.determinism == _expected_witness_determinism(
+                report.name, mode, backend,
+            ) || error("witness determinism report does not reconstruct")
+        end
     end
+    length(unique(backends)) == 1 || error("mixed cross-domain witness backends")
     return nothing
 end
 
@@ -1059,13 +1145,39 @@ function _tool_self_test(record)
             ),
             fracture = (policy = :exact,),
         ),
+        determinism = _expected_witness_determinism(
+            :lattice_spring, :deterministic, :CPU,
+        ),
+    ))
+    fast_spring = merge(spring_report, (
+        force_mode = :fast,
+        comparison = merge(spring_report.comparison, (
+            force = (
+                policy = :rtol,
+                rtol = 8eps(Float32),
+                maximum_absolute_error = Float32(0),
+            ),
+        )),
+        determinism = _expected_witness_determinism(
+            :lattice_spring, :fast, :CPU,
+        ),
     ))
     reports = (
-        merge(common_report, (name = :one,)),
+        merge(common_report, (name = :lbm_d2q9,)),
         spring_report,
-        merge(common_report, (name = :three,)),
-        merge(common_report, (name = :four,)),
-        merge(common_report, (name = :five,)),
+        fast_spring,
+        merge(common_report, (
+            name = :matrix_free_fem,
+            determinism = _expected_witness_determinism(
+                :matrix_free_fem, nothing, :CPU,
+            ),
+        )),
+        merge(common_report, (
+            name = :zbuffer,
+            determinism = _expected_witness_determinism(
+                :zbuffer, nothing, :CPU,
+            ),
+        )),
     )
     _validate_cross_domain(reports)
     altered_force = merge(spring_result, (force = Float32[102],))
@@ -1083,6 +1195,22 @@ function _tool_self_test(record)
         index -> index == 2 ? permissive : reports[index], length(reports)
     )
     @assert _rejected(() -> _validate_cross_domain(altered_reports))
+    duplicate_reports = ntuple(
+        index -> index == 4 ? reports[1] : reports[index], length(reports)
+    )
+    @assert _rejected(() -> _validate_cross_domain(duplicate_reports))
+    inflated = merge(reports[4], (
+        determinism = merge(reports[4].determinism, (
+            cross_backend_bitwise = merge(
+                reports[4].determinism.cross_backend_bitwise,
+                (guarantee = :qualified_cross_backend_bitwise,),
+            ),
+        )),
+    ))
+    inflated_reports = ntuple(
+        index -> index == 4 ? inflated : reports[index], length(reports)
+    )
+    @assert _rejected(() -> _validate_cross_domain(inflated_reports))
     mktempdir() do directory
         mkpath(joinpath(directory, "logs"))
         write(joinpath(directory, "identity.toml"), "x = 1\n")
