@@ -1,7 +1,7 @@
 # G5H implementation control
 
-Status: G5H-0 through G5H-5 and LocalWorksets LW-0 through LW-R2 passed; LW-5 open;
-G6 closed
+Status: G5H-0 through G5H-5 and LocalWorksets LW-0 through LW-R2 passed;
+bounded ED-1 cleanup open before substantive LW-5 migration; G6 closed
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -24,7 +24,8 @@ repeat or amend gate requirements.
 | LocalWorksets LW-0 and LW-R0 | `passed` | CP-B1--CP-B3, complete CorePotts CPU, qualified real Metal, quantitative baselines, and the exact preservation review passed with P0=0, P1=0, P2=0, P3=0 and no dissent. Evidence: [LW-0 corrected CorePotts baseline](lw0-corrected-corepotts-baseline.md). |
 | LocalWorksets LW-1 through LW-R1 | `passed` | The fresh exact-hash committee separately passed bounded LW-1 correctness, found no future-library obstruction, passed the bounded two-key conjunction and LW-3 Q01--Q10 on qualified CPU/Metal, and cleared LW-R1 with P0=0, P1=0, P2=0 and no dissent. Evidence: [implementation matrix](lw1-implementation-matrix.md), [bounded amendment](lw2-bounded-conjunctive-amendment.md), [LW-3 parity](lw3-localworksets-parity.md), and [LW-R1 review](lwr1-localworksets-review.md). |
 | LocalWorksets LW-4 through LW-R2 | `passed` | Standalone extraction, bounded general mechanisms, consolidation, construction simplification, API reconciliation, CPU/real-Metal Freeze, and the five-role LW-R2 review passed. Product `ee395bd2f70d210fe98a0fb748e6530824c50671`, evidence digest `49002d9542b64c4c03388ab9bbe30632dfe20a64eac6c2e4bbcb89c50a486641`, and final seal commit `a65622a2` pass `--verify-final`. Authority: [sealed bundle](lw4-final-qualification-bundle/README.txt) and [post-LW-R1 roadmap](../../spec/localworksets-post-lwr1-roadmap.md). |
-| LocalWorksets LW-5 through LW-R3 | `open` | LW-R2 froze the standalone package and public surface. Compiled local-operation adoption may begin under the existing LW-5 value-test boundary; domain semantics remain in PottsToolkit/CorePotts. The two carried P2 diagnostic findings remain explicit LW-5 debt. |
+| ED-0/ED-1 engineering-debt hold | `ED-0 passed; ED-1 open` | The [three-package audit](ed0-ed1-engineering-debt-audit.md) found no safe production deletion, identified confirmed SII/tracker ambiguities, the two carried LocalWorksets diagnostics, missing standalone CI, stale living status, and bounded responsibility debt. ED-1 may perform only the matrixed pre-adoption hygiene and must clear ED-R0. |
+| LocalWorksets LW-5 through LW-R3 | `authorized after ED-R0` | LW-R2 froze the standalone package and public surface. Substantive compiled local-operation migration waits for the bounded ED-R0 hold, then begins with the existing representability inventory and evidence-bearing pilot. Domain semantics remain in PottsToolkit/CorePotts. |
 | G6 owner decision | `blocked` | G6 requires LW-R2, LW-R3, disposition of every carried finding, and a separate explicit owner send-off. |
 
 ## Review results

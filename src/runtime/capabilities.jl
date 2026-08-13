@@ -37,7 +37,7 @@ function _native_event_contract(component::ScheduledNativeComponent)
     elseif event_free
         "native system has no events"
     else
-        "G5H-3 retains native events structurally but admits only event-free coupled runtime profiles because the pinned public API has no stable affect-classification accessors"
+        "native events are retained structurally, but coupled runtime profiles must be event-free because the pinned public API has no stable affect-classification accessors"
     end
     return (
         continuous = length(continuous),

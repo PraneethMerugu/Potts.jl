@@ -201,11 +201,30 @@ function _validate_independent_route(
         destination = Int(value)
         destination == 0 || push!(destinations, destination)
     end
-    length(unique(destinations)) == length(destinations) || throw(
-        LocalWorkValidationError(
-            "independent port $name has competing potential writers"
+    if length(unique(destinations)) != length(destinations)
+        counts = Dict{Int, Int}()
+        for destination in destinations
+            counts[destination] = get(counts, destination, 0) + 1
+        end
+        competing = Tuple(
+            sort!(
+                Int[
+                    destination for (destination, count) in counts if count > 1
+                ]
+            )
         )
-    )
+        throw(
+            LocalWorkValidationError(
+                "independent port $name has competing potential writers";
+                stage = :plan,
+                contract = :independent_writer_uniqueness,
+                port = name,
+                expected = :at_most_one_potential_writer_per_destination,
+                actual = (; competing_destinations = competing),
+                hint = "use combined or resolved output semantics for competing writers",
+            )
+        )
+    end
     if C === :all
         work.active === nothing || throw(LocalWorkValidationError(
             "full-coverage independent work cannot use active truncation"

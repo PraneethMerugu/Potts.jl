@@ -116,6 +116,91 @@ struct _MissingInt32Method end
 (::_MissingInt32Method)(item::Float32, reads, values) =
     (output = LW.emit(Int32(item)),)
 
+@testset "ordinary topology faults have structured plan diagnostics" begin
+    backend = KA.CPU()
+
+    independent_work = LW.localwork(
+        _PermutationOperation(), 1:2;
+        outputs = (
+            streamed = LW.independent(:route; value_type = Int32),
+        ),
+        read = (source = :source,),
+    )
+    independent_topology = LW.topology(
+        independent_work;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[1, 1], 1, 2),),
+        destination_counts = (streamed = 2,),
+    )
+    sentinel = fill(Int32(71), 2)
+    independent_error = try
+        LW.plan(independent_work, independent_topology; backend)
+        nothing
+    catch error
+        error
+    end
+    @test independent_error isa LW.LocalWorkValidationError
+    @test independent_error.stage == :plan
+    @test independent_error.contract == :independent_writer_uniqueness
+    @test independent_error.port == :streamed
+    @test independent_error.expected ==
+        :at_most_one_potential_writer_per_destination
+    @test independent_error.actual == (competing_destinations = (1,),)
+    @test sentinel == fill(Int32(71), 2)
+
+    resolved_work = LW.localwork(
+        _HeterogeneousOperation(), 1:2;
+        outputs = (
+            edge = LW.independent(:edge_route; value_type = Int32),
+            force = LW.combined(
+                :force_route;
+                value_type = Int32,
+                maximum = 2,
+                combine = LW.deterministic(+, Int32(0)),
+            ),
+            fracture = LW.resolved(
+                :fracture_route;
+                value_type = UInt32,
+                maximum = 1,
+                empty = UInt32(0),
+                rank = (
+                    type = Int32,
+                    order = :max,
+                    lower = typemin(Int32),
+                    upper = typemax(Int32),
+                ),
+                tie_break = (type = UInt32, order = :min),
+            ),
+        ),
+        read = (source = :source,),
+    )
+    resolved_topology = LW.topology(
+        resolved_work;
+        epoch = UInt64(1),
+        routes = (
+            edge_route = reshape(Int32[1, 2], 1, 2),
+            force_route = reshape(Int32[1, 2, 2, 1], 2, 2),
+            fracture_route = reshape(Int32[1, 1], 1, 2),
+        ),
+        destination_counts = (edge = 2, force = 2, fracture = 1),
+        semantic_ids = (fracture = reshape(UInt32[9, 9], 1, 2),),
+    )
+    resolved_error = try
+        LW.plan(resolved_work, resolved_topology; backend)
+        nothing
+    catch error
+        error
+    end
+    @test resolved_error isa LW.LocalWorkValidationError
+    @test resolved_error.stage == :plan
+    @test resolved_error.contract ==
+        :resolved_semantic_identity_uniqueness
+    @test resolved_error.port == :fracture
+    @test resolved_error.expected == :unique_per_destination
+    @test resolved_error.actual ==
+        (destination = 1, semantic_identity = UInt32(9))
+end
+
 @testset "invalid external operation results have structured prelaunch errors" begin
     backend = KA.CPU()
     direct_output = fill(Int32(91), 2)

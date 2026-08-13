@@ -207,6 +207,12 @@ function resolved(
             tie_break.type,
         }(empty, rank.lower, rank.upper)
     end
+    capacity === nothing && key_type === nothing && mask === nothing &&
+        throw(
+        ArgumentError(
+            "generic resolved output requires maximum"
+        )
+    )
     capacity === nothing && throw(ArgumentError(
         "legacy resolved output requires capacity"
     ))
@@ -240,7 +246,7 @@ function resolved(
         "resolved tie break requires exactly type and order"
     ))
     tie_break.order === :min || throw(ArgumentError(
-        "LW-1 admits canonical minimum identity tie breaking only"
+            "resolved outputs require canonical minimum identity tie breaking"
     ))
     tie_break.type isa DataType && isconcretetype(tie_break.type) ||
         throw(ArgumentError("resolved identity type must be concrete"))
@@ -285,7 +291,7 @@ function _resolved_operation(operation)
         ))
     operation.family === :resolved_selection ||
         throw(LocalWorkValidationError(
-            "the operation family has no centrally admitted LW-1 lowering"
+            "the operation family has no centrally admitted resolved lowering"
         ))
     operation.emission isa _MaskedEmission ||
         throw(LocalWorkValidationError(
@@ -410,23 +416,29 @@ function _resolved_topology(work, topology, output, operation)
         ))
     length(unique(identities)) == item_count ||
         throw(LocalWorkValidationError(
-            "canonical semantic identities must be unique"
+            "canonical semantic identities must be unique";
+            stage = :plan,
+            contract = :resolved_semantic_identity_uniqueness,
+            port = only(keys(work.outputs)),
+            expected = :globally_unique,
+            actual = :contains_duplicates,
+            hint = "assign one canonical semantic identity to each item",
         ))
     return item_count, destination_count
 end
 
 function _validate_resolved_capability(backend, output)
     output.key_type === Int32 || throw(LocalWorkValidationError(
-        "LW-1 resolved selection admits Int32 destination keys only"
+            "bounded resolved selection requires Int32 destination keys"
     ))
     output.rank.type === Int32 || throw(LocalWorkValidationError(
-        "LW-1 resolved rank type must be the qualified Int32 profile"
+            "bounded resolved selection requires the qualified Int32 rank type"
     ))
     output.tie_break.type === UInt32 || throw(LocalWorkValidationError(
-        "LW-1 resolved identity type must be UInt32"
+            "bounded resolved selection requires UInt32 semantic identities"
     ))
     output.value_type === UInt32 || throw(LocalWorkValidationError(
-        "LW-1 resolved value type must be the qualified UInt32 profile"
+            "bounded resolved selection requires the qualified UInt32 value type"
     ))
     invoke(
         _centrally_qualified_value_capability,
@@ -468,12 +480,12 @@ end
 
 function _lower_resolved(work::LocalWork, topology, backend)
     length(work.outputs) == 1 || throw(LocalWorkValidationError(
-        "LW-1 resolved selection implements one named output port"
+            "the bounded resolved-selection lowering implements one named output port"
     ))
     output_name = only(keys(work.outputs))
     output = only(values(work.outputs))
     output isa _ResolvedOutput || throw(LocalWorkValidationError(
-        "LW-1 implements resolved outputs only"
+            "the bounded resolved-selection lowering requires a resolved output"
     ))
     operation = invoke(
         _resolved_operation, Tuple{Any}, work.operation

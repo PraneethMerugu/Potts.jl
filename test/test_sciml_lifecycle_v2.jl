@@ -435,6 +435,7 @@ end
     @test G5H2V2_SII.default_values(system)[g5h2v2_marker] == 0.25
 
     problem_states = G5H2V2_SII.state_values(problem)
+    @test isequal(G5H2V2_SII.state_values(problem, :), problem_states)
     @test length(problem_states) == 2
     @test problem_states[1] == fixture.marker
     @test ismissing(problem_states[2])
@@ -446,6 +447,10 @@ end
     @test G5H2V2_SII.state_values(problem, state_index) == fixture.marker
     @test G5H2V2_SII.state_values(integrator, state_index) ==
           fill(1.25f0, 6, 6)
+    @test isequal(
+        G5H2V2_SII.state_values(integrator, :),
+        G5H2V2_SII.state_values(integrator),
+    )
     @test G5H2V2_SII.current_time(problem) == 0
     @test G5H2V2_SII.current_time(integrator) == 0
 
@@ -478,9 +483,15 @@ end
     @test G5H2V2_SII.symbolic_container(solution) === system
     @test G5H2V2_SII.is_timeseries(solution) isa G5H2V2_SII.Timeseries
     @test length(G5H2V2_SII.state_values(solution)) == length(solution.t)
+    @test isequal(
+        G5H2V2_SII.state_values(solution, :),
+        G5H2V2_SII.state_values(solution),
+    )
     @test G5H2V2_SII.state_values(solution, 1) ==
           G5H2V2_SII.state_values(solution)[1]
     @test G5H2V2_SII.current_time(solution, 1) == solution.t[1]
+    @test G5H2V2_SII.current_time(solution, :) ==
+        G5H2V2_SII.current_time(solution)
     @test marker_getter(solution, 1) == solution.u[1][:g5h2v2_marker]
     observation_getter = G5H2V2_SII.getsym(
         system,

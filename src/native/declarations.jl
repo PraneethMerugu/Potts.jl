@@ -640,19 +640,19 @@ function NativeComponent(
         "native component scope must be Global() or PerCell()"
     ))
     time isa FixedPhysicalTime || throw(ArgumentError(
-        "G5H-3 native components require FixedPhysicalTime"
+            "native components require FixedPhysicalTime"
     ))
     split isa CPMThenComponents || throw(ArgumentError(
-        "G5H-3 admits only the CPMThenComponents split"
+            "native components currently admit only the CPMThenComponents split"
     ))
     cadence isa Union{EveryMCS, Every} || throw(ArgumentError(
         "native component cadence must be EveryMCS() or Every(n)"
     ))
     initialization isa PreserveNativeInitialization || throw(ArgumentError(
-        "G5H-3 preserves native MTK initialization semantics"
+            "native components require PreserveNativeInitialization()"
     ))
     events isa PreserveNativeEvents || throw(ArgumentError(
-        "G5H-3 preserves native MTK event semantics"
+            "native components require PreserveNativeEvents()"
     ))
     if scope isa Global
         lifecycle isa GlobalNativeLifecycle || throw(ArgumentError(

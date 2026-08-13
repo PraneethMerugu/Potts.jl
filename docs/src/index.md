@@ -1,12 +1,13 @@
 # Potts.jl
 
-Potts.jl is a ModelingToolkit-native cellular Potts stack with three explicit
+Potts.jl is a ModelingToolkit-native cellular Potts stack with four explicit
 package responsibilities:
 
 | Package | Responsibility |
 |:--|:--|
 | `PottsToolkit` | Symbolic authoring, composition, structural compilation, native MTK coupling, and the SciML lifecycle |
 | `CorePotts` | MTK-free CPM execution, identity, lifecycle, relationships, checkpoints, and CPU/GPU backend contracts |
+| `LocalWorksets` | Backend-portable validated local connectivity, bounded conflict handling, workspace, lifetime, and inspection beneath CorePotts |
 | `MakiePotts` | Visualization from public saved observations and solutions |
 
 The public lifecycle is:

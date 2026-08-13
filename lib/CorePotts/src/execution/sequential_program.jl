@@ -877,7 +877,7 @@ function _localworksets_candidate_capability_report(
     )
     reason = maturity === Functional ?
         "Private bounded LocalWorksets claim lowering has functional CPU/Metal evidence; replay and performance qualification are not claimed." :
-        "Private bounded LocalWorksets claim lowering has exact continuation and LW-3 parity evidence; performance qualification is not claimed."
+        "Private bounded LocalWorksets claim lowering has exact continuation and direct-path parity evidence; performance qualification is not claimed."
     return ProgramCapabilityReport(
         key,
         Experimental,

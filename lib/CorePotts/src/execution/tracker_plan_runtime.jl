@@ -172,7 +172,14 @@ end
 
 
 @inline function _tracker_value_after(
-        quantity, ::Tuple{}, ::Tuple{}, source, owner, target, old_owner, new_owner
+        quantity,
+        ::Tuple{},
+        ::Tuple{},
+        source::TrackerSourceView,
+        owner::Int32,
+        target,
+        old_owner::Int32,
+        new_owner::Int32,
     )
     throw(ArgumentError("compiled tracker quantity $(repr(quantity)) is unavailable"))
 end

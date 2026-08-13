@@ -157,30 +157,43 @@ const _PROCESS_TYPES = Union{
     LifecycleProcess,
 }
 
-function (::Type{T})(id::Union{Symbol, StatementID}; source = UnknownSource(), kwargs...) where {
-        T <: _DECLARATION_TYPES,
-    }
+function _declaration_statement(
+        ::Type{T}, id::Union{Symbol, StatementID};
+        source = UnknownSource(), kwargs...,
+    ) where {T <: _DECLARATION_TYPES}
     return T(_statement_core(id, (), (; kwargs...), source))
 end
 
-function (::Type{T})(id::Union{Symbol, StatementID}; initial = nothing,
-        source = UnknownSource(), kwargs...) where {T <: _STATE_TYPES}
+function _state_statement(
+        ::Type{T}, id::Union{Symbol, StatementID};
+        initial = nothing, source = UnknownSource(), kwargs...,
+    ) where {T <: _STATE_TYPES}
     return T(_statement_core(id, (; initial), (; kwargs...), source))
 end
 
-function (::Type{T})(
-        variable::Union{Symbolics.Num, Symbolics.Arr};
-        name,
-        initial = nothing,
-        source = UnknownSource(),
-        kwargs...,
-    ) where {T <: _SYMBOLIC_STATE_TYPES}
-    name isa Union{Symbol, StatementID} || throw(ArgumentError(
-        "a symbolic state declaration requires a Symbol or StatementID `name`"
-    ))
-    return T(_statement_core(
-        name, (; variable, initial), (; kwargs...), source
-    ))
+for type_name in (:CellKind, :MediumKind, :LatticeDomain, :SpatialRelation)
+    @eval function $type_name(
+            id::Union{Symbol, StatementID};
+            source = UnknownSource(), kwargs...,
+        )
+        return _declaration_statement(
+            $type_name, id; source, kwargs...
+        )
+    end
+end
+
+for type_name in (
+        :SiteState, :CellState, :MediumState, :ModelState, :FieldState,
+        :HistoryState,
+    )
+    @eval function $type_name(
+            id::Union{Symbol, StatementID};
+            initial = nothing, source = UnknownSource(), kwargs...,
+        )
+        return _state_statement(
+            $type_name, id; initial, source, kwargs...
+        )
+    end
 end
 
 function RelationshipState(
@@ -204,15 +217,39 @@ function (::Type{T})(id::Union{Symbol, StatementID}, expression;
     return T(_statement_core(id, (; expression), (; kwargs...), source))
 end
 
-function (::Type{T})(id::Union{Symbol, StatementID};
-        domain = nothing, expression = nothing, effects = (),
-        phase = nothing, source = UnknownSource(), kwargs...) where {T <: _PROCESS_TYPES}
+function _process_statement(
+        ::Type{T}, id::Union{Symbol, StatementID};
+        domain = nothing, expression = nothing, effects = (), phase = nothing,
+        source = UnknownSource(), kwargs...,
+    ) where {T <: _PROCESS_TYPES}
     return T(_statement_core(
         id,
         (; domain, expression, effects = _defensive_tuple(effects)),
         (; phase, kwargs...),
         source,
     ))
+end
+
+
+for type_name in (
+        :SynchronousProcess, :AcceptedCopyProcess, :RelationshipProcess,
+    )
+    @eval function $type_name(
+            id::Union{Symbol, StatementID};
+            domain = nothing, expression = nothing, effects = (),
+            phase = nothing, source = UnknownSource(), kwargs...,
+        )
+        return _process_statement(
+            $type_name,
+            id;
+            domain,
+            expression,
+            effects,
+            phase,
+            source,
+            kwargs...,
+        )
+    end
 end
 
 function Observation(id::Union{Symbol, StatementID}, expression;

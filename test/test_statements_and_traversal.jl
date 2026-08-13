@@ -156,7 +156,7 @@
     @test occursin("collection-valued settled-snapshot", sprint(
         showerror, collection_error
     ))
-    @test occursin("G5H-4", sprint(showerror, collection_error))
+    @test occursin("not implemented", sprint(showerror, collection_error))
     @test_throws ArgumentError Protocol(:invalid; stages = (EveryMCS(),))
 
     phase_cell = CellKind(:phase_cell; extinction = RetireAtZero())

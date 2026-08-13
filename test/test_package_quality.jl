@@ -1,6 +1,11 @@
 @testset "package quality and clean-break boundary" begin
     Aqua.test_all(PottsToolkit; ambiguities = false, persistent_tasks = false)
     ExplicitImports.test_explicit_imports(PottsToolkit)
+    ambiguities = Test.detect_ambiguities(PottsToolkit, Base; recursive = true)
+    owned = filter(ambiguities) do pair
+        any(method -> method.module === PottsToolkit, pair)
+    end
+    @test isempty(owned)
 
     project = TOML.parsefile(joinpath(pkgdir(PottsToolkit), "Project.toml"))
     dependencies = Set(keys(get(project, "deps", Dict())))
@@ -40,6 +45,8 @@
         "integration",
         joinpath("lib", "CorePotts", "src"),
         joinpath("lib", "CorePotts", "test"),
+        joinpath("lib", "LocalWorksets", "src"),
+        joinpath("lib", "LocalWorksets", "test"),
         joinpath("lib", "MakiePotts", "src"),
         joinpath("lib", "MakiePotts", "test"),
         joinpath("docs", "src"),

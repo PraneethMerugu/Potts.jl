@@ -2,6 +2,95 @@ struct _LocalWorksetsLevel1Scale
     factor::Int32
 end
 
+struct _LocalWorksetsDiagnosticIndependent end
+function (::_LocalWorksetsDiagnosticIndependent)(item::Int32, reads, values)
+    return (streamed = LocalWorksets.emit(@inbounds(reads.source[item])),)
+end
+
+struct _LocalWorksetsDiagnosticResolved end
+function (::_LocalWorksetsDiagnosticResolved)(item::Int32, reads, values)
+    return (
+        fracture = LocalWorksets.candidate(
+            UInt32(item); rank = Int32(item)
+        ),
+    )
+end
+
+function run_localworksets_structured_plan_faults(array_convert; backend_name)
+    LW = LocalWorksets
+    prototype = array_convert(Int32[0])
+    backend = LW.KernelAbstractions.get_backend(prototype)
+    sentinel = array_convert(fill(Int32(71), 2))
+
+    independent = LW.localwork(
+        _LocalWorksetsDiagnosticIndependent(), 1:2;
+        read = (source = :source,),
+        outputs = (
+            streamed = LW.independent(:route; value_type = Int32),
+        ),
+    )
+    independent_topology = LW.topology(
+        independent;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[1, 1], 1, 2),),
+        destination_counts = (streamed = 2,),
+    )
+    independent_error = try
+        LW.plan(independent, independent_topology; backend)
+        nothing
+    catch error
+        error
+    end
+
+    resolved = LW.localwork(
+        _LocalWorksetsDiagnosticResolved(), 1:2;
+        outputs = (
+            fracture = LW.resolved(
+                :route;
+                value_type = UInt32,
+                maximum = 1,
+                empty = UInt32(0),
+                rank = (
+                    type = Int32,
+                    order = :max,
+                    lower = typemin(Int32),
+                    upper = typemax(Int32),
+                ),
+                tie_break = (type = UInt32, order = :min),
+            ),
+        ),
+    )
+    resolved_topology = LW.topology(
+        resolved;
+        epoch = UInt64(1),
+        routes = (route = reshape(Int32[1, 1], 1, 2),),
+        destination_counts = (fracture = 1,),
+        semantic_ids = (fracture = reshape(UInt32[9, 9], 1, 2),),
+    )
+    resolved_error = try
+        LW.plan(resolved, resolved_topology; backend)
+        nothing
+    catch error
+        error
+    end
+
+    @test independent_error isa LW.LocalWorkValidationError
+    @test independent_error.stage == :plan
+    @test independent_error.contract == :independent_writer_uniqueness
+    @test independent_error.port == :streamed
+    @test resolved_error isa LW.LocalWorkValidationError
+    @test resolved_error.stage == :plan
+    @test resolved_error.contract == :resolved_semantic_identity_uniqueness
+    @test resolved_error.port == :fracture
+    @test Array(sentinel) == fill(Int32(71), 2)
+    return (
+        backend = backend_name,
+        independent_contract = independent_error.contract,
+        resolved_contract = resolved_error.contract,
+        output_preserved = Array(sentinel) == fill(Int32(71), 2),
+    )
+end
+
 function (operation::_LocalWorksetsLevel1Scale)(item::Int32, reads, values)
     return LocalWorksets.emit(
         @inbounds(reads.source[item]) * operation.factor

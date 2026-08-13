@@ -36,7 +36,7 @@ function _native_canonical_value(value)
             ModelingToolkitBase.SymbolicContinuousCallback,
             ModelingToolkitBase.SymbolicDiscreteCallback,
         }
-        # Event runtime is not admitted in G5H-3. Use the public display
+        # Eventful native runtime is not admitted. Use the public display
         # representation for structural identity without reading callback
         # implementation fields.
         return string(
@@ -247,7 +247,7 @@ function _preflight_native_public_semantics(component, system)
             throw(_path_error(
                 component,
                 capability,
-                "G5H-3 does not admit nonempty $capability in a native ODE/DAE runtime profile",
+                    "native ODE/DAE runtime profiles do not admit nonempty $capability",
             ))
         end
         _native_public_property(node, :is_initializesystem, false) &&
@@ -258,12 +258,12 @@ function _preflight_native_public_semantics(component, system)
         _native_public_property(node, :is_discrete, false) &&
             throw(_path_error(
                 component, :discrete_system,
-                "G5H-3 admits continuous ODE/DAE native systems only",
+                "native ODE/DAE runtime profiles admit continuous systems only",
             ))
         _native_public_property(node, :is_dde, false) &&
             throw(_path_error(
                 component, :delay_system,
-                "G5H-3 does not admit delay differential systems",
+                "native ODE/DAE runtime profiles do not admit delay differential systems",
             ))
     end
     any(
@@ -274,7 +274,7 @@ function _preflight_native_public_semantics(component, system)
     ) && throw(_path_error(
         component,
         :discrete_parameters,
-        "G5H-3 does not admit discrete/time-series native parameters",
+            "native ODE/DAE runtime profiles do not admit discrete/time-series parameters",
     ))
     return nothing
 end
@@ -750,14 +750,14 @@ function PottsToolkit.preflight_native_component(
     initial_time isa Real && isfinite(initial_time) || throw(_path_error(
         component,
         :physical_time,
-        "G5H-3 requires a finite scalar Real clock; quantity clocks are not yet admitted",
+            "native runtime requires a finite scalar Real clock; quantity clocks are not yet admitted",
     ))
     declaration = getfield(component, :declaration)
     family = PottsToolkit.native_family(declaration)
     family isa Union{PottsToolkit.ODEComponent, PottsToolkit.DAEComponent} ||
         throw(_path_error(
             component, :problem_family,
-            "only ODEComponent and DAEComponent use the G5H-3 runtime",
+            "only ODEComponent and DAEComponent use the native ODE/DAE runtime",
         ))
     execution = profile.execution
     execution isa Union{
@@ -819,14 +819,14 @@ function PottsToolkit.preflight_native_component(
     any(value -> value isa Symbolics.Arr, symbolic_values) &&
         throw(_path_error(
             component, :fixed_dimension_state,
-            "dynamic or unscalarized array state is outside G5H-3",
+            "dynamic or unscalarized array state is outside the native runtime profile",
         ))
     for endpoint in PottsToolkit.native_coupling_endpoints(component)
         variables = PottsToolkit.native_variables(endpoint.port)
         all(variable -> variable isa Symbolics.Num, variables) ||
             throw(_path_error(
                 component, :typed_io,
-                "G5H-3 admits only scalar native input/output symbols",
+                "native runtime profiles admit only scalar input/output symbols",
             ))
         for variable in variables
             try

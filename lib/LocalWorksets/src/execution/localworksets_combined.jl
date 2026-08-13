@@ -585,7 +585,13 @@ function _lower_combined(work::LocalWork, topology, backend)
             end
             identity = identities[record_index]
             identity in bucket && throw(LocalWorkValidationError(
-                "resolved semantic identities must be unique per destination"
+                        "resolved semantic identities must be unique per destination";
+                        stage = :plan,
+                        contract = :resolved_semantic_identity_uniqueness,
+                        port = name,
+                        expected = :unique_per_destination,
+                        actual = (; destination, semantic_identity = identity),
+                        hint = "assign distinct canonical identities to candidates for the same destination",
             ))
             push!(bucket, identity)
         end

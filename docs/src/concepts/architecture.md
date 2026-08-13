@@ -1,6 +1,6 @@
 # [Architecture](@id architecture)
 
-Status: qualified G5H architecture
+Status: qualified G5H and frozen LocalWorksets LW-R2 architecture
 
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
@@ -13,9 +13,12 @@ PottsToolkit
           │ PottsProblem / init / solve
           v
 CorePotts CPM runtime <-> native SciML component integrators
-          │ settled observations and solutions
-          v
-MakiePotts / analysis
+     │ uses                    │ publishes settled observations
+     v                         v
+LocalWorksets              MakiePotts / analysis
+     │ portable launches
+     v
+KernelAbstractions
 ```
 
 ## PottsToolkit
@@ -40,6 +43,20 @@ and does not execute an external numerical solver.
 
 CorePotts publishes settled coupling arrays and lifecycle receipts. PottsToolkit uses those public
 boundaries to coordinate native component integrators.
+
+## LocalWorksets
+
+LocalWorksets is an independently testable execution substrate beneath
+CorePotts. It owns validated local topology, declared reads and destinations,
+bounded workspace, independent/combined/resolved output mechanisms, lifetime,
+inspection, and central lowering to KernelAbstractions kernels. It relies on
+KernelAbstractions implicit ordering and does not implement a scheduler.
+
+LocalWorksets does not own CPM physics, clocks, randomness, acceptance,
+Hamiltonian folding, lifecycle transactions, checkpoints, or solver behavior.
+Those remain domain responsibilities. Hardware-neutral kernel source is also
+distinct from runtime qualification: the currently reviewed execution rows
+are CPU and real Metal, not untested CUDA or ROCm claims.
 
 ## Time
 

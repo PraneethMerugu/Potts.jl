@@ -70,7 +70,7 @@ Symbolics.@register_symbolic neighbor_property_mean(x, y, z, empty)::Real
 function neighbor_cells(owner, filter)
     throw(ArgumentError(
         "neighbor_cells(owner, filter) is a collection-valued settled-snapshot " *
-        "query; executable collection materialization enters in G5H-4. " *
+                "query; executable collection materialization is not implemented. " *
         "Use neighbor_cell_count(owner, filter) when only cardinality is needed."
     ))
 end

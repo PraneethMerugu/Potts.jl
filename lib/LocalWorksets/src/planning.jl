@@ -98,7 +98,7 @@ function _validate_sequence(stages, works, topology, backend)
     length(stages) == length(works) || error("invalid internal sequence")
     all(work -> work.items == first(works).items, works) ||
         throw(LocalWorkValidationError(
-            "ordered stages require one compatible item domain in LW-1"
+            "ordered stages require one compatible item domain"
         ))
     output_names = map(work -> Tuple(keys(work.outputs)), works)
     flattened_outputs = reduce(vcat, collect.(output_names))

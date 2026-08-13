@@ -15,6 +15,9 @@ include("../../../test/backend_conformance/checkerboard_execution.jl")
 include("../../../test/backend_conformance/localworksets_execution.jl")
 
 backend = Metal.MetalBackend()
+diagnostics = run_localworksets_structured_plan_faults(
+    Metal.MtlArray; backend_name = :metal
+)
 reports = (
     run_lw_d2q9_witness(Metal.MtlArray; backend),
     run_lw_lattice_spring_witness(Metal.MtlArray; backend),
@@ -24,6 +27,11 @@ reports = (
 )
 
 @testset "LW-4 Check real-Metal semantics" begin
+    @test diagnostics.independent_contract ==
+        :independent_writer_uniqueness
+    @test diagnostics.resolved_contract ==
+        :resolved_semantic_identity_uniqueness
+    @test diagnostics.output_preserved
     @test map(report -> report.launches, reports) == (1, 2, 3, 2, 2)
     @test all(report -> report.waits == 2, reports)
     @test all(report -> report.invalid_rejected, reports)

@@ -549,6 +549,42 @@ end
     )
     @test LW.resolved(:destinations; keywords...) isa
           LW._AbstractOutputDeclaration
+    missing_maximum = try
+        LW.resolved(
+            :destinations;
+            empty = UInt32(0),
+            rank = (
+                type = Int32,
+                order = :min,
+                lower = typemin(Int32),
+                upper = typemax(Int32),
+            ),
+            tie_break = (type = UInt32, order = :min),
+            value_type = UInt32,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test missing_maximum isa ArgumentError
+    @test sprint(showerror, missing_maximum) ==
+        "ArgumentError: generic resolved output requires maximum"
+    @test_throws ArgumentError LW.resolved(
+        :destinations;
+        empty = UInt32(0),
+        rank = keywords.rank,
+        tie_break = keywords.tie_break,
+        capacity = 4,
+        value_type = UInt32,
+    )
+    @test_throws ArgumentError LW.resolved(
+        :destinations;
+        empty = UInt32(0),
+        rank = keywords.rank,
+        tie_break = keywords.tie_break,
+        key_type = Int32,
+        value_type = UInt32,
+    )
     @test_throws MethodError LW.resolved((:a, :b, :c); keywords...)
     @test_throws MethodError LW.resolved([:a, :b]; keywords...)
     @test_throws MethodError LW.resolved(17; keywords...)

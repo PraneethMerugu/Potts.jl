@@ -178,7 +178,7 @@ end
     @test occursin("interface-only settled-snapshot spatial query", sprint(
         showerror, error
     ))
-    @test occursin("G5H-4", sprint(showerror, error))
+    @test occursin("not implemented", sprint(showerror, error))
 end
 
 function _contains_corepotts_value(value)

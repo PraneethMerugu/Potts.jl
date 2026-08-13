@@ -6,8 +6,8 @@ architecture or phase boundaries.
 
 Date: 2026-08-10
 
-Status: LW-4A, LW-4B, LW-4C, and final LW-R2 complete; LW-4 frozen; LW-5 open;
-G6 closed
+Status: LW-4A, LW-4B, LW-4C, and final LW-R2 complete; LW-4 frozen; bounded
+ED-1 cleanup open before substantive LW-5 migration; G6 closed
 
 Authority:
 
@@ -26,6 +26,7 @@ The mandatory continuation is:
 LW-4A exact standalone extraction -> LW-R2A package-boundary review
   -> LW-4B bounded general mechanisms -> LW-R2B mechanism review
   -> LW-4C Julian/JuliaGPU API reconciliation -> LW-R2 public-surface freeze
+  -> ED-0 inventory -> bounded ED-1 hygiene -> ED-R0
   -> LW-5 compiled local-operation adoption -> LW-R3
   -> explicit owner G6 send-off
 ```
@@ -37,6 +38,14 @@ solver semantics or ModelingToolkit ownership into LocalWorksets.
 
 No later subgate begins early. P0/P1 findings block advancement. Every P2 requires an explicit
 owner and disposition before the next review boundary.
+
+The [ED-0/ED-1 engineering-debt audit](../design/hardening/ed0-ed1-engineering-debt-audit.md)
+inserts one bounded pre-adoption hygiene gate after the sealed LW-R2 baseline.
+It may repair confirmed dispatch/diagnostic defects, ordinary package CI and
+living repository status without reopening this architecture or deleting
+direct/reference oracles. Substantive LW-5 source migration begins after
+ED-R0; its first operation remains the evidence-bearing pilot that decides
+deeper consolidation.
 
 ## Preserved architecture
 
@@ -398,7 +407,8 @@ The committee may reject the public API even when the kernels are correct. It se
 7. CorePotts parity and ownership preservation; and
 8. readiness to begin LW-5.
 
-No public production promotion or LW-5 adoption begins before LW-R2 clears.
+The sealed LW-R2 record satisfies this freeze condition. The bounded ED-R0
+hold above now controls substantive LW-5 source migration.
 
 ## LW-5 — Compiled local-operation adoption
 

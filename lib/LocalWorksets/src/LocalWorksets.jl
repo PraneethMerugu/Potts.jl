@@ -17,10 +17,11 @@ export emit, candidate, masked
 # own an `inspect` binding of their own.
 public inspect
 
-using Adapt
-using Atomix
-using KernelAbstractions
-using SHA
+import Adapt
+import Atomix
+import KernelAbstractions
+import SHA
+using KernelAbstractions: @index, @kernel
 
 include("model.jl")
 include("planning.jl")

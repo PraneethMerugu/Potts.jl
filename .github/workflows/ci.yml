@@ -14,7 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JULIA_VERSION: '1.12'
   JULIA_NUM_PRECOMPILE_TASKS: 2
 
 jobs:
@@ -26,17 +25,27 @@ jobs:
         include:
           - package: PottsToolkit
             project: .
+            os: macos-15
+            julia: '1.12.6'
           - package: CorePotts
             project: lib/CorePotts
+            os: macos-15
+            julia: '1.12.6'
+          - package: LocalWorksets
+            project: lib/LocalWorksets
+            os: macos-15
+            julia: '1.12.6'
           - package: MakiePotts
             project: lib/MakiePotts
-    runs-on: ubuntu-latest
+            os: ubuntu-latest
+            julia: '1.12.6'
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
-          version: ${{ env.JULIA_VERSION }}
+          version: ${{ matrix.julia }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Run package tests
         env:
@@ -49,13 +58,13 @@ jobs:
 
   integration:
     name: Integration
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
-          version: ${{ env.JULIA_VERSION }}
+          version: '1.12.1'
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate integration environment
         run: >-
@@ -63,6 +72,23 @@ jobs:
           'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
       - name: Run cross-package tests
         run: julia --project=integration --startup-file=no integration/runtests.jl
+
+  documentation:
+    name: Documentation
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: '1.12.1'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate documentation environment
+        run: >-
+          julia --project=docs --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+      - name: Build strict documentation
+        run: julia --project=docs --startup-file=no docs/make.jl
 
   platform-smoke:
     name: Smoke / ${{ matrix.os }}
@@ -76,7 +102,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
-          version: ${{ env.JULIA_VERSION }}
+          version: '1.12.6'
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Install and run a tiny public sequential trajectory
         run: >-

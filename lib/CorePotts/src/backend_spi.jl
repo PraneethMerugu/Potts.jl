@@ -28,7 +28,6 @@ import ..CorePotts:
     CapabilityMaturity,
     CapabilityReplayClass,
     CapabilitySupportStatus,
-    CellCapacityFailure,
     CheckerboardEngine,
     CheckerboardPlan,
     CheckerboardProgramEngine,

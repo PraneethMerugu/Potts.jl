@@ -1,12 +1,12 @@
 module CorePotts
 
 import LinearAlgebra
-using LinearAlgebra: Symmetric, eigen
-using SHA
-using AcceleratedKernels
-using Adapt
-using Atomix
-using KernelAbstractions
+import SHA
+import AcceleratedKernels
+import Adapt
+import Atomix
+import KernelAbstractions
+using KernelAbstractions: @index, @kernel
 import LocalWorksets
 
 const RNG_CONTRACT_VERSION = v"1.2.0"

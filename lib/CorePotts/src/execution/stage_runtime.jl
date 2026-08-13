@@ -319,7 +319,7 @@ end
     return scratch
 end
 
-@inline function descriptor_apply_stage!(
+@inline function _apply_site_assignment!(
         descriptor::CompiledStageDescriptor,
         request::StageEvaluation,
         state::AuxiliaryState,
@@ -342,7 +342,7 @@ end
         runtime,
         context::_ProposalEvaluationContext,
     ) where {C, V, E <: SiteAssignmentEffect}
-    return descriptor_apply_stage!(
+    return _apply_site_assignment!(
         descriptor,
         request,
         runtime.descriptor_state,

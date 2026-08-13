@@ -96,16 +96,16 @@ const _REVIEWED_MECHANISM_AUTHORITIES = ((
 # evidence for the complete environment identity.
 const _REVIEWED_EXACT_ENVIRONMENT_DIGESTS = (
     # Canonical Julia 1.12.1, one thread, default bounds policy. This is the
-    # production/reproduction row recorded by the G5H-1 quantitative audit.
+    # production/reproduction row recorded by the quantitative audit.
     "c869ed68289ea1a641d8ed8c05e684693b08b2bb0b90fc2cc211e0b9da48a969",
     # The same reviewed environment with `--check-bounds=yes`, which is the
     # policy used by Julia's authoritative `Pkg.test` harness. Keeping this as
     # a separate closed row preserves the exact-environment replay boundary;
     # the test process does not acquire evidence by hashing itself.
     "80d86547549b8803a75311c347e74e4e44fbe1c550e1f20bc937003d850baefe",
-    # LW-0 qualification candidate on the same Apple M1 Pro host under Julia
-    # 1.12.6, one thread, default bounds policy. This row remains subject to
-    # the exact-candidate LW-R0 preservation review.
+    # Baseline qualification candidate on the same Apple M1 Pro host under
+    # Julia 1.12.6, one thread, default bounds policy. This closed row was
+    # admitted only after exact-candidate preservation review.
     "281cfbf41f362e63ec7005a8b5b9f536b67cd51d1d79a6847d60e63069f1f38b",
     # The matching Julia 1.12.6 `Pkg.test` process with `--check-bounds=yes`.
     # It is a separate closed identity rather than a wildcarded environment.

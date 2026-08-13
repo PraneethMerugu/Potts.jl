@@ -204,7 +204,7 @@ function _statement_lowering_rejection(statement, statements, system)
         )
         if operation !== nothing
             return "$(nameof(operation)) is an interface-only settled-snapshot " *
-                   "spatial query; executable spatial-query lowering enters in G5H-4"
+                "spatial query; executable spatial-query lowering is not implemented"
         end
     elseif statement isa Protocol
         all(stage -> stage isa SweepStage,

@@ -1,5 +1,5 @@
 # Reviewed environment data is isolated from the hardware-neutral provider and
-# lowering code. A new row requires repository evidence and LW-R1 review.
+# lowering code. A new row requires repository evidence and review.
 
 const _REVIEWED_BACKEND_PROBES = (
     (

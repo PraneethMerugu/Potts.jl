@@ -311,6 +311,8 @@ SymbolicIndexingInterface.state_values(problem::PottsProblem) =
     _problem_state_values(problem)
 SymbolicIndexingInterface.state_values(problem::PottsProblem, index) =
     _problem_state_values(problem)[index]
+SymbolicIndexingInterface.state_values(problem::PottsProblem, ::Colon) =
+    SymbolicIndexingInterface.state_values(problem)
 
 function SymbolicIndexingInterface.state_values(integrator::PottsIntegrator)
     _request_integrator_settlement!(
@@ -330,6 +332,9 @@ end
 SymbolicIndexingInterface.state_values(
     integrator::PottsIntegrator, index
 ) = SymbolicIndexingInterface.state_values(integrator)[index]
+SymbolicIndexingInterface.state_values(
+    integrator::PottsIntegrator, ::Colon
+) = SymbolicIndexingInterface.state_values(integrator)
 
 function _scheduled_saved_values(system::PottsSystem, saved::PottsSavedState)
     states = Tuple(
@@ -343,6 +348,8 @@ end
 
 SymbolicIndexingInterface.state_values(solution::PottsSolution) =
     [_scheduled_saved_values(solution.prob.system, saved) for saved in solution.u]
+SymbolicIndexingInterface.state_values(solution::PottsSolution, ::Colon) =
+    SymbolicIndexingInterface.state_values(solution)
 function SymbolicIndexingInterface.state_values(
         solution::PottsSolution, index
     )
@@ -360,6 +367,8 @@ SymbolicIndexingInterface.current_time(integrator::PottsIntegrator) = begin
 end
 SymbolicIndexingInterface.current_time(problem::PottsProblem) = problem.tspan[1]
 SymbolicIndexingInterface.current_time(solution::PottsSolution) = solution.t
+SymbolicIndexingInterface.current_time(solution::PottsSolution, ::Colon) =
+    SymbolicIndexingInterface.current_time(solution)
 SymbolicIndexingInterface.current_time(solution::PottsSolution, index) =
     solution.t[index]
 SymbolicIndexingInterface.is_timeseries(::PottsSolution) =

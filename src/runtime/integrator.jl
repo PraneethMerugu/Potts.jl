@@ -285,7 +285,7 @@ function _materialize_integrator(
         throw(NativeCapabilityError(
             (:runtime, :native_components),
             :outer_callbacks,
-            "G5H-3 does not admit outer Potts callbacks with native components because callback identity and state are not in the capability key or checkpoint",
+            "outer Potts callbacks with native components are unsupported because callback identity and state are not in the capability key or checkpoint",
         ))
     _native_runtime_preflight(
         problem, algorithm, backend, scalar_type, profiles

@@ -474,7 +474,7 @@ uuid = "a38c48d9-6df1-5ac9-9223-b6ada3b5572b"
 version = "0.1.0+0"
 
 [[deps.CorePotts]]
-deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "SHA"]
+deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalWorksets", "SHA"]
 path = "../lib/CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0"
@@ -1544,6 +1544,12 @@ version = "5.4.0"
     TriangularSolve = "d5829a12-d9aa-46ab-831f-fb7c9ab06edf"
     blis_jll = "6136c539-28a5-5bf0-87cc-b183200dce32"
     cuSOLVER = "887afef0-6a32-4de5-add4-7827692ba8fc"
+
+[[deps.LocalWorksets]]
+deps = ["Adapt", "Atomix", "KernelAbstractions", "SHA"]
+path = "../lib/LocalWorksets"
+uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
+version = "0.1.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]

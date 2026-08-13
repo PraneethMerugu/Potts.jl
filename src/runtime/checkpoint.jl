@@ -1,6 +1,6 @@
 # PottsToolkit contributes a deterministic logical extension block to the one
 # CorePotts checkpoint envelope.  There is one outer schema and one checksum;
-# native-component blocks join this same envelope in G5H-3.
+# native-component blocks join this same envelope.
 const PottsCheckpoint = CorePotts.ProgramCheckpoint
 const _POTTS_CHECKPOINT_BLOCK_SCHEMA = v"1.1.0"
 const _NATIVE_CHECKPOINT_BLOCK_SCHEMA = v"1.0.0"
