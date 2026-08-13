@@ -1,12 +1,16 @@
 # IC-R0 internal-complexity and Julian-design review
 
-Status: candidate; exact qualification in progress
+Status: passed; exact product qualified and review sealed
 
 Date: 2026-08-13
 
 Baseline commit: `b73dd89ca3f8ff79c145a00b0bdbaac8f139b3c7`
 
 Baseline tree: `11debc5eb7dc56bfbc50dbdfc4c7e9d0a6d5d9b0`
+
+Qualified product commit: `8b710692a84f79b1411a1443a27a9ee099327bcf`
+
+Qualified product tree: `b360f2b06b404b34d448c75f3bdd5b012d839dc7`
 
 Scope: the production and active verification surfaces of LocalWorksets,
 CorePotts, and PottsToolkit. This is a bounded behavior-preserving hold before
@@ -224,14 +228,15 @@ regression during the complete suites blocks and triggers investigation.
 | Behavioral integration | Pass with exit 0 on Julia 1.12.1 across MTK/MTSL, Catalyst, MethodOfLines, native serial/batched execution, Unitful, distribution, and extension/load-order cases. |
 | Strict documentation | Pass with doctests, checks, cross-references, and HTML rendering. |
 | Symbolics feasibility | Pass with adoption veto; see [IC-SYM](ic-symbolics-feasibility.md). No production change results. |
-| Qualified real Metal | The complete runner passed once after all production changes, including native components, LocalWorksets/CorePotts semantics/lifetime/admission, direct parity, and the then-unconditional performance witnesses. After the final test-cost-only runner edit, the required exact rerun stopped before tests because both fresh subprocesses reported `Metal.functional() == false`; an isolated check reports `No Metal devices.` This is an environment failure, not a product assertion, but the exact final runner is not yet qualified. |
+| Qualified real Metal | Pass with exit 0 on the exact product commit using one real Apple M1 Pro device: fresh extension orders 2/2, cross-domain witnesses 8/8, native components 37/37, LocalWorksets/CorePotts semantic, lifetime, implicit-order, one-final-wait, queued-settlement, boundary/workgroup, lifecycle-policy, direct-parity, poisoning, and fail-closed admission evidence all passed. The three opt-in throughput campaigns were absent from this semantic run as designed. |
 | Static gates | Pass: Runic made no changes; 297 Julia, 170 TOML, and four workflow YAML files parse; `git diff --check`, public-surface/SPI identity, ambiguity/ExplicitImports, active test inventory, and empty-directory checks pass. |
 
-IC-R0 therefore remains **under qualification**. The Metal environment failure
-must not be converted into a waiver, and the gate must not be marked passed
-from the earlier or focused results. The exact final semantic-only Metal runner
-must complete after a device is visible again. No performance campaign is
-invalidated by the runner-only dispatch change.
+An initial post-edit Metal attempt reported no devices inside the filesystem
+sandbox while IOKit still showed the active GPU. Repeating the exact command
+with real-device access exposed one functional M1 Pro and completed the full
+runner. No waiver or inherited pass was used. The disposable Symbolics Expr and
+dropped-RGF probes also compiled and executed on that device; their separate
+ordered-arithmetic failure still vetoes adoption.
 
 ## Review questions
 
@@ -247,8 +252,31 @@ The final exact-tree review answers separately:
    documented invalidation rule?
 6. Does anything make LW-5 adoption or eventual maintenance harder?
 
-P0 or P1 blocks IC-R0. A P2 requires an explicit owner and disposition before
-LW-5 source migration. Passing IC-R0 authorizes only the already specified
+### Final exact-tree ballot
+
+1. **Confirmed complexity was removed rather than renamed.** The only removed
+   types had no dispatch or extension role; shared reconstruction, validation,
+   finalization, and verification now have one owner.
+2. **No public or scientific contract changed.** Public counts, exact SPI
+   binding identity, fingerprints, RNG/checkpoint behavior, deterministic
+   folding, execution results, and backend admission remain qualified.
+3. **Retained abstractions earn their cost.** They represent multiple concrete
+   behaviors, hostile-boundary security, external extensibility, or
+   performance-qualified lowerings; speculative flattening was vetoed.
+4. **The SPIs are maintainable flat facades.** Compiler and backend names are
+   disjoint, alias CorePotts authority exactly, are selected by author role,
+   and gain no registry or self-authorization path.
+5. **Verification has one active inventory and proportional invalidation.** The
+   stale shadow runner is deleted, hostile worlds are consolidated without
+   losing attacks, and expensive Metal performance campaigns are explicit.
+6. **LW-5 is easier, not harder, to begin.** The authoring and ownership seams
+   are clearer, while direct/reference oracles and all LocalWorksets safeguards
+   remain available for the first evidence-bearing adoption pilot.
+
+Final review: **PASS**, P0=0, P1=0, P2=0, with no carried finding. The Symbolics
+question is a concluded adoption veto, not deferred remediation.
+
+Passing IC-R0 authorizes only the already specified
 LW-5 representability inventory and first evidence-bearing pilot. It does not
 authorize a new execution family, broad adapter framework, public API redesign,
 direct-oracle deletion, or G6.

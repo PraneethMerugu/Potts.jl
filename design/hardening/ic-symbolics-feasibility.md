@@ -180,7 +180,7 @@ consolidates the SPI. Complete-evaluator generation is rejected.
 | Semantic draw | Explicitly excluded until exact call/draw order is independently proved. |
 | Hostile dispatch | Whole-evaluator calls would bypass or duplicate the existing exact compiled boundary; vetoed. |
 | Fingerprints/checkpoints | Frozen graph can remain authoritative, but RGF reconstruction adds a new versioned artifact with no compensating deletion. |
-| Real Metal | The exact probe was attempted, but Metal became unavailable after the preceding complete suite. No GPU claim is made. CPU semantic failure already vetoes adoption; a successful simple GPU kernel could not repair it. |
+| Real Metal | The Expr-evaluated and dropped-RGF isbits callables both compiled and executed through KernelAbstractions on the real Apple M1 Pro Metal device, returning `52.375f0`. This proves the representative island mechanism, not the missing exact ordered semantics; the CPU semantic failure still vetoes adoption. |
 
 ## Final ballot
 

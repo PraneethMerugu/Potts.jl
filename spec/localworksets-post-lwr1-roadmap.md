@@ -6,8 +6,8 @@ architecture or phase boundaries.
 
 Date: 2026-08-10
 
-Status: LW-4A, LW-4B, LW-4C, final LW-R2, and bounded ED-R0 complete; bounded
-IC-R0 candidate under qualification; LW-4 frozen; LW-5 held; G6 closed
+Status: LW-4A, LW-4B, LW-4C, final LW-R2, bounded ED-R0, and bounded IC-R0
+complete; LW-4 frozen; LW-5 open at representability inventory; G6 closed
 
 Authority:
 
@@ -60,8 +60,11 @@ behavior-preserving duplication; it adds no feature and reopens no accepted
 LocalWorksets architecture. The Symbolics sub-gate may reject adoption and
 must not alter CorePotts/LocalWorksets dependency ownership. The single authoritative
 [IC-R0 record](../design/hardening/icr0-internal-complexity-review.md) defines
-the matrix and exact qualification. LW-5 source migration remains held until
-that record passes.
+the matrix and exact qualification. IC-R0 passed on exact product commit
+`8b710692a84f79b1411a1443a27a9ee099327bcf`, tree
+`b360f2b06b404b34d448c75f3bdd5b012d839dc7`, with P0=0, P1=0, and P2=0.
+LW-5 is open only at its existing representability inventory and first
+evidence-bearing pilot.
 
 ## Preserved architecture
 
