@@ -1,7 +1,7 @@
 # ED-0/ED-1 engineering-debt audit
 
-Status: ED-0 complete; bounded ED-1 candidate implemented and qualified;
-ED-R0 evidence seal pending
+Status: ED-0 and bounded ED-1 complete; ED-R0 passed on exact product commit
+`da80a0ec1f6b52321973872066e02632124ec0f4`
 
 Date: 2026-08-13
 
@@ -329,3 +329,5 @@ ED-R0 requires:
 ED-R0 is not another architecture committee or release freeze. Once it passes,
 LW-5 begins with its representability inventory and one pilot migration. The
 deeper consolidation decision follows that pilot's evidence.
+
+ED-R0 passed. See the [exact qualification and review record](edr0-engineering-debt-review.md).

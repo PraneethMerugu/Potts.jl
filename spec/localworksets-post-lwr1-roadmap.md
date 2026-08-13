@@ -6,8 +6,8 @@ architecture or phase boundaries.
 
 Date: 2026-08-10
 
-Status: LW-4A, LW-4B, LW-4C, and final LW-R2 complete; LW-4 frozen; bounded
-ED-1 cleanup open before substantive LW-5 migration; G6 closed
+Status: LW-4A, LW-4B, LW-4C, final LW-R2, and bounded ED-R0 complete; LW-4
+frozen; LW-5 open; G6 closed
 
 Authority:
 
@@ -46,6 +46,10 @@ living repository status without reopening this architecture or deleting
 direct/reference oracles. Substantive LW-5 source migration begins after
 ED-R0; its first operation remains the evidence-bearing pilot that decides
 deeper consolidation.
+
+ED-R0 passed on exact product commit
+`da80a0ec1f6b52321973872066e02632124ec0f4`; see the
+[qualification record](../design/hardening/edr0-engineering-debt-review.md).
 
 ## Preserved architecture
 
