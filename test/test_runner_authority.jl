@@ -1,4 +1,4 @@
-const AUTHORITATIVE_G5H_TESTS = (
+const POTTS_TOOLKIT_TESTS = (
     "test_public_api_v2.jl",
     "test_system_contract.jl",
     "test_statements_and_traversal.jl",
@@ -22,31 +22,31 @@ const AUTHORITATIVE_G5H_TESTS = (
     "test_package_quality.jl",
 )
 
-const G5H_TEST_SUPPORT_FILES = (
+const TEST_SUPPORT_FILES = (
     "runtests.jl",
     "setup.jl",
     "platform_smoke.jl",
     "test_runner_authority.jl",
 )
 
-function verify_authoritative_runner(test_root::AbstractString, files::Tuple)
-    @testset "authoritative runner closure" begin
+function verify_test_inventory(test_root::AbstractString, files::Tuple)
+    @testset "package test inventory" begin
         @test !isempty(files)
         @test length(unique(files)) == length(files)
         @test all(file -> isfile(joinpath(test_root, file)), files)
 
-        # Every top-level test file is either an authoritative G5H test or a
+        # Every top-level test file is either in the package suite or is a
         # named runner/support file. This prevents superseded suites from
-        # surviving silently outside `Pkg.test` after witness migration.
+        # surviving silently outside `Pkg.test`.
         actual_top_level = Set(
             name for name in readdir(test_root) if endswith(name, ".jl")
         )
         expected_top_level = Set((
-            AUTHORITATIVE_G5H_TESTS...,
-            G5H_TEST_SUPPORT_FILES...,
+                POTTS_TOOLKIT_TESTS...,
+                TEST_SUPPORT_FILES...,
         ))
         @test actual_top_level == expected_top_level || begin
-            @info "non-authoritative top-level test inventory" missing =
+            @info "unexpected top-level test inventory" missing =
                 setdiff(expected_top_level, actual_top_level) unexpected =
                 setdiff(actual_top_level, expected_top_level)
             false
@@ -74,29 +74,6 @@ function verify_authoritative_runner(test_root::AbstractString, files::Tuple)
             end
         end
 
-        # ModelingToolkitBase's `isscheduled` helper is intentionally private
-        # in the pinned upstream release. Potts systems query their own
-        # structural state through `PottsToolkit.is_scheduled`; native MTK
-        # systems may use the generated public `get_isscheduled` accessor.
-        project_root = dirname(normpath(test_root))
-        for relative_root in ("src", "ext", "integration", "test")
-            scan_root = joinpath(project_root, relative_root)
-            isdir(scan_root) || continue
-            for (directory, _, names) in walkdir(scan_root)
-                for name in names
-                    endswith(name, ".jl") || continue
-                    file = joinpath(directory, name)
-                    @test !occursin(
-                        r"ModelingToolkitBase\.isscheduled\s*\(",
-                        read(file, String),
-                    ) || begin
-                        @info "private upstream scheduling predicate reach" file
-                        false
-                    end
-                end
-            end
-        end
-
         stale_invocations = (
             r"(?<![A-Za-z0-9_])compile\s*\(",
             r"\bPottsExecutable\s*\(",
@@ -107,7 +84,7 @@ function verify_authoritative_runner(test_root::AbstractString, files::Tuple)
             source = read(file, String)
             for pattern in stale_invocations
                 @test isnothing(match(pattern, source)) || begin
-                    @info "stale public lifecycle invocation in authoritative test" file pattern
+                    @info "stale public lifecycle invocation in package test" file pattern
                     false
                 end
             end
@@ -116,7 +93,7 @@ function verify_authoritative_runner(test_root::AbstractString, files::Tuple)
             # of its two named SPIs. They may not couple to Core's private file
             # topology, underscored helpers, or formerly broad top-level API.
             @test !occursin(r"CorePotts\._[A-Za-z_]", source) || begin
-                @info "private underscored Core reach in authoritative root test" file
+                @info "private underscored Core reach in package test" file
                 false
             end
             for found in eachmatch(

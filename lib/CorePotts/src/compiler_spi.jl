@@ -1,10 +1,16 @@
 """
-Compiler-facing construction protocol for PottsToolkit and third-party scientific
-extensions.
+Compiler-facing construction protocol for PottsToolkit and third-party
+scientific extensions.
 
 Bindings in this module are the only supported route from another package into
 CorePotts lowering schemas, evaluator construction, descriptors, and inspection.
 They are intentionally absent from the stable package-level runtime API.
+
+This is an explicit, flat facade over CorePotts-owned bindings, not a second
+implementation or a general plugin registry. Ordinary model authors should not
+use it. Compiler extensions should import only the bindings needed to construct
+or inspect validated compiler IR; runtime and device integration belongs to
+`BackendSPI` instead.
 """
 module CompilerSPI
 

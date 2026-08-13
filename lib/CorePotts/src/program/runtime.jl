@@ -473,6 +473,50 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, C, R, TS, D, SB, EW, LW}
     last_lifecycle_receipt::MaybeLifecycleReceipt
 end
 
+function _rebuild_program_runtime(
+        runtime::ProgramRuntime{T, N}, capability_report, engine_workspace
+    ) where {T, N}
+    return ProgramRuntime{
+        T,
+        N,
+        typeof(runtime.program),
+        typeof(capability_report),
+        typeof(runtime.relationships),
+        typeof(runtime.trackers),
+        typeof(runtime.descriptor_state),
+        typeof(runtime.stage_buffers),
+        typeof(engine_workspace),
+        typeof(runtime.lifecycle_workspace),
+    }(
+        runtime.program,
+        capability_report,
+        runtime.ownership,
+        runtime.cell_kinds,
+        runtime.cell_generations,
+        runtime.trackers,
+        runtime.relationships,
+        runtime.descriptor_state,
+        runtime.proposal_contributions,
+        runtime.stage_buffers,
+        engine_workspace,
+        runtime.lifecycle_workspace,
+        runtime.parameters,
+        runtime.seed,
+        runtime.replica,
+        runtime.repeat,
+        runtime.mcs,
+        runtime.accepted,
+        runtime.rejected,
+        runtime.null_attempts,
+        runtime.constraint_rejections,
+        runtime.energy_rejections,
+        runtime.retired_cells,
+        runtime.settled,
+        runtime.failure_status,
+        runtime.last_lifecycle_receipt,
+    )
+end
+
 function _materialize_program(
         program::CompiledPottsProgram{T, N},
         initial::ProgramInitialState,
@@ -745,44 +789,8 @@ function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
         to, runtime.engine_workspace
     )
     capability_report = engine_workspace.capability_report
-    return ProgramRuntime{
-        T,
-        N,
-        typeof(runtime.program),
-        typeof(capability_report),
-        typeof(runtime.relationships),
-        typeof(runtime.trackers),
-        typeof(runtime.descriptor_state),
-        typeof(runtime.stage_buffers),
-        typeof(engine_workspace),
-        typeof(runtime.lifecycle_workspace),
-    }(
-        runtime.program,
-        capability_report,
-        runtime.ownership,
-        runtime.cell_kinds,
-        runtime.cell_generations,
-        runtime.trackers,
-        runtime.relationships,
-        runtime.descriptor_state,
-        runtime.proposal_contributions,
-        runtime.stage_buffers,
-        engine_workspace,
-        runtime.lifecycle_workspace,
-        runtime.parameters,
-        runtime.seed,
-        runtime.replica,
-        runtime.repeat,
-        runtime.mcs,
-        runtime.accepted,
-        runtime.rejected,
-        runtime.null_attempts,
-        runtime.constraint_rejections,
-        runtime.energy_rejections,
-        runtime.retired_cells,
-        runtime.settled,
-        runtime.failure_status,
-        runtime.last_lifecycle_receipt,
+    return _rebuild_program_runtime(
+        runtime, capability_report, engine_workspace
     )
 end
 

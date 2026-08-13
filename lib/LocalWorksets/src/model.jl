@@ -227,11 +227,9 @@ end
 
 abstract type _AbstractOutputDeclaration end
 
-abstract type _AbstractCombinationLaw end
-
 struct _IndependentOutput{T, K, R, C} <: _AbstractOutputDeclaration end
 
-struct _CombinationLaw{M, F, T} <: _AbstractCombinationLaw
+struct _CombinationLaw{M, F, T}
     operation::F
     identity::T
 end

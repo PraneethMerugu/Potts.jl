@@ -44,7 +44,8 @@ The package family supports Julia 1.12 and later Julia 1.x releases. See
 The repository is currently in pre-1.0 adoption and engineering hardening.
 G5H and the standalone LocalWorksets LW-4/LW-R2 freeze have cleared on exact
 candidates. The [post-LW-R1 roadmap](spec/localworksets-post-lwr1-roadmap.md)
-records the bounded ED-R0 engineering-debt gate as passed and opens LW-5 with
+records the bounded ED-R0 engineering-debt gate as passed and the focused
+IC-R0 internal-complexity/Julian-design hold as qualifying before LW-5 begins
 its representability inventory and one evidence-bearing pilot; G6 remains
 closed.
 

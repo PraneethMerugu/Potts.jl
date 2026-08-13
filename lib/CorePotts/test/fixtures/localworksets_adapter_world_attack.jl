@@ -27,62 +27,39 @@ function settle_full!(runtime)
     )
 end
 
-length(ARGS) == 1 || error("expected one adapter attack")
-attack = only(ARGS)
+length(ARGS) == 1 || error("expected one adapter attack profile")
+profile = only(ARGS)
 candidate = candidate_runtime()
-unsubmitted = attack == "run" ? candidate_runtime() : nothing
 CorePotts.enqueue_program_mcs!(candidate)
 prepared = candidate.engine_workspace.prepared
 before = CorePotts.LocalWorksets.inspect(prepared)
 @test before.submitted == UInt64(2)
 @test before.drained == UInt64(0)
 
-if attack == "run"
+if profile == "broad"
+    # Broad run and wait replacements may share one irreversible world. The
+    # trusted candidate must drain through both, while a previously prepared
+    # but uncached candidate must reject the changed run! authority.
+    unsubmitted = candidate_runtime()
     function CorePotts.LocalWorksets.run!(
             prepared::CorePotts.LocalWorksets.PreparedWork,
             submission::NamedTuple,
         )
         error("hostile exact broad run!")
     end
-    @test which(
-        CorePotts.LocalWorksets.run!,
-        Tuple{CorePotts.LocalWorksets.PreparedWork, NamedTuple},
-    ).module === Main
-elseif attack == "wait"
     function Base.wait(event::CorePotts.LocalWorksets.WorkEvent)
         error("hostile exact broad wait")
     end
     @test which(
+        CorePotts.LocalWorksets.run!,
+        Tuple{CorePotts.LocalWorksets.PreparedWork, NamedTuple},
+    ).module === Main
+    @test which(
         Base.wait, Tuple{CorePotts.LocalWorksets.WorkEvent}
     ).module === Main
-elseif attack == "specific"
-    function CorePotts.LocalWorksets.run!(
-            prepared::typeof(prepared), submission::NamedTuple
-        )
-        error("hostile more-specific run!")
-    end
-    event = candidate.engine_workspace.last_event
-    function Base.wait(event::typeof(event))
-        error("hostile more-specific wait")
-    end
-    @test which(
-        CorePotts.LocalWorksets.run!, Tuple{typeof(prepared), NamedTuple}
-    ).module === Main
-    @test which(Base.wait, Tuple{typeof(event)}).module === Main
-    CorePotts.enqueue_program_mcs!(candidate)
-else
-    error("unknown adapter attack: $attack")
-end
 
-receipt = settle_full!(candidate)
-after = CorePotts.LocalWorksets.inspect(prepared)
-expected_mcs = attack == "specific" ? 2 : 1
-@test receipt.committed_mcs == expected_mcs
-@test after.submitted == after.drained == UInt64(2 * expected_mcs)
-@test all(isnothing, prepared.leases)
-@test !after.poisoned
-
-if attack == "run"
+    receipt = settle_full!(candidate)
+    @test receipt.committed_mcs == 1
     fresh_prepared = unsubmitted.engine_workspace.prepared
     failure = try
         CorePotts.enqueue_program_mcs!(unsubmitted)
@@ -95,4 +72,28 @@ if attack == "run"
     @test fresh.submitted == fresh.drained == UInt64(0)
     @test all(isnothing, fresh_prepared.leases)
     @test !fresh.poisoned
+elseif profile == "specific"
+    event = candidate.engine_workspace.last_event
+    function CorePotts.LocalWorksets.run!(
+            prepared::typeof(prepared), submission::NamedTuple
+        )
+        error("hostile more-specific run!")
+    end
+    function Base.wait(event::typeof(event))
+        error("hostile more-specific wait")
+    end
+    @test which(
+        CorePotts.LocalWorksets.run!, Tuple{typeof(prepared), NamedTuple}
+    ).module === Main
+    @test which(Base.wait, Tuple{typeof(event)}).module === Main
+    CorePotts.enqueue_program_mcs!(candidate)
+    receipt = settle_full!(candidate)
+    @test receipt.committed_mcs == 2
+else
+    error("unknown adapter attack profile: $profile")
 end
+
+after = CorePotts.LocalWorksets.inspect(prepared)
+@test after.submitted == after.drained == UInt64(2 * receipt.committed_mcs)
+@test all(isnothing, prepared.leases)
+@test !after.poisoned

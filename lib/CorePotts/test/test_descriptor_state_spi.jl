@@ -35,6 +35,42 @@ function _descriptor_state_spi_plan()
     return descriptor_plan, only(layout.entries).handle
 end
 
+@testset "state and workspace handles share checked indices" begin
+    location = CorePotts.BlockLocation(1, (1,))
+    for (Handle, Representation, owner) in (
+            (
+                CorePotts.CompilerSPI.StateHandle,
+                CorePotts.DefaultStateStorageRepresentation,
+                "state",
+            ),
+            (
+                CorePotts.CompilerSPI.WorkspaceHandle,
+                CorePotts.DefaultWorkspaceStorageRepresentation,
+                "workspace",
+            ),
+        )
+        handle = Handle(2, 3)
+        @test CorePotts.CompilerSPI.handle_bank(handle) == 2
+        @test CorePotts.CompilerSPI.handle_slot(handle) == 3
+        bank_error = try
+            Handle(0, 1)
+            nothing
+        catch caught
+            caught
+        end
+        slot_error = try
+            Handle{Representation}(1, 0, location)
+            nothing
+        catch caught
+            caught
+        end
+        @test bank_error isa ArgumentError
+        @test slot_error isa ArgumentError
+        @test occursin("$owner bank ordinal", sprint(showerror, bank_error))
+        @test occursin("$owner handle slot", sprint(showerror, slot_error))
+    end
+end
+
 @testset "copy-returning descriptor-state backend SPI" begin
     ownership = zeros(Int32, 6, 6)
     ownership[3, 3] = 1

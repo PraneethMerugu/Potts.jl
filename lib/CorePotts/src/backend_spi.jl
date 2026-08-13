@@ -3,6 +3,11 @@ Backend and transactional execution protocol for PottsToolkit backend extensions
 
 This namespace is not an end-user modeling API. It owns capability admission,
 queue/settlement operations, device adaptation, and unpublished bank swaps.
+
+This is an explicit, flat facade over CorePotts-owned bindings, not a backend
+framework or a second implementation. Backend extensions should import only
+the smallest required protocol. They must not construct compiler IR through
+this namespace or self-authorize execution evidence.
 """
 module BackendSPI
 
@@ -61,8 +66,6 @@ import ..CorePotts:
     RelationshipTransactionBuffer,
     CreateRelationshipRequest,
     RemoveRelationshipRequest,
-    RNG_CONTRACT_VERSION,
-    RNG_LOWERING_IDENTITY,
     RetuneRelationshipRequest,
     ProgramRelationshipRequest,
     ProgramRelationshipState,
@@ -133,6 +136,7 @@ import ..CorePotts:
     remove_component_state!,
     reset_relationship_transaction!,
     retire_component_state!,
+    rng_contract_identity,
     settle_program!,
     stage_lifecycle_receipt!,
     stage_program_descriptor_state!,
@@ -207,13 +211,6 @@ public abort_component_state_transaction!, apply_lifecycle_receipt!
 public component_identity, component_state_snapshot
 public component_metadata_snapshot
 public bulk_component_completed_mcs, bulk_component_last_transaction_identity
-public validate_program_checkpoint
-
-"""Return the exact RNG contract and lowering identity admitted by this Core build."""
-rng_contract_identity() = (
-    contract_version = RNG_CONTRACT_VERSION,
-    lowering_identity = RNG_LOWERING_IDENTITY,
-)
-public rng_contract_identity
+public validate_program_checkpoint, rng_contract_identity
 
 end

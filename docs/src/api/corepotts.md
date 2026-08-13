@@ -16,6 +16,12 @@ extension should use the smallest public member of those modules and pass its
 owner-package conformance suite. Private file topology and underscored helpers
 are not extension points.
 
+`CompilerSPI` constructs and inspects validated compiler IR. `BackendSPI`
+implements admitted runtime, transaction, adaptation, and settlement behavior.
+They are explicit facades over CorePotts bindings rather than parallel
+implementations, and an extension should not mix them merely for convenience.
+See [Extension boundary](@ref extension-boundary) for the role map.
+
 ```@example core_boundary
 using CorePotts
 runtime_api = Set((

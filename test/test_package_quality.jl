@@ -82,6 +82,9 @@
         contents = read(file, String)
         @test all(pattern -> isnothing(match(pattern, contents)), retired_invocations)
         @test isnothing(match(private_upstream, contents))
+        @test !occursin(
+            r"ModelingToolkitBase\.isscheduled\s*\(", contents
+        )
         relative = relpath(file, project_root)
         owns_core_internals = startswith(
             relative, joinpath("lib", "CorePotts", "test")

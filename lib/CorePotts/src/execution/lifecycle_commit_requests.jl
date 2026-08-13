@@ -67,22 +67,16 @@ end
 end
 
 @inline _finalize_lifecycle_effect!(
-    workspace, request, descriptor, ::_CreateLifecyclePlan
-) = 0
-@inline _finalize_lifecycle_effect!(
-    workspace, request, descriptor, ::_TransitionLifecyclePlan
-) = 0
-@inline _finalize_lifecycle_effect!(
-    workspace, request, descriptor, ::_DivideLifecyclePlan
+    workspace,
+    request,
+    descriptor,
+    ::Union{_CreateLifecyclePlan, _TransitionLifecyclePlan, _DivideLifecyclePlan},
 ) = 0
 @inline function _finalize_lifecycle_effect!(
-        workspace, request, descriptor, ::_RemoveLifecyclePlan
-    )
-    @inbounds workspace.staged_cell_kinds[workspace.anchor[request]] = 0
-    return 1
-end
-@inline function _finalize_lifecycle_effect!(
-        workspace, request, descriptor, ::_RetireLifecyclePlan
+        workspace,
+        request,
+        descriptor,
+        ::Union{_RemoveLifecyclePlan, _RetireLifecyclePlan},
     )
     @inbounds workspace.staged_cell_kinds[workspace.anchor[request]] = 0
     return 1

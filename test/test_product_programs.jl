@@ -1,4 +1,4 @@
-@testset "G5H-5 final-interface product programs" begin
+@testset "published serial product programs" begin
     project_root = dirname(@__DIR__)
     include(joinpath(project_root, "examples", "wortel_2021_serial.jl"))
     include(joinpath(project_root, "examples", "merks_2006_serial.jl"))

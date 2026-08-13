@@ -60,7 +60,6 @@
         :_StorageSlot,
         :_MaskedEmission,
         :_AbstractOutputDeclaration,
-        :_AbstractCombinationLaw,
         :_IndependentOutput,
         :_CombinationLaw,
         :_CombinedOutput,
@@ -426,7 +425,6 @@ end
     @test combined_facts.combine.semantic_order ==
           :canonical_item_local_slot
     @test combined_facts.empty_destination === 0.0f0
-    @test relaxed isa LW._AbstractCombinationLaw
     @test LW.emit(UInt32(3)) isa LW._Emission{UInt32}
     @test LW.emit(UInt32(3), false) isa
           LW._ConditionalEmission{UInt32}

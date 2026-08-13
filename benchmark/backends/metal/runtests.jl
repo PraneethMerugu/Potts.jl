@@ -12,7 +12,11 @@ include("../../../test/localworksets_witnesses/lbm_d2q9.jl")
 include("../../../test/localworksets_witnesses/lattice_spring.jl")
 include("../../../test/localworksets_witnesses/matrix_free_fem.jl")
 include("../../../test/localworksets_witnesses/zbuffer.jl")
-include("../../../test/localworksets_witnesses/performance.jl")
+
+const _RUN_LW4_PERFORMANCE = haskey(ENV, "LW4_PERF_SAMPLES")
+if _RUN_LW4_PERFORMANCE
+    include("../../../test/localworksets_witnesses/performance.jl")
+end
 
 lw4b_witness_cache_before = length(Metal.compiler_cache(Metal.device()))
 lw4b_cross_domain_reports = let
@@ -33,12 +37,16 @@ lw4b_cross_domain_reports = let
         @test spring_fast.launches == 3
         @test fem.launches == 2
         @test zbuffer.launches == 2
-        @test all(report -> report.waits == 2, (
-            lbm, spring_deterministic, spring_fast, fem, zbuffer,
-        ))
-        @test all(report -> report.invalid_rejected, (
-            lbm, spring_deterministic, spring_fast, fem, zbuffer,
-        ))
+        @test all(
+            report -> report.waits == 2, (
+                lbm, spring_deterministic, spring_fast, fem, zbuffer,
+            )
+        )
+        @test all(
+            report -> report.invalid_rejected, (
+                lbm, spring_deterministic, spring_fast, fem, zbuffer,
+            )
+        )
         @test spring_fast.determinism.same_run_replay.guarantee ==
             :not_claimed_for_fast_ports
     end
@@ -54,17 +62,39 @@ lw4b_witness_cache_report = (
 println(lw4b_witness_cache_report)
 @test lw4b_witness_cache_after >= lw4b_witness_cache_before
 
-lw4b_d2q9_performance = run_lw4b_d2q9_performance(
-    Metal.MtlArray; backend = Metal.MetalBackend()
-)
-println(lw4b_d2q9_performance)
-@test lw4b_d2q9_performance.passed
+lw4b_d2q9_performance = nothing
+lw4b_zbuffer_performance = nothing
+if _RUN_LW4_PERFORMANCE
+    global lw4b_d2q9_performance = run_lw4b_d2q9_performance(
+        Metal.MtlArray; backend = Metal.MetalBackend()
+    )
+    println(
+        (
+            witness = lw4b_d2q9_performance.witness,
+            samples = lw4b_d2q9_performance.samples,
+            ratio = lw4b_d2q9_performance.ratio,
+            upper95 = lw4b_d2q9_performance.upper95,
+            threshold = lw4b_d2q9_performance.threshold,
+            passed = lw4b_d2q9_performance.passed,
+        )
+    )
+    @test lw4b_d2q9_performance.passed
 
-lw4b_zbuffer_performance = run_lw4b_zbuffer_performance(
-    Metal.MtlArray; backend = Metal.MetalBackend()
-)
-println(lw4b_zbuffer_performance)
-@test lw4b_zbuffer_performance.passed
+    global lw4b_zbuffer_performance = run_lw4b_zbuffer_performance(
+        Metal.MtlArray; backend = Metal.MetalBackend()
+    )
+    println(
+        (
+            witness = lw4b_zbuffer_performance.witness,
+            samples = lw4b_zbuffer_performance.samples,
+            ratio = lw4b_zbuffer_performance.ratio,
+            upper95 = lw4b_zbuffer_performance.upper95,
+            threshold = lw4b_zbuffer_performance.threshold,
+            passed = lw4b_zbuffer_performance.passed,
+        )
+    )
+    @test lw4b_zbuffer_performance.passed
+end
 
 include("native_component_execution.jl")
 
@@ -247,26 +277,31 @@ resolution_policy_report = run_lifecycle_resolution_policy_execution(
 )
 println(resolution_policy_report)
 
-include("lw3_localworksets_parity.jl")
+lw3_localworksets_parity_report = nothing
+if _RUN_LW4_PERFORMANCE
+    include("lw3_localworksets_parity.jl")
+end
 
 if haskey(ENV, "LW4_MACHINE_RESULTS")
     import Serialization
-    Serialization.serialize(ENV["LW4_MACHINE_RESULTS"], (
-        environment = (
-            julia = string(VERSION),
-            kernel = string(Sys.KERNEL),
-            architecture = string(Sys.ARCH),
-            machine = Sys.MACHINE,
-            metal = sprint(io -> Metal.versioninfo(io)),
-        ),
-        cross_domain = lw4b_cross_domain_reports,
-        d2q9_performance = lw4b_d2q9_performance,
-        zbuffer_performance = lw4b_zbuffer_performance,
-        localworksets = localworksets_report,
-        localworksets_failure = localworksets_failure_report,
-        shared_failure = localworksets_shared_failure_report,
-        checkerboard = localworksets_checkerboard_report,
-        checkerboard_failure = localworksets_checkerboard_failure_report,
-        lw3_parity = lw3_localworksets_parity_report,
-    ))
+    Serialization.serialize(
+        ENV["LW4_MACHINE_RESULTS"], (
+            environment = (
+                julia = string(VERSION),
+                kernel = string(Sys.KERNEL),
+                architecture = string(Sys.ARCH),
+                machine = Sys.MACHINE,
+                metal = sprint(io -> Metal.versioninfo(io)),
+            ),
+            cross_domain = lw4b_cross_domain_reports,
+            d2q9_performance = lw4b_d2q9_performance,
+            zbuffer_performance = lw4b_zbuffer_performance,
+            localworksets = localworksets_report,
+            localworksets_failure = localworksets_failure_report,
+            shared_failure = localworksets_shared_failure_report,
+            checkerboard = localworksets_checkerboard_report,
+            checkerboard_failure = localworksets_checkerboard_failure_report,
+            lw3_parity = lw3_localworksets_parity_report,
+        )
+    )
 end

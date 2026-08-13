@@ -59,6 +59,12 @@ struct BlockLocation{N}
     end
 end
 
+function _validated_handle_indices(bank::Integer, slot::Integer, owner)
+    bank > 0 || throw(ArgumentError("a $owner bank ordinal must be positive"))
+    slot > 0 || throw(ArgumentError("a $owner handle slot must be positive"))
+    return Int32(bank), Int32(slot)
+end
+
 struct StateHandle{
         Representation <: AbstractStorageRepresentation,
         L <: BlockLocation,
@@ -74,10 +80,10 @@ struct StateHandle{
             Representation <: AbstractStorageRepresentation,
             L <: BlockLocation,
         }
-        bank > 0 ||
-            throw(ArgumentError("a state bank ordinal must be positive"))
-        slot > 0 || throw(ArgumentError("a state handle slot must be positive"))
-        new{Representation, L}(Int32(bank), Int32(slot), location)
+        checked_bank, checked_slot = _validated_handle_indices(
+            bank, slot, "state"
+        )
+        return new{Representation, L}(checked_bank, checked_slot, location)
     end
 end
 
@@ -122,11 +128,10 @@ struct WorkspaceHandle{
             Representation <: AbstractStorageRepresentation,
             L <: BlockLocation,
         }
-        bank > 0 ||
-            throw(ArgumentError("a workspace bank ordinal must be positive"))
-        slot > 0 ||
-            throw(ArgumentError("a workspace handle slot must be positive"))
-        new{Representation, L}(Int32(bank), Int32(slot), location)
+        checked_bank, checked_slot = _validated_handle_indices(
+            bank, slot, "workspace"
+        )
+        return new{Representation, L}(checked_bank, checked_slot, location)
     end
 end
 

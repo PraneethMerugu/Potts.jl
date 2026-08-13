@@ -156,6 +156,7 @@ export PreserveNativeInitialization, PreserveNativeEvents
 export GlobalNativeLifecycle, PerCellNativeLifecycle, LateBoundNativeAlgorithm
 export RequireQualifiedNativeCapability
 
+# Scientific statement and compiler-transfer SPI.
 public map_symbolics, statement_kind, with_source
 public registered_statement_lowering
 public OperationTransfer, LifecycleOperationABI, operation_transfer
@@ -179,6 +180,8 @@ public registered_operation_tracker_requirements
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ScheduledSystemFingerprint
+
+# Native MTK/SciML component-extension SPI.
 public NativeSourceFingerprint, CompletedNativeComponent, ScheduledNativeComponent
 public native_source, native_family, native_inputs, native_outputs
 public native_variable, potts_endpoint, native_value_type
@@ -189,6 +192,8 @@ public NativeLogicalState
 public AbstractNativeRuntimeError, NativeProfileError, NativeCapabilityError
 public NativeExecutionError, NativeSolveFailure
 public PottsCapabilityKey, PottsCapabilityReport
+
+# Stable diagnostics, inspection, and unit-conversion helpers.
 public PottsDiagnostic, PottsValidationError
 public PottsLookupError, PottsUnknownIdentityError, PottsKnownUnsavedError
 public PottsUnsavedTimeError

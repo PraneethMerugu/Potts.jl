@@ -990,7 +990,7 @@ mutable struct _MutableCombinedWorkspace
     leases::Vector{Any}
 end
 
-struct _ExternalCombinationLaw{M, F, T} <: LW._AbstractCombinationLaw
+struct _ExternalCombinationLaw{M, F, T}
     operation::F
     identity::T
 end

@@ -24,8 +24,7 @@
         :PottsStats, :init, :solve, :solve!, :step!, :remake, :terminate!,
         :PottsCheckpoint, :checkpoint, :runtime_statistics,
 
-        # Intentional +2 stable delta from G5H-0: the minimal public
-        # realization of frozen F11, not compatibility surface.
+            # The narrow relationship-transaction boundary contributes two names.
         :CellIdentity, :relationship_transaction!,
 
         :DeclaredReferenceUnits, :ReferenceUnits, :SiteBinding, :CellBinding,

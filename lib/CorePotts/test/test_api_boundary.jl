@@ -62,4 +62,25 @@
     @test Base.ispublic(
         CorePotts.BackendSPI, :stage_program_descriptor_state!
     )
+
+    compiler_names = Set(
+        names(
+            CorePotts.CompilerSPI; all = false, imported = false
+        )
+    )
+    backend_names = Set(
+        names(
+            CorePotts.BackendSPI; all = false, imported = false
+        )
+    )
+    @test isempty(intersect(compiler_names, backend_names))
+    for (spi, spi_names) in (
+            (CorePotts.CompilerSPI, compiler_names),
+            (CorePotts.BackendSPI, backend_names),
+        )
+        @test all(spi_names) do name
+            isdefined(CorePotts, name) &&
+                getfield(spi, name) === getfield(CorePotts, name)
+        end
+    end
 end

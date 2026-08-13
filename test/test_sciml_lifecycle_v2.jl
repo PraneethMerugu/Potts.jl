@@ -123,7 +123,7 @@ function _g5h2v2_same_state(left, right)
            right[:g5h2v2_marker_snapshot]
 end
 
-@testset "G5H-2 validation-only problem boundary" begin
+@testset "validation-only problem boundary" begin
     fixture = _g5h2v2_fixture(:g5h2v2_validation)
     @test is_scheduled(fixture.system)
     @test mtkcompile(fixture.system) === fixture.system
@@ -276,7 +276,7 @@ end
     @test fieldnames(typeof(problem)) == problem_fields
 end
 
-@testset "G5H-2 late runtime profiles and SciML entry points" begin
+@testset "late runtime profiles and SciML entry points" begin
     fixture = _g5h2v2_fixture(:g5h2v2_profiles)
     problem = _g5h2v2_problem(fixture; tspan = (0, 2))
 
@@ -359,7 +359,7 @@ end
     )
 end
 
-@testset "G5H-2 complete remake dimensions" begin
+@testset "complete remake dimensions" begin
     fixture = _g5h2v2_fixture(:g5h2v2_remake)
     problem = _g5h2v2_problem(fixture)
     replacement = fill(7.0, 6, 6)
@@ -407,7 +407,7 @@ end
     )
 end
 
-@testset "G5H-2 SymbolicIndexingInterface contract" begin
+@testset "SymbolicIndexingInterface contract" begin
     fixture = _g5h2v2_fixture(:g5h2v2_sii)
     system = fixture.system
     problem = _g5h2v2_problem(fixture; tspan = (0, 3))
@@ -502,7 +502,7 @@ end
     @test target_getter(solution) == 7.0f0
 end
 
-@testset "G5H-2 saving, callbacks, and termination" begin
+@testset "saving, callbacks, and termination" begin
     fixture = _g5h2v2_fixture(:g5h2v2_callbacks)
     problem = _g5h2v2_problem(fixture; tspan = (0, 4))
 
@@ -587,7 +587,7 @@ end
     @test_throws ArgumentError init(problem; callback = continuous)
 end
 
-@testset "G5H-2 checkpoint identity and exact continuation" begin
+@testset "checkpoint identity and exact continuation" begin
     fixture = _g5h2v2_fixture(:g5h2v2_checkpoint)
     problem = _g5h2v2_problem(fixture; tspan = (0, 6), repeat = 2)
     algorithm = SequentialCPM()
@@ -704,7 +704,7 @@ end
     )
 end
 
-@testset "G5H-2 ensemble replica and repeat identity" begin
+@testset "ensemble replica and repeat identity" begin
     fixture = _g5h2v2_fixture(:g5h2v2_ensemble)
     problem = _g5h2v2_problem(fixture; tspan = (0, 2))
     exposed_u0 = problem.u0
@@ -769,12 +769,12 @@ end
     @test rerun_solution.provenance.repeat == 2
 end
 
-@testset "G5H-2 surfaced callback failure" begin
+@testset "surfaced callback failure" begin
     fixture = _g5h2v2_fixture(:g5h2v2_failure)
     problem = _g5h2v2_problem(fixture; tspan = (0, 3))
     failing_callback = SciMLBase.DiscreteCallback(
         (_, time, _) -> time == 1,
-        _ -> error("intentional G5H-2 callback failure");
+        _ -> error("intentional callback failure");
         save_positions = (false, false),
     )
     integrator = init(
@@ -790,7 +790,7 @@ end
         caught
     end
     @test failure isa ErrorException
-    @test occursin("intentional G5H-2", sprint(showerror, failure))
+    @test occursin("intentional callback failure", sprint(showerror, failure))
     @test integrator.retcode == SciMLBase.ReturnCode.Failure
     @test integrator.failure_report === failure
     @test_throws ArgumentError step!(integrator)

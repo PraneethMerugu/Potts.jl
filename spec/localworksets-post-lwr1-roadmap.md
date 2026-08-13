@@ -6,8 +6,8 @@ architecture or phase boundaries.
 
 Date: 2026-08-10
 
-Status: LW-4A, LW-4B, LW-4C, final LW-R2, and bounded ED-R0 complete; LW-4
-frozen; LW-5 open; G6 closed
+Status: LW-4A, LW-4B, LW-4C, final LW-R2, and bounded ED-R0 complete; bounded
+IC-R0 candidate under qualification; LW-4 frozen; LW-5 held; G6 closed
 
 Authority:
 
@@ -27,6 +27,7 @@ LW-4A exact standalone extraction -> LW-R2A package-boundary review
   -> LW-4B bounded general mechanisms -> LW-R2B mechanism review
   -> LW-4C Julian/JuliaGPU API reconciliation -> LW-R2 public-surface freeze
   -> ED-0 inventory -> bounded ED-1 hygiene -> ED-R0
+  -> IC-0 complexity/SPI/verification audit -> bounded IC-1 consolidation -> IC-R0
   -> LW-5 compiled local-operation adoption -> LW-R3
   -> explicit owner G6 send-off
 ```
@@ -50,6 +51,17 @@ deeper consolidation.
 ED-R0 passed on exact product commit
 `da80a0ec1f6b52321973872066e02632124ec0f4`; see the
 [qualification record](../design/hardening/edr0-engineering-debt-review.md).
+
+The owner subsequently inserted a bounded internal-complexity hold before
+substantive LW-5 migration. IC-0 audits abstraction ownership, Julia design,
+SPI organization, active verification cost, and a bounded Symbolics-generated
+evaluator feasibility question. IC-1 may consolidate only confirmed
+behavior-preserving duplication; it adds no feature and reopens no accepted
+LocalWorksets architecture. The Symbolics sub-gate may reject adoption and
+must not alter CorePotts/LocalWorksets dependency ownership. The single authoritative
+[IC-R0 record](../design/hardening/icr0-internal-complexity-review.md) defines
+the matrix and exact qualification. LW-5 source migration remains held until
+that record passes.
 
 ## Preserved architecture
 

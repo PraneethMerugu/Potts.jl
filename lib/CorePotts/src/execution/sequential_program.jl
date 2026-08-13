@@ -745,45 +745,7 @@ function _construct_localworksets_candidate_runtime(
     capability_report = _localworksets_candidate_capability_report(
         runtime.capability_report, candidate.prepared, maturity
     )
-    return ProgramRuntime{
-        eltype(runtime.parameters),
-        ndims(runtime.ownership),
-        typeof(runtime.program),
-        typeof(capability_report),
-        typeof(runtime.relationships),
-        typeof(runtime.trackers),
-        typeof(runtime.descriptor_state),
-        typeof(runtime.stage_buffers),
-        typeof(candidate),
-        typeof(runtime.lifecycle_workspace),
-    }(
-        runtime.program,
-        capability_report,
-        runtime.ownership,
-        runtime.cell_kinds,
-        runtime.cell_generations,
-        runtime.trackers,
-        runtime.relationships,
-        runtime.descriptor_state,
-        runtime.proposal_contributions,
-        runtime.stage_buffers,
-        candidate,
-        runtime.lifecycle_workspace,
-        runtime.parameters,
-        runtime.seed,
-        runtime.replica,
-        runtime.repeat,
-        runtime.mcs,
-        runtime.accepted,
-        runtime.rejected,
-        runtime.null_attempts,
-        runtime.constraint_rejections,
-        runtime.energy_rejections,
-        runtime.retired_cells,
-        runtime.settled,
-        runtime.failure_status,
-        runtime.last_lifecycle_receipt,
-    )
+    return _rebuild_program_runtime(runtime, capability_report, candidate)
 end
 
 function _localworksets_candidate_runtime(

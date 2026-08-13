@@ -7,8 +7,12 @@ Domain packages retain physics, clocks, RNG, solver, and commit semantics.
 """
 module LocalWorksets
 
+# Lifecycle values and operations.
 export LocalWork, WorkPlan, PreparedWork, WorkEvent, LocalWorkValidationError
-export localwork, topology, plan, prepare, run!, sequence
+export localwork, plan, prepare, run!, sequence
+
+# Declarative topology, binding, output, and emission vocabulary.
+export topology
 export value_slot, storage_slot
 export independent, combined, resolved, deterministic, fast
 export emit, candidate, masked

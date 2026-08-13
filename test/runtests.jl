@@ -4,11 +4,11 @@ using Aqua
 using ExplicitImports
 
 include("test_runner_authority.jl")
-verify_authoritative_runner(@__DIR__, AUTHORITATIVE_G5H_TESTS)
+verify_test_inventory(@__DIR__, POTTS_TOOLKIT_TESTS)
 
-@testset "G5H-1 through G5H-3 authoritative package surface" begin
-    for file in AUTHORITATIVE_G5H_TESTS
-        @info "authoritative test file" file
+@testset "PottsToolkit package suite" begin
+    for file in POTTS_TOOLKIT_TESTS
+        @info "package test file" file
         include(file)
     end
 end

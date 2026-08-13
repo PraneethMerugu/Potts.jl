@@ -5,6 +5,23 @@ Julia 1.x release is required.
 
 ## Test
 
+During development, start with the smallest self-contained test file that owns
+the changed behavior. For example, a focused root check can load the shared
+setup explicitly:
+
+```sh
+julia --project=. --startup-file=no -e 'include("test/setup.jl"); include("test/test_package_quality.jl")'
+```
+
+Focused commands shorten the edit loop; they are not a second test inventory
+or release gate. Before handoff, run the complete suite of every changed
+package. Add the integration suite when a package boundary, extension, SciML
+lifecycle, or persistence behavior changed; add the strict documentation build
+when a public name, docstring, example, or manual page changed. Qualified GPU
+checks are required when device execution, adaptation, admission, lifetime, or
+backend evidence changed. Historical evidence bundles are not rerun unless
+their preserved contract is actually invalidated.
+
 Run the independently installable package suites from the repository root:
 
 ```sh
@@ -73,6 +90,19 @@ GPU hardware tests, benchmarks, performance comparisons, and external-link
 checks are manually dispatched when relevant. Releases use the same tests and
 documentation build as normal development; there is no separate evidence
 refresh or one-time qualification ceremony.
+
+The real-Metal semantic runner does not perform the 1,000-pair performance
+campaign unless the reviewed benchmark profile is selected explicitly:
+
+```sh
+julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
+LW4_PERF_SAMPLES=1000 julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
+```
+
+The first command owns semantic, lifetime, parity, and admission qualification.
+The second adds the unchanged cross-domain and LW-3 paired performance
+campaigns; use it only when a measured kernel, launch sequence, wait,
+allocation, or workspace path changed.
 
 Current specifications and decisions live under `spec/`. Historical interviews and evidence under
 `design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier
