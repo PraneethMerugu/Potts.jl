@@ -1,11 +1,12 @@
 # Private late-lowered execution plan and public runtime selectors.
 
+"""Supertype of qualified cellular Potts scheduling algorithms."""
 abstract type AbstractPottsAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
 """
     SequentialCPM()
 
-The V1 stochastic reference engine. Proposal attempts are committed one at a time
+The stochastic reference engine. Proposal attempts are committed one at a time
 in their semantic RNG order.
 """
 struct SequentialCPM <: AbstractPottsAlgorithm end
@@ -13,16 +14,17 @@ struct SequentialCPM <: AbstractPottsAlgorithm end
 """
     CheckerboardSweepCPM()
 
-The V1 checkerboard sweep process. Every mutable site is scheduled once without
+The checkerboard sweep process. Every mutable site is scheduled once without
 replacement and colors execute in an unbiased semantic-RNG permutation per MCS.
 A compilation error is reported when the completed model has effects whose
 touched set cannot be proven.
 """
 struct CheckerboardSweepCPM <: AbstractPottsAlgorithm end
 
+"""Supertype of explicitly selected PottsToolkit execution backends."""
 abstract type AbstractPottsBackend end
 
-"""The qualified V1 host backend."""
+"""The qualified host backend."""
 struct CPUBackend <: AbstractPottsBackend end
 
 """Apple Metal accelerator selected through the optional Metal extension."""

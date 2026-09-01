@@ -1,11 +1,17 @@
 # Generic staged-effect descriptors and their preallocated runtime buffers.
 
+"""Scientific scheduling boundary for a compiled stage descriptor."""
 abstract type AbstractCompiledStage end
+"""Run a stage only for accepted copy proposals."""
 struct AcceptedCopyStage <: AbstractCompiledStage end
+"""Run a stage once after each completed MCS."""
 struct AfterMCSStage <: AbstractCompiledStage end
 
+"""Policy selecting the site bound to one compiled stage evaluation."""
 abstract type AbstractStageSiteSelector end
+"""Bind stage evaluation to the accepted proposal target site."""
 struct ProposalTargetStageSite <: AbstractStageSiteSelector end
+"""Bind stage evaluation to the current explicit iteration site."""
 struct IterationStageSite <: AbstractStageSiteSelector end
 """Select the sole scalar value of a model-scoped state block."""
 struct ModelStageSite <: AbstractStageSiteSelector end
@@ -44,6 +50,7 @@ function operation_callable(
     return BoundStateValueOperation{ModelStageSite}()
 end
 
+"""Return the lattice site selected by a stage-site policy and context."""
 function stage_site end
 
 @inline function (operation::BoundStateValueOperation{S})(
@@ -193,6 +200,7 @@ stage_effect_buffered(::RelationshipCreateEffect) = true
 stage_effect_buffered(::RelationshipRemoveEffect) = true
 stage_effect_buffered(::RelationshipRetuneEffect) = true
 
+"""One condition, value, effect, access contract, and scheduling boundary."""
 struct CompiledStageDescriptor{
         C <: StaticEvaluator,
         V <: StaticEvaluator,
@@ -278,10 +286,12 @@ descriptor_inspection(descriptor::CompiledStageDescriptor) = (
     value = nameof(typeof(descriptor.value.expression)),
 )
 
+"""Homogeneous stage descriptors sharing one concrete evaluator/effect schema."""
 struct StageDescriptorGroup{D, V <: AbstractVector{D}}
     instances::V
 end
 
+"""Ordered accepted-copy and before/after-lifecycle stage groups."""
 struct StageExecutionPlan{A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
     accepted_copy::A
     before_lifecycle::B
@@ -291,27 +301,6 @@ struct StageExecutionPlan{A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
     after_mcs_scratch_count::Int32
     fingerprint::String
 end
-
-"""Fingerprint-free stage plan used by checkerboard kernels."""
-struct StageKernelPlan{A <: Tuple, B <: Tuple, L <: Tuple, M <: Tuple}
-    accepted_copy::A
-    before_lifecycle::B
-    after_lifecycle::L
-    after_mcs::M
-    accepted_count::Int32
-    after_mcs_scratch_count::Int32
-end
-
-
-stage_kernel_plan(plan::StageExecutionPlan) = StageKernelPlan(
-    plan.accepted_copy,
-    plan.before_lifecycle,
-    plan.after_lifecycle,
-    plan.after_mcs,
-    plan.accepted_count,
-    plan.after_mcs_scratch_count,
-)
-stage_kernel_plan(plan::StageKernelPlan) = plan
 
 function StageExecutionPlan(
         accepted_copy::A,
@@ -414,6 +403,7 @@ function allocate_stage_runtime_buffers(
         relationships::RelationshipStorage = RelationshipStorage(()),
         ;
         accepted_batch_bound::Integer = 1,
+        accepted_relationship_transactions::Bool = true,
     ) where {T <: AbstractFloat, N}
     accepted_batch_bound > 0 || throw(ArgumentError(
         "accepted-copy batch bound must be positive"
@@ -433,13 +423,13 @@ function allocate_stage_runtime_buffers(
     after_model = fill(StageEvaluation(false, zero(T)), model_count)
     transactions = Any[]
     for store_slot in eachindex(relationships)
-        accepted_bound = sum((
+        accepted_bound = accepted_relationship_transactions ? sum((
             1
             for group in plan.accepted_copy
             for descriptor in group.instances
             if descriptor.effect isa RelationshipCreateEffect &&
                descriptor.effect.relationship_slot == store_slot
-        ); init = 0)
+        ); init = 0) : 0
         after_bound = sum((
             length(relationships[store_slot].active)
             for group in plan.after_mcs
@@ -449,27 +439,17 @@ function allocate_stage_runtime_buffers(
             } &&
                descriptor.effect.relationship_slot == store_slot
         ); init = 0)
-        push!(transactions, RelationshipTransactionBuffer(
-            relationships[store_slot],
-            max(accepted_bound * accepted_batch_bound, after_bound),
-        ))
+        capacity = max(accepted_bound * accepted_batch_bound, after_bound)
+        push!(
+            transactions,
+            iszero(capacity) ? nothing : RelationshipTransactionBuffer(
+                relationships[store_slot], capacity
+            ),
+        )
     end
-    relationship_transactions = RelationshipStorage(transactions)
+    relationship_transactions = all(isnothing, transactions) ? nothing :
+        RelationshipStorage(transactions)
     return StageRuntimeBuffers{T, N, typeof(relationship_transactions)}(
         accepted, after, after_model, relationship_transactions
     )
 end
-
-Adapt.@adapt_structure BoundStateValueOperation
-Adapt.@adapt_structure SiteAssignmentEffect
-Adapt.@adapt_structure ModelAssignmentEffect
-Adapt.@adapt_structure IteratedSiteAssignmentEffect
-Adapt.@adapt_structure ShiftAppendEffect
-Adapt.@adapt_structure RelationshipCreateEffect
-Adapt.@adapt_structure RelationshipRemoveEffect
-Adapt.@adapt_structure RelationshipRetuneEffect
-Adapt.@adapt_structure CompiledStageDescriptor
-Adapt.@adapt_structure StageDescriptorGroup
-Adapt.@adapt_structure StageExecutionPlan
-Adapt.@adapt_structure StageKernelPlan
-Adapt.@adapt_structure StageRuntimeBuffers

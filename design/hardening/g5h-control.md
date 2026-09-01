@@ -1,7 +1,9 @@
 # G5H implementation control
 
 Status: G5H-0 through G5H-5, LocalWorksets LW-0 through LW-R2, and bounded
-ED-R0 and bounded IC-R0 passed; LW-5 open at inventory/pilot; G6 closed
+ED-R0 and IC-R0 passed; revised LW-5A through mandatory LW-5B4O passed;
+bounded LW-5C, LW-5D convergence/promotion, and fresh LW-R3 passed exact
+qualification; G6 remains closed pending a separate owner send-off
 
 Authority: [Symbolic Potts V1 G5H Hardening Contract](../../spec/symbolic-potts-v1-hardening.md)
 
@@ -26,7 +28,7 @@ repeat or amend gate requirements.
 | LocalWorksets LW-4 through LW-R2 | `passed` | Standalone extraction, bounded general mechanisms, consolidation, construction simplification, API reconciliation, CPU/real-Metal Freeze, and the five-role LW-R2 review passed. Product `ee395bd2f70d210fe98a0fb748e6530824c50671`, evidence digest `49002d9542b64c4c03388ab9bbe30632dfe20a64eac6c2e4bbcb89c50a486641`, and final seal commit `a65622a2` pass `--verify-final`. Authority: [sealed bundle](lw4-final-qualification-bundle/README.txt) and [post-LW-R1 roadmap](../../spec/localworksets-post-lwr1-roadmap.md). |
 | ED-0/ED-1 engineering-debt hold | `passed` | The [three-package audit](ed0-ed1-engineering-debt-audit.md) found no safe production deletion and bounded the work. Exact product `da80a0ec1f6b52321973872066e02632124ec0f4` then passed complete PottsToolkit/CorePotts/LocalWorksets CPU suites, qualified integration/docs/real Metal, static seals, and focused ED-R0 review with P0=0, P1=0, P2=0. Evidence: [ED-R0 review](edr0-engineering-debt-review.md). |
 | IC-0/IC-1 internal-complexity hold | `passed` | Exact product `8b710692a84f79b1411a1443a27a9ee099327bcf`, tree `b360f2b06b404b34d448c75f3bdd5b012d839dc7`, passed complete CPU/integration/docs/real-Metal/static qualification and the bounded [IC-R0 review](icr0-internal-complexity-review.md) with P0=0, P1=0, P2=0. The Symbolics feasibility sub-gate vetoed adoption without production or dependency changes. |
-| LocalWorksets LW-5 through LW-R3 | `open` | ED-R0 and IC-R0 cleared the pre-adoption holds. Begin only with the existing representability inventory and one evidence-bearing pilot; domain semantics remain in PottsToolkit/CorePotts. Further migration remains conditional on smaller adapters and complete parity evidence. |
+| LocalWorksets LW-5 through LW-R3 | `passed; LW-5D promotion sealed` | The preservation-oriented [LW-5A inventory](lw5a-representability-and-preservation.md), authoritative amendment, B0/B2/B3/B4, mandatory [LW-5B4O](lw5b4o-review.md), and bounded [LW-5C](lw5c-review.md) holds passed. LW-5D then converged K02→K03 into the common CorePotts execution shell, preserved the frozen direct oracle, and passed the fresh [LW-R3 committee](lw5d-review.md) with P0=0/P1=0. The final [promotion qualification](lw5d-final-evidence.md) passed complete LocalWorksets/CorePotts, PottsToolkit 2,667/2,667, real-Metal, checkpoint/RNG/failure, and frozen paired performance gates. The promoted default is limited to the exact qualified conjunction; active lifecycle and insufficiently qualified external profiles remain direct. The three P2 items remain recorded. G6 and later operation families remain closed. |
 | G6 owner decision | `blocked` | G6 requires LW-R2, LW-R3, disposition of every carried finding, and a separate explicit owner send-off. |
 
 ## Review results

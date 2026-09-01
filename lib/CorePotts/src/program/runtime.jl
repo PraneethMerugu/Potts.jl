@@ -1,5 +1,6 @@
 # Logical snapshots, checkpoints, initialization, and runtime ownership.
 
+"""Independently owned logical state published at one settled MCS boundary."""
 struct ProgramSnapshot{T <: AbstractFloat, N, R, D, TS}
     mcs::Int
     ownership::Array{Int32, N}
@@ -24,6 +25,7 @@ function program_snapshot_descriptor_state(snapshot::ProgramSnapshot)
     return copy_auxiliary_state(state)
 end
 
+"""Checksummed exact-continuation payload for one compiled program identity."""
 struct ProgramCheckpoint{S, P, E}
     schema::VersionNumber
     program_fingerprint::String
@@ -42,24 +44,70 @@ struct ProgramCheckpoint{S, P, E}
     checksum::String
 end
 
-const _CORE_CHECKPOINT_CAPABILITY_SCHEMA = v"1.1.0"
+const _CORE_CHECKPOINT_CAPABILITY_SCHEMA = v"3.0.0"
+
+function _exact_execution_contract(key::ProgramCapabilityKey)
+    lifecycle = key.lifecycle
+    component_state = key.component_state
+    mechanisms = key.mechanisms
+    return (
+        engine = key.engine,
+        backend = key.backend,
+        device = key.device,
+        dimension = key.dimension,
+        topology = key.topology,
+        scalar_type = string(key.scalar_type),
+        math_policy = (
+            math = key.math_policy.math,
+            reductions = key.math_policy.reductions,
+            bounds = key.math_policy.bounds,
+        ),
+        lifecycle = (
+            family = lifecycle.family,
+            effect_mask = lifecycle.effect_mask,
+            division_variant_mask = lifecycle.division_variant_mask,
+            relationship_action_mask = lifecycle.relationship_action_mask,
+            state_action_masks = lifecycle.state_action_masks,
+            fingerprint = lifecycle.fingerprint,
+        ),
+        component_state = (
+            scope = component_state.scope,
+            identities = component_state.identities,
+            domains = component_state.domains,
+            schema_fingerprint = component_state.schema_fingerprint,
+        ),
+        mechanisms = (
+            proposal_fingerprint = mechanisms.proposal_fingerprint,
+            descriptor_fingerprint = mechanisms.descriptor_fingerprint,
+            stage_fingerprint = mechanisms.stage_fingerprint,
+            relationship_fingerprint = mechanisms.relationship_fingerprint,
+            tracker_fingerprint = mechanisms.tracker_fingerprint,
+            checkerboard_fingerprint = mechanisms.checkerboard_fingerprint,
+            rng_contract_version = mechanisms.rng_contract_version,
+            rng_lowering_identity = mechanisms.rng_lowering_identity,
+            code_identities = mechanisms.code_identities,
+            authority = mechanisms.authority,
+            support_family = mechanisms.support_family,
+            exact_replay = mechanisms.exact_replay,
+        ),
+        environment = key.environment,
+        replay = key.replay,
+    )
+end
 
 function _core_checkpoint_capability_block(program::CompiledPottsProgram)
     key = program_capability_report(program).key
     return (
         schema = _CORE_CHECKPOINT_CAPABILITY_SCHEMA,
-        capability_fingerprint = _capability_key_fingerprint(key),
+        execution_contract = _exact_execution_contract(key),
         rng = (
             contract_version = RNG_CONTRACT_VERSION,
             lowering_identity = RNG_LOWERING_IDENTITY,
         ),
-        environment = key.environment,
     )
 end
 
 _checkpoint_execution_block(runtime) = nothing
-_runtime_uses_experimental_capability(runtime) = false
-
 function _owned_checkpoint_extensions(
         program, extensions, execution_block = nothing
     )
@@ -93,7 +141,7 @@ function _validate_checkpoint_capability(
     block isa NamedTuple &&
         all(
             name -> hasproperty(block, name),
-            (:schema, :capability_fingerprint, :rng, :environment),
+            (:schema, :execution_contract, :rng),
         ) || throw(ArgumentError(
             "checkpoint has an incomplete CorePotts capability block"
         ))
@@ -108,12 +156,9 @@ function _validate_checkpoint_capability(
     block.rng == expected_rng || throw(ArgumentError(
         "checkpoint RNG contract version or lowering identity mismatch"
     ))
-    block.environment == key.environment || throw(ArgumentError(
-        "checkpoint exact-configuration execution environment mismatch"
-    ))
-    block.capability_fingerprint == _capability_key_fingerprint(key) ||
+    block.execution_contract == _exact_execution_contract(key) ||
         throw(ArgumentError(
-            "checkpoint exact-configuration capability fingerprint mismatch"
+            "checkpoint exact-configuration execution contract mismatch"
         ))
     return block
 end
@@ -172,7 +217,7 @@ function _checkpoint_extension_payload(value)
     ))
 end
 
-function _relationship_checkpoint_payload(state::ProgramRelationshipState)
+function _relationship_checkpoint_payload(state)
     return string(
         join(state.active, ','),
         ';', join(state.endpoint_a, ','),
@@ -246,6 +291,7 @@ function _program_checkpoint_checksum(
     return bytes2hex(SHA.sha256(codeunits(payload)))
 end
 
+"""Capture a validated exact-replay checkpoint at a settled MCS boundary."""
 function program_checkpoint(runtime; extensions = NamedTuple())
     runtime.settled || throw(ArgumentError(
         "a checkpoint requires a settled complete-MCS boundary"
@@ -257,9 +303,8 @@ function program_checkpoint(runtime; extensions = NamedTuple())
     _require_program_replay_capability(
         runtime.capability_report;
         operation = :checkpoint,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
-    schema = v"2.0.0"
+    schema = v"3.0.0"
     logical_snapshot = program_snapshot(runtime)
     trackers = encode_tracker_checkpoint(
         runtime.program.tracker_plan, runtime.trackers
@@ -335,12 +380,12 @@ function _validate_checkpoint_execution_lowering(
     has_execution = hasproperty(block, :execution_lowering)
     if expected_execution === nothing
         has_execution && throw(ArgumentError(
-            "candidate checkpoint cannot restore into direct execution"
+            "checkerboard execution checkpoint cannot restore into a runtime without that execution graph"
         ))
         return nothing
     end
     has_execution || throw(ArgumentError(
-        "direct checkpoint cannot restore into candidate execution"
+        "checkerboard checkpoint is missing its current execution identity"
     ))
     execution = block.execution_lowering
     execution isa NamedTuple &&
@@ -361,7 +406,7 @@ function _validate_program_checkpoint(
     _require_program_replay_capability(
         program; operation = :checkpoint_restore
     )
-    checkpoint.schema == v"2.0.0" ||
+    checkpoint.schema == v"3.0.0" ||
         throw(ArgumentError("unsupported CorePotts checkpoint schema"))
     checkpoint.program_fingerprint == program.fingerprint ||
         throw(ArgumentError("checkpoint executable identity does not match"))
@@ -390,10 +435,34 @@ function _validate_program_checkpoint(
     return checkpoint
 end
 
+function _public_checkpoint_execution_identity(checkpoint::ProgramCheckpoint)
+    core_block = hasproperty(checkpoint.extensions, :CorePotts) ?
+        checkpoint.extensions.CorePotts : nothing
+    core_block === nothing && return nothing
+    hasproperty(core_block, :execution_lowering) || return nothing
+    execution = core_block.execution_lowering
+    is_current_execution = execution isa NamedTuple &&
+        hasproperty(execution, :mechanism_identity) &&
+        execution.mechanism_identity ===
+            _CHECKERBOARD_MECHANISM_IDENTITY
+    is_current_execution || throw(ArgumentError(
+        "checkpoint uses an obsolete or unsupported checkerboard execution identity"
+    ))
+    return execution.mechanism_identity
+end
+
+"""Validate checksum, schema, program identity, state, and exact execution contract."""
 function validate_program_checkpoint(
         program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
     )
-    return _validate_program_checkpoint(program, checkpoint, nothing)
+    expected = _public_checkpoint_execution_identity(checkpoint)
+    if program.engine isa CheckerboardProgramEngine
+        expected === _CHECKERBOARD_MECHANISM_IDENTITY ||
+            throw(ArgumentError(
+                "checkerboard checkpoint uses an obsolete execution schema"
+            ))
+    end
+    return _validate_program_checkpoint(program, checkpoint, expected)
 end
 
 function _restore_validated_program_checkpoint(
@@ -408,7 +477,7 @@ function _restore_validated_program_checkpoint(
         checkpoint.snapshot.cell_kinds;
         scalar_type = eltype(program.parameter_defaults),
         cell_generations = checkpoint.snapshot.cell_generations,
-        relationships = collect(checkpoint.snapshot.relationships),
+        relationships = checkpoint.snapshot.relationships,
         descriptor_state,
     )
     return _materialize_program(
@@ -431,11 +500,22 @@ function _restore_validated_program_checkpoint(
     )
 end
 
+"""Restore an exact-replay runtime after validating program and checkpoint identity."""
 function restore_program_checkpoint(
         program::CompiledPottsProgram, checkpoint::ProgramCheckpoint
     )
+    expected = _public_checkpoint_execution_identity(checkpoint)
+    if program.engine isa CheckerboardProgramEngine
+        expected === _CHECKERBOARD_MECHANISM_IDENTITY ||
+            throw(ArgumentError(
+                "checkerboard checkpoint uses an obsolete execution schema"
+            ))
+        return _restore_checkerboard_checkpoint(program, checkpoint)
+    end
     validate_program_checkpoint(program, checkpoint)
-    return _restore_validated_program_checkpoint(program, checkpoint)
+    runtime = _restore_validated_program_checkpoint(program, checkpoint)
+    runtime.engine_workspace isa CheckerboardWorkspace || return runtime
+    return _prepare_checkerboard_execution(runtime)
 end
 
 function _accepted_copy_batch_bound(program::CompiledPottsProgram)
@@ -444,6 +524,19 @@ function _accepted_copy_batch_bound(program::CompiledPottsProgram)
            Int(plan.maximum_color_size) * Int(program.attempts_per_site) : 1
 end
 
+struct _ProgramRuntimeConstructionToken end
+const _PROGRAM_RUNTIME_CONSTRUCTION_TOKEN = _ProgramRuntimeConstructionToken()
+
+function _require_packed_runtime_relationships(relationships)
+    relationships isa RelationshipStorage &&
+        all(bank -> bank isa PackedRelationshipBank,
+            relationships.banks) || throw(ArgumentError(
+        "ProgramRuntime relationship storage must use PackedRelationshipBank"
+    ))
+    return relationships
+end
+
+"""Mutable owner of one compiled trajectory and its transactional execution state."""
 mutable struct ProgramRuntime{T <: AbstractFloat, N, P, C, R, TS, D, SB, EW, LW}
     program::P
     capability_report::C
@@ -471,6 +564,17 @@ mutable struct ProgramRuntime{T <: AbstractFloat, N, P, C, R, TS, D, SB, EW, LW}
     settled::Bool
     failure_status::ProgramStatus
     last_lifecycle_receipt::MaybeLifecycleReceipt
+
+    function ProgramRuntime{T,N,P,C,R,TS,D,SB,EW,LW}(
+            token::_ProgramRuntimeConstructionToken, args...,
+        ) where {T<:AbstractFloat,N,P,C,R,TS,D,SB,EW,LW}
+        token === _PROGRAM_RUNTIME_CONSTRUCTION_TOKEN ||
+            error("invalid ProgramRuntime construction token")
+        length(args) == 26 || throw(ArgumentError(
+            "ProgramRuntime construction requires its exact runtime state"))
+        _require_packed_runtime_relationships(args[7])
+        return new{T,N,P,C,R,TS,D,SB,EW,LW}(args...)
+    end
 end
 
 function _rebuild_program_runtime(
@@ -488,6 +592,7 @@ function _rebuild_program_runtime(
         typeof(engine_workspace),
         typeof(runtime.lifecycle_workspace),
     }(
+        _PROGRAM_RUNTIME_CONSTRUCTION_TOKEN,
         runtime.program,
         capability_report,
         runtime.ownership,
@@ -632,31 +737,13 @@ function _materialize_program(
             "initial relationship values must align with compiled schemas"
         )
     )
-    relationship_values = Any[]
-    for relationship_slot in eachindex(program.relationships)
-        schema = program.relationships[relationship_slot]
-        entries = initial_relationships[relationship_slot]
-        state = if entries isa ProgramRelationshipState
-            value = copy(entries)
-            validate_relationship_integrity(
-                value,
-                schema,
-                runtime_cell_kinds,
-                runtime_cell_generations,
-            )
-            value
-        else
-            initialize_program_relationships(
-                schema,
-                runtime_cell_kinds,
-                runtime_cell_generations,
-                runtime_parameters,
-                entries,
-            )
-        end
-        push!(relationship_values, state)
-    end
-    relationships = RelationshipStorage(relationship_values)
+    relationships = _materialize_relationship_storage(
+        initial_relationships,
+        program.relationships,
+        runtime_cell_kinds,
+        runtime_cell_generations,
+        runtime_parameters,
+    )
     descriptor_state = if initial_descriptor_state === nothing
         allocate_auxiliary_state(program.descriptor_plan.state_layout)
     elseif initial_descriptor_state isa AuxiliaryState
@@ -669,13 +756,15 @@ function _materialize_program(
             "descriptor state must be a CorePotts AuxiliaryState"
         ))
     end
-    stage_buffers = allocate_stage_runtime_buffers(
-        program.stage_plan,
-        T,
-        program.shape,
-        relationships,
-        accepted_batch_bound = _accepted_copy_batch_bound(program),
-    )
+    stage_buffers = program.engine isa CheckerboardProgramEngine ? nothing :
+        allocate_stage_runtime_buffers(
+            program.stage_plan,
+            T,
+            program.shape,
+            relationships,
+            accepted_batch_bound = _accepted_copy_batch_bound(program),
+            accepted_relationship_transactions = true,
+        )
     engine_workspace = allocate_program_engine_workspace(
         program,
         runtime_ownership,
@@ -691,18 +780,71 @@ function _materialize_program(
         repeat,
         initial_mcs,
     )
-    lifecycle_workspace = allocate_lifecycle_workspace(
-        program.lifecycle_plan,
-        program,
-        runtime_ownership,
-        runtime_cell_kinds,
-        runtime_cell_generations,
-        trackers,
-        relationships,
-        descriptor_state,
-    )
-    if lifecycle_workspace isa LifecycleWorkspace &&
-            engine_workspace isa SequentialTransactionWorkspace
+    lifecycle_workspace = if engine_workspace isa SequentialTransactionWorkspace
+        allocate_lifecycle_workspace(
+            program.lifecycle_plan,
+            program,
+            runtime_ownership,
+            runtime_cell_kinds,
+            runtime_cell_generations,
+            trackers,
+            relationships,
+            descriptor_state,
+        )
+    else
+        NoLifecycleWorkspace()
+    end
+    if lifecycle_workspace isa LifecycleWorkspace
+        decision_program = _LifecycleDecisionProgram(
+            program.shape,
+            program.periodic,
+            program.medium_kind,
+            program.tracker_plan,
+            _LifecycleDecisionDescriptorPlan(
+                program.descriptor_plan.domain_resources
+            ),
+            program.lifecycle_plan,
+        )
+        lifecycle_states = (
+            (
+                ownership = runtime_ownership,
+                cell_kinds = runtime_cell_kinds,
+                cell_generations = runtime_cell_generations,
+                trackers,
+                relationships,
+                descriptor_state,
+            ),
+            engine_workspace,
+        )
+        lifecycle_science = map(lifecycle_states) do state
+            staged_workspace = _lifecycle_workspace_with_staged_state(
+                lifecycle_workspace, state
+            )
+            _LifecycleDecisionRuntime(
+                decision_program,
+                state.ownership,
+                state.cell_kinds,
+                state.cell_generations,
+                state.trackers,
+                state.relationships,
+                state.descriptor_state,
+                staged_workspace,
+                runtime_parameters,
+                seed,
+                replica,
+                repeat,
+                initial_mcs,
+            )
+        end
+        lifecycle_compaction = _prepare_sequential_lifecycle_compaction(
+            program.lifecycle_plan,
+            lifecycle_workspace,
+            (runtime_ownership, engine_workspace.ownership),
+            lifecycle_science,
+        )
+        engine_workspace = _sequential_workspace_with_lifecycle_compaction(
+            engine_workspace, lifecycle_compaction
+        )
         lifecycle_workspace = _lifecycle_workspace_with_staged_state(
             lifecycle_workspace, engine_workspace
         )
@@ -715,6 +857,7 @@ function _materialize_program(
         typeof(engine_workspace),
         typeof(lifecycle_workspace),
     }(
+        _PROGRAM_RUNTIME_CONSTRUCTION_TOKEN,
         program,
         capability_report,
         runtime_ownership,
@@ -758,6 +901,7 @@ function _materialize_program(
     return runtime
 end
 
+"""Validate and materialize a compiled program, initial state, parameters, and RNG identity."""
 function initialize_program(
         program::CompiledPottsProgram,
         initial::ProgramInitialState,
@@ -767,7 +911,7 @@ function initialize_program(
         repeat::UInt32 = UInt32(1),
         initial_mcs::Integer = 0,
     )
-    return _materialize_program(
+    runtime = _materialize_program(
         program,
         initial,
         parameters,
@@ -776,27 +920,36 @@ function initialize_program(
         repeat,
         initial_mcs,
     )
+    runtime.engine_workspace isa CheckerboardWorkspace || return runtime
+    return _prepare_checkerboard_execution(runtime)
 end
 
+"""Adapt a checkerboard runtime's execution banks to device storage `to`."""
 function adapt_program_runtime(to, runtime::ProgramRuntime{T, N}) where {T, N}
+    _require_packed_runtime_relationships(runtime.relationships)
     runtime.settled || throw(ArgumentError(
         "program runtime adaptation requires a settled boundary"
     ))
-    runtime.engine_workspace isa CheckerboardWorkspace || throw(ArgumentError(
+    runtime.engine_workspace isa _CheckerboardExecutionWorkspace || throw(ArgumentError(
         "only checkerboard runtimes have a portable accelerator execution path"
     ))
+    queue_mcs_capacity = runtime.engine_workspace.identity.queue_policy.mcs_capacity
+    core = _checkerboard_core(runtime.engine_workspace)
     engine_workspace = adapt_checkerboard_workspace(
-        to, runtime.engine_workspace
+        to, core
     )
     capability_report = engine_workspace.capability_report
-    return _rebuild_program_runtime(
+    adapted = _rebuild_program_runtime(
         runtime, capability_report, engine_workspace
     )
+    return _prepare_checkerboard_execution(adapted; queue_mcs_capacity)
 end
 
+"""Return whether the runtime has reached a terminal scientific failure."""
 @inline program_failed(runtime::ProgramRuntime) =
     runtime.failure_status.code !== ProgramStatusSuccess
 
+"""Return immutable failure detail, or `nothing` when the runtime has not failed."""
 @inline program_failure_report(runtime::ProgramRuntime) =
     program_failed(runtime) ? ProgramFailureReport(runtime.failure_status) : nothing
 
@@ -851,6 +1004,7 @@ function _materialize_runtime_snapshot(
     return _materialize_program_state_snapshot(runtime, runtime, mcs)
 end
 
+"""Copy the complete logical state from a settled MCS boundary."""
 function program_snapshot(runtime::ProgramRuntime)
     runtime.settled || throw(ArgumentError(
         "a program snapshot requires a settled complete-MCS boundary"

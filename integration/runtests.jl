@@ -1,21 +1,20 @@
-using Test
-using PottsToolkit
-using Symbolics
-import DynamicQuantities
-using DynamicQuantities: @u_str
-import ModelingToolkit
-import ModelingToolkitBase
-import ModelingToolkitStandardLibrary
-import Unitful
-using ModelingToolkitBase:
-    @independent_variables, @named, @parameters, @variables
+include("setup.jl")
 
-include("test_modelingtoolkit_retention_and_structural_scheduling.jl")
-include("test_modelingtoolkit_standard_library.jl")
-include("test_native_runtime.jl")
-include("test_native_batched_cpu.jl")
-include("test_method_of_lines_field.jl")
-include("test_ensemble_distributed.jl")
-include("test_unitful_extension.jl")
-include("test_optional_extension_loading.jl")
-include("test_extension_load_order.jl")
+const INTEGRATION_TESTS = (
+    "test_modelingtoolkit_retention_and_structural_scheduling.jl",
+    "test_modelingtoolkit_standard_library.jl",
+    "test_native_functional_cpu.jl",
+    "test_method_of_lines_field.jl",
+    "test_ensemble_distributed.jl",
+    "test_unitful_extension.jl",
+    "test_optional_extension_loading.jl",
+    "test_extension_load_order.jl",
+)
+
+@testset "PottsToolkit integrations" begin
+    for file in INTEGRATION_TESTS
+        @testset "$file" begin
+            include(file)
+        end
+    end
+end

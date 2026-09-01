@@ -465,6 +465,7 @@ function _build_scheduled_data(data::CompletedPottsData, analysis)
 end
 
 
+"""Return scheduled native components in deterministic qualified-path order."""
 function scheduled_native_components(system::PottsSystem)
     is_scheduled(system) || throw(ArgumentError(
         "scheduled_native_components requires a structurally scheduled PottsSystem"

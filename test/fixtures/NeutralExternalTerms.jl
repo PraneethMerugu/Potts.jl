@@ -9,6 +9,8 @@ import PottsToolkit: registered_statement_lowering
 import PottsToolkit: registered_workspace_schemas
 import PottsToolkit: registered_tracker_requirements
 
+const CompilerSPI = CorePotts.CompilerSPI
+
 const SITE_SCHEMA = :external_weighted_site_term
 const PAIR_SCHEMA = :external_bounded_pair_term
 const VERSION = v"1.0.0"
@@ -19,12 +21,12 @@ Symbolics.@register_symbolic external_site_value(state, site)::Real
 function external_cpu_only_value end
 Symbolics.@register_symbolic external_cpu_only_value(value)::Real
 
-struct ExternalSiteValueCallable <: CorePotts.AbstractContextualOperation end
+struct ExternalSiteValueCallable <: CompilerSPI.AbstractContextualOperation end
 struct ExternalCpuOnlyValueCallable end
 
-CorePotts.operation_context_supported(
+CompilerSPI.operation_context_supported(
     ::ExternalSiteValueCallable,
-    ::Type{CorePotts.AbstractHamiltonianEvaluationContext},
+    ::Type{CompilerSPI.AbstractHamiltonianEvaluationContext},
 ) = true
 
 operation_transfer(::typeof(external_site_value), ::Int) =
@@ -42,7 +44,7 @@ operation_transfer(::typeof(external_site_value), ::Int) =
         true,
     )
 
-CorePotts.operation_callable(
+CompilerSPI.operation_callable(
     ::Val{:neutral_external_site_value},
     version::VersionNumber,
 ) = version == VERSION ? ExternalSiteValueCallable() :
@@ -63,7 +65,7 @@ operation_transfer(::typeof(external_cpu_only_value), ::Int) =
         false,
     )
 
-CorePotts.operation_callable(
+CompilerSPI.operation_callable(
     ::Val{:neutral_external_cpu_only_value},
     version::VersionNumber,
 ) = version == VERSION ? ExternalCpuOnlyValueCallable() :
@@ -76,7 +78,7 @@ CorePotts.operation_callable(
 )(
     arguments,
     context,
-) = CorePotts.state_value(context, arguments[1], arguments[2])
+) = CompilerSPI.state_value(context, arguments[1], arguments[2])
 
 @inline (::ExternalCpuOnlyValueCallable)(value) = value
 
@@ -92,34 +94,34 @@ struct NameParameterizedPayload{Name}
     schema::UInt16
 end
 
-struct ExternalDoubleOccupancyTracker <: CorePotts.AbstractTrackerDescriptor end
-struct ExternalCpuOnlyTracker <: CorePotts.AbstractTrackerDescriptor end
+struct ExternalDoubleOccupancyTracker <: CompilerSPI.AbstractTrackerDescriptor end
+struct ExternalCpuOnlyTracker <: CompilerSPI.AbstractTrackerDescriptor end
 
 for (tracker_type, quantity, gpu) in (
         (ExternalDoubleOccupancyTracker, :external_double_occupancy, true),
     (ExternalCpuOnlyTracker, :external_cpu_only_tracker, false),
 )
     @eval begin
-        CorePotts.tracker_contract(::$tracker_type) = CorePotts.TrackerContract(
+        CompilerSPI.tracker_contract(::$tracker_type) = CompilerSPI.TrackerContract(
             Val{$(QuoteNode(quantity))}(),
-            CorePotts.OwnershipTrackerSource(),
-            CorePotts.DenseOwnerScalarStorage{Int32}(),
-            CorePotts.AcceptedCommitTrackerVisibility(),
-            CorePotts.ClaimedOwnerExclusiveTrackerConcurrency(),
-            CorePotts.SourceTargetOwnerUpdateBound(),
-            CorePotts.ReconstructTrackerCheckpoint(),
-            CorePotts.TrackerSupport(
+            CompilerSPI.OwnershipTrackerSource(),
+            CompilerSPI.DenseOwnerScalarStorage{Int32}(),
+            CompilerSPI.AcceptedCommitTrackerVisibility(),
+            CompilerSPI.ClaimedOwnerExclusiveTrackerConcurrency(),
+            CompilerSPI.SourceTargetOwnerUpdateBound(),
+            CompilerSPI.ReconstructTrackerCheckpoint(),
+            CompilerSPI.TrackerSupport(
                 true, true, true, $gpu, $gpu ? 0 : 0x08
             ),
-            CorePotts.ConstantTrackerCost(),
-            CorePotts.LatticeLinearTrackerCost(),
+            CompilerSPI.ConstantTrackerCost(),
+            CompilerSPI.LatticeLinearTrackerCost(),
         )
     end
 end
 
-function CorePotts.tracker_rebuild(
+function CompilerSPI.tracker_rebuild(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        source::CorePotts.TrackerSourceView,
+        source::CompilerSPI.TrackerSourceView,
         cell_kinds,
     )
     ownership = source.ownership
@@ -130,9 +132,9 @@ function CorePotts.tracker_rebuild(
     return values
 end
 
-function CorePotts.tracker_recompute(
+function CompilerSPI.tracker_recompute(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        source::CorePotts.TrackerSourceView,
+        source::CompilerSPI.TrackerSourceView,
         cell_kinds,
     )
     ownership = source.ownership
@@ -144,13 +146,13 @@ function CorePotts.tracker_recompute(
     return values
 end
 
-@inline CorePotts.tracker_proposal_delta(
+@inline CompilerSPI.tracker_proposal_delta(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        source::CorePotts.TrackerSourceView,
+        source::CompilerSPI.TrackerSourceView,
         target,
         old_owner::Int32,
         new_owner::Int32,
-    ) = CorePotts.OwnerScalarDelta(Int32(2))
+    ) = CompilerSPI.OwnerScalarDelta(Int32(2))
 
 function registered_tracker_requirements(
         ::Val{:lower_external_weighted_site_term},
@@ -171,16 +173,16 @@ for payload_type in (
         :ExternalBoundedPairPayload,
     )
     @eval begin
-        CorePotts.descriptor_payload_adapt(
+        CompilerSPI.descriptor_payload_adapt(
             to,
             payload::$payload_type,
         ) = payload
-        CorePotts.descriptor_payload_checkpoint_encode(
+        CompilerSPI.descriptor_payload_checkpoint_encode(
             payload::$payload_type
         ) = (
             schema = payload.schema,
         )
-        function CorePotts.descriptor_payload_checkpoint_reconstruct(
+        function CompilerSPI.descriptor_payload_checkpoint_reconstruct(
                 current::$payload_type,
                 payload::NamedTuple,
             )
@@ -190,7 +192,7 @@ for payload_type in (
                 ))
             return current
         end
-        CorePotts.descriptor_payload_inspection(payload::$payload_type) = (
+        CompilerSPI.descriptor_payload_inspection(payload::$payload_type) = (
             family = $(QuoteNode(payload_type)),
             schema = payload.schema,
         )
@@ -205,8 +207,8 @@ function registered_descriptor_payload(
             string(context.source.identity.local_id),
             "adversarial_payload",
         )
-        return CorePotts.StaticEvaluator(
-            CorePotts.LiteralExpression(99.0),
+        return CompilerSPI.StaticEvaluator(
+            CompilerSPI.LiteralExpression(99.0),
         )
     elseif startswith(
             string(context.source.identity.local_id),
@@ -232,12 +234,12 @@ function registered_workspace_schemas(
         ::Type{T},
         lattice_shape::Tuple,
     ) where {T <: AbstractFloat}
-    identity = CorePotts.QualifiedResourceIdentity(
+    identity = CompilerSPI.QualifiedResourceIdentity(
         source.identity.path,
         :external_weighted_occupancy,
     )
     return (
-        CorePotts.WorkspaceSchema(
+        CompilerSPI.WorkspaceSchema(
             identity,
             VERSION,
             T,

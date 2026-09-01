@@ -1,22 +1,27 @@
+"""Supertype of source-aware native-component runtime failures."""
 abstract type AbstractNativeRuntimeError <: Exception end
 
+"""Invalid or incomplete late native solve profile."""
 struct NativeProfileError <: AbstractNativeRuntimeError
     path::Tuple{Vararg{Symbol}}
     message::String
 end
 
+"""Native component failed a required structural or numerical capability check."""
 struct NativeCapabilityError <: AbstractNativeRuntimeError
     path::Tuple{Vararg{Symbol}}
     capability::Symbol
     message::String
 end
 
+"""Native execution failed during the reported coupled phase."""
 struct NativeExecutionError <: AbstractNativeRuntimeError
     path::Tuple{Vararg{Symbol}}
     phase::Symbol
     cause::Any
 end
 
+"""Native solver failed to reach a required coupled time boundary."""
 struct NativeSolveFailure <: AbstractNativeRuntimeError
     path::Tuple{Vararg{Symbol}}
     retcode::SciMLBase.ReturnCode.T
@@ -311,18 +316,18 @@ function _native_runtime_preflight(
     return nothing
 end
 
-function _require_native_replay_evidence(system::PottsSystem, profiles)
+function _require_requested_native_replay(system::PottsSystem, profiles)
     components = scheduled_native_components(system)
     for (component, profile) in zip(components, profiles)
+        profile.exact_replay || continue
         evidence = applicable(_native_profile_evidence, component, profile) ?
             _native_profile_evidence(component, profile) : nothing
         (evidence !== nothing &&
                 evidence.status === CorePotts.BackendSPI.Supported &&
-                Int(evidence.maturity) >=
-                    Int(CorePotts.BackendSPI.ReplayQualified)) ||
+                evidence.exact_replay) ||
             throw(NativeCapabilityError(
                 native_component_path(component),
-                :closed_replay_evidence,
+                :exact_replay_evidence,
                 "this system/solver/event profile has no closed exact-replay evidence row; native problem construction and solver initialization were not attempted",
             ))
     end

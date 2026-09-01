@@ -91,6 +91,29 @@ maintainability.
 External orchestration is not an active product responsibility. A future adapter must be proposed
 and reviewed independently and cannot become a prerequisite for PottsToolkit or CorePotts.
 
+## Semantic naming and direct cutovers
+
+Development chronology is never product semantics. Phase, gate, migration,
+provisional, and generation labels may organize specifications, design history,
+reviews, and development work, but live product code must use durable
+scientific, mathematical, numerical, hardware, protocol, ownership, or
+execution terminology.
+
+When a temporary product name or representation is replaced, the replacement
+is one direct cutover across implementation, tests, current documentation,
+examples, configuration, serialization boundaries, extensions, and downstream
+consumers. The old name or representation is deleted in the same change. The
+repository does not retain forwarding aliases, deprecations, feature flags,
+old/new selectors, compatibility states, or parallel production paths whose
+only purpose is migration between development milestones.
+
+This rule does not remove genuine features. Scientific phases, mathematical
+candidates, distinct algorithms, backend implementations of one shared law,
+checkpoint and importer semantics, test-only independent oracles, package
+versions, and durable wire or schema versions remain when their distinction can
+be explained without reference to development history. A word is not banned by
+spelling; its semantic ownership determines whether it belongs in the product.
+
 ## Quality principles
 
 - Scientific semantics precede optimization.
@@ -101,3 +124,20 @@ and reviewed independently and cannot become a prerequisite for PottsToolkit or 
 - Hardware specialization is documented rather than hidden.
 - Tests validate laws and observable behavior rather than incidental layouts.
 - Current behavior, intended behavior, and compatibility behavior are documented separately.
+- Development milestones never become product identities or runtime modes.
+
+## Development workflow
+
+Development uses the ordinary Julia package workflow: focused and complete
+tests, integration tests, documentation builds, applicable GPU tests, and
+reproducible benchmarks proportional to the change. There are no evidence
+hashes, milestone scripts, frozen pass/fail timing gates, or committee
+paperwork.
+
+Technical review may challenge semantics, architecture, performance, and
+maintainability, but it does not create a second qualification system.
+Benchmarks remain required to substantiate performance claims and useful for
+detecting regressions; machine-dependent wall-clock observations inform
+engineering rather than acting as brittle development thresholds. Historical
+specifications, audits, and evidence remain records of earlier repository
+states and do not override this active workflow.

@@ -61,7 +61,7 @@ function initialize_program_relationships(
 end
 
 function validate_relationship_integrity(
-        state::ProgramRelationshipState,
+        state,
         schema::RelationshipStoreSchema,
         endpoint_status,
         endpoint_generations,
@@ -173,6 +173,57 @@ function validate_relationship_integrity(
         end
     end
     return state
+end
+
+_is_relationship_state(::ProgramRelationshipState) = true
+_is_relationship_state(::PackedRelationshipState) = true
+_is_relationship_state(::Any) = false
+
+function _materialize_relationship_storage(
+        initial::RelationshipStorage,
+        schemas,
+        endpoint_status,
+        endpoint_generations,
+        parameters,
+    )
+    all(bank -> bank isa PackedRelationshipBank, initial.banks) ||
+        return _materialize_relationship_storage(
+            collect(initial), schemas, endpoint_status,
+            endpoint_generations, parameters,
+        )
+    result = copy(initial)
+    for slot in eachindex(result)
+        validate_relationship_integrity(
+            result[slot], schemas[slot], endpoint_status, endpoint_generations
+        )
+    end
+    return result
+end
+
+function _materialize_relationship_storage(
+        initial,
+        schemas,
+        endpoint_status,
+        endpoint_generations,
+        parameters,
+    )
+    values = Any[]
+    for slot in eachindex(schemas)
+        entries = initial[slot]
+        state = if _is_relationship_state(entries)
+            copy(entries)
+        else
+            initialize_program_relationships(
+                schemas[slot], endpoint_status, endpoint_generations,
+                parameters, entries,
+            )
+        end
+        validate_relationship_integrity(
+            state, schemas[slot], endpoint_status, endpoint_generations
+        )
+        push!(values, state)
+    end
+    return _pack_relationship_storage(RelationshipStorage(values))
 end
 
 @inline function relationship_payload(

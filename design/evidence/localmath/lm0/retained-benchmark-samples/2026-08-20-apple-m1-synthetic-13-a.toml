@@ -1,0 +1,82 @@
+backend = "cpu"
+backend_type = "KernelAbstractions.CPU"
+cache_state = "fresh process; package caches may be precompiled; workload methods cold"
+compile_mode = "ordinary --compile=yes --optimize=2"
+cpu_threads = 6
+hardware = "apple-m1"
+host_compile_seconds_total = 31.657794203999998
+host_recompile_seconds_total = 8.34e-7
+item_count = 16
+julia_version = "1.12.6"
+kernel = "Darwin"
+kernelabstractions_version = "0.9.42"
+localmath_version = "0.1.0"
+logical_stage_kinds = ["unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve"]
+machine = "arm64-apple-darwin24.0.0"
+package_load_seconds = 3.193301458
+physical_launch_count = 27
+planning_through_first_execution_seconds = 30.255058208999998
+profile = "synthetic_scaling"
+program_arguments = ["--stages=13", "--backend=cpu", "--warm-samples=1"]
+schema_version = 1
+stage_count = 13
+threads = 1
+total_memory_bytes = 0x0400000000
+
+[construction]
+allocated_bytes = 194923536
+compile_seconds = 1.462881417
+elapsed_seconds = 1.467473042
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[first_execution]
+allocated_bytes = 31621472
+compile_seconds = 0.315537544
+elapsed_seconds = 0.316724875
+gc_seconds = 0.0
+provider_compile_upper_bound_seconds = 0.0009940810000000136
+recompile_seconds = 0.0
+
+[julia_options]
+compile_enabled = 1
+opt_level = 2
+project = "/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalMath/Project.toml"
+startupfile = 2
+use_compiled_modules = 2
+
+[planning]
+allocated_bytes = 1064531312
+compile_seconds = 13.750915368
+elapsed_seconds = 13.771361417
+gc_seconds = 0.065137667
+recompile_seconds = 0.0
+
+[preparation]
+allocated_bytes = 1139262992
+compile_seconds = 14.721479376
+elapsed_seconds = 14.757905875
+gc_seconds = 0.067533292
+recompile_seconds = 8.34e-7
+
+[process]
+command = "julia --startup-file=no --project=lib/LocalMath --compiled-modules=existing --compile=yes --optimize=2 benchmark/compiler_scaling/stage_scaling.jl --stages=13 --backend=cpu --warm-samples=1"
+exit_code = 0
+poll_wait_lower_bound_seconds = 46.060456209
+elapsed_measurement = "poll_wait_lower_bound_not_wall_clock"
+stderr = ""
+
+[storage_allocation]
+allocated_bytes = 96951520
+compile_seconds = 1.406980499
+elapsed_seconds = 1.409066042
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[warm_execution]
+maximum_allocated_bytes = 9120
+maximum_seconds = 0.00019325
+median_allocated_bytes = 9120.0
+median_seconds = 0.00019325
+minimum_seconds = 0.00019325
+samples = 1

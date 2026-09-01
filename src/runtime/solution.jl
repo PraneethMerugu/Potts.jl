@@ -1,3 +1,4 @@
+"""Timeseries solution containing saved Potts states, statistics, and replay provenance."""
 struct PottsSolution{S, P, A, R, H} <:
        SciMLBase.AbstractTimeseriesSolution{S, 1, Vector{S}}
     u::Vector{S}

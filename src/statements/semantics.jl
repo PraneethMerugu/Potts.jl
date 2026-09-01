@@ -1,24 +1,37 @@
 abstract type AbstractEffectClass end
+"""Effect class for expressions that only read scientific state."""
 struct PureRead <: AbstractEffectClass end
+"""Effect class for simultaneous assignment at a synchronous stage."""
 struct SynchronousAssign <: AbstractEffectClass end
+"""Effect class for updates conditioned on an accepted proposal."""
 struct AcceptedCopyEffect <: AbstractEffectClass end
+"""Effect class for canonically ordered bounded batches."""
 struct OrderedBatchEffect <: AbstractEffectClass end
 
+"""Phase in which copy proposals are evaluated."""
 struct Proposal <: AbstractPottsPhase end
+"""Phase in which accepted-copy effects are evaluated."""
 struct AcceptedCopy <: AbstractPottsPhase end
+"""Phase after one complete Monte Carlo step."""
 struct AfterMCS <: AbstractPottsPhase end
+"""Phase in which staged relationship changes settle."""
 struct RelationshipCommit <: AbstractPottsPhase end
+"""Phase owned by cell lifecycle transactions."""
 struct Lifecycle <: AbstractPottsPhase end
 
+"""`Before(phase)` places a stage immediately before `phase`."""
 struct Before{P <: AbstractPottsPhase} <: AbstractPottsPhase
     phase::P
 end
+"""`After(phase)` places a stage immediately after `phase`."""
 struct After{P <: AbstractPottsPhase} <: AbstractPottsPhase
     phase::P
 end
 
 abstract type AbstractCadence end
+"""Cadence that is due on every Monte Carlo step."""
 struct EveryMCS <: AbstractCadence end
+"""`AtMCS(mcs)` is due once at the specified nonnegative step."""
 struct AtMCS <: AbstractCadence
     mcs::Int
     function AtMCS(mcs::Integer)
@@ -26,6 +39,7 @@ struct AtMCS <: AbstractCadence
         new(Int(mcs))
     end
 end
+"""`Every(cadence)` is due at positive multiples of `cadence`."""
 struct Every{T <: Integer} <: AbstractCadence
     cadence::T
     function Every(cadence::Integer)
@@ -53,11 +67,17 @@ struct IncidentEdges{R, C} <: AbstractIterationDomain
 end
 struct ModelDomain <: AbstractIterationDomain end
 
+"""Construct the site iteration domain for a lattice domain."""
 sites(domain) = Sites(domain)
+"""Construct the finite-cell iteration domain for `kind`."""
 cells(kind) = Cells(kind)
+"""Construct the canonical-contact iteration domain for `relation`."""
 contacts(relation) = Contacts(relation)
+"""Construct the live-edge iteration domain for a relationship state."""
 edges(relationship) = Edges(relationship)
+"""Construct edges incident to `cell` within a relationship state."""
 incident_edges(relationship, cell) = IncidentEdges(relationship, cell)
+"""Construct the singleton model iteration domain."""
 model() = ModelDomain()
 
 function HamiltonianTerm(
@@ -76,11 +96,13 @@ function HamiltonianTerm(
     ))
 end
 
+"""`Assign(target, value)` publishes `value` to a declared state target."""
 struct Assign{T, V} <: AbstractPottsEffect
     target::T
     value::V
 end
 
+"""Request relationship creation with optional payload and priority."""
 struct Create{R, A, B, P, Q} <: AbstractPottsEffect
     relationship::R
     endpoint_a::A
@@ -91,6 +113,7 @@ end
 Create(relationship, a, b; payload = NamedTuple(), priority = 0) =
     Create(relationship, a, b, payload, priority)
 
+"""Request removal of one relationship edge with optional priority."""
 struct Remove{R, E, P} <: AbstractPottsEffect
     relationship::R
     edge::E
@@ -98,6 +121,7 @@ struct Remove{R, E, P} <: AbstractPottsEffect
 end
 Remove(relationship, edge; priority = 0) = Remove(relationship, edge, priority)
 
+"""Request replacement of an existing relationship payload."""
 struct Retune{R, E, P, Q} <: AbstractPottsEffect
     relationship::R
     edge::E
@@ -108,19 +132,24 @@ Retune(relationship, edge; payload, priority = 0) =
     Retune(relationship, edge, payload, priority)
 
 abstract type AbstractBoundaryPolicy end
+"""Periodic lattice boundary policy."""
 struct Periodic <: AbstractBoundaryPolicy end
+"""Closed lattice boundary policy with no wrapped neighbors."""
 struct Closed <: AbstractBoundaryPolicy end
+"""Boundary policy that reserves the border for the supplied cell kind."""
 struct FrozenBorder{K} <: AbstractBoundaryPolicy
     kind::K
 end
 
 abstract type AbstractNeighborhood end
+"""Axis-aligned neighborhood of positive Manhattan `radius`."""
 struct VonNeumann <: AbstractNeighborhood
     radius::Int
 end
 VonNeumann(radius::Integer = 1) =
     radius > 0 ? VonNeumann(Int(radius)) :
     throw(ArgumentError("neighborhood radius must be positive"))
+"""Full neighborhood of positive Chebyshev `radius`."""
 struct Moore <: AbstractNeighborhood
     radius::Int
 end
@@ -129,28 +158,39 @@ Moore(radius::Integer = 1) =
     throw(ArgumentError("neighborhood radius must be positive"))
 
 abstract type AbstractOwnershipChangePolicy end
+"""Reset associated state when its site's owner changes."""
 struct ClearOnOwnershipChange <: AbstractOwnershipChangePolicy end
+"""Preserve associated state when its site's owner changes."""
 struct PreserveOnOwnershipChange <: AbstractOwnershipChangePolicy end
 
 abstract type AbstractRelationshipEndpointPolicy end
+"""Undirected endpoint-kind contract for a relationship state."""
 struct Undirected{A, B} <: AbstractRelationshipEndpointPolicy
     kind_a::A
     kind_b::B
 end
+"""Remove incident relationship edges when an endpoint retires."""
 struct RemoveWithEndpoint end
+"""Reject endpoint retirement while an incident edge exists."""
 struct RejectEndpointRetirement end
 
 """Built-in fixed-grid forward-Euler diffusion/decay/source field component."""
 struct DiscreteFieldEuler end
 
 abstract type AbstractChemotaxisMode end
+"""Apply chemotactic response only to extension proposals."""
 struct ExtensionsOnly <: AbstractChemotaxisMode end
+"""Apply chemotactic response only to retraction proposals."""
 struct RetractionsOnly <: AbstractChemotaxisMode end
+"""Apply chemotactic response to extensions and retractions."""
 struct ExtensionsAndRetractions <: AbstractChemotaxisMode end
 
 abstract type AbstractInterpolationPolicy end
+"""Nearest-sample field interpolation policy."""
 struct Nearest <: AbstractInterpolationPolicy end
+"""Multilinear field interpolation policy."""
 struct Multilinear <: AbstractInterpolationPolicy end
+"""Marker for fields sampled at lattice-cell centers."""
 struct CellCentered end
 
 function _symbolic_local_name(value)
@@ -179,6 +219,7 @@ for state_type in (
     end
 end
 
+"""`AttemptsPerSite(count=1)` declares a positive proposal-attempt budget."""
 struct AttemptsPerSite
     count::Int
     function AttemptsPerSite(count::Integer = 1)
@@ -191,8 +232,10 @@ struct SymmetricPair{A, B}
     first::A
     second::B
 end
+"""Construct an unordered kind pair for `ContactEnergy` laws."""
 (↔)(a, b) = SymmetricPair(a, b)
 
+"""Declare a regular lattice and any named neighborhood relations."""
 function Lattice(shape::Tuple{Vararg{Integer}};
         name::Symbol = :lattice,
         spacing = ntuple(_ -> 1.0, length(shape)),
@@ -222,6 +265,7 @@ function Lattice(shape::Tuple{Vararg{Integer}};
     return StatementSet((domain, relation_statements...))
 end
 
+"""Construct the standard quadratic cell-volume Hamiltonian term."""
 function Volume(kind; target, strength,
         name::Symbol = Symbol(:volume_, Symbol(statement_id(kind))))
     cell = CellBinding(:cell)
@@ -238,6 +282,7 @@ function Volume(kind; target, strength,
     )
 end
 
+"""Construct a contact-energy term from unordered kind-pair energy laws."""
 function ContactEnergy(laws;
         relation = :contact,
         name::Symbol = :contact_energy,
@@ -273,6 +318,7 @@ function ContactEnergy(laws;
     )
 end
 
+"""Construct the standard quadratic cell-elongation Hamiltonian term."""
 function Elongation(kind; target, strength,
         name::Symbol = Symbol(:elongation_, Symbol(statement_id(kind))))
     cell = CellBinding(:cell)
@@ -288,6 +334,7 @@ function Elongation(kind; target, strength,
     )
 end
 
+"""Construct a chemotactic proposal term sampling `field`."""
 function Chemotaxis(kind, field; strength,
         mode::AbstractChemotaxisMode = ExtensionsOnly(),
         sample::AbstractInterpolationPolicy = Nearest(),
@@ -314,6 +361,7 @@ function Chemotaxis(kind, field; strength,
     )
 end
 
+"""Construct a local-connectivity proposal constraint for `kind`."""
 function LocalConnectivity(kind;
         foreground::Symbol = :connectivity,
         background::Symbol = :connectivity_background,
@@ -334,6 +382,7 @@ function LocalConnectivity(kind;
     )
 end
 
+"""Construct the activity proposal drive for a bounded activity state."""
 function ActEnergy(kind, activity; maximum, strength,
         reduction::Symbol = :activity_neighborhood,
         name::Symbol = Symbol(:activity_, Symbol(statement_id(kind))))
@@ -356,16 +405,19 @@ function ActEnergy(kind, activity; maximum, strength,
     )
 end
 
+"""Construct a synchronous process containing one effect."""
 Synchronous(id, effect; phase = AfterMCS(), kwargs...) =
     SynchronousProcess(id; effects = (effect,), phase, kwargs...)
 AcceptedCopy(id::Symbol, effect; when = true, phase = AcceptedCopy(), kwargs...) =
     AcceptedCopyProcess(id; expression = when, effects = (effect,), phase, kwargs...)
 
+"""One named CPM sweep stage with an attempt budget and options."""
 struct SweepStage{A, O}
     name::Symbol
     attempts::A
     options::O
 end
+"""Construct a named `SweepStage` for a `Protocol`."""
 Sweep(name::Symbol = :cpm; attempts = AttemptsPerSite(1), kwargs...) =
     SweepStage(name, attempts, (; kwargs...))
 
@@ -406,6 +458,7 @@ _map_symbolic_payload(f, value::RelationshipBinding) =
 Protocol(stages...; name::Symbol = :protocol, source = UnknownSource(), kwargs...) =
     Protocol(name; stages, source, kwargs...)
 
+"""Construct a Hamiltonian term iterating over a relationship state."""
 RelationshipEnergy(id, edge::RelationshipBinding, expression; kwargs...) =
     HamiltonianTerm(
         id;
@@ -416,5 +469,6 @@ RelationshipEnergy(id, edge::RelationshipBinding, expression; kwargs...) =
         relationship = edge.relationship,
         kwargs...,
     )
+"""Construct a proposal constraint derived from relationship state."""
 RelationshipConstraint(id, relationship, constraint; kwargs...) =
     ProposalConstraint(id, constraint; mechanism = :relationship, relationship, kwargs...)

@@ -11,6 +11,18 @@ using Symbolics
 include("downstream_fixture.jl")
 include("allocation_fixture.jl")
 
+const MAKIEPOTTS_TEST_FILES = Set((
+    "test_adversarial.jl",
+    "test_allocations.jl",
+    "test_downstream_conformance.jl",
+))
+
+@testset "MakiePotts test inventory" begin
+    discovered = Set(filter(name -> startswith(name, "test_") && endswith(name, ".jl"),
+        readdir(@__DIR__)))
+    @test discovered == MAKIEPOTTS_TEST_FILES
+end
+
 function render_fixture(; dimensions = 2)
     dims = dimensions == 2 ? (5, 4) : (5, 4, 3)
     labels = zeros(Int, dims)
@@ -59,7 +71,7 @@ function render_fixture(; dimensions = 2)
         ))
     else
         # Three-dimensional CPM execution is intentionally not admitted until
-        # G5H-4. Keep MakiePotts' independent 3D projection witness without
+        # Keep MakiePotts' independent 3D projection witness without
         # bypassing the runtime capability preflight.
         PottsToolkit.PottsSavedState(
             0,
@@ -250,12 +262,12 @@ end
 
 @testset "rerun publication is atomic" begin
     controller = RerunController(identity; initial = :old)
-    wait(rerun!(controller, :new))
+    wait(reexecute!(controller, :new))
     @test rerun_status(controller)[] === :succeeded
     @test rerun_result(controller)[] === :new
 
     failing = RerunController(x -> error("failure"); initial = :valid)
-    wait(rerun!(failing, nothing))
+    wait(reexecute!(failing, nothing))
     @test rerun_status(failing)[] === :failed
     @test rerun_result(failing)[] === :valid
     @test rerun_error(failing)[] !== nothing
@@ -265,9 +277,9 @@ end
         value === :first && take!(release_first)
         value
     end
-    first_task = rerun!(latest, :first)
+    first_task = reexecute!(latest, :first)
     yield()
-    second_task = rerun!(latest, :second)
+    second_task = reexecute!(latest, :second)
     wait(second_task)
     put!(release_first, nothing)
     wait(first_task)
@@ -279,7 +291,7 @@ end
         take!(release_closed)
         value
     end
-    closed_task = rerun!(closed, :discarded)
+    closed_task = reexecute!(closed, :discarded)
     yield()
     @test close(closed) === closed
     @test !isopen(closed)
@@ -287,11 +299,11 @@ end
     put!(release_closed, nothing)
     wait(closed_task)
     @test rerun_result(closed)[] === :preserved
-    @test_throws ArgumentError rerun!(closed, :forbidden)
+    @test_throws ArgumentError reexecute!(closed, :forbidden)
     @test close(closed) === closed
 end
 
-@testset "MakiePotts package-quality gates" begin
+@testset "MakiePotts package quality" begin
     Aqua.test_all(MakiePotts; persistent_tasks = false)
     @test isempty(Test.detect_ambiguities(MakiePotts; recursive = true))
     @test isempty(Docs.undocumented_names(MakiePotts; private = false))

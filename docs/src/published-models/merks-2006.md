@@ -6,7 +6,7 @@ chemotaxis, volume constraint, local connectivity, fixed split order, and
 field observation.
 
 It is an integration witness, not a reproduction of the paper's network,
-lacuna, branch, or remodeling statistics. Those remain G7 scientific work.
+lacuna, branch, or remodeling statistics. Those remain future scientific work.
 
 ## Substrate disposition
 

@@ -1,6 +1,73 @@
 # Closed Potts operation vocabulary. Public wrappers are registered through Symbolics and
 # are therefore ordinary Symbolics call trees rather than a parallel expression algebra.
 
+"""Return the proposed source-site identity."""
+function source_site end
+"""Return the proposed destination-site identity."""
+function target_site end
+"""Return the source site's owning cell identity."""
+function source_cell end
+"""Return the destination site's owning cell identity."""
+function target_cell end
+"""Return the source owner's cell-kind identity."""
+function source_kind end
+"""Return the destination owner's cell-kind identity."""
+function target_kind end
+"""Return the first canonical contact owner."""
+function contact_owner_a end
+"""Return the second canonical contact owner."""
+function contact_owner_b end
+"""Return the first canonical contact owner's kind."""
+function contact_kind_a end
+"""Return the second canonical contact owner's kind."""
+function contact_kind_b end
+"""Test whether a proposal extends the source cell."""
+function is_extension end
+"""Test whether a proposal retracts the destination cell."""
+function is_retraction end
+"""Return the current cell-volume tracker value."""
+function cell_volume end
+"""Return the current cell-surface tracker value."""
+function cell_surface end
+"""Return the current cell-elongation tracker value."""
+function cell_elongation end
+"""Return the wrapped cell-center coordinates."""
+function cell_center end
+"""Return the unwrapped cell-center coordinates."""
+function unwrapped_center end
+"""Return the first endpoint of the current relationship edge."""
+function endpoint_a end
+"""Return the second endpoint of the current relationship edge."""
+function endpoint_b end
+
+"""Return the metric distance between two bounded spatial values."""
+function distance end
+"""Return the number of lattice edges in a canonical contact."""
+function contact_edge_count end
+"""Return the number of boundary sites of a finite cell."""
+function boundary_site_count end
+"""Return the number of distinct neighboring cells selected by a relation."""
+function neighbor_cell_count end
+"""Sample a declared field at a bounded site."""
+function field_value end
+"""Sample the gradient of a declared field at a bounded site."""
+function field_gradient end
+"""Evaluate a declared relation-based field Laplacian."""
+function laplacian end
+"""Return the occupancy indicator for a kind at a site."""
+function occupancy end
+"""Read a declared history state at a bounded lag."""
+function history_value end
+"""Return the live degree of an endpoint in a relationship state."""
+function degree end
+
+"""Return the measure associated with a canonical contact."""
+function contact_measure end
+"""Return the sum of a neighboring-cell property."""
+function neighbor_property_sum end
+"""Return a model-wide interface measure for a pair of kinds."""
+function global_interface_measure end
+
 for (operation_name, result_type) in (
         (:source_site, Int),
         (:target_site, Int),
@@ -23,7 +90,6 @@ for (operation_name, result_type) in (
         (:endpoint_b, Int),
     )
     @eval begin
-        function $(operation_name) end
         Symbolics.@register_symbolic $(operation_name)(x)::$(result_type)
     end
 end
@@ -41,7 +107,6 @@ for (operation_name, result_type) in (
         (:degree, Int),
     )
     @eval begin
-        function $(operation_name) end
         Symbolics.@register_symbolic $(operation_name)(x, y)::$(result_type)
     end
 end
@@ -52,7 +117,6 @@ for (operation_name, result_type) in (
         (:global_interface_measure, Real),
     )
     @eval begin
-        function $(operation_name) end
         Symbolics.@register_symbolic $(operation_name)(x, y, z)::$(result_type)
     end
 end
@@ -60,6 +124,7 @@ end
 # A mean is total only when its empty-neighborhood behavior is explicit. The
 # fourth argument is that policy/value; the compiler deliberately admits no
 # ambiguous three-argument spelling.
+"""Return the mean of a neighboring-cell property under an explicit empty policy."""
 function neighbor_property_mean end
 Symbolics.@register_symbolic neighbor_property_mean(x, y, z, empty)::Real
 
@@ -67,6 +132,7 @@ Symbolics.@register_symbolic neighbor_property_mean(x, y, z, empty)::Real
 # scalar operation in the current executable DAG. Reject at authoring time
 # until the bounded snapshot query object exists; pretending it returns a
 # scalar would corrupt its distinct-identity semantics.
+"""Collection-valued neighbor query; currently rejects until bounded materialization exists."""
 function neighbor_cells(owner, filter)
     throw(ArgumentError(
         "neighbor_cells(owner, filter) is a collection-valued settled-snapshot " *
@@ -75,9 +141,13 @@ function neighbor_cells(owner, filter)
     ))
 end
 
+"""Test whether a contact is created by the proposal."""
 function new_contact end
+"""Test whether a contact is removed by the proposal."""
 function lost_contact end
+"""Read a named payload component from the current relationship edge."""
 function edge_payload end
+"""Construct a bounded lagged read of history state."""
 function lag end
 function _potts_draw end
 function _potts_merks_local_connectivity end
@@ -86,6 +156,8 @@ function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
 function _potts_model_bound_state_value end
 function _potts_lifecycle_bound_state_value end
+function _potts_bounded_fold end
+"""Test whether two endpoints are linked by a relationship state."""
 function linked end
 
 Symbolics.@register_symbolic new_contact(x, y)::Bool
@@ -100,6 +172,9 @@ Symbolics.@register_symbolic _potts_merks_local_connectivity(
 Symbolics.@register_symbolic _potts_act_energy(
     kind, activity, relation, maximum, strength
 )::Real
+Symbolics.@register_symbolic _potts_bounded_fold(
+    fold::LocalMath.BoundedFold, field, relation, anchor
+)::Real
 
 _kind_token(kind::Union{CellKind, MediumKind}) =
     _potts_token(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)
@@ -110,6 +185,8 @@ _relationship_token(relationship::RelationshipState) =
     )
 _spatial_relation_token(relation::Symbol) =
     _potts_token(Symbol("__potts_spatial_relation__", relation); T = Int)
+_spatial_relation_token(relation::SpatialRelation) =
+    _spatial_relation_token(Symbol(statement_id(relation)))
 _field_token(field::FieldState) =
     _potts_token(
         Symbol("__potts_field__", Symbol(statement_id(field))); T = Real
@@ -141,6 +218,7 @@ edge_payload(edge, ::Val{name}) where {name} =
     edge_payload(
         edge, _potts_token(Symbol("__potts_payload__", name); T = Int)
     )
+
 
 source_site(binding::ProposalContext) = source_site(_binding_token(binding))
 target_site(binding::ProposalContext) = target_site(_binding_token(binding))

@@ -1,6 +1,6 @@
 using Distributed
 
-function _g5h4_distributed_problem()
+function _distributed_ensemble_problem()
     cell = CellKind(:distributed_cell; extinction = RetireAtZero())
     medium = MediumKind(:distributed_medium)
     source = PottsSystem(
@@ -21,7 +21,7 @@ function _g5h4_distributed_problem()
 end
 
 @testset "SciML distributed ensemble authority" begin
-    problem = _g5h4_distributed_problem()
+    problem = _distributed_ensemble_problem()
     ensemble = SciMLBase.EnsembleProblem(problem)
     serial = solve(
         ensemble,

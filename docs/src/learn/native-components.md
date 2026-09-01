@@ -56,23 +56,29 @@ problem = PottsProblem(scheduled, initial, (0, 1); seed=0x503)
 profile = NativeSolveProfile(
     path,
     Tsit5();
-    profile_id="docs-global-tsit5-fixed-v1",
     deterministic=true,
-    exact_replay=true,
     adaptive=false,
     dt=0.01,
 )
-solution = solve(problem, SequentialCPM(); native_profiles=(profile,))
-(last(solution)[:output], native_value(solution, path, x))
+integrator = init(problem, SequentialCPM(); native_profiles=(profile,))
+step!(integrator)
+integrator.u.output
 ```
+
+Functional execution is admitted by structural, solver, backend, and event
+preflight. Set `exact_replay=true` with a pinned `profile_id` and
+`deterministic=true` only when the stronger checkpoint/replay contract is
+needed; that request additionally requires a matching closed replay row.
 
 For `PerCell()`, declare `PerCellNativeLifecycle` explicitly. The component
 pool has fixed capacity, active/generation/kind masks, and two-bank atomic
 publication. `SerialNativeExecution()` is the reference;
 `BatchedNativeExecution(width)` vectorizes live lanes on CPU; and
-`MetalNativeExecution(width)` is a separately evidenced GPU profile. These are
+`MetalNativeExecution(width)` is a separately evidenced GPU profile executed
+through DiffEqGPU's KernelAbstractions backend contract. These are
 within-trajectory component modes, not SciML ensemble algorithms.
 
 Every native solve needs a `NativeSolveProfile`. Unsupported family, scalar,
-events/callbacks, adaptivity, solver, backend, field provenance, or dependency
-stack fails during preflight before CPM state advances.
+events/callbacks, adaptivity, solver, backend, or field structure fails during
+preflight before CPM state advances. An unmatched dependency stack rejects an
+explicit exact-replay request, not an otherwise supported functional run.

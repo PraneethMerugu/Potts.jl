@@ -158,7 +158,7 @@ function _lower_static_node(
         )
         if !isempty(qualified_keys)
             length(qualified_keys) == 1 || throw(ArgumentError(
-                "V1 operations admit at most one qualified tracker binding"
+                "executable operations admit at most one qualified tracker binding"
             ))
             key = only(qualified_keys)
             operation = CorePotts.CompilerSPI.QualifiedTrackerOperation(

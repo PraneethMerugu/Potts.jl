@@ -15,6 +15,7 @@ function _scheduled_data(system::PottsSystem)
     return scheduled
 end
 
+"""Inspect a completed/scheduled system or runtime with an inspection selector."""
 inspect(system::PottsSystem, ::Statements) =
     Tuple(_completion_data(system).records)
 inspect(system::PottsSystem, ::Variables) =
@@ -148,8 +149,11 @@ end
 inspect(system::PottsSystem, ::LifecyclePlans) =
     _lifecycle_analysis_report(_analyze_completed_system(system))
 
+"""Return the semantic fingerprint of an authored `PottsSystem`."""
 semantic_fingerprint(system::PottsSystem) = inspect(system, Fingerprints()).semantic
+"""Return the completed-system fingerprint after semantic validation."""
 completed_system_fingerprint(system::PottsSystem) =
     inspect(system, Fingerprints()).completed
+"""Return the scheduled-system fingerprint after `mtkcompile`."""
 scheduled_system_fingerprint(system::PottsSystem) =
     inspect(system, Fingerprints()).scheduled

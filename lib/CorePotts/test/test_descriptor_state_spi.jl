@@ -181,6 +181,42 @@ end
         handle,
     ).values[1] == 1.0
 
+    replacement_state = CorePotts.CompilerSPI.copy_auxiliary_state(
+        descriptor_plan.state_layout, runtime.descriptor_state
+    )
+    CorePotts.CompilerSPI.state_block(
+        replacement_state, handle
+    ).values .= 6.0
+    @test CorePotts.CompilerSPI.update_program_descriptor_state!(
+        runtime, replacement_state
+    ) === runtime
+    published_before_failure = CorePotts.program_snapshot(runtime)
+    invalid_replacement = CorePotts.CompilerSPI.copy_auxiliary_state(
+        descriptor_plan.state_layout, replacement_state
+    )
+    CorePotts.CompilerSPI.state_block(
+        invalid_replacement, handle
+    ).values[1] = NaN
+    @test_throws ArgumentError CorePotts.CompilerSPI.update_program_descriptor_state!(
+        runtime, invalid_replacement
+    )
+    @test CorePotts.CompilerSPI.state_block(
+        CorePotts.BackendSPI.program_snapshot_descriptor_state(
+            CorePotts.program_snapshot(runtime)
+        ),
+        handle,
+    ).values == CorePotts.CompilerSPI.state_block(
+        CorePotts.BackendSPI.program_snapshot_descriptor_state(
+            published_before_failure
+        ),
+        handle,
+    ).values
+    checkpoint = CorePotts.program_checkpoint(runtime)
+    restored = CorePotts.restore_program_checkpoint(program, checkpoint)
+    @test CorePotts.CompilerSPI.state_block(
+        restored.descriptor_state, handle
+    ).values == fill(6.0, 2, 2)
+
     malformed_initial = CorePotts.ProgramInitialState(
         ownership,
         Int16[2];

@@ -211,6 +211,7 @@ function _assemble_block_banks(entries, blocks)
     return banks
 end
 
+"""Allocate and initialize all compiler-declared auxiliary-state blocks."""
 function allocate_auxiliary_state(
         layout::StateLayout,
         initial_values = fill(nothing, length(layout.entries)),
@@ -235,6 +236,7 @@ end
     return BlockBank{Representation, typeof(values)}(values)
 end
 
+"""Return an independent copy of validated auxiliary scientific state."""
 function copy_auxiliary_state(::StateLayout, state::AuxiliaryState)
     banks = map(_copy_state_bank, state.banks)
     return AuxiliaryState(banks)
@@ -251,12 +253,38 @@ end
     return _copyto_auxiliary_banks!(Base.tail(destination), Base.tail(source))
 end
 
+function _require_auxiliary_copy_compatible(
+        destination::AuxiliaryState, source::AuxiliaryState
+    )
+    typeof(destination.banks) === typeof(source.banks) || throw(ArgumentError(
+        "auxiliary states have incompatible physical layouts or element types"
+    ))
+    for (destination_bank, source_bank) in zip(
+            destination.banks, source.banks
+        )
+        axes(destination_bank.values) == axes(source_bank.values) || throw(
+            ArgumentError("auxiliary states have incompatible bank shapes")
+        )
+    end
+    return destination
+end
+
+function _validate_auxiliary_state_candidate(
+        layout::StateLayout,
+        expected::AuxiliaryState,
+        candidate::AuxiliaryState,
+    )
+    _require_auxiliary_copy_compatible(expected, candidate)
+    for entry in layout.entries
+        validate_state_block(entry.schema, state_block(candidate, entry.handle))
+    end
+    return candidate
+end
+
 function copyto_auxiliary_state!(
         destination::AuxiliaryState, source::AuxiliaryState
     )
-    length(destination.banks) == length(source.banks) || throw(ArgumentError(
-        "auxiliary states have incompatible bank layouts"
-    ))
+    _require_auxiliary_copy_compatible(destination, source)
     _copyto_auxiliary_banks!(destination.banks, source.banks)
     return destination
 end

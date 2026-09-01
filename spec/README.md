@@ -1,121 +1,52 @@
-# Potts.jl semantics specification
+# Potts.jl specifications
 
-Version: `0.6-draft`
+The accepted [project charter](project-charter.md) is the normative project
+authority. A more specific accepted decision applies only to the scope it
+names. Implementation and tests are evidence; they do not silently redefine a
+scientific contract.
 
-Status: Draft
+## Current contracts
 
-## Authority
-
-This specification defines the observable scientific behavior of PottsToolkit and CorePotts and the
-accepted mechanism contract for the pre-implementation LocalWorksets substrate.
-A conforming implementation may change storage layouts, kernel organization, parallel scheduling,
-backend libraries, and other internal mechanisms, but it must preserve accepted observable
-behavior.
-
-Apply authority in this order:
-
-1. the accepted [Project Charter](project-charter.md) and the latest accepted decision that
-   explicitly changes a product or architecture choice;
-2. the [LocalWorksets V1 Contract](localworksets-v1.md) and
-   [Implementation and Review Gate](localworksets-v1-implementation-gate.md) for the accepted
-   post-G5H execution-substrate contract, corrected CorePotts baseline, and pre-G6 work order;
-3. the [G5H Hardening Contract](symbolic-potts-v1-hardening.md) for the cleared post-G5 work order, MTK/SciML
-   integration, component scheduling, late lowering, capability profiles, and the G6 entry gate;
-4. accepted scientific contracts for state, CPM transitions, lifecycle, randomness, persistence,
-   topology, observation, and numerical meaning;
-5. earlier construction contracts only where the current index or a later decision has not marked
-   them superseded; and
-6. implementation, tests, tutorials, examples, and historical design evidence.
-
-A more specific later accepted decision wins only in the scope it names. Historical audits,
-superseded clauses, and working code are evidence, not authority to restore an obsolete API or
-product boundary.
-
-## Scope
-
-The specification covers:
-
-- PottsToolkit model authoring, composition, completion, validation, and compilation;
-- CorePotts state, transition, lifecycle, observation, checkpoint, and execution semantics;
-- LocalWorksets local-work declaration, validation, preparation, execution, and inspection semantics;
-- SciML problem, algorithm, integrator, solution, remake, and ensemble behavior;
-- ModelingToolkit completion and compilation integration;
-- CPU and accelerator backend guarantees;
-- reproducibility, semantic randomness, numerical expectations, and scientific claims; and
-- published-model admission and evidence requirements.
-
-External orchestration systems are out of scope unless admitted by a later, independently reviewed
-extension contract. They cannot redefine PottsToolkit or CorePotts semantics.
-
-## Surviving scientific contracts
-
-- [Project Charter](project-charter.md)
-- [Glossary](glossary.md)
-- [State Model](state-model.md)
-- [Time and Monte Carlo Steps](time-and-mcs.md)
-- [Auxiliary Constraints and Mechanical State](auxiliary-state-semantics.md)
+- [Project charter](project-charter.md)
+- [Correctness and contract stabilization](correctness-and-contract-stabilization.md)
+- [LocalMath](localmath.md)
+- [LocalMath effortless explicit setup](localmath-effortless-setup.md)
+- [LocalMath descriptor and relation ergonomics](localmath-descriptor-and-relation-ergonomics.md)
+- [LocalMath semantic-preserving physical fusion](localmath-physical-fusion.md)
+- [LocalMath private lifetimes and exact conflict lowering](localmath-private-lifetimes-and-conflicts.md)
+- [LocalMath developer-experience completion](localmath-developer-experience-completion.md)
+- [CorePotts compiler targeting LocalMath](corepotts-localmath-compiler.md)
+- [State model](state-model.md)
+- [Time and Monte Carlo steps](time-and-mcs.md)
+- [Auxiliary and mechanical state](auxiliary-state-semantics.md)
 - [Lifecycle](lifecycle.md)
-- [Randomness and Reproducibility](randomness-and-reproducibility.md)
-- [Snapshots, Checkpoints, Restore, and Logical Storage](persistence.md)
-- [Energy, Proposals, Acceptance, and Trackers](energy-proposals-and-trackers.md)
-- [Topology and Spatial Relations](topology-and-spatial-relations.md)
-- [Cartesian Surface, Queries, and Fields](cartesian-surface-queries-and-fields.md)
-- [Sequential Reference Engine](reference-engine-semantics.md)
-- [Numerical and Cross-Backend Semantics](numerical-and-cross-backend-semantics.md)
-- [Transition-Kernel Verification](transition-kernel-verification.md)
-- [Published-Model Reproduction Semantics](published-model-reproduction-semantics.md)
+- [Randomness and reproducibility](randomness-and-reproducibility.md)
+- [Persistence](persistence.md)
+- [Energy, proposals, acceptance, and trackers](energy-proposals-and-trackers.md)
+- [Topology and spatial relations](topology-and-spatial-relations.md)
+- [Cartesian surfaces, queries, and fields](cartesian-surface-queries-and-fields.md)
+- [Reference engine semantics](reference-engine-semantics.md)
+- [Numerical and cross-backend semantics](numerical-and-cross-backend-semantics.md)
+- [Transition-kernel verification](transition-kernel-verification.md)
+- [Published-model reproduction semantics](published-model-reproduction-semantics.md)
+- [PottsToolkit authoring and API semantics](pottstoolkit-authoring-composition-and-api-semantics.md)
+- [CorePotts public interfaces](corepotts-public-interface-semantics.md)
+- [SciML interface semantics](sciml-interface-semantics.md)
+- [Rule and model semantics](pottstoolkit-rule-and-model-semantics.md)
+- [Decision records](decisions/README.md)
 
-The scientific meaning in these files survives G5H. Historical API names, algorithm inventories,
-backend claims, or phase order inside them do not override Decision 0044 or the hardening contract.
+Some older interface documents contain superseded names alongside surviving
+scientific requirements. The charter, accepted decision records, and the
+current LocalMath contract take precedence for package identity, execution
+architecture, and contributor workflow.
 
-## Superseded-in-part interface contracts
+## Historical records
 
-- [PottsToolkit Authoring, Composition, and API Semantics](pottstoolkit-authoring-composition-and-api-semantics.md)
-- [CorePotts Public Scientific and Execution Interfaces](corepotts-public-interface-semantics.md)
-- [SciML Interface Semantics](sciml-interface-semantics.md)
-- [PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md)
+Development roadmaps, milestone specifications, audits, qualification reports,
+and earlier architecture proposals are retained as design history. They do not
+impose live execution modes, compatibility layers, machine allowlists, timing
+thresholds, or development gates. Historical evidence is indexed under
+`design/`; archived scripts live under `scripts/archive/`.
 
-These documents retain useful scientific intent and earlier evidence. Their pre-V1 `PottsModel`,
-old public API, authoring layers, algorithm inventory, compilation ownership, phase assignments,
-and maturity claims are not current implementation authority. G5H-0 must disposition each retained
-behavior before source cleanup.
-
-## Current construction program
-
-- [LocalWorksets V1 Normative Contract](localworksets-v1.md) — authoritative for the closed
-  LocalWorksets architecture and LW-A1–LW-A14
-- [LocalWorksets V1 Implementation and Review Gate](localworksets-v1-implementation-gate.md) —
-  authoritative for CP-B1–CP-B3 correction, the internal-first vertical, and direct-parity review
-- [Symbolic Potts V1 G5H Hardening](symbolic-potts-v1-hardening.md) — authoritative for the cleared
-  post-G5 implementation record and G6 entry
-- [Symbolic Potts V1 Compiler Construction](symbolic-potts-v1-compiler-construction.md) —
-  authoritative for cleared G0--G5 and future G6--G9 as amended by G5H
-- [Symbolic Potts V1](symbolic-potts-v1.md)
-- [Symbolic Potts V1 Architecture Redirection](symbolic-potts-v1-architecture-redirection.md)
-
-The last two documents are superseded in part. Their `EquationComponent` assimilation, public
-backend-specific compilation, public `PottsExecutable`, and direct G5-to-G6 clauses must not be
-implemented.
-
-Any clause in those documents that assumes the retired orchestration package is superseded by
-[Decision 0043](decisions/0043-retire-processbigraphs.md). PottsToolkit and CorePotts must remain
-independently loadable and testable without that retired package or its API.
-
-## Deferred upstream integrations
-
-- [MethodOfLines Input-Field Integration](methodoflines-input-field-integration.md) — preserves the
-  intended fixed-grid MTK input authoring experience and its reopening criteria without creating an
-  active phase gate or capability claim
-
-## Decision records
-
-Accepted semantic decisions and their status are indexed in
-[Decision Records](decisions/README.md).
-
-[Historical conformance evidence](conformance-evidence.md) and files under `design/audits/` describe
-earlier exact repository states. G5H creates a new preservation map rather than treating those
-claims as current qualification.
-
-The words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** retain their usual
-normative meanings. Accepted semantics and implementation maturity are separate: working code is
-not automatically a compatibility or scientific claim.
+The words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** retain
+their usual normative meanings.

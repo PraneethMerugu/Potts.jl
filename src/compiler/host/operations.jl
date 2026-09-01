@@ -1,11 +1,14 @@
 # Versioned authority for symbolic operations admitted to the normalized DAG.
 
+"""Supertype of cold resource requirements declared by symbolic operations."""
 abstract type AbstractOperationSourceRequirement end
 
+"""Require a lattice of one exact spatial rank."""
 struct LatticeRankRequirement <: AbstractOperationSourceRequirement
     rank::Int
 end
 
+"""Require a bounded spatial relation supplied by one operation operand."""
 struct SpatialRelationRequirement <: AbstractOperationSourceRequirement
     operand::Int
     neighborhood::Symbol
@@ -50,6 +53,7 @@ const _LIFECYCLE_RNG_ENTITIES = (
     :none, :bound_anchor, :model_occurrence, :cell_generation, :destination,
 )
 
+"""Bounded execution contract for a lifecycle symbolic operation."""
 struct LifecycleOperationABI
     role::Symbol
     input_context::Symbol
@@ -86,6 +90,7 @@ function LifecycleOperationABI(
     )
 end
 
+"""Versioned compiler contract for one registered symbolic operation."""
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
@@ -154,7 +159,7 @@ OperationTransfer(
     nothing,
 )
 
-const _V1_OPERATION_ROLES = (
+const _CLOSED_OPERATION_ROLES = (
     :hamiltonian,
     :drive,
     :constraint,
@@ -169,7 +174,7 @@ const _V1_OPERATION_ROLES = (
     :lifecycle_priority,
     :state,
 )
-const _V1_OPERATION_PHASES = (
+const _CLOSED_OPERATION_PHASES = (
     :none,
     :Proposal,
     :AcceptedCopy,
@@ -193,8 +198,8 @@ OperationTransfer(
     ;
     tracker_requirements = (),
     operand_rule = :any,
-    allowed_roles = _V1_OPERATION_ROLES,
-    allowed_phases = _V1_OPERATION_PHASES,
+    allowed_roles = _CLOSED_OPERATION_ROLES,
+    allowed_phases = _CLOSED_OPERATION_PHASES,
     required_context = :any,
     owner = :external,
     callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) *
@@ -237,8 +242,8 @@ OperationTransfer(
     gpu::Bool,
     tracker_requirements::Tuple{Vararg{Symbol}} = ();
     operand_rule = :any,
-    allowed_roles = _V1_OPERATION_ROLES,
-    allowed_phases = _V1_OPERATION_PHASES,
+    allowed_roles = _CLOSED_OPERATION_ROLES,
+    allowed_phases = _CLOSED_OPERATION_PHASES,
     required_context = :any,
     owner = :external,
     callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) *
@@ -268,6 +273,7 @@ OperationTransfer(
     lifecycle_abi,
 )
 
+"""Return the registered `OperationTransfer` for a symbolic operation."""
 function operation_transfer end
 
 _transfer(identity, arity, result_rule, unit_rule;
@@ -280,8 +286,8 @@ _transfer(identity, arity, result_rule, unit_rule;
         gpu = true,
         tracker_requirements = (),
         operand_rule = :any,
-        allowed_roles = _V1_OPERATION_ROLES,
-        allowed_phases = _V1_OPERATION_PHASES,
+        allowed_roles = _CLOSED_OPERATION_ROLES,
+        allowed_phases = _CLOSED_OPERATION_PHASES,
         required_context = :any,
         owner = :PottsToolkit,
         callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) * ":" *
@@ -316,7 +322,7 @@ numerical_operation_requirements(::Any) = ()
 
 function numerical_field_rejection end
 numerical_field_rejection(::Any, statement, statements, system) =
-    "V1 executable field lowering does not admit the selected evolution policy"
+    "executable field lowering does not admit the selected evolution policy"
 
 function numerical_field_stage_descriptor end
 
@@ -482,6 +488,19 @@ operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
         allowed_phases = (:Lifecycle,),
         required_context = :any,
         owner = :PottsToolkitLifecycleCompiler,
+    )
+
+operation_transfer(::typeof(_potts_bounded_fold), ::Int) =
+    _transfer(
+        :bounded_fold,
+        4,
+        :real,
+        :declared;
+        totality = :transaction_checked,
+        footprint_rule = NeighborhoodFootprintRule(OperandNeighborhoodAnchors()),
+        allowed_roles = (:hamiltonian,),
+        allowed_phases = (:Proposal,),
+        required_context = :hamiltonian,
     )
 
 for operation in (

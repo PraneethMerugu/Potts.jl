@@ -4,10 +4,21 @@ Qualification and review mechanics are governed by
 `design/hardening/lw4q-qualification.md`. LW-4Q does not change this roadmap's
 architecture or phase boundaries.
 
-Date: 2026-08-10
+Date: 2026-08-15
 
-Status: LW-4A, LW-4B, LW-4C, final LW-R2, bounded ED-R0, and bounded IC-R0
-complete; LW-4 frozen; LW-5 open at representability inventory; G6 closed
+Current disposition: historical adoption and qualification evidence. Its
+execution-selection and closed-adoption clauses are superseded by
+[Execution Architecture Consolidation](execution-architecture-consolidation.md),
+which defines the sole current production graph.
+
+Status: LW-4A through final LW-R2, bounded ED-R0 and bounded IC-R0 complete;
+LW-4 frozen; revised LW-5A, non-promoted LW-5B0, bounded LW-5B2, corrected
+isolated B3, non-promoted K02/B4, and mandatory LW-5B4O passed; bounded LW-5C
+K02→K03 adoption, LW-5D convergence/promotion, and fresh LW-R3 passed exact
+CPU/real-Metal qualification with P0=0/P1=0; the separately authorized
+post-simplification K09 gate completed K09-R1 with the corrected direct path
+sealed and LocalWorksets adoption rejected; G6 and all other later operation
+families remain closed pending a separate owner send-off
 
 Authority:
 
@@ -28,7 +39,12 @@ LW-4A exact standalone extraction -> LW-R2A package-boundary review
   -> LW-4C Julian/JuliaGPU API reconciliation -> LW-R2 public-surface freeze
   -> ED-0 inventory -> bounded ED-1 hygiene -> ED-R0
   -> IC-0 complexity/SPI/verification audit -> bounded IC-1 consolidation -> IC-R0
-  -> LW-5 compiled local-operation adoption -> LW-R3
+  -> LW-5 compiled local-operation adoption -> K02/B4 baseline
+  -> LW-5B4O mandatory layout/execution optimization -> LW-5B4O-R
+  -> bounded LW-5C adoption and stop review
+  -> separately authorized LW-5D -> LW-R3
+  -> post-CA simplification
+  -> separately authorized K09-0 -> K09-R0 -> K09-1/K09-2/K09-3 -> K09-R1
   -> explicit owner G6 send-off
 ```
 
@@ -44,9 +60,9 @@ The [ED-0/ED-1 engineering-debt audit](../design/hardening/ed0-ed1-engineering-d
 inserts one bounded pre-adoption hygiene gate after the sealed LW-R2 baseline.
 It may repair confirmed dispatch/diagnostic defects, ordinary package CI and
 living repository status without reopening this architecture or deleting
-direct/reference oracles. Substantive LW-5 source migration begins after
-ED-R0; its first operation remains the evidence-bearing pilot that decides
-deeper consolidation.
+direct/reference oracles. The non-promoted LW-5B0 adapter/clear probe is not a
+migrated production operation; proposal evaluation remains the first
+evidence-bearing operation and decides deeper consolidation.
 
 ED-R0 passed on exact product commit
 `da80a0ec1f6b52321973872066e02632124ec0f4`; see the
@@ -63,8 +79,54 @@ must not alter CorePotts/LocalWorksets dependency ownership. The single authorit
 the matrix and exact qualification. IC-R0 passed on exact product commit
 `8b710692a84f79b1411a1443a27a9ee099327bcf`, tree
 `b360f2b06b404b34d448c75f3bdd5b012d839dc7`, with P0=0, P1=0, and P2=0.
-LW-5 is open only at its existing representability inventory and first
-evidence-bearing pilot.
+The prior [LW-5A representability and preservation inventory](../design/hardening/lw5a-representability-and-preservation.md)
+is preserved as evidence and its completion ruling remains withdrawn. The
+authoritative [LW-5A adoption-and-consolidation amendment](../design/hardening/lw5a-adoption-consolidation-amendment.md)
+and [focused review](../design/hardening/lw5a-adoption-consolidation-review.md)
+passed. They open only the disposable, non-promoted B0 integration probe. The
+non-promoted [B0 probe](../design/hardening/lw5b0-integration-probe-review.md)
+subsequently passed exact CPU/real-Metal qualification and its focused hold.
+The bounded [B2 proposal bridge](../design/hardening/lw5b2-proposal-bridge-review.md)
+subsequently passed exact CPU/real-Metal qualification. It proved the shared
+science projection and inferred canonical source tuple without selecting a
+production path. The isolated
+[B3 one-for-one proposal comparison](../design/hardening/lw5b3-proposal-adoption-review.md)
+passed full semantic/RNG/checkpoint/failure and CPU/real-Metal lifetime
+evidence. Its original candidate failed the frozen CPU noninferiority
+threshold; a bounded canonical-schedule correction to the quadratic
+CorePotts adapter bridge then passed the unchanged CPU and real-Metal
+protocol and a fresh
+[remediation review](../design/hardening/lw5b3-proposal-adoption-remediation-review.md).
+At that historical gate, direct execution remained selected and `K02` passed
+as the non-promoted B4 second-use witness. The later execution architecture
+consolidation supersedes that selection and closed-adoption disposition.
+
+The owner subsequently authorized the single bounded
+[LW-5B4O mandatory layout and execution optimization](../design/hardening/lw5b4o-mandatory-layout-and-execution-optimization.md).
+It makes StructArrays and StaticArrays direct, always-loaded dependencies of
+CorePotts and LocalWorksets, repairs the outstanding B4 topology/count
+admission gaps, consolidates the proposal record/schema and qualified host
+submission path, and ended in the fresh
+[LW-5B4O-R review](../design/hardening/lw5b4o-review.md), which passed the
+sealed candidate with P0=0 and P1=0. It explicitly
+supersedes the earlier conditional dependency clauses and the B4 no-
+LocalWorksets-change veto only for its enumerated rows after the exact B4
+baseline is preserved. It did not promote K02 and cleared only the then-active
+LW-5C pre-migration preservation hold; later gates still required their own
+authorization.
+
+The bounded [LW-5C adoption matrix](../design/hardening/lw5c-adoption-matrix.md)
+then selected K02 candidate generation and K03 proposal evaluation as one
+ordered `LocalWorksets.sequence`. The exact
+[qualification packet](../design/hardening/lw5c-final-evidence.md) passed the
+complete CorePotts, LocalWorksets, PottsToolkit 2,664/2,664 and real-Metal
+suites. Its paired upper-95 ratios were `1.0423004818` on CPU and
+`1.0043324310` on Metal against the unchanged `1.05` threshold. The fresh
+[LW-5C committee review](../design/hardening/lw5c-review.md) returned P0=0 and
+P1=0 and froze only this bounded, non-default candidate. LW-5D subsequently
+absorbed the approximately 339-line parallel candidate lifecycle into the
+common execution shell, requalified allocations/performance, and promoted
+only the exact K02→K03 conjunction after LW-R3. No later family opened.
 
 ## Preserved architecture
 
@@ -73,7 +135,8 @@ genuine contradiction:
 
 - package name `LocalWorksets.jl`;
 - public mental model `LocalWork -> WorkPlan -> PreparedWork -> WorkEvent`;
-- lifecycle `localwork -> plan -> prepare -> run! -> wait`;
+- lifecycle `localwork -> plan -> prepare -> run! -> wait / waitall`, where
+  `waitall` is restricted to one exact provider synchronization scope;
 - topology ownership in `WorkPlan` and concrete storage/workspace/lane ownership in `PreparedWork`;
 - named output meanings `independent`, `combined` and `resolved`;
 - central validation and lowering;
@@ -450,7 +513,7 @@ PottsToolkit authoring
 LocalWorksets executes local mechanisms. PottsToolkit remains the symbolic/MTK authoring compiler,
 and CorePotts remains the CPM runtime and scientific transaction authority.
 
-### LW-5A — Representability and preservation inventory
+### LW-5A — Adoption-and-consolidation inventory
 
 Before migration, classify every CorePotts execution stage as:
 
@@ -468,6 +531,27 @@ authorize migration.
 
 Freeze public authoring, direct execution, checkpoint, RNG, capability and performance oracles for
 each selected family. A preservation review must approve this inventory before compiler work.
+
+The original preservation inventory remains evidence, but its completion
+ruling is superseded. The authoritative
+[amendment](../design/hardening/lw5a-adoption-consolidation-amendment.md)
+classifies every CorePotts semantic execution stage and all 41 current
+device-kernel declarations by scientific owner, current custom machinery,
+retained semantics, replaceable machinery, LocalWork representation,
+deletion/demotion target, adapter, oracle, blocker and closed disposition.
+Its [focused review](../design/hardening/lw5a-adoption-consolidation-review.md)
+passes the revised gate with an owned derivability hold and opened only the
+non-decisive B0 independent-clear integration probe. The one-launch proposal-
+evaluation pilot was conditional on B0 and must replace rather than wrap its
+custom execution unit. The
+[B0 focused hold](../design/hardening/lw5b0-integration-probe-review.md) passed;
+the bounded [B2 bridge](../design/hardening/lw5b2-proposal-bridge-review.md)
+then passed without production promotion. The isolated
+[B3 comparison](../design/hardening/lw5b3-proposal-adoption-review.md) passed
+after its original performance failure was corrected in the CorePotts
+descriptor bridge and cleared by fresh review. `K02`/B4 is authorized only as
+the non-promoted adapter-reuse witness. No production migration or later
+family is authorized.
 
 ### Ownership boundary
 
@@ -504,6 +588,70 @@ declarations. It must:
 Hamiltonian authors and ordinary PottsToolkit users never see LocalWorksets declarations unless
 they explicitly inspect the lowered execution.
 
+The B0 adapter skeleton and probe frozen by amended LW-5A passed their
+[focused hold](../design/hardening/lw5b0-integration-probe-review.md).
+The bounded [B2 bridge](../design/hardening/lw5b2-proposal-bridge-review.md)
+then proved an inferred fixed-source return, compiler-derived read manifest,
+shared device science projection and one-launch CPU/Metal execution without
+production promotion. The contribution matrix was confirmed to be transient
+scratch, so canonical contribution folding remains inside the CorePotts
+operation and only the disposition is published through LocalWorksets.
+
+The isolated B3 one-for-one proposal-evaluation comparison has passed after
+bounded remediation. "One adapter" means one CorePotts-owned lowering authority using
+ordinary multiple dispatch over qualified IR, not one monolithic function or
+one bespoke adapter per operation. The pilot must preserve CorePotts proposal science,
+derive a bounded type-stable return bridge without hidden output mutation,
+and replace the existing evaluation launch one-for-one without an intermediate
+wait. Failure does not authorize a new LocalWorksets mechanism.
+
+B3 must compare the frozen direct launch and isolated LocalWorksets launch on
+exact contributions/dispositions, failure classes, RNG addresses, state,
+trackers, checkpoint continuation and cross-mechanism rejection. It must also
+record launch, wait, allocation, workspace, transfer, queued-MCS and throughput
+ledgers. Passing B3 does not itself promote the path: the `K02` second-use
+witness and decisive pilot review remain required. B3 now passes; `K02` opens
+only under the bounded B4 hold below.
+
+### K02 / LW-5B4 — non-promoted adapter-reuse witness
+
+`K02` remains the operation name and is the only work opened by corrected B3.
+B4 must construct and compile checkerboard candidate generation through the
+same CorePotts adapter as a non-promoted second-use witness. It must:
+
+- reuse topology, binding, capability, inspection and execution-view
+  derivation from the proposal pilot;
+- require materially less family-specific integration than K03 proposal
+  evaluation;
+- retain production candidate generation and the direct oracle unchanged;
+- add no LocalWorksets mechanism, family, vendor branch, synchronization or
+  scheduling authority;
+- avoid copying K03 named bindings, creating a second execution-view
+  framework or adding a family-symbol registry; and
+- pass focused CPU and real-Metal compilation, exact candidate-array/RNG
+  parity, launch/wait/allocation inspection and adapter-consolidation review.
+
+B4 success is evidence for the decisive proposal-pilot review, not production
+promotion. Failure closes broader migration and returns adapter derivability
+to LW-5A; it does not authorize per-operation frameworks or LocalWorksets
+expansion.
+
+### LW-5B4O — mandatory layout and execution optimization
+
+After preserving the exact B4 candidate and evidence, execute the single
+[LW-5B4O matrix](../design/hardening/lw5b4o-mandatory-layout-and-execution-optimization.md).
+Both CorePotts and LocalWorksets receive direct StructArrays and StaticArrays
+dependencies and distinct base-package integrations. The same phase owns the
+bounded identity-route/component-publication and static-submission
+optimizations plus the independent B4 topology/count repair. One final
+The [LW-5B4O-R committee review](../design/hardening/lw5b4o-review.md) closed
+the phase with P0=0 and P1=0; no intermediate product gate or broader feature
+phase was introduced. Its carried P2 ledger remains binding on LW-5C/LW-5D.
+
+Mandatory integration does not predetermine K02's performance disposition.
+K02 retains the direct oracle and requires the unchanged noninferiority rule
+for any later promotion claim.
+
 ### LW-5C — Bounded migration order
 
 Migrate one family at a time, retaining its direct oracle:
@@ -518,7 +666,18 @@ Migrate one family at a time, retaining its direct oracle:
 Each family receives a pre-migration preservation hold and a post-migration parity review. A failed
 family does not justify weakening LocalWorksets semantics or migrating later families.
 
+The phase stopped after the K02→K03 proposal-local pair. The remaining rows
+were evaluated and explicitly retained in CorePotts because they did not yet
+prove an independent deletion unit, an unrelated consumer, or a complete
+CPU/real-Metal oracle. This stop is part of the frozen LW-5C result, not
+authority to continue the list.
+
 ### LW-5D — Adoption qualification
+
+**State: passed and sealed.** The bounded LW-5C candidate was converged into
+one CorePotts execution shell, passed complete final CPU/product/real-Metal
+and performance qualification, and was promoted only for the exact admitted
+K02→K03 conjunction. Evidence: [LW-5D packet](../design/hardening/lw5d-final-evidence.md).
 
 The final candidate must prove:
 
@@ -534,13 +693,154 @@ The final candidate must prove:
 
 ### LW-R3 — Adoption review
 
+**State: passed.** The fresh committee returned P0=0/P1=0 after independent
+memos and a contradiction round, then the bounded promotion delta passed its
+post-review seal. Review: [LW-R3 record](../design/hardening/lw5d-review.md).
+
 A fresh committee reviews semantic preservation, compiler cohesion, LocalWorksets generality,
 JuliaGPU performance, MTK/SciML boundaries and the public Potts authoring experience. It must verify
 that adoption removed bespoke execution machinery where justified without moving domain semantics
 downward or turning LocalWorksets into the hidden CorePotts engine.
 
-LW-R3 may authorize a later public/default promotion decision. It does not automatically delete the
-direct oracle or open G6.
+LW-R3 authorized and LW-5D sealed the narrow public/default promotion. The
+direct oracle remains reference/fallback/legacy replay. G6 did not open.
+
+### LocalWorksets construction amendment — CA-0 through CA-4
+
+**State: complete and qualified on 2026-08-15; focused committee PASS.** The
+[construction-pain audit](../design/hardening/localworksets-construction-pain-audit.md)
+found no contradiction in the accepted lifecycle or execution-family algebra,
+and its bounded prepared-state, topology, workspace-construction and adapter
+debt has been remediated. Complete LocalWorksets CPU, complete exact-source
+CorePotts CPU, qualified real-Metal, and fresh reviewer evidence passed with
+P0=0/P1=0/P2=0. The sealed LW-5D CPU/Metal behavior, launch, allocation,
+throughput, RNG, checkpoint, Hamiltonian, failure and settlement evidence
+remains the baseline.
+
+Work proceeds in this exact order:
+
+1. **CA-0 — prepared-state and topology integrity.** Freeze nested prepared
+   runtime/provider references, qualify stable array representations, define
+   canonical and prepared topology-leaf evidence, reject non-host plan-time
+   topology, and strengthen retained checkerboard-claim provenance.
+2. **CA-1 — construction evidence and caller workspace.** Expose complete
+   binding and workspace requirements from the same authority used by
+   validation; provide a mechanical caller-workspace construction path without
+   exposing lowering internals or hiding lease capacity.
+3. **CA-2 — topology authoring.** Add an allocation-free explicit identity
+   route and declarative topology-backed reads. Epochs, destination counts,
+   non-identity routes, semantic IDs, and ownership remain explicit.
+4. **CA-3 — CorePotts adapter consolidation.** Reuse one WorkPlan across
+   concrete bank preparations and derive structural inspection from
+   LocalWorksets rather than maintaining a parallel descriptive ledger.
+   CorePotts retains capability provenance, world-age trust, science, RNG,
+   clocks, Hamiltonian folding, transactions, settlement and checkpoints.
+5. **CA-4 — diagnostics, documentation and qualification.** Complete stable
+   validation fields, reconcile executable documentation, and prove unchanged
+   standalone/CorePotts CPU and qualified real-Metal behavior and performance.
+
+No CA slice introduced a second lifecycle, provider scheduler, vendor branch,
+new execution family, dynamic lease growth, warm allocation/transfer, hidden
+wait, host fallback or domain semantics. The fresh focused review is recorded in
+the construction-pain audit. The next fixed-topology adoption witness may now be
+considered as a separate bounded gate. Dynamic owner-keyed CPM statistics remain
+deferred unless they are representable without per-MCS replanning.
+
+### Post-CA simplification — S0 through S2
+
+**State: S0-S2 sealed on 2026-08-15; further operation migration remains a
+separate decision.** The committee-reviewed
+[full simplification audit](../design/hardening/post-ca-full-simplification-audit.md)
+found 4,067 nonblank/non-comment production lines of LocalWorksets/CorePotts
+growth since IC-R0. It authorizes only the common zero-loss intersection below.
+The exact pre-edit source, tests, benchmark harnesses, and environment
+identities are fingerprinted by the
+[baseline content manifest](../design/hardening/post-ca-simplification-baseline.sha256).
+
+Work proceeds in this exact order:
+
+1. **S0 — proven dead-code deletion.** Remove only the reviewed unreachable
+   LocalWorksets validation/extraction helpers, ungated CorePotts lifecycle-copy
+   family, superseded CorePotts construction overloads, and unreachable old
+   checkerboard advance tail. The reviewed direct-deletion floor is 295–305 raw
+   production lines.
+2. **S1 — LocalWorksets internal deduplication.** Reuse one centrally admitted
+   workspace-array traversal, centrally admitted binding/access derivation, one
+   typed workspace-tree constructor, and immutable evidence constants. Concrete
+   active-prefix, static-topology, topology-transfer/compiler-evidence, and
+   execution-family methods remain with their ownership and validation order.
+3. **S2 — CorePotts profile and preparation consolidation.** Make one exact
+   LocalWorksets execution-lowering profile drive capability and checkpoint
+   construction, reuse one CorePotts-owned checkerboard preparation result, and
+   materialize the canonical proposal descriptor identity once. Direct and
+   LocalWorksets scientific calculation and publication remain independent.
+
+The arithmetic implementation forecast was 533–607 raw production lines, with
+an original acceptance band of 500–600. The committee explicitly amended that
+numerical criterion after implementation: the floor and ceiling were waived in
+favor of independently net-negative slices plus the complete zero-loss evidence
+matrix. The
+[final implementation review](../design/hardening/post-ca-simplification-review.md)
+records the smaller safe result: 367 raw and 358 nonblank/non-comment production
+lines removed. Exact slice results are S0 -313/-289, narrowed S1 -30/-34, and
+hardened S2 -24/-35 raw/executable lines. The original numerical criterion was
+not met; reviewers retained apparent duplication where factoring would weaken
+family admission, validation order, backend authority, or specialization.
+
+S0–S2 must preserve public API and diagnostics, inspection tuple order,
+capability/checkpoint/report/fingerprint bytes, RNG addresses, Hamiltonian
+folding, direct-oracle independence, KernelAbstractions implicit ordering,
+launch and synchronization counts, allocation/inference/device-code behavior,
+CPU/qualified-Metal results, and cross-domain witnesses. Smoke tests cannot
+mint evidence. Complete package CPU and qualified real-Metal review remains the
+exit authority.
+
+The S3 CompilerSPI ownership proposal, recursive topology/fact walkers,
+settlement/gate factoring, legacy resolved retirement, claim-only candidate
+retirement, and direct-oracle demotion remain held. No operation migration or
+new LocalWorksets capability is authorized by passing S0–S2. Either requires a
+separate explicit gate and owner decision; the simplification seal alone cannot
+start it.
+
+### K09 post-simplification adoption gate
+
+**State: K09-R1 sealed on 2026-08-15; corrected direct path retained.** The
+owner separately authorized the
+[K09 gated state-copy plan](../design/hardening/k09-adoption-plan.md) after the
+[K01/K09/L01 suitability audit](../design/hardening/k01-k09-l01-suitability-audit.md).
+This is not a continuation or amendment of the sealed LW-5C/LW-5D candidate.
+
+Work proceeds only in this order:
+
+1. **K09-0:** prove the lifecycle staged/science alias invariant and directly
+   remove the two recursive selected-state self-copies;
+2. **K09-R0:** freeze the corrected direct CPU/real-Metal semantic, launch,
+   allocation, queueing, transfer, throughput, capability, and checkpoint
+   baseline;
+3. **K09-1:** census physical leaves and exact compatible capacity groups;
+4. **K09-2:** freeze a grouped independent-copy design using only existing
+   LocalWorksets mechanisms, if and only if the census predicts material
+   simplification;
+5. **K09-3:** build and qualify one private production-shaped candidate only
+   after K09-2 admission; and
+6. **K09-R1:** conduct a fresh adoption review and either adopt the exact
+   candidate or delete it and seal the corrected direct path.
+
+The scan-tail K09 copy remains direct. K01 and L01 remain closed. The two
+self-copy passes (`2U` launches in the corrected copy-unit vocabulary) and
+their source deletion belong to K09-0 and cannot be credited to
+LocalWorksets. K09-R1 requires material net source deletion, a material
+`U -> g` direct copy-unit launch reduction, exact no-/inert-/active-lifecycle behavior, twelve
+queued MCSs with one final synchronization, CPU/real-Metal noninferiority, and
+an exact new capability/checkpoint identity. A failed hold closes K09 without
+weakening LocalWorksets or opening another family.
+
+The completed [K09 census](../design/hardening/k09-r0-census-and-admission.md)
+found that CPU relationship storage requires a specialized field-wise direct
+copy unit and cannot satisfy the reviewed independent-output storage profile.
+The [K09-R1 committee](../design/hardening/k09-r1-review.md) therefore sealed
+the corrected direct implementation with P0=0/P1=0 and rejected K09-2/K09-3.
+No candidate, mechanism, capability identity, or checkpoint branch was added.
 
 ## Scope vetoes
 

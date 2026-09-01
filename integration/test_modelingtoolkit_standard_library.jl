@@ -72,9 +72,7 @@
     profile = NativeSolveProfile(
         path,
         OrdinaryDiffEqTsit5.Tsit5();
-        profile_id = "mtsl-first-order-v1",
         deterministic = true,
-        exact_replay = true,
         adaptive = false,
         dt = 0.005,
     )
@@ -82,6 +80,10 @@
         problem, SequentialCPM(); native_profiles = (profile,),
         save_everystep = true,
     )
+    @test integrator.capability_report.status ===
+        PottsToolkit.CorePotts.BackendSPI.Supported
+    @test !integrator.capability_report.exact_replay
+    @test integrator.capability_report.evidence.conjunction === nothing
     @test integrator.u[:filter_output_state] === 0.0
     step!(integrator)
     @test integrator.u[:filter_output_state] ≈

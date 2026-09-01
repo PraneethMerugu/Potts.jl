@@ -723,4 +723,4 @@ end
 _execute_after_mcs_stage!(runtime) =
     _execute_after_mcs_stage!(runtime, runtime.program.stage_plan.after_mcs)
 
-"""Log acceptance ratio for the conventional descriptor-driven V1 law."""
+"""Log acceptance ratio for the conventional descriptor-driven law."""

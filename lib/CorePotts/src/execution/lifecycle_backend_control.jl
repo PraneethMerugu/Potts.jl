@@ -12,17 +12,17 @@ struct LifecycleBackendControl{
         O <: AbstractVector{Int32},
         C <: AbstractVector{Int32},
         S <: AbstractVector{ProgramStatus},
-        K <: AbstractVector{UInt64},
         U <: AbstractVector{UInt64},
+        E <: AbstractVector{ProgramStatusCode},
+        D <: AbstractVector{ProgramStatusDetailCode},
     }
     request_offsets::O
     counters::C
-    request_scan::C
-    request_scan_scratch::C
     candidate_status::S
     state_rule_failure_rank::C
-    site_keys::K
     statistics::U
+    emission_status_code::E
+    emission_status_detail::D
 end
 
 Adapt.@adapt_structure LifecycleBackendControl
@@ -87,7 +87,7 @@ function _lifecycle_state_launch_payload(state, workspace)
         state.program.medium_kind,
         state.program.tracker_plan,
         _LifecycleStateDescriptorPlan(
-            state.program.descriptor_plan.domain_resources
+            state.program.domain_resources
         ),
         _LifecycleStateRelationshipPlan(lifecycle.relationship_rules),
     )
@@ -163,9 +163,13 @@ end
         workspace.descriptor,
         workspace.anchor,
         workspace.generation,
+        workspace.request_priority,
+        workspace.request_source_high,
+        workspace.request_source_low,
+        workspace.request_action_high,
+        workspace.request_action_low,
         workspace.occurrence,
         workspace.active,
-        workspace.selected,
         workspace.filtered,
         workspace.filtered_detail,
         workspace.planned_site_count,
@@ -173,20 +177,13 @@ end
         workspace.partition_labels,
         workspace.partition_scratch,
         workspace.partition_owner,
-        workspace.cell_site_starts,
-        workspace.cell_site_counts,
-        workspace.cell_site_cursor,
-        workspace.cell_sites,
-        workspace.site_position,
+        workspace.site_index,
+        workspace.request_index,
+        workspace.selection,
         workspace.planned_site_request,
         workspace.policy_workspace,
-        workspace.allocation,
-        workspace.canonical_order,
-        workspace.conflict_seen,
         workspace.site_seen,
         workspace.site_queue,
-        workspace.free_slots,
-        workspace.representative_site,
         workspace.staged_ownership,
         workspace.staged_cell_kinds,
         workspace.staged_cell_generations,
@@ -205,9 +202,13 @@ end
         workspace.descriptor,
         workspace.anchor,
         workspace.generation,
+        workspace.request_priority,
+        workspace.request_source_high,
+        workspace.request_source_low,
+        workspace.request_action_high,
+        workspace.request_action_low,
         workspace.occurrence,
         workspace.active,
-        workspace.selected,
         workspace.filtered,
         workspace.filtered_detail,
         workspace.planned_site_count,
@@ -215,20 +216,13 @@ end
         workspace.partition_labels,
         workspace.partition_scratch,
         workspace.partition_owner,
-        workspace.cell_site_starts,
-        workspace.cell_site_counts,
-        workspace.cell_site_cursor,
-        workspace.cell_sites,
-        workspace.site_position,
+        workspace.site_index,
+        workspace.request_index,
+        workspace.selection,
         workspace.planned_site_request,
         workspace.policy_workspace,
-        workspace.allocation,
-        workspace.canonical_order,
-        workspace.conflict_seen,
         workspace.site_seen,
         workspace.site_queue,
-        workspace.free_slots,
-        workspace.representative_site,
         state.ownership,
         state.cell_kinds,
         state.cell_generations,
@@ -240,11 +234,9 @@ end
 end
 
 const _LIFECYCLE_CONTROL_DUE = 1
-const _LIFECYCLE_CONTROL_SELECTED = 2
-const _LIFECYCLE_CONTROL_RETIRED = 3
-const _LIFECYCLE_CONTROL_RETIRED_TOTAL = 4
-const _LIFECYCLE_CONTROL_ACTIVE_BANK = 5
-const _LIFECYCLE_CONTROL_COMMITTED_MCS = 6
+const _LIFECYCLE_CONTROL_RETIRED = 2
+const _LIFECYCLE_CONTROL_ACTIVE_BANK = 3
+const _LIFECYCLE_CONTROL_COMMITTED_MCS = 4
 const _PROGRAM_STAT_ACCEPTED = 1
 const _PROGRAM_STAT_REJECTED = 2
 const _PROGRAM_STAT_NULL = 3
@@ -261,6 +253,15 @@ function _lifecycle_backend_filled(
     storage = _lifecycle_backend_similar(prototype, T, dimensions...)
     fill!(storage, convert(T, value))
     return storage
+end
+
+function _lifecycle_backend_filled(
+        prototype, ::Type{ProgramStatus}, value, dimensions...
+    )
+    host = StructArrays.StructArray(
+        fill(convert(ProgramStatus, value), dimensions...)
+    )
+    return Adapt.adapt(KernelAbstractions.get_backend(prototype), host)
 end
 
 function _lifecycle_request_offsets(plan::LifecycleExecutionPlan)
@@ -283,7 +284,7 @@ function allocate_lifecycle_backend_control(
     )
     site_count >= 0 || throw(ArgumentError("site count must be nonnegative"))
     return NoLifecycleBackendControl(
-        _lifecycle_backend_filled(prototype, Int32, 0, 6),
+        _lifecycle_backend_filled(prototype, Int32, 0, 4),
         _lifecycle_backend_filled(prototype, UInt64, 0, 6),
     )
 end
@@ -300,18 +301,11 @@ function allocate_lifecycle_backend_control(
         Int(plan.cell_capacity),
         Int(site_count),
     )
-    counters = _lifecycle_backend_filled(prototype, Int32, 0, 6)
+    counters = _lifecycle_backend_filled(prototype, Int32, 0, 4)
     @inbounds counters[_LIFECYCLE_CONTROL_ACTIVE_BANK] = Int32(1)
-    key_capacity = max(1, nextpow(2, max(1, Int(site_count))))
     return LifecycleBackendControl(
         _lifecycle_request_offsets(plan),
         counters,
-        _lifecycle_backend_filled(
-            prototype, Int32, 0, Int(plan.maximum_requests)
-        ),
-        _lifecycle_backend_filled(
-            prototype, Int32, 0, max(1, Int(plan.maximum_requests))
-        ),
         _lifecycle_backend_filled(
             prototype,
             ProgramStatus,
@@ -321,10 +315,19 @@ function allocate_lifecycle_backend_control(
         _lifecycle_backend_filled(
             prototype, Int32, typemax(Int32), status_slots
         ),
-        _lifecycle_backend_filled(
-            prototype, UInt64, typemax(UInt64), key_capacity
-        ),
         _lifecycle_backend_filled(prototype, UInt64, 0, 6),
+        _lifecycle_backend_filled(
+            prototype,
+            ProgramStatusCode,
+            ProgramStatusSuccess,
+            Int(plan.maximum_requests),
+        ),
+        _lifecycle_backend_filled(
+            prototype,
+            ProgramStatusDetailCode,
+            LifecycleDetailNone,
+            Int(plan.maximum_requests),
+        ),
     )
 end
 
@@ -340,389 +343,12 @@ end
     (@inbounds workspace.status[1]).code === ProgramStatusSuccess
 @inline _lifecycle_backend_open(::NoLifecycleWorkspace) = true
 
-function _enqueue_lifecycle_array_copy!(destination, source, backend)
-    length(destination) == length(source) || throw(ArgumentError(
-        "lifecycle staging arrays have incompatible lengths"
-    ))
-    AcceleratedKernels.foreachindex(destination, backend) do index
-        @inbounds destination[index] = source[index]
-    end
-    return nothing
-end
-_enqueue_lifecycle_tuple_copy!(::Tuple{}, ::Tuple{}, backend) = nothing
-function _enqueue_lifecycle_tuple_copy!(destination, source, backend)
-    _enqueue_lifecycle_storage_copy!(
-        first(destination), first(source), backend
-    )
-    _enqueue_lifecycle_tuple_copy!(
-        Base.tail(destination), Base.tail(source), backend
-    )
-    return nothing
-end
-
-_enqueue_lifecycle_storage_copy!(destination::AbstractArray, source, backend) =
-    _enqueue_lifecycle_array_copy!(destination, source, backend)
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::AbstractVector{<:ProgramRelationshipState},
-        source::AbstractVector{<:ProgramRelationshipState},
-        backend,
-    )
-    backend isa KernelAbstractions.CPU || throw(ArgumentError(
-        "unpacked relationship state cannot cross a device boundary"
-    ))
-    length(destination) == length(source) || throw(ArgumentError(
-        "relationship staging banks have incompatible lengths"
-    ))
-    for index in eachindex(destination)
-        copyto!(destination[index], source[index])
-    end
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::CellMomentsState, source::CellMomentsState, backend
-    )
-    _enqueue_lifecycle_array_copy!(destination.first, source.first, backend)
-    _enqueue_lifecycle_array_copy!(destination.second, source.second, backend)
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::TrackerState, source::TrackerState, backend
-    )
-    _enqueue_lifecycle_tuple_copy!(
-        destination.values, source.values, backend
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::AuxiliaryState, source::AuxiliaryState, backend
-    )
-    _enqueue_lifecycle_tuple_copy!(
-        destination.banks, source.banks, backend
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::BlockBank, source::BlockBank, backend
-    )
-    _enqueue_lifecycle_array_copy!(
-        destination.values, source.values, backend
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::PackedRelationshipBank,
-        source::PackedRelationshipBank,
-        backend,
-    )
-    for field in (
-            :active,
-            :endpoint_a,
-            :endpoint_b,
-            :generation_a,
-            :generation_b,
-            :degree,
-            :incident_edges,
-        )
-        _enqueue_lifecycle_array_copy!(
-            getfield(destination, field), getfield(source, field), backend
-        )
-    end
-    _enqueue_lifecycle_tuple_copy!(
-        destination.payload, source.payload, backend
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(
-        destination::RelationshipStorage,
-        source::RelationshipStorage,
-        backend,
-    )
-    _enqueue_lifecycle_tuple_copy!(
-        destination.banks, source.banks, backend
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_storage_copy!(destination, source, backend)
-    backend isa KernelAbstractions.CPU || throw(ArgumentError(
-        "lifecycle staging storage has no backend-resident copy protocol"
-    ))
-    copyto!(destination, source)
-    return nothing
-end
-
-function _enqueue_lifecycle_staging_copy!(state, backend)
-    workspace = state.lifecycle_workspace
-    _enqueue_lifecycle_array_copy!(
-        workspace.staged_ownership, state.ownership, backend
-    )
-    _enqueue_lifecycle_array_copy!(
-        workspace.staged_cell_kinds, state.cell_kinds, backend
-    )
-    _enqueue_lifecycle_array_copy!(
-        workspace.staged_cell_generations, state.cell_generations, backend
-    )
-    _enqueue_lifecycle_storage_copy!(
-        workspace.staged_trackers, state.trackers, backend
-    )
-    _enqueue_lifecycle_storage_copy!(
-        workspace.staged_relationships, state.relationships, backend
-    )
-    _enqueue_lifecycle_storage_copy!(
-        workspace.staged_descriptor_state, state.descriptor_state, backend
-    )
-    return nothing
-end
-
-@kernel function _lifecycle_gated_copy_kernel!(
-        destination, source, workspace, control, mode
-    )
-    index = @index(Global, Linear)
+@inline function _lifecycle_copy_enabled(workspace, control, mode)
     open = _lifecycle_backend_open(workspace)
-    enabled = mode === Val(:open) ? open :
+    return mode === Val(:open) ? open :
         mode === Val(:due) ? open && _lifecycle_backend_due(control) :
         open && _lifecycle_backend_due(control) &&
-            @inbounds(control.counters[_LIFECYCLE_CONTROL_SELECTED]) > 0
-    if index <= length(destination) && enabled
-        @inbounds destination[index] = source[index]
-    end
-end
-
-function _enqueue_lifecycle_gated_array_copy!(
-        destination, source, backend, workspace, control,
-        mode = Val(:selected),
-    )
-    length(destination) == length(source) || throw(ArgumentError(
-        "lifecycle transaction arrays have incompatible lengths"
-    ))
-    _lifecycle_gated_copy_kernel!(backend)(
-        destination,
-        source,
-        workspace,
-        control,
-        mode;
-        ndrange = length(destination),
-    )
-    return nothing
-end
-
-_enqueue_lifecycle_gated_tuple_copy!(
-    ::Tuple{}, ::Tuple{}, backend, workspace, control, mode = Val(:selected)
-) = nothing
-
-function _enqueue_lifecycle_gated_tuple_copy!(
-        destination, source, backend, workspace, control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_storage_copy!(
-        first(destination), first(source), backend, workspace, control, mode
-    )
-    _enqueue_lifecycle_gated_tuple_copy!(
-        Base.tail(destination),
-        Base.tail(source),
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    return nothing
-end
-
-_enqueue_lifecycle_gated_storage_copy!(
-    destination::AbstractArray, source, backend, workspace, control,
-    mode = Val(:selected),
-) = _enqueue_lifecycle_gated_array_copy!(
-    destination, source, backend, workspace, control, mode
-)
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::CellMomentsState,
-        source::CellMomentsState,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.first, source.first, backend, workspace, control, mode
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.second, source.second, backend, workspace, control, mode
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::TrackerState,
-        source::TrackerState,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_tuple_copy!(
-        destination.values, source.values, backend, workspace, control, mode
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::AuxiliaryState,
-        source::AuxiliaryState,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_tuple_copy!(
-        destination.banks, source.banks, backend, workspace, control, mode
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::BlockBank,
-        source::BlockBank,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.values, source.values, backend, workspace, control, mode
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::PackedRelationshipBank,
-        source::PackedRelationshipBank,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    for field in (
-            :active,
-            :endpoint_a,
-            :endpoint_b,
-            :generation_a,
-            :generation_b,
-            :degree,
-            :incident_edges,
-        )
-        _enqueue_lifecycle_gated_array_copy!(
-            getfield(destination, field),
-            getfield(source, field),
-            backend,
-            workspace,
-            control,
-            mode,
-        )
-    end
-    _enqueue_lifecycle_gated_tuple_copy!(
-        destination.payload,
-        source.payload,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_storage_copy!(
-        destination::RelationshipStorage,
-        source::RelationshipStorage,
-        backend,
-        workspace,
-        control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_tuple_copy!(
-        destination.banks, source.banks, backend, workspace, control, mode
-    )
-    return nothing
-end
-
-function _enqueue_lifecycle_gated_state_copy!(
-        destination, source, backend, workspace, control,
-        mode = Val(:selected),
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.ownership,
-        source.ownership,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.cell_kinds,
-        source.cell_kinds,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    _enqueue_lifecycle_gated_array_copy!(
-        destination.cell_generations,
-        source.cell_generations,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    _enqueue_lifecycle_gated_storage_copy!(
-        destination.trackers,
-        source.trackers,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    _enqueue_lifecycle_gated_storage_copy!(
-        destination.relationships,
-        source.relationships,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    _enqueue_lifecycle_gated_storage_copy!(
-        destination.descriptor_state,
-        source.descriptor_state,
-        backend,
-        workspace,
-        control,
-        mode,
-    )
-    return nothing
-end
-
-function _enqueue_program_state_copy!(destination, source)
-    workspace = destination.lifecycle_workspace
-    control = destination.lifecycle_control
-    backend = KernelAbstractions.get_backend(destination.ownership)
-    KernelAbstractions.get_backend(source.ownership) == backend || throw(
-        ArgumentError("program state banks must share one execution backend")
-    )
-    _enqueue_lifecycle_gated_state_copy!(
-        destination,
-        source,
-        backend,
-        workspace,
-        control,
-        Val(:open),
-    )
-    return destination
+            _lifecycle_selected_count(workspace) > 0
 end
 
 @kernel function _publish_program_bank_kernel!(
@@ -796,9 +422,9 @@ end
             descriptor.source_handle == status.source && return descriptor
         end
     end
-    count = Int(lifecycle_request_count(workspace))
+    count = Int(_lifecycle_canonical_request_count(workspace))
     for position in 1:count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_canonical_request_slot(workspace, position))
         descriptor_index = Int(@inbounds workspace.descriptor[request])
         1 <= descriptor_index <= length(plan.descriptors) || continue
         descriptor = @inbounds plan.descriptors[descriptor_index]

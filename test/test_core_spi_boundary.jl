@@ -40,7 +40,11 @@
         :validate_lifecycle_receipt,
         :program_lifecycle_receipt,
     ))
-    roots = (joinpath(@__DIR__, "..", "src"), joinpath(@__DIR__, "..", "ext"))
+    roots = (
+        joinpath(@__DIR__, "..", "src"),
+        joinpath(@__DIR__, "..", "ext"),
+        @__DIR__,
+    )
     direct_references = Tuple{String, Symbol}[]
     spi_references = Tuple{String, Symbol, Symbol}[]
 

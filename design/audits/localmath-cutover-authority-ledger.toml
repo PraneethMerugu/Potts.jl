@@ -1,0 +1,526 @@
+schema_version = "1.0.0"
+specification = "spec/localmath-direct-cutover.md"
+record_kind = "historical_lm0_baseline"
+live_successor = "design/audits/localmath-lm1-authority-cutover.toml"
+roadmap_revision = "post_lm1_2026_08_22"
+package_root = "lib/LocalWorksets/src"
+current_gate = "LM-0"
+overall_status = "baseline"
+
+completion_rule = "A gate passes only when every concrete anchor in each due row has the declared disposition. Aggregate symbol, file, kernel, or line counts are never substitutes for row-level disposition."
+
+# These are the coarse gate projections frozen at LM-0. They are historical
+# evidence, not the post-LM-1 LM-2A/2B/2C and LM-3A/3B work order.
+[historical_gate_required_rows]
+LM-1 = [
+  "semantic-waist",
+  "plan-and-prepared-lifecycle",
+  "topology-routes-extents",
+  "read-and-access-declarations",
+  "control-selection-parameters",
+  "binding-schema-and-alias-validation",
+]
+LM-2 = [
+  "semantic-waist",
+  "plan-and-prepared-lifecycle",
+  "event-dependency-status",
+  "topology-routes-extents",
+  "read-and-access-declarations",
+  "control-selection-parameters",
+  "publication-declarations-and-emissions",
+  "compacted-collection",
+  "ordered-recurrence",
+  "canonical-ordering",
+  "conjunctive-resolution-specialization",
+  "binding-schema-and-alias-validation",
+  "workspace-planning",
+  "evidence-inspection-results",
+  "lowering-and-execution-dispatch",
+  "kernel-families",
+]
+LM-3 = [
+  "package-identity",
+  "public-export-surface",
+  "semantic-waist",
+  "plan-and-prepared-lifecycle",
+  "event-dependency-status",
+  "topology-routes-extents",
+  "read-and-access-declarations",
+  "control-selection-parameters",
+  "legacy-authoring-grammar",
+  "publication-declarations-and-emissions",
+  "compacted-collection",
+  "ordered-recurrence",
+  "canonical-ordering",
+  "conjunctive-resolution-specialization",
+  "binding-schema-and-alias-validation",
+  "workspace-planning",
+  "evidence-inspection-results",
+  "lowering-and-execution-dispatch",
+  "kernel-families",
+]
+
+# Status meanings checked by scripts/check_localmath_cutover_authority_ledger.jl:
+# baseline: every current anchor exists and every replacement anchor is absent.
+# in_place: current anchors still exist under the sole old-named implementation;
+#           justification and gate evidence are mandatory.
+# replaced: current anchors are absent and replacement anchors exist.
+# deleted: current anchors are absent; no replacement is required.
+# retained: current anchors exist as permitted private residue; a domain-neutral
+#           justification and gate evidence are mandatory.
+
+[[authority]]
+id = "package-identity"
+semantic_fact = "package, module, and primary macro identity"
+replacement_owner = "LocalMath module and @localmath"
+deletion_boundary = "LM-3"
+permitted_private_residue = []
+validation_query = "exact module/project/macro anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/Project.toml", pattern = "name = \"LocalWorksets\"" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "module LocalWorksets" },
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "macro localwork(" },
+]
+replacement = [
+  { path = "lib/LocalMath/Project.toml", pattern = "name = \"LocalMath\"" },
+  { path = "lib/LocalMath/src", pattern = "module LocalMath", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "macro localmath(", recursive = true },
+]
+
+[[authority]]
+id = "public-export-surface"
+semantic_fact = "ordinary imported vocabulary and lifecycle/publication authoring surface"
+replacement_owner = "small audited LocalMath export surface; broad policies and lifecycle types remain qualified"
+deletion_boundary = "LM-3"
+permitted_private_residue = ["advanced programmatic constructors may remain public but unexported"]
+validation_query = "each current export statement receives an explicit replacement or deletion disposition"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export LocalWork, WorkPlan, PreparedWork, WorkEvent, LocalWorkValidationError" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export ispending, success_gate" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export SourceOrigin, @localwork" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export localwork, plan, prepare, run!, waitall, sequence" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export workspace_requirements, allocate_workspace" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export submission_capacity" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export topology" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export identity_route, fixed_offset_route, bounded_read, GatheredValues" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export active_prefix, active_mask, active_indices, pointwise_read" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export runtime_route" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export value_slot, storage_slot" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export independent, combined, resolved, deterministic, fast" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export emit, candidate" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export one_group, group_by, source_order, canonical_by, compacted" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export persistent_source_position" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export record_count, bounded_group_read, source_position" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export CompactedStorage, CompactedResult, BoundedGroupView, SourcePositions" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export allocate_compacted_storage, compacted_storage" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export compacted_result, compacted_record" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export FoldComponent, InitializedState, initialized_state" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export BoundedWrites, FoldStep, ordered_fold" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export allocate_ordered_fold_buffer" },
+]
+replacement = []
+
+[legacy_absence]
+enforced = false
+enforce_at_gate = "LM-3"
+scopes = ["src", "lib", "ext", "test", "benchmark"]
+patterns = [
+  { name = "package", regex = '''\bLocalWorksets\b''' },
+  { name = "macro", regex = '''@localwork\b''' },
+  { name = "semantic-type", regex = '''\bLocalWork\b''' },
+  { name = "plan-type", regex = '''\bWorkPlan\b''' },
+  { name = "prepared-type", regex = '''\bPreparedWork\b''' },
+  { name = "event-type", regex = '''\bWorkEvent\b''' },
+  { name = "validation-error", regex = '''\bLocalWorkValidationError\b''' },
+]
+
+[[authority]]
+id = "semantic-waist"
+semantic_fact = "source domain, accesses, publications, evaluator, control, and finite sequence"
+replacement_owner = "sole LocalLaw semantic type and constructors"
+deletion_boundary = "LM-1 in place; LM-3 names"
+permitted_private_residue = ["one private lowering envelope", "one prepared phase representation"]
+validation_query = "exact semantic root and constructor anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct LocalWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _LoweredWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function localwork(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function sequence(works::LocalWork" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "struct LocalLaw{", recursive = true },
+]
+
+[[authority]]
+id = "plan-and-prepared-lifecycle"
+semantic_fact = "validated plan and concrete prepared execution ownership"
+replacement_owner = "Plan and PreparedPlan"
+deletion_boundary = "LM-1/LM-2 in place; LM-3 names"
+permitted_private_residue = ["one prepared phase pipeline", "representation-specific device views"]
+validation_query = "exact lifecycle type and entry-point anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct WorkPlan{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "mutable struct PreparedWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct LocalWorkValidationError" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function plan(work::LocalWork" },
+  { path = "lib/LocalWorksets/src/preparation.jl", pattern = "function prepare(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "struct Plan{", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "mutable struct PreparedPlan{", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "struct LocalMathValidationError", recursive = true },
+]
+
+[[authority]]
+id = "event-dependency-status"
+semantic_fact = "submission identity, dependency token, semantic status, receipt, wait, and settlement"
+replacement_owner = "sole ExecutionEvent and explicit dependency lifecycle"
+deletion_boundary = "LM-2 in place; LM-3 names"
+permitted_private_residue = ["one KernelAbstractions provider token wrapper", "device-resident status and receipt storage owned by the event"]
+validation_query = "exact event, tail, wait, gate, and lane anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct WorkEvent{" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function run!(prepared::PreparedWork" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function Base.wait(event::WorkEvent)" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function success_gate(event::WorkEvent" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function waitall(" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "@inline ispending(event::WorkEvent)" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function submission_capacity(prepared::PreparedWork)" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _drain_lane_tail! end" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _lane_cumulative end" },
+  { path = "lib/LocalWorksets/src/execution/validation_support.jl", pattern = "struct _ValidatedPublicationStatus{" },
+  { path = "lib/LocalWorksets/src/execution/validation_support.jl", pattern = "function _enqueue_validation_status_transfers!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_kernelabstractions.jl", pattern = "mutable struct _KernelAbstractionsScope{" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "struct ExecutionEvent{", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "function execute!(", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "function Base.wait(event::ExecutionEvent", recursive = true },
+]
+
+[[authority]]
+id = "topology-routes-extents"
+semantic_fact = "domain/codomain identity, route storage, destination extent, freshness, and topology payload"
+replacement_owner = "Space, Field, Relation, sealed RelationProof, and prepared device views"
+deletion_boundary = "LM-1/LM-3"
+permitted_private_residue = ["physical relation arrays", "representation-specific device views", "validated schema/content epochs"]
+validation_query = "exact topology and route anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _TopologyFreshness{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function topology(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _RuntimeRoute{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function runtime_route(" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _TopologyLeaf{" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _FixedOffsetRoute{" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _IdentityRoute" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "function fixed_offset_route(" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "function identity_route(" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _topology_fingerprint(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "struct Space{", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "struct Field{", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "Relation", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "struct RelationProof{", recursive = true },
+]
+
+[[authority]]
+id = "read-and-access-declarations"
+semantic_fact = "logical field reads, pointwise snapshots, bounded gathers, and route bounds"
+replacement_owner = "Field access through admitted Relation"
+deletion_boundary = "LM-1/LM-3"
+permitted_private_residue = ["typed direct storage accessor", "bounded relation device view"]
+validation_query = "exact read declaration anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BoundedRead{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BindingRead{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _PointwiseRead{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct GatheredValues{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function bounded_read(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function pointwise_read(" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _PointwiseArray{" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _BoundedArray{" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "Accesses", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "device_view", recursive = true },
+]
+
+[[authority]]
+id = "control-selection-parameters"
+semantic_fact = "active source selection, work/stage gates, submission schema, and scalar runtime values"
+replacement_owner = "Control, selected Space/Relation, and ParameterSchema"
+deletion_boundary = "LM-1/LM-3"
+permitted_private_residue = ["prepared isbits parameter tuple", "device-resident gate/status binding"]
+validation_query = "exact control and submission anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "abstract type _AbstractActiveSelection" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActivePrefix{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActiveMask{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActiveIndices{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _WorkGate{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "abstract type _SubmissionProfile" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _StaticScalarSubmission" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _DynamicStorageSubmission{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function value_slot(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "Control", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "struct ParameterSchema{", recursive = true },
+]
+
+[[authority]]
+id = "legacy-authoring-grammar"
+semantic_fact = "macro parsing, read/value/axis/active/gate/port declarations, tensor expansion, and emission syntax"
+replacement_owner = "closed @localmath equation grammar calling canonical constructors"
+deletion_boundary = "LM-3"
+permitted_private_residue = ["source provenance helpers with final grammar names"]
+validation_query = "exact macro and legacy lowering roots"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "function _authoring_marker(" },
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "function _authoring_axis(" },
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "function _authoring_port(" },
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "function _authoring_tensor(" },
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "macro localwork(" },
+  { path = "lib/LocalWorksets/src/authoring/lowering.jl", pattern = "function _authored_port(" },
+  { path = "lib/LocalWorksets/src/authoring/lowering.jl", pattern = "function _authored_localwork(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "macro localmath(", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "ParameterSchema", recursive = true },
+]
+
+[[authority]]
+id = "publication-declarations-and-emissions"
+semantic_fact = "unique, reduction, resolution, routing, participation, payload, seed, coverage, and empty semantics"
+replacement_owner = "common Publication basis with Unique, Reduce, and Resolve laws"
+deletion_boundary = "LM-2/LM-3"
+permitted_private_residue = ["one concrete descriptor per distinct publication law", "physical law kernels"]
+validation_query = "exact descriptor, constructor, and emission anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "abstract type _AbstractOutputDeclaration" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _IndependentOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _CombinedOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _GenericResolvedOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _Emission{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _Candidate{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "@inline emit(value)" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "@inline candidate(rank, value)" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function independent(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function combined(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function resolved(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "Publication", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "Unique", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "Reduce", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "Resolve", recursive = true },
+]
+
+[[authority]]
+id = "compacted-collection"
+semantic_fact = "bounded ordered materialization, grouping, directory, projections, overflow, and result access"
+replacement_owner = "Collect publication law and one bounded collection result/storage authority"
+deletion_boundary = "LM-2/LM-3"
+permitted_private_residue = ["packed records/count/directory/projection storage", "scan/sort/validation phases required by Collect"]
+validation_query = "exact compacted declaration, storage, result, lowering, and accessor anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "struct _CompactedOutput{" },
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "struct CompactedStorage{" },
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "struct CompactedResult{" },
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "function compacted(" },
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "function allocate_compacted_storage(" },
+  { path = "lib/LocalWorksets/src/compacted.jl", pattern = "function compacted_result(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "struct _CompactedLowering{" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "Collect", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "bounded_collect", recursive = true },
+]
+
+[[authority]]
+id = "ordered-recurrence"
+semantic_fact = "heterogeneous accumulator initialization, bounded update records, canonical event order, and successful-prefix state"
+replacement_owner = "Ordered publication law and @ordered syntax"
+deletion_boundary = "LM-2/LM-3"
+permitted_private_residue = ["one heterogeneous ordered-action lowering and physical kernel"]
+validation_query = "exact ordered-fold public ceremony and lowering anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "struct FoldComponent{" },
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "struct InitializedState{" },
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "struct BoundedWrites{" },
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "struct FoldStep{" },
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "struct _OrderedFoldOutput{" },
+  { path = "lib/LocalWorksets/src/ordered_fold.jl", pattern = "function ordered_fold(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_ordered_fold.jl", pattern = "struct _OrderedFoldLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_ordered_fold.jl", pattern = "struct _PreparedOrderedFoldPhase{" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "Ordered", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "@ordered", recursive = true },
+]
+
+[[authority]]
+id = "canonical-ordering"
+semantic_fact = "canonical source order, keyed total order, extractor qualification, and comparison"
+replacement_owner = "one common publication-order authority shared by Resolve, Collect, and Ordered"
+deletion_boundary = "LM-2/LM-3"
+permitted_private_residue = ["typed order descriptors", "one device-inline comparison implementation"]
+validation_query = "exact order descriptor and constructor anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "struct _SourceOrder" },
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "struct _CanonicalBy{" },
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "struct _OrderingField{" },
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "source_order() = _SourceOrder()" },
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "function canonical_by(" },
+  { path = "lib/LocalWorksets/src/ordering.jl", pattern = "function _canonical_order_compare(" },
+]
+replacement = []
+
+[[authority]]
+id = "conjunctive-resolution-specialization"
+semantic_fact = "multi-resource conjunctive selection, rank/identity claims, and selected publication"
+replacement_owner = "generalized domain-neutral multi-resource law or deletion"
+deletion_boundary = "LM-2"
+permitted_private_residue = ["none unless two unrelated witnesses justify one generalized law"]
+validation_query = "exact conjunctive descriptor, lowering, constructor, and kernel anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ConjunctiveResolvedOutput{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "struct _ConjunctiveResolvedLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "function _lower_conjunctive_resolved(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_clear_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_select_kernel!(" },
+]
+replacement = []
+
+[[authority]]
+id = "binding-schema-and-alias-validation"
+semantic_fact = "logical binding schema, access role, physical leaves, backend coherence, alias identity, and prepared freshness"
+replacement_owner = "Field/Relation binding, RelationProof, and one prepared validation authority"
+deletion_boundary = "LM-1/LM-2"
+permitted_private_residue = ["representation-specific physical leaf protocol", "one alias/backend/freshness validator"]
+validation_query = "exact binding authority, protocol, and schema validation anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BindingAuthority{" },
+  { path = "lib/LocalWorksets/src/binding_protocol.jl", pattern = "abstract type _BindingProtocol" },
+  { path = "lib/LocalWorksets/src/binding_protocol.jl", pattern = "struct _StructuredPreparedBindingFact{" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _validate_binding_schema end" },
+  { path = "lib/LocalWorksets/src/execution/validation_support.jl", pattern = "function _binding_requirement(" },
+  { path = "lib/LocalWorksets/src/preparation.jl", pattern = "function _validate_distinct_aliases(" },
+  { path = "lib/LocalWorksets/src/preparation.jl", pattern = "function _validate_prepared_identities(" },
+]
+replacement = [
+  { path = "lib/LocalMath/src", pattern = "RelationProof", recursive = true },
+  { path = "lib/LocalMath/src", pattern = "function bind(", recursive = true },
+]
+
+[[authority]]
+id = "workspace-planning"
+semantic_fact = "workspace specification, allocation, lease capacity, prepared leaves, ownership, and validation"
+replacement_owner = "one common workspace planner with law-specific leaf requests"
+deletion_boundary = "LM-2"
+permitted_private_residue = ["law-specific workspace leaf descriptors", "one allocation and validation implementation"]
+validation_query = "exact workspace roots"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "struct _WorkspaceLeaf{" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "struct _WorkspaceAuthority{" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "function _workspace_spec end" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "function workspace_requirements(" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "function allocate_workspace(" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "function _automatic_workspace(" },
+]
+replacement = []
+
+[[authority]]
+id = "evidence-inspection-results"
+semantic_fact = "publication evidence, determinism, result schema, workspace evidence, lowering identity, and inspection"
+replacement_owner = "one inspection/evidence schema derived from LocalLaw, RelationProof, Plan, and PreparedPlan"
+deletion_boundary = "LM-2/LM-4"
+permitted_private_residue = ["law-specific evidence extension returning the common schema"]
+validation_query = "exact evidence and inspection roots"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/execution/evidence_support.jl", pattern = "function _determinism_report(" },
+  { path = "lib/LocalWorksets/src/execution/evidence_support.jl", pattern = "function _publication_evidence(" },
+  { path = "lib/LocalWorksets/src/execution/evidence_support.jl", pattern = "function _port_evidence(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_combined_evidence.jl", pattern = "function _combined_port_law(" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _lowering_evidence end" },
+  { path = "lib/LocalWorksets/src/inspection.jl", pattern = "function inspect(" },
+]
+replacement = []
+
+[[authority]]
+id = "lowering-and-execution-dispatch"
+semantic_fact = "mechanism admission, lowering families, planned phases, preparation, and execution dispatch"
+replacement_owner = "one validated planner/executor architecture with physically distinct law algorithms"
+deletion_boundary = "LM-2"
+permitted_private_residue = ["one lowering per physically distinct law", "one common phase protocol"]
+validation_query = "exact dispatch roots and lowering-family anchors"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _central_admission end" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _prepare_lowering end" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _execute_lowering! end" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_generic.jl", pattern = "struct _DirectIndependentLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_combined.jl", pattern = "struct _BufferedCombinedLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_keyed.jl", pattern = "struct _KeyedGroupedLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "struct _CompactedLowering{" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_ordered_fold.jl", pattern = "struct _OrderedFoldLowering{" },
+  { path = "lib/LocalWorksets/src/execution/pipeline_support.jl", pattern = "struct _PlanApplyDirect{" },
+  { path = "lib/LocalWorksets/src/execution/pipeline_support.jl", pattern = "struct _PlanApplyKeyedRecords{" },
+]
+replacement = []
+
+[[authority]]
+id = "kernel-families"
+semantic_fact = "package-owned physical KernelAbstractions implementation roots"
+replacement_owner = "one inventoried implementation per physically distinct LocalMath law phase"
+deletion_boundary = "LM-2/LM-3"
+permitted_private_residue = ["kernels justified by a distinct physical phase and referenced by one planner"]
+validation_query = "each named @kernel definition, not an aggregate count"
+status = "baseline"
+current = [
+  { path = "lib/LocalWorksets/src/execution/localworksets_generic.jl", pattern = "@kernel function _direct_independent_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_combined_kernels.jl", pattern = "@kernel function _combined_clear_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_combined_kernels.jl", pattern = "@kernel function _combined_apply_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_combined_kernels.jl", pattern = "@kernel function _combined_publish_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_keyed.jl", pattern = "@kernel function _keyed_initialize_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_keyed.jl", pattern = "@kernel function _keyed_apply_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_keyed.jl", pattern = "@kernel function _keyed_index_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_keyed.jl", pattern = "@kernel function _keyed_publish_segments_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_terminal.jl", pattern = "@kernel function _terminal_fold_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_clear_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_rank_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_identity_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl", pattern = "@kernel function _conjunctive_select_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_initialize_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_validate_order_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_collect_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_scan_block_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_scan_add_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_scatter_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_local_bitonic_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_merge_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_directory_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_finalize_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_validate_consumer_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_compacted.jl", pattern = "@kernel function _compacted_publish_kernel!(" },
+  { path = "lib/LocalWorksets/src/execution/localworksets_ordered_fold.jl", pattern = "@kernel function _ordered_fold_kernel!(" },
+]
+replacement = []

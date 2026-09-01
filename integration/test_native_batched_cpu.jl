@@ -1,7 +1,7 @@
 using OrdinaryDiffEqTsit5: Tsit5
 using SciMLBase
 
-@testset "G5H-4 batched CPU per-cell parity" begin
+@testset "batched CPU per-cell parity" begin
     @independent_variables batch_t
     @variables batch_x(batch_t) = 1.0 batch_drive(batch_t) batch_seen(batch_t)
     batch_D = ModelingToolkitBase.Differential(batch_t)
@@ -124,7 +124,7 @@ using SciMLBase
     @test only(report.key.native).execution ==
         (mode = :batched_cpu, width = 3)
     @test only(report.evidence.native).suite ===
-        :g5h4_per_cell_batched_cpu_native_ode_exact_replay
+        :per_cell_batched_cpu_native_ode_exact_replay
     @test only(report.key.native).evidence.profile_fingerprint ==
         only(report.evidence.native).profile_fingerprint
     scalar_error = try

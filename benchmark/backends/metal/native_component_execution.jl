@@ -5,6 +5,10 @@ using Symbolics
 using Test
 
 using ModelingToolkitBase: @independent_variables, @named, @variables
+import CorePotts
+
+_test_checkerboard_execution(runtime) =
+    CorePotts._checkerboard_execution_position(runtime.engine_workspace)
 
 function _metal_profile(
         path, width;
@@ -15,7 +19,7 @@ function _metal_profile(
     return NativeSolveProfile(
         path,
         algorithm;
-        profile_id = "g5h4-metal-gputsit5-fixed-v1",
+        profile_id = "metal-gputsit5-fixed-v1",
         execution = MetalNativeExecution(width),
         deterministic = true,
         exact_replay = true,
@@ -132,7 +136,7 @@ function _metal_per_cell_fixture()
 end
 
 function _metal_field_fixture(;
-        capabilities = RequireQualifiedNativeCapability(),
+        capabilities = StandardNativeCapability(),
     )
     @independent_variables metal_field_t
     @variables metal_field_u(metal_field_t)[1:4, 1:4]
@@ -201,15 +205,12 @@ function _metal_field_fixture(;
     return problem, path, variables, initial_values
 end
 
-@testset "G5H-4 real Metal native components" begin
-    metal_extension = Base.get_extension(PottsToolkit, :PottsToolkitMetalExt)
-    @test metal_extension._metal_core_environment_identity() ==
-        metal_extension._G5H4_TESTED_METAL_CORE_ENVIRONMENT
+@testset "real Metal native components" begin
     metal_native_extension = Base.get_extension(
         PottsToolkit, :PottsToolkitMetalNativeExt
     )
     @test metal_native_extension._metal_native_stack_identity() ==
-        metal_native_extension._G5H4_TESTED_METAL_NATIVE_STACK
+        metal_native_extension._TESTED_METAL_NATIVE_STACK
     global_problem, global_path, global_x = _metal_global_fixture()
     global_profile = _metal_profile(global_path, 1)
     global_solution = solve(
@@ -229,10 +230,7 @@ end
         scalar_type = Float32,
         native_profiles = (global_profile,),
     ), Capabilities())
-    @test only(global_report.evidence.native).suite ===
-        :g5h4_global_metal_native_ode_exact_replay
-    @test metal_extension._core_environment_digest(global_report.key.core) in
-        metal_extension._G5H4_TESTED_CORE_ENVIRONMENT_DIGESTS
+    @test global_report.exact_replay
 
     sequential_metal_error = try
         init(
@@ -271,7 +269,7 @@ end
     @test replay_a.u.ownership == replay_b.u.ownership
     @test native_value(replay_a, global_path, global_x) ==
         native_value(replay_b, global_path, global_x)
-    execution = replay_a.runtime.engine_workspace.execution
+    execution = _test_checkerboard_execution(replay_a.runtime)
     @test (
         execution.settlement_count,
         execution.synchronization_count,
@@ -321,8 +319,8 @@ end
     @test failed.runtime.mcs == 0
     @test failed.runtime.ownership == before_ownership
     @test native_value(failed, global_path, global_x) == before_native
-    @test failed.runtime.engine_workspace.execution.submitted_mcs == 0
-    @test failed.runtime.engine_workspace.execution.committed_mcs == 0
+    @test _test_checkerboard_execution(failed.runtime).submitted_mcs == 0
+    @test _test_checkerboard_execution(failed.runtime).committed_mcs == 0
 
     cell_problem, cell_path, cell_x = _metal_per_cell_fixture()
     cell_profile = _metal_profile(cell_path, 4)
@@ -355,12 +353,10 @@ end
         @test native_value(restored, cell_path, identity, cell_x) ≈ 1.25f0
     end
     report = inspect(restored, Capabilities())
-    @test only(report.key.native).execution.mode === :metal_kernel
-    @test only(report.evidence.native).suite ===
-        :g5h4_per_cell_metal_native_ode_exact_replay
-    @test only(report.key.native).evidence.profile_fingerprint ==
-        only(report.evidence.native).profile_fingerprint
-    restored_execution = restored.runtime.engine_workspace.execution
+    @test only(report.key.native).execution.mode ===
+        :kernelabstractions_metal
+    @test report.exact_replay
+    restored_execution = _test_checkerboard_execution(restored.runtime)
     @test restored_execution.settlement_count == 1
     @test restored_execution.synchronization_count == 2
     @test restored_execution.control_transfer_count == 1
@@ -384,8 +380,7 @@ end
         for variable in field_variables
     ], 4, 4)
     field_report = inspect(field_integrator, Capabilities())
-    @test only(field_report.evidence.native).suite ===
-        :g5h4_native_field_metal_exact_replay
+    @test field_report.exact_replay
     field_checkpoint = checkpoint(field_integrator)
     field_restored = init(
         field_problem,

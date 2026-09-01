@@ -1,12 +1,13 @@
 using Documenter
 using CorePotts
+using LocalMath
 using PottsToolkit
 using MakiePotts
 
 makedocs(
     sitename = "Potts.jl",
     authors = "Praneeth Merugu",
-    modules = [CorePotts, PottsToolkit, MakiePotts],
+    modules = [LocalMath, CorePotts, PottsToolkit, MakiePotts],
     format = Documenter.HTML(
         prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
@@ -22,14 +23,26 @@ makedocs(
     # Only pages in the curated manual execute. Generated media and historical drafts are not
     # documentation inputs merely because they remain in the repository.
     pagesonly = true,
-    # Stability is assigned by the curated API inventories and guarantee metadata. Export status
-    # alone is not a support promise, so a broad exported-name check enforces the wrong boundary.
-    checkdocs = :none,
+    # Exported constructors and operations require attached help. Qualified-public
+    # extension SPI is inventoried separately by package tests and the extension manual.
+    checkdocs = :exports,
     remotes = nothing,
     pages = [
         "Home" => "index.md",
+        "LocalMath 0.2 release candidate" =>
+            "localmath-0.2-release-candidate.md",
         "Learn" => [
+            "LocalMath in ten minutes" =>
+                "learn/localmath-quickstart.md",
             "Author and compose" => "learn/authoring.md",
+            "LocalMath across domains" => "learn/localmath.md",
+            "LocalMath relations and storage" =>
+                "learn/localmath-relations.md",
+            "LocalMath scientific recipes" => "learn/localmath-recipes.md",
+            "LocalMath troubleshooting" =>
+                "learn/localmath-troubleshooting.md",
+            "Writing a LocalMath domain compiler" =>
+                "learn/localmath-domain-compiler.md",
             "Initialize and execute" => "learn/execution.md",
             "Lifecycle and relationships" => "learn/state-lifecycle.md",
             "Native MTK components" => "learn/native-components.md",
@@ -39,6 +52,7 @@ makedocs(
         "Published-model integration" => [
             "Wortel 2021" => "published-models/wortel-2021.md",
             "Merks 2006" => "published-models/merks-2006.md",
+            "OpenVT monolayer" => "published-models/openvt-monolayer.md",
         ],
         "Concepts and support" => [
             "Architecture" => "concepts/architecture.md",
@@ -47,6 +61,7 @@ makedocs(
             "Extension boundary" => "concepts/extension-boundary.md",
         ],
         "API" => [
+            "LocalMath" => "api/localmath.md",
             "PottsToolkit" => "api/pottstoolkit.md",
             "CorePotts" => "api/corepotts.md",
             "MakiePotts" => "api/makiepotts.md",

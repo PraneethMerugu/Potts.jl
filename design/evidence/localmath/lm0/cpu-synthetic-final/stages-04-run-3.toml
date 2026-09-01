@@ -1,0 +1,80 @@
+backend = "cpu"
+backend_type = "KernelAbstractions.CPU"
+cache_state = "fresh process; package caches may be precompiled; workload methods cold"
+command = "`/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia -C native -J/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/lib/julia/sys.dylib -g1 --startup-file=no --startup-file=no --threads=1 '--project=/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalWorksets' --compiled-modules=existing --compile=yes --optimize=2 '/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/benchmark/lm0/compiler_case.jl' --stages=4 --backend=cpu --warm-samples=7`"
+compile_mode = "ordinary --compile=yes --optimize=2"
+cpu_threads = 6
+exit_code = 0
+hardware = "apple-m1"
+host_compile_seconds_total = 12.697896504
+host_recompile_seconds_total = 0.0
+item_count = 16
+julia_version = "1.12.6"
+kernel = "Darwin"
+kernelabstractions_version = "0.9.42"
+localworksets_version = "0.1.0"
+logical_stage_kinds = ["unique", "reduce", "resolve", "collect"]
+machine = "arm64-apple-darwin24.0.0"
+orchestrator_status = "completed"
+package_load_seconds = 3.131103666
+physical_launch_count = 11
+planning_through_first_execution_seconds = 12.230637291
+process_elapsed_seconds = 26.541589975357056
+profile = "synthetic_scaling"
+program_arguments = ["--stages=4", "--backend=cpu", "--warm-samples=7"]
+repetition = 3
+schema_version = 1
+stage_count = 4
+threads = 1
+total_memory_bytes = 0x0400000000
+
+[construction]
+allocated_bytes = 54835200
+compile_seconds = 0.490727335
+elapsed_seconds = 0.493809291
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[first_execution]
+allocated_bytes = 9216544
+compile_seconds = 0.115223126
+elapsed_seconds = 0.115814042
+gc_seconds = 0.0
+provider_compile_upper_bound_seconds = 0.0005754990000000108
+recompile_seconds = 0.0
+
+[julia_options]
+compile_enabled = 1
+opt_level = 2
+project = "/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalWorksets/Project.toml"
+startupfile = 2
+use_compiled_modules = 2
+
+[planning]
+allocated_bytes = 578208000
+compile_seconds = 7.135929291
+elapsed_seconds = 7.145825958
+gc_seconds = 0.021846667
+recompile_seconds = 0.0
+
+[preparation]
+allocated_bytes = 605629616
+compile_seconds = 4.357068918
+elapsed_seconds = 4.369292083
+gc_seconds = 0.030619125
+recompile_seconds = 0.0
+
+[storage_allocation]
+allocated_bytes = 91273136
+compile_seconds = 0.598947834
+elapsed_seconds = 0.599705208
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[warm_execution]
+maximum_allocated_bytes = 1184
+maximum_seconds = 9.0792e-5
+median_allocated_bytes = 1184.0
+median_seconds = 1.5417e-5
+minimum_seconds = 1.4875e-5
+samples = 7

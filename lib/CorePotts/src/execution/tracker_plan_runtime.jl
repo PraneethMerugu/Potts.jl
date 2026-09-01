@@ -421,6 +421,7 @@ end
     return @inbounds tracker_values(plan, state, quantity)[Int(index)]
 end
 
+"""Return the runtime storage associated with a qualified tracker quantity."""
 @inline program_tracker_values(runtime, quantity) = tracker_values(
     runtime.program.tracker_plan, runtime.trackers, quantity
 )
@@ -469,8 +470,10 @@ _tracker_instances(
     _tracker_instances(Base.tail(descriptors))...,
 )
 
-"""Logical tracker instances in a host execution plan, flattening storage groups."""
-tracker_instances(plan::TrackerExecutionPlan) = _tracker_instances(plan.descriptors)
+"""Flatten a tracker plan into its ordered concrete descriptor instances."""
+function tracker_instances(plan::AbstractTrackerPlan)
+    return _tracker_instances(plan.descriptors)
+end
 
 function tracker_plan_report(plan::TrackerExecutionPlan)
     instances = tracker_instances(plan)

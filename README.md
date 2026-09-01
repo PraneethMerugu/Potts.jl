@@ -7,7 +7,7 @@ testable Julia packages:
 
 - **PottsToolkit**: the repository-root biological authoring interface.
 - **CorePotts**: the scientific execution engine and advanced extension interface.
-- **LocalWorksets**: the backend-portable local execution substrate used internally by CorePotts.
+- **LocalMath**: the backend-portable local execution substrate used internally by CorePotts.
 - **MakiePotts**: native Makie recipes over explicit, host-owned render frames.
 
 The historical `Potts` umbrella package and pre-freeze engine have been removed.
@@ -18,12 +18,12 @@ Until the package family is registered, install PottsToolkit directly from the r
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", subdir = "lib/LocalWorksets")
+Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", subdir = "lib/LocalMath")
 Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", subdir = "lib/CorePotts")
 Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl")
 ```
 
-The unregistered CorePotts dependency resolves LocalWorksets explicitly; user scripts import
+The unregistered CorePotts dependency resolves LocalMath explicitly; user scripts import
 CorePotts directly for execution. Add the `lib/MakiePotts` subdirectory as a direct dependency
 when using visualization.
 
@@ -31,7 +31,7 @@ For development:
 
 ```julia
 using Pkg
-Pkg.develop(path="lib/LocalWorksets")
+Pkg.develop(path="lib/LocalMath")
 Pkg.develop(path="lib/CorePotts")
 Pkg.develop(path=".")
 ```
@@ -41,17 +41,18 @@ The package family supports Julia 1.12 and later Julia 1.x releases. See
 
 ## Documentation
 
-The repository is currently in pre-1.0 adoption and engineering hardening.
-G5H and the standalone LocalWorksets LW-4/LW-R2 freeze have cleared on exact
-candidates. The [post-LW-R1 roadmap](spec/localworksets-post-lwr1-roadmap.md)
-records the bounded ED-R0 engineering-debt and IC-R0
-internal-complexity/Julian-design gates as passed. LW-5 is open only at its
-representability inventory and one evidence-bearing pilot; G6 remains closed.
+The repository is pre-1.0. Its [LocalMath contract](spec/localmath.md) uses one
+typed LocalMath pipeline and one CorePotts checkerboard execution
+graph. CorePotts retains scientific ownership of proposal ordering, failure
+boundaries, acceptance, semantic randomness, lifecycle behavior, and
+checkpoint continuation. Historical development records remain available under
+[`design/`](design/) but do not define product APIs or runtime modes.
 
 ```bash
 julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
 julia --project=docs --startup-file=no docs/make.jl
 ```
 
-The complete Learn, Published Models, and API manual builds strictly against the qualified public
-interface. There is no compatibility promise for unpublished pre-V1 authoring names.
+The complete Learn, Published Models, and API manual builds strictly against
+the public interface. There is no compatibility promise for unpublished
+pre-release authoring names.

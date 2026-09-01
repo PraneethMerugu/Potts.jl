@@ -2,6 +2,7 @@
 
 struct _ValidatedDomainResourceAdaptation end
 
+"""Compiler-owned finite contact offsets and relationship-store bindings by source handle."""
 struct HamiltonianDomainResources{
         O <: AbstractMatrix{Int8},
         V <: AbstractVector{Int32},
@@ -173,5 +174,23 @@ end
         end
     end
     any(iszero, candidate) && return nothing
+    return CartesianIndex(candidate)
+end
+
+"""Resolve the source whose declared relation lane reaches `index`."""
+@inline function reverse_relation_neighbor_index(
+        shape::NTuple{N, Int},
+        periodic::NTuple{N, Bool},
+        index::CartesianIndex{N},
+        offsets::AbstractMatrix{Int8},
+        direction::Int,
+    ) where {N}
+    coordinates = Tuple(index)
+    candidate = ntuple(N) do dimension
+        coordinate = coordinates[dimension] - Int(@inbounds offsets[dimension, direction])
+        periodic[dimension] ? mod1(coordinate, shape[dimension]) : coordinate
+    end
+    all(dimension -> 1 <= candidate[dimension] <= shape[dimension], 1:N) ||
+        return nothing
     return CartesianIndex(candidate)
 end

@@ -47,3 +47,4 @@ __pycache__/
 
 # Independently installable packages do not carry local manifests
 /lib/*/Manifest.toml
+.empryo

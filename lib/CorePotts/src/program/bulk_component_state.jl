@@ -26,14 +26,21 @@ validate_component_state(
 
 # Downstream packages implement only the event operations admitted by their
 # component-state policy. Keeping Remove and Retire distinct is intentional.
+"""Initialize downstream component state for one newly created cell identity."""
 function initialize_component_state! end
+"""Remove downstream component state for one deleted cell identity."""
 function remove_component_state! end
+"""Apply downstream retirement semantics to one cell identity."""
 function retire_component_state! end
+"""Transform downstream component state across a kind transition."""
 function transition_component_state! end
+"""Split downstream component state between parent and daughter identities."""
 function divide_component_state! end
 
+"""Supertype for atomic component-state receipt application failures."""
 abstract type AbstractComponentStateApplicationError <: Exception end
 
+"""Error raised when a published lifecycle transaction is applied twice."""
 struct DuplicateLifecycleReceiptError <: AbstractComponentStateApplicationError
     completed_mcs::Int
     transaction_identity::UInt64
@@ -50,6 +57,7 @@ function Base.showerror(io::IO, error::DuplicateLifecycleReceiptError)
     )
 end
 
+"""Error raised when lifecycle receipts do not follow published MCS order."""
 struct LifecycleReceiptOrderError <: AbstractComponentStateApplicationError
     receipt_mcs::Int
     transaction_identity::UInt64
@@ -72,6 +80,7 @@ function Base.showerror(io::IO, error::LifecycleReceiptOrderError)
     )
 end
 
+"""Error raised when a receipt names a stale generation or kind."""
 struct StaleCellIdentityError <: AbstractComponentStateApplicationError
     event_index::Int
     identity::CellIdentity
@@ -96,6 +105,7 @@ function Base.showerror(io::IO, error::StaleCellIdentityError)
     )
 end
 
+"""Error raised when creation targets an already occupied component slot."""
 struct OccupiedComponentSlotError <: AbstractComponentStateApplicationError
     event_index::Int
     identity::CellIdentity
@@ -117,6 +127,7 @@ function Base.showerror(io::IO, error::OccupiedComponentSlotError)
     )
 end
 
+"""Error raised when a receipt targets a slot beyond component-state capacity."""
 struct ComponentStateCapacityError <: AbstractComponentStateApplicationError
     event_index::Int
     slot::Int32
@@ -142,6 +153,7 @@ struct BulkComponentStateBank{S}
     state::S
 end
 
+"""Two-bank transactional owner of downstream per-cell component state."""
 mutable struct BulkComponentStatePool{S, P <: AbstractBulkComponentStatePolicy}
     banks::NTuple{2, BulkComponentStateBank{S}}
     active_bank::UInt8
@@ -282,7 +294,9 @@ end
 
 Base.length(pool::BulkComponentStatePool) = length(_active_component_bank(pool).active)
 
+"""Return the last MCS published by a component-state pool."""
 bulk_component_completed_mcs(pool::BulkComponentStatePool) = pool.completed_mcs
+"""Return the last lifecycle transaction identity published by a pool."""
 bulk_component_last_transaction_identity(pool::BulkComponentStatePool) =
     pool.last_transaction_identity
 
@@ -521,6 +535,7 @@ function _require_staged_component_transaction(
 end
 
 
+"""Return the unpublished downstream state owned by a staged transaction."""
 function component_transaction_state(
         transaction::BulkComponentStateTransaction
     )
@@ -606,6 +621,7 @@ function publish_component_state_transactions!(transactions)
 end
 
 
+"""Prevalidate and atomically publish one component-state transaction."""
 function commit_component_state_transaction!(
         transaction::BulkComponentStateTransaction
     )
@@ -621,6 +637,7 @@ function commit_component_state_transactions!(transactions)
 end
 
 
+"""Discard one unpublished component-state transaction."""
 function abort_component_state_transaction!(
         transaction::BulkComponentStateTransaction
     )
@@ -631,6 +648,7 @@ function abort_component_state_transaction!(
 end
 
 
+"""Stage, validate, and atomically publish one lifecycle receipt to a pool."""
 function apply_lifecycle_receipt!(
         pool::BulkComponentStatePool, receipt::LifecycleReceipt
     )

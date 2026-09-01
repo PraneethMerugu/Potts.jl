@@ -15,38 +15,61 @@ end
 @inline function _proposal_acceptance_result(
         evaluation::ProposalEvaluation{T}, temperature::T
     ) where {T <: AbstractFloat}
-    evaluation.constraints_allowed || return ProposalAcceptanceResult(
-        -T(Inf), ProposalAcceptanceConstraintRejected
+    return _proposal_acceptance_result(
+        evaluation.delta_h,
+        evaluation.drive_energy,
+        evaluation.drive_log_bias,
+        evaluation.kinetic_modifier,
+        evaluation.constraints_allowed,
+        temperature,
     )
-    finite = isfinite(evaluation.delta_h) &&
-             isfinite(evaluation.drive_energy) &&
-             isfinite(evaluation.drive_log_bias) &&
-             isfinite(evaluation.kinetic_modifier)
-    finite || return ProposalAcceptanceResult(
-        -T(Inf), ProposalAcceptanceNonfinite
-    )
+end
+
+@inline function _proposal_acceptance_result(
+        delta_h::T,
+        drive_energy::T,
+        drive_log_bias::T,
+        kinetic_modifier::T,
+        constraints_allowed::Bool,
+        temperature::T,
+    ) where {T <: AbstractFloat}
+    log_ratio, code = _proposal_acceptance_values(
+        delta_h, drive_energy, drive_log_bias, kinetic_modifier,
+        constraints_allowed, temperature)
+    return ProposalAcceptanceResult(log_ratio, code)
+end
+
+@inline function _proposal_acceptance_values(
+        delta_h::T,
+        drive_energy::T,
+        drive_log_bias::T,
+        kinetic_modifier::T,
+        constraints_allowed::Bool,
+        temperature::T,
+    ) where {T <: AbstractFloat}
+    constraints_allowed || return (
+        -T(Inf), ProposalAcceptanceConstraintRejected)
+    finite = isfinite(delta_h) &&
+             isfinite(drive_energy) &&
+             isfinite(drive_log_bias) &&
+             isfinite(kinetic_modifier)
+    finite || return (-T(Inf), ProposalAcceptanceNonfinite)
     if iszero(temperature)
-        if !iszero(evaluation.drive_log_bias) ||
-                !iszero(evaluation.kinetic_modifier)
-            return ProposalAcceptanceResult(
-                -T(Inf), ProposalAcceptanceZeroTemperatureDrive
-            )
+        if !iszero(drive_log_bias) || !iszero(kinetic_modifier)
+            return (-T(Inf), ProposalAcceptanceZeroTemperatureDrive)
         end
-        effective_energy = evaluation.delta_h + evaluation.drive_energy
-        isfinite(effective_energy) || return ProposalAcceptanceResult(
-            -T(Inf), ProposalAcceptanceNonfinite
-        )
-        return ProposalAcceptanceResult(
+        effective_energy = delta_h + drive_energy
+        isfinite(effective_energy) || return (
+            -T(Inf), ProposalAcceptanceNonfinite)
+        return (
             effective_energy <= zero(T) ? zero(T) : -T(Inf),
             ProposalAcceptanceReady,
         )
     end
-    log_ratio = -(evaluation.delta_h + evaluation.drive_energy) / temperature +
-                evaluation.drive_log_bias + evaluation.kinetic_modifier
-    isfinite(log_ratio) || return ProposalAcceptanceResult(
-        -T(Inf), ProposalAcceptanceNonfinite
-    )
-    return ProposalAcceptanceResult(log_ratio, ProposalAcceptanceReady)
+    log_ratio = -(delta_h + drive_energy) / temperature +
+                drive_log_bias + kinetic_modifier
+    isfinite(log_ratio) || return (-T(Inf), ProposalAcceptanceNonfinite)
+    return (log_ratio, ProposalAcceptanceReady)
 end
 
 @inline function _validate_acceptance_temperature(
@@ -87,7 +110,7 @@ end
            isfinite(log_ratio) ? exp(log_ratio) : zero(T)
 end
 
-"""Apply the V1 strict-threshold decision to one pre-addressed uniform draw."""
+"""Apply the strict-threshold decision to one pre-addressed uniform draw."""
 @inline function proposal_acceptance_decision(
         evaluation::ProposalEvaluation{T}, temperature::Real, draw::Real
     ) where {T <: AbstractFloat}
@@ -135,11 +158,11 @@ function _validated_program_parameters(program, parameters)
 end
 
 @inline function _acceptance_failure_status(
-        result::ProposalAcceptanceResult,
+        code::ProposalAcceptanceCode,
         next_mcs::Integer,
         proposal_identity::Integer,
     )
-    detail = result.code === ProposalAcceptanceNonfinite ?
+    detail = code === ProposalAcceptanceNonfinite ?
              LifecycleDetailAcceptanceNonfinite :
              LifecycleDetailAcceptanceZeroTemperatureDrive
     return ProgramStatus(
@@ -156,3 +179,9 @@ end
         Int32(0),
     )
 end
+
+@inline _acceptance_failure_status(
+    result::ProposalAcceptanceResult,
+    next_mcs::Integer,
+    proposal_identity::Integer,
+) = _acceptance_failure_status(result.code, next_mcs, proposal_identity)

@@ -1,0 +1,13 @@
+backend = "cpu"
+finished_utc = "2026-08-23T00:13:10.851"
+julia_executable = "/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia"
+profile = "flagship"
+project = "lib/CorePotts"
+repetitions = 3
+results = ["flagship-run-1.toml", "flagship-run-2.toml", "flagship-run-3.toml"]
+schema_version = 1
+stage_counts = [1]
+started_utc = "2026-08-23T00:08:53.934"
+status = "complete"
+timeout_seconds = 600.0
+warm_samples = 7

@@ -1,5 +1,6 @@
 # Bounded relationship storage and the sole canonical transaction path.
 
+"""Bounded edge, payload, degree, and incidence storage for one relationship declaration."""
 struct ProgramRelationshipState{P <: Tuple}
     active::BitVector
     endpoint_a::Vector{Int32}
@@ -28,19 +29,19 @@ function ProgramRelationshipState(
         "relationship capacity must be positive"
     ))
     capacity <= typemax(Int32) || throw(ArgumentError(
-        "relationship capacity exceeds the V1 Int32 storage bound"
+        "relationship capacity exceeds the Int32 storage bound"
     ))
     endpoint_capacity >= 0 || throw(ArgumentError(
         "relationship endpoint capacity cannot be negative"
     ))
     endpoint_capacity <= typemax(Int32) || throw(ArgumentError(
-        "relationship endpoint capacity exceeds the V1 Int32 identity bound"
+        "relationship endpoint capacity exceeds the Int32 identity bound"
     ))
     maximum_degree > 0 || throw(ArgumentError(
         "relationship maximum degree must be positive"
     ))
     maximum_degree <= typemax(Int16) || throw(ArgumentError(
-        "relationship maximum degree exceeds the V1 Int16 storage bound"
+        "relationship maximum degree exceeds the Int16 storage bound"
     ))
     payload_count >= 0 || throw(ArgumentError(
         "relationship payload count cannot be negative"
@@ -94,7 +95,7 @@ function Base.copyto!(
     return _copy_relationship_state_fields!(destination, source)
 end
 
-"""Read-only offset view into one packed relationship vector."""
+"""Offset view into one packed relationship vector."""
 struct PackedRelationshipVector{
         T,
         A <: AbstractVector{T},
@@ -107,6 +108,17 @@ end
 Base.IndexStyle(::Type{<:PackedRelationshipVector}) = IndexLinear()
 Base.size(values::PackedRelationshipVector) = (Int(values.count),)
 Base.length(values::PackedRelationshipVector) = Int(values.count)
+Base.strides(values::PackedRelationshipVector) =
+    (stride(values.values, 1),)
+Base.mightalias(left::PackedRelationshipVector, right::AbstractArray) =
+    Base.mightalias(left.values, right)
+Base.mightalias(left::AbstractArray, right::PackedRelationshipVector) =
+    Base.mightalias(left, right.values)
+Base.mightalias(left::PackedRelationshipVector,
+    right::PackedRelationshipVector) =
+    Base.mightalias(left.values, right.values)
+KernelAbstractions.get_backend(values::PackedRelationshipVector) =
+    KernelAbstractions.get_backend(values.values)
 @inline function Base.getindex(values::PackedRelationshipVector, index::Int)
     @boundscheck checkbounds(values, index)
     return @inbounds values.values[Int(values.offset) + index - 1]
@@ -120,7 +132,7 @@ end
     return value
 end
 
-"""Read-only column-major view into one packed incident-edge matrix."""
+"""Column-major view into one packed incident-edge matrix."""
 struct PackedRelationshipMatrix{
         T,
         A <: AbstractVector{T},
@@ -134,6 +146,25 @@ end
 Base.IndexStyle(::Type{<:PackedRelationshipMatrix}) = IndexCartesian()
 Base.size(values::PackedRelationshipMatrix) =
     (Int(values.rows), Int(values.columns))
+Base.strides(values::PackedRelationshipMatrix) = (
+    stride(values.values, 1),
+    Int(values.rows) * stride(values.values, 1),
+)
+Base.mightalias(left::PackedRelationshipMatrix, right::AbstractArray) =
+    Base.mightalias(left.values, right)
+Base.mightalias(left::AbstractArray, right::PackedRelationshipMatrix) =
+    Base.mightalias(left, right.values)
+Base.mightalias(left::PackedRelationshipMatrix,
+    right::PackedRelationshipMatrix) =
+    Base.mightalias(left.values, right.values)
+Base.mightalias(left::PackedRelationshipVector,
+    right::PackedRelationshipMatrix) =
+    Base.mightalias(left.values, right.values)
+Base.mightalias(left::PackedRelationshipMatrix,
+    right::PackedRelationshipVector) =
+    Base.mightalias(left.values, right.values)
+KernelAbstractions.get_backend(values::PackedRelationshipMatrix) =
+    KernelAbstractions.get_backend(values.values)
 @inline function Base.getindex(
         values::PackedRelationshipMatrix, row::Int, column::Int
     )
@@ -167,6 +198,26 @@ struct PackedRelationshipState{A, E, G, P, D, I}
     incident_edges::I
 end
 
+function Base.copy(state::PackedRelationshipState)
+    return PackedRelationshipState(
+        copy(state.active),
+        copy(state.endpoint_a),
+        copy(state.endpoint_b),
+        copy(state.generation_a),
+        copy(state.generation_b),
+        map(copy, state.payload),
+        copy(state.degree),
+        copy(state.incident_edges),
+    )
+end
+
+function Base.copyto!(
+        destination::PackedRelationshipState,
+        source::PackedRelationshipState,
+    )
+    return _copy_relationship_state_fields!(destination, source)
+end
+
 function Base.copyto!(
         destination::ProgramRelationshipState,
         source::PackedRelationshipState,
@@ -174,7 +225,7 @@ function Base.copyto!(
     return _copy_relationship_state_fields!(destination, source)
 end
 
-"""Occurrence-stable SoA bank used for read-only relationship kernels."""
+"""Occurrence-stable SoA bank used by relationship kernels."""
 struct PackedRelationshipBank{A, E, G, P, D, I, M}
     active::A
     endpoint_a::E
@@ -198,6 +249,97 @@ Adapt.@adapt_structure PackedRelationshipState
 Adapt.@adapt_structure PackedRelationshipBank
 
 Base.length(bank::PackedRelationshipBank) = length(bank.edge_offsets)
+
+function _packed_relationship_science(bank::PackedRelationshipBank)
+    payload_names = ntuple(
+        index -> Symbol(:payload_, index), length(bank.payload)
+    )
+    names = (
+        :active,
+        :endpoint_a,
+        :endpoint_b,
+        :generation_a,
+        :generation_b,
+        payload_names...,
+        :degree,
+        :incident_edges,
+    )
+    return NamedTuple{names}((
+        bank.active,
+        bank.endpoint_a,
+        bank.endpoint_b,
+        bank.generation_a,
+        bank.generation_b,
+        bank.payload...,
+        bank.degree,
+        bank.incident_edges,
+    ))
+end
+
+_packed_relationship_schema(bank::PackedRelationshipBank) = (
+    edge_offsets = bank.edge_offsets,
+    edge_counts = bank.edge_counts,
+    endpoint_offsets = bank.endpoint_offsets,
+    endpoint_counts = bank.endpoint_counts,
+    incident_offsets = bank.incident_offsets,
+    maximum_degrees = bank.maximum_degrees,
+)
+
+function _packed_relationship_bank(science::NamedTuple, schema::NamedTuple)
+    science_values = values(science)
+    payload_count = length(science_values) - 7
+    payload = ntuple(index -> science_values[index + 5], payload_count)
+    return PackedRelationshipBank(
+        science.active,
+        science.endpoint_a,
+        science.endpoint_b,
+        science.generation_a,
+        science.generation_b,
+        payload,
+        science.degree,
+        science.incident_edges,
+        values(schema)...,
+    )
+end
+
+function Base.copy(bank::PackedRelationshipBank)
+    return _packed_relationship_bank(
+        map(copy, _packed_relationship_science(bank)),
+        map(copy, _packed_relationship_schema(bank)),
+    )
+end
+
+function Base.copyto!(
+        destination::PackedRelationshipBank,
+        source::PackedRelationshipBank,
+    )
+    destination_schema = _packed_relationship_schema(destination)
+    source_schema = _packed_relationship_schema(source)
+    keys(destination_schema) == keys(source_schema) &&
+        all(keys(destination_schema)) do name
+        target = getproperty(destination_schema, name)
+        values = getproperty(source_schema, name)
+        axes(target) == axes(values) && eltype(target) === eltype(values) &&
+            target == values
+    end || throw(ArgumentError(
+        "packed relationship banks have incompatible immutable schemas"
+    ))
+    destination_science = _packed_relationship_science(destination)
+    source_science = _packed_relationship_science(source)
+    keys(destination_science) == keys(source_science) || throw(
+        ArgumentError("packed relationship banks have incompatible payload schemas")
+    )
+    for (target, values) in zip(
+            values(destination_science), values(source_science)
+        )
+        axes(target) == axes(values) && eltype(target) === eltype(values) ||
+            throw(ArgumentError(
+            "packed relationship banks have incompatible scientific leaves"
+        ))
+        copyto!(target, values)
+    end
+    return destination
+end
 
 @inline function Base.getindex(bank::PackedRelationshipBank, slot::Int)
     @boundscheck checkbounds(bank.edge_offsets, slot)
@@ -235,7 +377,7 @@ function _flatten_relationship_arrays(states, accessor)
     prototype = accessor(first(states))
     total = sum(state -> length(accessor(state)), states; init = 0)
     total <= typemax(Int32) || throw(ArgumentError(
-        "packed relationship storage exceeds the V1 Int32 offset bound"
+        "packed relationship storage exceeds the Int32 offset bound"
     ))
     values = Vector{eltype(prototype)}(undef, total)
     offset = 1
@@ -253,7 +395,7 @@ function _relationship_offsets(lengths)
     for index in eachindex(lengths)
         length_value = Int(lengths[index])
         offset + length_value - 1 <= typemax(Int32) || throw(ArgumentError(
-            "packed relationship storage exceeds the V1 Int32 offset bound"
+            "packed relationship storage exceeds the Int32 offset bound"
         ))
         offsets[index] = Int32(offset)
         offset += length_value
@@ -261,10 +403,7 @@ function _relationship_offsets(lengths)
     return offsets, Int32.(lengths)
 end
 
-function _pack_relationship_bank(to, states::AbstractVector{S}) where {
-        P,
-        S <: ProgramRelationshipState{P},
-    }
+function _pack_relationship_bank(to, states::AbstractVector)
     isempty(states) && throw(ArgumentError(
         "a packed relationship representation bank cannot be empty"
     ))
@@ -275,7 +414,11 @@ function _pack_relationship_bank(to, states::AbstractVector{S}) where {
     edge_offsets, edge_counts = _relationship_offsets(edge_lengths)
     endpoint_offsets, endpoint_counts = _relationship_offsets(endpoint_lengths)
     incident_offsets, _ = _relationship_offsets(incident_lengths)
-    payload = ntuple(Val(fieldcount(P))) do slot
+    payload_count = length(first(states).payload)
+    all(state -> length(state.payload) == payload_count, states) || throw(
+        ArgumentError("relationship states have incompatible payload schemas")
+    )
+    payload = ntuple(payload_count) do slot
         Adapt.adapt(to, _flatten_relationship_arrays(
             states, state -> state.payload[slot]
         ))
@@ -305,6 +448,13 @@ _adapt_relationship_bank(
     to, values::AbstractVector{<:ProgramRelationshipState}
 ) = _pack_relationship_bank(to, values)
 
+_pack_relationship_storage(storage::RelationshipStorage) =
+    RelationshipStorage(
+        map(bank -> bank isa PackedRelationshipBank ? bank :
+            _pack_relationship_bank(identity, bank), storage.banks),
+        copy(storage.slots),
+    )
+
 function Adapt.adapt_structure(to, storage::RelationshipStorage)
     return RelationshipStorage(
         map(bank -> _adapt_relationship_bank(to, bank), storage.banks),
@@ -312,13 +462,20 @@ function Adapt.adapt_structure(to, storage::RelationshipStorage)
     )
 end
 
+"""Supertype for deterministic relationship mutations staged by compiled effects."""
 abstract type ProgramRelationshipRequest end
 
+"""Failure policy for an inadmissible relationship request."""
 @enum RelationshipFailureDisposition::UInt8 begin
     RelationshipFailureError = 0x01
     RelationshipFailureFilter = 0x02
 end
+"""Reject the complete transaction when the request is inadmissible."""
+RelationshipFailureError
+"""Filter the inadmissible request while retaining admissible requests."""
+RelationshipFailureFilter
 
+"""Request creation of a generation-stamped edge with an exact payload."""
 struct CreateRelationshipRequest{P <: Tuple} <:
        ProgramRelationshipRequest
     endpoint_a::Int32
@@ -331,12 +488,14 @@ struct CreateRelationshipRequest{P <: Tuple} <:
     on_failure::RelationshipFailureDisposition
 end
 
+"""Request removal of one active edge slot."""
 struct RemoveRelationshipRequest <: ProgramRelationshipRequest
     edge::Int32
     priority::Int32
     identity::UInt64
 end
 
+"""Request replacement of every payload field on one active edge."""
 struct RetuneRelationshipRequest{P <: Tuple} <:
        ProgramRelationshipRequest
     edge::Int32
@@ -382,6 +541,7 @@ function RetuneRelationshipRequest(
     )
 end
 
+"""Reusable unpublished candidate bank and bounded relationship request queue."""
 mutable struct RelationshipTransactionBuffer{
         S,
         Q,
@@ -396,10 +556,7 @@ mutable struct RelationshipTransactionBuffer{
     filtered_total::UInt64
 end
 
-function RelationshipTransactionBuffer(
-        state::ProgramRelationshipState,
-        capacity::Integer,
-    )
+function RelationshipTransactionBuffer(state, capacity::Integer)
     capacity >= 0 || throw(ArgumentError(
         "relationship transaction capacity cannot be negative"
     ))
@@ -420,9 +577,10 @@ function RelationshipTransactionBuffer(
     )
 end
 
+"""Reset a relationship transaction from the current published state."""
 @inline function reset_relationship_transaction!(
         buffer::RelationshipTransactionBuffer,
-        state::ProgramRelationshipState,
+        state,
     )
     copyto!(buffer.staged, state)
     fill!(buffer.first_request_for_edge, Int32(0))
@@ -431,6 +589,7 @@ end
     return buffer
 end
 
+"""Append one request to a bounded unpublished relationship transaction."""
 @inline function emit_relationship_request!(
         buffer::RelationshipTransactionBuffer,
         request::ProgramRelationshipRequest,
@@ -573,7 +732,7 @@ function _remove_incident_edge!(
 end
 
 function _validate_relationship_payload(
-        state::ProgramRelationshipState,
+        state,
         payload::Tuple,
     )
     length(payload) == length(state.payload) || throw(ArgumentError(

@@ -10,6 +10,7 @@ struct PottsSavePolicy{T <: Tuple, O <: Tuple}
     verbose::Bool
 end
 
+"""Mutable SciML integrator for a prepared Potts trajectory."""
 mutable struct PottsIntegrator{P, A, B, L, R, S, C, N, F, Q}
     prob::P
     alg::A
@@ -290,10 +291,10 @@ function _materialize_integrator(
     _native_runtime_preflight(
         problem, algorithm, backend, scalar_type, profiles
     )
-    # Evidence admission is part of preflight.  In particular, reject an
-    # unqualified native profile before constructing a native problem or
-    # calling SciMLBase.init in _initial_native_states!.
-    _require_native_replay_evidence(problem.system, profiles)
+    # Functional execution is authorized by semantic and numerical preflight.
+    # A caller that requests the stronger exact-replay contract must also match
+    # a closed replay row before native solver state is constructed.
+    _require_requested_native_replay(problem.system, profiles)
     parameters = _normalize_parameters(plan, problem.p)
     policy = _save_policy(problem, plan; solve_controls...)
 
@@ -513,8 +514,11 @@ end
 
 function _integrator_stats(integrator::PottsIntegrator)
     runtime = integrator.runtime
-    candidate_attempts = runtime.accepted + runtime.null_attempts +
-                         runtime.constraint_rejections + runtime.energy_rejections
+    # `rejected` is the disjoint aggregate of conflict, constraint, and energy
+    # rejections.  Summing only the latter two silently dropped checkerboard
+    # conflict attempts from the public attempt count.
+    candidate_attempts =
+        runtime.accepted + runtime.null_attempts + runtime.rejected
     return PottsStats(
         integrator.iterations,
         candidate_attempts,
@@ -527,6 +531,7 @@ function _integrator_stats(integrator::PottsIntegrator)
     )
 end
 
+"""Return current proposal, acceptance, and lifecycle runtime counters."""
 function runtime_statistics(integrator::PottsIntegrator)
     _request_integrator_settlement!(
         integrator, CorePotts.BackendSPI.StatisticsSettlement
@@ -554,6 +559,7 @@ function native_state(
     return native_state_view(component, native_cell_state(state, identity))
 end
 
+"""Read a native symbolic value from the current integrator state."""
 function native_value(integrator::PottsIntegrator, path, symbolic)
     component = _native_component_by_path(integrator.prob.system, path)
     state = _native_state_by_path(integrator.native_states, path)

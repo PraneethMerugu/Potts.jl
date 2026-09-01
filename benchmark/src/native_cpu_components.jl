@@ -147,7 +147,7 @@ function logical_pool_bytes(capacity, width)
     return Base.summarysize(bank)
 end
 
-println("native_cpu_component_evidence_v1")
+println("native_cpu_component_benchmark")
 println("julia_threads=", Threads.nthreads())
 println("capacity=", CAPACITY)
 println("state_memory_bytes:")

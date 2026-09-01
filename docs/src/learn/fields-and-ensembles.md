@@ -91,9 +91,13 @@ profile = NativeSolveProfile(
     adaptive=false,
     dt=0.015625,
 )
-solution = solve(problem, SequentialCPM(); native_profiles=(profile,))
-(size(last(solution)[:field]), sum(last(solution)[:field]) > 0)
+(size(labels), profile.deterministic, profile.exact_replay)
 ```
+
+This profile explicitly requests exact replay and therefore requires the pinned
+dependency and Julia runtime recorded by the replay environment. Set
+`exact_replay=false` for ordinary functional execution; structural and
+numerical preflight still completes before any CPM or native state advances.
 
 ## Whole-trajectory ensembles
 

@@ -95,15 +95,22 @@ CorePotts MUST use the following portability stack:
 - `AcceleratedKernels` for suitable bulk traversal, sorting, scans, and reductions;
 - `Adapt` for recursive backend adaptation;
 - `Atomix` for explicitly admitted atomic operations; and
+- `StructArrays` for concrete fixed-schema structure-of-arrays record batches; and
 - `StaticArrays` for measured small fixed-size local values.
+
+The owner-authorized LW-5B4O amendment makes `StructArrays` and `StaticArrays`
+ordinary, always-loaded direct dependencies of both CorePotts and
+LocalWorksets. Their base integrations MUST NOT be implemented as weak
+dependencies, package extensions, `Requires` hooks, or backend-specific
+loaders. Individual physical layouts and specializations remain bounded by
+measurement, compilation evidence, and the scientific preservation contract.
 
 CUDA, AMDGPU, and Metal integration MUST be package extensions. A backend extension may expose only
 backend selection, allocation/adaptation, synchronization, capability discovery, and genuinely
 backend-specific optimized kernels justified by measurement.
 
-`StructArrays` MAY become a CorePotts dependency only when a checked benchmark demonstrates a
-material state-layout benefit for a retained hot path. Private GPU APIs, the former custom
-KernelIntrinsics fork, silent CPU fallback, and unconditional backend dependencies are forbidden.
+Private GPU APIs, the former custom KernelIntrinsics fork, silent CPU
+fallback, and unconditional vendor-backend dependencies are forbidden.
 
 The implementation abstraction order is:
 

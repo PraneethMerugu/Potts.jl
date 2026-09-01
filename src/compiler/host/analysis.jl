@@ -113,7 +113,7 @@ function _operation_evaluation_context(role::Symbol, phase::Symbol)
     role === :lifecycle_priority && return nothing
     role === :hamiltonian &&
         return CorePotts.CompilerSPI.AbstractHamiltonianEvaluationContext
-    # V1 observations lower through their closed observation manifest rather
+    # Observations lower through their closed observation manifest rather
     # than the generic static-evaluator path.
     role === :observation && return nothing
     phase in (:Proposal, :AcceptedCopy) &&
@@ -212,7 +212,7 @@ function _source_requirement_problem(
                 _record_options(relation), :neighborhood, nothing
             )
             neighborhood isa Union{VonNeumann, Moore} || return(
-                "relation $(repr(requirement.name)) must use a finite V1 " *
+                "relation $(repr(requirement.name)) must use a finite " *
                 "VonNeumann or Moore neighborhood"
             )
         else
@@ -554,7 +554,7 @@ function _operation_unit_result(
             exponent = _literal_integer_exponent(node, graph)
             exponent === nothing && return(
                 nothing,
-                "V1 power requires a literal integer exponent; use sqrt for square roots",
+                "power requires a literal integer exponent; use sqrt for square roots",
             )
             operand_units[1] === :dimensionless && return(:dimensionless, nothing)
             return _unit_power(operand_units[1], exponent // 1)
@@ -998,7 +998,7 @@ function _compiler_analysis_report(ir::AnalyzedTermIR)
             nodes = length(ir.graph.nodes),
             roots = length(ir.graph.roots),
             operations = length(ir.graph.operation_snapshot),
-            operation_inventory = _v1_operation_inventory(ir.graph),
+            operation_inventory = _operation_inventory(ir.graph),
             structural_key = ir.graph.structural_key,
         ),
         analyzed = (

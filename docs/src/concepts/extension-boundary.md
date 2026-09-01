@@ -12,9 +12,9 @@ modeling engine or a general plugin registry.
    `CorePotts.CompilerSPI`.
 3. A backend or transactional runtime extension uses the smallest necessary
    part of `CorePotts.BackendSPI`.
-4. Reusable local connectivity and conflict handling uses LocalWorksets' own
+4. Reusable local connectivity and conflict handling uses LocalMath' own
    declaration, preparation, and extension protocols. Domain physics, clocks,
-   RNG, transaction semantics, and checkpoints stay above LocalWorksets.
+   RNG, transaction semantics, and checkpoints stay above LocalMath.
 
 Choose the seam by responsibility:
 
@@ -22,8 +22,8 @@ Choose the seam by responsibility:
 | --- | --- | --- |
 | Scientific model author | exported PottsToolkit authoring API | compiler IR, backend admission |
 | Potts operation or term package | PottsToolkit transfer API and the required `CompilerSPI` bindings | runtime queues, device evidence, checkpoints |
-| Runtime or backend package | required `BackendSPI` bindings | compiler IR, scientific semantics, self-issued qualification |
-| Local-work mechanism package | LocalWorksets public extension protocol | Potts acceptance, RNG, clocks, lifecycle commits |
+| Runtime or backend package | required `BackendSPI` bindings | compiler IR, scientific semantics, self-issued support claims |
+| Local-work mechanism package | LocalMath public extension protocol | Potts acceptance, RNG, clocks, lifecycle commits |
 | ModelingToolkit integration | Julia package extensions and public MTK/SciML interfaces | either CorePotts SPI unless it also implements one of the roles above |
 
 The two CorePotts SPI modules are flat, explicit facades over CorePotts-owned
@@ -37,17 +37,19 @@ consumer, and a contract test; otherwise it remains private.
 Production code must not reach private package fields, mix the two SPI roles,
 or create a parallel scheduler, state store, RNG, or checkpoint.
 
-GPU support requires device conformance and evidence for the exact mechanism;
-CPU compilation is not device qualification. External code without reviewed
-package, source, version, and environment identity is functional at most and
-cannot manufacture replay evidence.
+GPU support requires device conformance for the exact mechanism; CPU
+compilation is not device support. External code may provide functional
+execution, but exact replay additionally requires a matching package, source,
+version, and environment identity.
 
 The public extension-oriented names are distinguishable from the exported
 authoring API:
 
 ```@example extension_inventory
 using PottsToolkit
-authoring = Set(names(PottsToolkit))
-extension_api = Set(names(PottsToolkit; all=false, imported=false))
-(:PottsSystem in authoring, :operation_transfer in extension_api)
+visible_names = names(PottsToolkit; all=false, imported=false)
+exported = Set(filter(name -> Base.isexported(PottsToolkit, name), visible_names))
+public_names = Set(filter(name -> Base.ispublic(PottsToolkit, name), visible_names))
+extension_api = setdiff(public_names, exported)
+(:PottsSystem in exported, :operation_transfer in extension_api)
 ```

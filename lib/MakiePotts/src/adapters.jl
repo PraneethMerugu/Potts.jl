@@ -64,7 +64,7 @@ function materialize_channel(
     )
     throw(RenderMaterializationError(
         PottsToolkit.PottsSavedState,
-        "saved V1 state does not contain channel $(request.key); request a " *
+        "saved state does not contain channel $(request.key); request a " *
         "declared visualization-neutral observation when solving",
     ))
 end
@@ -80,7 +80,7 @@ function _build_renderframe(
         _project_extent(owners, spacing, request.extent)
     isempty(request.channels) || throw(RenderMaterializationError(
         typeof(state),
-        "V1 saved-state channels must be explicitly materialized before rendering",
+        "saved-state channels must be explicitly materialized before rendering",
     ))
     metadata = request.include_cell_metadata ? cells : RenderCellMetadata[]
     any(owner -> owner.kind === CellSite, projected_owners) &&
@@ -102,7 +102,7 @@ end
 """
     renderframe(state::PottsSavedState, request=RenderRequest())
 
-Defensively materialize one native Makie frame from an immutable V1 saved
+Defensively materialize one native Makie frame from an immutable saved
 boundary.
 """
 renderframe(
@@ -119,7 +119,7 @@ function renderframe(
     return renderframe(solution[index], request)
 end
 
-"""Eagerly materialize independent frames from a retained V1 solution."""
+"""Eagerly materialize independent frames from a retained solution."""
 function renderframes(
         solution::PottsToolkit.PottsSolution,
         request::RenderRequest = RenderRequest(),

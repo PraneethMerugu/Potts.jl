@@ -1,11 +1,15 @@
 # Reachability-specialized orchestration of the ordered backend lifecycle transaction.
 
 function enqueue_lifecycle_backend_index!(
-        state;
+        state,
+        reductions;
         workgroup_size::Union{Nothing, Integer} = nothing,
     )
     control = state.lifecycle_control
-    control isa NoLifecycleBackendControl && return state
+    control isa NoLifecycleBackendControl && return nothing
+    reductions === nothing && throw(ArgumentError(
+        "lifecycle execution requires prepared LocalMath reductions"
+    ))
     workspace = state.lifecycle_workspace
     backend = KernelAbstractions.get_backend(state.ownership)
     workgroup_size === nothing || workgroup_size > 0 || throw(ArgumentError(
@@ -14,13 +18,7 @@ function enqueue_lifecycle_backend_index!(
     launch(kernel) = workgroup_size === nothing ? kernel(backend) :
                      kernel(backend, Int(workgroup_size))
     reset = launch(_reset_lifecycle_backend_kernel!)
-    site_keys = launch(_lifecycle_site_key_kernel!)
-    reduce_status = _reduce_lifecycle_status_kernel!(backend, 1)
-    index_sites = launch(_index_lifecycle_sites_kernel!)
-    emit = launch(_emit_lifecycle_backend_kernel!)
-    mark_requests = launch(_mark_lifecycle_requests_kernel!)
-    compact_requests = launch(_compact_lifecycle_requests_kernel!)
-    sort_requests = _sort_lifecycle_backend_kernel!(backend, 1)
+    validate_ownership = launch(_validate_lifecycle_ownership_kernel!)
     plan_effect = _plan_lifecycle_effect_backend_kernel!(backend, 1)
     plan_division = _plan_lifecycle_division_backend_kernel!(backend, 1)
     validate_division_relationships =
@@ -29,9 +27,6 @@ function enqueue_lifecycle_backend_index!(
         _replan_selected_lifecycle_division_backend_kernel!(backend, 1)
     clear_selected_division_workspace =
         launch(_clear_selected_division_workspace_backend_kernel!)
-    reduce_planning_status =
-        _reduce_lifecycle_planning_status_kernel!(backend, 1)
-    select_requests = _select_lifecycle_backend_kernel!(backend, 1)
     stage_structure = _stage_lifecycle_structure_backend_kernel!(backend, 1)
     stage_relationships =
         _stage_lifecycle_relationships_backend_kernel!(backend, 1)
@@ -52,56 +47,24 @@ function enqueue_lifecycle_backend_index!(
         Int32(state.mcs + 1);
         ndrange = length(control.candidate_status),
     )
-    @debug "enqueue lifecycle backend stage" stage = :site_keys
-    site_keys(
-        control.site_keys,
+    @debug "enqueue lifecycle backend stage" stage = :validate_ownership
+    validate_ownership(
         state.ownership,
         workspace,
         control,
         Int32(length(state.cell_kinds));
-        ndrange = length(control.site_keys),
+        ndrange = length(state.ownership),
     )
-    @debug "enqueue lifecycle backend stage" stage = :sort_site_keys
-    _enqueue_lifecycle_sort!(
-        control.site_keys, workspace, control, launch
-    )
+    @debug "enqueue lifecycle backend stage" stage = :materialize_site_index
+    site_index_event = LocalMath.execute!(reductions.site_index)
     @debug "enqueue lifecycle backend stage" stage = :reduce_site_status
-    reduce_status(
-        workspace, control, Int32(length(state.ownership)); ndrange = 1
-    )
+    last_direct_event = _run_lifecycle_status!(
+        reductions.direct, length(state.ownership))
     _enqueue_lifecycle_failure_stamp!(state, ProgramStageIndex)
-    @debug "enqueue lifecycle backend stage" stage = :index_sites
-    index_sites(
-        workspace,
-        control,
-        Int32(length(state.cell_kinds));
-        ndrange = length(state.cell_kinds),
-    )
     @debug "enqueue lifecycle backend stage" stage = :emit_requests
-    isempty(workspace.active) || emit(
-        state,
-        workspace,
-        control,
-        Int32(state.mcs + 1);
-        ndrange = length(workspace.active),
-    )
-    @debug "enqueue lifecycle backend stage" stage = :reduce_emission_status
-    reduce_status(
-        workspace, control, Int32(length(workspace.active)); ndrange = 1
-    )
-    _enqueue_lifecycle_failure_stamp!(state, ProgramStageEmission)
-    @debug "enqueue lifecycle backend stage" stage = :mark_requests
-    isempty(control.request_scan) || mark_requests(
-        workspace, control; ndrange = length(control.request_scan)
-    )
-    @debug "enqueue lifecycle backend stage" stage = :scan_requests
-    _enqueue_lifecycle_scan!(workspace, control, backend, launch)
-    @debug "enqueue lifecycle backend stage" stage = :compact_requests
-    isempty(control.request_scan) || compact_requests(
-        workspace, control; ndrange = length(control.request_scan)
-    )
-    @debug "enqueue lifecycle backend stage" stage = :sort_requests
-    sort_requests(state, workspace, control; ndrange = 1)
+    emission_event = _run_lifecycle_emission!(reductions.emission, state.mcs)
+    @debug "enqueue lifecycle backend stage" stage = :materialize_requests
+    request_index_event = LocalMath.execute!(reductions.request_index)
     effect_mask = state.program.lifecycle_plan.effect_mask
     for plan_class in (
             _CreateLifecyclePlan(),
@@ -169,11 +132,13 @@ function enqueue_lifecycle_backend_index!(
         state, workspace, control; ndrange = 1
     )
     @debug "enqueue lifecycle backend stage" stage = :reduce_planning_status
-    reduce_planning_status(workspace, control; ndrange = 1)
+    last_planning_event = _run_lifecycle_status!(
+        reductions.planning, length(control.candidate_status))
     _enqueue_lifecycle_failure_stamp!(state, ProgramStagePlanning)
     @debug "enqueue lifecycle backend stage" stage = :select_requests
-    select_requests(state, workspace, control; ndrange = 1)
-    _enqueue_lifecycle_failure_stamp!(state, ProgramStageSelection)
+    selection_event = LocalMath.execute!(
+        reductions.selection; parameters = (current_mcs = Int64(state.mcs),)
+    )
     policy_workspace_length = length(workspace.policy_workspace)
     if policy_workspace_length > 0
         @debug "enqueue lifecycle backend stage" stage = :clear_selected_division_workspace
@@ -197,20 +162,9 @@ function enqueue_lifecycle_backend_index!(
         )
     end
     @debug "enqueue lifecycle backend stage" stage = :reduce_selected_planning_status
-    reduce_planning_status(workspace, control; ndrange = 1)
+    last_planning_event = _run_lifecycle_status!(
+        reductions.planning, length(control.candidate_status))
     _enqueue_lifecycle_failure_stamp!(state, ProgramStagePlanning)
-    staged_state = (
-        ownership = workspace.staged_ownership,
-        cell_kinds = workspace.staged_cell_kinds,
-        cell_generations = workspace.staged_cell_generations,
-        trackers = workspace.staged_trackers,
-        relationships = workspace.staged_relationships,
-        descriptor_state = workspace.staged_descriptor_state,
-    )
-    @debug "enqueue lifecycle backend stage" stage = :stage_state
-    _enqueue_lifecycle_gated_state_copy!(
-        staged_state, state, backend, workspace, control
-    )
     effect_classes = (
             _CreateLifecyclePlan(),
             _RetireLifecyclePlan(),
@@ -284,11 +238,12 @@ function enqueue_lifecycle_backend_index!(
                 control,
                 plan_class,
                 action_value;
-                ndrange = length(workspace.selected),
+                ndrange = length(workspace.active),
             )
         end
     end
-    reduce_planning_status(workspace, control; ndrange = 1)
+    last_planning_event = _run_lifecycle_status!(
+        reductions.planning, length(control.candidate_status))
     _enqueue_lifecycle_failure_stamp!(state, ProgramStageState)
     for plan_class in effect_classes
         iszero(
@@ -304,11 +259,14 @@ function enqueue_lifecycle_backend_index!(
     @debug "enqueue lifecycle backend stage" stage = :validate_staged_state
     validate_requests(state, workspace, control; ndrange = 1)
     _enqueue_lifecycle_failure_stamp!(state, ProgramStageValidation)
-    @debug "enqueue lifecycle backend stage" stage = :publish_state
-    _enqueue_lifecycle_gated_state_copy!(
-        state, staged_state, backend, workspace, control
-    )
     @debug "enqueue lifecycle backend stage" stage = :finalize
     finalize_requests(workspace, control; ndrange = 1)
-    return state
+    return (
+        direct = last_direct_event,
+        planning = last_planning_event,
+        site_index = site_index_event,
+        request_index = request_index_event,
+        emission = emission_event,
+        selection = selection_event,
+    )
 end

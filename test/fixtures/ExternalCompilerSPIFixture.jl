@@ -10,7 +10,7 @@ import PottsToolkit: registered_statement_lowering
 import PottsToolkit: registered_workspace_schemas
 
 const CompilerSPI = CorePotts.CompilerSPI
-const SCHEMA = :g5h_external_site_energy
+const SCHEMA = :external_site_energy
 const VERSION = v"1.0.0"
 
 function external_site_value end
@@ -29,10 +29,10 @@ for context in (
 end
 
 function CompilerSPI.operation_callable(
-        ::Val{:g5h_external_site_value}, version::VersionNumber
+        ::Val{:external_site_value}, version::VersionNumber
     )
     version == VERSION || throw(ArgumentError(
-        "unsupported G5H external operation version $version"
+        "unsupported external operation version $version"
     ))
     return ExternalSiteValueCallable()
 end
@@ -43,9 +43,9 @@ end
 
 operation_transfer(::typeof(external_site_value), ::Int) =
     PottsToolkit.OperationTransfer(
-        :g5h_external_site_value,
+        :external_site_value,
         VERSION,
-        "g5h-external-site-value-v1",
+        "external-site-value-v1",
         2:2,
         :real,
         :declared,
@@ -87,7 +87,7 @@ CompilerSPI.descriptor_payload_inspection(
 )
 
 function registered_descriptor_payload(
-        ::Val{:lower_g5h_external_site_energy},
+        ::Val{:lower_external_site_energy},
         context::PottsToolkit.DescriptorConstructionContext,
     )
     context.source.identity.local_id == StatementID(:mismatched_payload) &&
@@ -96,7 +96,7 @@ function registered_descriptor_payload(
 end
 
 function registered_workspace_schemas(
-        ::Val{:lower_g5h_external_site_energy},
+        ::Val{:lower_external_site_energy},
         source::PottsToolkit.DescriptorSource,
         ::Type{T},
         lattice_shape::Tuple,
@@ -122,7 +122,7 @@ function registered_workspace_schemas(
 end
 
 function registered_statement_lowering(
-        ::Val{:lower_g5h_external_site_energy},
+        ::Val{:lower_external_site_energy},
         id::StatementID,
         arguments::Tuple,
         options::NamedTuple,
@@ -162,8 +162,8 @@ function registry()
         affected_region = :target_site,
         reference_semantics = :weighted_site_state_energy,
         descriptor_payload_type = ExternalDescriptorPayload,
-        serialization_identity = "g5h-external-site-energy-v1",
-        lowering_identity = :lower_g5h_external_site_energy,
+        serialization_identity = "external-site-energy-v1",
+        lowering_identity = :lower_external_site_energy,
     )
     return register_statement(
         default_statement_registry(), SCHEMA, VERSION, contract

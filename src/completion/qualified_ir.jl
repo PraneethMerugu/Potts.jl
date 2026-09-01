@@ -1,3 +1,4 @@
+"""Path-qualified identity of a statement in a composed Potts system."""
 struct QualifiedStatementID
     path::Tuple{Vararg{Symbol}}
     local_id::StatementID
@@ -13,6 +14,7 @@ Base.:(==)(left::QualifiedStatementID, right::QualifiedStatementID) =
 Base.hash(id::QualifiedStatementID, seed::UInt) =
     hash(id.local_id, hash(id.path, seed))
 
+"""Finite maximum number of effects and the basis on which it is counted."""
 struct EffectBound
     maximum::Int
     basis::Symbol
@@ -22,18 +24,21 @@ struct EffectBound
     end
 end
 
+"""Completed semantic-random operation identity and distribution family."""
 struct RandomOperation
     identity::Symbol
     family::Symbol
     reserved::Bool
 end
 
+"""Admission result and reason for one execution-engine family."""
 struct EngineAdmission
     engine::Symbol
     admitted::Bool
     reason::String
 end
 
+"""Completed, source-aware semantic record for one Potts statement."""
 struct QualifiedStatement{
         S, M, N, T, Y, H, U, C, R, W, Q, D, Z, E, B, X, L, G, P, O, A,
     }
@@ -64,9 +69,11 @@ struct QualifiedStatement{
     lowering_identity::Symbol
 end
 
+"""Fingerprint of authored scientific meaning before completion."""
 struct SemanticFingerprint
     hex::String
 end
+"""Fingerprint of the completed system and its inferred contracts."""
 struct CompletedSystemFingerprint
     hex::String
 end
@@ -88,18 +95,31 @@ for fingerprint_type in (
 end
 
 abstract type AbstractInspectionSelector end
+"""Inspection selector for completed or scheduled statement records."""
 struct Statements <: AbstractInspectionSelector end
+"""Inspection selector for the qualified variable inventory."""
 struct Variables <: AbstractInspectionSelector end
+"""Inspection selector for effect and publication semantics."""
 struct Effects <: AbstractInspectionSelector end
+"""Inspection selector for semantic random-operation identities."""
 struct RandomOperations <: AbstractInspectionSelector end
+"""Inspection selector for the ordered execution schedule."""
 struct Schedule <: AbstractInspectionSelector end
+"""Inspection selector for backend and algorithm capability results."""
 struct Capabilities <: AbstractInspectionSelector end
+"""Inspection selector for semantic, completed, and scheduled fingerprints."""
 struct Fingerprints <: AbstractInspectionSelector end
 struct StoragePlan <: AbstractInspectionSelector end
 struct Kernels <: AbstractInspectionSelector end
+"""Inspection selector for the ordered runtime parameter schema."""
 struct ParameterSchema <: AbstractInspectionSelector end
+"""Inspection selector for state storage and initialization schemas."""
 struct StateSchema <: AbstractInspectionSelector end
+"""Inspection selector for declared observations and schedules."""
 struct Observations <: AbstractInspectionSelector end
+"""Inspection selector for external input and output contracts."""
 struct ExternalIO <: AbstractInspectionSelector end
+"""Inspection selector for deterministic replay and checkpoint guarantees."""
 struct ReplayContract <: AbstractInspectionSelector end
+"""Inspection selector for completed cell-lifecycle plans."""
 struct LifecyclePlans <: AbstractInspectionSelector end

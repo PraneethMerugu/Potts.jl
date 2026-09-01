@@ -1,46 +1,60 @@
 # Structured CorePotts mechanism capability profiles.
 
+"""Closed admission result for a typed execution capability key."""
 @enum CapabilitySupportStatus::UInt8 begin
     Unsupported = 0x00
-    Experimental = 0x01
-    Supported = 0x02
+    Supported = 0x01
 end
+"""The typed execution contract is not admitted."""
+Unsupported
+"""The typed execution contract is admitted."""
+Supported
 
-@enum CapabilityMaturity::UInt8 begin
-    InterfaceOnly = 0x00
-    Compiles = 0x01
-    Functional = 0x02
-    ReplayQualified = 0x03
-    PerformanceQualified = 0x04
-end
-
+"""Execution engine family encoded in a capability key."""
 @enum CapabilityEngine::UInt8 begin
     SequentialEngine = 0x00
     CheckerboardEngine = 0x01
 end
+"""Host-sequential execution engine identity."""
+SequentialEngine
+"""Conflict-free checkerboard execution engine identity."""
+CheckerboardEngine
 
+"""Physical backend family encoded in a capability key."""
 @enum CapabilityBackend::UInt8 begin
     CPUBackend = 0x00
     AdaptedBackend = 0x01
 end
+"""Host CPU backend identity."""
+CPUBackend
+"""Backend whose storage and execution are supplied by an adapter."""
+AdaptedBackend
 
+"""Per-dimension boundary topology encoded in a capability key."""
 @enum CapabilityBoundaryTopology::UInt8 begin
     ClosedBoundary = 0x00
     PeriodicBoundary = 0x01
 end
+"""Nonwrapping boundary topology."""
+ClosedBoundary
+"""Wrapping periodic boundary topology."""
+PeriodicBoundary
 
+"""Replay guarantee class encoded in a capability key."""
 @enum CapabilityReplayClass::UInt8 begin
     ExactConfigurationReplay = 0x00
-    PortableLogicalRestart = 0x01
-    StatisticalRestart = 0x02
 end
+"""Exact continuation for the recorded configuration and execution contract."""
+ExactConfigurationReplay
 
+"""Compiler math, reduction, and bounds semantics required by execution."""
 struct CapabilityMathPolicy
     math::Symbol
     reductions::Symbol
     bounds::Symbol
 end
 
+"""Lifecycle features and fingerprint included in capability admission."""
 struct CapabilityLifecycleProfile
     family::Symbol
     effect_mask::UInt8
@@ -50,6 +64,7 @@ struct CapabilityLifecycleProfile
     fingerprint::String
 end
 
+"""Component-state identities, domains, and schema included in admission."""
 struct CapabilityComponentStateProfile
     scope::Symbol
     identities::Tuple
@@ -61,9 +76,8 @@ end
 Exact execution-mechanism facts carried by a program capability key.
 
 The fingerprints are inspection identities for the complete, concrete plans;
-`qualification_family` is assigned only after the whole conjunction satisfies
-one closed CorePotts protocol family.  Individual mechanisms never authorize
-execution independently.
+`support_family` identifies the typed execution protocol. `exact_replay`
+records whether every non-Core mechanism has a durable package identity.
 """
 struct CapabilityMechanismProfile
     proposal_fingerprint::String
@@ -76,41 +90,9 @@ struct CapabilityMechanismProfile
     rng_lowering_identity::Symbol
     code_identities::Tuple
     authority::Any
-    qualification_family::Symbol
+    support_family::Symbol
+    exact_replay::Bool
 end
-
-const _REVIEWED_MECHANISM_AUTHORITIES = ((
-    authority = :PottsToolkit,
-    package = (
-        name = :PottsToolkit,
-        uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
-        version = v"0.2.0",
-    ),
-    suite = :g5h1_potts_compiler_mechanisms,
-    revision = v"1.0.0",
-),)
-
-# Exact replay evidence is deliberately finite. Other environments may still
-# execute a functionally admitted CPU profile, but cannot acquire a replay row
-# merely by hashing their current process. Additions require retained review
-# evidence for the complete environment identity.
-const _REVIEWED_EXACT_ENVIRONMENT_DIGESTS = (
-    # Canonical Julia 1.12.1, one thread, default bounds policy. This is the
-    # production/reproduction row recorded by the quantitative audit.
-    "c869ed68289ea1a641d8ed8c05e684693b08b2bb0b90fc2cc211e0b9da48a969",
-    # The same reviewed environment with `--check-bounds=yes`, which is the
-    # policy used by Julia's authoritative `Pkg.test` harness. Keeping this as
-    # a separate closed row preserves the exact-environment replay boundary;
-    # the test process does not acquire evidence by hashing itself.
-    "80d86547549b8803a75311c347e74e4e44fbe1c550e1f20bc937003d850baefe",
-    # Baseline qualification candidate on the same Apple M1 Pro host under
-    # Julia 1.12.6, one thread, default bounds policy. This closed row was
-    # admitted only after exact-candidate preservation review.
-    "281cfbf41f362e63ec7005a8b5b9f536b67cd51d1d79a6847d60e63069f1f38b",
-    # The matching Julia 1.12.6 `Pkg.test` process with `--check-bounds=yes`.
-    # It is a separate closed identity rather than a wildcarded environment.
-    "0b1726268dbde8e3f38c9186ed2eb07a684bc04818c3ba38793da886eb035d1a",
-)
 
 function _capability_package_identity(module_value)
     root = Base.moduleroot(module_value)
@@ -158,12 +140,13 @@ function _capability_environment_identity()
         ),
         corepotts = _capability_package_identity(CorePotts),
         dependencies = (
-            _capability_package_identity(AcceleratedKernels),
             _capability_package_identity(Adapt),
             _capability_package_identity(Atomix),
             _capability_package_identity(KernelAbstractions),
             _capability_package_identity(LinearAlgebra),
             _capability_package_identity(SHA),
+            _capability_package_identity(StaticArrays),
+            _capability_package_identity(StructArrays),
         ),
     )
 end
@@ -235,16 +218,8 @@ function ProgramCapabilityKey(
     )
 end
 
-"""Stable identity of the evidence attached to one exact mechanism row."""
-struct CapabilityEvidenceIdentity
-    authority::Symbol
-    suite::Symbol
-    revision::VersionNumber
-    profile_fingerprint::String
-end
-
 """
-A structured CorePotts capability row plus non-authorizing mechanism details.
+A structured CorePotts support report plus non-authorizing mechanism details.
 
 The `state_domains`, `stage_effects`, relationship, tracker, and checkerboard
 fields are inspection facts. They are deliberately not independent support
@@ -253,9 +228,8 @@ flags and cannot be combined to manufacture a broader profile claim.
 struct ProgramCapabilityReport{K <: ProgramCapabilityKey}
     key::K
     status::CapabilitySupportStatus
-    maturity::CapabilityMaturity
     reason::String
-    evidence::Union{Nothing, CapabilityEvidenceIdentity}
+    exact_replay::Bool
     state_domains::Tuple
     stage_effects::Tuple
     relationships::Bool
@@ -277,7 +251,6 @@ function Base.showerror(io::IO, error::ProgramCapabilityError)
         "CorePotts capability preflight rejected ",
         error.operation,
         ": status=", report.status,
-        ", maturity=", report.maturity,
         ", engine=", key.engine,
         ", backend=", key.backend,
         ", device=", key.device,
@@ -286,7 +259,7 @@ function Base.showerror(io::IO, error::ProgramCapabilityError)
         ", scalar_type=", key.scalar_type,
         ", replay=", key.replay,
         ", environment=", _capability_digest(key.environment),
-        ", mechanism_family=", key.mechanisms.qualification_family,
+        ", mechanism_family=", key.mechanisms.support_family,
         ", profile=", _capability_key_fingerprint(key),
         ". ", report.reason,
     )
@@ -383,23 +356,31 @@ end
     return bytes2hex(SHA.sha256(codeunits(repr(value))))
 end
 
-@inline function _capability_supports_cpu_engine(
-        support::DescriptorSupport, engine::CapabilityEngine
+@inline function _capability_supports_engine_backend(
+        support::DescriptorSupport,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
-    return support.cpu && (
+    device_supported = backend === CPUBackend ? support.cpu : support.gpu
+    return device_supported && (
         engine === SequentialEngine ? support.sequential : support.checkerboard
     )
 end
 
-@inline function _capability_supports_cpu_engine(
-        support::TrackerSupport, engine::CapabilityEngine
+@inline function _capability_supports_engine_backend(
+        support::TrackerSupport,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
-    return support.cpu && (
+    device_supported = backend === CPUBackend ? support.cpu : support.gpu
+    return device_supported && (
         engine === SequentialEngine ? support.sequential : support.checkerboard
     )
 end
 
-@inline _capability_supports_cpu_engine(_, ::CapabilityEngine) = false
+@inline _capability_supports_engine_backend(
+    _, ::CapabilityEngine, ::CapabilityBackend
+) = false
 
 function _capability_external_code_identities(values...)
     identities = NamedTuple[]
@@ -460,61 +441,72 @@ function _capability_external_code_identities(values...)
     return Tuple(identities)
 end
 
-function _capability_mechanism_qualification(program, admitted::Bool)
-    admitted || return (:unqualified, (), nothing)
+function _capability_mechanism_support(program, admitted::Bool)
+    admitted || return (:unsupported, (), nothing, false)
     identities = _capability_external_code_identities(
         program.descriptor_plan,
         program.stage_plan,
         program.tracker_plan,
         program.lifecycle_plan,
     )
-    isempty(identities) && return (
-        :core_execution_protocol_v1, identities, nothing
-    )
+    isempty(identities) &&
+        return (:core_execution_protocol_v1, identities, nothing, true)
     authority = program.mechanism_authority
-    reviewed = authority in _REVIEWED_MECHANISM_AUTHORITIES
-    reviewed && all(==(authority.package), identities) && return (
-        :evidenced_execution_protocol_v1, identities, authority
-    )
-    return (:external_execution_protocol_v1, identities, authority)
+    identified = authority isa NamedTuple && hasproperty(authority, :package) &&
+        all(==(authority.package), identities)
+    return (:external_execution_protocol_v1, identities, authority, identified)
 end
 
 function _capability_descriptor_family_admitted(
-        plan::DescriptorExecutionPlan, engine::CapabilityEngine
+        plan::DescriptorExecutionPlan,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
     return all(
-        _capability_supports_cpu_engine(
-            descriptor_support(descriptor), engine
+        _capability_supports_engine_backend(
+            descriptor_support(descriptor), engine, backend
         )
         for group in plan.groups
         for descriptor in group.launch.instances
     )
 end
-_capability_descriptor_family_admitted(_, ::CapabilityEngine) = false
+_capability_descriptor_family_admitted(
+    _, ::CapabilityEngine, ::CapabilityBackend
+) = false
 
 function _capability_stage_family_admitted(
-        plan::StageExecutionPlan, engine::CapabilityEngine
+        plan::StageExecutionPlan,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
     return all(
-        _capability_supports_cpu_engine(
-            descriptor_support(descriptor), engine
+        _capability_supports_engine_backend(
+            descriptor_support(descriptor), engine, backend
         )
         for groups in (plan.accepted_copy, plan.after_mcs)
         for group in groups
         for descriptor in group.instances
     )
 end
-_capability_stage_family_admitted(_, ::CapabilityEngine) = false
+_capability_stage_family_admitted(
+    _, ::CapabilityEngine, ::CapabilityBackend
+) = false
 
 function _capability_tracker_family_admitted(
-        plan::TrackerExecutionPlan, engine::CapabilityEngine
+        plan::TrackerExecutionPlan,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
     return all(
-        _capability_supports_cpu_engine(tracker_support(descriptor), engine)
+        _capability_supports_engine_backend(
+            tracker_support(descriptor), engine, backend
+        )
         for descriptor in plan.descriptors
     )
 end
-_capability_tracker_family_admitted(_, ::CapabilityEngine) = false
+_capability_tracker_family_admitted(
+    _, ::CapabilityEngine, ::CapabilityBackend
+) = false
 
 function _capability_relationship_family_admitted(relationships)
     return all(schema -> schema isa RelationshipStoreSchema, relationships)
@@ -534,9 +526,10 @@ _capability_checkerboard_family_admitted(_, ::CapabilityEngine) = false
 
 function _capability_mechanism_profile(program::CompiledPottsProgram)
     engine = _capability_engine(program.engine)
-    admitted = _capability_mechanism_family_admitted(program, engine)
-    qualification, identities, authority =
-        _capability_mechanism_qualification(program, admitted)
+    backend = _capability_backend(program.backend)
+    admitted = _capability_mechanism_family_admitted(program, engine, backend)
+    support_family, identities, authority, exact_replay =
+        _capability_mechanism_support(program, admitted)
     proposal = (
         shape = program.shape,
         offsets = Matrix(program.proposal_offsets),
@@ -560,19 +553,22 @@ function _capability_mechanism_profile(program::CompiledPottsProgram)
         RNG_LOWERING_IDENTITY,
         identities,
         authority,
-        qualification,
+        support_family,
+        exact_replay,
     )
 end
 
 @inline function _capability_mechanism_family_admitted(
-        program::CompiledPottsProgram, engine::CapabilityEngine
+        program::CompiledPottsProgram,
+        engine::CapabilityEngine,
+        backend::CapabilityBackend,
     )
     return _capability_descriptor_family_admitted(
-        program.descriptor_plan, engine
+        program.descriptor_plan, engine, backend
     ) && _capability_stage_family_admitted(
-        program.stage_plan, engine
+        program.stage_plan, engine, backend
     ) && _capability_tracker_family_admitted(
-        program.tracker_plan, engine
+        program.tracker_plan, engine, backend
     ) && _capability_relationship_family_admitted(
         program.relationships
     ) && _capability_checkerboard_family_admitted(
@@ -599,208 +595,58 @@ function _capability_key_fingerprint(key::ProgramCapabilityKey)
     return bytes2hex(SHA.sha256(codeunits(repr(key))))
 end
 
-const _SEQUENTIAL_CPU_QUALIFIED_EVIDENCE = CapabilityEvidenceIdentity(
-    :CorePotts,
-    :lw0_sequential_cpu_exact_replay_v1,
-    v"1.0.0",
-    bytes2hex(SHA.sha256(codeunits(
-        "CorePotts/lw0/sequential-cpu/core-execution-protocol-v1"
-    ))),
-)
-
-const _CHECKERBOARD_CPU_QUALIFIED_EVIDENCE = CapabilityEvidenceIdentity(
-    :CorePotts,
-    :lw0_checkerboard_random_color_cpu_exact_replay_v1,
-    v"1.0.0",
-    bytes2hex(SHA.sha256(codeunits(
-        "CorePotts/lw0/checkerboard-random-color-cpu/core-execution-protocol-v1"
-    ))),
-)
-
-# Closed authority rows.  These rows qualify a whole profile family; report
-# fingerprints never create evidence identities dynamically.
-const _QUALIFIED_CAPABILITY_FAMILIES = (
-    (
-        engine = SequentialEngine,
-        backend = CPUBackend,
-        device = :host_cpu,
-        dimensions = (Int16(2),),
-        topologies = (
-            (ClosedBoundary, ClosedBoundary),
-            (ClosedBoundary, PeriodicBoundary),
-            (PeriodicBoundary, ClosedBoundary),
-            (PeriodicBoundary, PeriodicBoundary),
-        ),
-        scalar_types = (Float32, Float64),
-        math_policy = CapabilityMathPolicy(:accurate, :deterministic, :checked),
-        lifecycle_families = (:none, :core_lifecycle_v1),
-        component_scopes = (:none, :core_auxiliary_state),
-        mechanism_families = (
-            :core_execution_protocol_v1,
-            :evidenced_execution_protocol_v1,
-        ),
-        rng_contract_versions = (RNG_CONTRACT_VERSION,),
-        rng_lowering_identities = (RNG_LOWERING_IDENTITY,),
-        environment_digests = _REVIEWED_EXACT_ENVIRONMENT_DIGESTS,
-        replay = ExactConfigurationReplay,
-        evidence = _SEQUENTIAL_CPU_QUALIFIED_EVIDENCE,
-    ),
-    (
-        engine = CheckerboardEngine,
-        backend = CPUBackend,
-        device = :host_cpu,
-        dimensions = (Int16(2),),
-        topologies = (
-            (ClosedBoundary, ClosedBoundary),
-            (ClosedBoundary, PeriodicBoundary),
-            (PeriodicBoundary, ClosedBoundary),
-            (PeriodicBoundary, PeriodicBoundary),
-        ),
-        scalar_types = (Float32, Float64),
-        math_policy = CapabilityMathPolicy(:accurate, :deterministic, :checked),
-        lifecycle_families = (:none, :core_lifecycle_v1),
-        component_scopes = (:none, :core_auxiliary_state),
-        mechanism_families = (
-            :core_execution_protocol_v1,
-            :evidenced_execution_protocol_v1,
-        ),
-        rng_contract_versions = (RNG_CONTRACT_VERSION,),
-        rng_lowering_identities = (RNG_LOWERING_IDENTITY,),
-        environment_digests = _REVIEWED_EXACT_ENVIRONMENT_DIGESTS,
-        replay = ExactConfigurationReplay,
-        evidence = _CHECKERBOARD_CPU_QUALIFIED_EVIDENCE,
-    ),
-)
-
-"""
-Bind a reviewed parametric evidence suite to one complete capability key.
-
-Family membership decides admission; hashing the exact key only identifies the
-row that the already-selected suite covers. A program outside the closed
-family never reaches this function and therefore cannot manufacture evidence
-by changing a mechanism fingerprint.
-"""
-function _exact_capability_evidence(
-        template::CapabilityEvidenceIdentity,
-        key::ProgramCapabilityKey,
-    )
-    return CapabilityEvidenceIdentity(
-        template.authority,
-        template.suite,
-        template.revision,
-        _capability_key_fingerprint(key),
-    )
-end
-
-function _functional_capability_evidence(key::ProgramCapabilityKey)
-    external = key.mechanisms.qualification_family ===
-        :external_execution_protocol_v1
-    suite = if key.engine === SequentialEngine
-        external ? :sequential_external_cpu_protocol_v1 :
-            :sequential_cpu_protocol_v1
-    else
-        external ? :checkerboard_external_cpu_protocol_v1 :
-            :checkerboard_cpu_protocol_v1
-    end
-    template = CapabilityEvidenceIdentity(
-        :CorePotts,
-        suite,
-        v"1.0.0",
-        bytes2hex(SHA.sha256(codeunits(string(:CorePotts, '/', suite)))),
-    )
-    return _exact_capability_evidence(template, key)
-end
-
-function _qualified_capability_family(key::ProgramCapabilityKey)
-    for family in _QUALIFIED_CAPABILITY_FAMILIES
-        key.engine === family.engine || continue
-        key.backend === family.backend || continue
-        key.device === family.device || continue
-        key.dimension in family.dimensions || continue
-        key.topology in family.topologies || continue
-        key.scalar_type in family.scalar_types || continue
-        key.math_policy == family.math_policy || continue
-        key.lifecycle.family in family.lifecycle_families || continue
-        key.component_state.scope in family.component_scopes || continue
-        key.mechanisms.qualification_family in family.mechanism_families || continue
-        key.mechanisms.rng_contract_version in
-            family.rng_contract_versions || continue
-        key.mechanisms.rng_lowering_identity in
-            family.rng_lowering_identities || continue
-        _capability_digest(key.environment) in family.environment_digests || continue
-        key.replay === family.replay || continue
-        return family
-    end
-    return nothing
-end
-
 function _cpu_capability_disposition(key::ProgramCapabilityKey)
     if key.dimension != 2
         return (
             Unsupported,
-            Compiles,
-            "The exact program is compiled, but CorePotts has no functional evidence for this lattice dimension.",
-            nothing,
+            "CorePotts does not support execution for this lattice dimension.",
+            false,
         )
     end
     if !(key.scalar_type === Float32 || key.scalar_type === Float64)
         return (
             Unsupported,
-            Compiles,
-            "The exact program is compiled, but CorePotts has no functional evidence for this scalar policy.",
-            nothing,
+            "CorePotts does not support execution for this scalar policy.",
+            false,
         )
     end
     if key.lifecycle.family === :external
         return (
             Unsupported,
-            Compiles,
-            "External lifecycle-plan families have no CorePotts functional evidence row.",
-            nothing,
+            "CorePotts does not support this external lifecycle-plan family.",
+            false,
         )
     end
-    if key.mechanisms.qualification_family === :unqualified
+    if key.mechanisms.support_family === :unsupported
         return (
             Unsupported,
-            Compiles,
-            "At least one descriptor, stage, relationship, tracker, or checkerboard mechanism lies outside the closed CorePotts CPU-qualified conjunction.",
-            nothing,
+            "At least one descriptor, stage, relationship, tracker, or checkerboard mechanism is unsupported by CorePotts.",
+            false,
         )
     end
-    if key.mechanisms.qualification_family === :external_execution_protocol_v1
-        return (
-            Supported,
-            Functional,
-            "The external mechanism profile is functionally admitted for CPU execution, but it has no reviewed package/code and exact-environment replay evidence row.",
-            _functional_capability_evidence(key),
-        )
-    end
-    family = _qualified_capability_family(key)
-    family === nothing && return (
-        Supported,
-        Functional,
-        "The mechanism profile is functionally admitted for CPU execution, but this exact execution environment has no reviewed replay evidence row.",
-        _functional_capability_evidence(key),
-    )
     return (
         Supported,
-        ReplayQualified,
-        "Bounded CorePotts CPU execution and exact logical-continuation evidence cover this mechanism profile; performance qualification is not claimed.",
-        _exact_capability_evidence(family.evidence, key),
+        "The typed CorePotts CPU execution contract supports this program.",
+        key.mechanisms.exact_replay,
     )
 end
 
+"""Return an adapter's support status, reason, and replay guarantee for a key."""
 function adapted_device_capability_disposition(
         ::Val, key::ProgramCapabilityKey
     )
     return (
         Unsupported,
-        InterfaceOnly,
-        "Adaptation establishes storage transport only; no real-device evidence row qualifies this backend/device profile.",
-        nothing,
+        "Storage adaptation alone does not establish executable backend support.",
+        false,
     )
 end
 
+"""Return the exact adapter environment identity incorporated into admission."""
+adapted_device_environment(::Val{Name}, key::ProgramCapabilityKey) where {Name} =
+    (provider = Name,)
+
+"""Hash the complete typed capability key into a stable inspection identity."""
 capability_key_fingerprint(key::ProgramCapabilityKey) =
     _capability_key_fingerprint(key)
 
@@ -811,9 +657,10 @@ function _capability_disposition(key::ProgramCapabilityKey)
     return _cpu_capability_disposition(key)
 end
 
+"""Report typed execution admission and exact-replay support for a compiled program."""
 function program_capability_report(program::CompiledPottsProgram)
     key = _capability_key(program)
-    status, maturity, reason, evidence = _capability_disposition(key)
+    status, reason, exact_replay = _capability_disposition(key)
     state_domains = key.component_state.domains
     stage_effects = Tuple(unique(
         nameof(typeof(descriptor.effect))
@@ -827,9 +674,8 @@ function program_capability_report(program::CompiledPottsProgram)
     return ProgramCapabilityReport(
         key,
         status,
-        maturity,
         reason,
-        evidence,
+        exact_replay,
         state_domains,
         stage_effects,
         !isempty(program.relationships),
@@ -842,10 +688,14 @@ function _adapted_program_capability_report(
         report::ProgramCapabilityReport, to
     )
     source = report.key
+    device = nameof(to)
+    environment = merge(source.environment, (
+        adapted_backend = adapted_device_environment(Val(device), source),
+    ))
     key = ProgramCapabilityKey(
         source.engine,
         AdaptedBackend,
-        Symbol(string(to)),
+        device,
         source.topology,
         source.scalar_type,
         source.math_policy,
@@ -853,15 +703,14 @@ function _adapted_program_capability_report(
         source.component_state,
         source.mechanisms,
         source.replay,
-        environment = source.environment,
+        ; environment,
     )
-    status, maturity, reason, evidence = _capability_disposition(key)
+    status, reason, exact_replay = _capability_disposition(key)
     return ProgramCapabilityReport(
         key,
         status,
-        maturity,
         reason,
-        evidence,
+        exact_replay,
         report.state_domains,
         report.stage_effects,
         report.relationships,
@@ -870,30 +719,25 @@ function _adapted_program_capability_report(
     )
 end
 
-function capability_authorizes_execution(
-        report::ProgramCapabilityReport; experimental::Bool = false
-    )
-    admitted_status = report.status === Supported ||
-                      (experimental && report.status === Experimental)
-    return admitted_status && Int(report.maturity) >= Int(Functional)
-end
+"""Return whether a capability report admits functional execution."""
+capability_authorizes_execution(report::ProgramCapabilityReport) =
+    report.status === Supported
 
+"""Return whether a report admits exact checkpoint continuation."""
 function capability_authorizes_replay(
         report::ProgramCapabilityReport;
         replay::CapabilityReplayClass = report.key.replay,
-        experimental::Bool = false,
     )
-    return capability_authorizes_execution(report; experimental) &&
+    return capability_authorizes_execution(report) && report.exact_replay &&
            report.key.replay === replay &&
-           Int(report.maturity) >= Int(ReplayQualified)
+           replay === ExactConfigurationReplay
 end
 
 function _require_program_execution_capability(
         report::ProgramCapabilityReport;
         operation::Symbol = :execution,
-        experimental::Bool = false,
     )
-    capability_authorizes_execution(report; experimental) ||
+    capability_authorizes_execution(report) ||
         throw(ProgramCapabilityError(operation, report))
     return report
 end
@@ -901,10 +745,9 @@ end
 function _require_program_execution_capability(
         program::CompiledPottsProgram;
         operation::Symbol = :execution,
-        experimental::Bool = false,
     )
     return _require_program_execution_capability(
-        program_capability_report(program); operation, experimental
+        program_capability_report(program); operation
     )
 end
 
@@ -912,9 +755,8 @@ function _require_program_replay_capability(
         report::ProgramCapabilityReport;
         operation::Symbol = :replay,
         replay::CapabilityReplayClass = ExactConfigurationReplay,
-        experimental::Bool = false,
     )
-    capability_authorizes_replay(report; replay, experimental) ||
+    capability_authorizes_replay(report; replay) ||
         throw(ProgramCapabilityError(operation, report))
     return report
 end
@@ -923,9 +765,8 @@ function _require_program_replay_capability(
         program::CompiledPottsProgram;
         operation::Symbol = :replay,
         replay::CapabilityReplayClass = ExactConfigurationReplay,
-        experimental::Bool = false,
     )
     return _require_program_replay_capability(
-        program_capability_report(program); operation, replay, experimental
+        program_capability_report(program); operation, replay
     )
 end

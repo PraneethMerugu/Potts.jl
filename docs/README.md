@@ -24,6 +24,6 @@ Doctest, example, cross-reference, and document checks are errors.
 - The normative specification and accepted decisions outrank documentation.
 - Export status alone is not a stability or scientific-support claim.
 - Support is an evidenced conjunction; compilation alone never broadens it.
-- Published-model integration programs do not claim G7 scientific reproduction.
+- Published-model integration programs do not claim scientific reproduction.
 - The manual documents only the final public lifecycle and has no migration
   guide for unpublished APIs.

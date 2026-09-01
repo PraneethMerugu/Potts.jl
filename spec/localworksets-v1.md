@@ -2,7 +2,8 @@
 
 Date: 2026-08-09
 
-Status: Accepted architecture; bounded internal implementation qualified through LW-R1;
+Status: Accepted architecture; bounded internal implementation qualified through the fused,
+seed-existing, stable-grouped runtime-keyed, and shared-gate named-port laws;
 standalone extraction governed by the post-LW-R1 roadmap
 
 ## Authority and closure
@@ -25,13 +26,30 @@ implementation maturity was governed by the
 bounded completion and adoption are governed by the
 [post-LW-R1 roadmap](localworksets-post-lwr1-roadmap.md).
 
+The post-LW-5D construction amendment CA-0 through CA-4 is a bounded normative
+clarification under that authority. It does not reopen this charter. It requires:
+
+- immutable prepared kernel/topology/provider references, with mutation limited
+  to counters, leases and poison state;
+- canonical host-resident plan-time topology leaves and fully validated,
+  inspectable prepared topology copies;
+- complete public binding/workspace construction evidence derived from the same
+  private specifications used by lowering and validation;
+- explicit allocation-free identity routes and explicit topology-backed reads;
+- reusable WorkPlans across concrete preparations; and
+- structured diagnostics and executable documentation for every public
+  construction path.
+
+The exact requirements, acceptance matrix and committee dissent are recorded in
+the [construction-pain audit](../design/hardening/localworksets-construction-pain-audit.md).
+
 ## Public model
 
 The public lifecycle is:
 
 ```text
 localwork -> plan(work, topology; backend) -> prepare(workplan, storage; workspace)
-          -> run! -> WorkEvent -> wait
+          -> run! -> WorkEvent -> wait / waitall
 ```
 
 - `LocalWork` declares items, reads, the local operation, named outputs, and optional active-item
@@ -70,7 +88,11 @@ Static exact-array binding is the default:
 workplan = plan(work, topology; backend)
 prepared = prepare(workplan, (; positions, incidence, forces);
     workspace,
-    submission = (; active_count = value_slot(Int32; bounds = 0:edge_capacity)),
+    submission = (;
+        active_count = value_slot(
+            Int32; bounds = Int32(0):Int32(edge_capacity)
+        )
+    ),
 )
 ```
 
@@ -116,6 +138,24 @@ qualified.
 Host visibility is guaranteed after `wait(event)`. `isready` MUST be absent unless the provider has
 a qualified nonblocking query.
 
+When several `PreparedWork` values share the exact provider completion scope,
+`waitall(event1, event2, ...)` MAY settle their snapshotted cumulative tails
+with exactly one provider synchronization. Every event MUST have the same
+owner task, backend/device completion scope, and centrally admitted provider;
+cross-scope groups reject before synchronization. Successful grouped waiting
+releases every participating submitted prefix only after the shared wait
+returns. A provider or synchronization failure releases none, poisons every
+participating preparation, and preserves the provider's shared poison scope.
+Already drained events are idempotent and do not force another synchronization
+under ordinary releasing settlement. `waitall(...; release=false)` is the
+retaining-fence policy of the same operation: it always synchronizes the
+current provider tail, including when supplied receipts are already drained,
+and changes no submitted/drained counter or lease. A later releasing `waitall`
+performs a fresh synchronization before release. Grouped waiting is explicit
+lifetime settlement: it does not create event
+dependencies, a scheduler, native queues, transferable receipts, or selective
+error attribution.
+
 ## LW-A3 — Ordered stages use provider implicit ordering
 
 `sequence(a, b, ...)` MUST lower all stages onto the same qualified lane in program order. It MUST
@@ -138,16 +178,46 @@ Each output port MUST declare a concrete device-compilable route containing its 
 destination key spaces, bounded emissions per item, role/sign transform, value or candidate type,
 result layout, combination identity or explicit resolved empty result, and empty behavior.
 
-For `independent`, planning MUST prove exactly one emitted value for every destination in the
-selected output coverage and no competing writer. Missing and duplicate writers reject. For
-`combined`, the declared identity is published for every destination receiving no contribution.
+For fixed-route `independent`, planning MUST prove exactly one emitted value for every destination
+in the selected output coverage and no competing writer. Runtime-keyed independent instead proves
+the corresponding facts in its prepublication validation phase. Missing and duplicate writers
+reject before publication. For `combined`, `initial=:identity` publishes the declared identity for
+a destination receiving no contribution. The qualified `initial=:existing` law instead defines
+each destination as
+`foldl(operation, canonical_emissions; init=old(output[d]))`; no emission preserves the old value.
+The existing value is a publication-owned read and is invisible to the operation. Seeded output is
+therefore an exact read/write binding and must satisfy the ordinary non-aliasing rules against every
+operation read, other output, workspace leaf, and prepared topology array. The initial seeded row is
+deterministic modular `UInt64 +` with identity `UInt64(0)` on qualified CPU and accelerator
+backends. `fast(...), initial=:existing` is not admitted.
+
+`independent(runtime_route(D); coverage=:all|:partial)` uses bounded runtime keys without adding a
+scatter family. An enabled nonzero key must be in `1:D`; zero and disabled records participate in
+neither uniqueness nor coverage. Before publication, one deterministic validation phase selects a
+total diagnostic in class order `invalid_domain < duplicate_key < incomplete_coverage`, using
+canonical `(item,lane)` record order and the lexicographically minimum duplicate pair. `:all`
+requires exactly one record for every destination; `:partial` preserves unmatched destinations.
+No port publishes after normal validation failure. The stable-grouped lowering shares one keyed
+record workspace, gate, status transfer, phase tuple, provider lane, leases, and prepared lifecycle
+with combined and resolved keyed work. One device item constructs destination counts, exclusive
+offsets, and a stable canonical-record permutation in `O(R + D)` work; publishers visit only their
+segments. It adds no host cardinality read, callback, or synchronization.
+
+Named runtime-keyed outputs use the same lowering and lifecycle. All keyed outputs in one work must
+use runtime routes. The operation is evaluated exactly once per selected item and materializes every
+port before one shared device validation opens one shared gate. Cross-port diagnostics are ordered
+by `(failure_class, canonical_port_index, primary_record, secondary_record)`, with global class
+priority `invalid_domain < duplicate_key < incomplete_coverage`. Mixed signed and unsigned witness
+bits decode through the selected port's planned key type, preserving the public diagnostic tuple.
+Three launches initialize, apply, and group/validate all ports; one monomorphic segment publisher
+then follows per canonical port, for `3 + P` launches. A normal validation failure writes no port.
+Publication-phase provider failure has no rollback or cross-port atomicity guarantee.
 For `resolved`, the declaration MUST provide a total ranking and canonical semantic tie breaks
-independent of launch or arrival order. Empty publication is result-layout specific and explicit:
-a keyed-value result publishes its declared empty for every key receiving no candidate; an
-item-selection result publishes its declared empty for each eligible item that loses the declared
-resolution relation, leaves ineligible or masked items untouched, and reports the internal
-no-winner key state through inspection. A false `masked` lane emits nothing; it is not an identity
-or empty candidate.
+independent of launch or arrival order. Every resolved output uses the same generic candidate
+contract: an eligible operation emits `candidate(rank, value, condition)`, a false condition emits
+nothing, and a destination receiving no candidate publishes the declaration's explicit `empty`
+value. Named resolved families and result-layout-specific selection semantics are not part of the
+contract.
 
 The only bounded item-selection profile admitted before LW-R1 is the exact two-key conjunctive
 profile in the
@@ -254,13 +324,22 @@ wait while that owner remains available. Owner-task exit is not cancellation. Cr
 transfer, reclamation, and simulated provider-wide drain are outside the accepted KA contract and
 MUST be reported as unsupported rather than fabricated.
 
+For several prepared values in one provider scope, the owner MAY use
+`waitall` to couple the physical backend-wide completion boundary to all
+participating lease ledgers. A domain orchestrator chooses which events form
+that explicit settlement group; LocalWorksets does not infer scientific
+transactions or silently drain omitted preparations. The group snapshots each
+participating preparation's complete submitted tail before waiting, retains
+all arguments and workspace until success, and then reclaims every covered
+tail. Waiting an older receipt remains cumulative for that preparation.
+
 LocalWorksets can enforce aliases and reject mutation/rebinding performed through its own API. It
 MUST NOT claim a global mutation registry or interception of arbitrary external kernels/libraries.
 External mutation of leased storage is a caller contract violation. Mutable outputs and workspace
 of concurrently active prepared values must be disjoint; cross-lane coordination belongs to the
 caller or a higher-level orchestrator.
 
-## LW-A12 — Active selection is not output masking
+## LW-A12 — Active selection precedes operation evaluation
 
 Active-item selection is a submission-level count, mask, or compacted index set. It MUST be applied
 before gather, destination calculation, local-operation evaluation, and emission. It must fit the
@@ -268,10 +347,44 @@ capacity proven by `WorkPlan`. Unselected items perform no local operation. `ind
 applies to the selected workset, and storage outside the selected output domain is untouched; this
 does not add a general retain-output semantic.
 
-`masked(values, mask)` is output-lane masking. Julia evaluates `values` eagerly. It suppresses fixed
-bounded emission slots after the local operation, and false lanes mean no emission rather than an
-identity value. It is valid only when payload computation is already safe. It MUST NOT guard an
-otherwise invalid gather or destination.
+`when = :name` declares a work gate distinct from ordinary reads, outputs, and active selection.
+The named binding MUST be a read-only, one-dimensional `Bool` array of length one on the prepared
+backend and device, and MUST satisfy the ordinary non-aliasing rules against writable storage,
+workspace, and topology. The gate MUST be observed on the device in provider program order. When
+the observed value is false, no item operation is evaluated and no live output is published. When
+it is true, the operation is evaluated exactly once for each item selected by `active`. External
+mutation of a leased gate while a submission is outstanding is a caller contract violation.
+
+Conditional output is expressed by the condition carried by `emit` or `candidate`. Julia evaluates
+their payload arguments eagerly, so a false condition suppresses publication but MUST NOT be used to
+guard an otherwise invalid gather, destination, or payload calculation. The retired `masked`
+wrapper is not part of the API.
+
+A centrally qualified work with exactly one resolved output, `maximum = 1`, minimum- or maximum-rank order, a
+`UInt32` tie-break identity, one destination, and one to four read bindings MAY lower to the fused
+single-resolved profile. That profile MUST use one device thread in one `resolve_publish` launch,
+MUST admit the complete planned item capacity, MUST NOT transfer derived segment topology, and MUST
+use neither global algorithmic nor threadgroup workspace. When gated, the phase MUST snapshot the
+gate once at phase entry before operation evaluation. Inspection MUST report the invocation rule,
+gate-read timing, admitted capacity, destination count, workspace bytes, and segment-transfer fact.
+
+The fused profile MAY accept resolved record values through a wide component-record boundary of at
+most 12 primitive, backend-qualified leaves, 48 bytes, and alignment eight. A record outside the
+narrow packed boundary of eight fields, 16 bytes, and alignment four MUST use a `StructArray`
+structure-of-arrays binding. Inspection MUST expose `record_profile = :wide_component_record`,
+`record_layout = :structarray_soa`, and the logical component schema. The fused profile guarantees
+one logical winner; it does not promise atomic multi-field publication after provider failure.
+
+A centrally qualified deterministic combined work MAY use `initial=:existing`.
+The existing destination participates exactly once before canonically ordered
+candidate records; an empty destination preserves its existing value. Fixed
+routing uses the ordinary apply and canonical-publish phases. Runtime-keyed
+routing snapshots seeds into planner-owned workspace before evaluation. The
+qualified catalog is `Int32`/`UInt32` addition, minimum, maximum, bitwise and,
+or, and xor; `Float32` addition; and `UInt64` addition. Seed load, final store,
+and scalar combination must all be centrally qualified. This law is
+deterministic publication, not a transaction guarantee after an asynchronous
+provider failure.
 
 ## LW-A13 — Determinism is an evidence vector
 
@@ -310,7 +423,7 @@ launch.
 work = localwork(active_items(edges; count = :active_count);
     read = (; positions, incidence),
     outputs = (; forces = combined(vertices;
-        combine = deterministic_sum(Float32; identity = 0.0f0, order = :semantic))),
+        combine = deterministic(+, Float32(0)))),
 ) do edge, local_state
     spring_force(edge, local_state)
 end
@@ -319,7 +432,9 @@ workplan = plan(work, spring_topology; backend)
 prepared = prepare(workplan, (; positions, incidence, forces);
     workspace,
     submission = (;
-        active_count = value_slot(Int32; bounds = 0:edge_capacity),
+        active_count = value_slot(
+            Int32; bounds = Int32(0):Int32(edge_capacity)
+        ),
     ),
 )
 
@@ -330,7 +445,7 @@ wait(event)
 The arrays are exact static bindings. Reducing the active count does not replan. Changing incidence
 does.
 
-`deterministic_sum` is the concise deterministic numerical declaration: the identity is published
+`deterministic(+, Float32(0))` is the explicit deterministic numerical declaration: the identity is published
 for vertices with no contribution and contributions follow canonical semantic order. An explicitly
 named fast reduction may be offered only with its weaker backend-qualified guarantees visible in
 inspection; bare floating-point `+` is never accepted as an implicit choice.
@@ -347,12 +462,16 @@ workplan = plan(checkerboard_sequence, checkerboard_topology; backend)
 prepared = prepare(workplan, core_static_storage;
     workspace = core_workspace,
     submission = (;
-        mcs = value_slot(Int64; bounds = 1:typemax(Int64)),
+        mcs = value_slot(
+            Int64; bounds = Int64(1):typemax(Int64)
+        ),
         time = value_slot(Float64),
         parameters = value_slot(ParameterBlock),
         rng_address = value_slot(RNGAddress),
-        active_bank = value_slot(UInt8; bounds = 1:2),
-        active_count = value_slot(Int32; bounds = 0:site_capacity),
+        active_bank = value_slot(UInt8; bounds = UInt8(1):UInt8(2)),
+        active_count = value_slot(
+            Int32; bounds = Int32(0):Int32(site_capacity)
+        ),
         attempt_ordinal = value_slot(Int32),
         color_ordinal = value_slot(Int16),
         status_epoch = value_slot(UInt32),
@@ -402,7 +521,7 @@ fixed by the plan and preparation respectively.
 
 ## Rejected interpretations
 
-- `masked(values, mask)` is not active-item selection and cannot make eager payload evaluation safe.
+- Conditional emission is not active-item selection and cannot make eager payload evaluation safe.
 - Same-lane physical order does not legalize undeclared aliases.
 - A length check is not sufficient validation for submission-bound storage.
 - `PreparedWork` does not accept arbitrary dynamic arrays without declared slots.

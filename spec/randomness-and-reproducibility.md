@@ -1,6 +1,7 @@
 # Randomness and Reproducibility
 
-Status: Accepted, except where explicitly marked Provisional or Under Investigation
+Status: Accepted scientific semantics. Current backend guarantees are limited
+by [Correctness and contract stabilization](correctness-and-contract-stabilization.md).
 
 ## Purpose
 
@@ -46,17 +47,21 @@ identifier covers:
 - Distribution transformations
 - Rejection and retry behavior
 
-Any change that can alter generated values for an existing address MUST introduce a new RNG contract
-version. Implementations SHOULD retain selectable historical versions needed to reproduce published
-work. A package version alone is not an adequate RNG version.
+Any change that can alter generated values for an existing address MUST
+introduce a new RNG contract version. Published work that requires a historical
+contract uses its released package or archived environment; the current runtime
+does not retain a historical RNG selector. A package version alone is not an
+adequate RNG identity inside a checkpoint or report.
 
-`Philox4x32x10V1` is the accepted default generator and address-packing contract. The current RNG
-contract version is `1.2.0`, with lowering identity
-`philox4x32x10_semantic_address_fisher_yates_v1`. Version `1.2.0` preserves all previously admitted
-raw words and adds the checkerboard color-order stream plus a fixed unbiased Fisher--Yates lowering.
-Known-answer and raw-word qualification covers the accepted CPU and qualified accelerator profiles;
-later changes that alter a mapped word, stream encoding, or permutation lowering require a new RNG
-contract version or lowering identity as applicable.
+`Philox4x32x10V2` is the accepted default generator and address-packing
+contract. The current RNG contract version is `2.0.0`, with lowering identity
+`philox4x32x10_semantic_address_fisher_yates_v2`. V2 closes the complete
+trajectory address—replica, repeat, stream, bounded MCS/subround, operation,
+entity kind and generation, invocation, and draw—and uses the fixed unbiased
+Fisher--Yates lowering. Known-answer, open-uniform endpoint, and raw-word tests
+cover each qualified profile. A changed mapped word, stream encoding, address
+layout, or permutation lowering requires a new contract version or lowering
+identity; V1 is not a selectable live compatibility path.
 
 ## Counter-Based Addressing
 
@@ -233,10 +238,11 @@ trajectory as an uninterrupted run under the checkpoint's declared trajectory pr
 
 ### Cross-Backend Equivalence
 
-CPU, Metal, and AMDGPU MUST be statistically equivalent under common model and algorithm
-semantics. Cross-backend bitwise trajectory equality is not required. Raw addressed random bits are
-still required to match; later distribution transforms or state evolution MAY differ only as allowed
-by their numerical and portability profiles.
+Every pair of qualified backends MUST be statistically equivalent under common
+model and algorithm semantics. Cross-backend bitwise trajectory equality is
+not required. Raw addressed random bits are required to match only where the
+backend's current guarantee profile explicitly claims that property. CUDA,
+ROCm, and AMDGPU currently have no public PottsToolkit backend guarantee.
 
 The unqualified phrase "reproducible simulation" SHOULD NOT appear in normative documentation.
 
@@ -505,7 +511,7 @@ diagnostics, output checksums, and optional exact checkpoint.
 Acceptance requires:
 
 - Published known-answer vectors for the raw generator
-- Raw-bit identity on CPU, Metal, and AMDGPU
+- Raw-bit identity on each backend pair whose current guarantee profile claims it
 - Workgroup-size and asynchronous-scheduling invariance tests
 - Static or generated auditing that built-in semantic addresses do not collide
 - Multiple-random-expression rule tests

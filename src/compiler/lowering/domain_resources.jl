@@ -6,7 +6,7 @@ function _offset_matrix(offsets, dimensions)
     result = Matrix{Int8}(undef, dimensions, length(offsets))
     for (column, offset) in enumerate(offsets), dimension in 1:dimensions
         typemin(Int8) <= offset[dimension] <= typemax(Int8) ||
-            throw(ArgumentError("V1 relation radius exceeds Int8 storage"))
+            throw(ArgumentError("relation radius exceeds Int8 storage"))
         result[dimension, column] = Int8(offset[dimension])
     end
     return result

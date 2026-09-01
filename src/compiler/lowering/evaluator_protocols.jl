@@ -91,6 +91,8 @@ function registered_operation_tracker_requirements end
 function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
+    value isa LocalMath.BoundedFold &&
+        return CorePotts.CompilerSPI.LiteralExpression(value)
     if value isa Bool || value isa Integer || value isa Symbol
         return CorePotts.CompilerSPI.LiteralExpression(value)
     elseif value isa Number

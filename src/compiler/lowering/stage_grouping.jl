@@ -5,12 +5,11 @@ function _stage_descriptor_groups(descriptors)
     grouped = Vector{Vector{Any}}()
     for descriptor in descriptors
         descriptor_type = typeof(descriptor)
-        index = findfirst(==(descriptor_type), types)
-        if index === nothing
+        if isempty(types) || last(types) !== descriptor_type
             push!(types, descriptor_type)
             push!(grouped, Any[descriptor])
         else
-            push!(grouped[index], descriptor)
+            push!(last(grouped), descriptor)
         end
     end
     groups = ()

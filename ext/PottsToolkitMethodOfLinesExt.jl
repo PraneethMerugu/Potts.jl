@@ -85,7 +85,7 @@ function PottsToolkit._native_field_profile_evidence(
         PottsToolkit, :PottsToolkitModelingToolkitExt
     )
     modelingtoolkit_extension === nothing && return nothing
-    getfield(modelingtoolkit_extension, :_audited_explicit_native_ode)(component) ||
+    getfield(modelingtoolkit_extension, :_replay_safe_explicit_native_ode)(component) ||
         return nothing
     PottsToolkit._native_event_contract(component).admitted || return nothing
     profile.exact_replay && profile.deterministic || return nothing
@@ -100,15 +100,15 @@ function PottsToolkit._native_field_profile_evidence(
     nameof(algorithm_type) === :Tsit5 || return nothing
     Base.pkgversion(MethodOfLines) == v"0.11.19" || return nothing
     PottsToolkit._native_runtime_stack_identity(component) == getfield(
-        modelingtoolkit_extension, :_G5H3_TESTED_NATIVE_STACK
+        modelingtoolkit_extension, :_TESTED_NATIVE_RUNTIME_STACK
     ) || return nothing
     port = only(outputs)
-    evidence = PottsToolkit.CorePotts.BackendSPI.CapabilityEvidenceIdentity(
+    evidence = PottsToolkit._capability_evidence_identity(
         :PottsToolkit,
-        :g5h4_method_of_lines_field_cpu_exact_replay,
+        :method_of_lines_field_cpu_exact_replay,
         v"1.0.0",
         PottsToolkit._sha256_hex(
-            "g5h4-method-of-lines-field-v1",
+            "method-of-lines-field-evidence-v1",
             PottsToolkit._native_profile_fingerprint(profile),
             PottsToolkit.native_scheduled_fingerprint(component).hex,
             getfield(port, :shape),
@@ -118,7 +118,7 @@ function PottsToolkit._native_field_profile_evidence(
     )
     return (
         status = PottsToolkit.CorePotts.BackendSPI.Supported,
-        maturity = PottsToolkit.CorePotts.BackendSPI.ReplayQualified,
+        exact_replay = true,
         evidence,
     )
 end

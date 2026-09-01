@@ -3,10 +3,10 @@ using CUDA
 CUDA.functional() || error("the selected CUDA witness is not functional")
 CUDA.allowscalar(false)
 
-include("../../../test/backend_conformance/descriptor_boundary.jl")
-include("../../../test/backend_conformance/checkerboard_execution.jl")
-include("../../../test/backend_conformance/relationship_execution.jl")
-include("../../../test/backend_conformance/surface_execution.jl")
+include("../../../lib/CorePotts/test/backend_conformance/descriptor_boundary.jl")
+include("../../../lib/CorePotts/test/backend_conformance/checkerboard_execution.jl")
+include("../../../lib/CorePotts/test/backend_conformance/relationship_execution.jl")
+include("../../../lib/CorePotts/test/backend_conformance/surface_execution.jl")
 
 report = run_descriptor_boundary(
     CUDA.CuArray,

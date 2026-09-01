@@ -147,7 +147,7 @@ function _stage_lifecycle_effect_base!(
         mode, runtime, plan, workspace, request, descriptor,
         ::_CreateLifecyclePlan,
     )
-    allocation = @inbounds workspace.allocation[request]
+    allocation = _lifecycle_request_allocation(workspace, request)
     generation = _allocated_generation(runtime, allocation)
     @inbounds begin
         workspace.staged_cell_kinds[allocation] = descriptor.destination_kind
@@ -168,8 +168,8 @@ function _stage_lifecycle_effect_base!(
         ::_RemoveLifecyclePlan,
     )
     anchor = @inbounds workspace.anchor[request]
-    for position in _cell_site_range(workspace, anchor)
-        linear = Int(@inbounds workspace.cell_sites[position])
+    for record in _lifecycle_site_records(workspace, anchor)
+        linear = Int(record.site)
         _stage_owner_change!(
             mode,
             runtime,
@@ -201,7 +201,7 @@ function _stage_lifecycle_effect_base!(
         ::_DivideLifecyclePlan,
     )
     anchor = @inbounds workspace.anchor[request]
-    allocation = @inbounds workspace.allocation[request]
+    allocation = _lifecycle_request_allocation(workspace, request)
     generation = _allocated_generation(runtime, allocation)
     parent_kind = descriptor.parent_kind == 0 ?
         @inbounds(runtime.cell_kinds[anchor]) : descriptor.parent_kind
@@ -221,9 +221,10 @@ function _stage_lifecycle_effect_base!(
             detail = LifecycleDetailDivisionPlanMissing,
         )
     end
-    for position in _cell_site_range(workspace, anchor)
+    for record in _lifecycle_site_records(workspace, anchor)
+        position = Int(_lifecycle_site_position(workspace, record.site))
         @inbounds workspace.partition_labels[position] == 2 || continue
-        linear = Int(@inbounds workspace.cell_sites[position])
+        linear = Int(record.site)
         _stage_owner_change!(
             mode, runtime, plan, workspace, linear, allocation
         ) || return false
@@ -314,7 +315,7 @@ end
 
 @inline _lifecycle_state_endpoints(
     workspace, request, ::_CreateLifecyclePlan
-) = (Int32(0), @inbounds(workspace.allocation[request]))
+) = (Int32(0), _lifecycle_request_allocation(workspace, request))
 @inline _lifecycle_state_endpoints(
     workspace, request, ::_RemoveLifecyclePlan
 ) = (@inbounds(workspace.anchor[request]), Int32(0))
@@ -328,5 +329,5 @@ end
     workspace, request, ::_DivideLifecyclePlan
 ) = (
     @inbounds(workspace.anchor[request]),
-    @inbounds(workspace.allocation[request]),
+    _lifecycle_request_allocation(workspace, request),
 )

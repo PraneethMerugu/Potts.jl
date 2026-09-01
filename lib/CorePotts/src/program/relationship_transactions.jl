@@ -23,7 +23,7 @@ const _RELATIONSHIP_CREATE_CAPACITY = UInt8(0x08)
 end
 
 function _relationship_create_admission(
-        state::ProgramRelationshipState,
+        state,
         endpoint_status,
         endpoint_generations,
         schema::RelationshipStoreSchema,
@@ -50,8 +50,15 @@ function _relationship_create_admission(
         edge = Int(existing)
         existing_generation_a = @inbounds state.generation_a[edge]
         existing_generation_b = @inbounds state.generation_b[edge]
+        payload_matches = all(eachindex(state.payload)) do payload_slot
+            @inbounds isequal(
+                state.payload[payload_slot][edge],
+                request.payload[payload_slot],
+            )
+        end
         return existing_generation_a == generation_a &&
-               existing_generation_b == generation_b ?
+               existing_generation_b == generation_b &&
+               payload_matches ?
                _RELATIONSHIP_CREATE_IDEMPOTENT :
                _RELATIONSHIP_CREATE_CONTRADICTORY
     end
@@ -87,7 +94,7 @@ function _throw_relationship_create_admission(
 end
 
 function validate_relationship_request(
-        state::ProgramRelationshipState,
+        state,
         endpoint_status,
         endpoint_generations,
         schema::RelationshipStoreSchema,
@@ -106,7 +113,7 @@ function validate_relationship_request(
 end
 
 function validate_relationship_request(
-        state::ProgramRelationshipState,
+        state,
         endpoint_status,
         endpoint_generations,
         ::RelationshipStoreSchema,
@@ -225,6 +232,7 @@ end
     RemoveRelationshipRequest, RetuneRelationshipRequest,
 }) = request.edge
 
+"""Validate and apply queued requests to an unpublished relationship candidate."""
 function prepare_relationship_transaction!(
         buffer::RelationshipTransactionBuffer,
         endpoint_status,
@@ -308,7 +316,7 @@ function prepare_relationship_transaction!(
 end
 
 @inline function publish_relationship_transaction!(
-        state::ProgramRelationshipState,
+        state,
         buffer::RelationshipTransactionBuffer,
     )
     copyto!(state, buffer.staged)
@@ -330,6 +338,10 @@ end
     return nothing
 end
 
+@inline _reset_relationship_buffer!(
+    ::Nothing, states, relationship_slot
+) = nothing
+
 @inline function _reset_relationship_transactions!(
         buffers::RelationshipStorage,
         states::RelationshipStorage,
@@ -347,6 +359,10 @@ end
     end
     return nothing
 end
+
+@inline _reset_relationship_transactions!(
+    ::Nothing, states::RelationshipStorage
+) = nothing
 
 @inline function _prepare_relationship_schema!(
         schema,
@@ -379,6 +395,12 @@ end
     return nothing
 end
 
+
+@inline _prepare_relationship_buffer!(
+    ::Nothing, endpoint_status, endpoint_generations, schemas,
+    relationship_slot,
+) = nothing
+
 @inline function _prepare_relationship_transactions!(
         buffers::RelationshipStorage,
         endpoint_status,
@@ -404,8 +426,14 @@ end
     return nothing
 end
 
+@inline _prepare_relationship_transactions!(
+    ::Nothing, endpoint_status, endpoint_generations,
+    schemas::RelationshipStorage,
+) = nothing
+
 @inline _publish_relationship_buffer!(buffer, state) =
     (publish_relationship_transaction!(state, buffer); nothing)
+@inline _publish_relationship_buffer!(::Nothing, state) = nothing
 
 @inline function _publish_relationship_state!(
         state, buffers, relationship_slot
@@ -437,8 +465,13 @@ end
     return nothing
 end
 
+@inline _publish_relationship_transactions!(
+    states::RelationshipStorage, ::Nothing
+) = nothing
+
+"""Atomically apply a finite request collection to one host relationship state."""
 function apply_relationship_requests!(
-        state::ProgramRelationshipState,
+        state,
         endpoint_status,
         endpoint_generations,
         schema::RelationshipStoreSchema,
@@ -468,7 +501,7 @@ protocol. Callers must still validate endpoint identities against the same
 settled snapshot before constructing a remove or retune request.
 """
 function relationship_edge_index(
-        state::ProgramRelationshipState,
+        state,
         endpoint_a::Integer,
         endpoint_b::Integer,
     )

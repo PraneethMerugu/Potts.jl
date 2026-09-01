@@ -92,6 +92,20 @@ end
 @inline _lifecycle_succeeded(workspace) =
     lifecycle_workspace_status(workspace).code === ProgramStatusSuccess
 
+function _validate_lifecycle_ownership!(runtime, workspace)
+    maximum = length(runtime.cell_kinds)
+    for owner in runtime.ownership
+        owner <= 0 && continue
+        owner <= maximum || return _set_lifecycle_status!(
+            workspace,
+            ProgramStatusInvariant;
+            anchor = owner,
+            detail = LifecycleDetailOwnershipExceedsCellCapacity,
+        )
+    end
+    return true
+end
+
 struct LifecycleEvaluationFailed end
 
 abstract type AbstractLifecycleExecutionMode end
@@ -109,65 +123,12 @@ struct BackendLifecycleExecution <: AbstractLifecycleExecutionMode end
     return false
 end
 
-function _index_lifecycle_representative_sites!(runtime, workspace)
-    fill!(workspace.cell_site_counts, 0)
-    fill!(workspace.cell_site_starts, 0)
-    fill!(workspace.cell_site_cursor, 0)
-    fill!(workspace.site_position, 0)
-    for linear in eachindex(runtime.ownership)
-        owner = @inbounds runtime.ownership[linear]
-        owner > 0 || continue
-        if owner > length(workspace.representative_site)
-            _set_lifecycle_status!(
-                workspace,
-                ProgramStatusInvariant;
-                anchor = owner,
-                detail = LifecycleDetailOwnershipExceedsCellCapacity,
-            )
-            return false
-        end
-        @inbounds iszero(workspace.representative_site[owner]) &&
-            (workspace.representative_site[owner] = Int32(linear))
-        @inbounds workspace.cell_site_counts[owner] += Int32(1)
-    end
-    cursor = Int32(1)
-    for cell in eachindex(workspace.cell_site_counts)
-        @inbounds begin
-            workspace.cell_site_starts[cell] = cursor
-            workspace.cell_site_cursor[cell] = cursor
-            cursor += workspace.cell_site_counts[cell]
-        end
-    end
-    if cursor > length(runtime.ownership) + 1
-        _set_lifecycle_status!(
-            workspace,
-            ProgramStatusInvariant;
-            detail = LifecycleDetailCellSiteIndexExceedsLattice,
-        )
-        return false
-    end
-    for linear in eachindex(runtime.ownership)
-        owner = @inbounds runtime.ownership[linear]
-        owner > 0 || continue
-        position = @inbounds workspace.cell_site_cursor[owner]
-        @inbounds begin
-            workspace.cell_sites[position] = Int32(linear)
-            workspace.site_position[linear] = position
-            workspace.cell_site_cursor[owner] = position + Int32(1)
-        end
-    end
-    return true
-end
-
-@inline function _cell_site_range(workspace, cell::Int32)
-    start = Int(@inbounds workspace.cell_site_starts[cell])
-    count = Int(@inbounds workspace.cell_site_counts[cell])
-    return start:(start + count - 1)
-end
-
 @inline function _lifecycle_context_site(runtime, workspace, anchor::Int32)
-    linear = anchor > 0 ?
-        @inbounds(workspace.representative_site[anchor]) : Int32(0)
+    linear = Int32(0)
+    if anchor > 0
+        records = _lifecycle_site_records(workspace, anchor)
+        isempty(records) || (linear = @inbounds records[1].site)
+    end
     iszero(linear) && (linear = Int32(1))
     return CartesianIndices(runtime.ownership)[Int(linear)]
 end
@@ -232,122 +193,6 @@ end
 ) = _evaluate_lifecycle_checked(
     HostLifecycleExecution(), plan, index, context, descriptor, workspace
 )
-
-function _emit_lifecycle_request!(
-        workspace::LifecycleWorkspace,
-        descriptor_index::Int,
-        descriptor::LifecycleDescriptor,
-        anchor::Int32,
-        generation::UInt32,
-    )
-    index = Int(lifecycle_request_count(workspace)) + 1
-    if index > length(workspace.descriptor)
-        _set_lifecycle_status!(
-            workspace,
-            ProgramStatusFootprint;
-            source = descriptor.source_handle,
-            anchor,
-            detail = LifecycleDetailRequestBoundExceeded,
-        )
-        return 0
-    end
-    @inbounds begin
-        workspace.descriptor[index] = Int32(descriptor_index)
-        workspace.anchor[index] = anchor
-        workspace.generation[index] = generation
-        workspace.occurrence[index] = 0
-        workspace.active[index] = true
-    end
-    set_lifecycle_request_count!(workspace, index)
-    return index
-end
-
-function _emit_lifecycle_requests!(runtime, plan, workspace)
-    next_mcs = runtime.mcs + 1
-    for descriptor_index in eachindex(plan.descriptors)
-        descriptor = @inbounds plan.descriptors[descriptor_index]
-        _lifecycle_due(descriptor, next_mcs) || continue
-        if descriptor.domain === ModelLifecycleDomain
-            context = _LifecycleTriggerContext(
-                runtime,
-                descriptor.source_identity,
-                descriptor.action_identity,
-                descriptor.trigger_workspace_maximum,
-                Int32(0),
-                lifecycle_request_count(workspace) + Int32(1),
-                Int32(0),
-                UInt32(0),
-                _lifecycle_context_site(runtime, workspace, Int32(0)),
-                Int32(0),
-                UInt16(descriptor.source_handle),
-            )
-            enabled = _evaluate_lifecycle_checked(
-                plan, descriptor.trigger_evaluator, context, descriptor, workspace
-            )
-            enabled isa LifecycleEvaluationFailed && return false
-            enabled isa Bool || return _set_lifecycle_status!(
-                workspace,
-                ProgramStatusEvaluator;
-                source = descriptor.source_handle,
-                detail = LifecycleDetailTriggerNotBoolean,
-            )
-            if enabled
-                emitted = _emit_lifecycle_request!(
-                workspace,
-                descriptor_index,
-                descriptor,
-                Int32(0),
-                UInt32(0),
-            )
-                iszero(emitted) && return false
-            end
-        else
-            for cell in eachindex(runtime.cell_kinds)
-                kind = @inbounds runtime.cell_kinds[cell]
-                kind == descriptor.domain_kind || continue
-                generation = @inbounds runtime.cell_generations[cell]
-                iszero(generation) && return _set_lifecycle_status!(
-                    workspace, ProgramStatusStaleGeneration; anchor = cell
-                )
-                context = _LifecycleTriggerContext(
-                    runtime,
-                    descriptor.source_identity,
-                    descriptor.action_identity,
-                    descriptor.trigger_workspace_maximum,
-                    Int32(0),
-                    lifecycle_request_count(workspace) + Int32(1),
-                    Int32(cell),
-                    generation,
-                    _lifecycle_context_site(runtime, workspace, Int32(cell)),
-                    Int32(0),
-                    UInt16(descriptor.source_handle),
-                )
-                enabled = _evaluate_lifecycle_checked(
-                    plan, descriptor.trigger_evaluator, context, descriptor, workspace
-                )
-                enabled isa LifecycleEvaluationFailed && return false
-                enabled isa Bool || return _set_lifecycle_status!(
-                    workspace,
-                    ProgramStatusEvaluator;
-                    source = descriptor.source_handle,
-                    anchor = cell,
-                    detail = LifecycleDetailTriggerNotBoolean,
-                )
-                if enabled
-                    emitted = _emit_lifecycle_request!(
-                    workspace,
-                    descriptor_index,
-                    descriptor,
-                    Int32(cell),
-                    generation,
-                )
-                    iszero(emitted) && return false
-                end
-            end
-        end
-    end
-    return true
-end
 
 @inline function _linear_neighbor(
         program,

@@ -399,7 +399,7 @@ function _package_identity(module_value)
     )
 end
 
-const _G5H3_TESTED_NATIVE_STACK = (
+const _TESTED_NATIVE_RUNTIME_STACK = (
     ModelingToolkit = (
         package = "ModelingToolkit",
         uuid = "961ee093-0014-501f-94e3-6117800e7a78",
@@ -423,7 +423,7 @@ const _G5H3_TESTED_NATIVE_STACK = (
     Symbolics = (
         package = "Symbolics",
         uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7",
-        version = v"7.34.1",
+        version = v"7.37.0",
     ),
     Julia = (
         version = v"1.12.1",
@@ -470,7 +470,7 @@ end
 
 const _AUDITED_SCALAR_OPERATIONS = (+, -, *, /, ^)
 
-function _audited_numeric_literal(value)
+function _replay_safe_numeric_literal(value)
     return try
         Symbolics.value(value) isa Number
     catch
@@ -478,33 +478,33 @@ function _audited_numeric_literal(value)
     end
 end
 
-function _audited_scalar_expression(value, known)
+function _replay_safe_scalar_expression(value, known)
     unwrapped = Symbolics.unwrap(value)
     any(candidate -> isequal(unwrapped, Symbolics.unwrap(candidate)), known) &&
         return true
-    Symbolics.iscall(unwrapped) || return _audited_numeric_literal(unwrapped)
+    Symbolics.iscall(unwrapped) || return _replay_safe_numeric_literal(unwrapped)
     operation = Symbolics.operation(unwrapped)
     operation isa ModelingToolkitBase.Differential ||
         any(candidate -> operation === candidate, _AUDITED_SCALAR_OPERATIONS) ||
         return false
     return all(
-        argument -> _audited_scalar_expression(argument, known),
+        argument -> _replay_safe_scalar_expression(argument, known),
         Symbolics.arguments(unwrapped),
     )
 end
 
-function _audited_scalar_equation(equation, known; audit_lhs::Bool = true)
+function _replay_safe_scalar_equation(equation, known; check_lhs::Bool = true)
     equation isa Symbolics.Equation || return false
-    (!audit_lhs || _audited_scalar_expression(equation.lhs, known)) &&
-        _audited_scalar_expression(equation.rhs, known)
+    (!check_lhs || _replay_safe_scalar_expression(equation.lhs, known)) &&
+        _replay_safe_scalar_expression(equation.rhs, known)
 end
 
-function _audited_scalar_map(value, known)
+function _replay_safe_scalar_map(value, known)
     value === nothing && return true
     try
         return all(pair ->
-            _audited_scalar_expression(first(pair), known) &&
-            _audited_scalar_expression(last(pair), known),
+            _replay_safe_scalar_expression(first(pair), known) &&
+            _replay_safe_scalar_expression(last(pair), known),
             pairs(value),
         )
     catch
@@ -512,7 +512,7 @@ function _audited_scalar_map(value, known)
     end
 end
 
-function _audited_native_lifecycle_map(component, expression)
+function _replay_safe_native_lifecycle_map(component, expression)
     expression isa PottsToolkit.NativeLogicalState && return true
     system = PottsToolkit.native_scheduled_system(component)
     known = Any[
@@ -533,13 +533,13 @@ function _audited_native_lifecycle_map(component, expression)
     for pair in declarations
         index = SymbolicIndexingInterface.variable_index(system, first(pair))
         index isa Integer || return false
-        _audited_scalar_expression(last(pair), known) || return false
+        _replay_safe_scalar_expression(last(pair), known) || return false
         push!(indices, Int(index))
     end
     return length(unique(indices)) == length(indices)
 end
 
-function _audited_native_lifecycle(component, lifecycle)
+function _replay_safe_native_lifecycle(component, lifecycle)
     lifecycle isa PottsToolkit.PerCellNativeLifecycle || return false
     lifecycle.creation isa Union{
         PottsToolkit.PreserveNativeInitialization, PottsToolkit.Unsupported,
@@ -548,9 +548,9 @@ function _audited_native_lifecycle(component, lifecycle)
     transition_ok = transition isa Union{
         PottsToolkit.Preserve, PottsToolkit.Unsupported,
     } || transition isa PottsToolkit.ResetTo &&
-        _audited_native_lifecycle_map(component, transition.expression) ||
+        _replay_safe_native_lifecycle_map(component, transition.expression) ||
         transition isa PottsToolkit.Transform &&
-        _audited_native_lifecycle_map(component, transition.expression)
+        _replay_safe_native_lifecycle_map(component, transition.expression)
     transition_ok || return false
     division = lifecycle.division
     return division isa Union{
@@ -559,22 +559,22 @@ function _audited_native_lifecycle(component, lifecycle)
             division.fraction isa Real && isfinite(division.fraction) &&
             0 <= division.fraction <= 1 ||
         division isa PottsToolkit.PreserveParentResetDaughter &&
-            _audited_native_lifecycle_map(component, division.expression) ||
+            _replay_safe_native_lifecycle_map(component, division.expression) ||
         division isa PottsToolkit.ResetBoth &&
-            _audited_native_lifecycle_map(
+            _replay_safe_native_lifecycle_map(
                 component, division.parent_expression
-            ) && _audited_native_lifecycle_map(
+            ) && _replay_safe_native_lifecycle_map(
                 component, division.daughter_expression
             ) ||
         division isa PottsToolkit.TransformDaughters &&
-            _audited_native_lifecycle_map(
+            _replay_safe_native_lifecycle_map(
                 component, division.parent_expression
-            ) && _audited_native_lifecycle_map(
+            ) && _replay_safe_native_lifecycle_map(
                 component, division.daughter_expression
             )
 end
 
-function _audited_explicit_native_ode(component)
+function _replay_safe_explicit_native_ode(component)
     system = PottsToolkit.native_scheduled_system(component)
     ivs = ModelingToolkitBase.independent_variables(system)
     length(ivs) == 1 || return false
@@ -624,19 +624,19 @@ function PottsToolkit._native_replay_schema(
     ]
     observed = ModelingToolkitBase.observed(system)
     append!(known, (equation.lhs for equation in observed))
-    all(equation -> _audited_scalar_equation(equation, known),
+    all(equation -> _replay_safe_scalar_equation(equation, known),
         ModelingToolkitBase.equations(system)) || return unreviewed
-    all(equation -> _audited_scalar_equation(
-            equation, known; audit_lhs = false
+    all(equation -> _replay_safe_scalar_equation(
+        equation, known; check_lhs = false
         ), observed) || return unreviewed
-    all(equation -> _audited_scalar_equation(equation, known),
+    all(equation -> _replay_safe_scalar_equation(equation, known),
         ModelingToolkitBase.initialization_equations(system)) ||
         return unreviewed
-    _audited_scalar_map(
+    _replay_safe_scalar_map(
         ModelingToolkitBase.initial_conditions(system), known
     ) ||
         return unreviewed
-    _audited_scalar_map(ModelingToolkitBase.guesses(system), known) ||
+    _replay_safe_scalar_map(ModelingToolkitBase.guesses(system), known) ||
         return unreviewed
     schema_payload = (
         equations = ModelingToolkitBase.equations(system),
@@ -678,7 +678,7 @@ function PottsToolkit._native_profile_evidence(
     version = package.version
     options_class = PottsToolkit._native_profile_options_class(profile)
     tested_stack = PottsToolkit._native_runtime_stack_identity(component) ==
-        _G5H3_TESTED_NATIVE_STACK
+        _TESTED_NATIVE_RUNTIME_STACK
     default_algorithm = _is_public_default_algorithm_instance(
         profile.algorithm
     )
@@ -687,11 +687,11 @@ function PottsToolkit._native_profile_evidence(
     lifecycle = getfield(declaration, :lifecycle)
     scope_qualified = scope isa PottsToolkit.Global ||
         scope isa PottsToolkit.PerCell &&
-        _audited_native_lifecycle(component, lifecycle)
+        _replay_safe_native_lifecycle(component, lifecycle)
     execution_qualified = profile.execution isa PottsToolkit.SerialNativeExecution ||
         scope isa PottsToolkit.PerCell &&
         profile.execution isa PottsToolkit.BatchedNativeExecution &&
-        _audited_explicit_native_ode(component)
+        _replay_safe_explicit_native_ode(component)
     ode_replay_qualified = tested_stack && default_algorithm &&
         scope_qualified && execution_qualified &&
         replay_schema.family === :scalar_algebraic_differential_v1 &&
@@ -705,14 +705,14 @@ function PottsToolkit._native_profile_evidence(
     ode_replay_qualified || return nothing
     suite = scope isa PottsToolkit.PerCell &&
             profile.execution isa PottsToolkit.BatchedNativeExecution ?
-        :g5h4_per_cell_batched_cpu_native_ode_exact_replay :
+        :per_cell_batched_cpu_native_ode_exact_replay :
         scope isa PottsToolkit.PerCell ?
-        :g5h4_per_cell_serial_native_ode_exact_replay :
+        :per_cell_serial_native_ode_exact_replay :
         options_class === :fixed_step_bounded_failure ?
-        :g5h3_native_failure_atomicity_exact :
-        :g5h3_native_ode_exact_replay
+        :native_failure_atomicity_exact :
+        :native_ode_exact_replay
     evidence_fingerprint = PottsToolkit._sha256_hex(
-        "g5h3-native-evidence-v2",
+        "native-runtime-evidence-v2",
         PottsToolkit._native_profile_fingerprint(profile),
         PottsToolkit.native_scheduled_fingerprint(component).hex,
         PottsToolkit._native_runtime_stack_identity(component),
@@ -721,7 +721,7 @@ function PottsToolkit._native_profile_evidence(
         scope,
         lifecycle,
     )
-    evidence = PottsToolkit.CorePotts.BackendSPI.CapabilityEvidenceIdentity(
+    evidence = PottsToolkit._capability_evidence_identity(
         :PottsToolkit,
         suite,
         v"1.0.0",
@@ -729,7 +729,7 @@ function PottsToolkit._native_profile_evidence(
     )
     return (
         status = PottsToolkit.CorePotts.BackendSPI.Supported,
-        maturity = PottsToolkit.CorePotts.BackendSPI.ReplayQualified,
+        exact_replay = true,
         evidence,
     )
 end
@@ -784,7 +784,7 @@ function PottsToolkit.preflight_native_component(
             :native_execution_mode,
             "batched/Metal native execution admits only fixed-shape ODE components",
         ))
-        _audited_explicit_native_ode(component) || throw(_path_error(
+        _replay_safe_explicit_native_ode(component) || throw(_path_error(
             component,
             :native_execution_mode,
             "batched/Metal native execution requires an explicit identity-mass-matrix ODE with one retained differential equation per unknown",
@@ -846,9 +846,7 @@ function PottsToolkit.preflight_native_component(
     ), point.guesses)
     if profile.exact_replay
         evidence = PottsToolkit._native_profile_evidence(component, profile)
-        (evidence === nothing || Int(evidence.maturity) < Int(
-            PottsToolkit.CorePotts.BackendSPI.ReplayQualified
-        )) &&
+        (evidence === nothing || !evidence.exact_replay) &&
             throw(_path_error(
                 component,
                 :exact_replay_evidence,

@@ -1,5 +1,6 @@
 # Sole host-wait and device-to-host publication boundary for queued programs.
 
+"""Reason a caller requires queued work to cross a host publication boundary."""
 @enum ProgramSettlementReason::UInt8 begin
     FinalizationSettlement = 0x01
     PublicStepSettlement = 0x02
@@ -13,7 +14,30 @@
     StatisticsSettlement = 0x0a
     ObservationSettlement = 0x0b
 end
+"""Settlement requested before runtime finalization."""
+FinalizationSettlement
+"""Settlement requested by the public one-step API."""
+PublicStepSettlement
+"""Settlement requested before saving logical state."""
+SaveSettlement
+"""Settlement requested before invoking a host callback."""
+HostCallbackSettlement
+"""Settlement requested before constructing an exact checkpoint."""
+CheckpointSettlement
+"""Settlement requested before indexed state observation."""
+IndexReadSettlement
+"""Settlement requested before indexed state mutation."""
+IndexMutationSettlement
+"""Settlement requested before component-state exchange."""
+ComponentExchangeSettlement
+"""Settlement requested to report execution progress."""
+ProgressSettlement
+"""Settlement requested to publish execution statistics."""
+StatisticsSettlement
+"""Settlement requested to materialize a scientific observation."""
+ObservationSettlement
 
+"""Requested publication reason and whether a complete snapshot is required."""
 struct ProgramSettlementRequest
     reason::ProgramSettlementReason
     full_snapshot::Bool
@@ -23,6 +47,7 @@ ProgramSettlementRequest(
     reason::ProgramSettlementReason; full_snapshot::Bool = false
 ) = ProgramSettlementRequest(reason, full_snapshot)
 
+"""Result of draining queued work and optionally materializing a logical snapshot."""
 struct ProgramSettlementReceipt{S, F, L}
     submitted_mcs::Int
     drained_mcs::Int
@@ -66,8 +91,9 @@ function update_program_parameters!(
         throw(ArgumentError("runtime parameter buffer has the wrong length"))
     replacement = _validated_program_parameters(runtime.program, parameters)
     copyto!(runtime.parameters, replacement)
-    workspace = runtime.engine_workspace
-    if workspace isa CheckerboardWorkspace
+    execution_workspace = runtime.engine_workspace
+    if _is_checkerboard_execution_workspace(execution_workspace)
+        workspace = _checkerboard_core(execution_workspace)
         primary = workspace.state.parameters
         primary === runtime.parameters || copyto!(primary, replacement)
         secondary = workspace.alternate_state.parameters
@@ -84,15 +110,26 @@ function update_program_descriptor_state!(
     runtime.settled || throw(ArgumentError(
         "state updates require a settled MCS boundary"
     ))
-    copyto_auxiliary_state!(runtime.descriptor_state, descriptor_state)
-    workspace = runtime.engine_workspace
-    if workspace isa CheckerboardWorkspace
+    execution_workspace = runtime.engine_workspace
+    destinations = AuxiliaryState[runtime.descriptor_state]
+    if _is_checkerboard_execution_workspace(execution_workspace)
+        workspace = _checkerboard_core(execution_workspace)
         primary = workspace.state.descriptor_state
-        primary === runtime.descriptor_state ||
-            copyto_auxiliary_state!(primary, descriptor_state)
+        primary === runtime.descriptor_state || push!(destinations, primary)
         secondary = workspace.alternate_state.descriptor_state
         secondary === primary || secondary === runtime.descriptor_state ||
-            copyto_auxiliary_state!(secondary, descriptor_state)
+            push!(destinations, secondary)
+    end
+    _validate_auxiliary_state_candidate(
+        runtime.program.descriptor_plan.state_layout,
+        runtime.descriptor_state,
+        descriptor_state,
+    )
+    for destination in destinations
+        _require_auxiliary_copy_compatible(destination, descriptor_state)
+    end
+    for destination in destinations
+        copyto_auxiliary_state!(destination, descriptor_state)
     end
     return runtime
 end
@@ -233,12 +270,13 @@ state to the host.
 function _settle_program_after_wait!(
         workspace::CheckerboardWorkspace,
         request::ProgramSettlementRequest,
+        did_synchronize::Bool,
     )
     execution = workspace.execution
     submitted = execution.submitted_mcs
     previous_drained = execution.drained_mcs
     backend = KernelAbstractions.get_backend(workspace.state.ownership)
-    execution.synchronization_count += 1
+    did_synchronize && (execution.synchronization_count += 1)
     execution.drained_mcs = submitted
     execution.settlement_count += 1
 
@@ -309,60 +347,94 @@ function _settle_program_after_wait!(
     )
 end
 
-function settle_program!(
-        workspace::CheckerboardWorkspace,
-        request::ProgramSettlementRequest,
+function _checkerboard_settlement_events(
+        execution::_CheckerboardExecutionWorkspace
     )
-    _require_program_execution_capability(
-        workspace.capability_report;
-        operation = :backend_settle_program,
-    )
-    execution = workspace.execution
-    submitted = execution.submitted_mcs
-    previous_drained = execution.drained_mcs
-    backend = KernelAbstractions.get_backend(workspace.state.ownership)
-    try
-        KernelAbstractions.synchronize(backend)
-    catch error
-        throw(LifecycleBackendFailure(
-            error, previous_drained + 1, submitted
+    identity = execution.identity
+    identity.scientific_abi ===
+        :corepotts_checkerboard_transaction_v1 || throw(ArgumentError(
+        "checkerboard settlement received an unknown scientific ABI"
+    ))
+    identity.queue_policy.completion ===
+        :grouped_cumulative_receipts || throw(ArgumentError(
+        "checkerboard settlement received an unsupported completion policy"
+    ))
+    identity.queue_policy.receipt_cumulative === true &&
+        identity.queue_policy.receipt_selective === false ||
+        throw(ArgumentError(
+            "checkerboard settlement requires cumulative provider-tail receipts"
         ))
+    lifecycle = execution.receipts.lifecycle
+    banks = (
+        execution.receipts.mechanics,
+        lifecycle.direct, lifecycle.planning,
+        lifecycle.site_index, lifecycle.request_index,
+        lifecycle.emission, lifecycle.selection,
+    )
+    return Tuple(receipt for family in banks for bank in family for receipt in bank)
+end
+
+function _clear_checkerboard_settlement_events!(execution)
+    lifecycle = execution.receipts.lifecycle
+    banks = (
+        execution.receipts.mechanics,
+        lifecycle.direct, lifecycle.planning,
+        lifecycle.site_index, lifecycle.request_index,
+        lifecycle.emission, lifecycle.selection,
+    )
+    for family in banks, bank in family
+        empty!(bank)
     end
-    return _settle_program_after_wait!(workspace, request)
+    return nothing
+end
+
+function _wait_checkerboard_execution!(
+        execution::_CheckerboardExecutionWorkspace,
+        backend,
+    )
+    submitted = _checkerboard_settlement_events(execution)
+    did_synchronize = execution.core.execution.submitted_mcs !=
+        execution.core.execution.drained_mcs ||
+        any(LocalMath.ispending, submitted)
+    isempty(submitted) || LocalMath.waitall(submitted)
+    KernelAbstractions.synchronize(backend)
+    _clear_checkerboard_settlement_events!(execution)
+    return did_synchronize
+end
+
+function _synchronize_checkerboard_execution!(
+        execution::_CheckerboardExecutionWorkspace,
+        backend,
+    )
+    submitted = _checkerboard_settlement_events(execution)
+    isempty(submitted) || LocalMath.waitall(submitted)
+    KernelAbstractions.synchronize(backend)
+    _clear_checkerboard_settlement_events!(execution)
+    return nothing
 end
 
 function settle_program!(
-        candidate::_LocalWorksetsCheckerboardWorkspace,
+        execution_graph::_CheckerboardExecutionWorkspace,
         request::ProgramSettlementRequest,
     )
-    workspace = candidate.direct
+    workspace = execution_graph.core
+    capability = execution_graph.capability_report
     _require_program_execution_capability(
-        workspace.capability_report;
+        capability;
         operation = :backend_settle_program,
     )
     execution = workspace.execution
     submitted = execution.submitted_mcs
     previous_drained = execution.drained_mcs
     backend = KernelAbstractions.get_backend(workspace.state.ownership)
-    try
-        event = candidate.last_event
-        if event === nothing
-            KernelAbstractions.synchronize(backend)
-        else
-            invoke(
-                _wait_localworksets_trusted!,
-                Tuple{
-                    _LocalWorksetsTrustedAdapter,
-                    LocalWorksets.WorkEvent,
-                },
-                candidate.trusted_adapter,
-                event,
-            )
-        end
+    did_synchronize = try
+        _wait_checkerboard_execution!(execution_graph, backend)
     catch error
         throw(LifecycleBackendFailure(
             error, previous_drained + 1, submitted
         ))
     end
-    return _settle_program_after_wait!(workspace, request)
+    return _settle_program_after_wait!(
+        workspace, request, did_synchronize
+    )
 end

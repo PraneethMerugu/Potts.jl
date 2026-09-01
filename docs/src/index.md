@@ -7,7 +7,7 @@ package responsibilities:
 |:--|:--|
 | `PottsToolkit` | Symbolic authoring, composition, structural compilation, native MTK coupling, and the SciML lifecycle |
 | `CorePotts` | MTK-free CPM execution, identity, lifecycle, relationships, checkpoints, and CPU/GPU backend contracts |
-| `LocalWorksets` | Backend-portable validated local connectivity, bounded conflict handling, workspace, lifetime, and inspection beneath CorePotts |
+| `LocalMath` | Backend-portable validated local connectivity, bounded conflict handling, workspace, lifetime, and inspection beneath CorePotts |
 | `MakiePotts` | Visualization from public saved observations and solutions |
 
 The public lifecycle is:
@@ -23,6 +23,8 @@ executable artifact.
 
 ## Start here
 
+- [LocalMath in ten minutes](@ref localmath-quickstart) is a complete
+  standalone CPU path from equations through execution and inspection.
 - [Author and compose](@ref author-and-compose) introduces the symbolic model.
 - [Initialize and execute](@ref initialize-and-execute) runs the model through
   the standard SciML lifecycle.
@@ -34,7 +36,10 @@ executable artifact.
 - [Wortel 2021](@ref wortel-2021-integration) and [Merks 2006](@ref
   merks-2006-integration) execute complete final-interface integration
   programs during this documentation build.
+- [OpenVT monolayer](@ref openvt-monolayer-integration) replaces the retired
+  research notebooks with a bounded 11-cell calibration, zero-adhesion
+  monolayer, free-surface inhibition classification, and lifecycle recipe.
 
 The published-model programs are API and integration witnesses. They do not
-claim the paper-source scientific qualification reserved for the later G7
+claim paper-source scientific qualification reserved for future scientific
 review.

@@ -3,7 +3,6 @@
         :CorePotts,
         :CompilerSPI,
         :BackendSPI,
-        :LocalWorksets,
         :ProgramInitialState,
         :ProgramSnapshot,
         :ProgramRuntime,
@@ -40,7 +39,7 @@
         :program_lifecycle_receipt,
     ))
     @test Set(names(CorePotts)) == expected
-    @test CorePotts.LocalWorksets === LocalWorksets
+    @test !Base.ispublic(CorePotts, :LocalMath)
 
     @test CorePotts.CompilerSPI.CompiledPottsProgram ===
           CorePotts.CompiledPottsProgram
@@ -62,6 +61,24 @@
     @test Base.ispublic(
         CorePotts.BackendSPI, :stage_program_descriptor_state!
     )
+    @test all((
+            :OwnershipTrackerSource,
+            :AcceptedCommitTrackerVisibility,
+            :ClaimedOwnerExclusiveTrackerConcurrency,
+            :SourceTargetOwnerUpdateBound,
+            :PersistTrackerCheckpoint,
+            :ReconstructTrackerCheckpoint,
+            :TrackerSupport,
+            :ConstantTrackerCost,
+            :LatticeLinearTrackerCost,
+            :OwnerScalarDelta,
+            :SourceTargetScalarDelta,
+            :tracker_rebuild,
+            :tracker_recompute,
+            :tracker_proposal_delta,
+        )) do name
+        Base.ispublic(CorePotts.CompilerSPI, name)
+    end
 
     compiler_names = Set(
         names(
@@ -74,6 +91,9 @@
         )
     )
     @test isempty(intersect(compiler_names, backend_names))
+    @test isempty(Base.Docs.undocumented_names(
+        CorePotts.CompilerSPI; private = false
+    ))
     for (spi, spi_names) in (
             (CorePotts.CompilerSPI, compiler_names),
             (CorePotts.BackendSPI, backend_names),
@@ -82,5 +102,23 @@
             isdefined(CorePotts, name) &&
                 getfield(spi, name) === getfield(CorePotts, name)
         end
+    end
+end
+
+@testset "every public CorePotts binding owns help" begin
+    for module_value in (
+            CorePotts,
+            CorePotts.CompilerSPI,
+            CorePotts.BackendSPI,
+        )
+        public_names = filter(
+            name -> Base.ispublic(module_value, name) &&
+                    !startswith(String(name), "#"),
+            names(module_value; all = true),
+        )
+        undocumented = filter(
+            name -> !Docs.hasdoc(module_value, name), public_names
+        )
+        @test isempty(undocumented)
     end
 end

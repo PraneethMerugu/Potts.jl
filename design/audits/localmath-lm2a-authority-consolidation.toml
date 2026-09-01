@@ -1,0 +1,216 @@
+schema_version = "1.0.0"
+specification = "spec/localmath-direct-cutover.md"
+predecessor = "design/audits/localmath-lm1-authority-cutover.toml"
+target_gate = "LM-2A"
+status = "implemented_review_approved"
+
+completion_rule = "LM-2A closes only when every retained semantic fact has one named authority, every replaced authority is absent, focused CPU and real-GPU evidence passes, the frozen compiler and stage-phase bounds pass, and the independent review gate approves the live source."
+phase_count_rule = "The four-stage synthetic witness owns exactly 21 stage-local physical phases. The program-scope validation reset is one additional KernelAbstractions launch; dynamic relation receipts are representation-dependent and reported separately."
+
+required_rows = [
+  "publication-basis",
+  "routing-and-grouping",
+  "qualification",
+  "workspace",
+  "failure-and-status",
+  "inspection-and-evidence",
+  "obsolete-conjunctive",
+  "physical-launches",
+]
+
+[inventories]
+workspace_authority_structs = 1
+stage_planning_calls_in_execution = 1
+localworksets_kernels = 35
+localworksets_kernel_names = [
+  "_candidate_stage_atomic_initialize_kernel!",
+  "_candidate_stage_atomic_kernel!",
+  "_candidate_stage_evaluate_kernel!",
+  "_candidate_stage_finalize_kernel!",
+  "_candidate_stage_publish_kernel!",
+  "_candidate_stage_reset_kernel!",
+  "_candidate_stage_validate_kernel!",
+  "_collect_stage_evaluate_kernel!",
+  "_collect_stage_finalize_kernel!",
+  "_collect_stage_reset_kernel!",
+  "_compacted_directory_kernel!",
+  "_compacted_local_bitonic_kernel!",
+  "_compacted_merge_kernel!",
+  "_compacted_publish_kernel!",
+  "_compacted_scan_add_kernel!",
+  "_compacted_scan_block_kernel!",
+  "_compacted_scatter_kernel!",
+  "_compacted_validate_order_kernel!",
+  "_destination_grouping_directory_kernel!",
+  "_destination_grouping_local_sort_kernel!",
+  "_destination_grouping_merge_kernel!",
+  "_direct_identity_unique_kernel!",
+  "_finalize_relation_content_validation_kernel!",
+  "_ordered_fold_stage_bitonic_kernel!",
+  "_ordered_fold_stage_evaluate_kernel!",
+  "_ordered_fold_stage_finalize_kernel!",
+  "_ordered_fold_stage_initialize_kernel!",
+  "_ordered_fold_stage_kernel!",
+  "_ordered_fold_stage_reset_kernel!",
+  "_ordered_fold_stage_validate_order_kernel!",
+  "_reset_relation_content_validation_kernel!",
+  "_stage_backend_qualification_gate_kernel!",
+  "_stage_program_status_reset_kernel!",
+  "_stage_relation_receipt_kernel!",
+  "_validate_relation_content_kernel!",
+]
+four_stage_stage_phases = 21
+four_stage_program_gate_launches = 1
+
+[compiler_gate]
+manifest = "design/evidence/localmath/lm2a/compiler-qualified-synthetic-current/manifest.toml"
+stage_counts = [1, 4, 8, 13, 32]
+stage_phase_counts = [1, 21, 52, 89, 230]
+minimum_repetitions = 3
+minimum_warm_samples = 7
+one_stage_seconds = 2.85098660505
+host_intercept_seconds = -1.21441894395
+host_slope_seconds_per_stage = 4.065405549
+
+[flagship_gate]
+manifest = "design/evidence/localmath/lm2a/compiler-qualified-flagship/manifest.toml"
+minimum_repetitions = 3
+minimum_warm_samples = 7
+stage_count = 1
+physical_launch_count = 9
+physical_bank_count = 2
+operation_fact_count = 3
+qualified_operation_fact_count = 3
+lowering_identity = "stage_local_erased_kernelabstractions_v1"
+physical_phase_identities = [
+  "CorePotts._lifecycle_selection_transaction_kernel!",
+  "collect_reset",
+  "collect_evaluate",
+  "compacted_scan_block",
+  "compacted_scatter",
+  "compacted_local_bitonic",
+  "compacted_validate_order",
+  "collect_finalize",
+  "compacted_publish",
+]
+planning_bound_seconds = 135.82995287614997
+process_bound_seconds = 214.3763473510742
+
+[metal_gate]
+evidence = "design/evidence/localmath/lm2a/real-metal.toml"
+minimum_assertions = 38
+required_packets = ["stage_program", "reduce", "resolve"]
+
+[[cutover]]
+id = "publication-basis"
+owner = "Publication plus its typed Unique, Reduce, Resolve, Collect, or OrderedFold law"
+disposition = "consolidated"
+target = [
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct Publication{" },
+  { path = "lib/LocalWorksets/src/execution/candidate_stage.jl", pattern = "function _candidate_publication_dimensions(" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src/execution", pattern = "_reduce_workspace_dimensions", recursive = true },
+  { path = "lib/LocalWorksets/src/execution", pattern = "_resolve_workspace_dimensions", recursive = true },
+]
+
+[[cutover]]
+id = "routing-and-grouping"
+owner = "RelationProof and the physically distinct _DestinationGrouping"
+disposition = "retained_physical_only"
+target = [
+  { path = "lib/LocalWorksets/src/spatial_model.jl", pattern = "struct RelationProof{" },
+  { path = "lib/LocalWorksets/src/execution/candidate_grouping.jl", pattern = "struct _DestinationGrouping{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_stage_slots", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_publication_component_slots", recursive = true },
+]
+
+[[cutover]]
+id = "qualification"
+owner = "central backend capability predicates plus law-specific physical requirements"
+disposition = "consolidated"
+target = [
+  { path = "lib/LocalWorksets/src/execution/mechanism_support.jl", pattern = "function _centrally_qualified_stage_record(" },
+  { path = "lib/LocalWorksets/src/execution/stage_preparation.jl", pattern = "function _require_prepared_stage_capabilities(" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_combination_capability", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_centrally_qualified_combination_capability", recursive = true },
+]
+
+[[cutover]]
+id = "workspace"
+owner = "one _WorkspaceAuthority schema drives requirements, allocation, reconstruction, validation, accounting, and inspection"
+disposition = "replaced"
+target = [
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "struct _WorkspaceAuthority{" },
+  { path = "lib/LocalWorksets/src/execution/workspace_support.jl", pattern = "function _validate_workspace(lowering" },
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "function _stage_program_workspace(entries" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_StageProgramWorkspace", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_prepared_stage_workspace_authority", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_workspace_arrays_from_spec", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_workspace_spec_bytes", recursive = true },
+]
+
+[[cutover]]
+id = "failure-and-status"
+owner = "one program gate, explicit candidate/collect/fold validation status, and relation receipts"
+disposition = "retained_barriers"
+target = [
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "_stage_program_status_reset_kernel!", count = 2 },
+  { path = "lib/LocalWorksets/src/execution/relation_receipts.jl", pattern = "_stage_relation_receipt_kernel!", count = 2 },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "runtime_conjunctive_validation", recursive = true },
+]
+
+[[cutover]]
+id = "inspection-and-evidence"
+owner = "_StageLoweringEntry retains planning dependencies and inspect reads the lowering"
+disposition = "replaced"
+target = [
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "field_dependencies::Any" },
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "function inspect(workplan::WorkPlan" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src/execution", pattern = "_centrally_qualified_component_record_store", recursive = true },
+  { path = "lib/LocalWorksets/src/execution", pattern = "_centrally_qualified_single_resolved_kernel", recursive = true },
+]
+
+[[cutover]]
+id = "obsolete-conjunctive"
+owner = "none; unrelated scientific laws compose as ordered Stage publications"
+disposition = "deleted"
+target = [
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "struct _StageProgramLowering" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src/execution/evidence_support.jl", pattern = "", file_must_not_exist = true },
+  { path = "lib/LocalWorksets/src/execution/arbitration_support.jl", pattern = "", file_must_not_exist = true },
+  { path = "lib/LocalWorksets/src", pattern = "conjunctive", recursive = true },
+]
+
+[[cutover]]
+id = "physical-launches"
+owner = "one stage-local KernelAbstractions executor with law-specific physical kernels"
+disposition = "retained_exact"
+target = [
+  { path = "lib/LocalWorksets/src/execution/candidate_stage.jl", pattern = "_candidate_stage_finalize_kernel!", count = 2 },
+  { path = "lib/LocalWorksets/src/execution/collect_physical_support.jl", pattern = "_compacted_publish_kernel!" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "fallback_executor", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "old_execution", recursive = true },
+]
+
+[evidence]
+cpu_tests = "lib/LocalWorksets/test/runtests.jl"
+compiler_case = "benchmark/lm0/compiler_case.jl"
+metal_witness = "benchmark/backends/metal/lm1_stage_program.jl"
+metal_evidence = "design/evidence/localmath/lm2a/real-metal.toml"
+implementation_report = "design/evidence/localmath/lm2a/implementation.md"
+review = "design/evidence/localmath/lm2a/final-review.md"

@@ -1,10 +1,12 @@
 # Typed storage schemas, layouts, and extension protocols.
 
+"""Stable resource name qualified by its compiler namespace path."""
 struct QualifiedResourceIdentity{P <: Tuple}
     path::P
     name::Symbol
 end
 
+"""Complete scientific, storage, lifecycle, validation, and persistence schema for a state block."""
 struct StateBlockSchema
     identity::QualifiedResourceIdentity
     version::VersionNumber
@@ -26,6 +28,7 @@ struct StateBlockSchema
     checkpoint::Bool
 end
 
+"""Complete storage and lifetime schema for compiler-owned workspace."""
 struct WorkspaceSchema
     identity::QualifiedResourceIdentity
     version::VersionNumber
@@ -51,10 +54,12 @@ struct WorkspaceEntry{H <: WorkspaceHandle, S}
     schema::S
 end
 
+"""Ordered schemas paired with their typed state handles."""
 struct StateLayout{E <: AbstractVector}
     entries::E
 end
 
+"""Ordered schemas paired with their typed workspace handles."""
 struct WorkspaceLayout{E <: AbstractVector}
     entries::E
 end
@@ -164,9 +169,19 @@ BlockView(
     storage, Int32(offset), Int32.(shape)
 )
 
+function Adapt.adapt_structure(to, view::BlockView{T,N}) where {T,N}
+    storage = Adapt.adapt(to, view.storage)
+    return BlockView{T,N,typeof(storage)}(
+        storage, view.offset, view.dimensions)
+end
+
 Base.IndexStyle(::Type{<:BlockView}) = IndexLinear()
 Base.size(view::BlockView) = Tuple(Int.(view.dimensions))
 Base.length(view::BlockView) = prod(size(view))
+Base.strides(view::BlockView{T,N}) where {T,N} = ntuple(Val(N)) do dimension
+    dimension == 1 && return 1
+    return prod(Int(view.dimensions[index]) for index in 1:(dimension - 1))
+end
 Base.parent(view::BlockView) = view.storage
 Base.similar(::BlockView, ::Type{T}, dimensions::Dims) where {T} =
     Array{T}(undef, dimensions)
@@ -225,6 +240,7 @@ end
     return :(getfield(banks, $(only(matches))))
 end
 
+"""Resolve a typed state handle to its physical block without copying."""
 @inline function state_block(
         state::AuxiliaryState,
         handle::StateHandle{Representation},
@@ -257,6 +273,7 @@ end
     context.states, handle
 ).values[site]
 
+"""Return the immutable metadata used to validate a state schema."""
 function state_schema_metadata end
 function state_storage_class end
 function allocate_state_block end

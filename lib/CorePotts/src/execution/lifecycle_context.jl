@@ -83,13 +83,19 @@ const _LifecycleContext = Union{
     _LifecycleStateContext,
 }
 
+"""Return the lifecycle evaluation's lattice anchor."""
 @inline lifecycle_anchor(context::_LifecycleContext) = context.anchor
+"""Return the lifecycle evaluation's selected site value."""
 @inline lifecycle_site(context::_LifecycleContext) = context.site
+"""Return the canonical occurrence ordinal for a lifecycle evaluation."""
 @inline lifecycle_occurrence(context::_LifecycleContext) = context.occurrence
+"""Return the stable descriptor source identity."""
 @inline lifecycle_source_identity(context::_LifecycleContext) =
     context.source_identity
+"""Return the stable lifecycle action identity."""
 @inline lifecycle_action_identity(context::_LifecycleContext) =
     context.action_identity
+"""Return the bounded request-local lifecycle workspace capacity."""
 @inline lifecycle_workspace_capacity(context::_LifecycleContext) =
     context.workspace_maximum
 
@@ -97,6 +103,7 @@ const _LifecycleContext = Union{
     return Int(context.workspace_slot)
 end
 
+"""Read one value from bounded request-local lifecycle workspace."""
 @inline function lifecycle_workspace_value(
         context::_LifecycleContext, index::Integer
     )
@@ -109,6 +116,7 @@ end
     ]
 end
 
+"""Write one value to bounded request-local lifecycle workspace."""
 @inline function set_lifecycle_workspace_value!(
         context::_LifecycleContext, value, index::Integer
     )
@@ -122,6 +130,7 @@ end
     return value
 end
 
+"""Bounded contextual operation over request-local lifecycle workspace."""
 struct LifecycleWorkspaceOperation{F} <: AbstractContextualOperation
     operation::F
     offset::Int32
@@ -238,17 +247,24 @@ end
     return operation.operation(arguments, sliced)
 end
 
+"""Return the source cell of a lifecycle state transform."""
 @inline lifecycle_source_cell(context::_LifecycleStateContext) = context.source
+"""Return the source generation of a lifecycle state transform."""
 @inline lifecycle_source_generation(context::_LifecycleStateContext) =
     context.source_generation
+"""Return the destination cell of a lifecycle state transform."""
 @inline lifecycle_destination_cell(context::_LifecycleStateContext) =
     context.destination
+"""Return the destination generation of a lifecycle state transform."""
 @inline lifecycle_destination_generation(context::_LifecycleStateContext) =
     context.destination_generation
+"""Return the participant role for a lifecycle state transform."""
 @inline lifecycle_state_role(context::_LifecycleStateContext) = context.role
+"""Return the stable identity of the lifecycle-managed state block."""
 @inline lifecycle_state_identity(context::_LifecycleStateContext) =
     context.state_identity
 
+"""Read the immutable pre-transaction value for the current state participant."""
 @inline function lifecycle_before_state_value(context::_LifecycleStateContext)
     index = context.source > 0 ? context.source : context.destination
     index > 0 || return zero(eltype(state_block(
@@ -259,6 +275,7 @@ end
     ).values[index]
 end
 
+"""Read the value planned earlier in the current lifecycle transaction."""
 @inline function lifecycle_planned_state_value(context::_LifecycleStateContext)
     index = context.role in (
         DestinationLifecycleStateRole, DaughterLifecycleStateRole,
@@ -314,7 +331,7 @@ end
     owner = @inbounds runtime.ownership[linear]
     if descriptor.effect === CreateCellLifecycleEffect
         @inbounds(workspace.planned_site_request[linear]) == request &&
-            return @inbounds workspace.allocation[request]
+            return _lifecycle_request_allocation(workspace, request)
     elseif descriptor.effect === RemoveCellLifecycleEffect
         anchor = @inbounds workspace.anchor[request]
         owner == anchor && return -Int32(descriptor.replacement_medium)
@@ -322,9 +339,9 @@ end
         anchor = @inbounds workspace.anchor[request]
         if owner == anchor &&
                 @inbounds(workspace.partition_owner[anchor]) == request
-            position = Int(@inbounds workspace.site_position[linear])
+            position = Int(_lifecycle_site_position(workspace, linear))
             position > 0 && @inbounds(workspace.partition_labels[position]) == 2 &&
-                return @inbounds workspace.allocation[request]
+                return _lifecycle_request_allocation(workspace, request)
         end
     end
     return owner
@@ -337,7 +354,7 @@ end
     request = Int(view.request)
     descriptor = view.descriptor
     anchor = @inbounds workspace.anchor[request]
-    allocation = @inbounds workspace.allocation[request]
+    allocation = _lifecycle_request_allocation(workspace, request)
     descriptor.effect === CreateCellLifecycleEffect &&
         return cell == allocation
     descriptor.effect === DivideCellLifecycleEffect &&
@@ -353,7 +370,7 @@ end
         return Int(@inbounds workspace.planned_site_count[request])
     if effect in (RemoveCellLifecycleEffect, DivideCellLifecycleEffect)
         anchor = @inbounds workspace.anchor[request]
-        return Int(@inbounds workspace.cell_site_counts[anchor])
+        return _lifecycle_site_count(workspace, anchor)
     end
     return 0
 end
@@ -368,12 +385,13 @@ end
     if descriptor.effect === CreateCellLifecycleEffect
         linear = Int(@inbounds workspace.planned_sites[position, request])
         old_owner = @inbounds runtime.ownership[linear]
-        new_owner = @inbounds workspace.allocation[request]
+        new_owner = _lifecycle_request_allocation(workspace, request)
         return linear, old_owner, new_owner, old_owner != new_owner
     end
     anchor = @inbounds workspace.anchor[request]
-    offset = Int(@inbounds workspace.cell_site_starts[anchor]) + position - 1
-    linear = Int(@inbounds workspace.cell_sites[offset])
+    record = @inbounds _lifecycle_site_records(workspace, anchor)[position]
+    linear = Int(record.site)
+    offset = Int(_lifecycle_site_position(workspace, linear))
     old_owner = @inbounds runtime.ownership[linear]
     if descriptor.effect === RemoveCellLifecycleEffect
         new_owner = -Int32(descriptor.replacement_medium)
@@ -382,7 +400,9 @@ end
     changed = descriptor.effect === DivideCellLifecycleEffect &&
               @inbounds(workspace.partition_owner[anchor]) == request &&
               @inbounds(workspace.partition_labels[offset]) == 2
-    new_owner = changed ? @inbounds(workspace.allocation[request]) : old_owner
+    new_owner = changed ? _lifecycle_request_allocation(
+        workspace, request
+    ) : old_owner
     return linear, old_owner, new_owner, changed
 end
 
@@ -401,7 +421,7 @@ end
     workspace = view.workspace
     request = Int(view.request)
     anchor = @inbounds workspace.anchor[request]
-    allocation = @inbounds workspace.allocation[request]
+    allocation = _lifecycle_request_allocation(workspace, request)
     if descriptor.effect === CreateCellLifecycleEffect && cell == allocation
         return descriptor.destination_kind
     elseif descriptor.effect in (
@@ -445,7 +465,7 @@ function _lifecycle_planned_surface(
         cell::Int32,
     )
     cell > 0 || return Int32(0)
-    resources = view.runtime.program.descriptor_plan.domain_resources
+    resources = view.runtime.program.domain_resources
     shape = view.runtime.program.shape
     periodic = view.runtime.program.periodic
     for dimension in eachindex(shape)
@@ -688,11 +708,11 @@ end
     runtime = _lifecycle_value_runtime(context)
     base_runtime = runtime isa _LifecycleRequestView ? runtime.runtime : runtime
     slot = _relationship_domain_slot(
-        base_runtime.program.descriptor_plan.domain_resources,
+        base_runtime.program.domain_resources,
         relationship_handle,
     )
-    runtime isa _LifecycleRequestView && return
-        _lifecycle_planned_relationship_degree(runtime, slot, endpoint)
+    runtime isa _LifecycleRequestView && return _lifecycle_planned_relationship_degree(
+        runtime, slot, endpoint)
     return _call_relationship_slot(
         _relationship_degree, runtime.relationships, slot, (endpoint,)
     )
@@ -730,7 +750,7 @@ function _lifecycle_planned_relationship_degree(
         view::_LifecycleRequestView, slot::Int32, endpoint::Int32
     )
     request = Int(view.request)
-    allocation = @inbounds view.workspace.allocation[request]
+    allocation = _lifecycle_request_allocation(view.workspace, request)
     descriptor = view.descriptor
     if endpoint == allocation && descriptor.effect in (
             CreateCellLifecycleEffect, DivideCellLifecycleEffect,

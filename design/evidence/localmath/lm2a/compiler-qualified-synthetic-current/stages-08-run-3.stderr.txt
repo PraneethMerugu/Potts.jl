@@ -1,0 +1,5 @@
+LM1_PHASE construction elapsed=1.034232625 compile=1.031777458
+LM1_PHASE binding elapsed=0.294437167 compile=0.294096377
+LM1_PHASE planning elapsed=11.947514625 compile=11.903993995
+LM1_PHASE preparation elapsed=9.303843958 compile=9.29406722
+LM1_PHASE first_execution elapsed=0.116570167 compile=0.115773667

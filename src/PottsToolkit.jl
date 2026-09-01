@@ -1,9 +1,15 @@
+"""
+PottsToolkit provides a ModelingToolkit-compatible authoring layer for cellular
+Potts models and compiles completed systems to CorePotts execution programs.
+"""
 module PottsToolkit
 
 import CorePotts
 import DynamicQuantities
+import LocalMath
 import ModelingToolkitBase
 import ModelingToolkitBase: @named, @mtkcompile, mtkcompile
+import PrecompileTools
 import SciMLBase
 import SHA
 import SymbolicIndexingInterface
@@ -96,6 +102,7 @@ export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
 export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
 export anchor_value
+export bounded_values
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
 export PottsStats, init, solve, solve!, step!, remake, terminate!
@@ -154,7 +161,7 @@ export native_time_at, native_cadence_stride, native_due, native_time_interval
 export native_state, native_value
 export PreserveNativeInitialization, PreserveNativeEvents
 export GlobalNativeLifecycle, PerCellNativeLifecycle, LateBoundNativeAlgorithm
-export RequireQualifiedNativeCapability
+export StandardNativeCapability
 
 # Scientific statement and compiler-transfer SPI.
 public map_symbolics, statement_kind, with_source
@@ -200,7 +207,9 @@ public PottsUnsavedTimeError
 public runtime_statistics
 public to_dynamic_quantity, to_unitful_quantity
 
+"""Convert a DynamicQuantities value to Unitful when that extension is loaded."""
 function to_unitful_quantity end
+"""Convert a Unitful quantity to PottsToolkit's DynamicQuantities representation."""
 to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value
 
 const compose = ModelingToolkitBase.compose

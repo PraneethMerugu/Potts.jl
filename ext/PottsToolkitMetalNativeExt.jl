@@ -2,6 +2,7 @@ module PottsToolkitMetalNativeExt
 
 using PottsToolkit
 using DiffEqGPU
+using KernelAbstractions
 using Metal
 using ModelingToolkit
 using StaticArrays
@@ -20,7 +21,7 @@ function _package_identity(module_value)
     )
 end
 
-const _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1 = (
+const _TESTED_METAL_NATIVE_STACK_1_12_1 = (
     DiffEqGPU = (
         package = "DiffEqGPU",
         uuid = "071ae1c0-96b5-11e9-1965-c90190d839ea",
@@ -70,8 +71,8 @@ const _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1 = (
     ),
 )
 
-const _G5H4_TESTED_METAL_NATIVE_STACK = merge(
-    _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1,
+const _TESTED_METAL_NATIVE_STACK = merge(
+    _TESTED_METAL_NATIVE_STACK_1_12_1,
     (Julia = (
         version = v"1.12.6",
         kernel = :Darwin,
@@ -81,9 +82,9 @@ const _G5H4_TESTED_METAL_NATIVE_STACK = merge(
     ),),
 )
 
-const _G5H4_TESTED_METAL_NATIVE_STACKS = (
-    _G5H4_TESTED_METAL_NATIVE_STACK_1_12_1,
-    _G5H4_TESTED_METAL_NATIVE_STACK,
+const _TESTED_METAL_NATIVE_STACKS = (
+    _TESTED_METAL_NATIVE_STACK_1_12_1,
+    _TESTED_METAL_NATIVE_STACK,
 )
 
 function _metal_native_stack_identity()
@@ -123,6 +124,16 @@ function _metal_error(component, capability, message)
     )
 end
 
+function _metal_kernelabstractions_backend(component)
+    backend = Metal.MetalBackend()
+    backend isa KernelAbstractions.Backend || throw(_metal_error(
+        component,
+        :kernelabstractions_backend,
+        "Metal native execution requires a KernelAbstractions backend",
+    ))
+    return backend
+end
+
 function _standard_preflight(component, point, profile, initial_time)
     return invoke(
         PottsToolkit.preflight_native_component,
@@ -148,7 +159,8 @@ function PottsToolkit.preflight_native_component(
         component, :device_available,
         "MetalNativeExecution was requested but Metal is not functional",
     ))
-    _metal_native_stack_identity() in _G5H4_TESTED_METAL_NATIVE_STACKS ||
+    !profile.exact_replay ||
+        _metal_native_stack_identity() in _TESTED_METAL_NATIVE_STACKS ||
         throw(_metal_error(
             component,
             :native_runtime_stack,
@@ -179,7 +191,7 @@ function PottsToolkit._native_profile_evidence(
         },
     ) where {P <: Tuple, A, O <: NamedTuple}
     declaration = getfield(component, :declaration)
-    _metal_native_stack_identity() in _G5H4_TESTED_METAL_NATIVE_STACKS ||
+    _metal_native_stack_identity() in _TESTED_METAL_NATIVE_STACKS ||
         return nothing
     getfield(declaration, :capabilities) isa
         PottsToolkit._MethodOfLinesNativeCapability && return nothing
@@ -198,26 +210,27 @@ function PottsToolkit._native_profile_evidence(
     )
     field_output && !(scope isa PottsToolkit.Global) && return nothing
     suite = field_output ?
-        :g5h4_native_field_metal_exact_replay : scope isa PottsToolkit.Global ?
-        :g5h4_global_metal_native_ode_exact_replay :
-        :g5h4_per_cell_metal_native_ode_exact_replay
-    evidence = PottsToolkit.CorePotts.BackendSPI.CapabilityEvidenceIdentity(
+        :native_field_metal_exact_replay : scope isa PottsToolkit.Global ?
+        :global_metal_native_ode_exact_replay :
+        :per_cell_metal_native_ode_exact_replay
+    evidence = PottsToolkit._capability_evidence_identity(
         :PottsToolkit,
         suite,
         v"1.0.0",
         PottsToolkit._sha256_hex(
-            "g5h4-metal-native-evidence-v1",
+            "metal-native-evidence-v1",
             PottsToolkit._native_profile_fingerprint(profile),
             PottsToolkit.native_scheduled_fingerprint(component).hex,
             _metal_native_stack_identity(),
-            :ensemble_gpu_kernel_metal,
+            :ensemble_gpu_kernel_kernelabstractions,
+            :metal_backend_adapter,
             :explicit_coupled_interval_transfer,
             field_output,
         ),
     )
     return (
         status = PottsToolkit.CorePotts.BackendSPI.Supported,
-        maturity = PottsToolkit.CorePotts.BackendSPI.ReplayQualified,
+        exact_replay = true,
         evidence,
     )
 end
@@ -352,10 +365,14 @@ function _solve_metal_lanes(component, lanes, profile, target_time)
             save_end = true,
         ),
     )
+    # DiffEqGPU.EnsembleGPUKernel accepts and launches a
+    # KernelAbstractions.Backend. Metal supplies only the backend adapter and
+    # storage implementation; PottsToolkit owns no vendor kernel or launch.
+    ka_backend = _metal_kernelabstractions_backend(component)
     solution = SciMLBase.solve(
         ensemble,
         profile.algorithm,
-        DiffEqGPU.EnsembleGPUKernel(Metal.MetalBackend());
+        DiffEqGPU.EnsembleGPUKernel(ka_backend);
         options...,
     )
     solution.converged || throw(_metal_error(

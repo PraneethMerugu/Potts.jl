@@ -20,7 +20,7 @@ function _operation_tracker_context(
             offsets = neighborhood isa Union{VonNeumann, Moore} ?
                 _host_neighborhood_offsets(neighborhood, length(_lattice_shape(ir))) :
                 throw(ArgumentError(
-                    "operation tracker binding requires a finite V1 neighborhood"
+                    "operation tracker binding requires a finite neighborhood"
                 ))
             (
                 neighborhood,
@@ -71,7 +71,7 @@ function registered_operation_tracker_requirements(
     relation = only(relations)
     maximum_neighbors = relation.metadata.maximum_neighbors
     maximum_neighbors > 0 || throw(ArgumentError(
-        "surface relation degree exceeds the V1 tracker bound"
+        "surface relation degree exceeds the configured tracker bound"
     ))
     return (CorePotts.CompilerSPI.CellSurfaceTracker(
         relation.handle, maximum_neighbors
@@ -160,7 +160,7 @@ function _validate_tracker_engine_support(descriptor, engine)
         "$(nameof(typeof(engine))) (reason code $(support.reason_code))"
     ))
     support.cpu || throw(ArgumentError(
-        "V1 host execution requires CPU tracker support"
+        "host execution requires CPU tracker support"
     ))
     return descriptor
 end
@@ -207,7 +207,7 @@ function _lower_tracker_plan(
             transfer !== nothing && transfer.identity === :cell_elongation
         end
         length(shape) == 2 || throw(ArgumentError(
-            "V1 cell elongation is qualified only for two-dimensional lattices"
+            "cell elongation is qualified only for two-dimensional lattices"
         ))
     end
     for node in ir.graph.nodes

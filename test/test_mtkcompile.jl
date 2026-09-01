@@ -89,8 +89,8 @@ end
           typeof(large_data.capability_requirements.engine_admission) ===
           Vector{NamedTuple}
 
-    # The type-erased encoder must retain the pre-refactor logical tuple bytes.
-    legacy = PottsToolkit._scheduled_fingerprint(
+    # The type-erased encoder must retain the reference logical tuple bytes.
+    reference_fingerprint = PottsToolkit._scheduled_fingerprint(
         small_completion.fingerprints.completed,
         Tuple(small_data.schedule),
         PottsToolkit._fingerprint_scheduled_provenance(small_data.provenance),
@@ -105,7 +105,7 @@ end
             small_data.native_components
         )),
     )
-    @test small_data.fingerprint == legacy
+    @test small_data.fingerprint == reference_fingerprint
     @test inspect(small_scheduled, Schedule()) isa Tuple
     @test inspect(small_scheduled, StateSchema()).states isa Tuple
     @test inspect(small_scheduled, Observations()) isa Tuple

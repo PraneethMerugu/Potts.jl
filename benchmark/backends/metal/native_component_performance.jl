@@ -25,12 +25,12 @@ GC.gc()
 timed = @timed for _ in 1:6
     step!(integrator)
 end
-execution = integrator.runtime.engine_workspace.execution
+execution = _test_checkerboard_execution(integrator.runtime)
 println((;
     julia = VERSION,
     metal = Base.pkgversion(Metal),
     device = Metal.device().name,
-    fixture = :g5h4_per_cell_metal_native_ode_exact_replay,
+    fixture = :per_cell_metal_native_ode_exact_replay,
     live_lanes = 2,
     capacity = 4,
     measured_mcs = 6,

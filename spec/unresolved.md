@@ -31,8 +31,9 @@ transforms. Specify which transforms are bitwise portable and which are only sta
 
 ### SEM-RNG-006: Default generator implementation
 
-Resolved by `Philox4x32x10V1`, current RNG contract version `1.2.0`, and lowering identity
-`philox4x32x10_semantic_address_fisher_yates_v1`. Known-answer vectors, semantic-address packing,
+Resolved by `Philox4x32x10V2`, current RNG contract version `2.0.0`, and lowering identity
+`philox4x32x10_semantic_address_fisher_yates_v2`. Known-answer vectors, nonoverlapping
+semantic-address packing,
 compilation, raw-word identity, and the checkerboard color-permutation lowering are qualified only
 for the backend/environment conjunctions admitted by the current CorePotts capability matrix. CUDA
 remains outside the current first-class backend contract and does not block the accepted default.

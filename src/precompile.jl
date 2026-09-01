@@ -1,8 +1,7 @@
-# This deliberately uses only the public V1 flow. Running the tiny workload
-# while the module is compiled seeds the construction, completion, lowering,
-# initialization, and one-MCS solve paths without adding a precompile-only
-# package dependency.
-let
+# This deliberately uses only the public compiled-model flow. Keeping the
+# complete construction-through-solve workload in one ordinary function gives
+# PrecompileTools one compiled latest-world entry boundary for all KA CPU work.
+function _potts_precompile_workload()
     cell = CellKind(:precompile_cell; extinction = RetireAtZero())
     medium = MediumKind(:precompile_medium)
     system = PottsSystem(
@@ -27,4 +26,9 @@ let
         backend = CPUBackend(),
         scalar_type = Float32,
     )
+    return nothing
+end
+
+PrecompileTools.@compile_workload begin
+    _potts_precompile_workload()
 end

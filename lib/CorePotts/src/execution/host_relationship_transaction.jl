@@ -77,7 +77,7 @@ function host_relationship_transaction(
         snapshot.cell_kinds;
         scalar_type = eltype(runtime.parameters),
         cell_generations = snapshot.cell_generations,
-        relationships = collect(relationships),
+        relationships,
         descriptor_state = snapshot.descriptor_state,
     )
     tracker_checkpoint = encode_tracker_checkpoint(
@@ -101,6 +101,14 @@ function host_relationship_transaction(
             retired_cells = runtime.retired_cells,
         ),
     )
+    if candidate.engine_workspace isa CheckerboardWorkspace
+        queue_mcs_capacity = runtime.engine_workspace isa
+            _CheckerboardExecutionWorkspace ?
+            runtime.engine_workspace.identity.queue_policy.mcs_capacity : 12
+        candidate = _prepare_checkerboard_execution(
+            candidate; queue_mcs_capacity
+        )
+    end
     candidate.last_lifecycle_receipt = deepcopy(runtime.last_lifecycle_receipt)
     return candidate
 end

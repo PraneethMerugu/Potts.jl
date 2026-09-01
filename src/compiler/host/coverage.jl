@@ -82,7 +82,7 @@ _same_statement_resource(left, right) =
 function _accepted_copy_rejection(statement, statements)
     effects = _statement_arguments(statement).effects
     length(effects) == 1 ||
-        return "accepted-copy lowering requires exactly one bounded V1 effect"
+        return "accepted-copy lowering requires exactly one bounded effect"
     effect = only(effects)
     condition = _statement_arguments(statement).expression
     if effect isa Assign
@@ -234,11 +234,11 @@ function _validate_compilation_coverage!(
         )
         reason === nothing && continue
         push!(diagnostics, PottsDiagnostic(
-            :unsupported_v1_lowering,
+            :unsupported_statement_lowering,
             record.identity,
             _statement_expression(statement),
             record.identity.path,
-            "a concrete, semantics-preserving V1 lowering",
+            "a concrete, semantics-preserving statement lowering",
             reason,
             (),
             record.source,
@@ -269,11 +269,11 @@ function _validate_equation_and_event_coverage!(diagnostics, system::PottsSystem
         )
         isempty(events) && continue
         push!(diagnostics, PottsDiagnostic(
-            :unsupported_v1_event_lowering,
+            :unsupported_event_lowering,
             nameof(system),
             join(string.(events), "; "),
             (nameof(system),),
-            "symbolic event effects lowerable into the closed V1 effect language",
+            "symbolic event effects lowerable into the closed effect language",
             "$(length(events)) $kind declaration(s) have no concrete lowering",
             (),
             UnknownSource(),

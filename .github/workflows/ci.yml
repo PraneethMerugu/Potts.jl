@@ -27,12 +27,16 @@ jobs:
             project: .
             os: macos-15
             julia: '1.12.6'
+          - package: PottsToolkit
+            project: .
+            os: ubuntu-latest
+            julia: '1.12.6'
           - package: CorePotts
             project: lib/CorePotts
             os: macos-15
             julia: '1.12.6'
-          - package: LocalWorksets
-            project: lib/LocalWorksets
+          - package: LocalMath
+            project: lib/LocalMath
             os: macos-15
             julia: '1.12.6'
           - package: MakiePotts
@@ -56,8 +60,79 @@ jobs:
           'using Pkg;
           Pkg.test(ENV["PACKAGE"]; julia_args=["--startup-file=no"])'
 
+  environment-loads:
+    name: Environment / ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: root, project: ., julia: '1.12.6', os: ubuntu-latest, packages: 'PottsToolkit'}
+          - {name: docs, project: docs, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath, CorePotts, PottsToolkit, MakiePotts'}
+          - {name: corepotts, project: lib/CorePotts, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts'}
+          - {name: localmath-tests, project: lib/LocalMath/test, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath'}
+          - {name: localmath-witnesses, project: test/localmath_witnesses, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath'}
+          - {name: examples, project: examples, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, PottsToolkit, MakiePotts'}
+          - {name: dashboards, project: examples/dashboards, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, PottsToolkit, MakiePotts'}
+          - {name: replay, project: integration/replay, julia: '1.12.1', os: macos-15, packages: 'PottsToolkit'}
+          - {name: makiepotts, project: lib/MakiePotts, julia: '1.12.6', os: ubuntu-latest, packages: 'MakiePotts'}
+          - {name: makie-backends, project: lib/MakiePotts/test/backends, julia: '1.12.6', os: ubuntu-latest, packages: 'MakiePotts'}
+          - {name: dagger, project: benchmark/dagger, julia: '1.12.6', os: ubuntu-latest, packages: 'Dagger, PottsToolkit'}
+          - {name: cuda, project: benchmark/backends/cuda, julia: '1.12.6', os: ubuntu-latest, packages: 'CUDA, CorePotts, PottsToolkit'}
+          - {name: amdgpu, project: benchmark/backends/amdgpu, julia: '1.12.6', os: ubuntu-latest, packages: 'AMDGPU, CorePotts, PottsToolkit'}
+          - {name: metal, project: benchmark/backends/metal, julia: '1.12.6', os: macos-15, packages: 'Metal, LocalMath, CorePotts, PottsToolkit'}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: ${{ matrix.julia }}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate and fresh-load owned packages
+        env:
+          PROJECT: ${{ matrix.project }}
+          PACKAGES: ${{ matrix.packages }}
+        run: >-
+          julia --project="$PROJECT" --startup-file=no -e
+          'using Pkg; Pkg.instantiate(; julia_version_strict=true);
+          Base.eval(Main, Meta.parse("using " * ENV["PACKAGES"]))'
+
   integration:
-    name: Integration
+    name: Integration / ${{ matrix.family }} / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest]
+        family:
+          - test_modelingtoolkit_retention_and_structural_scheduling.jl
+          - test_modelingtoolkit_standard_library.jl
+          - test_native_functional_cpu.jl
+          - test_method_of_lines_field.jl
+          - test_ensemble_distributed.jl
+          - test_unitful_extension.jl
+          - test_optional_extension_loading.jl
+          - test_extension_load_order.jl
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: '1.12.6'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate integration environment
+        run: >-
+          julia --project=integration --startup-file=no -e
+          'using Pkg; Pkg.instantiate()'
+      - name: Run integration family
+        env:
+          INTEGRATION_TEST: ${{ matrix.family }}
+        run: >-
+          julia --project=integration --startup-file=no -e
+          'include("integration/setup.jl"); include(joinpath("integration", ENV["INTEGRATION_TEST"]))'
+
+  exact-replay:
+    name: Exact native replay
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -66,12 +141,14 @@ jobs:
         with:
           version: '1.12.1'
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Instantiate integration environment
+      - name: Instantiate exact replay environment
         run: >-
-          julia --project=integration --startup-file=no -e
+          julia --project=integration/replay --startup-file=no -e
           'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-      - name: Run cross-package tests
-        run: julia --project=integration --startup-file=no integration/runtests.jl
+      - name: Run exact replay tests
+        run: >-
+          julia --project=integration/replay --startup-file=no
+          integration/replay/runtests.jl
 
   documentation:
     name: Documentation
@@ -81,7 +158,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
-          version: '1.12.1'
+          version: '1.12.6'
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environment
         run: >-
@@ -111,3 +188,74 @@ jobs:
           Pkg.activate(; temp=true);
           Pkg.develop(path=pwd());
           include("test/platform_smoke.jl")'
+
+  makie-backends:
+    name: Makie / ${{ matrix.backend }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: cairo
+            os: ubuntu-latest
+            command: lib/MakiePotts/test/backends/cairo.jl
+          - backend: wgl
+            os: ubuntu-latest
+            command: lib/MakiePotts/test/backends/wgl.jl
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: '1.12.6'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate backend environment
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no -e
+          'using Pkg; Pkg.instantiate()'
+      - name: Run backend smoke
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no
+          ${{ matrix.command }}
+
+  makie-visual:
+    name: Makie / Cairo visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: '1.12.6'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate backend environment
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no -e
+          'using Pkg; Pkg.instantiate()'
+      - name: Run visual regression
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no
+          lib/MakiePotts/test/visual_regression.jl
+      - name: Run clean install-to-PNG journey
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no
+          lib/MakiePotts/test/clean_install_smoke.jl
+
+  makie-gl:
+    name: Makie / GL backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with:
+          version: '1.12.6'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Instantiate backend environment
+        run: >-
+          julia --project=lib/MakiePotts/test/backends --startup-file=no -e
+          'using Pkg; Pkg.instantiate()'
+      - name: Run GL backend smoke
+        run: >-
+          xvfb-run -a julia --project=lib/MakiePotts/test/backends
+          --startup-file=no lib/MakiePotts/test/backends/gl.jl

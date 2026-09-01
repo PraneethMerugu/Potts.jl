@@ -1,0 +1,46 @@
+schema_version = 1
+status = "complete"
+backend = "MetalBackend"
+device = "Metal.MTL.MTLDevice (object of type AGXG13XDevice)"
+julia_version = "1.12.6"
+metal_version = "1.10.0"
+kernelabstractions_version = "0.9.42"
+localworksets_version = "0.1.0"
+functional = true
+passed = 62
+total = 62
+raw_vendor_kernel_in_localworksets = false
+single_kernelabstractions_path = true
+packed_relationship_receipts = true
+candidate_failure_no_write = true
+collect_overflow_no_write = true
+ordered_fold_validated_prefix = true
+provider_failure_rollback_claimed = false
+source_sha256 = "lm1_stage_program.jl=eda3cfd992002302d48d4b9cbf59e421ce96c5918946b8a2da784914c218cf81;lm1_destination_grouping.jl=1ea8c1941582e2694c3edf2caa1123d0efe19195f31e6033302fb83734f44505"
+
+cases = [
+  "parameterized Collect",
+  "candidate-owned Collect projection",
+  "parameterized OrderedFold",
+  "parameterized Candidate plus relationship receipt",
+  "relationship provider-tail success and failure",
+  "Unique conflict preservation",
+  "Collect overflow preservation",
+  "OrderedFold duplicate-order preservation",
+  "CPU/Metal invalid-write diagnostic parity",
+]
+
+[packets.stage_program]
+command = "julia --project=benchmark/backends/metal benchmark/backends/metal/lm1_stage_program.jl"
+passed = 38
+total = 38
+
+[packets.reduce]
+command = "LM1_DESTINATION_CASE=reduce julia --project=benchmark/backends/metal benchmark/backends/metal/lm1_destination_grouping.jl"
+passed = 9
+total = 9
+
+[packets.resolve]
+command = "LM1_DESTINATION_CASE=resolve julia --project=benchmark/backends/metal benchmark/backends/metal/lm1_destination_grouping.jl"
+passed = 15
+total = 15

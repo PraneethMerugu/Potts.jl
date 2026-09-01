@@ -1,7 +1,9 @@
 # Descriptor launch grouping, adaptation, validation, and inspection.
 
+"""Compile-time grouping key for compatible descriptor evaluator kernels."""
 struct DescriptorKernelStrategy{D, E, F, R, K} end
 
+"""One homogeneous descriptor launch and its state/workspace handles."""
 struct DescriptorLaunch{
         S,
         D,
@@ -15,42 +17,33 @@ struct DescriptorLaunch{
     workspace_handles::W
 end
 
+"""One descriptor launch plus its deterministic source-table split."""
 struct DescriptorGroup{L, M}
     launch::L
     split::M
 end
 
-abstract type AbstractDescriptorEvaluationPlan end
-
-struct KernelDescriptorGroup{L}
-    launch::L
-end
-
-struct DescriptorKernelPlan{G <: Tuple, D <: HamiltonianDomainResources} <:
-        AbstractDescriptorEvaluationPlan
-    groups::G
-    source_count::Int32
-    domain_resources::D
-end
-
 descriptor_launch(group::DescriptorGroup) = group.launch
 
+"""Cold-compiled predicate restricting one submission parameter domain."""
 struct ParameterDomainConstraint{E <: StaticEvaluator}
     evaluator::E
     predicate::UInt8
     source_handle::Int32
 end
 
+"""Homogeneous parameter-domain constraints sharing one evaluator type."""
 struct ConstraintGroup{C, V <: AbstractVector{C}}
     instances::V
 end
 
+"""Validated ordered proposal descriptor plan and its storage requirements."""
 struct DescriptorExecutionPlan{
         G <: Tuple,
         C <: Tuple,
         S <: AbstractVector,
         D <: HamiltonianDomainResources,
-    } <: AbstractDescriptorEvaluationPlan
+    }
     groups::G
     state_layout::StateLayout
     workspace_layout::WorkspaceLayout
@@ -144,8 +137,6 @@ end
 Adapt.@adapt_structure AuxiliaryState
 Adapt.@adapt_structure RuntimeWorkspaces
 Adapt.@adapt_structure DescriptorLaunch
-Adapt.@adapt_structure KernelDescriptorGroup
-Adapt.@adapt_structure DescriptorKernelPlan
 Adapt.@adapt_structure ParameterDomainConstraint
 Adapt.@adapt_structure ConstraintGroup
 
@@ -169,48 +160,8 @@ function adapt_descriptor_launch(to, group::DescriptorGroup)
     )
 end
 
-function adapt_descriptor_kernel_plan(to, plan::DescriptorExecutionPlan)
-    groups = map(
-        group -> KernelDescriptorGroup(adapt_descriptor_launch(to, group)),
-        plan.groups,
-    )
-    return DescriptorKernelPlan(
-        groups,
-        Int32(length(plan.source_table)),
-        Adapt.adapt(to, plan.domain_resources),
-    )
-end
-
-function adapt_descriptor_launch(to, group::KernelDescriptorGroup)
-    launch = group.launch
-    adapted_descriptors = map(
-        descriptor -> _compiled_descriptor_adapt(to, descriptor),
-        launch.instances,
-    )
-    return DescriptorLaunch(
-        launch.strategy,
-        Adapt.adapt(to, adapted_descriptors),
-        launch.state_handles,
-        launch.workspace_handles,
-    )
-end
-
-function adapt_descriptor_kernel_plan(to, plan::DescriptorKernelPlan)
-    groups = map(
-        group -> KernelDescriptorGroup(adapt_descriptor_launch(to, group)),
-        plan.groups,
-    )
-    return DescriptorKernelPlan(
-        groups,
-        plan.source_count,
-        Adapt.adapt(to, plan.domain_resources),
-    )
-end
-
 _descriptor_source_count(plan::DescriptorExecutionPlan) =
     length(plan.source_table)
-_descriptor_source_count(plan::DescriptorKernelPlan) =
-    Int(plan.source_count)
 
 @kernel function descriptor_group_probe_kernel!(
         output,
@@ -236,6 +187,7 @@ end
     return false
 end
 
+"""Validate concrete submission parameters against the compiled domain constraints."""
 function validate_parameters(plan::DescriptorExecutionPlan, parameters)
     context = EvaluatorProbeContext(parameters, NamedTuple())
     for group in plan.constraints
@@ -299,7 +251,7 @@ end
 
 @inline function evaluate_hamiltonian_contributions!(
         contributions,
-        plan::AbstractDescriptorEvaluationPlan,
+        plan::DescriptorExecutionPlan,
         context,
     )
     length(contributions) >= _descriptor_source_count(plan) || throw(
@@ -313,7 +265,7 @@ end
 
 """Fold source-indexed Hamiltonian contributions in canonical source order."""
 @inline function fold_hamiltonian_contributions(
-        plan::AbstractDescriptorEvaluationPlan,
+        plan::DescriptorExecutionPlan,
         contributions,
     )
     source_count = _descriptor_source_count(plan)
@@ -467,7 +419,7 @@ end
 """Evaluate every proposal descriptor into caller-owned, source-indexed storage."""
 @inline function evaluate_proposal_contributions!(
         contributions::AbstractVector{ProposalEvaluation{T}},
-        plan::AbstractDescriptorEvaluationPlan,
+        plan::DescriptorExecutionPlan,
         context,
     ) where {T <: AbstractFloat}
     length(contributions) >= _descriptor_source_count(plan) || throw(
@@ -481,7 +433,7 @@ end
 
 """Fold proposal roles in canonical frozen source order."""
 @inline function fold_proposal_contributions(
-        plan::AbstractDescriptorEvaluationPlan,
+        plan::DescriptorExecutionPlan,
         contributions::AbstractVector{ProposalEvaluation{T}},
     ) where {T <: AbstractFloat}
     source_count = _descriptor_source_count(plan)
@@ -510,6 +462,7 @@ end
     )
 end
 
+"""Return stable structural facts for a descriptor execution plan."""
 function descriptor_plan_report(plan::DescriptorExecutionPlan)
     return (
         occurrences = Int(plan.occurrence_count),
@@ -556,5 +509,6 @@ _expression_node_count(::Union{LiteralExpression, ParameterExpression,
                                ContextExpression, StateExpression}) = 1
 _expression_node_count(expression::OperationExpression) =
     1 + sum(_expression_node_count, expression.arguments; init = 0)
+"""Count recursively typed expression nodes in a static evaluator."""
 evaluator_node_count(evaluator::StaticEvaluator) =
     _expression_node_count(evaluator.expression)

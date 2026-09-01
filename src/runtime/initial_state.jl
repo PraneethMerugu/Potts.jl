@@ -21,6 +21,7 @@ function LabelledCells(labels::AbstractArray{<:Integer}; cells, medium)
     return LabelledCells(copied_labels, copied_cells, _defensive_copy(medium))
 end
 
+"""`CellPlacement(label, kind, sites)` assigns explicit sites to one finite cell."""
 struct CellPlacement{K, S}
     label::Int
     kind::K
@@ -32,11 +33,13 @@ struct CellPlacement{K, S}
     end
 end
 
+"""`MediumPlacement(kind, sites)` assigns explicit sites to the medium."""
 struct MediumPlacement{K, S}
     kind::K
     sites::S
 end
 
+"""Supertype of cold deterministic procedural placement declarations."""
 abstract type AbstractProceduralPlacement end
 
 """
@@ -79,6 +82,7 @@ function MediumPlacement(kind, sites::Union{Tuple, AbstractVector})
     return MediumPlacement{typeof(kind), typeof(copied)}(kind, copied)
 end
 
+"""Explicit and procedural ownership placements over a fixed lattice shape."""
 struct OwnershipLayout{N, P <: Tuple, M}
     shape::NTuple{N, Int}
     placements::P
@@ -120,6 +124,7 @@ function OwnershipLayout(
     )
 end
 
+"""Cold ownership, state-value, and native operating-point initialization."""
 struct PottsInitialState{O, V <: Tuple, N <: Tuple}
     ownership::O
     values::V
@@ -189,6 +194,7 @@ _defensive_copy(value::PottsInitialState) = PottsInitialState(
     values = value.values,
     native = value.native,
 )
+
 
 function _kind_symbol(kind)
     kind isa Union{CellKind, MediumKind} && return Symbol(statement_id(kind))

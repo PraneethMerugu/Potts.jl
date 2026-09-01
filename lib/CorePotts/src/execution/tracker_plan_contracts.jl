@@ -1,22 +1,36 @@
 # Typed derived-state trackers and their aligned runtime storage.
 
 abstract type AbstractTrackerPlanEntry end
+"""Compiler-owned description of one derived scientific quantity."""
 abstract type AbstractTrackerDescriptor <: AbstractTrackerPlanEntry end
 abstract type AbstractTrackerPlan end
+"""Checkpoint policy for derived tracker storage."""
 abstract type AbstractTrackerCheckpointPolicy end
+"""Concurrency contract governing proposal-time tracker updates."""
 abstract type AbstractTrackerConcurrency end
+"""Authoritative scientific source from which a tracker is derived."""
 abstract type AbstractTrackerSource end
+"""Closed physical-storage strategy for a tracker quantity."""
 abstract type AbstractTrackerStorage end
+"""Visibility boundary at which tracker changes become observable."""
 abstract type AbstractTrackerVisibility end
+"""Bound on the owners or sites touched by one tracker update."""
 abstract type AbstractTrackerUpdateBound end
+"""Static complexity class used to qualify tracker execution."""
 abstract type AbstractTrackerCost end
+"""Typed proposal-local change to a derived tracker quantity."""
 abstract type AbstractTrackerDelta end
 
+"""Persist tracker values in checkpoints."""
 struct PersistTrackerCheckpoint <: AbstractTrackerCheckpointPolicy end
+"""Reconstruct tracker values from authoritative state after restoration."""
 struct ReconstructTrackerCheckpoint <: AbstractTrackerCheckpointPolicy end
+"""Permit concurrent updates only after exclusive-owner claims succeed."""
 struct ClaimedOwnerExclusiveTrackerConcurrency <:
        AbstractTrackerConcurrency end
+"""Derive a tracker directly from lattice ownership."""
 struct OwnershipTrackerSource <: AbstractTrackerSource end
+"""Derive a tracker from ownership and one compiler-bound relation."""
 struct OwnershipRelationTrackerSource <: AbstractTrackerSource
     relation_handle::Int32
 end
@@ -31,19 +45,28 @@ struct QualifiedTrackerKey{Q <: Val}
         return new{Q}(quantity, Int32(source_handle))
     end
 end
+"""Store one scalar of type `T` per finite owner."""
 struct DenseOwnerScalarStorage{T} <: AbstractTrackerStorage end
 struct DenseOwnerScalarGroupStorage{T} <: AbstractTrackerStorage end
+"""Store first and second coordinate moments for each finite owner."""
 struct DenseOwnerMomentsStorage{N, T <: AbstractFloat} <:
        AbstractTrackerStorage end
+"""Publish tracker changes with the accepted-state commit."""
 struct AcceptedCommitTrackerVisibility <: AbstractTrackerVisibility end
+"""Bound a proposal update to its old and new finite owners."""
 struct SourceTargetOwnerUpdateBound <: AbstractTrackerUpdateBound end
+"""Declare constant work per proposal."""
 struct ConstantTrackerCost <: AbstractTrackerCost end
+"""Declare proposal work proportional to squared spatial dimension."""
 struct DimensionSquaredTrackerCost <: AbstractTrackerCost end
+"""Declare proposal work bounded by `maximum_neighbors`."""
 struct BoundedNeighborhoodTrackerCost <: AbstractTrackerCost
     maximum_neighbors::Int16
 end
+"""Declare rebuild work linear in lattice size."""
 struct LatticeLinearTrackerCost <: AbstractTrackerCost end
 
+"""Engine and backend qualification declared by a tracker contract."""
 struct TrackerSupport
     sequential::Bool
     checkerboard::Bool
@@ -62,6 +85,7 @@ TrackerSupport(
     sequential, checkerboard, cpu, gpu, UInt16(reason_code)
 )
 
+"""Closed scientific, storage, concurrency, checkpoint, and cost contract."""
 struct TrackerContract{
         Q <: Val,
         S <: AbstractTrackerSource,
@@ -85,6 +109,7 @@ struct TrackerContract{
     rebuild_cost::B
 end
 
+"""One signed scalar change for a single owner."""
 struct OwnerScalarDelta{T} <: AbstractTrackerDelta
     amount::T
 end
@@ -95,6 +120,7 @@ struct SourceTargetScalarDelta{T} <: AbstractTrackerDelta
     new_amount::T
 end
 
+"""First- and second-moment changes for a single owner."""
 struct OwnerMomentsDelta{F <: Tuple, S <: Tuple} <: AbstractTrackerDelta
     first::F
     second::S
@@ -170,10 +196,15 @@ struct CellMomentsState{
     second::Q
 end
 
+"""Return the closed `TrackerContract` for a descriptor."""
 function tracker_contract end
+"""Construct complete tracker values from an authoritative source view."""
 function tracker_rebuild end
+"""Independently recompute complete tracker storage from authoritative state."""
 function tracker_recompute end
+"""Return the bounded tracker change produced by one proposal."""
 function tracker_proposal_delta end
+"""Adapt an isbits tracker descriptor to an execution backend."""
 function tracker_adapt end
 
 """Read-only tracker source shared by rebuild, proposal, and oracle paths."""
@@ -184,6 +215,7 @@ struct TrackerSourceView{O, S, P, R}
     domain_resources::R
 end
 
+"""Construct the read-only authoritative source used by tracker protocols."""
 tracker_source_view(program, ownership) = TrackerSourceView(
     ownership,
     program.shape,
@@ -191,29 +223,35 @@ tracker_source_view(program, ownership) = TrackerSourceView(
     program.descriptor_plan.domain_resources,
 )
 
+"""Return the stable value-level identity of a tracker quantity."""
 tracker_quantity(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).quantity
 tracker_quantity(descriptor::CellSurfaceTracker) = QualifiedTrackerKey(
     tracker_contract(descriptor).quantity,
     descriptor.relation_handle,
 )
+"""Return all stable quantity identities produced by a descriptor or group."""
 tracker_quantities(descriptor::AbstractTrackerDescriptor) =
     (tracker_quantity(descriptor),)
 tracker_quantities(group::DenseScalarTrackerGroup) =
     Tuple(QualifiedTrackerKey(group.quantity, handle)
           for handle in group.source_handles)
+"""Return the checkpoint policy declared by a tracker contract."""
 tracker_checkpoint_policy(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).checkpoint
 tracker_checkpoint_policy(group::DenseScalarTrackerGroup) =
     tracker_checkpoint_policy(first(group.descriptors))
+"""Return the engine and backend qualification for a tracker."""
 tracker_support(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).support
 tracker_support(group::DenseScalarTrackerGroup) =
     tracker_support(first(group.descriptors))
+"""Return the proposal-update concurrency contract for a tracker."""
 tracker_concurrency(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).concurrency
 tracker_concurrency(group::DenseScalarTrackerGroup) =
     tracker_concurrency(first(group.descriptors))
+"""Return the closed physical-storage strategy for a tracker."""
 tracker_storage(descriptor::AbstractTrackerDescriptor) =
     tracker_contract(descriptor).storage
 function tracker_storage(group::DenseScalarTrackerGroup)
@@ -246,7 +284,7 @@ function _validate_tracker_descriptor(descriptor::AbstractTrackerDescriptor)
         OwnershipTrackerSource,
         OwnershipRelationTrackerSource,
     } || throw(ArgumentError(
-        "V1 trackers must derive from authoritative ownership"
+        "trackers must derive from authoritative ownership"
     ))
     contract.quantity isa Val || throw(ArgumentError(
         "tracker contracts must declare a closed scientific quantity"
@@ -259,25 +297,25 @@ function _validate_tracker_descriptor(descriptor::AbstractTrackerDescriptor)
     contract.storage isa Union{
         DenseOwnerScalarStorage,
         DenseOwnerMomentsStorage,
-    } || throw(ArgumentError("tracker storage strategy is not admitted in V1"))
+    } || throw(ArgumentError("tracker storage strategy is not admitted"))
     contract.visibility isa AcceptedCommitTrackerVisibility || throw(
-        ArgumentError("V1 tracker visibility must be accepted-commit")
+        ArgumentError("tracker visibility must be accepted-commit")
     )
     contract.update_bound isa SourceTargetOwnerUpdateBound || throw(
-        ArgumentError("V1 tracker updates must be source/target-owner bounded")
+        ArgumentError("tracker updates must be source/target-owner bounded")
     )
     contract.proposal_cost isa Union{
         ConstantTrackerCost,
         DimensionSquaredTrackerCost,
         BoundedNeighborhoodTrackerCost,
-    } || throw(ArgumentError("tracker proposal cost is not admitted in V1"))
+    } || throw(ArgumentError("tracker proposal cost is not admitted"))
     if contract.proposal_cost isa BoundedNeighborhoodTrackerCost
         contract.proposal_cost.maximum_neighbors > 0 || throw(ArgumentError(
             "bounded-neighborhood tracker cost must be positive"
         ))
     end
     contract.rebuild_cost isa LatticeLinearTrackerCost || throw(
-        ArgumentError("V1 tracker rebuilds must be lattice-linear")
+        ArgumentError("tracker rebuilds must be lattice-linear")
     )
     support = contract.support
     concurrency = contract.concurrency
@@ -326,6 +364,7 @@ function _validate_tracker_descriptor(group::DenseScalarTrackerGroup)
     return group
 end
 
+"""Validated ordered tracker descriptors and their stable plan fingerprint."""
 struct TrackerExecutionPlan{D <: Tuple} <: AbstractTrackerPlan
     descriptors::D
     fingerprint::String
@@ -522,6 +561,7 @@ _tracker_storage_inspection(
     element_type = T,
 )
 
+"""Return stable scientific and execution facts for a tracker descriptor."""
 function tracker_inspection(descriptor::AbstractTrackerDescriptor)
     contract = tracker_contract(descriptor)
     key = tracker_quantity(descriptor)

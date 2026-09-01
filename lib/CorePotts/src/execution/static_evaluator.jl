@@ -1,26 +1,37 @@
 # Generic, mechanism-free evaluator, storage, and descriptor runtime boundary.
 
+"""Closed, recursively typed expression accepted by `StaticEvaluator`."""
 abstract type AbstractStaticExpression end
+"""Operation whose meaning is supplied by a qualified evaluation context."""
 abstract type AbstractContextualOperation end
 
 """Structural execution contexts used to qualify concrete evaluator callables."""
 abstract type AbstractEvaluatorExecutionContext end
+"""Cold context used to validate evaluator construction without scientific execution."""
 abstract type AbstractProbeEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting before/after Hamiltonian evaluation."""
 abstract type AbstractHamiltonianEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting proposal-scoped scientific evaluation."""
 abstract type AbstractProposalEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting one site-stage evaluation."""
 abstract type AbstractSiteStageEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting one relationship-stage evaluation."""
 abstract type AbstractRelationshipStageEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting lifecycle-trigger evaluation."""
 abstract type AbstractLifecycleTriggerEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting lifecycle-placement evaluation."""
 abstract type AbstractLifecyclePlacementEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting lifecycle-partition evaluation."""
 abstract type AbstractLifecyclePartitionEvaluationContext <:
               AbstractEvaluatorExecutionContext end
+"""Context supporting lifecycle state-transform evaluation."""
 abstract type AbstractLifecycleStateTransformEvaluationContext <:
               AbstractEvaluatorExecutionContext end
 
@@ -65,6 +76,7 @@ function _validated_handle_indices(bank::Integer, slot::Integer, owner)
     return Int32(bank), Int32(slot)
 end
 
+"""Typed bank, slot, and block location for compiler-declared state."""
 struct StateHandle{
         Representation <: AbstractStorageRepresentation,
         L <: BlockLocation,
@@ -113,6 +125,7 @@ StateHandle(slot::Integer) =
 StateHandle(bank::Integer, slot::Integer) =
     StateHandle{DefaultStateStorageRepresentation}(bank, slot)
 
+"""Typed bank, slot, and block location for compiler-declared workspace."""
 struct WorkspaceHandle{
         Representation <: AbstractStorageRepresentation,
         L <: BlockLocation,
@@ -161,7 +174,9 @@ WorkspaceHandle(slot::Integer) =
 WorkspaceHandle(bank::Integer, slot::Integer) =
     WorkspaceHandle{DefaultWorkspaceStorageRepresentation}(bank, slot)
 
+"""Return the one-based bank ordinal encoded by a state or workspace handle."""
 handle_bank(handle::Union{StateHandle, WorkspaceHandle}) = handle.bank
+"""Return the one-based slot encoded by a state or workspace handle."""
 handle_slot(handle::Union{StateHandle, WorkspaceHandle}) = handle.slot
 handle_offset(handle::Union{StateHandle, WorkspaceHandle}) =
     handle.location.offset
@@ -181,10 +196,12 @@ function Base.getproperty(
     return getfield(handle, name)
 end
 
+"""Literal isbits value in a compiled expression."""
 struct LiteralExpression{T} <: AbstractStaticExpression
     value::T
 end
 
+"""Floating-point submission parameter with a compile-time default and positional index."""
 struct ParameterExpression{T <: AbstractFloat} <: AbstractStaticExpression
     default::T
     index::Int32
@@ -197,14 +214,17 @@ struct ParameterExpression{T <: AbstractFloat} <: AbstractStaticExpression
     end
 end
 
+"""Leaf expression evaluated by a contextual operation."""
 struct ContextExpression{T <: AbstractContextualOperation} <: AbstractStaticExpression
     operation::T
 end
 
+"""Leaf expression reading a compiler-declared state handle."""
 struct StateExpression{H <: StateHandle} <: AbstractStaticExpression
     handle::H
 end
 
+"""Typed callable application over a tuple of compiled subexpressions."""
 struct OperationExpression{
         T,
         A <: Tuple,
@@ -216,10 +236,12 @@ end
 OperationExpression(operation, arguments...) =
     OperationExpression(operation, arguments)
 
+"""Concrete evaluator wrapper around one recursively typed expression."""
 struct StaticEvaluator{E <: AbstractStaticExpression}
     expression::E
 end
 
+"""Callable marker requesting canonical left-to-right argument folding."""
 struct OrderedFold{F}
     operation::F
 end
@@ -238,6 +260,7 @@ end
     return comparison.operation(left, right)
 end
 
+"""Contextual operation identified by a compile-time `Symbol`."""
 struct ContextOperation{Identity} <: AbstractContextualOperation end
 struct ResourceOperation{Identity} <: AbstractContextualOperation end
 
@@ -250,25 +273,43 @@ end
 
 function context_value end
 function apply_resource_operation end
+"""Resolve a durable operation identity and version to a concrete callable."""
 function operation_callable end
+"""Evaluate a qualified tracker operation against the current execution context."""
 function qualified_tracker_operation_call end
+"""Report whether an operation is admitted by an evaluator context type."""
 function operation_context_supported end
+"""Read one compiler-declared state handle at an execution-local index."""
 function state_value end
 function workspace_value end
 function evaluator_parameters end
+"""Return the source lattice site of the current proposal."""
 function proposal_source_site end
+"""Return the target lattice site of the current proposal."""
 function proposal_target_site end
+"""Return the source owner before the current proposal."""
 function proposal_source_owner end
+"""Return the target owner before the current proposal."""
 function proposal_target_owner end
+"""Return the source owner's cell kind."""
 function proposal_source_kind end
+"""Return the target owner's cell kind."""
 function proposal_target_kind end
+"""Return the owner at a proposal-relative lattice site."""
 function proposal_site_owner end
+"""Return the bounded degree of a proposal-relative relation."""
 function proposal_relation_count end
+"""Return a relation endpoint site for the current proposal."""
 function proposal_relation_neighbor_site end
+"""Return the owner at a relation endpoint for the current proposal."""
 function proposal_relation_neighbor_owner end
+"""Return the owner at a stage-relative lattice site."""
 function site_owner end
+"""Return the cell kind for a finite owner identity."""
 function owner_kind end
+"""Return the bounded degree of a stage-relative relation."""
 function relation_count end
+"""Return a stage-relative relation endpoint site."""
 function relation_neighbor_site end
 function _compiled_evaluator_parameters end
 function _compiled_context_value end
@@ -436,6 +477,7 @@ for identity in (
         :lag,
         :new_contact,
         :lost_contact,
+        :bounded_fold,
         :draw,
     )
     @eval operation_callable(

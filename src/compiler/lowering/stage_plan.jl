@@ -95,7 +95,7 @@ function _lower_stage_plan(
         elseif record.kind === :HistoryState
             options = last(record.normalized_payload)
             haskey(options, :of) || throw(ArgumentError(
-                "HistoryState requires an explicit `of` source in V1"
+                "HistoryState requires an explicit `of` source"
             ))
             target = state_handles[record.identity]
             source = _stage_state_handle(
@@ -169,7 +169,7 @@ function _lower_stage_plan(
         after_mcs_assignments,
     )
     allunique(targets) || throw(ArgumentError(
-        "V1 permits at most one synchronous assignment per state block"
+        "state blocks permit at most one synchronous assignment"
     ))
     accepted_groups = _stage_descriptor_groups(accepted)
     before_lifecycle = (

@@ -340,7 +340,7 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
     ConstructionBaseStaticArraysExt = "StaticArrays"
 
 [[deps.CorePotts]]
-deps = ["AcceleratedKernels", "Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "SHA"]
+deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
 path = "../../../lib/CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0"
@@ -1055,6 +1055,12 @@ version = "5.4.0"
     blis_jll = "6136c539-28a5-5bf0-87cc-b183200dce32"
     cuSOLVER = "887afef0-6a32-4de5-add4-7827692ba8fc"
 
+[[deps.LocalMath]]
+deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "StructArrays", "UUIDs"]
+path = "../../../lib/LocalMath"
+uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
+version = "0.2.0-rc1"
+
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
 git-tree-sha1 = "bba2d9aa057d8f126415de240573e86a8f39d2a1"
@@ -1290,17 +1296,24 @@ uuid = "e409e4f3-bfea-5376-8464-e040bb5c01ab"
 version = "0.4.13"
 
 [[deps.PottsToolkit]]
-deps = ["CorePotts", "DynamicQuantities", "ModelingToolkitBase", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
+deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
 path = "../../.."
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 version = "0.2.0"
 
     [deps.PottsToolkit.extensions]
+    PottsToolkitMetalExt = "Metal"
+    PottsToolkitMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
+    PottsToolkitMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
     PottsToolkitModelingToolkitExt = "ModelingToolkit"
     PottsToolkitUnitfulExt = "Unitful"
 
     [deps.PottsToolkit.weakdeps]
+    DiffEqGPU = "071ae1c0-96b5-11e9-1965-c90190d839ea"
+    Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+    MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
     ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.PreallocationTools]]
@@ -1696,6 +1709,20 @@ git-tree-sha1 = "8a90c1d77c3277a5d43b83927b3cbe2c70a37484"
 uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
 version = "0.4.7"
 
+[[deps.StructArrays]]
+deps = ["ConstructionBase", "DataAPI", "Tables"]
+git-tree-sha1 = "ad8002667372439f2e3611cfd14097e03fa4bccd"
+uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
+version = "0.7.3"
+weakdeps = ["Adapt", "GPUArraysCore", "KernelAbstractions", "LinearAlgebra", "SparseArrays", "StaticArrays"]
+
+    [deps.StructArrays.extensions]
+    StructArraysAdaptExt = "Adapt"
+    StructArraysGPUArraysCoreExt = ["GPUArraysCore", "KernelAbstractions"]
+    StructArraysLinearAlgebraExt = "LinearAlgebra"
+    StructArraysSparseArraysExt = "SparseArrays"
+    StructArraysStaticArraysExt = "StaticArrays"
+
 [[deps.StyledStrings]]
 uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
 version = "1.11.0"
@@ -1741,9 +1768,9 @@ version = "4.44.0"
 
 [[deps.Symbolics]]
 deps = ["ADTypes", "AbstractPlutoDingetjes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "IntervalSets", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "Moshi", "MultivariatePolynomials", "MutableArithmetics", "NaNMath", "PrecompileTools", "Preferences", "Primes", "RecipesBase", "Reexport", "RuntimeGeneratedFunctions", "SciMLPublic", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
-git-tree-sha1 = "2a8387ae58e5c1afbd8820b5c3ddb300d15ae27f"
+git-tree-sha1 = "97d383a691f439013dacb95c8f55bd4266308a62"
 uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-version = "7.35.0"
+version = "7.37.0"
 
     [deps.Symbolics.extensions]
     SymbolicsD3TreesExt = "D3Trees"

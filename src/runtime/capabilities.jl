@@ -1,6 +1,7 @@
 # Exact PottsToolkit-level capability composition.  Scheduled systems expose
 # requirements; only a concrete runtime profile can produce a support row.
 
+"""Complete immutable identity of a Potts runtime capability request."""
 struct PottsCapabilityKey{C, N <: Tuple, E, O, S, R}
     core::C
     scheduled_fingerprint::String
@@ -13,13 +14,17 @@ struct PottsCapabilityKey{C, N <: Tuple, E, O, S, R}
     fingerprint::String
 end
 
+"""Preflight support result, reason, replay class, and backend evidence."""
 struct PottsCapabilityReport{K <: PottsCapabilityKey, E}
     key::K
     status::CorePotts.BackendSPI.CapabilitySupportStatus
-    maturity::CorePotts.BackendSPI.CapabilityMaturity
+    exact_replay::Bool
     reason::String
     evidence::E
 end
+
+_capability_evidence_identity(authority, suite, revision, profile_fingerprint) =
+    (; authority, suite, revision, profile_fingerprint)
 
 function _native_event_contract(component::ScheduledNativeComponent)
     original = native_original_system(component)
@@ -58,7 +63,7 @@ function _host_capture_identity(value)
                 VersionNumber, DataType, Module}
         return (kind = :value, type = string(typeof(value)), value = repr(value))
     elseif ismutabletype(typeof(value))
-        # Callback checkpointing is forbidden. For Functional in-process
+        # Callback checkpointing is forbidden. For supported in-process
         # execution, bind the exact captured object identity without claiming
         # that it can be reconstructed in another process.
         return (
@@ -181,11 +186,11 @@ function _observation_save_fact(policy)
     )
 end
 
-function _mode_evidence(suite::Symbol, maturity, family::Symbol)
+function _mode_evidence(suite::Symbol, exact_replay::Bool, family::Symbol)
     return (
         status = CorePotts.BackendSPI.Supported,
-        maturity,
-        evidence = CorePotts.BackendSPI.CapabilityEvidenceIdentity(
+        exact_replay,
+        evidence = _capability_evidence_identity(
             :PottsToolkit,
             suite,
             v"1.0.0",
@@ -198,8 +203,8 @@ function _outer_event_evidence(fact)
     if fact.mode === :none && fact.continuous_count == 0 &&
             fact.discrete_count == 0 && fact.callback_identities == ()
         return _mode_evidence(
-            :g5h2_no_outer_event_mode,
-            CorePotts.BackendSPI.ReplayQualified,
+            :no_outer_event_mode,
+            true,
             :no_outer_events,
         )
     elseif fact.mode === :imperative_host_discrete_callbacks &&
@@ -211,8 +216,8 @@ function _outer_event_evidence(fact)
             fact.state_codec === :unavailable &&
             fact.checkpoint === :unsupported_callback_state
         return _mode_evidence(
-            :g5h2_host_discrete_callback_functional,
-            CorePotts.BackendSPI.Functional,
+            :host_discrete_callback_functional,
+            false,
             :host_discrete_callback_protocol_v1,
         )
     end
@@ -240,8 +245,8 @@ function _observation_save_evidence(fact)
     fact.maxiters isa Int && fact.maxiters >= 0 || return nothing
     fact.progress_steps isa Int && fact.progress_steps > 0 || return nothing
     return _mode_evidence(
-        :g5h2_settled_observation_save_policy,
-        CorePotts.BackendSPI.ReplayQualified,
+        :settled_observation_save_policy,
+        true,
         :settled_observation_save_policy_v1,
     )
 end
@@ -326,7 +331,7 @@ function _native_capability_fact(component, profile, state, evidence_row)
         logical_state_schema = _native_logical_state_schema(state),
         algorithm = _native_algorithm_identity(profile),
         execution = profile.execution isa MetalNativeExecution ? (
-            mode = :metal_kernel,
+            mode = :kernelabstractions_metal,
             width = profile.execution.width,
             transfer_boundary = :coupled_component_interval,
         ) : profile.execution isa BatchedNativeExecution ? (
@@ -363,11 +368,6 @@ end
 function _minimum_capability_status(values)
     code = minimum(Int(value) for value in values)
     return CorePotts.BackendSPI.CapabilitySupportStatus(code)
-end
-
-function _minimum_capability_maturity(values)
-    code = minimum(Int(value) for value in values)
-    return CorePotts.BackendSPI.CapabilityMaturity(code)
 end
 
 function _compose_runtime_capability(
@@ -427,28 +427,18 @@ function _compose_runtime_capability(
     native_statuses = isempty(components) ?
         (core.status,) :
         Tuple(
-            profile_shape_admitted && row !== nothing &&
-                    row.status === CorePotts.BackendSPI.Supported ?
+            profile_shape_admitted &&
+                    (!profile.exact_replay ||
+                        row !== nothing &&
+                        row.status === CorePotts.BackendSPI.Supported) ?
                 CorePotts.BackendSPI.Supported :
                 CorePotts.BackendSPI.Unsupported
-            for row in native_rows
+            for (profile, row) in zip(profiles, native_rows)
         )
     replay = isempty(components) ? core.key.replay :
-        CorePotts.BackendSPI.ExactConfigurationReplay
-    maturity_values = Any[core.maturity]
-    for index in eachindex(components)
-        push!(maturity_values,
-            native_rows[index] === nothing ?
-                CorePotts.BackendSPI.InterfaceOnly :
-                native_rows[index].maturity)
-    end
-    push!(
-        maturity_values,
-        outer_event_row === nothing ? CorePotts.BackendSPI.InterfaceOnly :
-            outer_event_row.maturity,
-        observation_save_row === nothing ? CorePotts.BackendSPI.InterfaceOnly :
-            observation_save_row.maturity,
-    )
+        all(profile -> profile.exact_replay, profiles) ?
+            CorePotts.BackendSPI.ExactConfigurationReplay :
+            :functional_native_execution
     mode_statuses = (
         outer_event_row === nothing ? CorePotts.BackendSPI.Unsupported :
             outer_event_row.status,
@@ -458,12 +448,17 @@ function _compose_runtime_capability(
     status = _minimum_capability_status((
         core.status, native_statuses..., mode_statuses...
     ))
-    maturity = _minimum_capability_maturity(maturity_values)
-    core_profile_fingerprint = core.evidence === nothing ? nothing :
-        core.evidence.profile_fingerprint
+    exact_replay = status === CorePotts.BackendSPI.Supported &&
+        core.exact_replay &&
+        all(profile -> profile.exact_replay, profiles) &&
+        all(row -> row !== nothing && row.exact_replay, native_rows) &&
+        outer_event_row !== nothing && outer_event_row.exact_replay &&
+        observation_save_row !== nothing && observation_save_row.exact_replay
+    core_profile_fingerprint =
+        CorePotts.BackendSPI.capability_key_fingerprint(core.key)
     checkpoint_mode = if outer_events.checkpoint !== :admitted
         :unsupported_outer_callback_state
-    elseif Int(maturity) < Int(CorePotts.BackendSPI.ReplayQualified)
+    elseif !exact_replay
         :unsupported_unqualified_replay
     else
         isempty(components) ? :core_logical : :core_plus_native_logical
@@ -495,32 +490,30 @@ function _compose_runtime_capability(
     native_evidence = Tuple(
         row === nothing ? nothing : row.evidence for row in native_rows
     )
-    closed_conjunction = core.evidence !== nothing &&
+    closed_conjunction = exact_replay &&
         outer_event_row !== nothing &&
         observation_save_row !== nothing &&
         all(row -> row !== nothing, native_rows)
-    conjunction_evidence = status === CorePotts.BackendSPI.Supported &&
-            Int(maturity) >= Int(CorePotts.BackendSPI.Functional) &&
-            closed_conjunction ?
-        CorePotts.BackendSPI.CapabilityEvidenceIdentity(
+    conjunction_evidence = closed_conjunction ?
+        _capability_evidence_identity(
             :PottsToolkit,
-            Int(maturity) >= Int(CorePotts.BackendSPI.ReplayQualified) ?
-                :g5h3_composed_replay_conjunction :
-                :g5h3_composed_functional_conjunction,
+            :composed_replay_conjunction,
             v"1.0.0",
             fingerprint,
         ) : nothing
-    reason = status === CorePotts.BackendSPI.Supported ?
-        "The exact CorePotts row and every native solver/event/checkpoint row are covered by closed evidence suites." :
-        "No closed PottsToolkit evidence conjunction matches the exact runtime, native solver, event, and checkpoint profile."
+    reason = status !== CorePotts.BackendSPI.Supported ?
+        "The runtime profile violates a structural, numerical, or requested exact-replay requirement." :
+        exact_replay ?
+            "The complete runtime and checkpoint profile has a closed exact-replay conjunction." :
+            "The structural and numerical runtime contract is supported; exact replay was not requested or is not available."
     return PottsCapabilityReport(
         key,
         status,
-        maturity,
+        exact_replay,
         reason,
         (
             conjunction = conjunction_evidence,
-            core = core.evidence,
+            core = (key = core.key, exact_replay = core.exact_replay),
             native = native_evidence,
             outer_events = outer_event_row === nothing ? nothing :
                 outer_event_row.evidence,
@@ -531,12 +524,9 @@ function _compose_runtime_capability(
 end
 
 function _require_runtime_capability(report::PottsCapabilityReport)
-    report.status === CorePotts.BackendSPI.Supported &&
-        Int(report.maturity) >= Int(CorePotts.BackendSPI.Functional) &&
-        report.evidence.conjunction !== nothing &&
-        return report
+    report.status === CorePotts.BackendSPI.Supported && return report
     throw(ArgumentError(
-        "PottsToolkit capability preflight rejected exact profile " *
+        "PottsToolkit capability preflight rejected runtime profile " *
         "$(report.key.fingerprint): $(report.reason)"
     ))
 end

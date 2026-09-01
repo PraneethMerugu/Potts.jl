@@ -7,7 +7,8 @@ queue/settlement operations, device adaptation, and unpublished bank swaps.
 This is an explicit, flat facade over CorePotts-owned bindings, not a backend
 framework or a second implementation. Backend extensions should import only
 the smallest required protocol. They must not construct compiler IR through
-this namespace or self-authorize execution evidence.
+this namespace. CorePotts remains the authority for execution support and exact
+checkpoint replay.
 """
 module BackendSPI
 
@@ -26,11 +27,9 @@ import ..CorePotts:
     CapabilityBoundaryTopology,
     CapabilityComponentStateProfile,
     CapabilityEngine,
-    CapabilityEvidenceIdentity,
     CapabilityLifecycleProfile,
     CapabilityMechanismProfile,
     CapabilityMathPolicy,
-    CapabilityMaturity,
     CapabilityReplayClass,
     CapabilitySupportStatus,
     CheckerboardEngine,
@@ -39,25 +38,19 @@ import ..CorePotts:
     CheckerboardWorkspace,
     CheckpointSettlement,
     ClosedBoundary,
-    Compiles,
     ComponentExchangeSettlement,
     ComponentStateCapacityError,
     DuplicateLifecycleReceiptError,
     ExactConfigurationReplay,
-    Experimental,
     FinalizationSettlement,
-    Functional,
     HostCallbackSettlement,
     IndexMutationSettlement,
     IndexReadSettlement,
-    InterfaceOnly,
     LifecycleReceiptOrderError,
     NoCheckerboardPlan,
     ObservationSettlement,
     OccupiedComponentSlotError,
-    PerformanceQualified,
     PeriodicBoundary,
-    PortableLogicalRestart,
     ProgramCapabilityError,
     ProgramCapabilityKey,
     ProgramCapabilityReport,
@@ -77,7 +70,6 @@ import ..CorePotts:
     ProgramStatusDetailCode,
     ProgressSettlement,
     PublicStepSettlement,
-    ReplayQualified,
     RelationshipFailureDisposition,
     RelationshipFailureError,
     RelationshipFailureFilter,
@@ -85,12 +77,12 @@ import ..CorePotts:
     SequentialEngine,
     SequentialProgramEngine,
     StaleCellIdentityError,
-    StatisticalRestart,
     StatisticsSettlement,
     Supported,
     Unsupported,
     abort_component_state_transaction!,
     adapted_device_capability_disposition,
+    adapted_device_environment,
     abort_program_step!,
     adapt_checkerboard_workspace,
     adapt_program_runtime,
@@ -153,20 +145,18 @@ public CPUProgramBackend, AdaptedProgramBackend
 public AbstractCheckerboardPlan, NoCheckerboardPlan, CheckerboardPlan
 public CheckerboardWorkspace, adapt_checkerboard_workspace
 public execute_checkerboard_mcs!, enqueue_checkerboard_mcs!
-public CapabilitySupportStatus, Unsupported, Experimental, Supported
-public CapabilityMaturity, InterfaceOnly, Compiles, Functional
-public ReplayQualified, PerformanceQualified
+public CapabilitySupportStatus, Unsupported, Supported
 public CapabilityEngine, SequentialEngine, CheckerboardEngine
 public CapabilityBackend, CPUBackend, AdaptedBackend
 public CapabilityBoundaryTopology, ClosedBoundary, PeriodicBoundary
 public CapabilityReplayClass, ExactConfigurationReplay
-public PortableLogicalRestart, StatisticalRestart
 public CapabilityMathPolicy, CapabilityLifecycleProfile
 public CapabilityComponentStateProfile, CapabilityMechanismProfile
 public ProgramCapabilityKey
-public CapabilityEvidenceIdentity, ProgramCapabilityReport, ProgramCapabilityError
+public ProgramCapabilityReport, ProgramCapabilityError
 public capability_authorizes_execution, capability_authorizes_replay
 public adapted_device_capability_disposition, capability_key_fingerprint
+public adapted_device_environment
 public ProgramExecutionPosition, ProgramSettlementReason, ProgramSettlementRequest
 public FinalizationSettlement, PublicStepSettlement, SaveSettlement
 public HostCallbackSettlement, CheckpointSettlement

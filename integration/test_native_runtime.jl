@@ -5,13 +5,13 @@ using Sundials: IDA
 import Catalyst
 using Catalyst: @reaction_network
 
-const G5H3_IMPURE_CALL_COUNT = Ref(0)
-function g5h3_impure_identity(value)
-    G5H3_IMPURE_CALL_COUNT[] += 1
+const IMPURE_CALL_COUNT = Ref(0)
+function impure_identity(value)
+    IMPURE_CALL_COUNT[] += 1
     return value
 end
 
-@testset "G5H-4 per-cell serial native ODE runtime" begin
+@testset "per-cell serial native ODE runtime" begin
     @independent_variables cell_ode_t
     @variables cell_ode_x(cell_ode_t) = 1.0 cell_ode_drive(cell_ode_t)
     cell_ode_D = ModelingToolkitBase.Differential(cell_ode_t)
@@ -208,7 +208,7 @@ end
             only(before_failure.native).states)
 end
 
-@testset "G5H-4 per-cell lifecycle receipts and slot reuse" begin
+@testset "per-cell lifecycle receipts and slot reuse" begin
     @independent_variables lifecycle_native_t
     @variables lifecycle_native_x(lifecycle_native_t) = 1.0
     @parameters lifecycle_native_rate = 0.0
@@ -462,7 +462,7 @@ end
     @test resumed_native.last_transaction_identity ==
         expected_native.last_transaction_identity
 end
-Symbolics.@register_symbolic g5h3_impure_identity(value)
+Symbolics.@register_symbolic impure_identity(value)
 
 function _native_runtime_fixture(
         name::Symbol;
@@ -601,7 +601,7 @@ function _native_output_fixture(
     )
 end
 
-@testset "G5H-3 coupled native ODE runtime" begin
+@testset "coupled native ODE runtime" begin
     @independent_variables ode_t
     @variables ode_x(ode_t) = 1.0 ode_drive(ode_t)
     @variables ode_seen(ode_t)
@@ -686,7 +686,25 @@ end
     end
     @test global_batch_error isa PottsToolkit.NativeCapabilityError
     @test global_batch_error.capability === :native_execution_mode
-    unqualified_profile = NativeSolveProfile(
+    functional_profile = NativeSolveProfile(
+        fixture.path,
+        Tsit5();
+        deterministic = true,
+        adaptive = false,
+        dt = 0.01,
+    )
+    functional = init(
+        problem, SequentialCPM(); native_profiles = (functional_profile,)
+    )
+    @test functional.capability_report.status ===
+        PottsToolkit.CorePotts.BackendSPI.Supported
+    @test !functional.capability_report.exact_replay
+    @test functional.capability_report.evidence.conjunction === nothing
+    step!(functional)
+    @test functional.u[:potts_output] ≈ 3 - 2exp(-0.1) atol = 2e-8
+    @test_throws ArgumentError checkpoint(functional)
+
+    invalid_solver_profile = NativeSolveProfile(
         fixture.path,
         Tsit5();
         definitely_not_a_solver_option = true,
@@ -695,18 +713,13 @@ end
         init(
             problem,
             SequentialCPM();
-            native_profiles = (unqualified_profile,),
+            native_profiles = (invalid_solver_profile,),
         )
         nothing
     catch caught
         caught
     end
-    @test preflight_error isa PottsToolkit.NativeCapabilityError
-    @test preflight_error.capability === :closed_replay_evidence
-    @test occursin(
-        "solver initialization were not attempted",
-        sprint(showerror, preflight_error),
-    )
+    @test preflight_error isa PottsToolkit.NativeExecutionError
     integrator = init(
         problem, SequentialCPM(); native_profiles = (profile,),
         save_everystep = true,
@@ -757,10 +770,22 @@ end
         adaptive = false,
         dt = 0.01,
     )
-    @test_throws PottsToolkit.NativeCapabilityError init(
+    custom_integrator = init(
         problem, SequentialCPM();
         native_profiles = (custom_algorithm_profile,),
     )
+    custom_report = inspect(custom_integrator, Capabilities())
+    @test custom_report.status === report.status
+    @test !custom_report.exact_replay
+    custom_checkpoint_error = try
+        checkpoint(custom_integrator)
+        nothing
+    catch caught
+        caught
+    end
+    @test custom_checkpoint_error isa ArgumentError
+    @test occursin(
+        "exact-replay evidence", sprint(showerror, custom_checkpoint_error))
 
     uninterrupted = init(
         problem, SequentialCPM(); native_profiles = (profile,),
@@ -826,8 +851,7 @@ end
         problem, SequentialCPM(); native_profiles = (failure_profile,),
         save_everystep = true,
     )
-    @test failing.capability_report.maturity ===
-        PottsToolkit.CorePotts.BackendSPI.ReplayQualified
+    @test failing.capability_report.exact_replay
     @test checkpoint(failing).snapshot.mcs == 0
     before_failure = failing.u
     before_native = only(failing.native_states)
@@ -872,7 +896,7 @@ end
     @test_throws ArgumentError checkpoint(terminated)
 end
 
-@testset "G5H-3 native event retention and public-only rejection" begin
+@testset "native event retention and public-only rejection" begin
     @independent_variables event_t
     @variables event_x(event_t) = 0.0
     event_D = ModelingToolkitBase.Differential(event_t)
@@ -917,7 +941,7 @@ end
     @test occursin("event-free", sprint(showerror, event_error))
 end
 
-@testset "G5H-3 native DAE construction with honest runtime rejection" begin
+@testset "native DAE functional execution" begin
     @independent_variables dae_t
     @variables dae_x(dae_t) [guess = 1.0]
     @variables dae_y(dae_t) [guess = 1.0]
@@ -938,14 +962,6 @@ end
     profile = NativeSolveProfile(
         fixture.path, IDA(); profile_id = "ida-logical-v1"
     )
-    custom_ida_profile = NativeSolveProfile(
-        fixture.path,
-        IDA(; linear_solver = :GMRES);
-        profile_id = "ida-gmres-unqualified",
-    )
-    @test_throws PottsToolkit.NativeCapabilityError init(
-        problem, SequentialCPM(); native_profiles = (custom_ida_profile,)
-    )
     component = only(scheduled_native_components(fixture.scheduled))
     scheduled_dae = PottsToolkit.native_scheduled_system(component)
     standard_problem = SciMLBase.DAEProblem(
@@ -962,17 +978,20 @@ end
     @test SymbolicIndexingInterface.getsym(
         scheduled_dae, dae_x
     )(standard_integrator) ≈ 1.0
-    dae_error = try
-        init(problem, SequentialCPM(); native_profiles = (profile,))
-        nothing
-    catch caught
-        caught
-    end
-    @test dae_error isa PottsToolkit.NativeCapabilityError
-    @test occursin("no closed exact-replay evidence", sprint(showerror, dae_error))
+    dae_integrator = init(
+        problem, SequentialCPM(); native_profiles = (profile,)
+    )
+    @test dae_integrator.capability_report.status ===
+        PottsToolkit.CorePotts.BackendSPI.Supported
+    @test !dae_integrator.capability_report.exact_replay
+    @test native_value(dae_integrator, fixture.path, dae_x) ≈ 1.0
+    step!(dae_integrator)
+    @test dae_integrator.t == 1
+    @test isfinite(native_value(dae_integrator, fixture.path, dae_x))
+    @test_throws ArgumentError checkpoint(dae_integrator)
 end
 
-@testset "G5H-3 explicit Catalyst ODE conversion" begin
+@testset "explicit Catalyst ODE conversion" begin
     reaction_system = @reaction_network begin
         1.0, X --> 0
     end
@@ -1027,7 +1046,7 @@ end
     @test integrator.u[:potts_output] ≈ exp(-0.1) atol = 2e-8
 end
 
-@testset "G5H-3 zero-port native island" begin
+@testset "zero-port native island" begin
     @independent_variables isolated_t
     @variables isolated_x(isolated_t) = 1.0
     isolated_D = ModelingToolkitBase.Differential(isolated_t)
@@ -1081,7 +1100,7 @@ end
     @test isempty(inspect(scheduled, ExternalIO()))
 end
 
-@testset "G5H-3 simultaneous native-island publication" begin
+@testset "simultaneous native-island publication" begin
     @independent_variables jacobi_t
     @variables producer_x(jacobi_t) = 2.0
     @variables consumer_x(jacobi_t) = 0.0 consumer_drive(jacobi_t)
@@ -1198,12 +1217,12 @@ end
         last(forward.u)[:jacobi_result] atol = 2e-9
 end
 
-@testset "G5H-3 registered host functions cannot inherit replay evidence" begin
+@testset "registered host functions cannot inherit replay evidence" begin
     @independent_variables impure_t
     @variables impure_x(impure_t) = 1.0
     impure_D = ModelingToolkitBase.Differential(impure_t)
     @named impure_system = ModelingToolkit.System(
-        [impure_D(impure_x) ~ g5h3_impure_identity(impure_x)], impure_t
+        [impure_D(impure_x) ~ impure_identity(impure_x)], impure_t
     )
     fixture = _native_output_fixture(
         :impure_registered_function;

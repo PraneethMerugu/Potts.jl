@@ -3,14 +3,16 @@
 @inline function _trajectory_seed(
         seed::UInt64, replica::UInt32, repeat::UInt32
     )
-    return _rng_mix64(
-        xor(
-            seed,
-            UInt64(0x706f7474732d7631),
-            UInt64(replica) * UInt64(0x9e3779b97f4a7c15),
-            UInt64(repeat) * UInt64(0xbf58476d1ce4e5b9),
-        )
+    words = philox4x32_10(
+        (
+            replica,
+            repeat,
+            UInt32(0x74747332),
+            UInt32(0x706f7474),
+        ),
+        (seed % UInt32, (seed >> 32) % UInt32),
     )
+    return UInt64(words[1]) | (UInt64(words[2]) << 32)
 end
 
 @inline function _lifecycle_address(
@@ -60,12 +62,13 @@ end
     )
     return uniform_open01(
         T,
-        Philox4x32x10V1(),
+        Philox4x32x10V2(),
         _trajectory_seed(runtime.seed, runtime.replica, runtime.repeat),
         address,
     )
 end
 
+"""Draw a deterministic initialization sample bounded by the supplied limits."""
 function initialization_bounded(
         seed::UInt64,
         replica::UInt32,
@@ -93,7 +96,7 @@ function initialization_bounded(
         draw = draw,
     )
     return Int(bounded_uint(
-        Philox4x32x10V1(),
+        Philox4x32x10V2(),
         _trajectory_seed(seed, replica, repeat),
         address,
         UInt32(bound),
@@ -123,7 +126,7 @@ end
         stream, runtime.mcs + 1, operation, entity; subround, draw
     )
     return Int(bounded_uint(
-        Philox4x32x10V1(),
+        Philox4x32x10V2(),
         _trajectory_seed(runtime.seed, runtime.replica, runtime.repeat),
         address,
         UInt32(bound),
@@ -139,7 +142,7 @@ end
     )
     return uniform_open01(
         T,
-        Philox4x32x10V1(),
+        Philox4x32x10V2(),
         _trajectory_seed(runtime.seed, runtime.replica, runtime.repeat),
         address,
     )

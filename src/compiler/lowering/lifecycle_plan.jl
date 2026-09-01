@@ -246,7 +246,7 @@ function _lifecycle_distribution_parameters(distribution)
         distribution.mean, distribution.standard_deviation,
     )
     throw(ArgumentError(
-        "RedrawDaughters supports scalar Bernoulli, Uniform, or Normal in V1"
+        "RedrawDaughters supports scalar Bernoulli, Uniform, or Normal"
     ))
 end
 

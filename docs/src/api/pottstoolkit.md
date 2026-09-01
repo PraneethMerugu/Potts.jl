@@ -19,7 +19,9 @@ and unpublished compatibility spellings are intentionally absent.
 
 ```@example pottstoolkit_inventory
 using PottsToolkit
-exported = Set(names(PottsToolkit))
+visible_names = names(PottsToolkit; all=false, imported=false)
+exported = Set(filter(name -> Base.isexported(PottsToolkit, name), visible_names))
+public_names = Set(filter(name -> Base.ispublic(PottsToolkit, name), visible_names))
 required = Set((
     :PottsSystem,
     :mtkcompile,
@@ -40,9 +42,16 @@ retired = Set((
     :CUDABackend,
     :ROCmBackend,
 ))
-(issubset(required, exported), isempty(intersect(retired, exported)))
+(issubset(required, exported), isempty(intersect(retired, public_names)))
 ```
 
 Unexported but `public` names form the supported extension and inspection SPI;
 they are not additional authoring constructors. See [Extension boundary](@ref
 extension-boundary).
+
+## Reference
+
+```@autodocs
+Modules = [PottsToolkit]
+Private = false
+```

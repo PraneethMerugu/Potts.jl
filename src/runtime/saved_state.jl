@@ -1,14 +1,18 @@
+"""Supertype of precise saved-state lookup failures."""
 abstract type PottsLookupError <: Exception end
 
+"""Lookup failure for an identity absent from the compiled system."""
 struct PottsUnknownIdentityError <: PottsLookupError
     identity::Symbol
 end
 
+"""A known observation was not saved at the requested step."""
 struct PottsKnownUnsavedError <: PottsLookupError
     identity::Symbol
     mcs::Int
 end
 
+"""The requested trajectory step was omitted by the save schedule."""
 struct PottsUnsavedTimeError <: PottsLookupError
     mcs::Int
 end
@@ -26,6 +30,7 @@ Base.showerror(io::IO, error::PottsKnownUnsavedError) =
 Base.showerror(io::IO, error::PottsUnsavedTimeError) =
     print(io, "MCS ", error.mcs, " is within the trajectory but was not saved")
 
+"""Immutable scientific snapshot saved at one Monte Carlo step."""
 struct PottsSavedState{O, K, G, V, S, R, Q, D, N}
     mcs::Int
     ownership::O
@@ -134,6 +139,7 @@ Base.propertynames(state::PottsSavedState) = (
     keys(state.observations)...,
 )
 
+"""Return a copied native logical state from a saved state or solution."""
 function native_state(state::PottsSavedState, path)
     value = _native_state_by_path(state.native, path)
     value isa NativeCellStateSnapshot && throw(ArgumentError(
@@ -157,6 +163,7 @@ function native_state(
     return _copy_native_logical_state(value.states[slot])
 end
 
+"""Aggregated proposal and lifecycle counters for a solve."""
 struct PottsStats
     steps::Int
     candidate_attempts::UInt64

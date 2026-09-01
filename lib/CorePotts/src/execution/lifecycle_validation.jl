@@ -259,7 +259,7 @@ function _stage_lifecycle_transactions!(
     # and derived consequences before state policies observe that view; no
     # scientific value is published until every phase validates.
     for position in 1:selected_count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_selected_request(workspace, position))
         _stage_lifecycle_request_structure!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
@@ -267,7 +267,7 @@ function _stage_lifecycle_transactions!(
         ); -1)
     end
     for position in 1:selected_count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_selected_request(workspace, position))
         _stage_lifecycle_request_relationships!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
@@ -275,7 +275,7 @@ function _stage_lifecycle_transactions!(
         ); -1)
     end
     for position in 1:selected_count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_selected_request(workspace, position))
         _stage_lifecycle_request_state!(
             HostLifecycleExecution(), runtime, plan, workspace, request
         ) || return (_stamp_host_lifecycle_failure!(
@@ -284,7 +284,7 @@ function _stage_lifecycle_transactions!(
     end
     retired = 0
     for position in 1:selected_count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_selected_request(workspace, position))
         result = _finalize_lifecycle_request!(plan, workspace, request)
         result < 0 && return (_stamp_host_lifecycle_failure!(
             runtime, plan, workspace, ProgramStageValidation

@@ -1,0 +1,68 @@
+schema_version = 1
+gate = "LM-0"
+status = "passed_component_evidence"
+date = "2026-08-20"
+julia_version = "1.12.6"
+backend = "Metal.MetalKernels.MetalBackend"
+device = "AGXG13XDevice"
+execution_boundary = "KernelAbstractions"
+raw_metal_launches_in_production = 0
+
+[heterogeneous_program]
+report = "design/evidence/localmath/lm0/metal-current/stages-08-run-1.toml"
+logical_stages = 8
+physical_launches = 15
+law_families = ["unique", "reduce", "resolve", "collect", "ordered"]
+warm_samples = 3
+status = "passed"
+
+[cross_domain]
+runner = "benchmark/backends/metal/lw4_check.jl"
+assertions_passed = 15
+witnesses = [
+    "D2Q9",
+    "lattice_spring_deterministic",
+    "lattice_spring_relaxed",
+    "matrix_free_fem",
+    "zbuffer_resolution",
+    "ordered_fold",
+    "ordered_fold_atomicity",
+]
+status = "passed"
+
+[shared_provider_failure]
+runner = "lib/LocalWorksets/test/backend_conformance.jl"
+witness = "run_localworksets_shared_failure_scope"
+same_lane = true
+good_preparation_poisoned = true
+bad_preparation_poisoned = true
+drained = 0
+single_scope_synchronization = true
+status = "passed"
+
+[corepotts_scientific_failure]
+runner = "test/backend_conformance/localworksets_execution.jl"
+failure_type = "ProposalAcceptanceFailure"
+committed_mcs = 0
+provider_scope_poisoned = false
+status = "passed"
+
+[corepotts_provider_failure]
+runner = "test/backend_conformance/localworksets_execution.jl"
+fixture = "out_of_domain_checkerboard_site_in_production_proposal_kernel"
+device_error = "Metal.KernelException BoundsError"
+translated_error = "LifecycleBackendFailure"
+first_possible_mcs = 1
+last_possible_mcs = 1
+proposal_and_claims_same_lane = true
+proposal_poisoned = true
+claims_poisoned = true
+submitted = 1
+drained = 0
+scope_synchronizations = 1
+status = "passed"
+
+[interpretation]
+publication_validation_scope = "affected_preparation"
+provider_failure_scope = "shared_owner_task_and_device_scope"
+note = "The former site-swap fixture now closed as exact conjunctive publication validation and therefore could not witness provider poisoning. It was replaced directly with an out-of-domain site that raises a genuine device bounds fault. No production failure law was weakened."

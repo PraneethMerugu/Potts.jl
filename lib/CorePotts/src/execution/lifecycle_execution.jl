@@ -60,10 +60,10 @@ function _materialize_lifecycle_receipt(
         repeat::UInt32,
     )
     events = LifecycleEvent[]
-    selected_count = count(identity, workspace.selected)
+    selected_count = _lifecycle_selected_count(workspace)
     sizehint!(events, selected_count)
     for position in 1:selected_count
-        request = Int(@inbounds workspace.canonical_order[position])
+        request = Int(_lifecycle_selected_request(workspace, position))
         descriptor = @inbounds plan.descriptors[
             Int(workspace.descriptor[request])
         ]
@@ -76,7 +76,7 @@ function _materialize_lifecycle_receipt(
         )
         effect = descriptor.effect
         event = if effect === CreateCellLifecycleEffect
-            allocation = Int(@inbounds workspace.allocation[request])
+            allocation = Int(_lifecycle_request_allocation(workspace, request))
             CreateLifecycleEvent(
                 request_identity,
                 _receipt_cell_identity(
@@ -110,7 +110,7 @@ function _materialize_lifecycle_receipt(
                 ),
             )
         elseif effect === DivideCellLifecycleEffect
-            allocation = Int(@inbounds workspace.allocation[request])
+            allocation = Int(_lifecycle_request_allocation(workspace, request))
             DivideLifecycleEvent(
                 request_identity,
                 _receipt_cell_identity(
@@ -141,44 +141,29 @@ function _materialize_lifecycle_receipt(
     )
 end
 
-@inline function _lifecycle_descriptor_due(plan, next_mcs)
-    for descriptor in plan.descriptors
-        _lifecycle_due(descriptor, next_mcs) && return true
-    end
-    return false
-end
-
 function _execute_lifecycle_status!(
         runtime,
         plan::LifecycleExecutionPlan,
         workspace::LifecycleWorkspace,
     )
     _reset_lifecycle_workspace!(workspace)
-    _lifecycle_descriptor_due(plan, runtime.mcs + 1) || return true
-    _index_lifecycle_representative_sites!(runtime, workspace) || return (
+    any(descriptor -> _lifecycle_due(descriptor, runtime.mcs + 1),
+        plan.descriptors) || return true
+    _validate_lifecycle_ownership!(runtime, workspace) || return (
         _stamp_host_lifecycle_failure!(
             runtime, plan, workspace, ProgramStageIndex
         )
     )
-    _emit_lifecycle_requests!(runtime, plan, workspace) || return (
-        _stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, ProgramStageEmission
-        )
-    )
+    _run_host_lifecycle_site_index!(runtime, workspace)
+    _run_host_lifecycle_emission!(runtime, workspace) || return false
+    _run_host_lifecycle_request_index!(runtime, workspace)
     _filter_lifecycle_requests!(runtime, plan, workspace) || return (
         _stamp_host_lifecycle_failure!(
             runtime, plan, workspace, ProgramStagePlanning
         )
     )
-    _resolve_lifecycle_conflicts!(runtime, plan, workspace) || return (
-        _stamp_host_lifecycle_failure!(
-            runtime, plan, workspace, ProgramStageSelection
-        )
-    )
-    selected_count = _preflight_lifecycle_capacity!(runtime, plan, workspace)
-    selected_count < 0 && return _stamp_host_lifecycle_failure!(
-        runtime, plan, workspace, ProgramStageSelection
-    )
+    _run_host_lifecycle_selection!(runtime, workspace) || return false
+    selected_count = _lifecycle_selected_count(workspace)
     iszero(selected_count) && return true
     retired = _stage_lifecycle_transactions!(
         runtime, plan, workspace, selected_count

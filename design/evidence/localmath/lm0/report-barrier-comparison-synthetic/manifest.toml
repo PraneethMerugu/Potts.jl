@@ -1,0 +1,13 @@
+backend = "cpu"
+finished_utc = "2026-08-20T17:58:57.511"
+julia_executable = "/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia"
+profile = "synthetic"
+project = "lib/LocalWorksets"
+repetitions = 1
+results = ["stages-32-run-1.toml"]
+schema_version = 1
+stage_counts = [32]
+started_utc = "2026-08-20T17:55:34.135"
+status = "complete"
+timeout_seconds = 600.0
+warm_samples = 7

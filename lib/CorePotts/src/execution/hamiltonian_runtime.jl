@@ -33,10 +33,10 @@ HamiltonianEvaluationContext(view, anchor, proposal) =
     HamiltonianEvaluationContext(view, anchor, proposal, nothing)
 
 @inline evaluator_parameters(context::HamiltonianEvaluationContext) =
-    context.view.runtime.parameters
+    _proposal_science_parameters(context.view.runtime)
 @inline _compiled_evaluator_parameters(
     context::HamiltonianEvaluationContext
-) = context.view.runtime.parameters
+) = _proposal_science_parameters(context.view.runtime)
 
 for (identity, kind) in (
         :energy_anchor_site => :site,
@@ -63,24 +63,24 @@ end
 end
 
 @inline _view_owner(view::BeforeProposalView, site) =
-    @inbounds view.runtime.ownership[site]
+    _proposal_science_site_owner(view.runtime, site)
 @inline _view_owner(view::AfterProposalView, site) =
-    site == view.target ? view.new_owner : @inbounds(view.runtime.ownership[site])
+    site == view.target ? view.new_owner :
+    _proposal_science_site_owner(view.runtime, site)
 
 @inline _view_volume(view::BeforeProposalView, cell::Int32) =
-    cell <= 0 ? Int32(0) : program_tracker_value(
-        view.runtime, Val(:cell_volume), cell
-    )
+    cell <= 0 ? Int32(0) : _proposal_science_tracker_value(
+        view.runtime, Val(:cell_volume), cell)
 @inline function _view_volume(view::AfterProposalView, cell::Int32)
     cell <= 0 && return Int32(0)
-    value = program_tracker_value(
-        view.runtime, Val(:cell_volume), cell
-    )
+    value = _proposal_science_tracker_value(
+        view.runtime, Val(:cell_volume), cell)
     cell == view.old_owner && (value -= 1)
     cell == view.new_owner && (value += 1)
     return value
 end
 
+"""Evaluate a tracker-backed contextual operation for a proposal."""
 @inline function tracker_operation_value(
         context::HamiltonianEvaluationContext,
         key,
@@ -89,14 +89,10 @@ end
     cell <= 0 && return Int32(0)
     view = context.view
     runtime = view.runtime
-    view isa BeforeProposalView && return program_tracker_value(
-        runtime, key, cell
-    )
-    source = tracker_source_view(runtime.program, runtime.ownership)
-    return tracker_value_after(
-        runtime.program.tracker_plan,
-        runtime.trackers,
-        source,
+    view isa BeforeProposalView && return _proposal_science_tracker_value(
+        runtime, key, cell)
+    return _proposal_science_tracker_value_after(
+        runtime,
         key,
         cell,
         view.target,
@@ -114,18 +110,10 @@ end
     cell <= 0 && return Int32(0)
     view = context.view
     runtime = view.runtime
-    view isa BeforeProposalView && return qualified_tracker_value(
-        runtime.program.tracker_plan,
-        runtime.trackers,
-        quantity,
-        source_handle,
-        cell,
-    )
-    source = tracker_source_view(runtime.program, runtime.ownership)
-    return tracker_value_after(
-        runtime.program.tracker_plan,
-        runtime.trackers,
-        source,
+    view isa BeforeProposalView && return _proposal_science_qualified_tracker_value(
+        runtime, quantity, source_handle, cell)
+    return _proposal_science_qualified_tracker_value_after(
+        runtime,
         quantity,
         source_handle,
         cell,
@@ -141,6 +129,35 @@ end
         context::HamiltonianEvaluationContext,
     )
     return _view_volume(context.view, Int32(only(arguments)))
+end
+
+@inline function apply_resource_operation(
+        ::ResourceOperation{:bounded_fold},
+        arguments,
+        context::HamiltonianEvaluationContext,
+    )
+    fold = arguments[1]
+    handle = arguments[2]
+    relation_handle = Int32(arguments[3])
+    center = arguments[4]
+    resources = context.view.runtime.program.descriptor_plan.domain_resources
+    start, count = _contact_domain_columns(resources, relation_handle)
+    block = state_block(context.view.runtime.descriptor_state, handle).values
+    outcome = LocalMath.evaluate_bounded(fold, count) do direction
+        column = start + direction - Int32(1)
+        neighbor = _neighbor_index(
+            context.view.runtime.program,
+            center,
+            resources.contact_offsets,
+            Int(column),
+        )
+        present = neighbor !== nothing
+        value = present ? state_value(context, handle, neighbor) : zero(eltype(block))
+        (; present, value)
+    end
+    outcome.valid && return outcome.value
+    value = outcome.value
+    return value isa AbstractFloat ? oftype(value, NaN) : value
 end
 
 
@@ -232,10 +249,10 @@ end
 end
 
 @inline function _view_cell_center(view::BeforeProposalView, cell::Int32)
-    return _cell_center(view.runtime, cell)
+    return _proposal_science_cell_center(view.runtime, cell)
 end
 @inline function _view_cell_center(view::AfterProposalView, cell::Int32)
-    return _cell_center(
+    return _proposal_science_cell_center(
         view.runtime,
         cell;
         replaced_site = view.target,
@@ -244,10 +261,10 @@ end
 end
 
 @inline function _view_cell_length(view::BeforeProposalView, cell::Int32)
-    return _cell_length(view.runtime, cell)
+    return _proposal_science_cell_length(view.runtime, cell)
 end
 @inline function _view_cell_length(view::AfterProposalView, cell::Int32)
-    return _cell_length(
+    return _proposal_science_cell_length(
         view.runtime,
         cell;
         replaced_site = view.target,
@@ -302,9 +319,7 @@ end
         handle::StateHandle,
         site,
     )
-    return @inbounds state_block(
-        context.view.runtime.descriptor_state, handle
-    ).values[site]
+    return _proposal_science_state_value(context.view.runtime, handle, site)
 end
 
 @inline function _compiled_resource_operation(
@@ -338,8 +353,8 @@ operation_context_supported(
 )
 
 @inline function _canonical_contact(runtime, first, second)
-    linear = LinearIndices(runtime.ownership)
-    return linear[first] <= linear[second] ?
+    return _proposal_science_linear_site(runtime, first) <=
+            _proposal_science_linear_site(runtime, second) ?
            CanonicalContactAnchor(first, second) :
            CanonicalContactAnchor(second, first)
 end
@@ -401,6 +416,53 @@ end
 
 @inline function _hamiltonian_delta(
         evaluator::StaticEvaluator,
+        role::HamiltonianRole{<:SiteEnergyDomainPlan, <:NeighborhoodSitesAffectedPlan},
+        before,
+        after,
+        proposal,
+        resources,
+    )
+    runtime = proposal.runtime
+    T = _proposal_science_scalar_type(runtime)
+    delta = _anchor_energy_delta(
+        evaluator, before, after, proposal.target, proposal)
+    count = Int32(1)
+    start, directions = _contact_domain_columns(
+        resources, role.affected.relation_handle)
+    for lane in Int32(0):(directions - Int32(1))
+        direction = start + lane
+        center = _proposal_science_reverse_neighbor(
+            runtime,
+            proposal.target,
+            resources.contact_offsets,
+            Int(direction),
+        )
+        center === nothing && continue
+        duplicate = center == proposal.target
+        if lane > 0
+            for prior_lane in Int32(0):(lane - Int32(1))
+                prior = _proposal_science_reverse_neighbor(
+                    runtime,
+                    proposal.target,
+                    resources.contact_offsets,
+                    Int(start + prior_lane),
+                )
+                duplicate |= prior !== nothing && prior == center
+            end
+        end
+        duplicate && continue
+        count += Int32(1)
+        count <= role.affected.maximum || throw(ArgumentError(
+            "neighborhood-site affected-anchor proof was exceeded at runtime"
+        ))
+        delta += _anchor_energy_delta(
+            evaluator, before, after, center, proposal)
+    end
+    return T(delta)
+end
+
+@inline function _hamiltonian_delta(
+        evaluator::StaticEvaluator,
         role::HamiltonianRole{<:CellEnergyDomainPlan, <:SourceTargetCellsAffectedPlan},
         before,
         after,
@@ -449,7 +511,7 @@ end
         resources,
     )
     runtime = proposal.runtime
-    T = eltype(runtime.parameters)
+    T = _proposal_science_scalar_type(runtime)
     delta = zero(T)
     count = 0
     start, direction_count = _contact_domain_columns(
@@ -457,8 +519,8 @@ end
     )
     stop = start + direction_count - 1
     for direction in start:stop
-        neighbor = _neighbor_index(
-            runtime.program,
+        neighbor = _proposal_science_neighbor(
+            runtime,
             proposal.target,
             resources.contact_offsets,
             direction,
@@ -467,8 +529,8 @@ end
         contact = _canonical_contact(runtime, proposal.target, neighbor)
         duplicate = false
         for prior in start:(direction - 1)
-            prior_neighbor = _neighbor_index(
-                runtime.program,
+            prior_neighbor = _proposal_science_neighbor(
+                runtime,
                 proposal.target,
                 resources.contact_offsets,
                 prior,
@@ -501,7 +563,7 @@ end
         resources,
     )
     runtime = proposal.runtime
-    T = eltype(runtime.parameters)
+    T = _proposal_science_scalar_type(runtime)
     delta = zero(T)
     count = 0
 
@@ -558,9 +620,9 @@ end
     slot = _relationship_domain_slot(
         resources, role.domain.relationship_handle
     )
-    return _call_relationship_slot(
+    return _proposal_science_relationship_call(
         _relationship_hamiltonian_delta,
-        proposal.runtime.relationships,
+        proposal.runtime,
         slot,
         (evaluator, role, before, after, proposal, resources),
     )

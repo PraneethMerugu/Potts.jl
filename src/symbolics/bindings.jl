@@ -1,12 +1,12 @@
+_potts_token(name::Symbol; T = Real) =
+    ModelingToolkitBase.GlobalScope(Symbolics.variable(name; T))
+
 """
     ProposalContext(name)
 
 A symbolic handle for the proposal snapshot. Property access constructs registered
 Symbolics operations; it never reads mutable runtime state.
 """
-_potts_token(name::Symbol; T = Real) =
-    ModelingToolkitBase.GlobalScope(Symbolics.variable(name; T))
-
 struct ProposalContext
     name::Symbol
     token::Symbolics.Num
@@ -103,6 +103,37 @@ _binding_token(binding::RelationshipBinding) = getfield(binding, :token)
 anchor_value(binding::Union{
     SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
 }) = _binding_token(binding)
+
+"""
+    bounded_values(field, relation, anchor)
+
+Declare the finite field values reached from `anchor` through `relation` as
+the input to a `LocalMath.bounded_fold`.  This is a cold symbolic declaration;
+the Potts compiler resolves both resources and removes the declaration before
+execution planning.
+"""
+struct BoundedValues{F, R, A}
+    field::F
+    relation::R
+    anchor::A
+end
+
+"""Construct a cold bounded-values declaration for a `LocalMath.bounded_fold`."""
+function bounded_values(field::FieldState, relation, anchor)
+    relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
+        "bounded_values relation must be a declared SpatialRelation or its local name"
+    ))
+    return BoundedValues(field, relation, anchor)
+end
+
+function (fold::LocalMath.BoundedFold)(values::BoundedValues)
+    return _potts_bounded_fold(
+        fold,
+        _field_token(values.field),
+        _spatial_relation_token(values.relation),
+        values.anchor,
+    )
+end
 
 function Base.getproperty(binding::ProposalContext, name::Symbol)
     name === :name && return getfield(binding, :name)

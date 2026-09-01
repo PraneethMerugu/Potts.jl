@@ -217,13 +217,15 @@ function prepared_emit_runtime(executable, initial)
     runtime = runtime_for(executable, initial)
     workspace = runtime.lifecycle_workspace
     CorePotts._reset_lifecycle_workspace!(workspace)
-    CorePotts._index_lifecycle_representative_sites!(runtime, workspace)
+    CorePotts._validate_lifecycle_ownership!(runtime, workspace)
+    CorePotts._run_sequential_lifecycle_site_index!(runtime, workspace)
     return runtime
 end
 
-emit_lifecycle_requests!(runtime) = CorePotts._emit_lifecycle_requests!(
-    runtime, runtime.program.lifecycle_plan, runtime.lifecycle_workspace
-)
+emit_lifecycle_requests!(runtime) =
+    CorePotts._run_sequential_lifecycle_emission!(
+        runtime, runtime.lifecycle_workspace
+    )
 
 function cell_request_fixture(cell_count; competitors = 1)
     source = CellKind(:request_source; extinction = ForbidExtinction())

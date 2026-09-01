@@ -1,6 +1,6 @@
 """
 Native Makie recipes and explicit, visualization-neutral render contracts for
-PottsToolkit V1 solutions.
+PottsToolkit solutions.
 """
 module MakiePotts
 
@@ -46,6 +46,6 @@ export potts_theme, potts_legend
 export inspection_label, record_potts
 
 export PottsExplorer, explore_potts
-export RerunController, rerun!, rerun_status, rerun_result, rerun_error
+export RerunController, reexecute!, rerun_status, rerun_result, rerun_error
 
 end

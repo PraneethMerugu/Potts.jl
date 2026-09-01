@@ -613,7 +613,7 @@ function _validate_statement_draws!(diagnostics, statement, identity, path)
     return nothing
 end
 
-"""Reject declared public markers whose executable semantics are not yet V1."""
+"""Reject declared public markers without executable semantics."""
 function _validate_builtin_marker_support!(
         diagnostics, statement, identity, path
     )
@@ -627,7 +627,7 @@ function _validate_builtin_marker_support!(
                 identity,
                 _statement_expression(statement),
                 path,
-                "ExtensionsOnly() in the V1 executable profile",
+                "ExtensionsOnly() in the compiled executable profile",
                 string(nameof(typeof(mode))),
                 (),
                 statement_source(statement),
@@ -640,7 +640,7 @@ function _validate_builtin_marker_support!(
                 identity,
                 _statement_expression(statement),
                 path,
-                "Nearest() in the V1 executable profile",
+                "Nearest() in the compiled executable profile",
                 string(nameof(typeof(sample))),
                 (),
                 statement_source(statement),
@@ -782,7 +782,7 @@ function _validate_registered_lowering!(
             identity,
             _statement_expression(registered),
             path,
-            "exactly one qualified built-in V1 statement",
+            "exactly one qualified built-in executable statement",
             "$(length(lowered)) statements",
             (),
             statement_source(registered),
@@ -796,7 +796,7 @@ function _validate_registered_lowering!(
             identity,
             _statement_expression(registered),
             path,
-            "a built-in V1 statement",
+            "a built-in executable statement",
             "RegisteredStatement",
             (),
             statement_source(registered),

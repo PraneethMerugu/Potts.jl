@@ -72,10 +72,9 @@ function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
     )
 end
 
-function _is_named_singleton_callable(value::Function)
-    Base.issingletontype(typeof(value)) || return false
-    return !startswith(String(nameof(value)), "#")
-end
+_is_storage_free_callable(value::Function) =
+    Base.issingletontype(typeof(value)) && isbitstype(typeof(value)) &&
+    fieldcount(typeof(value)) == 0
 
 function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     value === nothing && return nothing
@@ -85,9 +84,9 @@ function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     value in seen && return nothing
     push!(seen, value)
     value isa Function &&
-        !_is_named_singleton_callable(value) &&
+        !_is_storage_free_callable(value) &&
         throw(ArgumentError(
-            "host closure crossed the CorePotts boundary at $path"
+            "capturing host closure crossed the CorePotts boundary at $path"
         ))
     value isa AbstractPottsStatement && throw(ArgumentError(
         "symbolic statement crossed the CorePotts boundary at $path"

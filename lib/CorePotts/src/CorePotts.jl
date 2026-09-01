@@ -1,17 +1,22 @@
+"""
+CorePotts owns validated compiled Potts programs, deterministic execution,
+transactional lifecycle state, and exact checkpoint continuation.
+"""
 module CorePotts
 
 import LinearAlgebra
 import SHA
-import AcceleratedKernels
 import Adapt
 import Atomix
 import KernelAbstractions
+import StaticArrays
+import StructArrays
 using KernelAbstractions: @index, @kernel
-import LocalWorksets
+import LocalMath
 
-const RNG_CONTRACT_VERSION = v"1.2.0"
+const RNG_CONTRACT_VERSION = v"2.0.0"
 const RNG_LOWERING_IDENTITY =
-    :philox4x32x10_semantic_address_fisher_yates_v1
+    :philox4x32x10_semantic_address_fisher_yates_v2
 
 """Return the exact RNG contract and lowering identity admitted by this Core build."""
 rng_contract_identity() = (
@@ -19,13 +24,12 @@ rng_contract_identity() = (
     lowering_identity = RNG_LOWERING_IDENTITY,
 )
 
-public LocalWorksets
-
 # Declared before program/types.jl so the compiled program can own the generic
 # lifecycle boundary while its concrete plan is defined with the execution IR.
+"""Supertype for compiled lifecycle scheduling, policy, and storage plans."""
 abstract type AbstractLifecycleExecutionPlan end
+"""Marker for compiled programs with no lifecycle processes."""
 struct NoLifecycleExecutionPlan <: AbstractLifecycleExecutionPlan end
-
 include("rng/semantic.jl")
 include("execution/static_evaluator.jl")
 include("execution/storage_schema.jl")
@@ -41,8 +45,10 @@ include("execution/lifecycle_plan.jl")
 include("program/capabilities.jl")
 include("execution/lifecycle_status.jl")
 include("execution/acceptance.jl")
-include("program/v1.jl")
+include("program/compiled_program.jl")
 include("execution/hamiltonian_runtime.jl")
+include("execution/checkerboard_compiler.jl")
+include("execution/checkerboard_stage_compiler.jl")
 
 include("compiler_spi.jl")
 include("backend_spi.jl")

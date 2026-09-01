@@ -12,7 +12,11 @@ struct AffectedAnchorFact
     kind::Symbol
     locality::Symbol
     maximum::Int
+    resource::Union{Nothing, QualifiedStatementID}
 end
+
+AffectedAnchorFact(kind::Symbol, locality::Symbol, maximum::Int) =
+    AffectedAnchorFact(kind, locality, maximum, nothing)
 
 struct ExpressionAnchorReadFact
     kind::Symbol
@@ -293,7 +297,7 @@ function _affected_anchor_fact(
         throw(ArgumentError("Hamiltonians cannot contain random draws"))
     _validate_normalized_energy_anchor_reads(reads, domain)
     transition == CopyProposalTransition() || throw(ArgumentError(
-        "V1 Hamiltonians require the canonical ownership copy transition"
+        "Hamiltonians require the canonical ownership copy transition"
     ))
 
     locality = _footprint_locality(footprint)
@@ -306,7 +310,24 @@ function _affected_anchor_fact(
         OwnerFootprintFact, IncidentRelationshipFootprintFact,
     }, members)
 
-    if domain.kind === :sites && (isempty(members) || site_proof)
+    neighborhood_terms = filter(
+        member -> member isa FootprintMinkowskiFact &&
+            member.left isa SpatialFootprintFact &&
+            member.left.anchor isa BoundSiteAnchor &&
+            member.right isa SpatialRelationFootprintFact,
+        members,
+    )
+    if domain.kind === :sites && length(neighborhood_terms) == 1 &&
+            all(member -> member isa SpatialFootprintFact ||
+                member === only(neighborhood_terms), members)
+        relation = only(neighborhood_terms).right
+        return AffectedAnchorFact(
+            :neighborhood_sites,
+            locality,
+            length(relation.offsets) + 1,
+            relation.identity,
+        )
+    elseif domain.kind === :sites && (isempty(members) || site_proof)
         return AffectedAnchorFact(:target_site, locality, 1)
     elseif domain.kind === :cells && (isempty(members) || cell_proof)
         return AffectedAnchorFact(:source_and_target_cells, locality, 2)

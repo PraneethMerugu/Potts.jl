@@ -44,9 +44,31 @@ function CorePotts.CompilerSPI.operation_callable(
     return RelationshipEndpointKindsCallable()
 end
 
+@inline _relationship_endpoint_index(value::Int32) = (true, value)
+
+@inline function _relationship_endpoint_index(value::Integer)
+    value isa Bool && return (false, Int32(0))
+    typemin(Int32) <= value <= typemax(Int32) || return (false, Int32(0))
+    return (true, Int32(value))
+end
+
+@inline function _relationship_endpoint_index(value::AbstractFloat)
+    isfinite(value) || return (false, Int32(0))
+    lower = typeof(value)(-2147483648)
+    upper = typeof(value)(2147483648)
+    lower <= value < upper || return (false, Int32(0))
+    trunc(value) == value || return (false, Int32(0))
+    return (true, Int32(value))
+end
+
+@inline _relationship_endpoint_index(_value) = (false, Int32(0))
+
 @inline function (::RelationshipEndpointKindsCallable)(arguments::Tuple, context)
-    endpoint_a = Int32(arguments[1])
-    endpoint_b = Int32(arguments[2])
+    valid_a, endpoint_a = _relationship_endpoint_index(arguments[1])
+    valid_b, endpoint_b = _relationship_endpoint_index(arguments[2])
+    # A non-Bool sentinel is intentional: accepted-copy execution translates
+    # it into deterministic evaluator status with descriptor provenance.
+    valid_a & valid_b || return UInt8(0)
     kind_a = Int16(arguments[3])
     kind_b = Int16(arguments[4])
     endpoint_a > 0 && endpoint_b > 0 || return false

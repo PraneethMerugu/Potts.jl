@@ -151,13 +151,22 @@ invalidation unless static policies demonstrably cannot pass the accepted gates.
 
 Tuning policy cannot change the scientific algorithm, semantic RNG identity, or normalized MCS.
 
-### 15. Optional performance mechanisms
+### 15. Required layout/value foundations and optional specializations
 
 KernelAbstractions remains the default language for portable domain-specific kernels.
-AcceleratedKernels primitives, KernelIntrinsics specializations, StructArrays layouts, StaticArrays
-values, and other performance mechanisms are adopted only after an end-to-end profile identifies the
-relevant cost. Adoption requires qualified CPU/Metal/ROCm behavior where applicable, generic
-fallbacks, and equivalence evidence.
+The owner-authorized LW-5B4O amendment makes StructArrays and StaticArrays
+always-loaded direct dependencies with concrete base-package integrations in
+CorePotts and LocalWorksets. This supersedes their former optional dependency
+classification. It does not make every StructArrays layout or StaticArrays
+specialization mandatory: each physical representation remains bounded by
+semantic equivalence, specialization, compilation, allocation and qualified
+CPU/GPU evidence.
+
+AcceleratedKernels primitives, KernelIntrinsics specializations, particular
+StructArrays layouts, particular StaticArrays values, and other performance
+mechanisms are selected for a hot path only after the relevant cost and
+representation are characterized. Adoption requires qualified CPU/Metal/ROCm
+behavior where applicable, generic fallbacks, and equivalence evidence.
 
 A mechanism normally demonstrates a material end-to-end benefit after accounting for compilation,
 registers, memory, and complexity. It may instead be retained for material correctness or code

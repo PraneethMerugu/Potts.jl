@@ -1,12 +1,27 @@
 # Proposal acceptance and the sequential/checkerboard program barriers.
 
-mutable struct SequentialTransactionWorkspace{O, K, G, TS, R, D}
+mutable struct SequentialTransactionWorkspace{O, K, G, TS, R, D, L}
     ownership::O
     cell_kinds::K
     cell_generations::G
     trackers::TS
     relationships::R
     descriptor_state::D
+    lifecycle_compaction::L
+end
+
+@inline function _sequential_workspace_with_lifecycle_compaction(
+        workspace::SequentialTransactionWorkspace, lifecycle_compaction
+    )
+    return SequentialTransactionWorkspace(
+        workspace.ownership,
+        workspace.cell_kinds,
+        workspace.cell_generations,
+        workspace.trackers,
+        workspace.relationships,
+        workspace.descriptor_state,
+        lifecycle_compaction,
+    )
 end
 
 @enum ProgramStepTransactionState::UInt8 begin
@@ -58,9 +73,11 @@ end
     return transaction
 end
 
+"""Return the lifecycle receipt staged by a program-step transaction."""
 @inline program_step_lifecycle_receipt(transaction::ProgramStepTransaction) =
     (_require_staged_program_step(transaction); transaction.lifecycle_receipt)
 
+"""Return an independently owned snapshot of a staged program-step candidate."""
 function program_step_snapshot(transaction::ProgramStepTransaction)
     _require_staged_program_step(transaction)
     transaction.candidate_snapshot === nothing ||
@@ -71,6 +88,7 @@ function program_step_snapshot(transaction::ProgramStepTransaction)
     )
 end
 
+"""Validate and stage replacement parameters without publishing them."""
 function stage_program_parameters!(
         transaction::ProgramStepTransaction{T},
         parameters::AbstractVector{<:Real},
@@ -106,23 +124,11 @@ function _validate_program_descriptor_state(
         runtime::ProgramRuntime,
         candidate::AuxiliaryState,
     )
-    expected = runtime.descriptor_state
-    typeof(candidate.banks) === typeof(expected.banks) || throw(ArgumentError(
-        "descriptor state has an incompatible physical layout or element type"
-    ))
-    for (candidate_bank, expected_bank) in zip(
-            candidate.banks, expected.banks
-        )
-        axes(candidate_bank.values) == axes(expected_bank.values) || throw(
-            ArgumentError("descriptor state has an incompatible bank shape")
-        )
-    end
-    for entry in runtime.program.descriptor_plan.state_layout.entries
-        validate_state_block(
-            entry.schema, state_block(candidate, entry.handle)
-        )
-    end
-    return candidate
+    return _validate_auxiliary_state_candidate(
+        runtime.program.descriptor_plan.state_layout,
+        runtime.descriptor_state,
+        candidate,
+    )
 end
 
 """
@@ -142,7 +148,7 @@ function stage_program_descriptor_state!(
     runtime.engine_workspace === workspace || throw(ArgumentError(
         "program-step transaction lost its runtime workspace ownership"
     ))
-    if workspace isa CheckerboardWorkspace
+    if _is_checkerboard_execution_workspace(workspace)
         snapshot = transaction.candidate_snapshot
         snapshot === nothing && error(
             "checkerboard transaction has no materialized candidate snapshot"
@@ -201,6 +207,7 @@ function allocate_sequential_transaction_workspace(
         copy_tracker_state(trackers),
         copy(relationships),
         copy_auxiliary_state(program.descriptor_plan.state_layout, descriptor_state),
+        nothing,
     )
 end
 
@@ -425,11 +432,11 @@ end
     return runtime
 end
 
+"""Execute one MCS into an unpublished transaction candidate."""
 function stage_program_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
         runtime.capability_report;
         operation = :staged_mcs,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
     if runtime.program.engine isa CheckerboardProgramEngine
         return _stage_checkerboard_program_mcs!(runtime)
@@ -555,11 +562,12 @@ function prevalidate_program_step_transaction(
     if pending !== nothing
         _validated_program_parameters(runtime.program, pending)
     end
-    if transaction.workspace isa CheckerboardWorkspace
+    if _is_checkerboard_execution_workspace(transaction.workspace)
+        workspace = _checkerboard_core(transaction.workspace)
         snapshot = transaction.candidate_snapshot
         _validate_program_descriptor_state(runtime, snapshot.descriptor_state)
         _, destination, _ = _checkerboard_transaction_banks(
-            transaction.workspace, runtime.mcs
+            workspace, runtime.mcs
         )
         copyto_auxiliary_state!(
             destination.descriptor_state, snapshot.descriptor_state
@@ -568,7 +576,7 @@ function prevalidate_program_step_transaction(
         KernelAbstractions.synchronize(
             KernelAbstractions.get_backend(destination.ownership)
         )
-        transaction.workspace.execution.synchronization_count += 1
+        workspace.execution.synchronization_count += 1
     else
         _validate_program_descriptor_state(
             runtime, transaction.workspace.descriptor_state
@@ -590,7 +598,7 @@ function publish_program_step_transaction!(
     if transaction.pending_parameters !== nothing
         copyto!(runtime.parameters, transaction.pending_parameters)
     end
-    if transaction.workspace isa CheckerboardWorkspace
+    if _is_checkerboard_execution_workspace(transaction.workspace)
         _publish_program_snapshot!(runtime, transaction.candidate_snapshot)
         _restore_program_counters!(runtime, transaction.counters_candidate)
         runtime.last_lifecycle_receipt = transaction.lifecycle_receipt
@@ -611,15 +619,17 @@ function publish_program_step_transaction!(
     return runtime
 end
 
+"""Prevalidate and atomically publish a staged program-step transaction."""
 function commit_program_step!(transaction::ProgramStepTransaction)
     prevalidate_program_step_transaction(transaction)
     return publish_program_step_transaction!(transaction)
 end
 
+"""Discard a staged program-step transaction without changing its runtime."""
 function abort_program_step!(transaction::ProgramStepTransaction)
     _require_staged_program_step(transaction)
     runtime = transaction.runtime
-    if transaction.workspace isa CheckerboardWorkspace
+    if _is_checkerboard_execution_workspace(transaction.workspace)
         _rollback_checkerboard_program_step!(transaction)
     end
     # The host runtime already points at its published bank; discarding the token
@@ -653,7 +663,7 @@ end
 
 function _rollback_checkerboard_program_step!(transaction)
     runtime = transaction.runtime
-    workspace = transaction.workspace
+    workspace = _checkerboard_core(transaction.workspace)
     source, _, destination_bank = _checkerboard_transaction_banks(
         workspace, runtime.mcs
     )
@@ -715,235 +725,315 @@ function _publish_program_receipt!(runtime::ProgramRuntime, receipt)
     return runtime
 end
 
+"""Return whether the runtime uses the prepared queued checkerboard path."""
 @inline function supports_queued_program_execution(runtime::ProgramRuntime)
-    runtime.engine_workspace isa Union{
-        CheckerboardWorkspace, _LocalWorksetsCheckerboardWorkspace,
-    } || return false
-    return isempty(runtime.program.stage_plan.after_mcs)
+    return runtime.engine_workspace isa _CheckerboardExecutionWorkspace
 end
 
-function _construct_localworksets_candidate_runtime(
+function _checkerboard_execution_identity(
+        workspace::CheckerboardWorkspace,
+        color_laws,
+        mechanics,
+        queue_mcs_capacity::Integer,
+    )
+    mechanical_preparations = (
+        color_laws.prepared...,
+        mechanics.clear_report...,
+        (entry.prepared[1]
+            for entry in mechanics.stage_boundaries.before)...,
+        (entry.prepared[2]
+            for entry in mechanics.stage_boundaries.before)...,
+        (entry.prepared[1]
+            for entry in mechanics.stage_boundaries.after)...,
+        (entry.prepared[2]
+            for entry in mechanics.stage_boundaries.after)...,
+        (mechanics.lifecycle_reductions === nothing ? () : (
+            mechanics.lifecycle_reductions[1].site_index,
+            mechanics.lifecycle_reductions[1].request_index,
+            mechanics.lifecycle_reductions[1].selection,
+            mechanics.lifecycle_reductions[2].site_index,
+            mechanics.lifecycle_reductions[2].request_index,
+            mechanics.lifecycle_reductions[2].selection,
+        ))...,
+    )
+    compilers = map(mechanical_preparations) do prepared
+        LocalMath.lowering_identity(prepared.plan)
+    end
+    all(==(isempty(compilers) ? nothing : first(compilers)), compilers) || throw(ArgumentError(
+        "checkerboard proposal stages disagree on provider compiler"
+    ))
+    compiler_identity = isempty(compilers) ?
+        :corepotts_kernelabstractions_v1 : first(compilers)
+    mechanisms = workspace.capability_report.key.mechanisms
+    submissions_per_mcs = _checked_checkerboard_capacity_mul(
+        Int(workspace.state.program.attempts_per_site),
+        Int(workspace.state.program.checkerboard_plan.color_count),
+        :submissions_per_mcs,
+    )
+    before_lifecycle_submissions = sum(
+        entry.repetitions for entry in mechanics.stage_boundaries.before;
+        init = 0)
+    after_lifecycle_submissions = sum(
+        entry.repetitions for entry in mechanics.stage_boundaries.after;
+        init = 0)
+    return CheckerboardExecutionIdentity(
+        _CHECKERBOARD_EXECUTION_SCHEMA,
+        _CHECKERBOARD_MECHANISM_IDENTITY,
+        :corepotts_checkerboard_transaction_v1,
+        mechanisms.descriptor_fingerprint,
+        _capability_key_fingerprint(workspace.capability_report.key),
+        workspace.state.program.topology_epoch,
+        (
+            contract_version = mechanisms.rng_contract_version,
+            lowering = mechanisms.rng_lowering_identity,
+        ),
+        (
+            clear_report = LocalMath.lowering_identity(
+                mechanics.clear_report[1].plan),
+            color_mechanics = LocalMath.lowering_identity(
+                first(color_laws.prepared).plan),
+            before_lifecycle = map(mechanics.stage_boundaries.before) do entry
+                LocalMath.lowering_identity(entry.prepared[1].plan)
+            end,
+            after_lifecycle = map(mechanics.stage_boundaries.after) do entry
+                LocalMath.lowering_identity(entry.prepared[1].plan)
+            end,
+            lifecycle_status = mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : :corepotts_lifecycle_status_ka_v1,
+            lifecycle_planning_status =
+                mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : :corepotts_lifecycle_status_ka_v1,
+            lifecycle_site_index = mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : LocalMath.lowering_identity(
+                    mechanics.lifecycle_reductions[1].site_index.plan
+                ),
+            lifecycle_request_index = mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : LocalMath.lowering_identity(
+                    mechanics.lifecycle_reductions[1].request_index.plan
+                ),
+            lifecycle_emission = mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : :corepotts_lifecycle_emission_ka_v1,
+            lifecycle_selection = mechanics.lifecycle_reductions === nothing ?
+                :not_applicable : LocalMath.lowering_identity(
+                    mechanics.lifecycle_reductions[1].selection.plan
+                ),
+        ),
+        :KernelAbstractions,
+        compiler_identity,
+        (
+            mcs_capacity = Int(queue_mcs_capacity),
+            color_submissions_per_mcs = submissions_per_mcs,
+            clear_report_submissions_per_mcs = 1,
+            before_lifecycle_submissions_per_mcs =
+                before_lifecycle_submissions,
+            after_lifecycle_submissions_per_mcs =
+                after_lifecycle_submissions,
+            lifecycle_status_submissions_per_mcs = 1,
+            lifecycle_planning_status_submissions_per_mcs = 3,
+            lifecycle_site_index_submissions_per_mcs = 1,
+            lifecycle_request_index_submissions_per_mcs = 1,
+            lifecycle_emission_submissions_per_mcs = 1,
+            lifecycle_selection_submissions_per_mcs = 1,
+            receipt_scope = :backend_queue,
+            receipt_cumulative = true,
+            receipt_selective = false,
+            completion = :grouped_cumulative_receipts,
+        ),
+        _CHECKERBOARD_CHECKPOINT_SCHEMA,
+    )
+end
+
+function _build_checkerboard_capability_report(
+        direct::ProgramCapabilityReport,
+        identity::CheckerboardExecutionIdentity,
+    )
+    capability_authorizes_execution(direct) ||
+        throw(ProgramCapabilityError(:checkerboard_localmath, direct))
+    identity.capability_fingerprint ==
+        _capability_key_fingerprint(direct.key) || throw(ArgumentError(
+        "checkerboard execution identity does not name the admitted capability key"
+    ))
+    return direct
+end
+
+function _prepare_checkerboard_execution(
         runtime::ProgramRuntime;
         queue_mcs_capacity::Integer = 12,
-        maturity::CapabilityMaturity,
     )
     runtime.settled || throw(ArgumentError(
-        "LocalWorksets candidate construction requires a settled runtime"
+        "checkerboard execution preparation requires a settled runtime"
     ))
-    runtime.engine_workspace isa CheckerboardWorkspace ||
-        throw(ArgumentError(
-            "LocalWorksets candidate construction requires the direct checkerboard oracle"
-        ))
-    isempty(runtime.program.stage_plan.after_mcs) || throw(ArgumentError(
-        "host after-MCS stages remain on the direct path"
+    _require_program_execution_capability(
+        runtime.capability_report;
+        operation = :checkerboard_localmath,
+    )
+    workspace = runtime.engine_workspace
+    workspace isa CheckerboardWorkspace || throw(ArgumentError(
+        "checkerboard execution preparation requires authoritative Core storage"
     ))
-    candidate = _prepare_localworksets_checkerboard_candidate(
-        runtime.engine_workspace;
+    queue_mcs_capacity > 0 || throw(ArgumentError(
+        "checkerboard queue capacity must be positive"
+    ))
+    submissions_per_mcs = _checked_checkerboard_capacity_mul(
+        Int(runtime.program.attempts_per_site),
+        Int(runtime.program.checkerboard_plan.color_count),
+        :compiled_color_submissions_per_mcs)
+    color_lease_capacity = _checked_checkerboard_capacity_mul(
+        Int(queue_mcs_capacity), submissions_per_mcs,
+        :compiled_color_lease_capacity)
+    color_laws = _prepare_checkerboard_color_laws(
+        workspace,
+        runtime.program.checkerboard_plan,
+        runtime.program.proposal_offsets,
+        runtime.program.descriptor_plan,
+        runtime.program.stage_plan,
+        runtime.program.ownership_change_handles,
+        runtime.program.relationships,
+        runtime.program.kind_count,
+        color_lease_capacity,
+    )
+    mechanics = _prepare_localmath_checkerboard_mechanics(
+        workspace;
         queue_mcs_capacity,
         canonical_plan = runtime.program.checkerboard_plan,
+        canonical_proposal_offsets = runtime.program.proposal_offsets,
+        canonical_stage_plan = runtime.program.stage_plan,
     )
-    capability_report = _localworksets_candidate_capability_report(
-        runtime.capability_report, candidate.prepared, maturity
+    identity = _checkerboard_execution_identity(
+        workspace,
+        color_laws,
+        mechanics,
+        queue_mcs_capacity,
     )
-    return _rebuild_program_runtime(runtime, capability_report, candidate)
+    capability_report = _build_checkerboard_capability_report(
+        runtime.capability_report, identity
+    )
+    execution = _CheckerboardExecutionWorkspace(
+        workspace,
+        color_laws,
+        mechanics.clear_report,
+        mechanics.stage_boundaries,
+        mechanics.lifecycle_reductions,
+        mechanics.gates,
+        _empty_checkerboard_receipts(),
+        identity,
+        capability_report,
+    )
+    return _rebuild_program_runtime(runtime, capability_report, execution)
 end
 
-function _localworksets_candidate_runtime(
-        runtime::ProgramRuntime;
-        queue_mcs_capacity::Integer = 12,
+function _checkerboard_execution_identity_block(
+        identity::CheckerboardExecutionIdentity
     )
-    return _construct_localworksets_candidate_runtime(
-        runtime; queue_mcs_capacity, maturity = Functional
+    return (
+        schema = identity.schema,
+        mechanism_identity = identity.mechanism_identity,
+        scientific_abi = identity.scientific_abi,
+        descriptor_fingerprint = identity.descriptor_fingerprint,
+        capability_fingerprint = identity.capability_fingerprint,
+        topology_epoch = identity.topology_epoch,
+        rng_identity = identity.rng_identity,
+        lowerings = identity.lowerings,
+        provider = identity.provider,
+        provider_compiler = identity.provider_compiler,
+        queue_policy = identity.queue_policy,
+        checkpoint_schema = identity.checkpoint_schema,
     )
-end
-
-function _localworksets_candidate_capability_report(
-        direct::ProgramCapabilityReport,
-        prepared::LocalWorksets.PreparedWork,
-        maturity::CapabilityMaturity,
-    )
-    maturity in (Functional, ReplayQualified) || throw(ArgumentError(
-        "the private LocalWorksets candidate is admitted only as Functional or ReplayQualified"
-    ))
-    base_authorized = maturity === Functional ?
-        capability_authorizes_execution(direct) :
-        capability_authorizes_replay(direct)
-    base_authorized && direct.evidence !== nothing ||
-        throw(ProgramCapabilityError(:localworksets_candidate, direct))
-    source = direct.key
-    base = source.mechanisms
-    inspect_signature = Tuple{LocalWorksets.PreparedWork}
-    inspect_method = which(LocalWorksets.inspect, inspect_signature)
-    inspect_method.module === LocalWorksets || throw(ArgumentError(
-        "the LocalWorksets inspection boundary is not package-owned"
-    ))
-    facts = invoke(LocalWorksets.inspect, inspect_signature, prepared)
-    provider = facts.provider
-    mechanism_identity = :corepotts_checkerboard_conjunctive_localworksets_v1
-    authority = (
-        authority = :CorePotts,
-        suite = maturity === Functional ?
-            :lw2_localworksets_functional_v1 :
-            :lw3_localworksets_replay_v1,
-        revision = v"1.0.0",
-    )
-    mechanisms = CapabilityMechanismProfile(
-        base.proposal_fingerprint,
-        base.descriptor_fingerprint,
-        base.stage_fingerprint,
-        base.relationship_fingerprint,
-        base.tracker_fingerprint,
-        _capability_digest((
-            direct = base.checkerboard_fingerprint,
-            mechanism_identity,
-            lowering_identity = facts.lowering,
-            provider,
-            provider_compiler = facts.capability.compiler,
-        )),
-        base.rng_contract_version,
-        base.rng_lowering_identity,
-        (base.code_identities..., (
-            identity = mechanism_identity,
-            lowering = facts.lowering,
-            provider,
-        )),
-        authority,
-        :localworksets_experimental_v1,
-    )
-    key = ProgramCapabilityKey(
-        source.engine,
-        source.backend,
-        source.device,
-        source.topology,
-        source.scalar_type,
-        source.math_policy,
-        source.lifecycle,
-        source.component_state,
-        mechanisms,
-        source.replay;
-        environment = source.environment,
-    )
-    evidence_profile = (
-        capability_fingerprint = _capability_key_fingerprint(key),
-        authority,
-        mechanism_identity,
-        lowering_identity = facts.lowering,
-        provider_compiler = facts.capability.compiler,
-        maturity,
-    )
-    evidence = CapabilityEvidenceIdentity(
-        :CorePotts,
-        authority.suite,
-        authority.revision,
-        bytes2hex(SHA.sha256(repr(evidence_profile))),
-    )
-    reason = maturity === Functional ?
-        "Private bounded LocalWorksets claim lowering has functional CPU/Metal evidence; replay and performance qualification are not claimed." :
-        "Private bounded LocalWorksets claim lowering has exact continuation and direct-path parity evidence; performance qualification is not claimed."
-    return ProgramCapabilityReport(
-        key,
-        Experimental,
-        maturity,
-        reason,
-        evidence,
-        direct.state_domains,
-        direct.stage_effects,
-        direct.relationships,
-        direct.trackers,
-        direct.checkerboard_plan,
-    )
-end
-
-function _localworksets_replay_candidate_runtime(
-        runtime::ProgramRuntime;
-        queue_mcs_capacity::Integer = 12,
-    )
-    return _construct_localworksets_candidate_runtime(
-        runtime; queue_mcs_capacity, maturity = ReplayQualified
-    )
-end
-
-function _runtime_uses_experimental_capability(
-        runtime::ProgramRuntime{T, N, P, C, R, TS, D, SB, EW, LW}
-    ) where {
-        T, N, P, C, R, TS, D, SB,
-        EW <: _LocalWorksetsCheckerboardWorkspace, LW,
-    }
-    return true
 end
 
 function _checkpoint_execution_block(
         runtime::ProgramRuntime{T, N, P, C, R, TS, D, SB, EW, LW}
     ) where {
         T, N, P, C, R, TS, D, SB,
-        EW <: _LocalWorksetsCheckerboardWorkspace, LW,
+        EW <: _CheckerboardExecutionWorkspace, LW,
     }
-    candidate = runtime.engine_workspace
-    inspect_signature = Tuple{LocalWorksets.PreparedWork}
-    inspect_method = which(LocalWorksets.inspect, inspect_signature)
-    inspect_method.module === LocalWorksets || throw(ArgumentError(
-        "the LocalWorksets inspection boundary is not package-owned"
-    ))
-    facts = invoke(
-        LocalWorksets.inspect, inspect_signature, candidate.prepared
+    execution = runtime.engine_workspace
+    return (
+        schema = _CHECKERBOARD_CHECKPOINT_SCHEMA,
+        mechanism_identity = execution.identity.mechanism_identity,
+        identity = _checkerboard_execution_identity_block(execution.identity),
     )
-    color_count = Int(runtime.program.checkerboard_plan.color_count)
-    queue_mcs_capacity = div(
-        candidate.lease_capacity,
-        Int(runtime.program.attempts_per_site) * color_count,
-    )
-    profile = (
-        schema = v"1.0.0",
-        mechanism_identity = candidate.mechanism_identity,
-        lowering_identity = facts.lowering,
-        wrapper_identity = :corepotts_private_claim_block_v1,
-        provider = :KernelAbstractions,
-        provider_compiler = facts.capability.compiler,
-        queue_mcs_capacity,
-        capability_status = runtime.capability_report.status,
-        capability_maturity = runtime.capability_report.maturity,
-        capability_fingerprint = _capability_key_fingerprint(
-            runtime.capability_report.key
-        ),
-        capability_evidence = (
-            authority = runtime.capability_report.evidence.authority,
-            suite = runtime.capability_report.evidence.suite,
-            revision = runtime.capability_report.evidence.revision,
-            profile_fingerprint =
-                runtime.capability_report.evidence.profile_fingerprint,
-        ),
-    )
-    return merge(profile, (
-        evidence_fingerprint = bytes2hex(SHA.sha256(repr(profile))),
-    ))
 end
 
-function _restore_localworksets_checkpoint(
+function _restore_checkerboard_checkpoint(
         program::CompiledPottsProgram,
         checkpoint::ProgramCheckpoint,
     )
-    expected = :corepotts_checkerboard_conjunctive_localworksets_v1
+    expected = _CHECKERBOARD_MECHANISM_IDENTITY
     _validate_program_checkpoint(program, checkpoint, expected)
     block = checkpoint.extensions.CorePotts.execution_lowering
-    block.schema == v"1.0.0" && block.queue_mcs_capacity >= 12 ||
-        throw(ArgumentError(
-            "candidate checkpoint has an unsupported execution profile"
-        ))
-    runtime = _restore_validated_program_checkpoint(program, checkpoint)
-    candidate = _localworksets_replay_candidate_runtime(
-        runtime; queue_mcs_capacity = block.queue_mcs_capacity
-    )
-    _checkpoint_execution_block(candidate) == block || throw(ArgumentError(
-        "candidate checkpoint evidence does not match this execution environment"
+    block.schema == _CHECKERBOARD_CHECKPOINT_SCHEMA || throw(ArgumentError(
+        "checkerboard checkpoint has an unsupported execution schema"
     ))
-    return candidate
+    runtime = _restore_validated_program_checkpoint(program, checkpoint)
+    runtime.engine_workspace isa CheckerboardWorkspace || return runtime
+    queue_mcs_capacity = Int(block.identity.queue_policy.mcs_capacity)
+    restored = _prepare_checkerboard_execution(
+        runtime; queue_mcs_capacity
+    )
+    _checkpoint_execution_block(restored) == block || throw(ArgumentError(
+        "checkerboard checkpoint execution identity does not match this environment"
+    ))
+    return restored
 end
 
+function _inspect_checkerboard_execution(
+        execution::_CheckerboardExecutionWorkspace
+    )
+    return (
+        identity = _checkerboard_execution_identity_block(execution.identity),
+        color_mechanics = map(
+            LocalMath.inspect, execution.color_laws.prepared),
+        clear_report = map(LocalMath.inspect, execution.clear_report),
+        stage_boundaries = (
+            before = map(execution.stage_boundaries.before) do entry
+                map(LocalMath.inspect, entry.prepared)
+            end,
+            after = map(execution.stage_boundaries.after) do entry
+                map(LocalMath.inspect, entry.prepared)
+            end,
+        ),
+        lifecycle_reductions = execution.lifecycle_reductions === nothing ?
+            nothing : map(execution.lifecycle_reductions) do reductions
+                (
+                    direct = (owner = :CorePotts,
+                        executor = :KernelAbstractions,
+                        lowering = :corepotts_lifecycle_status_ka_v1),
+                    planning = (owner = :CorePotts,
+                        executor = :KernelAbstractions,
+                        lowering = :corepotts_lifecycle_status_ka_v1),
+                    site_index = LocalMath.inspect(reductions.site_index),
+                    request_index = LocalMath.inspect(
+                        reductions.request_index
+                    ),
+                    emission = (
+                        owner = :CorePotts,
+                        executor = :KernelAbstractions,
+                        lowering = :corepotts_lifecycle_emission_ka_v1,
+                    ),
+                    selection = LocalMath.inspect(reductions.selection),
+                )
+            end,
+        completion_receipts = (
+            mechanics = execution.receipts.mechanics,
+            lifecycle = execution.receipts.lifecycle,
+        ),
+        order = (
+            :state_initialization_and_report_reset,
+            :color_mechanics,
+            :before_lifecycle,
+            :core_lifecycle_transaction,
+            :after_lifecycle,
+            :bank_authorization_and_publication,
+        ),
+    )
+end
+
+"""Queue one checkerboard MCS without publishing host-visible logical state."""
 function enqueue_program_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
         runtime.capability_report;
         operation = :queued_mcs,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
@@ -952,40 +1042,47 @@ function enqueue_program_mcs!(runtime::ProgramRuntime)
         "cannot enqueue a program runtime after a terminal scientific failure"
     ))
     workspace = runtime.engine_workspace
-    enqueue_checkerboard_mcs!(workspace, workspace.execution.submitted_mcs)
+    execution = _checkerboard_execution_position(workspace)
+    current_mcs = execution.submitted_mcs
+    _preflight_checkerboard_mcs!(workspace, current_mcs)
+    # From this point onward an ordered CorePotts prefix may have reached the
+    # backend even if a later LocalMath admission check rejects. Keep the
+    # runtime unsettled until the portable settlement boundary drains it.
     runtime.settled = false
+    _enqueue_checkerboard_mcs_after_preflight!(workspace, current_mcs)
     return runtime
 end
 
+"""Queue checkerboard execution through the requested absolute MCS."""
 function enqueue_program_through!(
         runtime::ProgramRuntime, target_mcs::Integer
     )
     _require_program_execution_capability(
         runtime.capability_report;
         operation = :queued_mcs_through,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS execution"
     ))
     workspace = runtime.engine_workspace
+    execution = _checkerboard_execution_position(workspace)
     target = Int(target_mcs)
-    target >= workspace.execution.submitted_mcs || throw(ArgumentError(
+    target >= execution.submitted_mcs || throw(ArgumentError(
         "queued execution target precedes the submitted MCS"
     ))
-    while workspace.execution.submitted_mcs < target
+    while execution.submitted_mcs < target
         enqueue_program_mcs!(runtime)
     end
     return runtime
 end
 
+"""Drain queued work and publish it according to a settlement request."""
 function settle_program!(
         runtime::ProgramRuntime, request::ProgramSettlementRequest
     )
     _require_program_execution_capability(
         runtime.capability_report;
         operation = :settle_program,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
     supports_queued_program_execution(runtime) || throw(ArgumentError(
         "this program does not support queued whole-MCS settlement"
@@ -995,107 +1092,11 @@ function settle_program!(
     return receipt
 end
 
-mutable struct _CheckerboardTransactionRuntime{
-        P, O, K, G, TS, R, D, S, L, A,
-    }
-    program::P
-    ownership::O
-    cell_kinds::K
-    cell_generations::G
-    trackers::TS
-    relationships::R
-    descriptor_state::D
-    stage_buffers::S
-    lifecycle_workspace::L
-    parameters::A
-    mcs::Int
-    retired_cells::UInt64
-end
-
-function _checkerboard_transaction_runtime(runtime, state, mcs)
-    return _CheckerboardTransactionRuntime(
-        runtime.program,
-        state.ownership,
-        state.cell_kinds,
-        state.cell_generations,
-        state.trackers,
-        state.relationships,
-        state.descriptor_state,
-        state.stage_buffers,
-        state.lifecycle_workspace,
-        state.parameters,
-        Int(mcs),
-        runtime.retired_cells,
-    )
-end
-
-function _advance_checkerboard_host_stage_transaction!(runtime::ProgramRuntime)
-    workspace = runtime.engine_workspace
-    current_mcs = workspace.execution.submitted_mcs
-    source, destination, destination_bank = _checkerboard_transaction_banks(
-        workspace, current_mcs
-    )
-    destination = _checkerboard_state_at_mcs(destination, current_mcs)
-    backend = KernelAbstractions.get_backend(destination.ownership)
-    backend isa KernelAbstractions.CPU || throw(ArgumentError(
-        "host after-MCS transaction execution requires the CPU backend"
-    ))
-    _enqueue_program_state_copy!(destination, source)
-    execute_checkerboard_mcs!(workspace, current_mcs, destination)
-    transaction = _checkerboard_transaction_runtime(
-        runtime, destination, current_mcs
-    )
-    succeeded = _program_backend_open(destination)
-    if succeeded
-        try
-            _execute_after_mcs_stage!(
-                transaction, runtime.program.stage_plan.before_lifecycle
-            )
-            execute_lifecycle!(transaction)
-            _execute_after_mcs_stage!(
-                transaction, runtime.program.stage_plan.after_lifecycle
-            )
-        catch error
-            status = @inbounds destination.program_status[1]
-            if error isa AbstractLifecycleFailure &&
-                    status.code !== ProgramStatusSuccess &&
-                    program_status_is_expected(status)
-                succeeded = false
-            else
-                rethrow()
-            end
-        end
-    end
-    if succeeded
-        @inbounds destination.lifecycle_control.statistics[
-            _PROGRAM_STAT_RETIRED
-        ] = transaction.retired_cells
-    end
-    _enqueue_program_bank_publication!(
-        destination,
-        workspace.report,
-        destination_bank,
-        current_mcs + 1,
-    )
-    workspace.execution.submitted_mcs = current_mcs + 1
-    runtime.settled = false
-    receipt = settle_program!(
-        workspace,
-        ProgramSettlementRequest(PublicStepSettlement; full_snapshot = true),
-    )
-    _publish_program_receipt!(runtime, receipt)
-    return runtime
-end
-
 function _advance_checkerboard_transaction!(runtime::ProgramRuntime)
     workspace = runtime.engine_workspace
-    workspace isa Union{
-        CheckerboardWorkspace, _LocalWorksetsCheckerboardWorkspace,
-    } || error(
+    workspace isa _CheckerboardExecutionWorkspace || error(
         "checkerboard runtime has no portable execution workspace"
     )
-    isempty(runtime.program.stage_plan.after_mcs) ||
-        return _advance_checkerboard_host_stage_transaction!(runtime)
     enqueue_program_mcs!(runtime)
     receipt = settle_program!(
         runtime,
@@ -1107,11 +1108,11 @@ function _advance_checkerboard_transaction!(runtime::ProgramRuntime)
     return runtime
 end
 
+"""Advance one complete transactional MCS and publish only after successful settlement."""
 function advance_mcs!(runtime::ProgramRuntime)
     _require_program_execution_capability(
         runtime.capability_report;
         operation = :advance_mcs,
-        experimental = _runtime_uses_experimental_capability(runtime),
     )
     runtime.settled ||
         throw(ArgumentError("cannot advance an unsettled program runtime"))
@@ -1121,23 +1122,17 @@ function advance_mcs!(runtime::ProgramRuntime)
     if runtime.program.engine isa CheckerboardProgramEngine
         return _advance_checkerboard_transaction!(runtime)
     end
-    runtime.program.engine isa SequentialProgramEngine &&
+    if runtime.program.engine isa SequentialProgramEngine
         return _advance_sequential_transaction!(runtime)
-    runtime.settled = false
-    if runtime.program.engine isa CheckerboardProgramEngine
-        _advance_checkerboard!(runtime)
-    else
-        error("unreachable program engine")
     end
-    _after_mcs!(runtime)
-    runtime.mcs += 1
-    runtime.settled = true
-    return runtime
+    error("unsupported program engine $(typeof(runtime.program.engine))")
 end
 
+"""Return the durable symbolic identity of a compiled program backend."""
 @inline program_backend_name(::CPUProgramBackend) = :CPUBackend
 @inline program_backend_name(::AdaptedProgramBackend{Name}) where {Name} = Name
 
+"""Inspect the program's engine, backend, numerical policy, tracker plan, and RNG contract."""
 function program_execution_report(program::CompiledPottsProgram)
     _validate_compiled_program_integrity(program)
     return (
@@ -1147,7 +1142,7 @@ function program_execution_report(program::CompiledPottsProgram)
         shape = program.shape,
         attempts_per_site = program.attempts_per_site,
         trackers = tracker_plan_report(program.tracker_plan),
-        rng = :Philox4x32x10V1,
+        rng = :Philox4x32x10V2,
         numerical_policy = (
             math = :accurate,
             reductions = :deterministic,

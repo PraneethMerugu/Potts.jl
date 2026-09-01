@@ -34,7 +34,7 @@ recording contracts are stable for the v0.2 line.
 successful temporary recording. Experimental explorers and rerun controllers
 are explicitly closable with `close`.
 
-Qualification exercises an unrelated downstream frame implementation, custom
-request and encoding extensions, CairoMakie/GLMakie/WGLMakie, tolerant visual
-regression, allocation ceilings, strict documentation, and a clean
-install-to-PNG workflow.
+The ordinary package and backend tests exercise an unrelated downstream frame
+implementation, custom request and encoding extensions,
+CairoMakie/GLMakie/WGLMakie, tolerant visual regression, allocation
+measurements, strict documentation, and a clean install-to-PNG workflow.

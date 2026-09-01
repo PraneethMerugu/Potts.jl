@@ -86,10 +86,12 @@ struct CPMThenComponents <: AbstractNativeSplitPolicy end
 
 """Initialization is delegated to the native system and standard MTK problem."""
 abstract type AbstractNativeInitializationPolicy end
+"""Preserve ModelingToolkit initialization equations for a native component."""
 struct PreserveNativeInitialization <: AbstractNativeInitializationPolicy end
 
 """Native continuous and discrete events remain owned by the MTK system."""
 abstract type AbstractNativeEventPolicy end
+"""Preserve declared native events structurally for capability preflight."""
 struct PreserveNativeEvents <: AbstractNativeEventPolicy end
 
 """Lifecycle behavior of native component state."""
@@ -138,11 +140,13 @@ PerCellNativeLifecycle(; creation, transition, division) =
 
 """Numerical algorithms are selected at `init`, never by the declaration."""
 abstract type AbstractNativeAlgorithmPolicy end
+"""Require the concrete native solver algorithm at `init` time."""
 struct LateBoundNativeAlgorithm <: AbstractNativeAlgorithmPolicy end
 
 """Capability admission is checked against the complete late runtime profile."""
 abstract type AbstractNativeCapabilityPolicy end
-struct RequireQualifiedNativeCapability <: AbstractNativeCapabilityPolicy end
+"""Use package-qualified structural, numerical, and backend capability rows."""
+struct StandardNativeCapability <: AbstractNativeCapabilityPolicy end
 """Internal provenance marker for components produced by MethodOfLines."""
 struct _MethodOfLinesNativeCapability <: AbstractNativeCapabilityPolicy end
 
@@ -249,20 +253,7 @@ function _native_profile_value(value, owner::AbstractString)
     ))
 end
 
-"""
-    NativeSolveProfile(path, algorithm; profile_id=nothing,
-                       execution=SerialNativeExecution(),
-                       deterministic=false, exact_replay=false, options...)
-
-Late numerical policy for exactly one native component. There is deliberately
-no default native solver. Execution and checkpoint/restore admit only a closed
-capability row: exact replay requires `exact_replay=true`, an explicitly pinned
-`profile_id`, and the author's `deterministic=true` assertion. `execution`
-selects serial versus per-cell batched numerical lanes; it never changes CPM
-ordering or trajectory-ensemble identity. A profile with `exact_replay=false`
-can represent an unsupported candidate for inspection and preflight
-diagnostics, but it cannot initialize a native solver.
-"""
+"""Execution-mode family for native numerical solves."""
 abstract type AbstractNativeExecutionMode end
 
 """One native solve at a time in deterministic component/slot order."""
@@ -291,7 +282,8 @@ end
     MetalNativeExecution(width=1)
 
 Execute one fixed-shape ODE lane (`width == 1`, including a `Global`
-component) or a bounded group of `PerCell` lanes in one DiffEqGPU kernel on
+component) or a bounded group of `PerCell` lanes in one DiffEqGPU
+KernelAbstractions kernel on
 Apple Metal. Device transfers occur only at the documented coupled-state
 boundary; this mode never silently falls back to CPU execution.
 """
@@ -306,6 +298,20 @@ struct MetalNativeExecution <: AbstractNativeExecutionMode
     end
 end
 
+"""
+    NativeSolveProfile(path, algorithm; profile_id=nothing,
+                       execution=SerialNativeExecution(),
+                       deterministic=false, exact_replay=false, options...)
+
+Late numerical policy for exactly one native component. There is deliberately
+no default native solver. Functional execution is admitted by structural,
+numerical, and backend preflight. Exact replay additionally requires
+`exact_replay=true`, an explicitly pinned `profile_id`, the author's
+`deterministic=true` assertion, and a matching closed replay row. `execution`
+selects serial versus per-cell batched numerical lanes; it never changes CPM
+ordering or trajectory-ensemble identity. A profile with `exact_replay=false`
+may execute but cannot checkpoint native state.
+"""
 struct NativeSolveProfile{
         P <: Tuple, A, O <: NamedTuple, E <: AbstractNativeExecutionMode,
     }
@@ -507,31 +513,40 @@ struct CouplingEndpointSchema{P <: _NativePort}
     end
 end
 
+"""Return the native symbolic variable represented by a coupling port."""
 native_variable(port::Union{NativeInput, NativeOutput}) =
     getfield(port, :native_variable)
 native_variable(port::NativeFieldOutput) = getfield(port, :native_variables)
 native_variables(port::Union{NativeInput, NativeOutput}) = (native_variable(port),)
 native_variables(port::NativeFieldOutput) = native_variable(port)
+"""Return the Potts-side identity represented by a coupling port."""
 potts_endpoint(port::NativeInput) = getfield(port, :from)
 potts_endpoint(port::NativeOutput) = getfield(port, :to)
 potts_endpoint(port::NativeFieldOutput) = getfield(port, :to)
+"""Return the concrete value type required by a coupling port."""
 native_value_type(port::_NativePort) = getfield(port, :value_type)
 native_variable(endpoint::CouplingEndpointSchema) = native_variable(endpoint.port)
 potts_endpoint(endpoint::CouplingEndpointSchema) = endpoint.potts_identity
 native_value_type(endpoint::CouplingEndpointSchema) = native_value_type(endpoint.port)
 
+"""Internal token that restricts construction to the validating outer constructor."""
+struct _NativeConstructionToken end
+const _NATIVE_CONSTRUCTION_TOKEN = _NativeConstructionToken()
+
 """
-    NativeComponent(source; name, family, time, ...)
+    NativeComponent(source; name, family, time, scope=Global(),
+                    cadence=EveryMCS(), split=CPMThenComponents(),
+                    inputs=(), outputs=(), initialization=PreserveNativeInitialization(),
+                    events=PreserveNativeEvents(), lifecycle=GlobalNativeLifecycle(),
+                    algorithm=LateBoundNativeAlgorithm(),
+                    capabilities=StandardNativeCapability())
 
 Declare a native ModelingToolkit component without translating it into Potts
 equations. `Global()` stores one state for the trajectory; `PerCell()` stores
 one state for every live finite Potts cell. `source` is retained by identity.
 Its hierarchy, defaults, initialization equations, observations, and events
-remain under MTK ownership.
+remain under ModelingToolkit ownership.
 """
-struct _NativeConstructionToken end
-const _NATIVE_CONSTRUCTION_TOKEN = _NativeConstructionToken()
-
 struct NativeComponent{
         S <: ModelingToolkitBase.AbstractSystem,
         F <: AbstractNativeComponentFamily,
@@ -628,7 +643,7 @@ function NativeComponent(
         lifecycle::AbstractNativeLifecyclePolicy = GlobalNativeLifecycle(),
         algorithm::AbstractNativeAlgorithmPolicy = LateBoundNativeAlgorithm(),
         capabilities::AbstractNativeCapabilityPolicy =
-            RequireQualifiedNativeCapability(),
+            StandardNativeCapability(),
     )
     name isa Symbol || throw(ArgumentError(
         "NativeComponent requires a Symbol `name`"
@@ -667,7 +682,7 @@ function NativeComponent(
         "native numerical algorithms must remain late-bound"
     ))
     capabilities isa Union{
-        RequireQualifiedNativeCapability, _MethodOfLinesNativeCapability,
+        StandardNativeCapability, _MethodOfLinesNativeCapability,
     } || throw(ArgumentError(
         "native execution requires a package-owned late capability policy"
     ))
@@ -758,9 +773,13 @@ function _assert_unique_native_values(ports::Tuple, label::AbstractString)
     return nothing
 end
 
+"""Return the original ModelingToolkit source system."""
 native_source(component::NativeComponent) = getfield(component, :source)
+"""Return the declared `ODEComponent` or `DAEComponent` family."""
 native_family(component::NativeComponent) = getfield(component, :family)
+"""Return the component's ordered native input ports."""
 native_inputs(component::NativeComponent) = getfield(component, :inputs)
+"""Return the component's ordered native output ports."""
 native_outputs(component::NativeComponent) = getfield(component, :outputs)
 Base.nameof(component::NativeComponent) = getfield(component, :name)
 
@@ -810,12 +829,14 @@ end
 native_time_at(component::NativeComponent, completed_mcs::Integer) =
     native_time_at(getfield(component, :time), completed_mcs)
 
+"""Return the positive MCS cadence stride of a native component."""
 function native_cadence_stride(component::NativeComponent)
     cadence = getfield(component, :cadence)
     cadence isa EveryMCS && return 1
     return Int(getfield(cadence, :cadence))
 end
 
+"""Test whether a native component is due at an MCS boundary."""
 function native_due(component::NativeComponent, completed_mcs::Integer)
     completed_mcs >= 0 || throw(ArgumentError(
         "completed MCS must be nonnegative"
@@ -937,17 +958,23 @@ struct ScheduledNativeComponent{C <: NativeComponent, O, S, E <: Tuple}
     end
 end
 
+"""Return the fully qualified tuple path of a native component."""
 native_component_path(component::CompletedNativeComponent) = getfield(component, :path)
 native_component_path(component::ScheduledNativeComponent) = getfield(component, :path)
 
+"""Return the original ModelingToolkit system retained after scheduling."""
 native_original_system(component::ScheduledNativeComponent) =
     getfield(component, :original_system)
+"""Return the structurally compiled ModelingToolkit system."""
 native_scheduled_system(component::ScheduledNativeComponent) =
     getfield(component, :scheduled_system)
+"""Return the ordered Potts/native coupling endpoint schemas."""
 native_coupling_endpoints(component::ScheduledNativeComponent) =
     getfield(component, :endpoints)
+"""Return the fingerprint of the original native system."""
 native_original_fingerprint(component::ScheduledNativeComponent) =
     getfield(component, :original_fingerprint)
+"""Return the fingerprint of the scheduled native system."""
 native_scheduled_fingerprint(component::ScheduledNativeComponent) =
     getfield(component, :scheduled_fingerprint)
 
@@ -955,6 +982,7 @@ native_scheduled_fingerprint(component::ScheduledNativeComponent) =
 native_index_provider(component::ScheduledNativeComponent) =
     native_scheduled_system(component)
 
+"""Return the extension-owned constructor for the native numerical problem."""
 native_problem_constructor(component::ScheduledNativeComponent) =
     native_problem_constructor(native_family(getfield(component, :declaration)))
 native_problem_constructor(::ODEComponent) = SciMLBase.ODEProblem

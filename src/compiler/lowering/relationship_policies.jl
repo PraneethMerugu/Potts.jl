@@ -24,7 +24,7 @@ function _compile_relationship_endpoint_policies(ir::AnalyzedTermIR)
         )
         endpoints = _statement_option(relationship, :endpoints)
         endpoints isa Undirected || throw(ArgumentError(
-            "V1 relationship storage requires Undirected endpoints"
+            "packed relationship storage requires Undirected endpoints"
         ))
         declaration_a = _relationship_endpoint_declaration(
             ir, relationship, endpoints.kind_a

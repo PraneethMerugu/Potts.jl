@@ -1,11 +1,14 @@
 # Deterministic realized-domain coloring for the portable checkerboard engine.
 
+"""Supertype for optional checkerboard geometry plans."""
 abstract type AbstractCheckerboardPlan end
 
+"""Marker used by non-checkerboard compiled programs."""
 struct NoCheckerboardPlan <: AbstractCheckerboardPlan end
 
 struct _VerifiedCheckerboardPlanToken end
 
+"""Validated color classes, site mappings, and proposal geometry for checkerboard execution."""
 struct CheckerboardPlan{
         N,
         S <: AbstractVector{Int32},
@@ -209,6 +212,7 @@ function CheckerboardPlan(
     )
 end
 
+"""Return immutable geometry and coloring facts for a checkerboard plan."""
 function checkerboard_plan_report(plan::CheckerboardPlan)
     return (
         algorithm = :canonical_realized_greedy_v1,

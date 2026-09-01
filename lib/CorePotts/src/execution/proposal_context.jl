@@ -12,12 +12,13 @@
 end
 
 @inline _owner_kind(runtime, owner::Int32) =
-    owner > 0 ? @inbounds(runtime.cell_kinds[owner]) :
-    owner == 0 ? runtime.program.medium_kind : Int16(-owner)
+    _proposal_science_owner_kind(runtime, owner)
 
+"""Return the authoritative ownership storage used by proposal evaluation."""
 @inline ownership_state(runtime::ProgramRuntime) = runtime.ownership
 @inline owner_kind(runtime::ProgramRuntime, owner::Integer) =
     _owner_kind(runtime, Int32(owner))
+"""Return the live incident degree for a finite owner and relationship store."""
 @inline function relationship_degree(
         runtime::ProgramRuntime,
         relationship_slot::Integer,
@@ -40,8 +41,8 @@ function _cell_center(
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
     )
-    T = eltype(runtime.parameters)
-    N = length(runtime.program.shape)
+    T = _proposal_science_scalar_type(runtime)
+    N = length(_proposal_science_shape(runtime))
     cell > 0 || return nothing
     count, moments, old_owner, changed = _cell_moment_overlay(
         runtime.program.tracker_plan,
@@ -88,8 +89,8 @@ function _cell_shape_statistics(
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
     )
-    T = eltype(runtime.parameters)
-    N = length(runtime.program.shape)
+    T = _proposal_science_scalar_type(runtime)
+    N = length(_proposal_science_shape(runtime))
     cell > 0 || return nothing
     count, moments, old_owner, changed = _cell_moment_overlay(
         runtime.program.tracker_plan,
@@ -145,7 +146,7 @@ end
 
 function _maximum_covariance_eigenvalue(::Val{N}, covariance) where {N}
     throw(ArgumentError(
-        "V1 cell elongation is qualified only for two-dimensional lattices"
+        "cell elongation is qualified only for two-dimensional lattices"
     ))
 end
 
@@ -155,8 +156,8 @@ function _cell_length(
         replaced_site = nothing,
         replacement_owner::Int32 = Int32(-1),
     )
-    T = eltype(runtime.parameters)
-    N = length(runtime.program.shape)
+    T = _proposal_science_scalar_type(runtime)
+    N = length(_proposal_science_shape(runtime))
     statistics = _cell_shape_statistics(
         runtime, cell; replaced_site, replacement_owner
     )
@@ -178,9 +179,9 @@ end
     return sqrt(sum((first[i] - second[i])^2 for i in eachindex(first)))
 end
 
-@inline _center_distance(::Nothing, second) = Inf
-@inline _center_distance(first, ::Nothing) = Inf
-@inline _center_distance(::Nothing, ::Nothing) = Inf
+@inline _center_distance(::Nothing, second::Tuple{T, Vararg{T}}) where {T} = T(Inf)
+@inline _center_distance(first::Tuple{T, Vararg{T}}, ::Nothing) where {T} = T(Inf)
+@inline _center_distance(::Nothing, ::Nothing) = Inf32
 
 @inline _has_due_zero_volume_retirement(
     ::NoLifecycleExecutionPlan, kind::Int16
@@ -255,9 +256,9 @@ struct _ProposalEvaluationContext{R, I} <:
 end
 
 @inline evaluator_parameters(context::_ProposalEvaluationContext) =
-    context.runtime.parameters
+    _proposal_science_parameters(context.runtime)
 @inline _compiled_evaluator_parameters(context::_ProposalEvaluationContext) =
-    context.runtime.parameters
+    _proposal_science_parameters(context.runtime)
 @inline proposal_source_site(context::_ProposalEvaluationContext) =
     context.source
 @inline proposal_target_site(context::_ProposalEvaluationContext) =
@@ -276,7 +277,7 @@ end
 @inline proposal_site_owner(
     context::_ProposalEvaluationContext,
     site,
-) = @inbounds context.runtime.ownership[site]
+) = _proposal_science_site_owner(context.runtime, site)
 
 @inline function proposal_relation_count(
         context::_ProposalEvaluationContext,

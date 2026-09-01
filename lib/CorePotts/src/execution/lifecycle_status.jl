@@ -1,5 +1,6 @@
 # Fixed-size lifecycle status values and host-side failure translations.
 
+"""Device-reportable success or terminal scientific failure category."""
 @enum ProgramStatusCode::UInt8 begin
     ProgramStatusSuccess = 0x00
     ProgramStatusInadmissible = 0x01
@@ -15,6 +16,7 @@
     ProgramStatusAcceptance = 0x0b
 end
 
+"""Machine-readable detail refining a program status code."""
 @enum ProgramStatusDetailCode::UInt16 begin
     LifecycleDetailNone = 0x0000
     LifecycleDetailOwnershipExceedsCellCapacity = 0x0001
@@ -57,6 +59,7 @@ end
     LifecycleDetailAcceptanceZeroTemperatureDrive = 0x0026
 end
 
+"""Execution stage at which a device status was produced."""
 @enum ProgramExecutionStage::UInt8 begin
     ProgramStageNone = 0x00
     ProgramStageIndex = 0x01
@@ -84,6 +87,18 @@ struct ProgramStatus
     required::Int32
     available::Int32
     maximum::Int32
+end
+
+function KernelAbstractions.get_backend(
+        status::StructArrays.StructArray{ProgramStatus}
+    )
+    components = values(StructArrays.components(status))
+    backend = KernelAbstractions.get_backend(first(components))
+    all(component -> KernelAbstractions.get_backend(component) == backend,
+        components) || throw(ArgumentError(
+        "ProgramStatus components belong to different backends"
+    ))
+    return backend
 end
 
 ProgramStatus() = ProgramStatus(

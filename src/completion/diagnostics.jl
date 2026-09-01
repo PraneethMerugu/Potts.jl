@@ -1,3 +1,4 @@
+"""One source-aware completion or scheduling diagnostic."""
 struct PottsDiagnostic
     kind::Symbol
     identity::Union{Nothing, QualifiedStatementID, Symbol}
@@ -22,6 +23,7 @@ function Base.show(io::IO, diagnostic::PottsDiagnostic)
     end
 end
 
+"""Ordered collection of diagnostics raised by one validation stage."""
 struct PottsValidationError <: Exception
     stage::Symbol
     diagnostics::Tuple{Vararg{PottsDiagnostic}}
@@ -49,4 +51,3 @@ function _throw_diagnostics(stage::Symbol, diagnostics)
     ordered = sort!(collect(diagnostics); by = _diagnostic_sort_key)
     throw(PottsValidationError(stage, Tuple(ordered)))
 end
-

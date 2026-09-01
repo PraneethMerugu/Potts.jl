@@ -1,8 +1,12 @@
+"""Supertype of immutable declarative statements accepted by `PottsSystem`."""
 abstract type AbstractPottsStatement end
+"""Supertype of effects performed by scheduled Potts processes."""
 abstract type AbstractPottsEffect end
+"""Supertype of durable execution-phase markers used by process schedules."""
 abstract type AbstractPottsPhase end
 abstract type AbstractStatementSource end
 
+"""Stable symbolic identity of a Potts statement."""
 struct StatementID
     value::Symbol
     function StatementID(value::Symbol)
@@ -18,8 +22,10 @@ Base.show(io::IO, id::StatementID) = print(io, id.value)
 Base.:(==)(left::StatementID, right::StatementID) = left.value == right.value
 Base.hash(id::StatementID, seed::UInt) = hash(id.value, seed)
 
+"""Source-provenance marker used when no authored location is available."""
 struct UnknownSource <: AbstractStatementSource end
 
+"""Authored file, line, module, and expression provenance for a statement."""
 struct SourceLocation <: AbstractStatementSource
     file::String
     line::Int
@@ -51,7 +57,9 @@ function _statement_core(id, arguments, options, source)
     return StatementCore(StatementID(id), arguments, options, source)
 end
 
+"""Return a statement's stable `StatementID`."""
 statement_id(statement::AbstractPottsStatement) = getfield(statement, :core).id
+"""Return a statement's `SourceLocation` or `UnknownSource` provenance."""
 statement_source(statement::AbstractPottsStatement) = getfield(statement, :core).source
 _statement_arguments(statement::AbstractPottsStatement) = getfield(statement, :core).arguments
 _statement_options(statement::AbstractPottsStatement) = getfield(statement, :core).options
@@ -65,9 +73,18 @@ function Base.show(io::IO, statement::AbstractPottsStatement)
     print(io, ")")
 end
 
-macro _define_statement_type(type_name)
+"""Return the durable statement-kind symbol for a declarative statement."""
+function statement_kind end
+
+"""Return a copy of a statement carrying the supplied source provenance."""
+function with_source end
+
+"""Map `f` over the symbolic payload of a statement or symbolic binding."""
+function map_symbolics end
+
+macro _define_statement_type(type_name, documentation)
     quote
-        struct $(esc(type_name)){C <: StatementCore} <: AbstractPottsStatement
+        Base.@doc $(esc(documentation)) struct $(esc(type_name)){C <: StatementCore} <: AbstractPottsStatement
             core::C
         end
 
@@ -95,28 +112,29 @@ macro _define_statement_type(type_name)
     end
 end
 
-@_define_statement_type CellKind
-@_define_statement_type MediumKind
-@_define_statement_type LatticeDomain
-@_define_statement_type SpatialRelation
-@_define_statement_type SiteState
-@_define_statement_type CellState
-@_define_statement_type MediumState
-@_define_statement_type ModelState
-@_define_statement_type FieldState
-@_define_statement_type HistoryState
-@_define_statement_type RelationshipState
-@_define_statement_type HamiltonianTerm
-@_define_statement_type ProposalDrive
-@_define_statement_type ProposalConstraint
-@_define_statement_type ProposalModifier
-@_define_statement_type SynchronousProcess
-@_define_statement_type AcceptedCopyProcess
-@_define_statement_type RelationshipProcess
-@_define_statement_type LifecycleProcess
-@_define_statement_type Observation
-@_define_statement_type Protocol
-@_define_statement_type RegisteredStatement
+@_define_statement_type CellKind "Declare a finite cell-kind identity and its metadata."
+@_define_statement_type MediumKind "Declare the distinguished medium kind and its metadata."
+@_define_statement_type LatticeDomain "Declare a lattice domain; use `Lattice` for the regular-grid form."
+@_define_statement_type SpatialRelation "Declare a named bounded spatial relation within a lattice domain."
+@_define_statement_type SiteState "Declare state stored per lattice site."
+@_define_statement_type CellState "Declare state stored per finite cell identity."
+@_define_statement_type MediumState "Declare state associated with the medium."
+@_define_statement_type ModelState "Declare singleton model state."
+@_define_statement_type FieldState "Declare spatial field state, optionally from a symbolic array variable."
+@_define_statement_type HistoryState "Declare bounded historical state for lagged reads."
+@_define_statement_type RelationshipState "Declare bounded relationship state with `capacity` and `maximum_degree`."
+@_define_statement_type HamiltonianTerm "Declare a Hamiltonian contribution over a bounded iteration domain."
+@_define_statement_type ProposalDrive "Declare an additive proposal-drive expression."
+@_define_statement_type ProposalConstraint "Declare a Boolean proposal-admission constraint."
+@_define_statement_type ProposalModifier "Declare a proposal-energy or acceptance modifier."
+@_define_statement_type SynchronousProcess "Declare a synchronous process whose reads observe stage-entry state."
+@_define_statement_type AcceptedCopyProcess "Declare a process evaluated only for accepted copy proposals."
+@_define_statement_type RelationshipProcess "Declare a bounded relationship-update process."
+@_define_statement_type LifecycleProcess "Declare a process executed at a lifecycle boundary."
+@_define_statement_type Observation "Declare a named observable expression."
+@_define_statement_type Protocol "Declare ordered `SweepStage` values and a lifecycle conflict policy."
+@_define_statement_type RegisteredStatement "Declare a versioned extension statement registered through `StatementRegistry`."
+
 
 const _DECLARATION_TYPES = Union{
     CellKind,
@@ -368,6 +386,7 @@ function _map_symbolic_payload(f, value)
     return symbolic ? f(value) : value
 end
 
+"""Immutable, ordered collection of uniquely identified Potts statements."""
 struct StatementSet{T <: Tuple}
     values::T
     StatementSet(values::T, ::Val{:raw}) where {T <: Tuple} = new{T}(values)
@@ -415,6 +434,7 @@ function _capture_statement(statement, source::SourceLocation)
     throw(ArgumentError("@statements entries must construct Potts statements"))
 end
 
+"""Construct a `StatementSet` from statement expressions while retaining source provenance."""
 macro statements(block)
     expressions = block isa Expr && block.head === :block ? block.args : Any[block]
     captured = Any[]
@@ -466,12 +486,14 @@ struct StatementDefinition{C <: NamedTuple}
     contract::C
 end
 
+"""Registry of versioned external statement schemas and their lowering functions."""
 struct StatementRegistry{T <: Tuple}
     definitions::T
 end
 
 StatementRegistry() = StatementRegistry(())
 
+"""Return the lowering function for a registered statement schema."""
 function registered_statement_lowering end
 
 function _validate_registered_index_set(value, name, arity)
@@ -512,7 +534,7 @@ function _validate_registered_contract(contract)
         throw(ArgumentError("registered reads and writes must be disjoint"))
     contract.effect in (
         :pure_read, :synchronous_assign, :accepted_copy, :ordered_batch
-    ) || throw(ArgumentError("registered effect class is not a V1 effect"))
+    ) || throw(ArgumentError("registered effect class is not a closed effect"))
     contract.rng isa Tuple ||
         throw(ArgumentError("registered rng contract must be a tuple"))
     for operation in contract.rng
@@ -556,7 +578,7 @@ function _validate_registered_contract(contract)
         contract.capabilities.reason isa AbstractString ||
         throw(ArgumentError("registered capability values have invalid types"))
     contract.capabilities.sequential || throw(ArgumentError(
-        "V1 registered statements must admit the sequential engine"
+        "registered statements must admit the sequential engine"
     ))
     (!contract.capabilities.checkerboard &&
      isempty(contract.capabilities.reason)) &&
@@ -566,18 +588,18 @@ function _validate_registered_contract(contract)
     contract.scientific_category in (
         :hamiltonian, :drive, :constraint, :modifier, :process, :observation,
     ) || throw(ArgumentError(
-        "registered scientific_category is not a closed V1 category"
+        "registered scientific_category is not a closed category"
     ))
     contract.energy_domain in (
         nothing, :sites, :cells, :contacts, :relationships,
     ) || throw(ArgumentError(
-        "registered energy_domain is not a closed V1 energy domain"
+        "registered energy_domain is not a closed energy domain"
     ))
     contract.affected_region in (
         nothing, :target_site, :source_and_target_cells,
         :incident_contacts, :incident_relationships,
     ) || throw(ArgumentError(
-        "registered affected_region is not a closed V1 affected-anchor class"
+        "registered affected_region is not a closed affected-anchor class"
     ))
     if contract.scientific_category === :hamiltonian
         contract.energy_domain === nothing && throw(ArgumentError(
@@ -609,6 +631,7 @@ function _validate_registered_contract(contract)
     return nothing
 end
 
+"""Register one versioned `RegisteredStatement` schema and lowering function."""
 function register_statement(
         registry::StatementRegistry,
         schema::Symbol,
@@ -636,4 +659,5 @@ function register_statement(
     return StatementRegistry(Tuple(definitions))
 end
 
+"""Return a new registry containing the package's built-in statement definitions."""
 default_statement_registry() = StatementRegistry()

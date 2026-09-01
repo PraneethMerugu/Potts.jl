@@ -283,7 +283,7 @@ function _lower_descriptor_plan(
         for descriptor in descriptors
     ]
     allunique(descriptor_sources) || throw(ArgumentError(
-        "V1 requires exactly one proposal descriptor occurrence per source statement"
+        "proposal lowering requires exactly one descriptor occurrence per source statement"
     ))
     groups = _descriptor_groups(descriptors)
     constraints = _domain_constraints(

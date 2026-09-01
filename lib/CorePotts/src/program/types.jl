@@ -1,11 +1,17 @@
 # Compiled program types and immutable construction contracts.
 
+"""Supertype for compiled program scheduling engines."""
 abstract type AbstractProgramEngine end
+"""Independent host reference engine with sequential proposal order."""
 struct SequentialProgramEngine <: AbstractProgramEngine end
+"""Conflict-free colored engine using the shared KernelAbstractions path."""
 struct CheckerboardProgramEngine <: AbstractProgramEngine end
+"""Host CPU storage and execution backend."""
 struct CPUProgramBackend end
+"""Backend identity whose runtime storage is supplied by adapter `Name`."""
 struct AdaptedProgramBackend{Name} end
 
+"""Scalar compiler value represented by a default or submission-parameter slot."""
 struct CompiledScalar{T <: AbstractFloat}
     value::T
     parameter_index::Int32
@@ -25,6 +31,7 @@ end
     return index == 0 ? scalar.value : @inbounds parameters[index]
 end
 
+"""Capacity, degree, endpoint, generation, and payload schema for one relationship store."""
 struct RelationshipStoreSchema{D <: Tuple}
     capacity::Int32
     maximum_degree::Int16
@@ -38,12 +45,12 @@ function RelationshipStoreSchema(
     )
     capacity > 0 || throw(ArgumentError("relationship capacity must be positive"))
     capacity <= typemax(Int32) || throw(ArgumentError(
-        "relationship capacity exceeds the V1 Int32 storage bound"
+        "relationship capacity exceeds the Int32 storage bound"
     ))
     maximum_degree > 0 ||
         throw(ArgumentError("relationship maximum degree must be positive"))
     maximum_degree <= typemax(Int16) || throw(ArgumentError(
-        "relationship maximum degree exceeds the V1 Int16 storage bound"
+        "relationship maximum degree exceeds the Int16 storage bound"
     ))
     return RelationshipStoreSchema(
         Int32(capacity),
@@ -100,7 +107,7 @@ end
 
 function Base.copy(storage::RelationshipStorage)
     return RelationshipStorage(
-        map(bank -> map(copy, bank), storage.banks),
+        map(copy, storage.banks),
         copy(storage.slots),
     )
 end
@@ -108,11 +115,20 @@ end
 function Base.copyto!(
         destination::RelationshipStorage, source::RelationshipStorage
     )
-    length(destination) == length(source) || throw(ArgumentError(
-        "relationship storages have incompatible slot counts"
+    Adapt.adapt(Array, destination.slots) == Adapt.adapt(Array, source.slots) ||
+        throw(ArgumentError(
+        "relationship storages have incompatible canonical slots"
     ))
-    for slot in eachindex(destination)
-        copyto!(destination[slot], source[slot])
+    length(destination.banks) == length(source.banks) || throw(ArgumentError(
+        "relationship storages have incompatible bank counts"
+    ))
+    for index in eachindex(destination.banks, source.banks)
+        target = destination.banks[index]
+        values = source.banks[index]
+        target isa PackedRelationshipBank && values isa PackedRelationshipBank ||
+            throw(ArgumentError(
+                "runtime RelationshipStorage copy requires packed banks"))
+        copyto!(target, values)
     end
     return destination
 end
@@ -137,6 +153,7 @@ end
 
 Adapt.@adapt_structure RelationshipSlot
 
+"""Validated immutable scientific program and its qualified execution plans."""
 struct CompiledPottsProgram{
         T <: AbstractFloat,
         N,
@@ -296,10 +313,8 @@ function CompiledPottsProgram(
         throw(ArgumentError("the medium-kind table has the wrong size"))
     medium_mask[medium_kind] ||
         throw(ArgumentError("the default medium must be a declared medium kind"))
-    attempts_per_site == 1 || throw(ArgumentError(
-        "SequentialProgramEngine and CheckerboardProgramEngine implement " *
-        "only the normalized AttemptsPerSite(1) process; a different " *
-        "budget requires a separately named and qualified algorithm"
+    attempts_per_site > 0 || throw(ArgumentError(
+        "attempts per site must be positive"
     ))
     relationship_storage = relationships isa RelationshipStorage ?
                            relationships : RelationshipStorage(relationships)
@@ -348,7 +363,9 @@ function CompiledPottsProgram(
     owned_ownership_change_handles = _own_compiled_program_value(
         ownership_change_handles
     )
-    owned_lifecycle_plan = _own_compiled_program_value(lifecycle_plan)
+    owned_lifecycle_plan = _own_compiled_program_value(
+        lifecycle_plan
+    )
     owned_checkerboard_plan = _own_compiled_program_value(
         resolved_checkerboard_plan
     )
@@ -413,11 +430,12 @@ function CompiledPottsProgram(
     )
 end
 
-struct ProgramInitialState{T <: AbstractFloat, N, D}
+"""Owned, validated inputs used to initialize one compiled Potts trajectory."""
+struct ProgramInitialState{T <: AbstractFloat, N, R, D}
     ownership::Array{Int32, N}
     cell_kinds::Vector{Int16}
     cell_generations::Vector{UInt32}
-    relationships::Vector{Any}
+    relationships::R
     descriptor_state::D
 end
 
@@ -428,7 +446,8 @@ function Base.getproperty(initial::ProgramInitialState, name::Symbol)
     value = _program_initial_field(initial, name)
     name === :descriptor_state && value isa AuxiliaryState &&
         return copy_auxiliary_state(value)
-    name === :relationships && return deepcopy(value)
+    name === :relationships && return value isa RelationshipStorage ?
+        copy(value) : deepcopy(value)
     value isa AbstractArray && return copy(value)
     return value
 end
@@ -459,13 +478,14 @@ function ProgramInitialState(
     all(eachindex(kinds)) do index
         @inbounds kinds[index] == 0 || !iszero(generations[index])
     end || throw(ArgumentError("active cell generations must be positive"))
-    relationship_values = Any[deepcopy(value) for value in relationships]
+    relationship_values = relationships isa RelationshipStorage ?
+        copy(relationships) : Any[deepcopy(value) for value in relationships]
     owned_descriptor_state = descriptor_state === nothing ? nothing :
                              descriptor_state isa AuxiliaryState ?
                              copy_auxiliary_state(descriptor_state) :
                              deepcopy(descriptor_state)
     return ProgramInitialState{
-        T, N, typeof(owned_descriptor_state),
+        T, N, typeof(relationship_values), typeof(owned_descriptor_state),
     }(
         owned,
         kinds,

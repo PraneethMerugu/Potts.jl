@@ -1,0 +1,37 @@
+schema_version = 1
+status = "complete"
+completed_utc = "2026-08-23T17:55:38Z"
+backend = "MetalBackend"
+device = "Metal.MTL.MTLDevice (object of type AGXG13XDevice)"
+julia_version = "1.12.6"
+metal_version = "1.10.0"
+kernelabstractions_version = "0.9.42"
+localworksets_version = "0.1.0"
+functional = true
+passed = 59
+total = 59
+single_kernelabstractions_path = true
+fixed_dependency_join_abi = true
+phase_specific_kernel_arguments = true
+cpu_metal_inspection_parity = true
+
+[packets.stage_program]
+command = "julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/lm1_stage_program.jl"
+passed = 46
+total = 46
+
+[packets.execution_receipts]
+command = "julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/lm2b_execution_receipts.jl"
+passed = 13
+total = 13
+
+[source_sha256]
+"lib/LocalWorksets/src/execution.jl" = "ed5da4e21df525e823b062f8e1f5e096378c9636af76473c2db61c9f8669b477"
+"lib/LocalWorksets/src/execution/stage_program.jl" = "7ccf8a8e9c0ea9c69d87f063e77dc25a846fad89dc9045281826793def853bf4"
+"lib/LocalWorksets/src/execution/candidate_stage.jl" = "0f67ff52840d034638bc71ad58fa5bda1fdf45314c8ac3307a0c3a71f992ed1b"
+"lib/LocalWorksets/src/execution/collect_stage.jl" = "b58891b6a39e3ee8bb8ec8b8c298cfecb0446cf0002cb9fb0cae9a8ebcea72c0"
+"lib/LocalWorksets/src/execution/ordered_fold_stage.jl" = "b13b83b57ffbff153fce4b8a02f0d17573dd2c668714deb1e0eaff61901d6d8d"
+"lib/LocalWorksets/src/execution/stage_preparation.jl" = "6a5c1e4ff0a12d629dfe9beac957360d8248b94805788cfe3474e0ffc0681d78"
+"lib/LocalWorksets/src/model.jl" = "f7253aac0e1c5c674980687aa17f1930dbabde9c8d322a32e2de9e2ea8e1c7b6"
+"benchmark/backends/metal/lm1_stage_program.jl" = "f1a1fb60863cebdeeb8ed548f37481a14d6c16476299c41e560b67d8c3a0e739"
+"benchmark/backends/metal/lm2b_execution_receipts.jl" = "ee7c0cdefab19de77eb0706d7dd6e56042ebddc66ab4ce83a8e93d7144898b71"

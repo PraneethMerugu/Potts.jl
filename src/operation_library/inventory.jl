@@ -1,7 +1,7 @@
-# Literal V1 operation vocabulary. Each surface operation appears once with a
+# Built-in operation vocabulary. Each surface operation appears once with a
 # canonical arity used to materialize its complete frozen admission contract.
 
-function _v1_builtin_operation_declarations()
+function _builtin_operation_declarations()
     return (
         ((+), 2), ((-), 2), ((*), 2), ((/), 2), ((^), 2),
         (max, 2), (min, 2),
@@ -17,6 +17,7 @@ function _v1_builtin_operation_declarations()
         (_potts_iteration_bound_state_value, 1),
         (_potts_model_bound_state_value, 1),
         (_potts_lifecycle_bound_state_value, 1),
+        (_potts_bounded_fold, 4),
         (cell_volume, 1), (cell_surface, 1), (cell_elongation, 1),
         (cell_center, 1), (unwrapped_center, 1),
         (endpoint_a, 1), (endpoint_b, 1), (degree, 2),
@@ -37,7 +38,7 @@ function _v1_builtin_operation_declarations()
     )
 end
 
-function _v1_operation_inventory(graph::NormalizedTermGraph)
+function _operation_inventory(graph::NormalizedTermGraph)
     return NamedTuple[ (
         identity = schema.transfer.identity,
         version = schema.transfer.schema_version,
@@ -65,9 +66,9 @@ function _v1_operation_inventory(graph::NormalizedTermGraph)
     ) for schema in graph.operation_snapshot ]
 end
 
-function _v1_builtin_operation_inventory()
+function _builtin_operation_inventory()
     rows = NamedTuple[]
-    for (operation, arity) in _v1_builtin_operation_declarations()
+    for (operation, arity) in _builtin_operation_declarations()
         transfer = operation_transfer(operation, arity)
         push!(rows, (
             identity = transfer.identity,

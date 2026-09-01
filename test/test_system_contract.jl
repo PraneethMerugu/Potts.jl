@@ -1,3 +1,83 @@
+import LocalMath
+
+LocalMath.@localmath function _localmath_symbolic_geometric_mean(
+        x::T, y::T,
+    ) where {T}
+    sqrt(x * y)
+end
+
+@testset "transparent LocalMath functions trace through Symbolics" begin
+    @variables localmath_x localmath_y
+    traced = _localmath_symbolic_geometric_mean(localmath_x, localmath_y)
+    @test traced isa Symbolics.Num
+    compiled = Symbolics.build_function(
+        traced, localmath_x, localmath_y; expression = Val(false))
+    @test compiled(4.0, 9.0) == 6.0
+    @test _localmath_symbolic_geometric_mean(4.0, 9.0) == 6.0
+end
+
+@testset "bounded LocalMath terms lower through Potts semantics" begin
+    @variables bounded_signal
+    cell = CellKind(:bounded_cell; extinction = RetireAtZero())
+    medium = MediumKind(:bounded_medium)
+    signal = FieldState(
+        bounded_signal; name = :bounded_signal, initial = 1.0)
+    site = SiteBinding(:bounded_site)
+    neighbor_sum = LocalMath.bounded_fold(
+        identity,
+        +,
+        0.0,
+        (sum, count) -> sum;
+        domain = LocalMath.Where(isfinite),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.FillEmpty(0.0),
+        order = LocalMath.CanonicalLeftFold(),
+    )
+    source = PottsSystem(
+        name = :bounded_term_system,
+        statements = StatementSet((
+            Lattice((3, 3); relations = (
+                contact = VonNeumann(), proposal = VonNeumann())),
+            cell,
+            medium,
+            signal,
+            HamiltonianTerm(
+                :bounded_signal_energy;
+                domain = sites(:lattice),
+                anchor = site,
+                expression = neighbor_sum(bounded_values(
+                    signal, :contact, anchor_value(site))),
+            ),
+            Protocol(Sweep(); name = :bounded_protocol),
+        )),
+        unknowns = [bounded_signal],
+    )
+    scheduled = mtkcompile(source)
+    @test is_scheduled(scheduled)
+
+    ownership = reshape(Int32[1, 1, 0, 1, 0, 0, 0, 0, 0], 3, 3)
+    initial = PottsInitialState(
+        ownership = LabelledCells(ownership; cells = [cell], medium),
+        values = (bounded_signal => ones(3, 3),),
+    )
+    solution = solve(
+        PottsProblem(scheduled, initial, (0, 1); seed = 0x61),
+        SequentialCPM(); backend = CPUBackend(), scalar_type = Float64,
+    )
+    @test solution.stats.candidate_attempts == 9
+
+    checkerboard_solution = solve(
+        PottsProblem(scheduled, initial, (0, 1); seed = 0x61),
+        CheckerboardSweepCPM(); backend = CPUBackend(), scalar_type = Float64,
+    )
+    @test checkerboard_solution.stats.candidate_attempts == 9
+    @test checkerboard_solution.stats.candidate_attempts ==
+          checkerboard_solution.stats.accepted +
+          checkerboard_solution.stats.null_attempts +
+          checkerboard_solution.stats.rejected
+    @test size(last(checkerboard_solution).ownership) == size(ownership)
+end
+
 @testset "PottsSystem contract" begin
     @variables t x(t)
     @parameters k

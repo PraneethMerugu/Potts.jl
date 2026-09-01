@@ -57,7 +57,7 @@ using OrdinaryDiffEqTsit5
         outputs = PottsToolkit.native_outputs(component),
     )
     @test getfield(generic_field_component, :capabilities) isa
-        RequireQualifiedNativeCapability
+        StandardNativeCapability
     cell = CellKind(:mol_cell; extinction = RetireAtZero())
     medium = MediumKind(:mol_medium)
     source = PottsSystem(
@@ -111,24 +111,19 @@ using OrdinaryDiffEqTsit5
     generic_profile = NativeSolveProfile(
         generic_path,
         Tsit5();
-        profile_id = "g5h4-generic-field-cpu-rejected-v1",
         deterministic = true,
-        exact_replay = true,
         adaptive = false,
         dt = 0.015625,
     )
-    generic_error = try
-        init(
-            generic_problem,
-            SequentialCPM();
-            native_profiles = (generic_profile,),
-        )
-        nothing
-    catch caught
-        caught
-    end
-    @test generic_error isa PottsToolkit.NativeCapabilityError
-    @test generic_error.capability === :exact_replay_evidence
+    generic_integrator = init(
+        generic_problem,
+        SequentialCPM();
+        native_profiles = (generic_profile,),
+    )
+    @test size(generic_integrator.u.mol_field) == (4, 4)
+    @test generic_integrator.capability_report.status ===
+        PottsToolkit.CorePotts.BackendSPI.Supported
+    @test !generic_integrator.capability_report.exact_replay
     problem = PottsProblem(
         scheduled,
         PottsInitialState(
@@ -141,9 +136,7 @@ using OrdinaryDiffEqTsit5
     profile = NativeSolveProfile(
         path,
         Tsit5();
-        profile_id = "g5h4-mol-tsit5-fixed-v1",
         deterministic = true,
-        exact_replay = true,
         adaptive = false,
         dt = 0.015625,
     )
@@ -158,17 +151,7 @@ using OrdinaryDiffEqTsit5
         native_value(integrator, path, variable) for variable in variables
     ], 4, 4)
     @test integrator.u.mol_field ≈ expected
-
-    saved = checkpoint(integrator)
-    restored = init(
-        problem,
-        SequentialCPM();
-        checkpoint = saved,
-        native_profiles = (profile,),
-    )
-    step!(integrator)
-    step!(restored)
-    @test integrator.u.mol_field == restored.u.mol_field
+    @test_throws ArgumentError checkpoint(integrator)
 
     discrete = MethodOfLines.get_discrete(pde, discretization)
     @test_throws ArgumentError NativeFieldOutput(

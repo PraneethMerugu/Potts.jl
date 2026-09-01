@@ -18,7 +18,7 @@ function _relation_offsets(
     relation === nothing && return _neighborhood_offsets(fallback, dimensions)
     neighborhood = _statement_option(relation, :neighborhood)
     neighborhood isa Union{VonNeumann, Moore} || throw(ArgumentError(
-        "relation `$name` must use VonNeumann or Moore in V1"
+        "relation `$name` must use VonNeumann or Moore"
     ))
     return _neighborhood_offsets(neighborhood, dimensions)
 end
@@ -168,7 +168,7 @@ function _lower_observations(
             ))
         else
             throw(ArgumentError(
-                "no concrete V1 observation lowering exists for `$name`: " *
+                "no concrete observation lowering exists for `$name`: " *
                 "$(node.operation)"
             ))
         end
@@ -412,7 +412,7 @@ function _lower_core_program(
     records = ir.source.records
     domains = filter(record -> record.kind === :LatticeDomain, records)
     length(domains) == 1 ||
-        throw(ArgumentError("V1 compilation requires exactly one LatticeDomain"))
+        throw(ArgumentError("compilation requires exactly one LatticeDomain"))
     domain = only(domains)
     shape = _statement_option(domain, :shape)
     shape isa Tuple{Vararg{Int}} ||
@@ -425,19 +425,19 @@ function _lower_core_program(
     elseif boundary isa Union{Closed, FrozenBorder}
         ntuple(_ -> false, dimensions)
     else
-        throw(ArgumentError("unsupported V1 lattice boundary $(typeof(boundary))"))
+        throw(ArgumentError("unsupported lattice boundary $(typeof(boundary))"))
     end
 
     declarations = _ordered_kind_records(records)
     isempty(declarations) &&
-        throw(ArgumentError("V1 compilation requires declared cell/medium kinds"))
+        throw(ArgumentError("compilation requires declared cell/medium kinds"))
     kinds = Dict(
         declaration.identity => index
         for (index, declaration) in enumerate(declarations)
     )
     media = filter(record -> record.kind === :MediumKind, declarations)
     isempty(media) &&
-        throw(ArgumentError("V1 compilation requires at least one MediumKind"))
+        throw(ArgumentError("compilation requires at least one MediumKind"))
     medium_kind = kinds[first(media).identity]
     medium_kinds = falses(length(kinds))
     for declaration in media
@@ -531,7 +531,7 @@ function _lower_core_program(
                 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
                 version = something(Base.pkgversion(PottsToolkit), v"0.0.0"),
             ),
-            suite = :g5h1_potts_compiler_mechanisms,
+            suite = :potts_compiler_mechanisms,
             revision = v"1.0.0",
         ),
     ), Tuple((

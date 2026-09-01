@@ -1,6 +1,7 @@
 # PottsToolkit contributes a deterministic logical extension block to the one
 # CorePotts checkpoint envelope.  There is one outer schema and one checksum;
 # native-component blocks join this same envelope.
+"""Checkpoint payload for exact continuation of an admitted Potts runtime."""
 const PottsCheckpoint = CorePotts.ProgramCheckpoint
 const _POTTS_CHECKPOINT_BLOCK_SCHEMA = v"1.1.0"
 const _NATIVE_CHECKPOINT_BLOCK_SCHEMA = v"1.0.0"
@@ -106,6 +107,7 @@ function _potts_checkpoint_block(integrator::PottsIntegrator)
     )
 end
 
+"""Capture a restartable checkpoint of the integrator's authorized runtime state."""
 function checkpoint(integrator::PottsIntegrator)
     integrator.retcode == SciMLBase.ReturnCode.Failure && throw(ArgumentError(
         "a failed PottsIntegrator cannot be checkpointed"
@@ -117,10 +119,9 @@ function checkpoint(integrator::PottsIntegrator)
         "checkpointing with outer Potts callbacks is not admitted because callback identity and state are not checkpointed"
     ))
     isempty(integrator.native_states) ||
-        Int(integrator.capability_report.maturity) >=
-            Int(CorePotts.BackendSPI.ReplayQualified) ||
+        integrator.capability_report.exact_replay ||
         throw(ArgumentError(
-            "native checkpointing requires ReplayQualified evidence for the " *
+            "native checkpointing requires exact-replay evidence for the " *
             "complete composed runtime profile"
         ))
     integrator.pending_parameters === nothing || throw(ArgumentError(
@@ -165,7 +166,7 @@ function _validate_checkpoint(
         plan::_PottsExecutionPlan,
         checkpoint_value::PottsCheckpoint,
     )
-    checkpoint_value.schema == v"2.0.0" ||
+    checkpoint_value.schema == v"3.0.0" ||
         throw(ArgumentError("unsupported logical checkpoint schema"))
     block = _potts_checkpoint_block(checkpoint_value)
     block.schema == _POTTS_CHECKPOINT_BLOCK_SCHEMA ||

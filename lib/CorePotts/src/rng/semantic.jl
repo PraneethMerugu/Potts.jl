@@ -1,7 +1,7 @@
-"""The immutable Philox contract used by V1 compiled programs."""
-struct Philox4x32x10V1 end
+"""The immutable Philox contract used by V2 compiled programs."""
+struct Philox4x32x10V2 end
 
-# Values 3–5 preserve the accepted V1 semantic-address contract.
+# Values 3–5 preserve their semantic stream identities across the V2 cutover.
 @enum RNGStream::UInt8 begin
     ProposalRecipientStream = 3
     ProposalDirectionStream = 4
@@ -32,10 +32,9 @@ const _PHILOX_M4X32_1 = UInt32(0xcd9e8d57)
 const _PHILOX_W32_0 = UInt32(0x9e3779b9)
 const _PHILOX_W32_1 = UInt32(0xbb67ae85)
 const _RNG_GENERATION_DOMAIN = UInt64(0xd2b74407b1ce6e93)
-const _F32_OPEN_SCALE = Float32(0x1.0p-24)
 
-"""Largest operation identity admitted by the versioned V1 RNG address."""
-rng_operation_limit(::Philox4x32x10V1 = Philox4x32x10V1()) =
+"""Largest operation identity admitted by the versioned V2 RNG address."""
+rng_operation_limit(::Philox4x32x10V2 = Philox4x32x10V2()) =
     _RNG_MAX_OPERATION
 
 struct RNGAddress
@@ -61,11 +60,17 @@ struct RNGAddress
             draw::UInt16,
         )
         mcs <= _RNG_MAX_MCS ||
-            throw(ArgumentError("RNG MCS exceeds the V1 address domain"))
+            throw(ArgumentError("RNG MCS exceeds the V2 address domain"))
         operation <= _RNG_MAX_OPERATION ||
-            throw(ArgumentError("RNG operation exceeds the V1 address domain"))
+            throw(ArgumentError("RNG operation exceeds the V2 address domain"))
         draw <= _RNG_MAX_DRAW ||
-            throw(ArgumentError("RNG draw exceeds the V1 address domain"))
+            throw(ArgumentError("RNG draw exceeds the V2 address domain"))
+        UInt8(stream) <= 0x0f || throw(ArgumentError(
+            "RNG stream exceeds the V2 packed address domain"
+        ))
+        UInt8(entity_kind) <= 0x07 || throw(ArgumentError(
+            "RNG entity kind exceeds the V2 packed address domain"
+        ))
         entity_kind in (SiteEntity, CellEntity, DestinationEntity) ||
             generation == 0 || throw(ArgumentError(
                 "only site, cell, or destination addresses may carry a generation"
@@ -166,7 +171,8 @@ end
 end
 
 @inline function _philox_round(
-        counter::NTuple{4, UInt32}, key::NTuple{2, UInt32}
+        counter::StaticArrays.SVector{4, UInt32},
+        key::StaticArrays.SVector{2, UInt32},
     )
     product0 = widemul(_PHILOX_M4X32_0, counter[1])
     product1 = widemul(_PHILOX_M4X32_1, counter[3])
@@ -174,7 +180,7 @@ end
     high1 = (product1 >> 32) % UInt32
     low0 = product0 % UInt32
     low1 = product1 % UInt32
-    return (
+    return StaticArrays.SVector{4, UInt32}(
         xor(xor(high1, counter[2]), key[1]),
         low1,
         xor(xor(high0, counter[4]), key[2]),
@@ -182,11 +188,14 @@ end
     )
 end
 
-@inline _philox_bump_key(key::NTuple{2, UInt32}) =
-    (key[1] + _PHILOX_W32_0, key[2] + _PHILOX_W32_1)
+@inline _philox_bump_key(key::StaticArrays.SVector{2, UInt32}) =
+    StaticArrays.SVector{2, UInt32}(
+        key[1] + _PHILOX_W32_0, key[2] + _PHILOX_W32_1
+    )
 
 @inline function philox4x32_10(
-        counter::NTuple{4, UInt32}, key::NTuple{2, UInt32}
+        counter::StaticArrays.SVector{4, UInt32},
+        key::StaticArrays.SVector{2, UInt32},
     )
     value = counter
     round_key = key
@@ -197,6 +206,15 @@ end
     return value
 end
 
+@inline function philox4x32_10(
+        counter::NTuple{4, UInt32}, key::NTuple{2, UInt32}
+    )
+    return Tuple(philox4x32_10(
+        StaticArrays.SVector{4, UInt32}(counter),
+        StaticArrays.SVector{2, UInt32}(key),
+    ))
+end
+
 @inline function _rng_mix64(value::UInt64)
     value = xor(value, value >> 30) * UInt64(0xbf58476d1ce4e5b9)
     value = xor(value, value >> 27) * UInt64(0x94d049bb133111eb)
@@ -204,7 +222,7 @@ end
 end
 
 @inline function _rng_words(
-        ::Philox4x32x10V1, master_seed::UInt64, address::RNGAddress
+        ::Philox4x32x10V2, master_seed::UInt64, address::RNGAddress
     )
     counter0 = address.mcs |
                (UInt64(address.subround) << 48) |
@@ -212,23 +230,25 @@ end
     counter1 = UInt64(address.entity) |
                (UInt64(address.operation) << 32) |
                (UInt64(address.stream) << 44) |
-               (UInt64(address.entity_kind) << 52) |
-               (UInt64(address.draw) << 54)
+               (UInt64(address.entity_kind) << 48) |
+               (UInt64(address.draw) << 51)
     generation_key =
         _rng_mix64(xor(address.generation, _RNG_GENERATION_DOMAIN))
     key = xor(master_seed, generation_key)
-    counter = (
+    counter = StaticArrays.SVector{4, UInt32}(
         counter0 % UInt32,
         (counter0 >> 32) % UInt32,
         counter1 % UInt32,
         (counter1 >> 32) % UInt32,
     )
-    key_words = (key % UInt32, (key >> 32) % UInt32)
-    return philox4x32_10(counter, key_words)
+    key_words = StaticArrays.SVector{2, UInt32}(
+        key % UInt32, (key >> 32) % UInt32
+    )
+    return Tuple(philox4x32_10(counter, key_words))
 end
 
 @inline function _rng_word(
-        contract::Philox4x32x10V1,
+        contract::Philox4x32x10V2,
         master_seed::UInt64,
         address::RNGAddress,
         lane::Integer = 1,
@@ -240,23 +260,38 @@ end
 
 @inline function uniform_open01(
         ::Type{Float32},
-        contract::Philox4x32x10V1,
+        contract::Philox4x32x10V2,
         master_seed::UInt64,
         address::RNGAddress,
     )
-    bits = _rng_word(contract, master_seed, address) >> 8
-    return (Float32(bits) + 0.5f0) * _F32_OPEN_SCALE
+    return _uniform_open01_from_words(
+        Float32, _rng_words(contract, master_seed, address)
+    )
+end
+
+@inline function _uniform_open01_from_words(
+        ::Type{Float32}, words::NTuple{4, UInt32}
+    )
+    bits = words[1] >> 9
+    return Float32(bits) * Float32(0x1.0p-23) + Float32(0x1.0p-24)
 end
 
 @inline function uniform_open01(
         ::Type{Float64},
-        contract::Philox4x32x10V1,
+        contract::Philox4x32x10V2,
         master_seed::UInt64,
         address::RNGAddress,
     )
-    words = _rng_words(contract, master_seed, address)
-    bits = (UInt64(words[1]) << 21) | (UInt64(words[2]) >> 11)
-    return (Float64(bits) + 0.5) * 0x1.0p-53
+    return _uniform_open01_from_words(
+        Float64, _rng_words(contract, master_seed, address)
+    )
+end
+
+@inline function _uniform_open01_from_words(
+        ::Type{Float64}, words::NTuple{4, UInt32}
+    )
+    bits = (UInt64(words[1]) << 20) | (UInt64(words[2]) >> 12)
+    return Float64(bits) * 0x1.0p-52 + 0x1.0p-53
 end
 
 @inline function _with_invocation(
@@ -276,7 +311,7 @@ end
 end
 
 function bounded_uint(
-        contract::Philox4x32x10V1,
+        contract::Philox4x32x10V2,
         master_seed::UInt64,
         address::RNGAddress,
         bound::UInt32,
@@ -291,7 +326,7 @@ function bounded_uint(
         )
         word >= threshold && return mod(word, bound)
         invocation == typemax(UInt8) &&
-            throw(ArgumentError("bounded rejection exhausted the V1 address domain"))
+            throw(ArgumentError("bounded rejection exhausted the V2 address domain"))
         invocation += UInt8(1)
     end
 end

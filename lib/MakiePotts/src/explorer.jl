@@ -93,7 +93,7 @@ rerun_error(controller::RerunController) = controller.error
 Start a nonblocking rerun. Only the latest requested generation may publish.
 Failures leave the previous complete result intact.
 """
-function rerun!(controller::RerunController, args...; kwargs...)
+function reexecute!(controller::RerunController, args...; kwargs...)
     controller.closed && throw(ArgumentError(
         "cannot rerun a closed RerunController; construct a new controller"))
     controller.generation += 1

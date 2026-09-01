@@ -33,17 +33,28 @@ import ..CorePotts:
     AbstractSiteStageEvaluationContext,
     AbstractStageSiteSelector,
     AbstractStaticExpression,
+    AbstractTrackerCheckpointPolicy,
+    AbstractTrackerConcurrency,
+    AbstractTrackerCost,
+    AbstractTrackerDelta,
     AbstractTrackerDescriptor,
+    AbstractTrackerSource,
+    AbstractTrackerStorage,
+    AbstractTrackerUpdateBound,
+    AbstractTrackerVisibility,
     AcceptedCopyStage,
+    AcceptedCommitTrackerVisibility,
     AfterMCSStage,
     AtMCSLifecycleCadence,
     BoundSiteFootprintAnchor,
+    BoundedNeighborhoodTrackerCost,
     CanonicalLifecycleSide,
     CeilLifecycleRounding,
     CellEnergyDomainPlan,
     CellKindLifecycleDomain,
     CellMomentsTracker,
     CellSurfaceTracker,
+    ClaimedOwnerExclusiveTrackerConcurrency,
     ClearLifecycleOwnershipState,
     CommutativeIntegerWriteAccess,
     CompiledPottsProgram,
@@ -52,12 +63,14 @@ import ..CorePotts:
     ConstraintGroup,
     ContactEnergyDomainPlan,
     ContactFootprint,
+    ConstantTrackerCost,
     ContextExpression,
     ContextOperation,
     CopyDaughtersLifecycleState,
     CreateCellLifecycleEffect,
     DeferredRequestWriteAccess,
     DenseOwnerScalarStorage,
+    DenseOwnerMomentsStorage,
     DenseScalarTrackerGroup,
     DestinationLifecycleStateRole,
     DescriptorExecutionPlan,
@@ -65,6 +78,7 @@ import ..CorePotts:
     DescriptorKernelStrategy,
     DescriptorLaunch,
     DescriptorSupport,
+    DimensionSquaredTrackerCost,
     DivideCellLifecycleEffect,
     DaughterLifecycleStateRole,
     EmptyDescriptorPayload,
@@ -125,6 +139,7 @@ import ..CorePotts:
     OrderedFold,
     OwnerFootprint,
     OwnershipCountTracker,
+    OwnershipTrackerSource,
     OwnershipRelationTrackerSource,
     ParameterDomainConstraint,
     ParameterExpression,
@@ -134,6 +149,7 @@ import ..CorePotts:
     PreserveLifecycleOwnershipState,
     PreserveLifecycleState,
     PreserveParentResetDaughterLifecycleState,
+    PersistTrackerCheckpoint,
     PrincipalMajorLifecyclePartition,
     PrincipalMinorLifecyclePartition,
     ProposalConstraintRole,
@@ -156,6 +172,7 @@ import ..CorePotts:
     RelationshipEnergyDomainPlan,
     RelationshipRemoveEffect,
     RelationshipRetuneEffect,
+    ReconstructTrackerCheckpoint,
     RelationshipStoreSchema,
     RemoveCellLifecycleEffect,
     RemoveIncidentLifecycleRelationship,
@@ -171,6 +188,8 @@ import ..CorePotts:
     SiteAssignmentEffect,
     SiteEnergyDomainPlan,
     SourceLifecycleStateRole,
+    SourceTargetOwnerUpdateBound,
+    SourceTargetScalarDelta,
     SourceTargetCellsAffectedPlan,
     SpecifiedNormalLifecyclePartition,
     SplitConservativelyLifecycleState,
@@ -184,8 +203,11 @@ import ..CorePotts:
     StateLayout,
     StaticEvaluator,
     TargetSiteAffectedPlan,
+    NeighborhoodSitesAffectedPlan,
     TrackerContract,
     TrackerExecutionPlan,
+    TrackerSourceView,
+    TrackerSupport,
     TransformDaughtersLifecycleState,
     TransformLifecycleState,
     TransitionCellLifecycleEffect,
@@ -193,6 +215,9 @@ import ..CorePotts:
     WorkspaceHandle,
     WorkspaceLayout,
     WorkspaceSchema,
+    LatticeLinearTrackerCost,
+    OwnerMomentsDelta,
+    OwnerScalarDelta,
     allocate_auxiliary_state,
     copy_auxiliary_state,
     descriptor_adapt,
@@ -253,10 +278,20 @@ import ..CorePotts:
     state_value,
     set_lifecycle_workspace_value!,
     tracker_contract,
+    tracker_adapt,
+    tracker_checkpoint_policy,
+    tracker_concurrency,
     tracker_inspection,
     tracker_instances,
     tracker_operation_value,
+    tracker_proposal_delta,
     tracker_quantity,
+    tracker_quantities,
+    tracker_rebuild,
+    tracker_recompute,
+    tracker_source_view,
+    tracker_storage,
+    tracker_support,
     update_program_descriptor_state!,
     validate_parameters
 
@@ -270,6 +305,10 @@ public AbstractLifecyclePartitionEvaluationContext
 public AbstractLifecycleStateTransformEvaluationContext
 public AbstractStaticExpression, AbstractFootprint, AbstractStageSiteSelector
 public AbstractProposalRole, AbstractTrackerDescriptor
+public AbstractTrackerCheckpointPolicy, AbstractTrackerConcurrency
+public AbstractTrackerCost, AbstractTrackerDelta, AbstractTrackerSource
+public AbstractTrackerStorage, AbstractTrackerUpdateBound
+public AbstractTrackerVisibility
 public CompiledPottsProgram, CompiledScalar, CompiledStageDescriptor
 public StaticEvaluator, LiteralExpression, ParameterExpression, ContextExpression
 public StateExpression, OperationExpression, OrderedFold, ContextOperation
@@ -288,6 +327,7 @@ public ProposalDriveRole, ProposalEnergyDriveRole, ProposalConstraintRole
 public ProposalModifierRole, SiteEnergyDomainPlan, CellEnergyDomainPlan
 public ContactEnergyDomainPlan, RelationshipEnergyDomainPlan
 public TargetSiteAffectedPlan, SourceTargetCellsAffectedPlan
+public NeighborhoodSitesAffectedPlan
 public IncidentContactsAffectedPlan, IncidentRelationshipsAffectedPlan
 public AcceptedCopyStage, AfterMCSStage, ProposalTargetStageSite
 public IterationStageSite, ModelStageSite, SiteAssignmentEffect
@@ -297,8 +337,15 @@ public RelationshipRetuneEffect, StageDescriptorGroup, StageExecutionPlan
 public NoWriteAccess, ExclusiveWriteAccess, CommutativeIntegerWriteAccess
 public DeferredRequestWriteAccess, RelationshipStoreSchema
 public OwnershipCountTracker, CellSurfaceTracker, CellMomentsTracker
-public DenseOwnerScalarStorage, DenseScalarTrackerGroup
-public OwnershipRelationTrackerSource, QualifiedTrackerKey
+public DenseOwnerScalarStorage, DenseOwnerMomentsStorage, DenseScalarTrackerGroup
+public OwnershipTrackerSource, OwnershipRelationTrackerSource
+public AcceptedCommitTrackerVisibility
+public ClaimedOwnerExclusiveTrackerConcurrency, SourceTargetOwnerUpdateBound
+public PersistTrackerCheckpoint, ReconstructTrackerCheckpoint
+public ConstantTrackerCost, DimensionSquaredTrackerCost
+public BoundedNeighborhoodTrackerCost, LatticeLinearTrackerCost
+public OwnerScalarDelta, SourceTargetScalarDelta, OwnerMomentsDelta
+public TrackerSourceView, TrackerSupport, QualifiedTrackerKey
 public QualifiedTrackerOperation, TrackerContract, TrackerExecutionPlan
 public LifecycleDomainCode, ModelLifecycleDomain, CellKindLifecycleDomain
 public LifecycleCadenceCode, EveryMCSLifecycleCadence, AtMCSLifecycleCadence
@@ -364,8 +411,11 @@ public qualified_tracker_operation_call
 public relation_count, relation_neighbor_site, relation_offsets
 public relationship_degree, rng_operation_limit, site_owner, stage_site
 public state_block, state_schema_metadata, state_value
-public tracker_contract, tracker_inspection, tracker_instances
-public tracker_operation_value, tracker_quantity
+public tracker_contract, tracker_adapt, tracker_checkpoint_policy
+public tracker_concurrency, tracker_inspection, tracker_instances
+public tracker_operation_value, tracker_proposal_delta, tracker_quantity
+public tracker_quantities, tracker_rebuild, tracker_recompute
+public tracker_source_view, tracker_storage, tracker_support
 public update_program_descriptor_state!, validate_parameters
 
 end

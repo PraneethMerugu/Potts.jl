@@ -319,11 +319,22 @@ function _domain_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
     throw(ArgumentError("unsupported energy domain plan `$(fact.kind)`"))
 end
 
-function _affected_plan(candidate::DescriptorCandidate)
+function _affected_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
     fact = candidate.affected_anchors
     maximum = Int32(fact.maximum)
     fact.kind === :target_site &&
         return CorePotts.CompilerSPI.TargetSiteAffectedPlan(maximum)
+    if fact.kind === :neighborhood_sites
+        handle = findfirst(
+            record -> record.identity == fact.resource,
+            ir.source.records,
+        )
+        handle === nothing && throw(ArgumentError(
+            "neighborhood-site affected plan has no compiled relation handle"
+        ))
+        return CorePotts.CompilerSPI.NeighborhoodSitesAffectedPlan(
+            maximum, Int32(handle))
+    end
     fact.kind === :source_and_target_cells &&
         return CorePotts.CompilerSPI.SourceTargetCellsAffectedPlan(maximum)
     fact.kind === :incident_contacts &&
@@ -340,7 +351,7 @@ function _proposal_role(
     )
     record.kind === :HamiltonianTerm && return CorePotts.CompilerSPI.HamiltonianRole(
         _domain_plan(ir, candidate),
-        _affected_plan(candidate),
+        _affected_plan(ir, candidate),
     )
     if record.kind === :ProposalDrive
         options = last(record.normalized_payload)

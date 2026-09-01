@@ -1,0 +1,13 @@
+backend = "metal"
+finished_utc = "2026-08-20T18:39:00.399"
+julia_executable = "/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia"
+profile = "synthetic"
+project = "benchmark/backends/metal"
+repetitions = 1
+results = ["stages-08-run-1.toml"]
+schema_version = 1
+stage_counts = [8]
+started_utc = "2026-08-20T18:38:23.254"
+status = "complete"
+timeout_seconds = 600.0
+warm_samples = 3

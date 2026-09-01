@@ -14,8 +14,10 @@ implicitly synchronizes a device, or reconstructs an unsaved channel.
 | Record | `record_potts` |
 
 The stable boundary is the immutable render frame, not a CorePotts runtime
-object. The explorer and rerun controller remain experimental and are not
-promoted by their export status.
+object. `PottsExplorer`, `explore_potts`, `RerunController`, `reexecute!`, and
+the rerun-state accessors are exported experimental interfaces: they may change
+within the pre-1.0 series and are not covered by the stable render-frame
+contract.
 
 ```@example makie_boundary
 using MakiePotts
@@ -27,4 +29,11 @@ required = (
     :pottsplot,
 )
 all(name -> isdefined(MakiePotts, name), required)
+```
+
+## Reference
+
+```@autodocs
+Modules = [MakiePotts]
+Private = false
 ```

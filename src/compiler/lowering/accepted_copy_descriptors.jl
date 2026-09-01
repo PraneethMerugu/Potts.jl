@@ -15,11 +15,11 @@ function _stage_descriptor(
     arguments = first(record.normalized_payload)
     effects = arguments.effects
     length(effects) == 1 || throw(ArgumentError(
-        "V1 staged assignment descriptors require exactly one effect"
+        "staged assignment descriptors require exactly one effect"
     ))
     effect = only(effects)
     effect isa Assign || throw(ArgumentError(
-        "V1 staged assignment descriptors require Assign"
+        "staged assignment descriptors require Assign"
     ))
     target_record = _stage_state_record(ir, record, effect.target)
     target_record === nothing && throw(ArgumentError(

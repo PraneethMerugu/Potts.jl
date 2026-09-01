@@ -1,11 +1,24 @@
+"""Marker requesting completion of declared reference-unit values."""
 struct DeclaredReferenceUnits end
 
+"""Validated immutable reference-unit values for a completed system."""
 struct ReferenceUnits{T <: NamedTuple}
     values::T
 end
 
 ReferenceUnits(; kwargs...) = ReferenceUnits((; kwargs...))
 
+"""
+    PottsSystem(; name, statements=StatementSet(), equations=(), unknowns=(),
+                parameters=(), independent_variables=(), systems=(),
+                native_components=(), inputs=(), outputs=(),
+                initial_conditions=Dict(), observed=(), events=(),
+                continuous_events=(), discrete_events=events)
+
+Declarative Potts model compatible with ModelingToolkit composition. Use
+`@named model = PottsSystem(...)` to supply `name`, then call `complete` and
+`mtkcompile` before constructing a `PottsProblem`.
+"""
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol
     statements::StatementSet
@@ -509,7 +522,9 @@ function _rebuild(
     )
 end
 
+"""Return the ordered statements owned directly by a Potts system."""
 statements(system::PottsSystem) = statements(getfield(system, :statements))
+"""Return native component declarations owned directly by a Potts system."""
 native_components(system::PottsSystem) =
     Tuple(getfield(system, :native_components))
 

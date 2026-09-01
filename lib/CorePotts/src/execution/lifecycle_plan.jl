@@ -1,16 +1,24 @@
 # Immutable, mechanism-neutral cell-lifecycle transaction descriptors.
 
+"""Scientific domain addressed by a lifecycle descriptor."""
 @enum LifecycleDomainCode::UInt8 begin
     ModelLifecycleDomain = 0x01
     CellKindLifecycleDomain = 0x02
 end
+@doc "Apply one lifecycle descriptor to the model domain." ModelLifecycleDomain
+@doc "Apply one lifecycle descriptor to a selected cell-kind domain." CellKindLifecycleDomain
 
+"""Cadence at which a lifecycle descriptor becomes due."""
 @enum LifecycleCadenceCode::UInt8 begin
     EveryMCSLifecycleCadence = 0x01
     AtMCSLifecycleCadence = 0x02
     PeriodicLifecycleCadence = 0x03
 end
+@doc "Run at every completed MCS." EveryMCSLifecycleCadence
+@doc "Run at one specified MCS." AtMCSLifecycleCadence
+@doc "Run at a fixed positive MCS cadence." PeriodicLifecycleCadence
 
+"""Core-owned scientific lifecycle effect."""
 @enum LifecycleEffectCode::UInt8 begin
     CreateCellLifecycleEffect = 0x01
     RemoveCellLifecycleEffect = 0x02
@@ -18,27 +26,44 @@ end
     TransitionCellLifecycleEffect = 0x04
     DivideCellLifecycleEffect = 0x05
 end
+@doc "Create a new finite cell." CreateCellLifecycleEffect
+@doc "Remove a finite cell immediately." RemoveCellLifecycleEffect
+@doc "Retire a finite cell through retirement semantics." RetireCellLifecycleEffect
+@doc "Transition a finite cell to another kind." TransitionCellLifecycleEffect
+@doc "Divide one finite parent into parent and daughter outcomes." DivideCellLifecycleEffect
 
 @inline _lifecycle_effect_bit(effect::LifecycleEffectCode) =
     UInt8(1) << (UInt8(effect) - UInt8(1))
 
+"""Policy for a lifecycle request that is scientifically inadmissible."""
 @enum LifecycleInadmissibilityDisposition::UInt8 begin
     FilterLifecycleInadmissible = 0x01
     ErrorLifecycleInadmissible = 0x02
 end
+@doc "Filter an inadmissible lifecycle request." FilterLifecycleInadmissible
+@doc "Fail the lifecycle transaction on an inadmissible request." ErrorLifecycleInadmissible
 
+"""Policy resolving conflicts among lifecycle requests."""
 @enum LifecycleConflictCode::UInt8 begin
     RejectLifecycleConflicts = 0x01
     StablePriorityLifecycleConflicts = 0x02
 end
+@doc "Reject conflicting lifecycle requests." RejectLifecycleConflicts
+@doc "Select conflicts by stable priority and semantic identity." StablePriorityLifecycleConflicts
 
+"""Placement policy for lifecycle effects that require lattice sites."""
 @enum LifecyclePlacementCode::UInt8 begin
     NoLifecyclePlacement = 0x00
     SeedAtLifecyclePlacement = 0x01
     SeedStencilLifecyclePlacement = 0x02
     ExternalLifecyclePlacement = 0x03
 end
+@doc "Request no additional lifecycle placement." NoLifecyclePlacement
+@doc "Place at one seed site." SeedAtLifecyclePlacement
+@doc "Place over a bounded seed stencil." SeedStencilLifecyclePlacement
+@doc "Delegate placement calculation to a contextual evaluator." ExternalLifecyclePlacement
 
+"""Geometric partition policy for cell division."""
 @enum LifecyclePartitionCode::UInt8 begin
     NoLifecyclePartition = 0x00
     RandomPlaneLifecyclePartition = 0x01
@@ -47,11 +72,20 @@ end
     SpecifiedNormalLifecyclePartition = 0x04
     ExternalLifecyclePartition = 0x05
 end
+@doc "Apply no division partition." NoLifecyclePartition
+@doc "Partition by a deterministic semantic-random plane." RandomPlaneLifecyclePartition
+@doc "Partition along the principal major axis." PrincipalMajorLifecyclePartition
+@doc "Partition along the principal minor axis." PrincipalMinorLifecyclePartition
+@doc "Partition along an explicitly evaluated normal." SpecifiedNormalLifecyclePartition
+@doc "Delegate partitioning to a contextual evaluator." ExternalLifecyclePartition
 
+"""Side-selection policy for an oriented lifecycle partition."""
 @enum LifecycleSideCode::UInt8 begin
     CanonicalLifecycleSide = 0x01
     StableRandomLifecycleSide = 0x02
 end
+@doc "Use the canonical side of an oriented partition." CanonicalLifecycleSide
+@doc "Choose the side by stable semantic randomness." StableRandomLifecycleSide
 
 @inline function _lifecycle_division_variant_bit(
         partition::LifecyclePartitionCode, side::LifecycleSideCode
@@ -62,6 +96,7 @@ end
     return UInt16(1) << (partition_index * UInt16(2) + side_index)
 end
 
+"""Transaction action applied to one lifecycle-managed state block."""
 @enum LifecycleStateAction::UInt8 begin
     InitializeLifecycleState = 0x01
     UnsupportedLifecycleState = 0x02
@@ -76,6 +111,18 @@ end
     TransformDaughtersLifecycleState = 0x0b
     RedrawDaughtersLifecycleState = 0x0c
 end
+@doc "Initialize destination state." InitializeLifecycleState
+@doc "Declare the lifecycle effect unsupported for this state." UnsupportedLifecycleState
+@doc "Write the configured retirement value." RetireToLifecycleState
+@doc "Preserve source state." PreserveLifecycleState
+@doc "Reset destination state." ResetLifecycleState
+@doc "Evaluate one state transform." TransformLifecycleState
+@doc "Copy source state to both daughters." CopyDaughtersLifecycleState
+@doc "Preserve parent state and reset daughter state." PreserveParentResetDaughterLifecycleState
+@doc "Reset both parent and daughter state." ResetBothLifecycleState
+@doc "Split conserved state between parent and daughter." SplitConservativelyLifecycleState
+@doc "Evaluate distinct daughter transforms." TransformDaughtersLifecycleState
+@doc "Redraw both daughter states from initialization semantics." RedrawDaughtersLifecycleState
 
 @inline _lifecycle_state_action_bit(action::LifecycleStateAction) =
     UInt16(1) << (UInt16(action) - UInt16(1))
@@ -103,20 +150,31 @@ end
 @inline _lifecycle_state_action_value(::Val{:redraw_daughters}) =
     RedrawDaughtersLifecycleState
 
+"""Lifecycle participant whose state is addressed by a rule."""
 @enum LifecycleStateRoleCode::UInt8 begin
     SourceLifecycleStateRole = 0x01
     DestinationLifecycleStateRole = 0x02
     ParentLifecycleStateRole = 0x03
     DaughterLifecycleStateRole = 0x04
 end
+@doc "Address the lifecycle source cell." SourceLifecycleStateRole
+@doc "Address the lifecycle destination cell." DestinationLifecycleStateRole
+@doc "Address the post-division parent." ParentLifecycleStateRole
+@doc "Address the post-division daughter." DaughterLifecycleStateRole
 
+"""Rounding policy for integer-valued lifecycle state transforms."""
 @enum LifecycleRoundingCode::UInt8 begin
     ExactLifecycleRounding = 0x00
     FloorLifecycleRounding = 0x01
     CeilLifecycleRounding = 0x02
     NearestLifecycleRounding = 0x03
 end
+@doc "Require an exactly representable integer result." ExactLifecycleRounding
+@doc "Round toward negative infinity." FloorLifecycleRounding
+@doc "Round toward positive infinity." CeilLifecycleRounding
+@doc "Round to the nearest integer." NearestLifecycleRounding
 
+"""Action applied to relationships incident to a lifecycle participant."""
 @enum LifecycleRelationshipAction::UInt8 begin
     RejectWhileLinkedLifecycleRelationship = 0x01
     RemoveIncidentLifecycleRelationship = 0x02
@@ -124,6 +182,11 @@ end
     RemoveIncompatibleLifecycleRelationship = 0x04
     RejectIncompatibleLifecycleRelationship = 0x05
 end
+@doc "Reject the lifecycle request while matching relationships remain." RejectWhileLinkedLifecycleRelationship
+@doc "Remove all matching incident relationships." RemoveIncidentLifecycleRelationship
+@doc "Preserve relationships compatible with the resulting identities." PreserveCompatibleLifecycleRelationship
+@doc "Remove relationships incompatible with the resulting identities." RemoveIncompatibleLifecycleRelationship
+@doc "Reject when an incompatible relationship is encountered." RejectIncompatibleLifecycleRelationship
 
 @inline _lifecycle_relationship_action_bit(
     action::LifecycleRelationshipAction
@@ -133,10 +196,13 @@ end
 @inline _lifecycle_relationship_action_value(::Val{:remove_incompatible}) =
     RemoveIncompatibleLifecycleRelationship
 
+"""Ownership-state action applied at lifecycle settlement."""
 @enum LifecycleOwnershipAction::UInt8 begin
     PreserveLifecycleOwnershipState = 0x01
     ClearLifecycleOwnershipState = 0x02
 end
+@doc "Preserve ownership entries not otherwise changed by settlement." PreserveLifecycleOwnershipState
+@doc "Clear ownership entries selected by settlement." ClearLifecycleOwnershipState
 
 """Closed result category for fixed-capacity lifecycle placement policies."""
 abstract type AbstractLifecycleSiteSelection end
@@ -179,9 +245,14 @@ function LifecycleEvaluatorBank(::Val{Role}, values::AbstractVector{E}) where {R
 end
 
 Base.size(bank::LifecycleEvaluatorBank) = size(bank.values)
+Base.length(bank::LifecycleEvaluatorBank) = length(bank.values)
+Base.strides(bank::LifecycleEvaluatorBank) = strides(bank.values)
 Base.getindex(bank::LifecycleEvaluatorBank, index::Int) = bank.values[index]
 Base.IndexStyle(::Type{<:LifecycleEvaluatorBank}) = IndexLinear()
+KernelAbstractions.get_backend(bank::LifecycleEvaluatorBank) =
+    KernelAbstractions.get_backend(bank.values)
 
+"""Representation-banked lifecycle evaluators and their ordered role slots."""
 struct LifecycleEvaluatorStorage{B <: Tuple, S <: AbstractVector{LifecycleEvaluatorSlot}}
     banks::B
     slots::S
@@ -286,6 +357,7 @@ struct LifecycleStateRuleSlot
     slot::Int32
 end
 
+"""Representation-banked lifecycle state rules and their ordered slots."""
 struct LifecycleStateRuleStorage{B <: Tuple, S <: AbstractVector{LifecycleStateRuleSlot}}
     banks::B
     slots::S
@@ -360,6 +432,7 @@ end
 
 @inline _lifecycle_state_rule_action(rule) = rule.action
 
+"""Relationship-store action applied for selected lifecycle effects."""
 struct LifecycleRelationshipRule
     relationship_slot::Int32
     action::LifecycleRelationshipAction
@@ -367,6 +440,7 @@ struct LifecycleRelationshipRule
     kind_b::Int16
 end
 
+"""Ownership action and optional state handle for lifecycle settlement."""
 struct LifecycleOwnershipRule{H <: StateHandle}
     handle::H
     action::LifecycleOwnershipAction
@@ -417,6 +491,7 @@ struct LifecycleDescriptor{N, T <: AbstractFloat}
     compiler_synthesized::Bool
 end
 
+"""Packed finite spatial relations used by lifecycle placement and partitioning."""
 struct LifecycleRelationStorage{
         N,
         D <: AbstractVector{Int8},
@@ -472,6 +547,7 @@ end
     )
 end
 
+"""Validated lifecycle descriptors, policies, evaluators, rules, and relations."""
 struct LifecycleExecutionPlan{
         N,
         T <: AbstractFloat,
@@ -482,7 +558,7 @@ struct LifecycleExecutionPlan{
         O <: Tuple,
         SO <: AbstractVector{<:NTuple{N, Int16}},
         R <: LifecycleRelationStorage{N},
-        F <: AbstractVector{Bool},
+        F <: Tuple{Vararg{Bool}},
     } <: AbstractLifecycleExecutionPlan
     descriptors::D
     evaluators::E
@@ -516,7 +592,9 @@ function LifecycleExecutionPlan(
         maximum_requests::Integer,
         maximum_placement_sites::Integer,
         maximum_policy_workspace::Integer,
-        forbid_extinction::F,
+        forbid_extinction::Union{
+            AbstractVector{Bool}, Tuple{Vararg{Bool}}
+        },
     ) where {
         N,
         T <: AbstractFloat,
@@ -524,7 +602,6 @@ function LifecycleExecutionPlan(
         RR <: AbstractVector{LifecycleRelationshipRule},
         SO <: AbstractVector{<:NTuple{N, Int16}},
         R <: LifecycleRelationStorage{N},
-        F <: AbstractVector{Bool},
     }
     cell_capacity > 0 || throw(ArgumentError(
         "lifecycle cell capacity must be positive"
@@ -532,6 +609,7 @@ function LifecycleExecutionPlan(
     maximum_requests >= 0 || throw(ArgumentError(
         "lifecycle request bound cannot be negative"
     ))
+    iszero(maximum_requests) && return NoLifecycleExecutionPlan()
     maximum_requests <= typemax(Int32) || throw(ArgumentError(
         "lifecycle request bound exceeds Int32"
     ))
@@ -550,6 +628,7 @@ function LifecycleExecutionPlan(
     length(forbid_extinction) > 0 || throw(ArgumentError(
         "lifecycle extinction table cannot be empty"
     ))
+    owned_forbid_extinction = Tuple(forbid_extinction)
     effect_mask = UInt8(0)
     division_variant_mask = UInt16(0)
     relationship_action_mask = UInt8(0)
@@ -584,7 +663,7 @@ function LifecycleExecutionPlan(
         typeof(ownership_rules),
         SO,
         R,
-        F,
+        typeof(owned_forbid_extinction),
     }(
         descriptors,
         evaluators,
@@ -602,7 +681,7 @@ function LifecycleExecutionPlan(
         Int32(maximum_requests),
         Int32(maximum_placement_sites),
         Int32(maximum_policy_workspace),
-        forbid_extinction,
+        owned_forbid_extinction,
     )
 end
 
@@ -631,6 +710,7 @@ function _lifecycle_plan_fingerprint(plan::LifecycleExecutionPlan)
     return bytes2hex(SHA.sha256(codeunits(repr(payload))))
 end
 
+"""Return stable structural facts for a lifecycle execution plan."""
 function lifecycle_plan_report(plan::LifecycleExecutionPlan)
     return (
         descriptors = length(plan.descriptors),
@@ -680,6 +760,7 @@ function operation_callable(
     return LifecycleBoundStateValueOperation()
 end
 
+"""Return the lattice anchor selected for the current lifecycle evaluation."""
 function lifecycle_anchor end
 
 @inline function (operation::LifecycleBoundStateValueOperation)(

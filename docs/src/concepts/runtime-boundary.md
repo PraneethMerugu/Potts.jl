@@ -1,7 +1,5 @@
 # [Runtime boundary](@id runtime-boundary)
 
-Status: qualified G5H runtime contract
-
 PottsToolkit and CorePotts have one downward numerical boundary:
 
 - PottsToolkit produces a scheduled symbolic system, runtime schemas, and an immutable private
@@ -32,24 +30,23 @@ after every due solve succeeds. Islands therefore use simultaneous (Jacobi) coup
 boundary: declaration or scheduling order cannot let one island observe another island's new
 output early.
 
-G5H-3 retains native MTK continuous and discrete events through upstream structural compilation,
+Native MTK execution retains continuous and discrete events through upstream structural compilation,
 but admits only event-free coupled runtime profiles. The pinned public API exposes recursive event
 collections but no stable public accessors for classifying every affect, initialization/finalization
 effect, and reinitialization policy. Nonempty event sets or a structural event-count change therefore
 fail preflight rather than relying on callback struct fields or private helpers.
 
-The first executable native row is deliberately narrow: global scalar ODE islands in the audited
-algebraic/differential expression family, on sequential `Float64` CPU execution, with the public
-default `Tsit5()` instance and reviewed fixed-step options. Exact restart additionally binds the
+The native runtime admits structurally supported ODE and DAE islands through
+the standard SciML problem and solver interfaces. Batched and device execution
+retain their additional fixed-shape and backend requirements. Exact restart additionally binds the
 scheduled-system fingerprint, logical state schema, native solver profile, complete MTK/SciML/Julia
-stack, outer-event mode, and save/observation mode. A standard MTK `DAEProblem` can be constructed
-and initialized from a retained scheduled DAE, but coupled DAE execution remains unsupported until
-it has an exact continuation row.
+stack, outer-event mode, and save/observation mode. Functional execution does
+not by itself authorize a native checkpoint.
 
 Native execution is available only through the composed `init`/`step!`/`solve!` boundary. Extension
 hooks for native problem construction, initialization, advance, and value extraction are private
 implementation SPI and are not a public bypass around capability admission. Likewise, an outer
-SciML discrete callback is a Functional-only in-process host protocol: its code and captures receive
+SciML discrete callback is a supported in-process host protocol without exact replay: its code and captures receive
 a process-local identity, but it has no state codec and therefore cannot be checkpointed. Native
 islands currently reject outer callbacks altogether.
 

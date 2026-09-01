@@ -1,6 +1,8 @@
 # Transition-Kernel Verification and Algorithm Characterization
 
-Status: Accepted and implemented; Phase 13 complete
+Status: Accepted verification design. Current implemented guarantees are
+limited by [Correctness and contract stabilization](correctness-and-contract-stabilization.md); historical
+phase closure language below is not a current backend-support claim.
 
 The project-owner entry, evidence, and API-freeze policy is recorded in
 [Decision 0028](decisions/0028-phase-13-entry-and-freeze-policy.md).
@@ -166,10 +168,13 @@ correlated trajectory is not the primary row estimator. Statistical plans declar
 levels, multiplicity handling, minimum detectable discrepancies, sample counts, seeds, and stopping
 rules before qualification results are examined.
 
-CPU, Metal, and ROCm compare empirical destination counts against the independent oracle where the
-fixture is supported. Same-backend replay remains governed by the semantic RNG contract. Cross-
-backend bitwise or trajectory identity is not required; cross-backend transition distributions MUST
-meet the preregistered scientific criteria.
+Each qualified backend compares empirical destination counts against the
+independent oracle where the fixture is supported. Current qualification covers
+CPU and the bounded rows exercised by the real-Metal runner; ROCm has no current
+public backend row. Same-backend replay remains governed by the semantic RNG
+contract. Cross-backend bitwise or trajectory identity is not required;
+claimed cross-backend transition distributions must meet preregistered
+scientific criteria.
 
 Exact microstate results do not establish realistic-tissue equivalence by themselves. Algorithm
 claims about practical kinetics or equilibrium require larger ensemble studies with applicable
@@ -202,7 +207,7 @@ Verification is tiered:
 
 - tiny deterministic oracle checks on every pull request;
 - broader CPU matrix suites on scheduled or protected-main CI;
-- empirical Metal and ROCm transition tests on scheduled and release CI; and
+- empirical accelerator transition tests when a suitable real-device runner is available; and
 - exhaustive paper sweeps in archived research workflows.
 
 Failures retain the source state, destination residuals, model and algorithm identities, parameters,
@@ -219,7 +224,7 @@ Phase 13 cannot close until:
 
 1. sequential production behavior passes its applicable independent reference obligations;
 2. checkerboard execution receives an evidence-supported guarantee label;
-3. CPU, Metal, and ROCm pass applicable empirical transition tests;
+3. every backend named by a current guarantee passes its applicable empirical transition tests;
 4. exact microstate conclusions are reconciled with required larger-ensemble evidence;
 5. the specification-to-evidence index and user-facing reports point to current records; and
 6. every resulting stable, experimental, limited-domain, or rejected claim is reflected in the API

@@ -2,28 +2,79 @@ using Aqua
 using ExplicitImports
 using Test
 import CorePotts
-import LocalWorksets
+import LocalMath
 
-include("test_api_boundary.jl")
-include("test_rng_contract.jl")
-include("test_scientific_reference.jl")
-include("test_program_v1.jl")
-include("test_surface_tracker_contract.jl")
-include("test_scientific_geometry_contract.jl")
-include("test_relationship_access_contract.jl")
-include("test_descriptor_state_spi.jl")
-include("test_acceptance.jl")
-include("test_capabilities.jl")
-include("test_lifecycle_receipts.jl")
+const _COREPOTTS_COMPILED_PROGRAM_TESTS = (
+    "test_compiled_program_support.jl",
+    "test_compiled_program_execution.jl",
+    "test_compiled_program_checkerboard_oracles.jl",
+    "test_compiled_program_state.jl",
+    "test_compiled_program_parallel_trackers.jl",
+    "test_compiled_program_relationships_checkpoint.jl",
+    "test_compiled_program_extensibility_storage.jl",
+)
+const _COREPOTTS_DIRECT_TESTS = (
+    "test_api_boundary.jl",
+    "test_rng_contract.jl",
+    "test_scientific_reference.jl",
+    "test_compiled_program.jl",
+    "test_surface_tracker_contract.jl",
+    "test_scientific_geometry_contract.jl",
+    "test_relationship_access_contract.jl",
+    "test_descriptor_state_spi.jl",
+    "test_acceptance.jl",
+    "test_capabilities.jl",
+    "test_lifecycle_selection_oracle.jl",
+    "test_lifecycle_receipts.jl",
+    "test_localmath_compiler_boundary.jl",
+)
+const _COREPOTTS_TEST_HELPER_EXCLUSIONS = ()
+const _COREPOTTS_DEVICE_CONFORMANCE_WITNESSES = (
+    "checkerboard_execution.jl",
+    "descriptor_boundary.jl",
+    "lifecycle_execution.jl",
+    "lifecycle_policy_execution.jl",
+    "localmath_execution.jl",
+    "relationship_execution.jl",
+    "surface_execution.jl",
+)
+
+@testset "ordinary test runner owns every CorePotts test file" begin
+    discovered = Set(filter(
+        name -> startswith(name, "test_") && endswith(name, ".jl"),
+        readdir(@__DIR__),
+    ))
+    included = Set((
+        _COREPOTTS_DIRECT_TESTS...,
+        _COREPOTTS_COMPILED_PROGRAM_TESTS...,
+    ))
+    exclusions = Set(_COREPOTTS_TEST_HELPER_EXCLUSIONS)
+    @test isempty(intersect(included, exclusions))
+    @test union(included, exclusions) == discovered
+end
+
+@testset "CorePotts owns every device conformance witness" begin
+    witness_directory = joinpath(@__DIR__, "backend_conformance")
+    discovered = Set(filter(
+        name -> endswith(name, ".jl"), readdir(witness_directory)
+    ))
+    @test discovered == Set(_COREPOTTS_DEVICE_CONFORMANCE_WITNESSES)
+end
+
+for test_file in _COREPOTTS_DIRECT_TESTS
+    include(test_file)
+end
 
 @testset "CorePotts package quality" begin
     Aqua.test_all(CorePotts; ambiguities = false)
-    # Exact non-public dependencies support reviewed device adaptation,
-    # atomic arbitration, evidence identity, admission world-age hardening,
-    # storage alias checks, and the qualified lifecycle primitive.
+    # Exact non-public dependencies support device adaptation, atomic
+    # arbitration, world-age checks, and storage alias checks. LocalMath
+    # consumers use only its declared public compiler surface.
     qualified_internal_boundary = (
         Symbol("@adapt_structure"),
         Symbol("@atomic"),
+        :dataids,
+        :device,
         :GIT_VERSION_INFO,
         :JLOptions,
         :foreachindex,
@@ -31,6 +82,7 @@ include("test_lifecycle_receipts.jl")
         :invoke_in_world,
         :libllvm_version,
         :mightalias,
+        :setindex,
     )
     ExplicitImports.test_explicit_imports(
         CorePotts;
@@ -43,7 +95,3 @@ include("test_lifecycle_receipts.jl")
     end
     @test isempty(owned)
 end
-
-# Exact broad-method replacements are irreversible in a Julia process. Run
-# each post-submission adapter attack in a fresh process after all other tests.
-include("test_localworksets_adapter_worlds.jl")

@@ -75,8 +75,10 @@ Base.isless(
     right::QualifiedLifecycleRequestIdentity,
 ) = isless(_lifecycle_request_order_key(left), _lifecycle_request_order_key(right))
 
+"""Supertype for immutable generation-stamped lifecycle outcome events."""
 abstract type AbstractLifecycleEvent end
 
+"""Return the qualified request identity that caused a lifecycle event."""
 @inline lifecycle_request_identity(event::AbstractLifecycleEvent) = event.request
 
 @inline function _require_request_generation(
@@ -226,6 +228,7 @@ function DivideLifecycleEvent(
     )
 end
 
+"""Closed union of lifecycle event variants carried by public receipts."""
 const LifecycleEvent = Union{
     CreateLifecycleEvent,
     RemoveCellLifecycleEvent,
@@ -318,6 +321,7 @@ Base.iterate(receipt::LifecycleReceipt, state...) = iterate(receipt._events, sta
 """Return the receipt events as an immutable tuple snapshot."""
 lifecycle_events(receipt::LifecycleReceipt) = Tuple(receipt._events)
 
+"""Validate event identity, ordering, generations, and transaction metadata."""
 function validate_lifecycle_receipt(receipt::LifecycleReceipt)
     0 <= receipt.completed_mcs || throw(ArgumentError(
         "receipt completed MCS must be nonnegative"

@@ -101,7 +101,7 @@ Package-owned operation declarations live outside the compiler:
 
 ```text
 operation_library/inventory.jl
-    own the literal package-level V1 vocabulary used by documentation and coverage audits
+    own the literal package-level operation vocabulary used by documentation and coverage audits
 
 operation_library/scientific.jl
     admit named scientific operations through the same transfer contract as extensions

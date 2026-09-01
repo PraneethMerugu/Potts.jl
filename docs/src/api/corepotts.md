@@ -41,3 +41,15 @@ runtime_api = Set((
 CorePotts owns numerical invariants and logical persistence; it does not own
 symbolic biological authoring, ModelingToolkit systems, SciML solver
 selection, or presentation.
+
+## Reference
+
+```@docs
+CorePotts.CompilerSPI
+CorePotts.BackendSPI
+```
+
+```@autodocs
+Modules = [CorePotts]
+Private = false
+```

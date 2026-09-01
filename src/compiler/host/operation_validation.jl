@@ -22,7 +22,8 @@ const _UNIT_TRANSFER_RULES = Set((
 ))
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
 const _TOTALITY_TRANSFER_RULES = Set((
-    :total, :domain_checked, :requires_prelaunch_validation
+    :total, :domain_checked, :requires_prelaunch_validation,
+    :transaction_checked,
 ))
 const _OPERAND_TRANSFER_RULES = Set((
     :any, :numeric, :boolean, :integer, :same_type, :ifelse,
@@ -101,13 +102,13 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
     transfer.operand_rule in _OPERAND_TRANSFER_RULES ||
         return "unknown operand rule $(transfer.operand_rule)"
     !isempty(transfer.allowed_roles) &&
-        all(role -> role in _V1_OPERATION_ROLES, transfer.allowed_roles) ||
-        return "allowed_roles must be a nonempty subset of the closed V1 roles"
+        all(role -> role in _CLOSED_OPERATION_ROLES, transfer.allowed_roles) ||
+        return "allowed_roles must be a nonempty subset of the closed operation roles"
     length(unique(transfer.allowed_roles)) == length(transfer.allowed_roles) ||
         return "allowed_roles must be unique"
     !isempty(transfer.allowed_phases) &&
-        all(phase -> phase in _V1_OPERATION_PHASES, transfer.allowed_phases) ||
-        return "allowed_phases must be a nonempty subset of the closed V1 phases"
+        all(phase -> phase in _CLOSED_OPERATION_PHASES, transfer.allowed_phases) ||
+        return "allowed_phases must be a nonempty subset of the closed operation phases"
     length(unique(transfer.allowed_phases)) == length(transfer.allowed_phases) ||
         return "allowed_phases must be unique"
     transfer.required_context in _OPERATION_CONTEXT_RULES ||
@@ -158,7 +159,7 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
             transfer.allowed_phases == (:none,) &&
             !transfer.gpu
         if !interface_only
-            return "non-executable V1 operations must use the closed " *
+            return "non-executable operations must use the closed " *
                    "interface-only contract"
         end
     end
