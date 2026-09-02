@@ -874,7 +874,9 @@ function run_lifecycle_capacity_failure(
         to_host = Array,
         require_isbits::Bool = true,
     )
-    executable, initial = _lifecycle_backend_fixture(max_cells = 1)
+    executable, initial = _lifecycle_backend_fixture(
+        max_cells = 1, freeze_proposals = true
+    )
     program = executable.core_program
     parameters = program.parameter_defaults
     candidate = CorePotts.initialize_program(
@@ -946,7 +948,7 @@ function run_public_lifecycle_capacity_failure(;
         engine = CheckerboardSweepCPM()
     )
     scheduled, _ = _lifecycle_backend_fixture(
-        max_cells = 1; engine, lower = false
+        max_cells = 1; engine, freeze_proposals = true, lower = false
     )
     labels = zeros(Int, 6, 6)
     labels[2:5, 3] .= 1
