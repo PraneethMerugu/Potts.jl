@@ -255,7 +255,7 @@ end
     catch caught
         caught
     end
-    @test incompatible isa PottsToolkit.PottsValidationError
+    @test incompatible isa Potts.PottsValidationError
     @test only(incompatible.diagnostics).kind === :illegal_operation_units
 
     parameterized = try
@@ -268,6 +268,6 @@ end
     catch caught
         caught
     end
-    @test parameterized isa PottsToolkit.PottsValidationError
+    @test parameterized isa Potts.PottsValidationError
     @test only(parameterized.diagnostics).kind === :illegal_operation_units
 end

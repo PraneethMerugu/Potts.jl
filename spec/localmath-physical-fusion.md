@@ -278,7 +278,7 @@ planning or execution.
 
 ## Validation and performance evidence
 
-Use ordinary LocalMath, CorePotts, PottsToolkit, integration, documentation,
+Use ordinary LocalMath, CorePotts, Potts, integration, documentation,
 compiler-scaling, scientific-witness, and real-Metal tests on the repository
 Julia version.
 

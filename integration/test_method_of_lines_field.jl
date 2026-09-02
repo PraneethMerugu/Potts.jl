@@ -47,14 +47,14 @@ using OrdinaryDiffEqTsit5
         time = FixedPhysicalTime(0.0, 0.125),
     )
     @test getfield(component, :capabilities) isa
-        PottsToolkit._MethodOfLinesNativeCapability
+        Potts._MethodOfLinesNativeCapability
     generic_field_component = NativeComponent(
-        PottsToolkit.native_source(component);
+        Potts.native_source(component);
         name = :generic_field_component,
         family = ODEComponent(),
         scope = Global(),
         time = FixedPhysicalTime(0.0, 0.125),
-        outputs = PottsToolkit.native_outputs(component),
+        outputs = Potts.native_outputs(component),
     )
     @test getfield(generic_field_component, :capabilities) isa
         StandardNativeCapability
@@ -122,7 +122,7 @@ using OrdinaryDiffEqTsit5
     )
     @test size(generic_integrator.u.mol_field) == (4, 4)
     @test generic_integrator.capability_report.status ===
-        PottsToolkit.CorePotts.BackendSPI.Supported
+        Potts.CorePotts.BackendSPI.Supported
     @test !generic_integrator.capability_report.exact_replay
     problem = PottsProblem(
         scheduled,
@@ -144,8 +144,8 @@ using OrdinaryDiffEqTsit5
     @test size(integrator.u.mol_field) == (4, 4)
     @test integrator.u.mol_field != zeros(4, 4)
     step!(integrator)
-    variables = PottsToolkit.native_variables(
-        only(PottsToolkit.native_outputs(component))
+    variables = Potts.native_variables(
+        only(Potts.native_outputs(component))
     )
     expected = reshape([
         native_value(integrator, path, variable) for variable in variables

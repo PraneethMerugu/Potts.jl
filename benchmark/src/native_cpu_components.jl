@@ -1,4 +1,4 @@
-using PottsToolkit
+using Potts
 using ModelingToolkit
 using ModelingToolkitBase
 using OrdinaryDiffEqTsit5: Tsit5
@@ -135,7 +135,7 @@ end
 
 function logical_pool_bytes(capacity, width)
     path = (:benchmark, :logical_pool)
-    template = PottsToolkit.NativeLogicalState(
+    template = Potts.NativeLogicalState(
         path,
         ntuple(index -> Float64(index), width),
         (),
@@ -143,7 +143,7 @@ function logical_pool_bytes(capacity, width)
         0.0,
         SciMLBase.ReturnCode.Success,
     )
-    bank = PottsToolkit.NativeCellStateBank(template, capacity)
+    bank = Potts.NativeCellStateBank(template, capacity)
     return Base.summarysize(bank)
 end
 

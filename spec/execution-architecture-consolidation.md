@@ -1293,7 +1293,7 @@ rewritten to generic resolved rather than deleted.
 ### Backend and performance evidence
 
 - complete CPU LocalWorksets and CorePotts suites;
-- complete PottsToolkit and integration suites;
+- complete Potts and integration suites;
 - the qualified real-Metal semantic/lifetime/failure suite, extended to fused
   proposal dynamic-bank submissions and accepted-copy site/relationship
   effects with scalar device access disabled;

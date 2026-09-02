@@ -1,6 +1,6 @@
 using Metal
 using LocalMath
-using PottsToolkit
+using Potts
 using Test
 import KernelAbstractions
 

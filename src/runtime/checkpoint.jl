@@ -1,9 +1,9 @@
-# PottsToolkit contributes a deterministic logical extension block to the one
+# Potts contributes a deterministic logical extension block to the one
 # CorePotts checkpoint envelope.  There is one outer schema and one checksum;
 # native-component blocks join this same envelope.
 """Checkpoint payload for exact continuation of an admitted Potts runtime."""
 const PottsCheckpoint = CorePotts.ProgramCheckpoint
-const _POTTS_CHECKPOINT_BLOCK_SCHEMA = v"1.1.0"
+const _POTTS_CHECKPOINT_BLOCK_SCHEMA = v"2.0.0"
 const _NATIVE_CHECKPOINT_BLOCK_SCHEMA = v"1.0.0"
 
 function _native_checkpoint_blocks(integrator::PottsIntegrator)
@@ -132,18 +132,18 @@ function checkpoint(integrator::PottsIntegrator)
     )
     return CorePotts.program_checkpoint(
         integrator.runtime;
-        extensions = (PottsToolkit = _potts_checkpoint_block(integrator),),
+        extensions = (Potts = _potts_checkpoint_block(integrator),),
     )
 end
 
 function _potts_checkpoint_block(checkpoint_value::PottsCheckpoint)
-    hasproperty(checkpoint_value.extensions, :PottsToolkit) ||
+    hasproperty(checkpoint_value.extensions, :Potts) ||
         throw(ArgumentError(
-            "checkpoint has no PottsToolkit logical extension block"
+            "checkpoint has no Potts logical extension block"
         ))
-    block = getproperty(checkpoint_value.extensions, :PottsToolkit)
+    block = getproperty(checkpoint_value.extensions, :Potts)
     block isa NamedTuple || throw(ArgumentError(
-        "invalid PottsToolkit checkpoint extension block"
+        "invalid Potts checkpoint extension block"
     ))
     required = (
         :schema,
@@ -156,7 +156,7 @@ function _potts_checkpoint_block(checkpoint_value::PottsCheckpoint)
         :replay_class,
     )
     all(name -> hasproperty(block, name), required) || throw(ArgumentError(
-        "incomplete PottsToolkit checkpoint extension block"
+        "incomplete Potts checkpoint extension block"
     ))
     return block
 end
@@ -170,7 +170,7 @@ function _validate_checkpoint(
         throw(ArgumentError("unsupported logical checkpoint schema"))
     block = _potts_checkpoint_block(checkpoint_value)
     block.schema == _POTTS_CHECKPOINT_BLOCK_SCHEMA ||
-        throw(ArgumentError("unsupported PottsToolkit checkpoint block schema"))
+        throw(ArgumentError("unsupported Potts checkpoint block schema"))
     block.scheduled_fingerprint ==
         scheduled_system_fingerprint(problem.system).hex ||
         throw(ArgumentError("checkpoint scheduled-system fingerprint mismatch"))
@@ -463,7 +463,7 @@ function _restore_checkpoint_materialization(
         capability_report::PottsCapabilityReport,
         prepared_native,
     )
-    # Validate the one outer checksum, Core-program identity, and PottsToolkit
+    # Validate the one outer checksum, Core-program identity, and Potts
     # profile block before allocating either runtime domain.
     CorePotts.BackendSPI.validate_program_checkpoint(
         plan.core_program, checkpoint_value

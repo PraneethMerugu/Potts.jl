@@ -44,7 +44,7 @@ function explore_potts(frames::AbstractVector{<:AbstractPottsRenderFrame{2}};
         subscription, data_inspector, Ref(false))
 end
 
-function explore_potts(solution::PottsToolkit.PottsSolution;
+function explore_potts(solution::Potts.PottsSolution;
         request::RenderRequest = RenderRequest(), kwargs...)
     return explore_potts(renderframes(solution, request); kwargs...)
 end

@@ -1,13 +1,13 @@
 module ExternalCompilerSPIFixture
 
-using PottsToolkit
+using Potts
 using ModelingToolkitBase
 using Symbolics
 
 import CorePotts
-import PottsToolkit: operation_transfer, registered_descriptor_payload
-import PottsToolkit: registered_statement_lowering
-import PottsToolkit: registered_workspace_schemas
+import Potts: operation_transfer, registered_descriptor_payload
+import Potts: registered_statement_lowering
+import Potts: registered_workspace_schemas
 
 const CompilerSPI = CorePotts.CompilerSPI
 const SCHEMA = :external_site_energy
@@ -42,7 +42,7 @@ end
 end
 
 operation_transfer(::typeof(external_site_value), ::Int) =
-    PottsToolkit.OperationTransfer(
+    Potts.OperationTransfer(
         :external_site_value,
         VERSION,
         "external-site-value-v1",
@@ -51,7 +51,7 @@ operation_transfer(::typeof(external_site_value), ::Int) =
         :declared,
         :pure,
         :total,
-        PottsToolkit.InheritFootprintRule(),
+        Potts.InheritFootprintRule(),
         true,
         true;
         allowed_roles = (:hamiltonian, :constraint),
@@ -88,7 +88,7 @@ CompilerSPI.descriptor_payload_inspection(
 
 function registered_descriptor_payload(
         ::Val{:lower_external_site_energy},
-        context::PottsToolkit.DescriptorConstructionContext,
+        context::Potts.DescriptorConstructionContext,
     )
     context.source.identity.local_id == StatementID(:mismatched_payload) &&
         return CompilerSPI.EmptyDescriptorPayload()
@@ -97,7 +97,7 @@ end
 
 function registered_workspace_schemas(
         ::Val{:lower_external_site_energy},
-        source::PottsToolkit.DescriptorSource,
+        source::Potts.DescriptorSource,
         ::Type{T},
         lattice_shape::Tuple,
     ) where {T <: AbstractFloat}

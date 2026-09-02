@@ -1,4 +1,4 @@
-# PottsToolkit Authoring, Composition, and API Semantics
+# Potts Authoring, Composition, and API Semantics
 
 Status: Accepted Level 1 and Level 2 authoring, composition, and API contract; implementation evidence pending
 
@@ -13,12 +13,12 @@ contract remains unchanged.
 
 ## Purpose
 
-This document defines the durable public-language architecture of PottsToolkit. It governs how users
+This document defines the durable public-language architecture of Potts. It governs how users
 declare, compose, inspect, revise, serialize, and exchange models independently of the spelling of
 individual macros.
 
 Rule meaning is defined by
-[PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md). Compiler
+[Potts Rule and Model Semantics](potts-rule-and-model-semantics.md). Compiler
 realization is governed by the
 [Metaprogramming and Compiler Architecture Standard](../design/metaprogramming-and-compiler-architecture.md).
 
@@ -37,23 +37,23 @@ retained when it lowers unambiguously to the accepted semantic model.
 
 Potts.jl provides progressive disclosure through four first-class levels:
 
-1. PottsToolkit biological DSL
-2. PottsToolkit Julia-native typed modeling API
+1. Potts biological DSL
+2. Potts Julia-native typed modeling API
 3. CorePotts scientific API
 4. CorePotts execution and backend API
 
 These levels share scientific contracts and conformance tests. They do not all pass through one
 authoring compiler or one IR.
 
-Equivalent PottsToolkit DSL and typed-modeling declarations MUST normalize to equal semantic models.
+Equivalent Potts DSL and typed-modeling declarations MUST normalize to equal semantic models.
 A direct CorePotts program MAY construct scientific and execution objects without producing
-PottsToolkit authoring IR. It remains governed by the applicable state, time, energy, RNG,
+Potts authoring IR. It remains governed by the applicable state, time, energy, RNG,
 transaction, lifecycle, numerical, and algorithm contracts.
 
 Moving to a lower level makes more responsibilities explicit; it does not make correctness optional
 or make the interface unofficial.
 
-### Level 1: PottsToolkit biological DSL
+### Level 1: Potts biological DSL
 
 The friendly interface optimizes readability, discoverability, and concise scientific expression.
 It MAY use macros and domain-oriented syntax, but it cannot bypass builders, validation, typed IR,
@@ -65,7 +65,7 @@ a convenience.
 
 The closed portable expression language applies at this level.
 
-### Level 2: PottsToolkit Julia-native typed modeling API
+### Level 2: Potts Julia-native typed modeling API
 
 Every portable model construct expressible with a macro is expressible with ordinary constructors
 or builder functions. The programmatic interface is the stable foundation for tests, generated
@@ -79,13 +79,13 @@ required to mimic DSL syntax, and ordinary Julia construction logic is not parse
 syntax. Typed rule expressions intended for portable lowering still satisfy the same semantic-node
 contracts as the DSL.
 
-The principal model name is `PottsToolkit.PottsModel`. It is distinct from the lower-level
+The principal model name is `Potts.PottsModel`. It is distinct from the lower-level
 `CorePotts.PottsModel` by ordinary module qualification. Friendly `PottsProblem` construction
 validates and lowers the Level 2 model and returns the single CorePotts/SciML runtime problem;
-PottsToolkit does not introduce a wrapper problem type.
+Potts does not introduce a wrapper problem type.
 
 Phase 10 model and rule quantities are plain numerical values governed by the numerical policy.
-PottsToolkit performs no authoring-time unit conversion and does not carry Unitful values into
+Potts performs no authoring-time unit conversion and does not carry Unitful values into
 normalization or lowering. Optional units are a Phase 11 solution post-processing concern and do
 not alter model semantics or execution.
 
@@ -99,13 +99,13 @@ it unambiguously.
 
 CorePotts exposes stable scientific objects and protocols for state, topology, energy components,
 trackers, events, algorithms, problems, integrators, and SciML integration. Advanced users and other
-packages MAY use this API directly without constructing a PottsToolkit model.
+packages MAY use this API directly without constructing a Potts model.
 
 A custom penalty, tracker, event, topology, or algorithm that satisfies the applicable CorePotts
 protocol is a first-class extension. It is not merely a temporary escape hatch awaiting a DSL
 wrapper.
 
-PottsToolkit MAY accept CorePotts scientific objects through these public protocols and SHOULD
+Potts MAY accept CorePotts scientific objects through these public protocols and SHOULD
 re-export or make discoverable the supported scientific API. Such objects declare enough metadata
 for dependency, capability, provenance, and conformance reporting. A friendly DSL spelling is
 optional.
@@ -125,14 +125,14 @@ required by the JuliaGPU standard.
 The levels interoperate through stable scientific protocols:
 
 ```text
-PottsToolkit DSL ---------\
+Potts DSL ---------\
                            +--> shared scientific protocols --> CorePotts engine
-PottsToolkit typed API ---/
+Potts typed API ---/
 
 CorePotts direct API -----------------------------------------> CorePotts engine
 ```
 
-PottsToolkit authoring IR is canonical for equivalent Level 1 and Level 2 models. CorePotts
+Potts authoring IR is canonical for equivalent Level 1 and Level 2 models. CorePotts
 scientific protocols are canonical at Levels 3 and 4. Cross-level equivalence is judged by shared
 scientific behavior and conformance evidence, not by requiring identical compiler artifacts.
 
@@ -149,7 +149,7 @@ target applies to the stable scientific inventory shipped by the project; it doe
 experimental or third-party component from participating through the public typed protocols.
 
 Direct Level 3 or Level 4 use follows the corresponding CorePotts public protocol and does not
-require a PottsToolkit IR adapter. Internal, undocumented CorePotts representation details remain
+require a Potts IR adapter. Internal, undocumented CorePotts representation details remain
 outside all public levels.
 
 ### Extension protocol ergonomics
@@ -162,7 +162,7 @@ reference capability declarations, and standard inspection metadata.
 
 Advanced protocols become mandatory only when an extension claims the associated behavior. In
 particular, a GPU capability claim requires concrete device lowering and evidence, while a
-reference-only component remains a valid explicitly CPU-only component. Neither PottsToolkit nor
+reference-only component remains a valid explicitly CPU-only component. Neither Potts nor
 CorePotts may silently execute it on the host during a GPU solve.
 
 ## Cross-Level Coverage and Interoperability
@@ -170,7 +170,7 @@ CorePotts may silently execute it on the host during a GPU solve.
 ### DSL coverage target
 
 At least 95% of stable user-facing CorePotts scientific components MUST have a first-class
-PottsToolkit DSL spelling for a paper-quality release.
+Potts DSL spelling for a paper-quality release.
 
 The denominator includes stable user-facing:
 
@@ -192,7 +192,7 @@ by the conformance inventory rather than manually curated marketing counts.
 
 ### Curated re-exports and single-import use
 
-`using PottsToolkit` remains the single-import experience for ordinary modeling. PottsToolkit
+`using Potts` remains the single-import experience for ordinary modeling. Potts
 re-exports a curated stable subset of the CorePotts scientific API, not every CorePotts name.
 
 Extension authors SHOULD use explicit `import CorePotts` when implementing CorePotts protocols so
@@ -211,22 +211,22 @@ Every stable CorePotts scientific component exposes sufficient public metadata o
 - Reference or conformance behavior
 - Provenance and serialization support
 
-CorePotts uses this metadata to produce a scientific/execution report even when no PottsToolkit model
-exists. PottsToolkit reports share the same vocabulary and add authoring, expansion, namespace, and
+CorePotts uses this metadata to produce a scientific/execution report even when no Potts model
+exists. Potts reports share the same vocabulary and add authoring, expansion, namespace, and
 source information.
 
 ### Direct composition
 
-Level 2 PottsToolkit models MAY directly contain conforming public Level 3 components. No adapter is
+Level 2 Potts models MAY directly contain conforming public Level 3 components. No adapter is
 required when the object already implements the stable CorePotts scientific-component protocol. A
-separate registration is required only for Level 1 syntax, PottsToolkit-specific normalization, or
+separate registration is required only for Level 1 syntax, Potts-specific normalization, or
 portable semantic serialization not supplied by the Level 3 protocol.
 
 Abstraction level does not determine precedence. If components from different levels provide or
 write the same scientific concern, composition rejects the conflict unless an explicit accepted
 combination, merge, or replacement policy resolves it. The resolution appears in provenance.
 
-A user can replace one high-level component with a typed PottsToolkit or CorePotts component without
+A user can replace one high-level component with a typed Potts or CorePotts component without
 rewriting the rest of the model when the replacement satisfies the same declared scientific
 protocol.
 
@@ -261,11 +261,11 @@ reference implementation wherever feasible; optimized implementations are tested
 
 ## Stability by Level
 
-Levels 1 and 2 receive the PottsToolkit DSL, authoring, composition, migration, and semantic
+Levels 1 and 2 receive the Potts DSL, authoring, composition, migration, and semantic
 serialization contracts.
 
 Level 3 is a stable CorePotts scientific extension API. Direct state, problem, algorithm, and
-integrator construction is supported without PottsToolkit.
+integrator construction is supported without Potts.
 
 Level 4 is divided into:
 
@@ -297,10 +297,10 @@ limitation is visible before execution and in model provenance.
 
 ## Documentation by Progressive Disclosure
 
-Documentation leads with PottsToolkit and is organized so a concept can expose, as applicable:
+Documentation leads with Potts and is organized so a concept can expose, as applicable:
 
 1. Biological DSL usage
-2. Typed PottsToolkit construction
+2. Typed Potts construction
 3. CorePotts scientific protocol and direct use
 4. Execution-extension details
 
@@ -399,7 +399,7 @@ make these declaration categories interchangeable.
 
 ### Model and problem
 
-The primary immutable scientific model is `PottsToolkit.PottsModel`. A model contains biological
+The primary immutable scientific model is `Potts.PottsModel`. A model contains biological
 declarations, components, rules, scientific relations, field coupling, and capability requirements.
 
 `PottsProblem` is the SciML problem object. It binds a model to a concrete experiment, including:
@@ -412,18 +412,18 @@ declarations, components, rules, scientific relations, field coupling, and capab
 - Problem-level observation or solve configuration
 
 Layouts and initial placement belong to the problem rather than the reusable scientific model.
-The PottsToolkit constructor returns the CorePotts/SciML `PottsProblem` directly; there is no second
+The Potts constructor returns the CorePotts/SciML `PottsProblem` directly; there is no second
 runtime problem wrapper.
 
-PottsToolkit layout values lower through CorePotts' minimal claim-emission protocol. Built-in dense
+Potts layout values lower through CorePotts' minimal claim-emission protocol. Built-in dense
 labels or masks, coordinates, and paper-required procedural shapes share that path. Users identify
 provisional entities semantically rather than choosing runtime integer cell IDs. Overlap rejects by
 default; an explicit stable-priority policy is order independent and appears in `explain` and
 provenance.
 
-PottsToolkit reports whether initialization is host-finalized or device-native. Loading an image,
+Potts reports whether initialization is host-finalized or device-native. Loading an image,
 table, or domain-specific file remains the job of ordinary Julia data packages that produce a
-supported array, coordinate collection, or custom layout value; PottsToolkit does not create a
+supported array, coordinate collection, or custom layout value; Potts does not create a
 parallel file-loader framework.
 
 Level 1 does not expose one ambiguous `RandomLayout` meaning. It distinguishes uniform one-site
@@ -431,7 +431,7 @@ seeds from sequential rejection placement of declared shapes. Each spelling expo
 domain, distributions, attempt bound, periodic behavior, failure semantics, and guarantee profile.
 Dictionary order, the default Julia RNG, and silent overwrite are never part of initialization.
 
-Sequential rejection is not described as uniform packing or guaranteed confluence. PottsToolkit
+Sequential rejection is not described as uniform packing or guaranteed confluence. Potts
 uses deterministic tiling or explicit masks for paper workflows requiring confluent ownership until
 a separately named packing algorithm has its own statistical and failure contract.
 
@@ -548,7 +548,7 @@ Custom properties are declared independently of rules. A property schema declare
 initialization, invariant or valid range, separate division/transition/retirement policy values,
 visibility, persistence participation, optionality, and numeric conversion policy. Undefined
 storage is forbidden. Each operation must be explicitly supported or explicitly rejected;
-PottsToolkit does not fill missing lifecycle behavior from a global default.
+Potts does not fill missing lifecycle behavior from a global default.
 
 Built-in components MAY supply common schemas without verbose user declarations. Supplied schemas
 appear in `explain`, participate in conflict detection, and cannot silently override explicit user
@@ -660,7 +660,7 @@ composition semantics is rejected.
 
 ## Model, Problem, and Execution State
 
-A `PottsToolkit.PottsModel` is an immutable declarative scientific value. It contains authoring or
+A `Potts.PottsModel` is an immutable declarative scientific value. It contains authoring or
 normalized meaning, not evolving simulation state.
 
 A `Problem` binds a model to initial state, geometry, time span, and solve-level configuration. An
@@ -742,7 +742,7 @@ roles; a symbol or dictionary key is not a substitute for a role value.
 
 Phase 13 supplies `CellRole` and `FieldRole`. Phase 14 generalizes the same requirement protocol to
 state, process operation, observation, relation, parameter, and other registered semantic
-categories. One generic requirement/export protocol is used; PottsToolkit does not create separate
+categories. One generic requirement/export protocol is used; Potts does not create separate
 field-module, ODE-module, relationship-module, or paper-module composition runtimes.
 
 ```julia
@@ -855,7 +855,7 @@ identities. The persistent model-editing API uses:
 
 These operations MUST NOT depend on object position or vector order. `add` rejects a conflicting
 identity. `replace` is the explicit operation that supersedes an existing identity and records the
-replacement in provenance. PottsToolkit does not overload `+`, `-`, indexing assignment, or hidden
+replacement in provenance. Potts does not overload `+`, `-`, indexing assignment, or hidden
 mutation for model revision.
 
 ### Custom-physics qualification
@@ -872,7 +872,7 @@ expanded declaration, capability limitation, and replacement remains visible thr
 
 Selected-paper convenience builders may be distributed in tutorial or paper-example modules, but
 they use this same fragment and plan API. Paper and author names are not admitted as stable
-CorePotts or PottsToolkit constructors merely to shorten examples. A paper builder is documented
+CorePotts or Potts constructors merely to shorten examples. A paper builder is documented
 only after the equivalent generic construction and does not count as generic API conformance
 evidence.
 
@@ -892,7 +892,7 @@ migration.
 
 Multiple property targets MAY be declared as one atomic rule group. All targets in that group read
 one accepted phase snapshot and commit together according to
-[PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md).
+[Potts Rule and Model Semantics](potts-rule-and-model-semantics.md).
 
 Sequential dependence requires separate explicitly ordered phases. Assignment-like syntax, if
 offered, is sugar for declared targets and does not imply statement-by-statement mutation.
@@ -918,11 +918,11 @@ Validation MUST NOT defer a host-detectable semantic error until GPU execution.
 `validate(model)` returns an immutable `ValidationReport` rather than throwing for ordinary model
 invalidity. `isvalid(report)` returns its validity. An operation that requires a valid model, such
 as problem construction or lowering, throws one structured `ModelValidationError` containing the
-applicable report. PottsToolkit does not use a mutating `validate!` spelling.
+applicable report. Potts does not use a mutating `validate!` spelling.
 
 ## Inspection Interface
 
-Users can inspect every meaningful compilation stage through stable semantic reports. PottsToolkit
+Users can inspect every meaningful compilation stage through stable semantic reports. Potts
 provides:
 
 - `validate(model)`
@@ -993,7 +993,7 @@ produce a migration diagnostic or require an explicit migration tool.
 
 ## Serialization and Exchange
 
-PottsToolkit distinguishes a versioned semantic manifest, runtime checkpoints, and reconstructable
+Potts distinguishes a versioned semantic manifest, runtime checkpoints, and reconstructable
 model serialization. A semantic manifest supports provenance, exchange, and validation without
 promising that every Julia extension can be reconstructed.
 
@@ -1066,17 +1066,17 @@ diagnostics are accumulated when doing so remains safe and meaningful.
 
 - Friendly and programmatic authoring forms normalize to equal meaning.
 - The multilevel API shares scientific contracts without requiring direct CorePotts use to produce
-  PottsToolkit authoring IR.
+  Potts authoring IR.
 - CorePotts remains independently usable through stable scientific and execution interfaces.
 - A conforming custom CorePotts component is a first-class extension rather than a provisional escape
   hatch.
 - At least 95% of the stable user-facing CorePotts scientific inventory has a Level 1 DSL spelling,
   with every exclusion reported and justified.
-- The curated CorePotts scientific subset is available through the PottsToolkit single-import
+- The curated CorePotts scientific subset is available through the Potts single-import
   experience; execution extensions remain clearly qualified.
 - Cross-level fixtures establish scientific equivalence without requiring equal internal objects.
 - Mixed-level conflicts require explicit combination, replacement, or rejection.
-- Level 3 objects expose scientific metadata even when no PottsToolkit authoring model exists.
+- Level 3 objects expose scientific metadata even when no Potts authoring model exists.
 - Level 4 clearly separates stable extension protocols from experimental implementation internals.
 - A model is immutable and separate from mutable execution state.
 - Declaration order is irrelevant outside explicitly ordered constructs.
@@ -1095,7 +1095,7 @@ diagnostics are accumulated when doing so remains safe and meaningful.
   rather than incidental source spelling; unsupported components are reported before persistence.
 - Model and rule authoring performs no unit conversion; optional units remain solution-side
   post-processing metadata.
-- Documented CorePotts public protocols interoperate with PottsToolkit without exposing internal
+- Documented CorePotts public protocols interoperate with Potts without exposing internal
   storage representations.
 
 ## Level 1 API Freeze Evidence Gate

@@ -113,7 +113,7 @@ using SciMLBase
         report = inspect(init(
             problem, SequentialCPM(); native_profiles = (profile,)
         ), Capabilities())
-        @test report.status === PottsToolkit.CorePotts.BackendSPI.Supported
+        @test report.status === Potts.CorePotts.BackendSPI.Supported
         @test !report.exact_replay
         @test report.evidence.conjunction === nothing
     end
@@ -131,7 +131,7 @@ using SciMLBase
         problem, SequentialCPM(); native_profiles = (failing_profile,)
     )
     before = failing.u
-    @test_throws PottsToolkit.NativeSolveFailure step!(failing)
+    @test_throws Potts.NativeSolveFailure step!(failing)
     @test failing.t == 0
     @test failing.retcode == SciMLBase.ReturnCode.Failure
     @test failing.u.ownership == before.ownership

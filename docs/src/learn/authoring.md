@@ -6,7 +6,7 @@ spatial relations, schedules, and observations remain symbolic until runtime.
 `mtkcompile` performs structural scheduling and is idempotent.
 
 ```@example authoring
-using PottsToolkit
+using Potts
 using Symbolics
 using ModelingToolkitBase: @parameters
 

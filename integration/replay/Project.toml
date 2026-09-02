@@ -17,7 +17,7 @@ OrdinaryDiffEqRosenbrockTableaus = "b4bd8bb3-f80f-41d2-9b21-73a655b304b9"
 OrdinaryDiffEqSDIRK = "2d112036-d095-4a1e-ab9a-08536f3ecdbf"
 OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 OrdinaryDiffEqVerner = "79d7bb75-1356-48c1-b8c0-6832512096c2"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
@@ -26,7 +26,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [sources]
-PottsToolkit = {path = "../.."}
+Potts = {path = "../.."}
 
 [compat]
 Catalyst = "=16.2.3"

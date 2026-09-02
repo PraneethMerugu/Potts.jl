@@ -50,15 +50,15 @@
     )
     scheduled_potts = mtkcompile(source)
     compiled = only(scheduled_native_components(scheduled_potts))
-    scheduled = PottsToolkit.native_scheduled_system(compiled)
+    scheduled = Potts.native_scheduled_system(compiled)
 
-    @test PottsToolkit.native_original_system(compiled) === native_filter
+    @test Potts.native_original_system(compiled) === native_filter
     @test ModelingToolkitBase.get_isscheduled(scheduled)
     @test any(isequal(only(filter_inputs)), ModelingToolkitBase.inputs(scheduled))
     @test any(isequal(only(filter_outputs)), ModelingToolkitBase.outputs(scheduled))
     @test !isempty(ModelingToolkitBase.get_systems(native_filter))
     @test !isempty(ModelingToolkitBase.get_initial_conditions(scheduled))
-    @test PottsToolkit.native_component_path(compiled) ==
+    @test Potts.native_component_path(compiled) ==
         (:mtsl_coupled_model, :native_filter_component)
 
     labels = zeros(Int, 4, 4)
@@ -81,7 +81,7 @@
         save_everystep = true,
     )
     @test integrator.capability_report.status ===
-        PottsToolkit.CorePotts.BackendSPI.Supported
+        Potts.CorePotts.BackendSPI.Supported
     @test !integrator.capability_report.exact_replay
     @test integrator.capability_report.evidence.conjunction === nothing
     @test integrator.u[:filter_output_state] === 0.0

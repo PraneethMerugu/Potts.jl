@@ -9,7 +9,7 @@ Cellular Potts modeling ecosystem for Julia.
 
 The active package family has three responsibilities:
 
-1. PottsToolkit is the primary biological and symbolic authoring interface.
+1. Potts is the primary biological and symbolic authoring interface.
 2. CorePotts is the independently usable scientific execution engine and extension boundary.
 3. MakiePotts converts explicit host-owned observations into visualization recipes.
 
@@ -23,25 +23,25 @@ scope. Dimensionality and topology are capability dimensions, not implicit backe
 
 ## Primary user experience
 
-PottsToolkit acts as a high-level declarative language and model compiler for CorePotts. It should
+Potts acts as a high-level declarative language and model compiler for CorePotts. It should
 allow computational biologists, statistical physicists, HPC researchers, and Julia developers to
 express models without depending on CorePotts internals.
 
-Advanced users may extend or use CorePotts directly through its public protocols. PottsToolkit
+Advanced users may extend or use CorePotts directly through its public protocols. Potts
 must not duplicate the numerical engine or make private storage part of its authoring contract.
 
 ## Core engine
 
 CorePotts defines the scientific execution contracts, fundamental state model, reference engine,
 optimized algorithms, checkpoints, observations, and backend extension interfaces. It must remain
-usable independently of PottsToolkit and visualization packages.
+usable independently of Potts and visualization packages.
 
 Optimized execution is judged against explicit scientific contracts. Performance improvements
 must not silently redefine model behavior.
 
 ## ModelingToolkit and SciML integration
 
-PottsToolkit owns ModelingToolkit-facing symbolic completion and compilation. CorePotts execution
+Potts owns ModelingToolkit-facing symbolic completion and compilation. CorePotts execution
 is exposed through genuine SciML problem, algorithm, integrator, solution, remake, checkpoint, and
 ensemble conventions where applicable.
 
@@ -89,7 +89,7 @@ improve scientific correctness, API cohesion, execution portability, extensibili
 maintainability.
 
 External orchestration is not an active product responsibility. A future adapter must be proposed
-and reviewed independently and cannot become a prerequisite for PottsToolkit or CorePotts.
+and reviewed independently and cannot become a prerequisite for Potts or CorePotts.
 
 ## Semantic naming and direct cutovers
 

@@ -1,6 +1,6 @@
 # [CorePotts API](@id corepotts-api)
 
-Most users should author with PottsToolkit. CorePotts intentionally exposes a
+Most users should author with Potts. CorePotts intentionally exposes a
 narrow MTK-free runtime boundary:
 
 - `ProgramInitialState`, `ProgramRuntime`, `ProgramSnapshot`;

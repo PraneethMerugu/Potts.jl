@@ -5,7 +5,7 @@ package responsibilities:
 
 | Package | Responsibility |
 |:--|:--|
-| `PottsToolkit` | Symbolic authoring, composition, structural compilation, native MTK coupling, and the SciML lifecycle |
+| `Potts` | Symbolic authoring, composition, structural compilation, native MTK coupling, and the SciML lifecycle |
 | `CorePotts` | MTK-free CPM execution, identity, lifecycle, relationships, checkpoints, and CPU/GPU backend contracts |
 | `LocalMath` | Backend-portable validated local connectivity, bounded conflict handling, workspace, lifetime, and inspection beneath CorePotts |
 | `MakiePotts` | Visualization from public saved observations and solutions |

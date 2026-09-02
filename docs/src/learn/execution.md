@@ -6,7 +6,7 @@ backend, scalar type, save policy, callbacks, and native solve profiles are
 selected at `init` or `solve`.
 
 ```@example execution
-using PottsToolkit
+using Potts
 using SciMLBase
 using Symbolics
 using ModelingToolkitBase: @parameters

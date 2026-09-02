@@ -12,7 +12,7 @@ relationships, replica/repeat identity, and replay evidence participate in
 compatibility.
 
 ```@example replay
-using PottsToolkit
+using Potts
 
 cell = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)

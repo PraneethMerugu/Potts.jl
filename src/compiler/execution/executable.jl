@@ -21,7 +21,7 @@ touched set cannot be proven.
 """
 struct CheckerboardSweepCPM <: AbstractPottsAlgorithm end
 
-"""Supertype of explicitly selected PottsToolkit execution backends."""
+"""Supertype of explicitly selected Potts execution backends."""
 abstract type AbstractPottsBackend end
 
 """The qualified host backend."""
@@ -34,7 +34,7 @@ _validate_backend_available(::CPUBackend) = nothing
 function _validate_backend_available(backend::AbstractPottsBackend)
     throw(ArgumentError(
         "$(nameof(typeof(backend))) requires its optional backend package and " *
-        "PottsToolkit extension"
+        "Potts extension"
     ))
 end
 
@@ -48,7 +48,7 @@ function _adapt_runtime_backend(
     )
     throw(ArgumentError(
         "$(CorePotts.BackendSPI.program_backend_name(backend)) runtime adaptation " *
-        "requires its optional PottsToolkit backend extension"
+        "requires its optional Potts backend extension"
     ))
 end
 

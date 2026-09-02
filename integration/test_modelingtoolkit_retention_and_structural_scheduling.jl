@@ -62,18 +62,18 @@
         native_components = (component,),
     )
 
-    @test native_source === PottsToolkit.native_source(component)
+    @test native_source === Potts.native_source(component)
     @test only(native_components(source)) === component
     @test isempty(ModelingToolkitBase.get_systems(source))
 
     completed = complete(source)
     completed_native = only(getfield(completed, :completion).native_components)
-    @test PottsToolkit.native_component_path(completed_native) ==
+    @test Potts.native_component_path(completed_native) ==
         (:native_coupled_model, :native_decay)
     @test completed_native.declaration === component
     @test all(endpoint ->
-        PottsToolkit.potts_endpoint(endpoint) isa
-            PottsToolkit.QualifiedStatementID,
+        Potts.potts_endpoint(endpoint) isa
+            Potts.QualifiedStatementID,
         completed_native.endpoints,
     )
     @test Set(endpoint.potts_kind for endpoint in completed_native.endpoints) ==
@@ -83,12 +83,12 @@
     scheduled = mtkcompile(completed)
     compiled = only(scheduled_native_components(scheduled))
     scheduled_data = getfield(scheduled, :completion).scheduled
-    @test PottsToolkit.native_component_path(compiled) ==
+    @test Potts.native_component_path(compiled) ==
         (:native_coupled_model, :native_decay)
-    @test PottsToolkit.native_original_system(compiled) === native_source
-    @test PottsToolkit.native_scheduled_system(compiled) !== native_source
+    @test Potts.native_original_system(compiled) === native_source
+    @test Potts.native_scheduled_system(compiled) !== native_source
     @test ModelingToolkitBase.get_isscheduled(
-        PottsToolkit.native_scheduled_system(compiled)
+        Potts.native_scheduled_system(compiled)
     )
     @test compiled.original_fingerprint == completed_native.source_fingerprint
     @test length(string(compiled.scheduled_fingerprint)) == 64
@@ -109,25 +109,25 @@
     @test ModelingToolkitBase.get_observed(native_source) == source_observed
     @test ModelingToolkitBase.continuous_events(native_source) == source_events
     @test !isempty(ModelingToolkitBase.initialization_equations(
-        PottsToolkit.native_scheduled_system(compiled)
+        Potts.native_scheduled_system(compiled)
     ))
     @test !isempty(ModelingToolkitBase.get_observed(
-        PottsToolkit.native_scheduled_system(compiled)
+        Potts.native_scheduled_system(compiled)
     ))
     @test !isempty(ModelingToolkitBase.continuous_events(
-        PottsToolkit.native_scheduled_system(compiled)
+        Potts.native_scheduled_system(compiled)
     ))
-    @test PottsToolkit.native_index_provider(compiled) ===
-        PottsToolkit.native_scheduled_system(compiled)
-    @test PottsToolkit.native_problem_constructor(compiled) ===
-        PottsToolkit.SciMLBase.ODEProblem
+    @test Potts.native_index_provider(compiled) ===
+        Potts.native_scheduled_system(compiled)
+    @test Potts.native_problem_constructor(compiled) ===
+        Potts.SciMLBase.ODEProblem
     endpoint_variables = map(
-        PottsToolkit.native_variable,
-        PottsToolkit.native_coupling_endpoints(compiled),
+        Potts.native_variable,
+        Potts.native_coupling_endpoints(compiled),
     )
     @test all(isequal.(endpoint_variables, (native_drive, native_x)))
-    @test !isdefined(PottsToolkit, :EquationComponent) ||
-        isempty(methods(PottsToolkit.EquationComponent))
+    @test !isdefined(Potts, :EquationComponent) ||
+        isempty(methods(Potts.EquationComponent))
 
     missing_component = NativeComponent(
         native_source;

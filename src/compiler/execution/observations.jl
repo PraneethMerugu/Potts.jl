@@ -1,4 +1,4 @@
-# Immutable settled-boundary observation evaluators owned by PottsToolkit.
+# Immutable settled-boundary observation evaluators owned by Potts.
 
 abstract type AbstractCompiledObservationEvaluator end
 

@@ -46,7 +46,7 @@ energy values, and fields unless a declaration explicitly selects another type.
 The Level 1 portable default is `Float32`. This choice is visible in normalized
 reports and documentation. CPU is the ordinary portable execution profile;
 bounded Metal mechanisms have separate real-device evidence. AMDGPU, CUDA, and
-ROCm are not current public PottsToolkit backend profiles.
+ROCm are not current public Potts backend profiles.
 
 Explicit `Float64` scientific input or policy is never silently narrowed to `Float32`. It is
 preserved on qualified backends or rejected with a capability diagnostic. Backends do not choose

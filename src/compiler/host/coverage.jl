@@ -15,7 +15,7 @@ function _validate_compilation_choices(
         "algorithm must be SequentialCPM() or CheckerboardSweepCPM()"
     ))
     backend isa AbstractPottsBackend || throw(ArgumentError(
-        "backend must be a PottsToolkit backend selector"
+        "backend must be a Potts backend selector"
     ))
     engine isa SequentialCPM && !(backend isa CPUBackend) &&
         throw(ArgumentError(

@@ -1,13 +1,13 @@
 # [Extension boundary](@id extension-boundary)
 
-PottsToolkit has several deliberately narrow extension seams. None is a second
+Potts has several deliberately narrow extension seams. None is a second
 modeling engine or a general plugin registry.
 
 1. A native ModelingToolkit component remains an upstream system. The full-MTK
    extension structurally compiles it and constructs its standard SciML
-   problem/integrator. PottsToolkit owns only the typed CPM coupling map,
+   problem/integrator. Potts owns only the typed CPM coupling map,
    cadence, time conversion, lifecycle transfer policy, and capability check.
-2. A new kernel-safe Potts operation uses the documented PottsToolkit
+2. A new kernel-safe Potts operation uses the documented Potts
    operation/descriptor transfer API and the smallest necessary part of
    `CorePotts.CompilerSPI`.
 3. A backend or transactional runtime extension uses the smallest necessary
@@ -20,8 +20,8 @@ Choose the seam by responsibility:
 
 | Extension author | Supported surface | Must not own |
 | --- | --- | --- |
-| Scientific model author | exported PottsToolkit authoring API | compiler IR, backend admission |
-| Potts operation or term package | PottsToolkit transfer API and the required `CompilerSPI` bindings | runtime queues, device evidence, checkpoints |
+| Scientific model author | exported Potts authoring API | compiler IR, backend admission |
+| Potts operation or term package | Potts transfer API and the required `CompilerSPI` bindings | runtime queues, device evidence, checkpoints |
 | Runtime or backend package | required `BackendSPI` bindings | compiler IR, scientific semantics, self-issued support claims |
 | Local-work mechanism package | LocalMath public extension protocol | Potts acceptance, RNG, clocks, lifecycle commits |
 | ModelingToolkit integration | Julia package extensions and public MTK/SciML interfaces | either CorePotts SPI unless it also implements one of the roles above |
@@ -46,10 +46,10 @@ The public extension-oriented names are distinguishable from the exported
 authoring API:
 
 ```@example extension_inventory
-using PottsToolkit
-visible_names = names(PottsToolkit; all=false, imported=false)
-exported = Set(filter(name -> Base.isexported(PottsToolkit, name), visible_names))
-public_names = Set(filter(name -> Base.ispublic(PottsToolkit, name), visible_names))
+using Potts
+visible_names = names(Potts; all=false, imported=false)
+exported = Set(filter(name -> Base.isexported(Potts, name), visible_names))
+public_names = Set(filter(name -> Base.ispublic(Potts, name), visible_names))
 extension_api = setdiff(public_names, exported)
 (:PottsSystem in exported, :operation_transfer in extension_api)
 ```

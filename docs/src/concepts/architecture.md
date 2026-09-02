@@ -3,7 +3,7 @@
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
 ```text
-PottsToolkit
+Potts
   PottsSystem + native MTK component islands
           │ complete / structural mtkcompile
           v
@@ -19,16 +19,16 @@ LocalMath              MakiePotts / analysis
 KernelAbstractions
 ```
 
-## PottsToolkit
+## Potts
 
-PottsToolkit owns the public symbolic and SciML-facing product:
+Potts owns the public symbolic and SciML-facing product:
 
 - typed Potts statements, names, hierarchy, units, parameters, and observations;
 - composition, completion, validation, source-located diagnostics, and inspection;
 - structural `mtkcompile` and explicit component IO, time, scope, and coupling schedules;
 - `PottsProblem`, late private lowering, integrator/solution integration, and symbolic indexing.
 
-An external ModelingToolkit system remains native through structural compilation. PottsToolkit
+An external ModelingToolkit system remains native through structural compilation. Potts
 does not recreate that system by copying equations, unknowns, parameters, defaults, events, or
 hierarchy into a parallel Potts representation.
 
@@ -39,7 +39,7 @@ proposal and acceptance semantics, trackers, relationships, generation-safe life
 counter-based randomness, checkpoints, and backend execution. It has no ModelingToolkit dependency
 and does not execute an external numerical solver.
 
-CorePotts publishes settled coupling arrays and lifecycle receipts. PottsToolkit uses those public
+CorePotts publishes settled coupling arrays and lifecycle receipts. Potts uses those public
 boundaries to coordinate native component integrators.
 
 ## LocalMath

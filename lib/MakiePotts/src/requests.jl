@@ -68,7 +68,7 @@ end
 abstract type AbstractChannelRequest end
 
 """
-Request one finite-cell property by its stable PottsToolkit property key.
+Request one finite-cell property by its stable Potts property key.
 """
 struct CellPropertyRequest{T} <: AbstractChannelRequest
     key::RenderChannelKey{CellChannelScope, T}

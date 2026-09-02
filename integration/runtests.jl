@@ -11,7 +11,7 @@ const INTEGRATION_TESTS = (
     "test_extension_load_order.jl",
 )
 
-@testset "PottsToolkit integrations" begin
+@testset "Potts integrations" begin
     for file in INTEGRATION_TESTS
         @testset "$file" begin
             include(file)

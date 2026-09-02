@@ -154,7 +154,7 @@ end
 """
 The exact CorePotts mechanism conjunction covered by one capability row.
 
-PottsToolkit may compose this with native-problem, component-solver, and
+Potts may compose this with native-problem, component-solver, and
 observation/event facts, but must not widen any field in this Core-owned key.
 """
 struct ProgramCapabilityKey{

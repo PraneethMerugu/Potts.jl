@@ -51,12 +51,12 @@ end
 @testset "completion and scheduling topology stays out of carrier types" begin
     # Composite numeric values are encoded structurally. `isbitstype` alone
     # is insufficient because `bitstring` accepts primitive numbers only.
-    @test PottsToolkit._canonical_value(1.0u"m") ==
-          PottsToolkit._canonical_value(1.0u"m")
-    @test PottsToolkit._canonical_value(1.0u"m") !=
-          PottsToolkit._canonical_value(2.0u"m")
-    @test PottsToolkit._canonical_value(1.0u"m") !=
-          PottsToolkit._canonical_value(1.0u"s")
+    @test Potts._canonical_value(1.0u"m") ==
+          Potts._canonical_value(1.0u"m")
+    @test Potts._canonical_value(1.0u"m") !=
+          Potts._canonical_value(2.0u"m")
+    @test Potts._canonical_value(1.0u"m") !=
+          Potts._canonical_value(1.0u"s")
 
     small = complete(_type_erased_scheduling_fixture(:type_stability_small, 1))
     large = complete(_type_erased_scheduling_fixture(:type_stability_large, 24))
@@ -64,11 +64,11 @@ end
     large_completion = getfield(large, :completion)
 
     @test typeof(small_completion) === typeof(large_completion) ===
-          PottsToolkit.CompletedPottsData
+          Potts.CompletedPottsData
     @test typeof(small_completion.records) ===
-          typeof(large_completion.records) === Vector{PottsToolkit.QualifiedStatement}
+          typeof(large_completion.records) === Vector{Potts.QualifiedStatement}
     @test typeof(small_completion.schedule) ===
-          typeof(large_completion.schedule) === Vector{PottsToolkit.QualifiedStatement}
+          typeof(large_completion.schedule) === Vector{Potts.QualifiedStatement}
     @test typeof(small_completion.variables) ===
           typeof(large_completion.variables) === Vector{Any}
     @test inspect(small, Statements()) isa Tuple
@@ -80,9 +80,9 @@ end
     small_data = getfield(small_scheduled, :completion).scheduled
     large_data = getfield(large_scheduled, :completion).scheduled
     @test typeof(small_data) === typeof(large_data) ===
-          PottsToolkit.ScheduledPottsData
+          Potts.ScheduledPottsData
     @test typeof(small_data.schedule) === typeof(large_data.schedule) ===
-          Vector{PottsToolkit.QualifiedStatement}
+          Vector{Potts.QualifiedStatement}
     @test typeof(small_data.provenance.records) ===
           typeof(large_data.provenance.records) === Vector{NamedTuple}
     @test typeof(small_data.capability_requirements.engine_admission) ===
@@ -90,18 +90,18 @@ end
           Vector{NamedTuple}
 
     # The type-erased encoder must retain the reference logical tuple bytes.
-    reference_fingerprint = PottsToolkit._scheduled_fingerprint(
+    reference_fingerprint = Potts._scheduled_fingerprint(
         small_completion.fingerprints.completed,
         Tuple(small_data.schedule),
-        PottsToolkit._fingerprint_scheduled_provenance(small_data.provenance),
-        PottsToolkit._fingerprint_scheduled_parameters(small_data.parameters),
+        Potts._fingerprint_scheduled_provenance(small_data.provenance),
+        Potts._fingerprint_scheduled_parameters(small_data.parameters),
         Tuple(small_data.states),
         Tuple(small_data.relationships),
         Tuple(small_data.observations),
-        PottsToolkit._fingerprint_scheduled_capabilities(
+        Potts._fingerprint_scheduled_capabilities(
             small_data.capability_requirements
         ),
-        Tuple(PottsToolkit._scheduled_native_provenance(
+        Tuple(Potts._scheduled_native_provenance(
             small_data.native_components
         )),
     )
@@ -173,7 +173,7 @@ end
     catch caught
         caught
     end
-    @test error isa PottsToolkit.PottsValidationError
+    @test error isa Potts.PottsValidationError
     @test error.stage === :scheduling
     @test occursin("interface-only settled-snapshot spatial query", sprint(
         showerror, error
@@ -195,7 +195,7 @@ function _contains_corepotts_value(value)
         return any(pair ->
             _contains_corepotts_value(first(pair)) ||
             _contains_corepotts_value(last(pair)), value)
-    elseif parentmodule(typeof(value)) === PottsToolkit &&
+    elseif parentmodule(typeof(value)) === Potts &&
             isstructtype(typeof(value))
         return any(
             field -> _contains_corepotts_value(getfield(value, field)),
@@ -250,7 +250,7 @@ end
 
     completion = getfield(scheduled, :completion)
     structural = completion.scheduled
-    @test structural isa PottsToolkit.ScheduledPottsData
+    @test structural isa Potts.ScheduledPottsData
     @test fieldnames(typeof(structural)) == (
         :schema_version,
         :schedule,
@@ -298,9 +298,9 @@ end
     @test io_error isa ArgumentError
     @test occursin("declare inputs and outputs", sprint(showerror, io_error))
 
-    @test PottsToolkit.mtkcompile === ModelingToolkitBase.mtkcompile
-    @test :mtkcompile in names(PottsToolkit)
-    @test Symbol("@mtkcompile") in names(PottsToolkit)
+    @test Potts.mtkcompile === ModelingToolkitBase.mtkcompile
+    @test :mtkcompile in names(Potts)
+    @test Symbol("@mtkcompile") in names(Potts)
 
     macro_source = _scheduling_fixture(:macro_scheduled)
     @mtkcompile macro_scheduled = PottsSystem(
@@ -314,7 +314,7 @@ end
 
     project = dirname(@__DIR__)
     script = """
-        using PottsToolkit
+        using Potts
         @assert !any(id -> id.name == \"ModelingToolkit\", keys(Base.loaded_modules))
         cell = CellKind(:cell; extinction = RetireAtZero())
         medium = MediumKind(:medium)

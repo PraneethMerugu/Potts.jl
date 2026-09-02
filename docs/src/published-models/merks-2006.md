@@ -14,7 +14,7 @@ The model boundary is deliberate:
 
 | Mechanism | Owner | Reason |
 |:--|:--|:--|
-| ownership, volume, chemotaxis, connectivity, and copy scheduling | PottsToolkit | These are CPM lattice and proposal semantics. |
+| ownership, volume, chemotaxis, connectivity, and copy scheduling | Potts | These are CPM lattice and proposal semantics. |
 | diffusion, decay, and secretion | bounded `DiscreteFieldEuler()` policy | Diffusion and decay are equation-defined, but secretion is recomputed from the staged, moving endothelial occupancy after each MCS. |
 
 MethodOfLines is the preferred upstream PDE substrate when its checked adapter
@@ -28,7 +28,7 @@ moving CPM-occupancy/PDE boundary. The narrow built-in stencil is therefore
 retained here until a separately qualified native field-input adapter exists.
 
 Within every native symbolic component, MTK retains equations, hierarchy, and
-connections; PottsToolkit owns only the explicit typed CPM/state boundary,
+connections; Potts owns only the explicit typed CPM/state boundary,
 cadence, and atomic publication.
 
 The complete reusable source is
@@ -36,8 +36,8 @@ The complete reusable source is
 The strict documentation build executes that exact file:
 
 ```@example merks_product
-using PottsToolkit
-program = joinpath(pkgdir(PottsToolkit), "examples", "merks_2006_serial.jl")
+using Potts
+program = joinpath(pkgdir(Potts), "examples", "merks_2006_serial.jl")
 include(program)
 result = Merks2006Serial.run_merks_2006()
 final = last(result.solution)

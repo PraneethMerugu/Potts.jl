@@ -190,7 +190,7 @@ MAY keep compiled state resident across steps and observations.
 
 ## Custom Properties
 
-PottsToolkit MUST support user-declared custom per-cell properties through the same compiled schema
+Potts MUST support user-declared custom per-cell properties through the same compiled schema
 as built-in components. Custom properties MUST NOT bypass type, lifecycle, initialization, or GPU
 compatibility validation.
 

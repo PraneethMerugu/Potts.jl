@@ -23,11 +23,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - package: PottsToolkit
+          - package: Potts
             project: .
             os: macos-15
             julia: '1.12.6'
-          - package: PottsToolkit
+          - package: Potts
             project: .
             os: ubuntu-latest
             julia: '1.12.6'
@@ -66,20 +66,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: root, project: ., julia: '1.12.6', os: ubuntu-latest, packages: 'PottsToolkit'}
-          - {name: docs, project: docs, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath, CorePotts, PottsToolkit, MakiePotts'}
+          - {name: root, project: ., julia: '1.12.6', os: ubuntu-latest, packages: 'Potts'}
+          - {name: docs, project: docs, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath, CorePotts, Potts, MakiePotts'}
           - {name: corepotts, project: lib/CorePotts, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts'}
           - {name: localmath-tests, project: lib/LocalMath/test, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath'}
           - {name: localmath-witnesses, project: test/localmath_witnesses, julia: '1.12.6', os: ubuntu-latest, packages: 'LocalMath'}
-          - {name: examples, project: examples, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, PottsToolkit, MakiePotts'}
-          - {name: dashboards, project: examples/dashboards, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, PottsToolkit, MakiePotts'}
-          - {name: replay, project: integration/replay, julia: '1.12.1', os: macos-15, packages: 'PottsToolkit'}
+          - {name: examples, project: examples, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, Potts, MakiePotts'}
+          - {name: dashboards, project: examples/dashboards, julia: '1.12.6', os: ubuntu-latest, packages: 'CorePotts, Potts, MakiePotts'}
+          - {name: replay, project: integration/replay, julia: '1.12.1', os: macos-15, packages: 'Potts'}
           - {name: makiepotts, project: lib/MakiePotts, julia: '1.12.6', os: ubuntu-latest, packages: 'MakiePotts'}
           - {name: makie-backends, project: lib/MakiePotts/test/backends, julia: '1.12.6', os: ubuntu-latest, packages: 'MakiePotts'}
-          - {name: dagger, project: benchmark/dagger, julia: '1.12.6', os: ubuntu-latest, packages: 'Dagger, PottsToolkit'}
-          - {name: cuda, project: benchmark/backends/cuda, julia: '1.12.6', os: ubuntu-latest, packages: 'CUDA, CorePotts, PottsToolkit'}
-          - {name: amdgpu, project: benchmark/backends/amdgpu, julia: '1.12.6', os: ubuntu-latest, packages: 'AMDGPU, CorePotts, PottsToolkit'}
-          - {name: metal, project: benchmark/backends/metal, julia: '1.12.6', os: macos-15, packages: 'Metal, LocalMath, CorePotts, PottsToolkit'}
+          - {name: dagger, project: benchmark/dagger, julia: '1.12.6', os: ubuntu-latest, packages: 'Dagger, Potts'}
+          - {name: cuda, project: benchmark/backends/cuda, julia: '1.12.6', os: ubuntu-latest, packages: 'CUDA, CorePotts, Potts'}
+          - {name: amdgpu, project: benchmark/backends/amdgpu, julia: '1.12.6', os: ubuntu-latest, packages: 'AMDGPU, CorePotts, Potts'}
+          - {name: metal, project: benchmark/backends/metal, julia: '1.12.6', os: macos-15, packages: 'Metal, LocalMath, CorePotts, Potts'}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:

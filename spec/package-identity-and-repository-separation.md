@@ -21,7 +21,7 @@ on LocalMath where its public bounded-authoring API exposes LocalMath values.
 
 ## Package identities
 
-The high-level `PottsToolkit` package, module, extensions, current documentation,
+The high-level `Potts` package, module, extensions, current documentation,
 tests, configuration, and durable serialization identities are replaced
 atomically by `Potts`. The repository remains `Potts.jl` and the package keeps
 UUID `e4c62a4c-8889-4cc8-ad3a-75efc86c53b9`. No alias module, compatibility

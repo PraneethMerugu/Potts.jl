@@ -6,7 +6,7 @@ changes stage against an inactive candidate and publish atomically after the
 MCS and all coupled work succeed.
 
 ```@example lifecycle
-using PottsToolkit
+using Potts
 using Symbolics
 
 @variables activity

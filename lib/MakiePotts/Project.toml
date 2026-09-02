@@ -1,22 +1,22 @@
 name = "MakiePotts"
 uuid = "95794c00-c762-4965-bf31-de18bcca2bc9"
 authors = ["PraneethMerugu <merugufam@gmail.com>"]
-version = "0.2.0"
+version = "0.3.0-rc1"
 
 [deps]
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
 [sources]
-PottsToolkit = {path = "../.."}
+Potts = {path = "../.."}
 
 [compat]
 Aqua = "0.8"
 CairoMakie = "0.15"
 Makie = "0.24"
 ModelingToolkitBase = "1.51"
-PottsToolkit = "0.2"
+Potts = "0.2"
 PrecompileTools = "1"
 Random = "1"
 Symbolics = "7"

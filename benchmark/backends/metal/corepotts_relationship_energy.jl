@@ -1,7 +1,7 @@
 using Test
 import Metal
 import LocalMath
-using PottsToolkit
+using Potts
 using ModelingToolkitBase: @variables
 
 function _relationship_energy_problem()
@@ -89,14 +89,14 @@ end
     cpu = solve(
         problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.CPUBackend(),
+        backend = Potts.CPUBackend(),
         scalar_type = Float32,
         save_everystep = true,
     )
     device = solve(
         problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         save_everystep = true,
     )

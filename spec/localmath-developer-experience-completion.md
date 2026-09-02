@@ -75,7 +75,7 @@ Total identity, affine, interior, and periodic reads retain their behavior.
 Optional indexed, fixed, exterior, masked, and other incomplete reads must make
 their absence semantics visible. Add no compatibility constructor or selector.
 Inventory every active explicit `Access` construction in LocalMath, CorePotts,
-PottsToolkit, tests, witnesses, benchmarks, and current documentation. Classify
+Potts, tests, witnesses, benchmarks, and current documentation. Classify
 each use from its scientific relation and evaluator meaning rather than making
 a mechanical keyword replacement. Every intentionally absence-aware use must
 spell `required=false`. Strict uses retain the required default even where
@@ -359,7 +359,7 @@ Use ordinary Julia tests and existing documentation and GPU programs.
 - Simplified and explicit compiler constructions have equal semantics,
   inspection, launches, and numerical results.
 - Complete LocalMath, scientific-witness, documentation, CorePotts,
-  PottsToolkit, integration, and real-Metal suites pass on the repository Julia
+  Potts, integration, and real-Metal suites pass on the repository Julia
   version.
 
 Compare cold planning and preparation for representative laws because the

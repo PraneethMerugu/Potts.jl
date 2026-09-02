@@ -94,7 +94,7 @@ relations by role rather than consulting a global topology.
 
 ## Presets and Defaults
 
-CorePotts MUST NOT impose one universal scientific neighborhood bundle. PottsToolkit provides named,
+CorePotts MUST NOT impose one universal scientific neighborhood bundle. Potts provides named,
 reportable presets, including compatibility-oriented and native physics-oriented families.
 
 Examples include:

@@ -1,4 +1,4 @@
-function _render_cells(state::PottsToolkit.PottsSavedState)
+function _render_cells(state::Potts.PottsSavedState)
     return [
         RenderCellMetadata(
             CellIdentity(id, Int(state.cell_generations[id])),
@@ -9,7 +9,7 @@ function _render_cells(state::PottsToolkit.PottsSavedState)
     ]
 end
 
-function _render_owners(state::PottsToolkit.PottsSavedState, cells)
+function _render_owners(state::Potts.PottsSavedState, cells)
     active = Set(cell.identity.id for cell in cells)
     owners = Array{RenderOwner}(undef, size(state.ownership))
     for site in CartesianIndices(owners)
@@ -58,19 +58,19 @@ function _project_extent(
 end
 
 function materialize_channel(
-        ::PottsToolkit.PottsSavedState,
+        ::Potts.PottsSavedState,
         cells,
         request::AbstractChannelRequest,
     )
     throw(RenderMaterializationError(
-        PottsToolkit.PottsSavedState,
+        Potts.PottsSavedState,
         "saved state does not contain channel $(request.key); request a " *
         "declared visualization-neutral observation when solving",
     ))
 end
 
 function _build_renderframe(
-        state::PottsToolkit.PottsSavedState,
+        state::Potts.PottsSavedState,
         request::RenderRequest,
     )
     cells = _render_cells(state)
@@ -106,12 +106,12 @@ Defensively materialize one native Makie frame from an immutable saved
 boundary.
 """
 renderframe(
-    state::PottsToolkit.PottsSavedState,
+    state::Potts.PottsSavedState,
     request::RenderRequest = RenderRequest(),
 ) = _build_renderframe(state, request)
 
 function renderframe(
-        solution::PottsToolkit.PottsSolution,
+        solution::Potts.PottsSolution,
         request::RenderRequest = RenderRequest();
         index::Integer = lastindex(solution),
     )
@@ -121,7 +121,7 @@ end
 
 """Eagerly materialize independent frames from a retained solution."""
 function renderframes(
-        solution::PottsToolkit.PottsSolution,
+        solution::Potts.PottsSolution,
         request::RenderRequest = RenderRequest(),
     )
     return [

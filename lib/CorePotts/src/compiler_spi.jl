@@ -1,5 +1,5 @@
 """
-Compiler-facing construction protocol for PottsToolkit and third-party
+Compiler-facing construction protocol for Potts and third-party
 scientific extensions.
 
 Bindings in this module are the only supported route from another package into

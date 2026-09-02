@@ -1,4 +1,4 @@
-using PottsToolkit
+using Potts
 using ModelingToolkitBase
 using Statistics
 using Symbolics
@@ -106,7 +106,7 @@ function localmath_graph_fixture(
         ownership = LabelledCells(labels; cells = [cell], medium),
         values = include_external ? (localmath_graph_field => field_values,) : (),
     )
-    executable = PottsToolkit._lower_execution_plan(
+    executable = Potts._lower_execution_plan(
         compiled,
         CheckerboardSweepCPM(),
         CPUBackend(),
@@ -115,7 +115,7 @@ function localmath_graph_fixture(
     return (
         executable,
         program = executable.core_program,
-        initial = PottsToolkit._core_initial_state(executable, initial),
+        initial = Potts._core_initial_state(executable, initial),
     )
 end
 

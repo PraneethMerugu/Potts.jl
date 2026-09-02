@@ -7,7 +7,7 @@ structural compilation and standard SciML problem construction live in the
 weak extension.
 
 ```@example native_global
-using PottsToolkit
+using Potts
 using ModelingToolkit
 using OrdinaryDiffEqTsit5: Tsit5
 

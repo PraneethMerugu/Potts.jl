@@ -3,7 +3,7 @@ include("setup.jl")
 using Aqua
 using ExplicitImports
 
-const POTTS_TOOLKIT_TESTS = (
+const POTTS_TESTS = (
     "test_public_api.jl",
     "test_system_contract.jl",
     "test_statements_and_traversal.jl",
@@ -30,11 +30,11 @@ const POTTS_TOOLKIT_TESTS = (
 @testset "root test inventory" begin
     discovered = Set(filter(name -> startswith(name, "test_") && endswith(name, ".jl"),
         readdir(@__DIR__)))
-    @test discovered == Set(POTTS_TOOLKIT_TESTS)
+    @test discovered == Set(POTTS_TESTS)
 end
 
-@testset "PottsToolkit package suite" begin
-    for file in POTTS_TOOLKIT_TESTS
+@testset "Potts package suite" begin
+    for file in POTTS_TESTS
         @info "package test file" file
         include(file)
     end

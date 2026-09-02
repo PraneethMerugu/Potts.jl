@@ -77,7 +77,7 @@ Phase 4 closes when this slice:
 1. runs through public CorePotts logical-state and scientific protocols;
 2. passes deterministic replay, attempt accounting, energy-delta, extinction, invariant, and
    observation tests;
-3. is constructible from one public PottsToolkit volume-plus-contact model spelling; and
+3. is constructible from one public Potts volume-plus-contact model spelling; and
 4. has type inference and allocation behavior measured and recorded without claiming production
    performance.
 

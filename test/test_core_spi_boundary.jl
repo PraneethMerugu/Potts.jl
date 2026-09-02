@@ -1,6 +1,6 @@
-@testset "PottsToolkit uses only the frozen Core boundary and explicit SPIs" begin
-    @test !isdefined(PottsToolkit, :stage_external_inputs!)
-    @test !isdefined(PottsToolkit, :_stage_external_inputs!)
+@testset "Potts uses only the frozen Core boundary and explicit SPIs" begin
+    @test !isdefined(Potts, :stage_external_inputs!)
+    @test !isdefined(Potts, :_stage_external_inputs!)
 
     frozen_top_level = Set((
         :CompilerSPI,

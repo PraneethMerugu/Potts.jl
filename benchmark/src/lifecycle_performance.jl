@@ -1,10 +1,10 @@
-using PottsToolkit
+using Potts
 using Statistics
 using Symbolics
 
 import CorePotts
 
-_lower_lifecycle_benchmark(system) = PottsToolkit._lower_execution_plan(
+_lower_lifecycle_benchmark(system) = Potts._lower_execution_plan(
     mtkcompile(complete(system)), SequentialCPM(), CPUBackend(), Float32
 )
 

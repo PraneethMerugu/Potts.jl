@@ -1,4 +1,4 @@
-function PottsToolkit.registered_statement_lowering(
+function Potts.registered_statement_lowering(
         ::Val{:lower_example_read},
         id::StatementID,
         arguments::Tuple,
@@ -97,7 +97,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     @test activity_record.shape == ()
     @test activity_record.ownership === :none
     @test activity_record.persistence === :none
-    @test PottsToolkit.QualifiedStatementID(
+    @test Potts.QualifiedStatementID(
         (:wortel,), StatementID(:endothelial)
     ) in activity_record.resources
     @test activity_record.provenance.schema === :built_in_v1
@@ -120,17 +120,17 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     flat = Int16[1, 2, 3, 4]
     square = reshape(Base.copy(flat), 2, 2)
     @test collect(flat) == vec(square)
-    @test PottsToolkit._canonical_value(flat) !=
-          PottsToolkit._canonical_value(square)
-    @test PottsToolkit._sha256_hex(:array_shape, flat) !=
-          PottsToolkit._sha256_hex(:array_shape, square)
+    @test Potts._canonical_value(flat) !=
+          Potts._canonical_value(square)
+    @test Potts._sha256_hex(:array_shape, flat) !=
+          Potts._sha256_hex(:array_shape, square)
 
     one_based = FingerprintAxisVector(Base.copy(flat), 1)
     shifted = FingerprintAxisVector(Base.copy(flat), -2)
     @test collect(one_based) == collect(shifted)
     @test axes(one_based) != axes(shifted)
-    @test PottsToolkit._canonical_value(one_based) !=
-          PottsToolkit._canonical_value(shifted)
+    @test Potts._canonical_value(one_based) !=
+          Potts._canonical_value(shifted)
 
     delimiter_left = (
         FingerprintDelimiterPayload("x,y"),
@@ -143,10 +143,10 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     legacy_join(value) = "(" *
         join((sprint(show, item) for item in value), ",") * ")"
     @test legacy_join(delimiter_left) == legacy_join(delimiter_right)
-    @test PottsToolkit._canonical_value(delimiter_left) !=
-          PottsToolkit._canonical_value(delimiter_right)
-    @test PottsToolkit._sha256_hex(delimiter_left) !=
-          PottsToolkit._sha256_hex(delimiter_right)
+    @test Potts._canonical_value(delimiter_left) !=
+          Potts._canonical_value(delimiter_right)
+    @test Potts._sha256_hex(delimiter_left) !=
+          Potts._sha256_hex(delimiter_right)
 
     cell = CellBinding(:cell)
     @named missing_surface_relation = PottsSystem(
@@ -169,7 +169,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test surface_relation_error isa PottsToolkit.PottsValidationError
+    @test surface_relation_error isa Potts.PottsValidationError
     @test surface_relation_error.stage === :analysis
     @test only(surface_relation_error.diagnostics).kind ===
           :illegal_operation_use
@@ -210,7 +210,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test error isa PottsToolkit.PottsValidationError
+    @test error isa Potts.PottsValidationError
     @test error.stage == :completion
     @test only(error.diagnostics).kind == :duplicate_statement_identity
 
@@ -276,8 +276,8 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
         v"1.0.0",
         fingerprint_contract_b,
     )
-    @test PottsToolkit._canonical_value(FingerprintPayload{:a}) !=
-          PottsToolkit._canonical_value(FingerprintPayload{:b})
+    @test Potts._canonical_value(FingerprintPayload{:a}) !=
+          Potts._canonical_value(FingerprintPayload{:b})
     @test completed_system_fingerprint(complete(
         registered_model;
         registry = fingerprint_registry_a,
@@ -293,7 +293,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
         lowering_identity = :lower_external_weighted_site_term,
         descriptor_payload_type = FingerprintPayload{:forged},
     )
-    forged_core = PottsToolkit.StatementCore(
+    forged_core = Potts.StatementCore(
         StatementID(:forged_internal_origin),
         (; expression = activity_strength),
         (; __registered_origin = forged_origin),
@@ -310,7 +310,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test forged_origin_error isa PottsToolkit.PottsValidationError
+    @test forged_origin_error isa Potts.PottsValidationError
     @test only(forged_origin_error.diagnostics).kind ===
           :unauthenticated_registered_origin
 
@@ -321,7 +321,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
         lowering_identity = :lower_example_read,
         descriptor_payload_type = FingerprintPayload{:forged},
     )
-    mismatched_core = PottsToolkit.StatementCore(
+    mismatched_core = Potts.StatementCore(
         StatementID(:mismatched_internal_origin),
         (; expression = activity_strength),
         (; __registered_origin = mismatched_origin),
@@ -337,7 +337,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test mismatched_origin_error isa PottsToolkit.PottsValidationError
+    @test mismatched_origin_error isa Potts.PottsValidationError
     @test only(mismatched_origin_error.diagnostics).kind ===
           :unauthenticated_registered_origin
 
@@ -347,7 +347,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test missing_registry_error isa PottsToolkit.PottsValidationError
+    @test missing_registry_error isa Potts.PottsValidationError
     @test only(missing_registry_error.diagnostics).kind ===
           :unregistered_statement_schema
 
@@ -360,7 +360,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test mistyped_error isa PottsToolkit.PottsValidationError
+    @test mistyped_error isa Potts.PottsValidationError
     @test only(mistyped_error.diagnostics).kind ===
           :registered_argument_type_mismatch
 
@@ -374,7 +374,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test aggregate_error isa PottsToolkit.PottsValidationError
+    @test aggregate_error isa Potts.PottsValidationError
     @test length(aggregate_error.diagnostics) == 2
     @test getfield.(aggregate_error.diagnostics, :kind) ==
           (:unregistered_statement_schema, :unregistered_statement_schema)
@@ -410,7 +410,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test duplicate_draw_error isa PottsToolkit.PottsValidationError
+    @test duplicate_draw_error isa Potts.PottsValidationError
     @test only(duplicate_draw_error.diagnostics).kind === :duplicate_draw_key
 
     @named invalid_distribution = PottsSystem(statements = @statements begin
@@ -424,7 +424,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test distribution_error isa PottsToolkit.PottsValidationError
+    @test distribution_error isa Potts.PottsValidationError
     @test only(distribution_error.diagnostics).kind ===
           :invalid_random_distribution
     @test only(distribution_error.diagnostics).source isa SourceLocation
@@ -441,7 +441,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test unit_vector_error isa PottsToolkit.PottsValidationError
+    @test unit_vector_error isa Potts.PottsValidationError
     @test only(unit_vector_error.diagnostics).kind ===
           :nonscalar_distribution_in_proposal_term
     @test only(unit_vector_error.diagnostics).source isa SourceLocation
@@ -501,7 +501,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
         catch caught
             caught
         end
-        @test marker_error isa PottsToolkit.PottsValidationError
+        @test marker_error isa Potts.PottsValidationError
         @test only(marker_error.diagnostics).kind === kind
         @test only(marker_error.diagnostics).source isa SourceLocation
     end
@@ -522,7 +522,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test centered_error isa PottsToolkit.PottsValidationError
+    @test centered_error isa Potts.PottsValidationError
     @test only(centered_error.diagnostics).kind ===
           :unsupported_field_placement
     @test only(centered_error.diagnostics).source isa SourceLocation
@@ -545,7 +545,7 @@ Base.getindex(value::FingerprintAxisVector, index::Int) =
     catch caught
         caught
     end
-    @test phase_error isa PottsToolkit.PottsValidationError
+    @test phase_error isa Potts.PottsValidationError
     @test only(phase_error.diagnostics).kind === :illegal_effect_phase
     @test only(phase_error.diagnostics).source isa SourceLocation
 end

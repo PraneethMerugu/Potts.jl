@@ -138,7 +138,7 @@ using SciMLBase
     catch error
         error
     end
-    @test scalar_error isa PottsToolkit.NativeCapabilityError
+    @test scalar_error isa Potts.NativeCapabilityError
     @test scalar_error.capability === :scalar_type
 
     dae_component = NativeComponent(
@@ -202,7 +202,7 @@ using SciMLBase
     catch error
         error
     end
-    @test dae_error isa PottsToolkit.NativeCapabilityError
+    @test dae_error isa Potts.NativeCapabilityError
     @test dae_error.capability === :native_execution_mode
 
     @independent_variables batch_event_t
@@ -271,7 +271,7 @@ using SciMLBase
     catch error
         error
     end
-    @test event_error isa PottsToolkit.NativeCapabilityError
+    @test event_error isa Potts.NativeCapabilityError
     @test event_error.capability === :native_events
 
     callback = SciMLBase.DiscreteCallback(
@@ -289,6 +289,6 @@ using SciMLBase
     catch error
         error
     end
-    @test callback_error isa PottsToolkit.NativeCapabilityError
+    @test callback_error isa Potts.NativeCapabilityError
     @test callback_error.capability === :outer_callbacks
 end

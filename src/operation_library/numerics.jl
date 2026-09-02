@@ -15,7 +15,7 @@ operation_transfer(::typeof(_potts_discrete_field_euler), ::Int) =
         allowed_roles = (:process,),
         allowed_phases = (:AfterMCS,),
         required_context = :iteration,
-        owner = :PottsToolkitNumerics,
+        owner = :PottsNumerics,
     )
 
 struct DiscreteFieldEulerCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end

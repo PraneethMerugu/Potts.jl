@@ -1,6 +1,6 @@
-module PottsToolkitModelingToolkitExt
+module PottsModelingToolkitExt
 
-using PottsToolkit
+using Potts
 import ModelingToolkit
 import ModelingToolkitBase
 import SHA
@@ -279,20 +279,20 @@ function _preflight_native_public_semantics(component, system)
     return nothing
 end
 
-function PottsToolkit.native_source_fingerprint(
+function Potts.native_source_fingerprint(
         source::ModelingToolkitBase.AbstractSystem
     )
     payload = string(
         _native_token("Schema:", "potts-native-source-v2"),
         _native_canonical_value(_native_system_fingerprint_payload(source)),
     )
-    return PottsToolkit.NativeSourceFingerprint(
+    return Potts.NativeSourceFingerprint(
         bytes2hex(SHA.sha256(codeunits(payload)))
     )
 end
 
-function PottsToolkit.mtkcompile_native(
-        component::PottsToolkit.CompletedNativeComponent; kwargs...
+function Potts.mtkcompile_native(
+        component::Potts.CompletedNativeComponent; kwargs...
     )
     haskey(kwargs, :inputs) && throw(ArgumentError(
         "native component inputs are owned by its NativeInput declarations"
@@ -301,32 +301,32 @@ function PottsToolkit.mtkcompile_native(
         "native component outputs are owned by its NativeOutput declarations"
     ))
     declaration = component.declaration
-    original = PottsToolkit.native_source(declaration)
+    original = Potts.native_source(declaration)
     all(
         equation -> equation isa Symbolics.Equation,
         ModelingToolkitBase.equations(original),
     ) || throw(ArgumentError(
         "native domain systems with non-equation semantics require an explicit " *
         "conversion to a concrete MTK ODE/DAE System (for example " *
-        "Catalyst.ode_model); PottsToolkit never chooses that interpretation",
+        "Catalyst.ode_model); Potts never chooses that interpretation",
     ))
     inputs = Any[
-        PottsToolkit.native_variable(port)
-        for port in PottsToolkit.native_inputs(declaration)
+        Potts.native_variable(port)
+        for port in Potts.native_inputs(declaration)
     ]
     outputs = Any[
         variable
-        for port in PottsToolkit.native_outputs(declaration)
-        for variable in PottsToolkit.native_variables(port)
+        for port in Potts.native_outputs(declaration)
+        for variable in Potts.native_variables(port)
     ]
 
-    # Full ModelingToolkit owns every structural pass. PottsToolkit retains the
+    # Full ModelingToolkit owns every structural pass. Potts retains the
     # returned system and the original source; it does not reconstruct either.
     scheduled = ModelingToolkitBase.mtkcompile(
         original; inputs, outputs, kwargs...
     )
-    scheduled_fingerprint = PottsToolkit.native_source_fingerprint(scheduled)
-    return PottsToolkit.ScheduledNativeComponent(
+    scheduled_fingerprint = Potts.native_source_fingerprint(scheduled)
+    return Potts.ScheduledNativeComponent(
         component.path,
         declaration,
         original,
@@ -348,13 +348,13 @@ SymbolicIndexingInterface.parameter_values(view::NativeLogicalStateView) = view.
 SymbolicIndexingInterface.current_time(view::NativeLogicalStateView) = view.t
 
 function _path_error(component, capability, message)
-    return PottsToolkit.NativeCapabilityError(
-        PottsToolkit.native_component_path(component), capability, message
+    return Potts.NativeCapabilityError(
+        Potts.native_component_path(component), capability, message
     )
 end
 
 function _require_native_logical_value(component, value, label)
-    path = PottsToolkit.native_component_path(component)
+    path = Potts.native_component_path(component)
     if value isa AbstractFloat
         isfinite(value) || throw(_path_error(
             component, :logical_checkpoint, "$label is nonfinite"
@@ -391,7 +391,7 @@ const _FUNCTIONAL_IDA_PACKAGE_UUID = "c3572dad-4567-51f8-b174-8c6c989267f4"
 const _FUNCTIONAL_IDA_PACKAGE_VERSION = v"6.4.2"
 
 function _package_identity(module_value)
-    package = PottsToolkit._native_package_identity(module_value)
+    package = Potts._native_package_identity(module_value)
     return (
         package = package.name,
         uuid = package.uuid,
@@ -434,8 +434,8 @@ const _TESTED_NATIVE_RUNTIME_STACK = (
     ),
 )
 
-function PottsToolkit._native_runtime_stack_identity(
-        ::PottsToolkit.ScheduledNativeComponent
+function Potts._native_runtime_stack_identity(
+        ::Potts.ScheduledNativeComponent
     )
     return (
         ModelingToolkit = _package_identity(ModelingToolkit),
@@ -513,8 +513,8 @@ function _replay_safe_scalar_map(value, known)
 end
 
 function _replay_safe_native_lifecycle_map(component, expression)
-    expression isa PottsToolkit.NativeLogicalState && return true
-    system = PottsToolkit.native_scheduled_system(component)
+    expression isa Potts.NativeLogicalState && return true
+    system = Potts.native_scheduled_system(component)
     known = Any[
         ModelingToolkitBase.unknowns(system)...,
         ModelingToolkitBase.parameters(system)...,
@@ -540,33 +540,33 @@ function _replay_safe_native_lifecycle_map(component, expression)
 end
 
 function _replay_safe_native_lifecycle(component, lifecycle)
-    lifecycle isa PottsToolkit.PerCellNativeLifecycle || return false
+    lifecycle isa Potts.PerCellNativeLifecycle || return false
     lifecycle.creation isa Union{
-        PottsToolkit.PreserveNativeInitialization, PottsToolkit.Unsupported,
+        Potts.PreserveNativeInitialization, Potts.Unsupported,
     } || return false
     transition = lifecycle.transition
     transition_ok = transition isa Union{
-        PottsToolkit.Preserve, PottsToolkit.Unsupported,
-    } || transition isa PottsToolkit.ResetTo &&
+        Potts.Preserve, Potts.Unsupported,
+    } || transition isa Potts.ResetTo &&
         _replay_safe_native_lifecycle_map(component, transition.expression) ||
-        transition isa PottsToolkit.Transform &&
+        transition isa Potts.Transform &&
         _replay_safe_native_lifecycle_map(component, transition.expression)
     transition_ok || return false
     division = lifecycle.division
     return division isa Union{
-            PottsToolkit.CopyToDaughters, PottsToolkit.Unsupported,
-        } || division isa PottsToolkit.SplitConservatively &&
+            Potts.CopyToDaughters, Potts.Unsupported,
+        } || division isa Potts.SplitConservatively &&
             division.fraction isa Real && isfinite(division.fraction) &&
             0 <= division.fraction <= 1 ||
-        division isa PottsToolkit.PreserveParentResetDaughter &&
+        division isa Potts.PreserveParentResetDaughter &&
             _replay_safe_native_lifecycle_map(component, division.expression) ||
-        division isa PottsToolkit.ResetBoth &&
+        division isa Potts.ResetBoth &&
             _replay_safe_native_lifecycle_map(
                 component, division.parent_expression
             ) && _replay_safe_native_lifecycle_map(
                 component, division.daughter_expression
             ) ||
-        division isa PottsToolkit.TransformDaughters &&
+        division isa Potts.TransformDaughters &&
             _replay_safe_native_lifecycle_map(
                 component, division.parent_expression
             ) && _replay_safe_native_lifecycle_map(
@@ -575,7 +575,7 @@ function _replay_safe_native_lifecycle(component, lifecycle)
 end
 
 function _replay_safe_explicit_native_ode(component)
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     ivs = ModelingToolkitBase.independent_variables(system)
     length(ivs) == 1 || return false
     unknowns = ModelingToolkitBase.unknowns(system)
@@ -589,12 +589,12 @@ function _replay_safe_explicit_native_ode(component)
         length(equations)
 end
 
-function PottsToolkit._native_replay_schema(
-        component::PottsToolkit.ScheduledNativeComponent
+function Potts._native_replay_schema(
+        component::Potts.ScheduledNativeComponent
     )
     unreviewed = (family = :unreviewed, fingerprint = nothing)
-    system = PottsToolkit.native_original_system(component)
-    events = PottsToolkit._native_event_contract(component)
+    system = Potts.native_original_system(component)
+    events = Potts._native_event_contract(component)
     events.runtime_policy === :event_free || return unreviewed
     for node in _native_system_tree(system)
         unsupported = (
@@ -658,93 +658,93 @@ function PottsToolkit._native_replay_schema(
     )
 end
 
-function PottsToolkit._native_profile_evidence(
-        component::PottsToolkit.ScheduledNativeComponent,
-        profile::PottsToolkit.NativeSolveProfile,
+function Potts._native_profile_evidence(
+        component::Potts.ScheduledNativeComponent,
+        profile::Potts.NativeSolveProfile,
     )
-    if any(endpoint -> endpoint.port isa PottsToolkit.NativeFieldOutput,
-            PottsToolkit.native_coupling_endpoints(component))
+    if any(endpoint -> endpoint.port isa Potts.NativeFieldOutput,
+            Potts.native_coupling_endpoints(component))
         return applicable(
-            PottsToolkit._native_field_profile_evidence, component, profile
-        ) ? PottsToolkit._native_field_profile_evidence(component, profile) : nothing
+            Potts._native_field_profile_evidence, component, profile
+        ) ? Potts._native_field_profile_evidence(component, profile) : nothing
     end
     declaration = getfield(component, :declaration)
-    family = PottsToolkit.native_family(declaration)
-    events = PottsToolkit._native_event_contract(component)
+    family = Potts.native_family(declaration)
+    events = Potts._native_event_contract(component)
     events.admitted || return nothing
     algorithm_type = typeof(profile.algorithm)
     algorithm_module = parentmodule(algorithm_type)
-    package = PottsToolkit._native_package_identity(algorithm_module)
+    package = Potts._native_package_identity(algorithm_module)
     version = package.version
-    options_class = PottsToolkit._native_profile_options_class(profile)
-    tested_stack = PottsToolkit._native_runtime_stack_identity(component) ==
+    options_class = Potts._native_profile_options_class(profile)
+    tested_stack = Potts._native_runtime_stack_identity(component) ==
         _TESTED_NATIVE_RUNTIME_STACK
     default_algorithm = _is_public_default_algorithm_instance(
         profile.algorithm
     )
-    replay_schema = PottsToolkit._native_replay_schema(component)
+    replay_schema = Potts._native_replay_schema(component)
     scope = getfield(declaration, :scope)
     lifecycle = getfield(declaration, :lifecycle)
-    scope_qualified = scope isa PottsToolkit.Global ||
-        scope isa PottsToolkit.PerCell &&
+    scope_qualified = scope isa Potts.Global ||
+        scope isa Potts.PerCell &&
         _replay_safe_native_lifecycle(component, lifecycle)
-    execution_qualified = profile.execution isa PottsToolkit.SerialNativeExecution ||
-        scope isa PottsToolkit.PerCell &&
-        profile.execution isa PottsToolkit.BatchedNativeExecution &&
+    execution_qualified = profile.execution isa Potts.SerialNativeExecution ||
+        scope isa Potts.PerCell &&
+        profile.execution isa Potts.BatchedNativeExecution &&
         _replay_safe_explicit_native_ode(component)
     ode_replay_qualified = tested_stack && default_algorithm &&
         scope_qualified && execution_qualified &&
         replay_schema.family === :scalar_algebraic_differential_v1 &&
         profile.exact_replay && profile.deterministic &&
-        family isa PottsToolkit.ODEComponent &&
+        family isa Potts.ODEComponent &&
         package.name == "OrdinaryDiffEqTsit5" &&
         package.uuid == _EXACT_TSIT5_PACKAGE_UUID &&
         version == _EXACT_TSIT5_PACKAGE_VERSION &&
         nameof(algorithm_type) === :Tsit5 &&
         options_class in (:fixed_step, :fixed_step_bounded_failure)
     ode_replay_qualified || return nothing
-    suite = scope isa PottsToolkit.PerCell &&
-            profile.execution isa PottsToolkit.BatchedNativeExecution ?
+    suite = scope isa Potts.PerCell &&
+            profile.execution isa Potts.BatchedNativeExecution ?
         :per_cell_batched_cpu_native_ode_exact_replay :
-        scope isa PottsToolkit.PerCell ?
+        scope isa Potts.PerCell ?
         :per_cell_serial_native_ode_exact_replay :
         options_class === :fixed_step_bounded_failure ?
         :native_failure_atomicity_exact :
         :native_ode_exact_replay
-    evidence_fingerprint = PottsToolkit._sha256_hex(
+    evidence_fingerprint = Potts._sha256_hex(
         "native-runtime-evidence-v2",
-        PottsToolkit._native_profile_fingerprint(profile),
-        PottsToolkit.native_scheduled_fingerprint(component).hex,
-        PottsToolkit._native_runtime_stack_identity(component),
+        Potts._native_profile_fingerprint(profile),
+        Potts.native_scheduled_fingerprint(component).hex,
+        Potts._native_runtime_stack_identity(component),
         replay_schema,
         events,
         scope,
         lifecycle,
     )
-    evidence = PottsToolkit._capability_evidence_identity(
-        :PottsToolkit,
+    evidence = Potts._capability_evidence_identity(
+        :Potts,
         suite,
         v"1.0.0",
         evidence_fingerprint,
     )
     return (
-        status = PottsToolkit.CorePotts.BackendSPI.Supported,
+        status = Potts.CorePotts.BackendSPI.Supported,
         exact_replay = true,
         evidence,
     )
 end
 
-function PottsToolkit.preflight_native_component(
-        component::PottsToolkit.ScheduledNativeComponent,
-        point::PottsToolkit.NativeOperatingPoint,
-        profile::PottsToolkit.NativeSolveProfile,
+function Potts.preflight_native_component(
+        component::Potts.ScheduledNativeComponent,
+        point::Potts.NativeOperatingPoint,
+        profile::Potts.NativeSolveProfile,
         initial_time,
     )
-    path = PottsToolkit.native_component_path(component)
-    point.path == path || throw(PottsToolkit.NativeProfileError(
+    path = Potts.native_component_path(component)
+    point.path == path || throw(Potts.NativeProfileError(
         path, "operating-point path does not match the scheduled component"
     ))
-    profile.path == path || throw(PottsToolkit.NativeProfileError(
+    profile.path == path || throw(Potts.NativeProfileError(
         path, "solve-profile path does not match the scheduled component"
     ))
     initial_time isa Real && isfinite(initial_time) || throw(_path_error(
@@ -753,33 +753,33 @@ function PottsToolkit.preflight_native_component(
             "native runtime requires a finite scalar Real clock; quantity clocks are not yet admitted",
     ))
     declaration = getfield(component, :declaration)
-    family = PottsToolkit.native_family(declaration)
-    family isa Union{PottsToolkit.ODEComponent, PottsToolkit.DAEComponent} ||
+    family = Potts.native_family(declaration)
+    family isa Union{Potts.ODEComponent, Potts.DAEComponent} ||
         throw(_path_error(
             component, :problem_family,
             "only ODEComponent and DAEComponent use the native ODE/DAE runtime",
         ))
     execution = profile.execution
     execution isa Union{
-        PottsToolkit.SerialNativeExecution,
-        PottsToolkit.BatchedNativeExecution,
-        PottsToolkit.MetalNativeExecution,
+        Potts.SerialNativeExecution,
+        Potts.BatchedNativeExecution,
+        Potts.MetalNativeExecution,
     } || throw(_path_error(
         component,
         :native_execution_mode,
         "unknown native execution mode $(typeof(execution))",
     ))
     if execution isa Union{
-            PottsToolkit.BatchedNativeExecution,
-            PottsToolkit.MetalNativeExecution,
+            Potts.BatchedNativeExecution,
+            Potts.MetalNativeExecution,
         }
-        getfield(declaration, :scope) isa PottsToolkit.PerCell ||
-            execution isa PottsToolkit.MetalNativeExecution || throw(_path_error(
+        getfield(declaration, :scope) isa Potts.PerCell ||
+            execution isa Potts.MetalNativeExecution || throw(_path_error(
                 component,
                 :native_execution_mode,
                 "BatchedNativeExecution requires a PerCell component",
             ))
-        family isa PottsToolkit.ODEComponent || throw(_path_error(
+        family isa Potts.ODEComponent || throw(_path_error(
             component,
             :native_execution_mode,
             "batched/Metal native execution admits only fixed-shape ODE components",
@@ -789,7 +789,7 @@ function PottsToolkit.preflight_native_component(
             :native_execution_mode,
             "batched/Metal native execution requires an explicit identity-mass-matrix ODE with one retained differential equation per unknown",
         ))
-        PottsToolkit._native_profile_options_class(profile) in (
+        Potts._native_profile_options_class(profile) in (
             :fixed_step, :fixed_step_bounded_failure,
         ) || throw(_path_error(
             component,
@@ -797,7 +797,7 @@ function PottsToolkit.preflight_native_component(
             "batched/Metal native execution requires adaptive=false and a positive fixed dt",
         ))
     end
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     isempty(ModelingToolkitBase.brownians(system)) || throw(_path_error(
         component, :problem_family, "SDE systems require a distinct adapter"
     ))
@@ -806,7 +806,7 @@ function PottsToolkit.preflight_native_component(
         "jump and hybrid systems require an explicit semantic adapter",
     ))
     _preflight_native_public_semantics(component, system)
-    events = PottsToolkit._native_event_contract(component)
+    events = Potts._native_event_contract(component)
     events.admitted || throw(_path_error(
         component,
         :native_events,
@@ -821,8 +821,8 @@ function PottsToolkit.preflight_native_component(
             component, :fixed_dimension_state,
             "dynamic or unscalarized array state is outside the native runtime profile",
         ))
-    for endpoint in PottsToolkit.native_coupling_endpoints(component)
-        variables = PottsToolkit.native_variables(endpoint.port)
+    for endpoint in Potts.native_coupling_endpoints(component)
+        variables = Potts.native_variables(endpoint.port)
         all(variable -> variable isa Symbolics.Num, variables) ||
             throw(_path_error(
                 component, :typed_io,
@@ -832,7 +832,7 @@ function PottsToolkit.preflight_native_component(
             try
                 SymbolicIndexingInterface.getsym(system, variable)
             catch error
-                throw(PottsToolkit.NativeExecutionError(
+                throw(Potts.NativeExecutionError(
                     path, :symbolic_index_preflight, error
                 ))
             end
@@ -845,7 +845,7 @@ function PottsToolkit.preflight_native_component(
         component, last(pair), "initialization guess"
     ), point.guesses)
     if profile.exact_replay
-        evidence = PottsToolkit._native_profile_evidence(component, profile)
+        evidence = Potts._native_profile_evidence(component, profile)
         (evidence === nothing || !evidence.exact_replay) &&
             throw(_path_error(
                 component,
@@ -879,16 +879,16 @@ function _native_problem(
         tspan;
         continuation::Bool,
     )
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     declaration = getfield(component, :declaration)
     kwargs = isempty(guesses) ? NamedTuple() : (; guesses = collect(guesses))
     continuation && (kwargs = merge(kwargs, (; build_initializeprob = false)))
-    family = PottsToolkit.native_family(declaration)
-    if family isa PottsToolkit.ODEComponent
+    family = Potts.native_family(declaration)
+    if family isa Potts.ODEComponent
         return SciMLBase.ODEProblem(
             system, collect(operating_pairs), tspan; kwargs...
         )
-    elseif family isa PottsToolkit.DAEComponent
+    elseif family isa Potts.DAEComponent
         return SciMLBase.DAEProblem(
             system, collect(operating_pairs), tspan; kwargs...
         )
@@ -908,19 +908,19 @@ end
 
 function _native_derivative_values(component, integrator)
     declaration = getfield(component, :declaration)
-    PottsToolkit.native_family(declaration) isa PottsToolkit.DAEComponent ||
+    Potts.native_family(declaration) isa Potts.DAEComponent ||
         return nothing
     values = SciMLBase.get_du(integrator)
     return Tuple(deepcopy(value) for value in values)
 end
 
 function _capture_native_state(component, integrator, retcode)
-    return PottsToolkit.NativeLogicalState(
-        PottsToolkit.native_component_path(component),
+    return Potts.NativeLogicalState(
+        Potts.native_component_path(component),
         Tuple(deepcopy(value) for value in
             SymbolicIndexingInterface.state_values(integrator)),
         _native_parameter_values(
-            PottsToolkit.native_scheduled_system(component), integrator
+            Potts.native_scheduled_system(component), integrator
         ),
         _native_derivative_values(component, integrator),
         SymbolicIndexingInterface.current_time(integrator),
@@ -928,30 +928,30 @@ function _capture_native_state(component, integrator, retcode)
     )
 end
 
-function PottsToolkit.initialize_native_component(
-        component::PottsToolkit.ScheduledNativeComponent,
-        point::PottsToolkit.NativeOperatingPoint,
-        profile::PottsToolkit.NativeSolveProfile,
+function Potts.initialize_native_component(
+        component::Potts.ScheduledNativeComponent,
+        point::Potts.NativeOperatingPoint,
+        profile::Potts.NativeSolveProfile,
         inputs::Tuple,
         initial_time,
     )
-    PottsToolkit.preflight_native_component(
+    Potts.preflight_native_component(
         component, point, profile, initial_time
     )
-    return PottsToolkit._initialize_preflighted_native_component(
+    return Potts._initialize_preflighted_native_component(
         component, point, profile, inputs, initial_time
     )
 end
 
-function PottsToolkit._initialize_preflighted_native_component(
-        component::PottsToolkit.ScheduledNativeComponent,
-        point::PottsToolkit.NativeOperatingPoint,
-        profile::PottsToolkit.NativeSolveProfile,
+function Potts._initialize_preflighted_native_component(
+        component::Potts.ScheduledNativeComponent,
+        point::Potts.NativeOperatingPoint,
+        profile::Potts.NativeSolveProfile,
         inputs::Tuple,
         initial_time,
     )
     declaration = getfield(component, :declaration)
-    stride = PottsToolkit.native_cadence_stride(declaration)
+    stride = Potts.native_cadence_stride(declaration)
     clock = getfield(declaration, :time)
     terminal_time = initial_time + stride * getfield(clock, :duration_per_mcs)
     operating = _merge_pairs(point.values, inputs)
@@ -962,9 +962,9 @@ function PottsToolkit._initialize_preflighted_native_component(
         (initial_time, terminal_time);
         continuation = false,
     )
-    solve_options = if PottsToolkit.native_family(
+    solve_options = if Potts.native_family(
             getfield(component, :declaration)
-        ) isa PottsToolkit.DAEComponent
+        ) isa Potts.DAEComponent
         merge(profile.options, (; initializealg = SciMLBase.OverrideInit()))
     else
         profile.options
@@ -982,14 +982,14 @@ function PottsToolkit._initialize_preflighted_native_component(
     )
 end
 
-function PottsToolkit._native_initial_problem(
-        component::PottsToolkit.ScheduledNativeComponent,
-        point::PottsToolkit.NativeOperatingPoint,
+function Potts._native_initial_problem(
+        component::Potts.ScheduledNativeComponent,
+        point::Potts.NativeOperatingPoint,
         inputs::Tuple,
         initial_time,
     )
     declaration = getfield(component, :declaration)
-    stride = PottsToolkit.native_cadence_stride(declaration)
+    stride = Potts.native_cadence_stride(declaration)
     clock = getfield(declaration, :time)
     terminal_time = initial_time + stride * getfield(clock, :duration_per_mcs)
     return _native_problem(
@@ -1002,7 +1002,7 @@ function PottsToolkit._native_initial_problem(
 end
 
 function _continuation_operating_pairs(component, state, inputs)
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     unknowns = ModelingToolkitBase.unknowns(system)
     parameters = ModelingToolkitBase.parameters(system)
     length(unknowns) == length(state.u) || throw(_path_error(
@@ -1018,7 +1018,7 @@ function _continuation_operating_pairs(component, state, inputs)
         parameters .=> state.p;
     ]
     declaration = getfield(component, :declaration)
-    if PottsToolkit.native_family(declaration) isa PottsToolkit.DAEComponent
+    if Potts.native_family(declaration) isa Potts.DAEComponent
         state.du === nothing && throw(_path_error(
             component, :dae_derivative_state,
             "DAE continuation requires a stored derivative vector",
@@ -1038,9 +1038,9 @@ function _continuation_operating_pairs(component, state, inputs)
     return _merge_pairs(state_pairs, inputs)
 end
 
-function PottsToolkit._native_continuation_problem(
-        component::PottsToolkit.ScheduledNativeComponent,
-        state::PottsToolkit.NativeLogicalState,
+function Potts._native_continuation_problem(
+        component::Potts.ScheduledNativeComponent,
+        state::Potts.NativeLogicalState,
         inputs::Tuple,
         target_time,
     )
@@ -1054,19 +1054,19 @@ function PottsToolkit._native_continuation_problem(
     )
 end
 
-function PottsToolkit._native_logical_from_problem_solution(
-        component::PottsToolkit.ScheduledNativeComponent,
+function Potts._native_logical_from_problem_solution(
+        component::Potts.ScheduledNativeComponent,
         problem,
         final_state,
         reached,
         retcode,
     )
     view = NativeLogicalStateView(final_state, problem.p, reached)
-    return PottsToolkit.NativeLogicalState(
-        PottsToolkit.native_component_path(component),
+    return Potts.NativeLogicalState(
+        Potts.native_component_path(component),
         Tuple(deepcopy(value) for value in final_state),
         _native_parameter_values(
-            PottsToolkit.native_scheduled_system(component), view
+            Potts.native_scheduled_system(component), view
         ),
         nothing,
         reached,
@@ -1074,25 +1074,25 @@ function PottsToolkit._native_logical_from_problem_solution(
     )
 end
 
-function PottsToolkit.advance_native_component(
-        component::PottsToolkit.ScheduledNativeComponent,
-        state::PottsToolkit.NativeLogicalState,
-        profile::PottsToolkit.NativeSolveProfile,
+function Potts.advance_native_component(
+        component::Potts.ScheduledNativeComponent,
+        state::Potts.NativeLogicalState,
+        profile::Potts.NativeSolveProfile,
         inputs::Tuple,
         target_time,
     )
-    path = PottsToolkit.native_component_path(component)
-    state.path == path || throw(PottsToolkit.NativeProfileError(
+    path = Potts.native_component_path(component)
+    state.path == path || throw(Potts.NativeProfileError(
         path, "logical-state path does not match scheduled component"
     ))
-    profile.path == path || throw(PottsToolkit.NativeProfileError(
+    profile.path == path || throw(Potts.NativeProfileError(
         path, "solve-profile path does not match scheduled component"
     ))
     state.t < target_time || throw(_path_error(
         component, :physical_time,
         "native target time $target_time must follow logical time $(state.t)",
     ))
-    problem = PottsToolkit._native_continuation_problem(
+    problem = Potts._native_continuation_problem(
         component, state, inputs, target_time
     )
     integrator = SciMLBase.init(
@@ -1105,7 +1105,7 @@ function PottsToolkit.advance_native_component(
                        (retcode === SciMLBase.ReturnCode.Terminated &&
                         reached == target_time)
     accepted_retcode && reached == target_time ||
-        throw(PottsToolkit.NativeSolveFailure(
+        throw(Potts.NativeSolveFailure(
             path, retcode, reached, target_time
         ))
     return _capture_native_state(component, integrator, retcode)
@@ -1130,19 +1130,19 @@ function (function_value::NativeBatchedODEFunction)(du, u, parameters, time)
     return nothing
 end
 
-function PottsToolkit._advance_native_cell_batch(
-        component::PottsToolkit.ScheduledNativeComponent,
+function Potts._advance_native_cell_batch(
+        component::Potts.ScheduledNativeComponent,
         lanes::AbstractVector,
-        profile::PottsToolkit.NativeSolveProfile,
+        profile::Potts.NativeSolveProfile,
         target_time,
     )
-    profile.execution isa PottsToolkit.BatchedNativeExecution ||
+    profile.execution isa Potts.BatchedNativeExecution ||
         throw(_path_error(
             component,
             :native_execution_mode,
             "the batched lane entry point requires BatchedNativeExecution",
         ))
-    isempty(lanes) && return PottsToolkit.NativeLogicalState[]
+    isempty(lanes) && return Potts.NativeLogicalState[]
     lane_problems = map(lanes) do lane
         operating = _continuation_operating_pairs(
             component, lane.state, lane.inputs
@@ -1218,13 +1218,13 @@ function PottsToolkit._advance_native_cell_batch(
     retcode = solution.retcode
     reached = SymbolicIndexingInterface.current_time(integrator)
     retcode === SciMLBase.ReturnCode.Success && reached == target_time ||
-        throw(PottsToolkit.NativeSolveFailure(
-            PottsToolkit.native_component_path(component),
+        throw(Potts.NativeSolveFailure(
+            Potts.native_component_path(component),
             retcode,
             reached,
             target_time,
         ))
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     final = SymbolicIndexingInterface.state_values(integrator)
     state_type = typeof(first(lanes).state)
     results = Vector{state_type}(undef, length(lanes))
@@ -1235,8 +1235,8 @@ function PottsToolkit._advance_native_cell_batch(
         parameter_view = NativeLogicalStateView(
             lane_problem.u0, lane_problem.p, reached
         )
-        results[lane] = PottsToolkit.NativeLogicalState(
-            PottsToolkit.native_component_path(component),
+        results[lane] = Potts.NativeLogicalState(
+            Potts.native_component_path(component),
             Tuple(deepcopy(final[index]) for index in first_index:last_index),
             _native_parameter_values(system, parameter_view),
             nothing,
@@ -1248,7 +1248,7 @@ function PottsToolkit._advance_native_cell_batch(
 end
 
 function _native_parameter_buffer(component, state)
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     parameters = ModelingToolkitBase.parameters(system)
     length(parameters) == length(state.p) || throw(_path_error(
         component, :fixed_dimension_state,
@@ -1259,25 +1259,25 @@ function _native_parameter_buffer(component, state)
     )
 end
 
-function PottsToolkit.native_state_view(
-        component::PottsToolkit.ScheduledNativeComponent,
-        state::PottsToolkit.NativeLogicalState,
+function Potts.native_state_view(
+        component::Potts.ScheduledNativeComponent,
+        state::Potts.NativeLogicalState,
     )
-    state.path == PottsToolkit.native_component_path(component) ||
+    state.path == Potts.native_component_path(component) ||
         throw(ArgumentError("native state and component paths do not match"))
     return NativeLogicalStateView(
         state.u, _native_parameter_buffer(component, state), state.t
     )
 end
 
-function PottsToolkit.native_component_value(
-        component::PottsToolkit.ScheduledNativeComponent,
-        state::PottsToolkit.NativeLogicalState,
+function Potts.native_component_value(
+        component::Potts.ScheduledNativeComponent,
+        state::Potts.NativeLogicalState,
         symbolic,
     )
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     getter = SymbolicIndexingInterface.getsym(system, symbolic)
-    return getter(PottsToolkit.native_state_view(component, state))
+    return getter(Potts.native_state_view(component, state))
 end
 
 struct NativeLifecycleAssignment{G}
@@ -1295,9 +1295,9 @@ struct PreserveNativeLifecycleState end
 (::PreserveNativeLifecycleState)(state, _event) = state
 
 function (transform::NativeLifecycleStateTransform)(state, _event)
-    state.path == PottsToolkit.native_component_path(transform.component) ||
+    state.path == Potts.native_component_path(transform.component) ||
         throw(ArgumentError("native lifecycle state path does not match its component"))
-    view = PottsToolkit.native_state_view(transform.component, state)
+    view = Potts.native_state_view(transform.component, state)
     # Every right-hand side observes the same pre-event state. This gives a
     # declarative map simultaneous-assignment semantics.
     values = map(assignment -> assignment.getter(view), transform.assignments)
@@ -1317,7 +1317,7 @@ function (transform::NativeLifecycleStateTransform)(state, _event)
             throw(ArgumentError("native lifecycle expression produced a nonfinite value"))
         unknowns[assignment.index] = deepcopy(converted)
     end
-    return PottsToolkit.NativeLogicalState(
+    return Potts.NativeLogicalState(
         state.path,
         Tuple(unknowns),
         state.p,
@@ -1349,7 +1349,7 @@ function _native_lifecycle_pairs(component, expression, label)
 end
 
 function _compile_native_lifecycle_transform(component, expression, label)
-    system = PottsToolkit.native_scheduled_system(component)
+    system = Potts.native_scheduled_system(component)
     assignments = map(_native_lifecycle_pairs(component, expression, label)) do pair
         target, value = pair
         index = SymbolicIndexingInterface.variable_index(system, target)
@@ -1361,8 +1361,8 @@ function _compile_native_lifecycle_transform(component, expression, label)
         getter = try
             SymbolicIndexingInterface.getsym(system, value)
         catch error
-            throw(PottsToolkit.NativeExecutionError(
-                PottsToolkit.native_component_path(component),
+            throw(Potts.NativeExecutionError(
+                Potts.native_component_path(component),
                 :lifecycle_symbolic_compilation,
                 error,
             ))
@@ -1377,41 +1377,41 @@ function _compile_native_lifecycle_transform(component, expression, label)
     return NativeLifecycleStateTransform(component, assignments)
 end
 
-function PottsToolkit._lower_native_cell_state_policy(
-        component::PottsToolkit.ScheduledNativeComponent,
-        template::PottsToolkit.NativeLogicalState,
+function Potts._lower_native_cell_state_policy(
+        component::Potts.ScheduledNativeComponent,
+        template::Potts.NativeLogicalState,
         capacity::Integer,
     )
     declaration = getfield(component, :declaration)
     lifecycle = getfield(declaration, :lifecycle)
-    lifecycle isa PottsToolkit.PerCellNativeLifecycle || throw(_path_error(
+    lifecycle isa Potts.PerCellNativeLifecycle || throw(_path_error(
         component, :native_lifecycle,
         "a PerCell native component requires PerCellNativeLifecycle",
     ))
 
-    creation = lifecycle.creation isa PottsToolkit.PreserveNativeInitialization ?
-        PottsToolkit._NativePreparedCreationAction(
+    creation = lifecycle.creation isa Potts.PreserveNativeInitialization ?
+        Potts._NativePreparedCreationAction(
             Union{Nothing, typeof(template)}[nothing for _ in 1:capacity]
-        ) : PottsToolkit._NativeUnsupportedAction(:creation)
+        ) : Potts._NativeUnsupportedAction(:creation)
 
-    transition = if lifecycle.transition isa PottsToolkit.Preserve
-        PottsToolkit._NativePreserveAction()
-    elseif lifecycle.transition isa PottsToolkit.Unsupported
-        PottsToolkit._NativeUnsupportedAction(:transition)
-    elseif lifecycle.transition isa PottsToolkit.ResetTo
+    transition = if lifecycle.transition isa Potts.Preserve
+        Potts._NativePreserveAction()
+    elseif lifecycle.transition isa Potts.Unsupported
+        Potts._NativeUnsupportedAction(:transition)
+    elseif lifecycle.transition isa Potts.ResetTo
         expression = lifecycle.transition.expression
-        expression isa PottsToolkit.NativeLogicalState ?
-            PottsToolkit._NativeResetAction(expression) :
-            PottsToolkit._NativeTransformAction(
+        expression isa Potts.NativeLogicalState ?
+            Potts._NativeResetAction(expression) :
+            Potts._NativeTransformAction(
                 _compile_native_lifecycle_transform(
                     component, expression, "ResetTo transition"
                 )
             )
-    elseif lifecycle.transition isa PottsToolkit.Transform
+    elseif lifecycle.transition isa Potts.Transform
         expression = lifecycle.transition.expression
         applicable(expression, template, nothing) ?
-            PottsToolkit._NativeTransformAction(expression) :
-            PottsToolkit._NativeTransformAction(
+            Potts._NativeTransformAction(expression) :
+            Potts._NativeTransformAction(
                 _compile_native_lifecycle_transform(
                     component, expression, "Transform transition"
                 )
@@ -1420,24 +1420,24 @@ function PottsToolkit._lower_native_cell_state_policy(
         error("validated native transition policy reached an unknown lowering branch")
     end
 
-    division = if lifecycle.division isa PottsToolkit.CopyToDaughters
-        PottsToolkit._NativeCopyDaughtersAction()
-    elseif lifecycle.division isa PottsToolkit.Unsupported
-        PottsToolkit._NativeUnsupportedAction(:division)
-    elseif lifecycle.division isa PottsToolkit.SplitConservatively
+    division = if lifecycle.division isa Potts.CopyToDaughters
+        Potts._NativeCopyDaughtersAction()
+    elseif lifecycle.division isa Potts.Unsupported
+        Potts._NativeUnsupportedAction(:division)
+    elseif lifecycle.division isa Potts.SplitConservatively
         fraction = lifecycle.division.fraction
         fraction isa Real && isfinite(fraction) && 0 <= fraction <= 1 ||
             throw(_path_error(
                 component, :native_lifecycle,
                 "SplitConservatively fraction must be finite and in [0, 1]",
             ))
-        PottsToolkit._NativeSplitDaughtersAction(fraction)
-    elseif lifecycle.division isa PottsToolkit.PreserveParentResetDaughter
+        Potts._NativeSplitDaughtersAction(fraction)
+    elseif lifecycle.division isa Potts.PreserveParentResetDaughter
         expression = lifecycle.division.expression
-        if expression isa PottsToolkit.NativeLogicalState
-            PottsToolkit._NativeParentResetDaughterAction(expression)
+        if expression isa Potts.NativeLogicalState
+            Potts._NativeParentResetDaughterAction(expression)
         else
-            PottsToolkit._NativeTransformDaughtersAction(
+            Potts._NativeTransformDaughtersAction(
                 PreserveNativeLifecycleState(),
                 _compile_native_lifecycle_transform(
                     component, expression,
@@ -1445,14 +1445,14 @@ function PottsToolkit._lower_native_cell_state_policy(
                 ),
             )
         end
-    elseif lifecycle.division isa PottsToolkit.ResetBoth
+    elseif lifecycle.division isa Potts.ResetBoth
         parent = lifecycle.division.parent_expression
         daughter = lifecycle.division.daughter_expression
-        if parent isa PottsToolkit.NativeLogicalState &&
-                daughter isa PottsToolkit.NativeLogicalState
-            PottsToolkit._NativeResetDaughtersAction(parent, daughter)
+        if parent isa Potts.NativeLogicalState &&
+                daughter isa Potts.NativeLogicalState
+            Potts._NativeResetDaughtersAction(parent, daughter)
         else
-            PottsToolkit._NativeTransformDaughtersAction(
+            Potts._NativeTransformDaughtersAction(
                 _compile_native_lifecycle_transform(
                     component, parent, "ResetBoth parent"
                 ),
@@ -1461,7 +1461,7 @@ function PottsToolkit._lower_native_cell_state_policy(
                 ),
             )
         end
-    elseif lifecycle.division isa PottsToolkit.TransformDaughters
+    elseif lifecycle.division isa Potts.TransformDaughters
         parent = lifecycle.division.parent_expression
         daughter = lifecycle.division.daughter_expression
         parent_transform = applicable(parent, template, nothing) ? parent :
@@ -1472,13 +1472,13 @@ function PottsToolkit._lower_native_cell_state_policy(
             _compile_native_lifecycle_transform(
                 component, daughter, "TransformDaughters daughter"
             )
-        PottsToolkit._NativeTransformDaughtersAction(
+        Potts._NativeTransformDaughtersAction(
             parent_transform, daughter_transform
         )
     else
         error("validated native division policy reached an unknown lowering branch")
     end
-    return PottsToolkit.NativeCellStatePolicy(
+    return Potts.NativeCellStatePolicy(
         template; creation, transition, division
     )
 end

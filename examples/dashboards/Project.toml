@@ -7,7 +7,7 @@ Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 
@@ -15,7 +15,7 @@ StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 CorePotts = {path = "../../lib/CorePotts"}
 KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git", rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"}
 MakiePotts = {path = "../../lib/MakiePotts"}
-PottsToolkit = {path = "../.."}
+Potts = {path = "../.."}
 
 [compat]
 julia = "1.12"

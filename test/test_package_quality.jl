@@ -1,14 +1,14 @@
 @testset "package quality" begin
-    Aqua.test_all(PottsToolkit; ambiguities = false, persistent_tasks = false)
-    ExplicitImports.test_explicit_imports(PottsToolkit)
+    Aqua.test_all(Potts; ambiguities = false, persistent_tasks = false)
+    ExplicitImports.test_explicit_imports(Potts)
 
-    ambiguities = Test.detect_ambiguities(PottsToolkit, Base; recursive = true)
+    ambiguities = Test.detect_ambiguities(Potts, Base; recursive = true)
     owned = filter(ambiguities) do pair
-        any(method -> method.module === PottsToolkit, pair)
+        any(method -> method.module === Potts, pair)
     end
     @test isempty(owned)
 
-    project = TOML.parsefile(joinpath(pkgdir(PottsToolkit), "Project.toml"))
+    project = TOML.parsefile(joinpath(pkgdir(Potts), "Project.toml"))
     dependencies = Set(keys(get(project, "deps", Dict())))
     weak_dependencies = Set(keys(get(project, "weakdeps", Dict())))
 
@@ -21,7 +21,7 @@
     @test Set(("DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
         "StaticArrays", "Unitful")) ⊆ weak_dependencies
 
-    repository = pkgdir(PottsToolkit)
+    repository = pkgdir(Potts)
     live_manifests = String[]
     for (directory, subdirectories, files) in walkdir(repository)
         filter!(name -> name != ".git" && name != "design" &&

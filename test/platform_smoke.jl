@@ -1,4 +1,4 @@
-using PottsToolkit
+using Potts
 using ModelingToolkitBase
 using SciMLBase
 using Symbolics

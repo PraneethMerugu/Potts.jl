@@ -2,36 +2,36 @@
     project = @__DIR__
     orders = (
         raw"""
-        using PottsToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) === nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMethodOfLinesExt) === nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitUnitfulExt) === nothing
+        using Potts
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) === nothing
+        @assert Base.get_extension(Potts, :PottsMethodOfLinesExt) === nothing
+        @assert Base.get_extension(Potts, :PottsUnitfulExt) === nothing
         using ModelingToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) !== nothing
         using MethodOfLines
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMethodOfLinesExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMethodOfLinesExt) !== nothing
         using Unitful
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitUnitfulExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsUnitfulExt) !== nothing
         print("potts-first-ok")
         """,
         raw"""
         using ModelingToolkit
         using MethodOfLines
         using Unitful
-        using PottsToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMethodOfLinesExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitUnitfulExt) !== nothing
+        using Potts
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMethodOfLinesExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsUnitfulExt) !== nothing
         print("dependencies-first-ok")
         """,
         raw"""
         using Unitful
-        using PottsToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitUnitfulExt) !== nothing
+        using Potts
+        @assert Base.get_extension(Potts, :PottsUnitfulExt) !== nothing
         using MethodOfLines
         using ModelingToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMethodOfLinesExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMethodOfLinesExt) !== nothing
         print("interleaved-ok")
         """,
     )

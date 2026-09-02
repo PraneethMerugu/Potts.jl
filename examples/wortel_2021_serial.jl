@@ -1,6 +1,6 @@
 module Wortel2021Serial
 
-using PottsToolkit
+using Potts
 using SciMLBase
 using Symbolics
 using ModelingToolkitBase: @parameters

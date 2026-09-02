@@ -1,6 +1,6 @@
-name = "PottsToolkit"
+name = "Potts"
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-version = "0.2.0"
+version = "0.3.0-rc1"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
@@ -53,11 +53,11 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [extensions]
-PottsToolkitMetalExt = "Metal"
-PottsToolkitMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
-PottsToolkitModelingToolkitExt = "ModelingToolkit"
-PottsToolkitMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
-PottsToolkitUnitfulExt = "Unitful"
+PottsMetalExt = "Metal"
+PottsMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
+PottsModelingToolkitExt = "ModelingToolkit"
+PottsMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
+PottsUnitfulExt = "Unitful"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

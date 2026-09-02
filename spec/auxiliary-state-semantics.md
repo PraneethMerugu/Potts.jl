@@ -134,9 +134,9 @@ in Phase 7. They become first-class only after their geometry, periodic behavior
 and lifecycle semantics pass their own evidence gates. Generic storage does not transfer a
 scientific proof from one observable to another.
 
-## PottsToolkit Authoring
+## Potts Authoring
 
-PottsToolkit authoring is organized by scientific concern. Conceptual spellings include a classical
+Potts authoring is organized by scientific concern. Conceptual spellings include a classical
 quadratic volume or surface constraint and a separately named fluctuating-pressure or
 fluctuating-tension mechanical component. There is no stable equilibrium-auxiliary spelling. Exact
 Level 1 constructors are `Volume`, `Surface`, `FluctuatingVolumePressure`, and

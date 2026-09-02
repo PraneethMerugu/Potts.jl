@@ -154,7 +154,7 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
     if !transfer.cpu
         interface_only =
             transfer.identity in _INTERFACE_ONLY_SPATIAL_QUERY_IDENTITIES &&
-            transfer.owner === :PottsToolkitSpatialQueryInterface &&
+            transfer.owner === :PottsSpatialQueryInterface &&
             transfer.allowed_roles == (:observation,) &&
             transfer.allowed_phases == (:none,) &&
             !transfer.gpu

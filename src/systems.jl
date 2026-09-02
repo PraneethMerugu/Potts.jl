@@ -531,7 +531,7 @@ native_components(system::PottsSystem) =
 """
     is_scheduled(system::PottsSystem) -> Bool
 
-Return whether `system` has passed PottsToolkit's structural `mtkcompile`
+Return whether `system` has passed Potts's structural `mtkcompile`
 boundary. This is the Potts-owned scheduling query; the `isscheduled` field is
 retained only as part of the `ModelingToolkitBase.AbstractSystem` storage
 contract.

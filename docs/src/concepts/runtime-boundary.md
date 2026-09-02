@@ -1,13 +1,13 @@
 # [Runtime boundary](@id runtime-boundary)
 
-PottsToolkit and CorePotts have one downward numerical boundary:
+Potts and CorePotts have one downward numerical boundary:
 
-- PottsToolkit produces a scheduled symbolic system, runtime schemas, and an immutable private
+- Potts produces a scheduled symbolic system, runtime schemas, and an immutable private
   lowering request.
 - CorePotts initializes and advances CPM state for an explicit algorithm/backend profile.
 - CorePotts returns settled observations, checkpoints, capability reports, and generation-safe
   lifecycle receipts.
-- PottsToolkit coordinates any native SciML component integrators outside copy-attempt kernels.
+- Potts coordinates any native SciML component integrators outside copy-attempt kernels.
 
 Runtime state is materialized once per `init`. A public executable is not a required authoring
 stage, and an extension cannot introduce another model authority, scheduler, lifecycle engine,

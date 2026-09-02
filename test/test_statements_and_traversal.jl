@@ -59,7 +59,7 @@
     all_statements = (declarations..., states..., proposals..., processes..., tail...)
 
     @test length(all_statements) == 22
-    @test length(unique(PottsToolkit.statement_kind.(all_statements))) == 22
+    @test length(unique(Potts.statement_kind.(all_statements))) == 22
     @test all(statement -> statement_source(statement) isa UnknownSource, all_statements)
 
     set = StatementSet((Lattice((4, 4); relations = (proposal = Moore(),)),
@@ -80,7 +80,7 @@
     @test all(statement -> statement_source(statement) isa SourceLocation, captured)
     @test occursin("HamiltonianTerm", statement_source(captured[2]).expression)
 
-    mapped = PottsToolkit.map_symbolics(
+    mapped = Potts.map_symbolics(
         value -> substitute(value, Dict(k => 4.0)),
         HamiltonianTerm(
             :mapped;
@@ -91,7 +91,7 @@
         ),
     )
     @test occursin("4.0", sprint(show, mapped))
-    mapped_effect = PottsToolkit.map_symbolics(
+    mapped_effect = Potts.map_symbolics(
         value -> substitute(value, Dict(k => 4.0)),
         AcceptedCopyProcess(
             :mapped_effect;
@@ -100,20 +100,20 @@
             phase = AcceptedCopy(),
         ),
     )
-    @test only(PottsToolkit._statement_arguments(mapped_effect).effects).value == 4.0
-    mapped_protocol = PottsToolkit.map_symbolics(
+    @test only(Potts._statement_arguments(mapped_effect).effects).value == 4.0
+    mapped_protocol = Potts.map_symbolics(
         value -> substitute(value, Dict(k => 4.0)),
         Protocol(Sweep(; temperature = k); name = :mapped_protocol),
     )
     @test only(
-        PottsToolkit._statement_arguments(mapped_protocol).stages
+        Potts._statement_arguments(mapped_protocol).stages
     ).options.temperature == 4.0
 
     copy = ProposalContext(:copy)
     @test occursin("source_cell", string(copy.source_cell))
     @test occursin("is_extension", string(copy.is_extension))
     links = RelationshipState(:focal_links; capacity = 16)
-    @test PottsToolkit._statement_options(links).maximum_degree == 16
+    @test Potts._statement_options(links).maximum_degree == 16
     edge = RelationshipBinding(:edge, links)
     @test occursin("endpoint_a", string(edge.a))
     @test occursin("edge_payload", string(edge.strength))
@@ -138,7 +138,7 @@
     )
     for (operation, arity, expression) in query_contracts
         @test expression isa Num
-        transfer = PottsToolkit.operation_transfer(operation, arity)
+        transfer = Potts.operation_transfer(operation, arity)
         @test transfer.arity == arity:arity
         @test transfer.allowed_roles == (:observation,)
         @test transfer.allowed_phases == (:none,)

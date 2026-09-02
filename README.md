@@ -5,7 +5,7 @@
 Potts.jl is a Cellular Potts modeling system for Julia. The repository contains four independently
 testable Julia packages:
 
-- **PottsToolkit**: the repository-root biological authoring interface.
+- **Potts**: the repository-root biological authoring interface.
 - **CorePotts**: the scientific execution engine and advanced extension interface.
 - **LocalMath**: the backend-portable local execution substrate used internally by CorePotts.
 - **MakiePotts**: native Makie recipes over explicit, host-owned render frames.
@@ -14,7 +14,7 @@ The historical `Potts` umbrella package and pre-freeze engine have been removed.
 
 ## Installation
 
-Until the package family is registered, install PottsToolkit directly from the repository root:
+Until the package family is registered, install Potts directly from the repository root:
 
 ```julia
 using Pkg

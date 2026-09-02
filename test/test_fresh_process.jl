@@ -1,7 +1,7 @@
 @testset "fresh-process public authoring through solution" begin
     project = dirname(@__DIR__)
     script = raw"""
-        using PottsToolkit
+        using Potts
         using SciMLBase
         using Symbolics
         using ModelingToolkitBase: @parameters

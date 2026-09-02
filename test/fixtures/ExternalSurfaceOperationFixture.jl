@@ -1,10 +1,10 @@
 module ExternalSurfaceOperationFixture
 
-using PottsToolkit
+using Potts
 using Symbolics
 import CorePotts
-import PottsToolkit: operation_transfer
-import PottsToolkit: registered_operation_tracker_requirements
+import Potts: operation_transfer
+import Potts: registered_operation_tracker_requirements
 
 const CompilerSPI = CorePotts.CompilerSPI
 
@@ -23,7 +23,7 @@ CompilerSPI.operation_context_supported(
 ) = true
 
 operation_transfer(::typeof(external_cell_surface), ::Int) =
-    PottsToolkit.OperationTransfer(
+    Potts.OperationTransfer(
         :fixture_external_cell_surface,
         VERSION,
         "external-cell-surface-v1",
@@ -32,7 +32,7 @@ operation_transfer(::typeof(external_cell_surface), ::Int) =
         :dimensionless,
         :pure,
         :total,
-        PottsToolkit.OwnerFootprintRule(),
+        Potts.OwnerFootprintRule(),
         true,
         true,
         (:fixture_external_cell_surface_tracker,),
@@ -42,11 +42,11 @@ operation_transfer(::typeof(external_cell_surface), ::Int) =
         :hamiltonian,
         :ExternalSurfaceOperationFixture,
         "ExternalSurfaceOperationFixture.ExternalCellSurfaceCallable",
-        (PottsToolkit.NamedSpatialRelationRequirement(:surface),),
+        (Potts.NamedSpatialRelationRequirement(:surface),),
     )
 
 operation_transfer(::typeof(external_cell_surface_alt), ::Int) =
-    PottsToolkit.OperationTransfer(
+    Potts.OperationTransfer(
         :fixture_external_cell_surface_alt,
         VERSION,
         "external-cell-surface-alt-v1",
@@ -55,7 +55,7 @@ operation_transfer(::typeof(external_cell_surface_alt), ::Int) =
         :dimensionless,
         :pure,
         :total,
-        PottsToolkit.OwnerFootprintRule(),
+        Potts.OwnerFootprintRule(),
         true,
         true,
         (:fixture_external_cell_surface_alt_tracker,),
@@ -65,7 +65,7 @@ operation_transfer(::typeof(external_cell_surface_alt), ::Int) =
         :hamiltonian,
         :ExternalSurfaceOperationFixture,
         "ExternalSurfaceOperationFixture.ExternalCellSurfaceCallable",
-        (PottsToolkit.NamedSpatialRelationRequirement(:surface_alt),),
+        (Potts.NamedSpatialRelationRequirement(:surface_alt),),
     )
 
 CompilerSPI.operation_callable(
@@ -95,7 +95,7 @@ function registered_operation_tracker_requirements(
             Val{:fixture_external_cell_surface_tracker},
             Val{:fixture_external_cell_surface_alt_tracker},
         },
-        context::PottsToolkit.OperationTrackerContext,
+        context::Potts.OperationTrackerContext,
         ::Type,
         ::Tuple,
     )

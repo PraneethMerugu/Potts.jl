@@ -1,8 +1,8 @@
 """
-PottsToolkit provides a ModelingToolkit-compatible authoring layer for cellular
+Potts provides a ModelingToolkit-compatible authoring layer for cellular
 Potts models and compiles completed systems to CorePotts execution programs.
 """
-module PottsToolkit
+module Potts
 
 import CorePotts
 import DynamicQuantities
@@ -209,7 +209,7 @@ public to_dynamic_quantity, to_unitful_quantity
 
 """Convert a DynamicQuantities value to Unitful when that extension is loaded."""
 function to_unitful_quantity end
-"""Convert a Unitful quantity to PottsToolkit's DynamicQuantities representation."""
+"""Convert a Unitful quantity to Potts's DynamicQuantities representation."""
 to_dynamic_quantity(value::DynamicQuantities.UnionAbstractQuantity) = value
 
 const compose = ModelingToolkitBase.compose

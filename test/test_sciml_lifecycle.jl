@@ -134,8 +134,8 @@ end
     fixture = _lifecycle_fixture(:lifecycle_validation)
     @test is_scheduled(fixture.system)
     @test mtkcompile(fixture.system) === fixture.system
-    @test :compile ∉ names(PottsToolkit)
-    @test :PottsExecutable ∉ names(PottsToolkit)
+    @test :compile ∉ names(Potts)
+    @test :PottsExecutable ∉ names(Potts)
 
     problem = _lifecycle_problem(
         fixture;
@@ -278,7 +278,7 @@ end
         caught
     end
     @test three_d_error isa
-        PottsToolkit.CorePotts.BackendSPI.ProgramCapabilityError
+        Potts.CorePotts.BackendSPI.ProgramCapabilityError
     @test occursin("dimension=3", sprint(showerror, three_d_error))
     @test fieldnames(typeof(problem)) == problem_fields
 end
@@ -522,7 +522,7 @@ end
     @test endpoints(4) === last(endpoints.u)
     @test endpoints(4; idxs = :lifecycle_marker) ==
           endpoints.u[end][:lifecycle_marker]
-    @test_throws PottsToolkit.PottsUnsavedTimeError endpoints(2)
+    @test_throws Potts.PottsUnsavedTimeError endpoints(2)
 
     every_step = solve(
         problem;
@@ -618,8 +618,28 @@ end
     @test captured isa PottsCheckpoint
     @test captured.schema == v"3.0.0"
     @test length(captured.checksum) == 64
-    @test hasproperty(captured.extensions, :PottsToolkit)
-    @test !hasproperty(captured.extensions.PottsToolkit, :checksum)
+    @test hasproperty(captured.extensions, :Potts)
+    @test captured.extensions.Potts.schema == v"2.0.0"
+    @test !hasproperty(captured.extensions.Potts, :checksum)
+    obsolete_extensions = (PottsToolkit = captured.extensions.Potts,)
+    obsolete_identity = CorePotts.ProgramCheckpoint(
+        captured.schema,
+        captured.program_fingerprint,
+        captured.snapshot,
+        captured.parameters,
+        captured.seed,
+        captured.replica,
+        captured.repeat,
+        captured.accepted,
+        captured.rejected,
+        captured.null_attempts,
+        captured.constraint_rejections,
+        captured.energy_rejections,
+        captured.retired_cells,
+        obsolete_extensions,
+        captured.checksum,
+    )
+    @test_throws ArgumentError Potts._potts_checkpoint_block(obsolete_identity)
     restore_callback = SciMLBase.DiscreteCallback(
         (_, _, _) -> false,
         _ -> nothing;

@@ -1,5 +1,5 @@
 using Test
-using PottsToolkit
+using Potts
 using Symbolics
 import DynamicQuantities
 using DynamicQuantities: @u_str

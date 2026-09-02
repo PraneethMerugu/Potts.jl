@@ -1,6 +1,6 @@
 module SourceTraversalAuthorityFixtures
 
-using PottsToolkit
+using Potts
 using ModelingToolkitBase
 using Symbolics
 
@@ -12,23 +12,23 @@ end
 
 Base.nameof(system::TraversalNativeSystem) = getfield(system, :name)
 
-function PottsToolkit.native_source_fingerprint(source::TraversalNativeSystem)
-    return PottsToolkit.NativeSourceFingerprint(PottsToolkit._sha256_hex(
+function Potts.native_source_fingerprint(source::TraversalNativeSystem)
+    return Potts.NativeSourceFingerprint(Potts._sha256_hex(
         "source-traversal-native-fixture-v1", nameof(source)
     ))
 end
 
-function PottsToolkit.mtkcompile_native(
-        component::PottsToolkit.CompletedNativeComponent{C},
-    ) where {C <: PottsToolkit.NativeComponent{TraversalNativeSystem}}
-    source = PottsToolkit.native_source(component.declaration)
-    scheduled_fingerprint = PottsToolkit.NativeSourceFingerprint(
-        PottsToolkit._sha256_hex(
+function Potts.mtkcompile_native(
+        component::Potts.CompletedNativeComponent{C},
+    ) where {C <: Potts.NativeComponent{TraversalNativeSystem}}
+    source = Potts.native_source(component.declaration)
+    scheduled_fingerprint = Potts.NativeSourceFingerprint(
+        Potts._sha256_hex(
             "source-traversal-native-scheduled-fixture-v1",
             component.source_fingerprint,
         )
     )
-    return PottsToolkit.ScheduledNativeComponent(
+    return Potts.ScheduledNativeComponent(
         component.path,
         component.declaration,
         source,
@@ -39,7 +39,7 @@ function PottsToolkit.mtkcompile_native(
     )
 end
 
-function PottsToolkit.registered_statement_lowering(
+function Potts.registered_statement_lowering(
         ::Val{:lower_source_traversal_observation},
         id::StatementID,
         arguments::Tuple,
@@ -149,10 +149,10 @@ function visit_key(kind, path, value)
         return (kind, path)
     elseif kind === :statement
         return (
-            kind, path, PottsToolkit.statement_kind(value), statement_id(value)
+            kind, path, Potts.statement_kind(value), statement_id(value)
         )
     end
-    return (kind, path, PottsToolkit._canonical_value(value))
+    return (kind, path, Potts._canonical_value(value))
 end
 
 end
@@ -164,7 +164,7 @@ using .SourceTraversalAuthorityFixtures
 
     complete_visits = Dict{Any, Int}()
     source = SourceTraversalAuthorityFixtures.model()
-    completed = PottsToolkit._with_source_traversal_witness(
+    completed = Potts._with_source_traversal_witness(
         (kind, path, value) -> begin
             key = SourceTraversalAuthorityFixtures.visit_key(kind, path, value)
             complete_visits[key] = get(complete_visits, key, 0) + 1
@@ -185,14 +185,14 @@ using .SourceTraversalAuthorityFixtures
     ))
     @test registered.kind === :Observation
     @test registered.provenance.schema === :source_traversal_observation
-    @test only(PottsToolkit._completion_data(completed).parameter_roles.structural) ==
+    @test only(Potts._completion_data(completed).parameter_roles.structural) ==
           (name = :relationship_capacity, value = 4)
     @test ModelingToolkitBase.iscomplete(only(
         ModelingToolkitBase.get_systems(completed)
     ))
 
     idempotent_complete_visits = Ref(0)
-    same_completed = PottsToolkit._with_source_traversal_witness(
+    same_completed = Potts._with_source_traversal_witness(
         (_, _, _) -> (idempotent_complete_visits[] += 1),
     ) do
         complete(completed; registry = fixture_registry)
@@ -201,7 +201,7 @@ using .SourceTraversalAuthorityFixtures
     @test iszero(idempotent_complete_visits[])
 
     compile_visits = Dict{Any, Int}()
-    scheduled = PottsToolkit._with_source_traversal_witness(
+    scheduled = Potts._with_source_traversal_witness(
         (kind, path, value) -> begin
             key = SourceTraversalAuthorityFixtures.visit_key(kind, path, value)
             compile_visits[key] = get(compile_visits, key, 0) + 1
@@ -216,19 +216,19 @@ using .SourceTraversalAuthorityFixtures
     native = only(scheduled_native_components(scheduled))
     @test native_component_path(native) ==
           (:traversal_root, :coupled_child, :native_component)
-    @test Set(PottsToolkit.potts_endpoint.(
-        PottsToolkit.native_coupling_endpoints(native)
+    @test Set(Potts.potts_endpoint.(
+        Potts.native_coupling_endpoints(native)
     )) == Set((
-        PottsToolkit.QualifiedStatementID(
+        Potts.QualifiedStatementID(
             (:traversal_root, :coupled_child), StatementID(:potts_to_native)
         ),
-        PottsToolkit.QualifiedStatementID(
+        Potts.QualifiedStatementID(
             (:traversal_root, :coupled_child), StatementID(:native_to_potts)
         ),
     ))
 
     idempotent_schedule_visits = Ref(0)
-    same_scheduled = PottsToolkit._with_source_traversal_witness(
+    same_scheduled = Potts._with_source_traversal_witness(
         (_, _, _) -> (idempotent_schedule_visits[] += 1),
     ) do
         mtkcompile(scheduled)

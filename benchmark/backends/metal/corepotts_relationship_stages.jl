@@ -1,6 +1,6 @@
 using Test
 import Metal
-using PottsToolkit
+using Potts
 
 function _relationship_stage_problem(effect_kind::Symbol)
     cell = CellKind(Symbol(effect_kind, :_cell); extinction = RetireAtZero())
@@ -58,14 +58,14 @@ end
         cpu = solve(
             problem,
             CheckerboardSweepCPM();
-            backend = PottsToolkit.CPUBackend(),
+            backend = Potts.CPUBackend(),
             scalar_type = Float32,
             save_everystep = true,
         )
         device = solve(
             problem,
             CheckerboardSweepCPM();
-            backend = PottsToolkit.MetalBackend(),
+            backend = Potts.MetalBackend(),
             scalar_type = Float32,
             save_everystep = true,
         )

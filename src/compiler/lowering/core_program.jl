@@ -485,7 +485,7 @@ function _lower_core_program(
     end
     ownership_change_handles = _ownership_change_handles(descriptor_plan)
     program_fingerprint = _sha256_hex(
-        "core-program-v1",
+        "core-program-v2",
         fingerprint_seed,
         nameof(typeof(engine)),
         nameof(typeof(backend)),
@@ -501,8 +501,8 @@ function _lower_core_program(
         ownership_change_handles,
         CorePotts.CompilerSPI.lifecycle_plan_report(lifecycle_plan),
         CorePotts.BackendSPI.checkerboard_plan_report(checkerboard_plan),
-        :PottsToolkit,
-        Base.pkgversion(PottsToolkit),
+        :Potts,
+        Base.pkgversion(Potts),
     )
     return CorePotts.CompilerSPI.CompiledPottsProgram(
         shape,
@@ -525,14 +525,14 @@ function _lower_core_program(
         checkerboard_plan,
         ownership_change_handles,
         mechanism_authority = (
-            authority = :PottsToolkit,
+            authority = :Potts,
             package = (
-                name = :PottsToolkit,
+                name = :Potts,
                 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
-                version = something(Base.pkgversion(PottsToolkit), v"0.0.0"),
+                version = something(Base.pkgversion(Potts), v"0.0.0"),
             ),
             suite = :potts_compiler_mechanisms,
-            revision = v"1.0.0",
+            revision = v"2.0.0",
         ),
     ), Tuple((
         identity = _manifest_identity(declaration.identity),

@@ -16,10 +16,10 @@ mechanisms are tied to CPM events and spatial identity:
 
 | Mechanism | Owner | Reason |
 |:--|:--|:--|
-| volume, contact, surface, connectivity, and copy energy | PottsToolkit | These are CPM lattice and proposal semantics. |
-| site activity and ownership-change clearing | PottsToolkit | Activity belongs to individual occupied lattice sites, not one continuous state per cell. |
-| activation | PottsToolkit | It occurs only when an extension copy is accepted. |
-| activity aging and history | PottsToolkit | They advance at the completed-MCS boundary and retain site-field history. |
+| volume, contact, surface, connectivity, and copy energy | Potts | These are CPM lattice and proposal semantics. |
+| site activity and ownership-change clearing | Potts | Activity belongs to individual occupied lattice sites, not one continuous state per cell. |
+| activation | Potts | It occurs only when an extension copy is accepted. |
+| activity aging and history | Potts | They advance at the completed-MCS boundary and retain site-field history. |
 
 A per-cell MTK ODE or Catalyst reaction network would lose the per-site
 activity distribution, accepted-copy trigger, and ownership-change behavior.
@@ -32,8 +32,8 @@ The complete reusable source is
 The strict documentation build executes that exact file:
 
 ```@example wortel_product
-using PottsToolkit
-program = joinpath(pkgdir(PottsToolkit), "examples", "wortel_2021_serial.jl")
+using Potts
+program = joinpath(pkgdir(Potts), "examples", "wortel_2021_serial.jl")
 include(program)
 result = Wortel2021Serial.run_wortel_2021()
 final = last(result.solution)

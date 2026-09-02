@@ -141,7 +141,7 @@ end
         time = FixedPhysicalTime(0.0, 0.25),
     )
     @test nameof(named_component) === :named_component
-    @test PottsToolkit.native_source(named_component) === native_source_system
+    @test Potts.native_source(named_component) === native_source_system
     source = PottsSystem(
         name = :native_authoring,
         statements = StatementSet((input_state, output_state)),
@@ -150,8 +150,8 @@ end
     )
 
     @test only(native_components(source)) === component
-    @test PottsToolkit.native_source(component) === native_source_system
-    @test PottsToolkit.native_cadence_stride(component) == 2
+    @test Potts.native_source(component) === native_source_system
+    @test Potts.native_cadence_stride(component) == 2
     @test native_time_interval(component, 2) == (1.0, 1.5)
     @test_throws ArgumentError scheduled_native_components(source)
 
@@ -165,9 +165,9 @@ end
     @test isempty(ModelingToolkitBase.get_systems(flattened))
     flattened_component = only(native_components(flattened))
     @test nameof(flattened_component) === :native_authoring₊native_fixture
-    @test PottsToolkit.native_source(flattened_component) === native_source_system
-    @test statement_id(PottsToolkit.potts_endpoint(
-        only(PottsToolkit.native_inputs(flattened_component))
+    @test Potts.native_source(flattened_component) === native_source_system
+    @test statement_id(Potts.potts_endpoint(
+        only(Potts.native_inputs(flattened_component))
     )) == StatementID(:native_authoring₊native_fixture_input_state)
 
     base_component = NativeComponent(

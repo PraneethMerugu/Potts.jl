@@ -18,7 +18,7 @@ qualification process.
 - The hosted workflow has no Apple Metal executor. The repository's real-Metal
   runner is the authority for hardware-tested Metal semantics and must include
   every active, non-performance Metal witness.
-- CUDA, ROCm, and AMDGPU are not current public PottsToolkit backends. Retained
+- CUDA, ROCm, and AMDGPU are not current public Potts backends. Retained
   development environments do not create a support guarantee.
 - Exported names and unexported `public` names are distinct inventories.
   Documentation and tests must classify each set with the corresponding Julia
@@ -79,7 +79,7 @@ dependency arity, and provider/device facts. It does not promise
 compiler representation.
 
 `CorePotts.CompilerSPI` is the complete downstream compiler boundary. Every
-PottsToolkit lowering needed by a real consumer must use its public handles,
+Potts lowering needed by a real consumer must use its public handles,
 layouts, descriptors, evaluator/context contracts, lifecycle plans, and report
 accessors. Reaching through CorePotts private fields is not a supported
 completion shortcut.
@@ -118,7 +118,7 @@ semantic runners.
 
 ## Ordinary validation matrix
 
-Validation uses normal Julia workflows: LocalMath, CorePotts, PottsToolkit,
+Validation uses normal Julia workflows: LocalMath, CorePotts, Potts,
 and MakiePotts package suites; root path-manifest and runner inventories;
 cross-package integration families; exact replay under its pinned environment;
 strict Documenter doctests/examples/export checks; bounded current examples;

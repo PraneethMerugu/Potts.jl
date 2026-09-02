@@ -1,8 +1,8 @@
 @testset "optional extension loading" begin
     @test Base.get_extension(
-        PottsToolkit, :PottsToolkitModelingToolkitExt
+        Potts, :PottsModelingToolkitExt
     ) !== nothing
     @test Base.get_extension(
-        PottsToolkit, :PottsToolkitUnitfulExt
+        Potts, :PottsUnitfulExt
     ) !== nothing
 end

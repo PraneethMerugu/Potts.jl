@@ -1,11 +1,11 @@
 """
 Native Makie recipes and explicit, visualization-neutral render contracts for
-PottsToolkit solutions.
+Potts solutions.
 """
 module MakiePotts
 
 import Makie
-import PottsToolkit
+import Potts
 import PrecompileTools
 
 include("errors.jl")

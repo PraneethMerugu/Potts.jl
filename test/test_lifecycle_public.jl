@@ -977,7 +977,7 @@ end
     end
     for fraction in (1.5, 0.5u"μm")
         error = split_error(fraction)
-        @test error isa PottsToolkit.PottsValidationError
+        @test error isa Potts.PottsValidationError
         @test only(error.diagnostics).kind ===
               :invalid_lifecycle_split_fraction
         @test only(error.diagnostics).source isa SourceLocation

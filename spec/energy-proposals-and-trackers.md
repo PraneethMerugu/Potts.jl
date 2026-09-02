@@ -338,7 +338,7 @@ records the conversion.
 If all energies are rescaled by `c`, compatibility conversion MUST also rescale temperature, yield,
 offsets, and energy-unit drives by `c` to preserve acceptance probabilities.
 
-PottsToolkit SHOULD accept dimensioned host-side quantities and validate units before lowering them
+Potts SHOULD accept dimensioned host-side quantities and validate units before lowering them
 to device-compatible numbers. Lattice volume is site count; physical volume includes lattice spacing
 and dimensionality.
 

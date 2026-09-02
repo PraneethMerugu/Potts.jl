@@ -1,5 +1,5 @@
 using Metal
-using PottsToolkit
+using Potts
 
 Metal.functional() || error("the selected Metal witness is not functional")
 Metal.allowscalar(false)
@@ -13,7 +13,7 @@ profile = _metal_profile(path, 4)
 integrator = init(
     problem,
     CheckerboardSweepCPM();
-    backend = PottsToolkit.MetalBackend(),
+    backend = Potts.MetalBackend(),
     scalar_type = Float32,
     native_profiles = (profile,),
     save_start = false,

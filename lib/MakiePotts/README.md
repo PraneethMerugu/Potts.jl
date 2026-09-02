@@ -23,7 +23,7 @@ The stable API centers on:
 `renderframe` is deliberately explicit. It never transfers backend state or
 reconstructs an observation that was not retained. Use
 `CorePotts.HostSnapshotPolicy()` for complete post-hoc frames, or retain
-`PottsToolkit.LatticeOwnership()` for a bounded visualization-neutral
+`Potts.LatticeOwnership()` for a bounded visualization-neutral
 observation.
 
 `PottsVolume`, `PottsExplorer`, and `RerunController` are experimental. The

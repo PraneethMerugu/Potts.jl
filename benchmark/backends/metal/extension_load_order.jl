@@ -2,17 +2,17 @@
     project = @__DIR__
     orders = (
         raw"""
-        using PottsToolkit
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalExt) === nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalNativeExt) === nothing
+        using Potts
+        @assert Base.get_extension(Potts, :PottsMetalExt) === nothing
+        @assert Base.get_extension(Potts, :PottsMetalNativeExt) === nothing
         using ModelingToolkit
         using StaticArrays
         using DiffEqGPU
         using Metal
         @assert Metal.functional()
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalNativeExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMetalExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMetalNativeExt) !== nothing
         print("potts-first-metal-ok")
         """,
         raw"""
@@ -20,11 +20,11 @@
         using DiffEqGPU
         using ModelingToolkit
         using StaticArrays
-        using PottsToolkit
+        using Potts
         @assert Metal.functional()
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitModelingToolkitExt) !== nothing
-        @assert Base.get_extension(PottsToolkit, :PottsToolkitMetalNativeExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMetalExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsModelingToolkitExt) !== nothing
+        @assert Base.get_extension(Potts, :PottsMetalNativeExt) !== nothing
         print("dependencies-first-metal-ok")
         """,
     )

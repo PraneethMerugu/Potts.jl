@@ -16,7 +16,7 @@ standard SciML problem, and maps ordered spatial coordinates to an exact Potts
 lattice shape.
 
 ```@example method_of_lines
-using PottsToolkit
+using Potts
 using ModelingToolkit
 using DomainSets
 using MethodOfLines
@@ -107,7 +107,7 @@ trajectory scheduling, retries, reductions, and failures. The inner Potts
 trajectory still requires an admitted algorithm/backend/component profile.
 
 ```@example ensembles
-using PottsToolkit
+using Potts
 using SciMLBase
 
 cell = CellKind(:cell; extinction=RetireAtZero())

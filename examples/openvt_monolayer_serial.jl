@@ -1,7 +1,7 @@
 module OpenVTMonolayerSerial
 
 using ModelingToolkitBase: @parameters
-using PottsToolkit
+using Potts
 using SciMLBase
 using Symbolics
 

@@ -1,13 +1,13 @@
 using Documenter
 using CorePotts
 using LocalMath
-using PottsToolkit
+using Potts
 using MakiePotts
 
 makedocs(
     sitename = "Potts.jl",
     authors = "Praneeth Merugu",
-    modules = [LocalMath, CorePotts, PottsToolkit, MakiePotts],
+    modules = [LocalMath, CorePotts, Potts, MakiePotts],
     format = Documenter.HTML(
         prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
@@ -62,7 +62,7 @@ makedocs(
         ],
         "API" => [
             "LocalMath" => "api/localmath.md",
-            "PottsToolkit" => "api/pottstoolkit.md",
+            "Potts" => "api/potts.md",
             "CorePotts" => "api/corepotts.md",
             "MakiePotts" => "api/makiepotts.md",
         ],

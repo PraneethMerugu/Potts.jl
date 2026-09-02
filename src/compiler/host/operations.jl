@@ -289,7 +289,7 @@ _transfer(identity, arity, result_rule, unit_rule;
         allowed_roles = _CLOSED_OPERATION_ROLES,
         allowed_phases = _CLOSED_OPERATION_PHASES,
         required_context = :any,
-        owner = :PottsToolkit,
+        owner = :Potts,
         callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) * ":" *
             string(version),
         source_requirements = (),
@@ -487,7 +487,7 @@ operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
         ),
         allowed_phases = (:Lifecycle,),
         required_context = :any,
-        owner = :PottsToolkitLifecycleCompiler,
+        owner = :PottsLifecycleCompiler,
     )
 
 operation_transfer(::typeof(_potts_bounded_fold), ::Int) =
@@ -591,7 +591,7 @@ function _spatial_query_interface_transfer(
         allowed_roles = (:observation,),
         allowed_phases = (:none,),
         required_context = :any,
-        owner = :PottsToolkitSpatialQueryInterface,
+        owner = :PottsSpatialQueryInterface,
     )
 end
 

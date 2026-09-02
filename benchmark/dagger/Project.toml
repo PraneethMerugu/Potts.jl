@@ -1,10 +1,10 @@
 [deps]
 Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 
 [sources]
-PottsToolkit = {path = "../.."}
+Potts = {path = "../.."}
 
 [compat]
 Dagger = "0.21"

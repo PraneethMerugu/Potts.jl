@@ -1,13 +1,13 @@
 module NeutralExternalTerms
 
-using PottsToolkit
+using Potts
 using Symbolics
 
 import CorePotts
-import PottsToolkit: operation_transfer, registered_descriptor_payload
-import PottsToolkit: registered_statement_lowering
-import PottsToolkit: registered_workspace_schemas
-import PottsToolkit: registered_tracker_requirements
+import Potts: operation_transfer, registered_descriptor_payload
+import Potts: registered_statement_lowering
+import Potts: registered_workspace_schemas
+import Potts: registered_tracker_requirements
 
 const CompilerSPI = CorePotts.CompilerSPI
 
@@ -30,7 +30,7 @@ CompilerSPI.operation_context_supported(
 ) = true
 
 operation_transfer(::typeof(external_site_value), ::Int) =
-    PottsToolkit.OperationTransfer(
+    Potts.OperationTransfer(
         :neutral_external_site_value,
         VERSION,
         "neutral-external-site-value-v1",
@@ -39,7 +39,7 @@ operation_transfer(::typeof(external_site_value), ::Int) =
         :declared,
         :pure,
         :total,
-        PottsToolkit.InheritFootprintRule(),
+        Potts.InheritFootprintRule(),
         true,
         true,
     )
@@ -51,7 +51,7 @@ CompilerSPI.operation_callable(
     throw(ArgumentError("unsupported external site operation version $version"))
 
 operation_transfer(::typeof(external_cpu_only_value), ::Int) =
-    PottsToolkit.OperationTransfer(
+    Potts.OperationTransfer(
         :neutral_external_cpu_only_value,
         VERSION,
         "neutral-external-cpu-only-value-v1",
@@ -60,7 +60,7 @@ operation_transfer(::typeof(external_cpu_only_value), ::Int) =
         :unary,
         :pure,
         :total,
-        PottsToolkit.InheritFootprintRule(),
+        Potts.InheritFootprintRule(),
         true,
         false,
     )
@@ -156,7 +156,7 @@ end
 
 function registered_tracker_requirements(
         ::Val{:lower_external_weighted_site_term},
-        source::PottsToolkit.DescriptorSource,
+        source::Potts.DescriptorSource,
         ::Type,
         ::Tuple,
     )
@@ -201,7 +201,7 @@ end
 
 function registered_descriptor_payload(
         ::Val{:lower_external_weighted_site_term},
-        context::PottsToolkit.DescriptorConstructionContext,
+        context::Potts.DescriptorConstructionContext,
     )
     if startswith(
             string(context.source.identity.local_id),
@@ -223,14 +223,14 @@ end
 
 function registered_descriptor_payload(
         ::Val{:lower_external_bounded_pair_term},
-        context::PottsToolkit.DescriptorConstructionContext,
+        context::Potts.DescriptorConstructionContext,
     )
     return ExternalBoundedPairPayload(UInt16(1))
 end
 
 function registered_workspace_schemas(
         ::Val{:lower_external_weighted_site_term},
-        source::PottsToolkit.DescriptorSource,
+        source::Potts.DescriptorSource,
         ::Type{T},
         lattice_shape::Tuple,
     ) where {T <: AbstractFloat}

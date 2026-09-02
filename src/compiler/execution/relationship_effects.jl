@@ -1,4 +1,4 @@
-# PottsToolkit-owned relationship policies composed over CorePotts primitives.
+# Potts-owned relationship policies composed over CorePotts primitives.
 
 function _potts_relationship_endpoint_kinds end
 
@@ -31,7 +31,7 @@ operation_transfer(
     allowed_roles = (:process, :relationship),
     allowed_phases = (:AcceptedCopy,),
     required_context = :proposal,
-    owner = :PottsToolkitRelationshipOperations,
+    owner = :PottsRelationshipOperations,
 )
 
 function CorePotts.CompilerSPI.operation_callable(

@@ -1,4 +1,4 @@
-# [PottsToolkit API](@id pottstoolkit-api)
+# [Potts API](@id potts-api)
 
 The exported API is organized by lifecycle rather than implementation files.
 
@@ -17,11 +17,11 @@ The exact inventory is executable and rejects additions or retired aliases in
 the package test suite. A public compiler artifact, early engine selection,
 and unpublished compatibility spellings are intentionally absent.
 
-```@example pottstoolkit_inventory
-using PottsToolkit
-visible_names = names(PottsToolkit; all=false, imported=false)
-exported = Set(filter(name -> Base.isexported(PottsToolkit, name), visible_names))
-public_names = Set(filter(name -> Base.ispublic(PottsToolkit, name), visible_names))
+```@example potts_inventory
+using Potts
+visible_names = names(Potts; all=false, imported=false)
+exported = Set(filter(name -> Base.isexported(Potts, name), visible_names))
+public_names = Set(filter(name -> Base.ispublic(Potts, name), visible_names))
 required = Set((
     :PottsSystem,
     :mtkcompile,
@@ -52,6 +52,6 @@ extension-boundary).
 ## Reference
 
 ```@autodocs
-Modules = [PottsToolkit]
+Modules = [Potts]
 Private = false
 ```

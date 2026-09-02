@@ -207,7 +207,7 @@ end
 
 @testset "real Metal native components" begin
     metal_native_extension = Base.get_extension(
-        PottsToolkit, :PottsToolkitMetalNativeExt
+        Potts, :PottsMetalNativeExt
     )
     @test metal_native_extension._metal_native_stack_identity() ==
         metal_native_extension._TESTED_METAL_NATIVE_STACK
@@ -216,7 +216,7 @@ end
     global_solution = solve(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (global_profile,),
     )
@@ -226,7 +226,7 @@ end
     global_report = inspect(init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (global_profile,),
     ), Capabilities())
@@ -236,7 +236,7 @@ end
         init(
             global_problem,
             SequentialCPM();
-            backend = PottsToolkit.MetalBackend(),
+            backend = Potts.MetalBackend(),
             scalar_type = Float32,
             native_profiles = (global_profile,),
         )
@@ -253,14 +253,14 @@ end
     replay_a = init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (global_profile,),
     )
     replay_b = init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (global_profile,),
     )
@@ -278,28 +278,28 @@ end
         execution.lifecycle_transfer_count,
     ) == (1, 2, 1, 1, 1)
 
-    @test_throws PottsToolkit.NativeCapabilityError init(
+    @test_throws Potts.NativeCapabilityError init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (_metal_profile(
             global_path, 1; algorithm = Val(:not_a_gpu_algorithm)
         ),),
     )
-    @test_throws PottsToolkit.NativeCapabilityError init(
+    @test_throws Potts.NativeCapabilityError init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (_metal_profile(
             global_path, 1; adaptive = true
         ),),
     )
-    @test_throws PottsToolkit.CorePotts.BackendSPI.ProgramCapabilityError init(
+    @test_throws Potts.CorePotts.BackendSPI.ProgramCapabilityError init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float64,
         native_profiles = (global_profile,),
     )
@@ -307,7 +307,7 @@ end
     failed = init(
         global_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (_metal_profile(
             global_path, 1; dt = 0.25f0
@@ -315,7 +315,7 @@ end
     )
     before_ownership = copy(failed.u.ownership)
     before_native = native_value(failed, global_path, global_x)
-    @test_throws PottsToolkit.NativeCapabilityError step!(failed)
+    @test_throws Potts.NativeCapabilityError step!(failed)
     @test failed.runtime.mcs == 0
     @test failed.runtime.ownership == before_ownership
     @test native_value(failed, global_path, global_x) == before_native
@@ -327,7 +327,7 @@ end
     integrator = init(
         cell_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (cell_profile,),
     )
@@ -336,7 +336,7 @@ end
     restored = init(
         cell_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         checkpoint = saved,
         native_profiles = (cell_profile,),
@@ -368,7 +368,7 @@ end
     field_integrator = init(
         field_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (field_profile,),
     )
@@ -385,7 +385,7 @@ end
     field_restored = init(
         field_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         checkpoint = field_checkpoint,
         native_profiles = (field_profile,),
@@ -396,12 +396,12 @@ end
         field_restored.u.metal_field_output
 
     mol_field_problem, mol_field_path, _, _ = _metal_field_fixture(
-        capabilities = PottsToolkit._MethodOfLinesNativeCapability(),
+        capabilities = Potts._MethodOfLinesNativeCapability(),
     )
-    @test_throws PottsToolkit.NativeCapabilityError init(
+    @test_throws Potts.NativeCapabilityError init(
         mol_field_problem,
         CheckerboardSweepCPM();
-        backend = PottsToolkit.MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         native_profiles = (_metal_profile(mol_field_path, 1),),
     )

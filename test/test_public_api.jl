@@ -1,6 +1,6 @@
 @testset "authoritative public API inventory" begin
     expected = Set(Symbol[
-        :PottsToolkit,
+        :Potts,
         Symbol("@named"), Symbol("@mtkcompile"), Symbol("@statements"),
 
         :PottsSystem, :StatementSet, :StatementID, :SourceLocation,
@@ -118,7 +118,7 @@
         :PottsUnsavedTimeError, :to_dynamic_quantity, :to_unitful_quantity,
     ])
 
-    actual = Set(names(PottsToolkit))
+    actual = Set(names(Potts))
     missing = setdiff(expected, actual)
     unexpected = setdiff(actual, expected)
     @test isempty(missing)
@@ -133,13 +133,13 @@
         :CUDABackend, :ROCmBackend,
     ))
     @test isempty(intersect(actual, retired))
-    @test all(name -> !isdefined(PottsToolkit, name), retired)
+    @test all(name -> !isdefined(Potts, name), retired)
 end
 
 @testset "export and extension inventories are distinct" begin
-    visible_names = names(PottsToolkit; all = false, imported = false)
-    exported = Set(filter(name -> Base.isexported(PottsToolkit, name), visible_names))
-    public_names = Set(filter(name -> Base.ispublic(PottsToolkit, name), visible_names))
+    visible_names = names(Potts; all = false, imported = false)
+    exported = Set(filter(name -> Base.isexported(Potts, name), visible_names))
+    public_names = Set(filter(name -> Base.ispublic(Potts, name), visible_names))
     extension_api = setdiff(public_names, exported)
     @test :PottsSystem in exported
     @test :operation_transfer in extension_api
@@ -147,7 +147,7 @@ end
 end
 
 @testset "curated public help is attached and truthful" begin
-    @test isempty(Docs.undocumented_names(PottsToolkit; private = false))
+    @test isempty(Docs.undocumented_names(Potts; private = false))
     for binding in (PottsSystem, NativeComponent, NativeSolveProfile)
         @test Docs.doc(binding) !== nothing
     end

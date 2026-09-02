@@ -1,4 +1,4 @@
-# PottsToolkit Rule and Model Semantics
+# Potts Rule and Model Semantics
 
 Status: Accepted scientific-semantics source; interface and construction clauses superseded in part
 
@@ -11,12 +11,12 @@ Status: Accepted scientific-semantics source; interface and construction clauses
 
 ## Purpose
 
-PottsToolkit is the primary public modeling interface for Potts.jl. It provides a high-level,
+Potts is the primary public modeling interface for Potts.jl. It provides a high-level,
 scientifically explicit language that lowers validated models to CorePotts. The same valid portable
 model is intended to execute on every supported CPU and GPU backend without rewriting its scientific
 definition.
 
-This document defines what PottsToolkit models and rules mean. It does not prescribe macro expansion,
+This document defines what Potts models and rules mean. It does not prescribe macro expansion,
 generated-function use, storage layout, or kernel organization. Those engineering constraints are
 defined by the
 [Metaprogramming and Compiler Architecture Standard](../design/metaprogramming-and-compiler-architecture.md).
@@ -242,7 +242,7 @@ includes, for suitable types and numerical policies:
 - `dot` and `norm`
 - Operations on small fixed vectors
 
-PottsToolkit does not create parallel names such as `PottsExp`. Acceptance is method-specific: the
+Potts does not create parallel names such as `PottsExp`. Acceptance is method-specific: the
 function, argument types, domain, numerical behavior, and device support must all conform.
 
 Users define helpers as ordinary Julia functions or immutable callable structs. Level 2 can accept
@@ -298,7 +298,7 @@ where they improve edit-stable provenance.
 Level 1 users do not pass an RNG object. Lower execution layers MAY extend Julia's standard
 `rand(rng::PottsRNG, sampler::PottsSampler)` protocol for Potts-owned RNG and sampler types under the
 accepted randomness contract. Such methods are ordinary dispatch, not a reinterpretation of
-`rand` in the DSL. PottsToolkit MUST NOT pirate `rand` methods for types it does not own, and loading
+`rand` in the DSL. Potts MUST NOT pirate `rand` methods for types it does not own, and loading
 an optional distribution package MUST NOT change the meaning of existing draws.
 
 ### No change and missingness
@@ -688,7 +688,7 @@ GPU solve is forbidden.
 
 ## Nonportable and Expert Rule Paths
 
-This section concerns rules embedded in a PottsToolkit semantic model. It does not classify direct
+This section concerns rules embedded in a Potts semantic model. It does not classify direct
 use of the public CorePotts scientific or execution APIs as an escape hatch.
 
 ### Host Rule

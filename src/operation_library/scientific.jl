@@ -12,7 +12,7 @@ operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
         allowed_roles = (:constraint,),
         allowed_phases = (:Proposal,),
         required_context = :proposal,
-        owner = :PottsToolkitScientificOperations,
+        owner = :PottsScientificOperations,
         source_requirements = (
             LatticeRankRequirement(2),
             SpatialRelationRequirement(2, :moore, 1),
@@ -33,7 +33,7 @@ operation_transfer(::typeof(_potts_act_energy), ::Int) =
         allowed_roles = (:drive,),
         allowed_phases = (:Proposal,),
         required_context = :proposal,
-        owner = :PottsToolkitScientificOperations,
+        owner = :PottsScientificOperations,
         source_requirements = (
             SpatialRelationRequirement(3, :moore, 1),
         ),

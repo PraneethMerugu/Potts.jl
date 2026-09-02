@@ -1,6 +1,6 @@
 name = "CorePotts"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
-version = "0.2.0"
+version = "0.2.0-rc1"
 authors = ["PraneethMerugu <merugufam@gmail.com>"]
 
 [deps]

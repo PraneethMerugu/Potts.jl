@@ -39,7 +39,7 @@ end
     try
         for worker in added
             remotecall_wait(worker) do
-                Core.eval(Main, :(using PottsToolkit, SciMLBase))
+                Core.eval(Main, :(using Potts, SciMLBase))
                 nothing
             end
         end

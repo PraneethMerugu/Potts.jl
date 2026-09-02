@@ -1,5 +1,5 @@
 using Metal
-using PottsToolkit
+using Potts
 using Test
 using ModelingToolkitBase
 using Symbolics

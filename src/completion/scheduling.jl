@@ -218,7 +218,7 @@ function _schedule_native_components(components)
         applicable(mtkcompile_native, component) || throw(ArgumentError(
             "scheduling NativeComponent $(repr(nameof(component.declaration))) " *
             "requires loading full ModelingToolkit so the " *
-            "PottsToolkitModelingToolkitExt extension can call upstream mtkcompile"
+            "PottsModelingToolkitExt extension can call upstream mtkcompile"
         ))
         result = mtkcompile_native(component)
         result isa ScheduledNativeComponent || error(

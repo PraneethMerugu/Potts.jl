@@ -101,7 +101,7 @@ provenance, and is never inferred merely because an input contains GPU arrays.
 
 The final `PottsProblem`, `PottsIntegrator`, and `PottsSolution` names belong exclusively to this
 replacement interface. Historical concrete types are renamed to explicitly internal legacy names
-before the final bindings are introduced. Existing PottsToolkit constructors MAY temporarily return
+before the final bindings are introduced. Existing Potts constructors MAY temporarily return
 the renamed legacy problem only through the frozen containment boundary until Phase 10 replaces
 their compiler. The bridge gains no features, is never a replacement fallback, and is deleted at
 typed-compiler parity. No provisional `ScientificPottsProblem` family is introduced.

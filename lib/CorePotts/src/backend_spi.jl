@@ -1,5 +1,5 @@
 """
-Backend and transactional execution protocol for PottsToolkit backend extensions.
+Backend and transactional execution protocol for Potts backend extensions.
 
 This namespace is not an end-user modeling API. It owns capability admission,
 queue/settlement operations, device adaptation, and unpublished bank swaps.

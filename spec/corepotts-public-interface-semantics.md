@@ -13,7 +13,7 @@ This document defines the public Julia interfaces for using and extending CorePo
 governs scientific components, state access, proposals, trackers, observables, events, algorithms,
 topologies, backend specialization, workspaces, validation, and conformance.
 
-CorePotts is independently usable. Direct CorePotts programs do not construct PottsToolkit
+CorePotts is independently usable. Direct CorePotts programs do not construct Potts
 authoring IR. They remain governed by the scientific contracts in this specification suite.
 
 The API follows ordinary Julia design: immutable structs, small functions, multiple dispatch,
@@ -85,7 +85,7 @@ scientific values into concrete, bounded, device-valid descriptors and operation
 extensions specialize through ordinary dispatch on their concrete compiled types and satisfy the
 same allocation, synchronization, effect, RNG, and conformance contracts as built-ins.
 
-Direct Level 3 execution does not require registration. PottsToolkit MAY require versioned
+Direct Level 3 execution does not require registration. Potts MAY require versioned
 registration for Level 1 spelling, semantic serialization, compatibility translation, or other
 boundaries that genuinely require durable names.
 
@@ -147,7 +147,7 @@ An undeclared component is rejected rather than silently scheduled under an inco
 relation.
 
 Direct Level 3 use does not require a global component registry. Julia dispatch provides direct
-extension. PottsToolkit maintains a versioned registry only where Level 1 naming, DSL parsing,
+extension. Potts maintains a versioned registry only where Level 1 naming, DSL parsing,
 normalization, or semantic serialization requires it.
 
 ## State Access
@@ -212,7 +212,7 @@ requirements are validated before execution.
 
 The first executable consumer of a proposed stable scientific protocol MUST be the sequential
 reference engine. A public protocol remains provisional for API-freeze purposes until it has been
-used by that engine, tested through a complete MCS, and—when it has a PottsToolkit spelling—reached
+used by that engine, tested through a complete MCS, and—when it has a Potts spelling—reached
 through one authoring-to-CorePotts compilation path. This permits breaking refinements before the
 paper API freeze when executable use exposes a poor abstraction.
 
@@ -397,7 +397,7 @@ workspace use, and backend qualification separately.
 
 ## Conformance Requirements
 
-- CorePotts is usable without PottsToolkit authoring IR.
+- CorePotts is usable without Potts authoring IR.
 - Scientific categories are meaningful and do not collapse into a universal component hierarchy.
 - Immutable structs and ordinary public methods form the extension interface.
 - Subtyping alone never establishes conformance.
@@ -416,5 +416,5 @@ workspace use, and backend qualification separately.
 - Stable execution protocols are separated from replaceable internals.
 - The sequential reference engine can execute a complete normalized MCS through public scientific
   protocols without legacy `PottsState` fields.
-- Public protocol freeze follows executable reference and PottsToolkit compilation evidence, not
+- Public protocol freeze follows executable reference and Potts compilation evidence, not
   interface-shape tests alone.

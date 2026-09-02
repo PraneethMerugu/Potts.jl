@@ -1,6 +1,6 @@
 module Merks2006Serial
 
-using PottsToolkit
+using Potts
 using SciMLBase
 using Symbolics
 using ModelingToolkitBase: @parameters

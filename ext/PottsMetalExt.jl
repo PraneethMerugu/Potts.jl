@@ -1,6 +1,6 @@
-module PottsToolkitMetalExt
+module PottsMetalExt
 
-using PottsToolkit
+using Potts
 using Metal
 
 import CorePotts
@@ -8,7 +8,7 @@ import CorePotts.BackendSPI: adapted_device_capability_disposition
 import CorePotts.BackendSPI: adapted_device_environment
 
 function _metal_core_environment_identity()
-    package = PottsToolkit._native_package_identity(Metal)
+    package = Potts._native_package_identity(Metal)
     return (
         Metal = (
             package = package.name,
@@ -33,14 +33,14 @@ adapted_device_environment(
     ::Val{:MtlArray}, ::CorePotts.BackendSPI.ProgramCapabilityKey
 ) = _metal_core_environment_identity()
 
-function PottsToolkit._validate_backend_available(::PottsToolkit.MetalBackend)
+function Potts._validate_backend_available(::Potts.MetalBackend)
     Metal.functional() || throw(ArgumentError(
         "MetalBackend() was requested, but Metal is not functional"
     ))
     return nothing
 end
 
-function PottsToolkit._adapt_runtime_backend(
+function Potts._adapt_runtime_backend(
         ::CorePotts.BackendSPI.AdaptedProgramBackend{:MetalBackend}, runtime
     )
     return CorePotts.BackendSPI.adapt_program_runtime(Metal.MtlArray, runtime)

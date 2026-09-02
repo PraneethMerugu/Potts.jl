@@ -98,7 +98,7 @@ end
     catch error
         error
     end
-    @test checkerboard_error isa PottsToolkit.NativeCapabilityError
+    @test checkerboard_error isa Potts.NativeCapabilityError
     @test checkerboard_error.capability === :execution_profile
     integrator = init(
         problem, SequentialCPM(); native_profiles = (profile,)
@@ -109,27 +109,27 @@ end
     @test native_value(integrator, path, identity, cell_ode_x) == 1.0
     @test integrator.u.potts_cell_output[1] == 1.0
     policy = integrator.native_states[1].policy
-    candidate_bank = PottsToolkit.CorePotts.BackendSPI.component_state_snapshot(
+    candidate_bank = Potts.CorePotts.BackendSPI.component_state_snapshot(
         integrator.native_states[1].storage
     )
-    transition_event = PottsToolkit.CorePotts.TransitionLifecycleEvent(
-        PottsToolkit.CorePotts.QualifiedLifecycleRequestIdentity(1, 1, 1, 1),
+    transition_event = Potts.CorePotts.TransitionLifecycleEvent(
+        Potts.CorePotts.QualifiedLifecycleRequestIdentity(1, 1, 1, 1),
         identity,
         CellIdentity(identity.slot, identity.generation, identity.kind + 1),
     )
-    PottsToolkit.transition_component_state!(
+    Potts.transition_component_state!(
         policy, candidate_bank, transition_event
     )
-    @test PottsToolkit.native_cell_state(policy, candidate_bank, 1).u == (4.0,)
-    divide_event = PottsToolkit.CorePotts.DivideLifecycleEvent(
-        PottsToolkit.CorePotts.QualifiedLifecycleRequestIdentity(2, 1, 1, 1),
+    @test Potts.native_cell_state(policy, candidate_bank, 1).u == (4.0,)
+    divide_event = Potts.CorePotts.DivideLifecycleEvent(
+        Potts.CorePotts.QualifiedLifecycleRequestIdentity(2, 1, 1, 1),
         identity,
         identity,
         CellIdentity(2, 1, identity.kind),
     )
-    PottsToolkit.divide_component_state!(policy, candidate_bank, divide_event)
-    @test PottsToolkit.native_cell_state(policy, candidate_bank, 1).u == (2.0,)
-    @test PottsToolkit.native_cell_state(policy, candidate_bank, 2).u == (2.0,)
+    Potts.divide_component_state!(policy, candidate_bank, divide_event)
+    @test Potts.native_cell_state(policy, candidate_bank, 1).u == (2.0,)
+    @test Potts.native_cell_state(policy, candidate_bank, 2).u == (2.0,)
     step!(integrator)
     @test native_value(integrator, path, identity, cell_ode_x) ≈ 1.2
     @test integrator.u.potts_cell_output[1] ≈ 1.2
@@ -177,7 +177,7 @@ end
     catch error
         error
     end
-    @test adaptive_error isa PottsToolkit.NativeCapabilityError
+    @test adaptive_error isa Potts.NativeCapabilityError
     @test adaptive_error.capability === :native_execution_mode
 
     failing_batch = NativeSolveProfile(
@@ -197,7 +197,7 @@ end
         native_profiles = (failing_batch,),
     )
     before_failure = failing.u
-    @test_throws PottsToolkit.NativeSolveFailure step!(failing)
+    @test_throws Potts.NativeSolveFailure step!(failing)
     @test failing.t == 0
     @test failing.retcode == SciMLBase.ReturnCode.Failure
     @test failing.u.ownership == before_failure.ownership
@@ -611,14 +611,14 @@ end
         ode_t;
         observed = [ode_seen ~ 2ode_x],
     )
-    source_fingerprint = PottsToolkit.native_source_fingerprint(ode_system)
+    source_fingerprint = Potts.native_source_fingerprint(ode_system)
     changed_observation = ModelingToolkit.System(
         [ode_D(ode_x) ~ -ode_x + ode_drive],
         ode_t;
         name = :ode_system,
         observed = [ode_seen ~ 3ode_x],
     )
-    @test PottsToolkit.native_source_fingerprint(changed_observation) !=
+    @test Potts.native_source_fingerprint(changed_observation) !=
         source_fingerprint
     fixture = _native_runtime_fixture(
         :ode_coupled;
@@ -628,7 +628,7 @@ end
         native_output = ode_x,
         operating_values = (ode_x => 1.0,),
     )
-    @test PottsToolkit.native_source_fingerprint(ode_system) ==
+    @test Potts.native_source_fingerprint(ode_system) ==
         source_fingerprint
     problem = PottsProblem(
         fixture.scheduled, fixture.initial, (0, 2); seed = 0x503
@@ -653,8 +653,8 @@ end
     )
     @test keys(profile.options) == (:adaptive, :dt)
     @test profile.options == reordered_profile.options
-    @test PottsToolkit._native_profile_fingerprint(profile) ==
-        PottsToolkit._native_profile_fingerprint(reordered_profile)
+    @test Potts._native_profile_fingerprint(profile) ==
+        Potts._native_profile_fingerprint(reordered_profile)
     values_forward = Dict(ode_x => 1.0, ode_drive => 2.0)
     values_reverse = Dict(ode_drive => 2.0, ode_x => 1.0)
     point_forward = NativeOperatingPoint(
@@ -684,7 +684,7 @@ end
     catch error
         error
     end
-    @test global_batch_error isa PottsToolkit.NativeCapabilityError
+    @test global_batch_error isa Potts.NativeCapabilityError
     @test global_batch_error.capability === :native_execution_mode
     functional_profile = NativeSolveProfile(
         fixture.path,
@@ -697,7 +697,7 @@ end
         problem, SequentialCPM(); native_profiles = (functional_profile,)
     )
     @test functional.capability_report.status ===
-        PottsToolkit.CorePotts.BackendSPI.Supported
+        Potts.CorePotts.BackendSPI.Supported
     @test !functional.capability_report.exact_replay
     @test functional.capability_report.evidence.conjunction === nothing
     step!(functional)
@@ -719,7 +719,7 @@ end
     catch caught
         caught
     end
-    @test preflight_error isa PottsToolkit.NativeExecutionError
+    @test preflight_error isa Potts.NativeExecutionError
     integrator = init(
         problem, SequentialCPM(); native_profiles = (profile,),
         save_everystep = true,
@@ -793,7 +793,7 @@ end
     )
     step!(uninterrupted)
     captured = checkpoint(uninterrupted)
-    checkpoint_block = captured.extensions.PottsToolkit
+    checkpoint_block = captured.extensions.Potts
     @test checkpoint_block.replay_class === :exact_pinned_native_profiles
     @test only(checkpoint_block.native_components).replay_class ===
         :exact_pinned_deterministic_profile
@@ -861,7 +861,7 @@ end
     catch caught
         caught
     end
-    @test native_error isa PottsToolkit.NativeSolveFailure
+    @test native_error isa Potts.NativeSolveFailure
     @test failing.retcode === SciMLBase.ReturnCode.Failure
     @test failing.t == 0
     @test failing.runtime.mcs == 0
@@ -875,7 +875,7 @@ end
         terminate!;
         save_positions = (false, false),
     )
-    @test_throws PottsToolkit.NativeCapabilityError init(
+    @test_throws Potts.NativeCapabilityError init(
         problem, SequentialCPM(); native_profiles = (profile,),
         callback = cancel_callback, save_everystep = true,
     )
@@ -917,10 +917,10 @@ end
     )
     compiled = only(scheduled_native_components(fixture.scheduled))
     @test length(ModelingToolkitBase.continuous_events(
-        PottsToolkit.native_original_system(compiled)
+        Potts.native_original_system(compiled)
     )) == 1
     @test length(ModelingToolkitBase.continuous_events(
-        PottsToolkit.native_scheduled_system(compiled)
+        Potts.native_scheduled_system(compiled)
     )) == 1
     profile = NativeSolveProfile(
         fixture.path,
@@ -937,7 +937,7 @@ end
     catch caught
         caught
     end
-    @test event_error isa PottsToolkit.NativeCapabilityError
+    @test event_error isa Potts.NativeCapabilityError
     @test occursin("event-free", sprint(showerror, event_error))
 end
 
@@ -963,7 +963,7 @@ end
         fixture.path, IDA(); profile_id = "ida-logical-v1"
     )
     component = only(scheduled_native_components(fixture.scheduled))
-    scheduled_dae = PottsToolkit.native_scheduled_system(component)
+    scheduled_dae = Potts.native_scheduled_system(component)
     standard_problem = SciMLBase.DAEProblem(
         scheduled_dae,
         [dae_x => 1.0, dae_D(dae_x) => 1.0],
@@ -982,7 +982,7 @@ end
         problem, SequentialCPM(); native_profiles = (profile,)
     )
     @test dae_integrator.capability_report.status ===
-        PottsToolkit.CorePotts.BackendSPI.Supported
+        Potts.CorePotts.BackendSPI.Supported
     @test !dae_integrator.capability_report.exact_replay
     @test native_value(dae_integrator, fixture.path, dae_x) ≈ 1.0
     step!(dae_integrator)
@@ -1023,8 +1023,8 @@ end
         native_output = reaction_x,
     )
     compiled = only(scheduled_native_components(fixture.scheduled))
-    @test PottsToolkit.native_original_system(compiled) === native_ode
-    @test !(PottsToolkit.native_original_system(compiled) isa
+    @test Potts.native_original_system(compiled) === native_ode
+    @test !(Potts.native_original_system(compiled) isa
         Catalyst.ReactionSystem)
     problem = PottsProblem(
         fixture.scheduled, fixture.initial, (0, 1); seed = 0x506
@@ -1249,7 +1249,7 @@ end
     catch caught
         caught
     end
-    @test replay_error isa PottsToolkit.NativeCapabilityError
+    @test replay_error isa Potts.NativeCapabilityError
     @test occursin("exact replay", sprint(showerror, replay_error)) ||
         occursin("exact-replay", sprint(showerror, replay_error))
 end

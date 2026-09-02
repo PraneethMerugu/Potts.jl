@@ -5,7 +5,7 @@ using MakiePotts
 using ModelingToolkitBase: @named
 using Random
 import Makie
-import PottsToolkit
+import Potts
 using Symbolics
 
 include("downstream_fixture.jl")
@@ -33,47 +33,47 @@ function render_fixture(; dimensions = 2)
         fill!(view(labels, 2:3, 2:3, 2), 1)
         fill!(view(labels, 4:5, 2:3, 2), 2)
     end
-    cell = PottsToolkit.CellKind(
-        :cell; extinction = PottsToolkit.RetireAtZero()
+    cell = Potts.CellKind(
+        :cell; extinction = Potts.RetireAtZero()
     )
-    other = PottsToolkit.CellKind(
-        :other; extinction = PottsToolkit.RetireAtZero()
+    other = Potts.CellKind(
+        :other; extinction = Potts.RetireAtZero()
     )
-    medium = PottsToolkit.MediumKind(:medium)
-    @named visual = PottsToolkit.PottsSystem(
-        statements = PottsToolkit.StatementSet((
-            PottsToolkit.Lattice(dims),
+    medium = Potts.MediumKind(:medium)
+    @named visual = Potts.PottsSystem(
+        statements = Potts.StatementSet((
+            Potts.Lattice(dims),
             cell,
             other,
             medium,
-            PottsToolkit.Volume(cell; target = 4.0, strength = 1.0),
-            PottsToolkit.Volume(other; target = 4.0, strength = 1.0),
-            PottsToolkit.Protocol(
-                PottsToolkit.Sweep(; temperature = 2.0); name = :main
+            Potts.Volume(cell; target = 4.0, strength = 1.0),
+            Potts.Volume(other; target = 4.0, strength = 1.0),
+            Potts.Protocol(
+                Potts.Sweep(; temperature = 2.0); name = :main
             ),
         )),
     )
-    scheduled = PottsToolkit.mtkcompile(PottsToolkit.complete(visual))
-    initial = PottsToolkit.PottsInitialState(
-        ownership = PottsToolkit.LabelledCells(
+    scheduled = Potts.mtkcompile(Potts.complete(visual))
+    initial = Potts.PottsInitialState(
+        ownership = Potts.LabelledCells(
             labels; cells = [cell, other], medium
         )
     )
-    problem = PottsToolkit.PottsProblem(
+    problem = Potts.PottsProblem(
         scheduled, initial, (0, 0); seed = 1
     )
     state = if dimensions == 2
-        only(PottsToolkit.solve(
+        only(Potts.solve(
             problem,
-            PottsToolkit.SequentialCPM();
-            backend = PottsToolkit.CPUBackend(),
+            Potts.SequentialCPM();
+            backend = Potts.CPUBackend(),
             scalar_type = Float64,
         ))
     else
         # Three-dimensional CPM execution is intentionally not admitted until
         # Keep MakiePotts' independent 3D projection witness without
         # bypassing the runtime capability preflight.
-        PottsToolkit.PottsSavedState(
+        Potts.PottsSavedState(
             0,
             Int32.(labels),
             Int32[2, 3],
@@ -317,15 +317,15 @@ end
         raw"""
         using MakiePotts
         loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
-        @assert "PottsToolkit" in loaded
+        @assert "Potts" in loaded
         @assert !("ModelingToolkit" in loaded)
         print("makie-first-ok")
         """,
         raw"""
-        using PottsToolkit
+        using Potts
         using MakiePotts
         loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
-        @assert "PottsToolkit" in loaded
+        @assert "Potts" in loaded
         @assert "MakiePotts" in loaded
         @assert !("ModelingToolkit" in loaded)
         print("potts-first-ok")

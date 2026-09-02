@@ -1,4 +1,4 @@
-using PottsToolkit
+using Potts
 using Statistics
 
 import LocalMath

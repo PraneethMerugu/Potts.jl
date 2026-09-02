@@ -1582,7 +1582,7 @@ weakdeps = ["DynamicQuantities"]
     MakieDynamicQuantitiesExt = "DynamicQuantities"
 
 [[deps.MakiePotts]]
-deps = ["Makie", "PottsToolkit", "PrecompileTools"]
+deps = ["Makie", "Potts", "PrecompileTools"]
 path = "../lib/MakiePotts"
 uuid = "95794c00-c762-4965-bf31-de18bcca2bc9"
 version = "0.2.0"
@@ -2082,20 +2082,20 @@ git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
 version = "0.1.2"
 
-[[deps.PottsToolkit]]
+[[deps.Potts]]
 deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
 path = ".."
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 version = "0.2.0"
 
-    [deps.PottsToolkit.extensions]
-    PottsToolkitMetalExt = "Metal"
-    PottsToolkitMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
-    PottsToolkitMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
-    PottsToolkitModelingToolkitExt = "ModelingToolkit"
-    PottsToolkitUnitfulExt = "Unitful"
+    [deps.Potts.extensions]
+    PottsMetalExt = "Metal"
+    PottsMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
+    PottsMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
+    PottsModelingToolkitExt = "ModelingToolkit"
+    PottsUnitfulExt = "Unitful"
 
-    [deps.PottsToolkit.weakdeps]
+    [deps.Potts.weakdeps]
     DiffEqGPU = "071ae1c0-96b5-11e9-1965-c90190d839ea"
     Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
     MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"

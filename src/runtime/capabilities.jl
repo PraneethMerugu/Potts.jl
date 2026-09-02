@@ -1,4 +1,4 @@
-# Exact PottsToolkit-level capability composition.  Scheduled systems expose
+# Exact Potts-level capability composition.  Scheduled systems expose
 # requirements; only a concrete runtime profile can produce a support row.
 
 """Complete immutable identity of a Potts runtime capability request."""
@@ -191,7 +191,7 @@ function _mode_evidence(suite::Symbol, exact_replay::Bool, family::Symbol)
         status = CorePotts.BackendSPI.Supported,
         exact_replay,
         evidence = _capability_evidence_identity(
-            :PottsToolkit,
+            :Potts,
             suite,
             v"1.0.0",
             _sha256_hex("potts-runtime-mode-family-v1", family),
@@ -496,7 +496,7 @@ function _compose_runtime_capability(
         all(row -> row !== nothing, native_rows)
     conjunction_evidence = closed_conjunction ?
         _capability_evidence_identity(
-            :PottsToolkit,
+            :Potts,
             :composed_replay_conjunction,
             v"1.0.0",
             fingerprint,
@@ -526,7 +526,7 @@ end
 function _require_runtime_capability(report::PottsCapabilityReport)
     report.status === CorePotts.BackendSPI.Supported && return report
     throw(ArgumentError(
-        "PottsToolkit capability preflight rejected runtime profile " *
+        "Potts capability preflight rejected runtime profile " *
         "$(report.key.fingerprint): $(report.reason)"
     ))
 end

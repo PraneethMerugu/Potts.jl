@@ -30,10 +30,10 @@ scientific contract.
 - [Numerical and cross-backend semantics](numerical-and-cross-backend-semantics.md)
 - [Transition-kernel verification](transition-kernel-verification.md)
 - [Published-model reproduction semantics](published-model-reproduction-semantics.md)
-- [PottsToolkit authoring and API semantics](pottstoolkit-authoring-composition-and-api-semantics.md)
+- [Potts authoring and API semantics](potts-authoring-composition-and-api-semantics.md)
 - [CorePotts public interfaces](corepotts-public-interface-semantics.md)
 - [SciML interface semantics](sciml-interface-semantics.md)
-- [Rule and model semantics](pottstoolkit-rule-and-model-semantics.md)
+- [Rule and model semantics](potts-rule-and-model-semantics.md)
 - [Decision records](decisions/README.md)
 
 Some older interface documents contain superseded names alongside surviving

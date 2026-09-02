@@ -1,7 +1,7 @@
 using Test
 using Metal
 using KernelAbstractions
-using PottsToolkit
+using Potts
 import CorePotts
 
 include("../../../lib/CorePotts/test/test_compiled_program_support.jl")

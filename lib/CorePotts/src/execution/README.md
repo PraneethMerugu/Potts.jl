@@ -40,7 +40,7 @@ The ownership boundary is intentionally narrow:
 - LocalMath owns bounded preparation, submission capacity, provider-lane
   ordering, compiled proposal execution, conjunctive arbitration, publication
   laws, cumulative receipts, lease release, and provider-scope poisoning.
-- PottsToolkit supplies fully analyzed concrete plans. CorePotts does not
+- Potts supplies fully analyzed concrete plans. CorePotts does not
   resolve biological names, registries, units, or symbolic expressions.
 
 Whole-MCS admission is atomic. CorePotts validates the destination bank,

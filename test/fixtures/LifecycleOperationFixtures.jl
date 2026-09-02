@@ -1,10 +1,10 @@
 module LifecycleOperationFixtures
 
-using PottsToolkit
+using Potts
 using Symbolics
 
 import CorePotts
-import PottsToolkit: operation_transfer
+import Potts: operation_transfer
 
 const CompilerSPI = CorePotts.CompilerSPI
 
@@ -133,7 +133,7 @@ function _transfer(
         rng_entity = :none,
     )
     TRANSFER_LOOKUPS[] += 1
-    return PottsToolkit.OperationTransfer(
+    return Potts.OperationTransfer(
         identity,
         VERSION,
         "lifecycle-operation-fixture:" * String(identity) * ":v1",
@@ -142,7 +142,7 @@ function _transfer(
         :dimensionless,
         :pure,
         :total,
-        PottsToolkit.InheritFootprintRule(),
+        Potts.InheritFootprintRule(),
         true,
         true;
         allowed_roles = (Symbol(:lifecycle_, role === :binary_partition ?
@@ -151,7 +151,7 @@ function _transfer(
         required_context = context,
         owner = :LifecycleOperationFixtures,
         callable_identity = "LifecycleOperationFixtures:" * String(identity) * ":v1",
-        lifecycle_abi = PottsToolkit.LifecycleOperationABI(
+        lifecycle_abi = Potts.LifecycleOperationABI(
             role;
             input_context = context,
             result_shape,
@@ -206,7 +206,7 @@ operation_transfer(::typeof(external_lifecycle_transform), ::Int) = _transfer(
 
 function _unqualified_transfer(identity, role, context, result_rule)
     TRANSFER_LOOKUPS[] += 1
-    return PottsToolkit.OperationTransfer(
+    return Potts.OperationTransfer(
         identity,
         VERSION,
         "lifecycle-operation-fixture:" * String(identity) * ":v1",
@@ -215,7 +215,7 @@ function _unqualified_transfer(identity, role, context, result_rule)
         :dimensionless,
         :pure,
         :total,
-        PottsToolkit.InheritFootprintRule(),
+        Potts.InheritFootprintRule(),
         true,
         true;
         allowed_roles = (role,),

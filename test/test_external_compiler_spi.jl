@@ -72,7 +72,7 @@ end
     )
     # This is package-owned qualification of the private late-materialization
     # artifact, not an author-facing access path. The report itself is the
-    # immutable PottsToolkit/CorePotts boundary authority.
+    # immutable Potts/CorePotts boundary authority.
     reports = getfield(getfield(integrator, :plan), :reports)
     inspections = filter(
         report -> report.quantity === :cell_surface,
@@ -187,7 +187,7 @@ end
     catch caught
         caught
     end
-    @test error isa PottsToolkit.PottsValidationError
+    @test error isa Potts.PottsValidationError
     @test error.stage === :descriptor_lowering
     @test only(error.diagnostics).kind === :descriptor_payload_type_mismatch
 end

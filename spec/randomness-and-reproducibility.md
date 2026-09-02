@@ -24,7 +24,7 @@ initialization and stochastic simulation behavior.
 - A user who wants operating-system entropy MUST request it explicitly through a typed seed source
   or supply a realized seed. Such a source is sampled exactly once during problem construction; the
   resulting `UInt64` is stored in the problem and reported in solution provenance.
-- PottsToolkit and CorePotts MUST NOT use Julia's default or task-local RNG for model randomness.
+- Potts and CorePotts MUST NOT use Julia's default or task-local RNG for model randomness.
 - Ordinary single-trajectory `init` and `solve` MUST NOT override the problem seed. A different
   trajectory uses `remake(prob; seed = ...)`; ensemble master-seed selection follows the ensemble
   contract below.
@@ -242,7 +242,7 @@ Every pair of qualified backends MUST be statistically equivalent under common
 model and algorithm semantics. Cross-backend bitwise trajectory equality is
 not required. Raw addressed random bits are required to match only where the
 backend's current guarantee profile explicitly claims that property. CUDA,
-ROCm, and AMDGPU currently have no public PottsToolkit backend guarantee.
+ROCm, and AMDGPU currently have no public Potts backend guarantee.
 
 The unqualified phrase "reproducible simulation" SHOULD NOT appear in normative documentation.
 
@@ -502,7 +502,7 @@ trajectory continuation unless a stronger profile has been validated.
 Reproduction helpers MUST NOT silently install packages or mutate the active Julia environment. They
 MAY create an isolated environment description and report version mismatches.
 
-PottsToolkit SHOULD provide a publication-bundle helper containing the declarative model, seed list,
+Potts SHOULD provide a publication-bundle helper containing the declarative model, seed list,
 contract versions, environment identity or files, hardware report, initial-state checksum,
 diagnostics, output checksums, and optional exact checkpoint.
 

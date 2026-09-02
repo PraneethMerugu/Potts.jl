@@ -1,5 +1,5 @@
 using Dagger
-using PottsToolkit
+using Potts
 using SciMLBase
 
 function benchmark_problem()

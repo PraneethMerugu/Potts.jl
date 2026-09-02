@@ -676,8 +676,8 @@ end
     @test length(final[:wortel_history]) == 2
     @test last(final[:wortel_history]) == final[:wortel_activity]
     @test final[:wortel_occupied] == count(!iszero, final.ownership)
-    @test_throws PottsToolkit.PottsKnownUnsavedError replay(2)[:wortel_occupied]
-    @test_throws PottsToolkit.PottsUnknownIdentityError replay(2)[:not_declared]
+    @test_throws Potts.PottsKnownUnsavedError replay(2)[:wortel_occupied]
+    @test_throws Potts.PottsUnknownIdentityError replay(2)[:not_declared]
     activity_getter = SymbolicIndexingInterface.getsym(
         solution, wortel_activity
     )
@@ -687,7 +687,7 @@ end
     )
     @test occupied_getter(solution) ==
           [state[:wortel_occupied] for state in solution]
-    @test_throws PottsToolkit.PottsKnownUnsavedError begin
+    @test_throws Potts.PottsKnownUnsavedError begin
         SymbolicIndexingInterface.getsym(
             replay, :wortel_occupied
         )(replay)
