@@ -22,7 +22,7 @@ jobs:
       - name: Package tests
         run: julia --project=. --startup-file=no -e 'using Pkg; Pkg.develop(path="deps/LocalMath"); Pkg.instantiate(); Pkg.test()'
       - name: Documentation
-        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop(path="deps/LocalMath"); Pkg.develop(path="."); Pkg.instantiate(); include("docs/make.jl")'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", ".")]); Pkg.instantiate(); include("docs/make.jl")'
 
   metal:
     runs-on: macos-15
@@ -37,4 +37,4 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@v3
       - name: Metal qualification
-        run: julia --project=test/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="deps/LocalMath"); Pkg.develop(path="."); Pkg.instantiate(); include("test/metal/runtests.jl")'
+        run: julia --project=test/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", ".")]); Pkg.instantiate(); include("test/metal/runtests.jl")'

@@ -23,6 +23,6 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@v3
       - name: Package tests
-        run: julia --project=. --startup-file=no -e 'using Pkg; foreach(path -> Pkg.develop(path=path), ("deps/LocalMath", "deps/CorePotts", "deps/Potts")); Pkg.instantiate(); Pkg.test()'
+        run: julia --project=. --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts")]); Pkg.instantiate(); Pkg.test()'
       - name: Documentation
-        run: julia --project=docs --startup-file=no -e 'using Pkg; foreach(path -> Pkg.develop(path=path), ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")); Pkg.instantiate(); include("docs/make.jl")'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); include("docs/make.jl")'
