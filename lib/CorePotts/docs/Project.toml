@@ -1,0 +1,8 @@
+[deps]
+CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+CorePotts = "0.2"
+Documenter = "1"
+julia = "1.12"

@@ -1,0 +1,28 @@
+name: CI
+
+on: [push, pull_request, workflow_dispatch]
+
+env:
+  JULIA_VERSION: '1.12.6'
+  LOCALMATH_REF: 'v0.2.0-rc1'
+  COREPOTTS_REF: 'v0.2.0-rc1'
+  POTTS_REF: 'v0.3.0-rc1'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/Potts.jl, ref: '${{ env.POTTS_REF }}', path: deps/Potts}
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@v3
+      - name: Package tests
+        run: julia --project=. --startup-file=no -e 'using Pkg; foreach(path -> Pkg.develop(path=path), ("deps/LocalMath", "deps/CorePotts", "deps/Potts")); Pkg.instantiate(); Pkg.test()'
+      - name: Documentation
+        run: julia --project=docs --startup-file=no -e 'using Pkg; foreach(path -> Pkg.develop(path=path), ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")); Pkg.instantiate(); include("docs/make.jl")'

@@ -30,13 +30,7 @@ const _COREPOTTS_DIRECT_TESTS = (
 )
 const _COREPOTTS_TEST_HELPER_EXCLUSIONS = ()
 const _COREPOTTS_DEVICE_CONFORMANCE_WITNESSES = (
-    "checkerboard_execution.jl",
-    "descriptor_boundary.jl",
-    "lifecycle_execution.jl",
-    "lifecycle_policy_execution.jl",
     "localmath_execution.jl",
-    "relationship_execution.jl",
-    "surface_execution.jl",
 )
 
 @testset "ordinary test runner owns every CorePotts test file" begin

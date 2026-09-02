@@ -11,7 +11,7 @@ _test_checkerboard_core(runtime) =
 _test_checkerboard_execution(runtime) =
     CorePotts._checkerboard_execution_position(runtime.engine_workspace)
 
-include("../../../lib/CorePotts/test/backend_conformance/lifecycle_execution.jl")
+include("../../../integration/backend_conformance/lifecycle_execution.jl")
 
 Metal.functional() || error("the selected Metal witness is not functional")
 Metal.allowscalar(false)

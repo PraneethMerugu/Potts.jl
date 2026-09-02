@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use LocalMath.jl, please cite the software release."
+title: "LocalMath.jl"
+type: software
+authors:
+  - family-names: Merugu
+    given-names: Praneeth
+repository-code: "https://github.com/PraneethMerugu/LocalMath.jl"
+license: MIT
+version: 0.2.0-rc1
+date-released: 2026-09-01

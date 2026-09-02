@@ -9,11 +9,6 @@ MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
-[sources]
-CorePotts = {path = "../../../CorePotts"}
-MakiePotts = {path = "../.."}
-Potts = {path = "../../../.."}
-
 [compat]
 CairoMakie = "0.15"
 CorePotts = "0.2"

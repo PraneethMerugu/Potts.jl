@@ -1,5 +1,9 @@
 # MakiePotts
 
+> **Development disclosure:** Substantial portions of this pre-release codebase,
+> tests, and documentation were developed with generative-AI assistance and
+> remain subject to maintainer review.
+
 MakiePotts v0.2 turns explicit Potts observations into native Makie recipes.
 
 ```julia

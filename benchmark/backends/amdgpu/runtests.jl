@@ -3,10 +3,10 @@ using AMDGPU
 AMDGPU.functional() || error("the selected AMDGPU witness is not functional")
 AMDGPU.allowscalar(false)
 
-include("../../../lib/CorePotts/test/backend_conformance/descriptor_boundary.jl")
-include("../../../lib/CorePotts/test/backend_conformance/checkerboard_execution.jl")
-include("../../../lib/CorePotts/test/backend_conformance/relationship_execution.jl")
-include("../../../lib/CorePotts/test/backend_conformance/surface_execution.jl")
+include("../../../integration/backend_conformance/descriptor_boundary.jl")
+include("../../../integration/backend_conformance/checkerboard_execution.jl")
+include("../../../integration/backend_conformance/relationship_execution.jl")
+include("../../../integration/backend_conformance/surface_execution.jl")
 
 report = run_descriptor_boundary(
     AMDGPU.ROCArray,

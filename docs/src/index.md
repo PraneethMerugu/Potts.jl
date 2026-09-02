@@ -23,8 +23,6 @@ executable artifact.
 
 ## Start here
 
-- [LocalMath in ten minutes](@ref localmath-quickstart) is a complete
-  standalone CPU path from equations through execution and inspection.
 - [Author and compose](@ref author-and-compose) introduces the symbolic model.
 - [Initialize and execute](@ref initialize-and-execute) runs the model through
   the standard SciML lifecycle.
@@ -43,3 +41,6 @@ executable artifact.
 The published-model programs are API and integration witnesses. They do not
 claim paper-source scientific qualification reserved for future scientific
 review.
+
+LocalMath, CorePotts, and MakiePotts publish their own package manuals; this
+manual covers the high-level Potts authoring and SciML surface.

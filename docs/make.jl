@@ -1,13 +1,10 @@
 using Documenter
-using CorePotts
-using LocalMath
 using Potts
-using MakiePotts
 
 makedocs(
     sitename = "Potts.jl",
     authors = "Praneeth Merugu",
-    modules = [LocalMath, CorePotts, Potts, MakiePotts],
+    modules = [Potts],
     format = Documenter.HTML(
         prettyurls = true,
         canonical = "https://praneethmerugu.github.io/Potts.jl/",
@@ -29,20 +26,8 @@ makedocs(
     remotes = nothing,
     pages = [
         "Home" => "index.md",
-        "LocalMath 0.2 release candidate" =>
-            "localmath-0.2-release-candidate.md",
         "Learn" => [
-            "LocalMath in ten minutes" =>
-                "learn/localmath-quickstart.md",
             "Author and compose" => "learn/authoring.md",
-            "LocalMath across domains" => "learn/localmath.md",
-            "LocalMath relations and storage" =>
-                "learn/localmath-relations.md",
-            "LocalMath scientific recipes" => "learn/localmath-recipes.md",
-            "LocalMath troubleshooting" =>
-                "learn/localmath-troubleshooting.md",
-            "Writing a LocalMath domain compiler" =>
-                "learn/localmath-domain-compiler.md",
             "Initialize and execute" => "learn/execution.md",
             "Lifecycle and relationships" => "learn/state-lifecycle.md",
             "Native MTK components" => "learn/native-components.md",
@@ -61,10 +46,7 @@ makedocs(
             "Extension boundary" => "concepts/extension-boundary.md",
         ],
         "API" => [
-            "LocalMath" => "api/localmath.md",
             "Potts" => "api/potts.md",
-            "CorePotts" => "api/corepotts.md",
-            "MakiePotts" => "api/makiepotts.md",
         ],
     ],
 )

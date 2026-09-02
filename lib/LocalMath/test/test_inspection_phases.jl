@@ -2,7 +2,7 @@ using Test
 
 # Reuse the four-law scientific witness; phase expectations come only from
 # source-owned inspection, not from a benchmark-side schedule reconstruction.
-include(joinpath(@__DIR__, "../../../benchmark/compiler_scaling/stage_scaling.jl"))
+include(joinpath(@__DIR__, "..", "benchmark", "compiler_scaling", "stage_scaling.jl"))
 
 @testset "canonical inspection owns complete physical launch evidence" begin
     workload = _compiler_workload(4, 16)

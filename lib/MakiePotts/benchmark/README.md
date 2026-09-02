@@ -3,8 +3,7 @@
 Run the non-gating smoke benchmarks with:
 
 ```sh
-julia --project=lib/MakiePotts/benchmark \
-  lib/MakiePotts/benchmark/benchmarks.jl
+julia --project=benchmark benchmark/benchmarks.jl
 ```
 
 Set `MAKIEPOTTS_BENCHMARK_REPORT` to write a TOML report containing median

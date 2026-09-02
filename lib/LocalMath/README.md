@@ -1,7 +1,11 @@
 # LocalMath.jl
 
+> **Development disclosure:** Substantial portions of this pre-release codebase,
+> tests, and documentation were developed with generative-AI assistance and
+> remain subject to maintainer review.
+
 New users can run the complete [ten-minute CPU
-quickstart](../../docs/src/learn/localmath-quickstart.md) before reading the
+quickstart](docs/src/learn/localmath-quickstart.md) before reading the
 compiler and execution details below.
 
 `LocalMath` is the typed spatial and publication layer beneath bounded
