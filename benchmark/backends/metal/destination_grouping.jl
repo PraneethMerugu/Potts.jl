@@ -113,7 +113,6 @@ end
 
 function prepare_metal_candidate(bound, index, parameters, backend, label)
     index == 1 || error("the public Stage lifecycle prepares the full program")
-    isempty(parameters) || error("this Metal witness declares no parameters")
     relations = map(bound.binding.relations) do binding
         binding.storage === nothing && return binding
         (binding.generation !== nothing || binding.status !== nothing) &&
@@ -132,9 +131,11 @@ end
 
 _metal_candidate_stage(prepared) = only(prepared.runtime.launches).stage
 _metal_candidate_status(prepared) = _metal_candidate_stage(prepared).execution.status
-function _run_metal_candidate!(prepared)
+_metal_physical_family(prepared) =
+    only(LWMG.inspect(prepared).planning.physical_segments).family
+function _run_metal_candidate!(prepared; parameters = (;))
     try
-        wait(LWMG.execute!(prepared))
+        wait(LWMG.execute!(prepared; parameters))
     catch error
         error isa LWMG.LocalMathValidationError || rethrow()
     end
@@ -203,7 +204,7 @@ _DestinationGrouping_DESTINATION_CASE in ("all", "unique") &&
     _run_metal_candidate!(prepared)
     KernelAbstractions.synchronize(backend)
     @test Array(output_storage) == Int32.(1:n)
-    @test Array(_metal_candidate_status(prepared)) == Int32[0]
+    @test _metal_physical_family(prepared) == :direct_pointwise
 
     destination = LWMG.Space(DestinationGroupingMetalUniqueNode, 1)
     collision_output = LWMG.Field(destination, Int32)
@@ -241,10 +242,10 @@ _DestinationGrouping_DESTINATION_CASE in ("all", "unique") &&
             (LWMG._relation_storage_binding(identity),)))
     gated_prepared = prepare_metal_candidate(
         gated_bound, 1, (false,), backend, :unique_closed_gate)
-    _run_metal_candidate!(gated_prepared)
+    _run_metal_candidate!(gated_prepared; parameters = (; enabled = false))
     KernelAbstractions.synchronize(backend)
     @test Array(gated_storage) == fill(Int32(23), n)
-    @test Array(_metal_candidate_status(gated_prepared)) == Int32[0]
+    @test _metal_physical_family(gated_prepared) == :direct_pointwise
 end
 
 _DestinationGrouping_DESTINATION_CASE in ("all", "reduce") &&

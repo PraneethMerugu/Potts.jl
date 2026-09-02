@@ -9,6 +9,7 @@ scientific contract.
 
 - [Project charter](project-charter.md)
 - [Correctness and contract stabilization](correctness-and-contract-stabilization.md)
+- [Package identity and independent repository cutover](package-identity-and-repository-separation.md)
 - [LocalMath](localmath.md)
 - [LocalMath effortless explicit setup](localmath-effortless-setup.md)
 - [LocalMath descriptor and relation ergonomics](localmath-descriptor-and-relation-ergonomics.md)
