@@ -93,16 +93,18 @@ when a public name, docstring, example, or manual page changed. Applicable
 real-GPU tests are required when device execution, adaptation, admission, or
 lifetime changed.
 
-Run the independently installable package suites from the repository root:
+Run the Potts package suite from this repository:
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.test()'
-julia --project=lib/CorePotts -e 'using Pkg; Pkg.test()'
-julia --project=lib/LocalMath -e 'using Pkg; Pkg.test()'
-julia --project=lib/MakiePotts -e 'using Pkg; Pkg.test()'
 ```
 
-Run cross-package behavior with:
+LocalMath, CorePotts, and MakiePotts are independent repositories with their
+own test, documentation, and backend qualification. For sibling development,
+place their checkouts beside Potts in a plain `PottsEcosystem` directory and
+use `Pkg.develop(path=...)` from a temporary or task-specific environment.
+
+Run Potts-owned cross-package behavior with:
 
 ```sh
 julia --project=integration -e 'using Pkg; Pkg.instantiate()'
