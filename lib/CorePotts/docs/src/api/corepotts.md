@@ -19,8 +19,10 @@ are not extension points.
 `CompilerSPI` constructs and inspects validated compiler IR. `BackendSPI`
 implements admitted runtime, transaction, adaptation, and settlement behavior.
 They are explicit facades over CorePotts bindings rather than parallel
-implementations, and an extension should not mix them merely for convenience.
-See [Extension boundary](@ref extension-boundary) for the role map.
+implementations, and an extension should not mix them merely for convenience:
+compiler extensions describe validated scientific/compiler meaning, while
+backend extensions provide execution, storage, and settlement behavior for an
+admitted device profile.
 
 ```@example core_boundary
 using CorePotts
