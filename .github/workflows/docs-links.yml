@@ -7,7 +7,9 @@ permissions:
   contents: read
 
 env:
-  JULIA_VERSION: '1.12'
+  JULIA_VERSION: '1.12.6'
+  LOCALMATH_REF: 'v0.2.0-rc1'
+  COREPOTTS_REF: 'v0.2.0-rc1'
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
@@ -18,12 +20,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate documentation environments
-        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
+        run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(; julia_version_strict=true)'
       - name: Build documentation and check links
         env:
           POTTS_DEPLOY_DOCS: 'false'
