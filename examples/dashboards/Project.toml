@@ -12,10 +12,7 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 
 [sources]
-CorePotts = {path = "../../lib/CorePotts"}
 KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git", rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"}
-MakiePotts = {path = "../../lib/MakiePotts"}
-Potts = {path = "../.."}
 
 [compat]
 julia = "1.12"

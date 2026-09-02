@@ -25,9 +25,6 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[sources]
-Potts = {path = "../.."}
-
 [compat]
 Catalyst = "=16.2.3"
 DynamicQuantities = "=1.13.0"
