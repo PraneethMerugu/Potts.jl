@@ -215,6 +215,8 @@ struct TrackerSourceView{O, S, P, R}
     domain_resources::R
 end
 
+Adapt.@adapt_structure TrackerSourceView
+
 """Construct the read-only authoritative source used by tracker protocols."""
 tracker_source_view(program, ownership) = TrackerSourceView(
     ownership,

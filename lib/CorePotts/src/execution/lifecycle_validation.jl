@@ -258,10 +258,14 @@ function _stage_lifecycle_transactions!(
     # The inactive bank is the concrete planned-after state. Finish structural
     # and derived consequences before state policies observe that view; no
     # scientific value is published until every phase validates.
+    tracker_source = tracker_source_view(
+        runtime.program, workspace.staged_ownership
+    )
     for position in 1:selected_count
         request = Int(_lifecycle_selected_request(workspace, position))
         _stage_lifecycle_request_structure!(
-            HostLifecycleExecution(), runtime, plan, workspace, request
+            HostLifecycleExecution(), runtime, plan, workspace,
+            tracker_source, request,
         ) || return (_stamp_host_lifecycle_failure!(
             runtime, plan, workspace, ProgramStageStructure
         ); -1)

@@ -48,20 +48,18 @@ end
         runtime,
         plan,
         workspace,
+        tracker_source,
         linear,
         new_owner,
     )
     old_owner = @inbounds workspace.staged_ownership[linear]
     old_owner == new_owner && return true
     site = CartesianIndices(runtime.program.shape)[linear]
-    source = tracker_source_view(
-        runtime.program, workspace.staged_ownership
-    )
     if !_commit_lifecycle_tracker_updates!(
             mode,
             workspace,
             runtime,
-            source,
+            tracker_source,
             site,
             old_owner,
             new_owner,

@@ -83,13 +83,17 @@ end
 end
 
 function _apply_lifecycle_request_effect!(
-        mode, runtime, plan, workspace, request, descriptor, plan_class
-    )
+    mode, runtime, plan, workspace, request, descriptor, plan_class
+)
     _apply_lifecycle_pre_relationships!(
         mode, runtime, plan, workspace, request, descriptor, plan_class
     ) || return -1
+    tracker_source = tracker_source_view(
+        runtime.program, workspace.staged_ownership
+    )
     _stage_lifecycle_effect_base!(
-        mode, runtime, plan, workspace, request, descriptor, plan_class
+        mode, runtime, plan, workspace, request, descriptor,
+        tracker_source, plan_class,
     ) || return -1
     _apply_lifecycle_post_relationships!(
         mode, runtime, plan, workspace, request, descriptor, plan_class
@@ -132,13 +136,14 @@ function _apply_lifecycle_request!(
 end
 
 @inline function _stage_lifecycle_request_structure!(
-        mode, runtime, plan, workspace, request
+        mode, runtime, plan, workspace, tracker_source, request
     )
     descriptor = @inbounds plan.descriptors[Int(workspace.descriptor[request])]
     plan_class = _lifecycle_request_plan_class(descriptor)
     plan_class === nothing && return false
     return _stage_lifecycle_effect_base!(
-        mode, runtime, plan, workspace, request, descriptor, plan_class
+        mode, runtime, plan, workspace, request, descriptor,
+        tracker_source, plan_class,
     )
 end
 

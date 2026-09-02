@@ -1246,6 +1246,14 @@ _checkerboard_domain_resources(program::CheckerboardKernelProgram) =
 _checkerboard_domain_resources(program) =
     program.descriptor_plan.domain_resources
 
+tracker_source_view(program::CheckerboardKernelProgram, ownership) =
+    TrackerSourceView(
+        ownership,
+        program.shape,
+        program.periodic,
+        program.domain_resources,
+    )
+
 _checkerboard_adapt(to, value) =
     to === nothing ? value : Adapt.adapt(to, value)
 

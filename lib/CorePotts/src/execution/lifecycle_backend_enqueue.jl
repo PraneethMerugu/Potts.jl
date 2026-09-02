@@ -11,6 +11,9 @@ function enqueue_lifecycle_backend_index!(
         "lifecycle execution requires prepared LocalMath reductions"
     ))
     workspace = state.lifecycle_workspace
+    tracker_source = tracker_source_view(
+        state.program, workspace.staged_ownership
+    )
     backend = KernelAbstractions.get_backend(state.ownership)
     workgroup_size === nothing || workgroup_size > 0 || throw(ArgumentError(
         "lifecycle workgroup size must be positive"
@@ -180,7 +183,7 @@ function enqueue_lifecycle_backend_index!(
         ) && continue
         @debug "enqueue lifecycle structural staging" plan_class
         stage_structure(
-            state, workspace, control, plan_class; ndrange = 1
+            state, tracker_source, workspace, control, plan_class; ndrange = 1
         )
     end
     _enqueue_lifecycle_failure_stamp!(state, ProgramStageStructure)

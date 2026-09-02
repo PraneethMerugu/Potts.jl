@@ -145,6 +145,7 @@ end
 
 function _stage_lifecycle_effect_base!(
         mode, runtime, plan, workspace, request, descriptor,
+        tracker_source,
         ::_CreateLifecyclePlan,
     )
     allocation = _lifecycle_request_allocation(workspace, request)
@@ -157,7 +158,7 @@ function _stage_lifecycle_effect_base!(
         linear = Int(@inbounds workspace.planned_sites[position, request])
         @inbounds workspace.planned_site_request[linear] = Int32(request)
         _stage_owner_change!(
-            mode, runtime, plan, workspace, linear, allocation
+            mode, runtime, plan, workspace, tracker_source, linear, allocation
         ) || return false
     end
     return true
@@ -165,6 +166,7 @@ end
 
 function _stage_lifecycle_effect_base!(
         mode, runtime, plan, workspace, request, descriptor,
+        tracker_source,
         ::_RemoveLifecyclePlan,
     )
     anchor = @inbounds workspace.anchor[request]
@@ -175,6 +177,7 @@ function _stage_lifecycle_effect_base!(
             runtime,
             plan,
             workspace,
+            tracker_source,
             linear,
             -Int32(descriptor.replacement_medium),
         ) || return false
@@ -184,11 +187,13 @@ end
 
 @inline _stage_lifecycle_effect_base!(
     mode, runtime, plan, workspace, request, descriptor,
+    tracker_source,
     ::_RetireLifecyclePlan,
 ) = true
 
 @inline function _stage_lifecycle_effect_base!(
         mode, runtime, plan, workspace, request, descriptor,
+        tracker_source,
         ::_TransitionLifecyclePlan,
     )
     anchor = @inbounds workspace.anchor[request]
@@ -198,6 +203,7 @@ end
 
 function _stage_lifecycle_effect_base!(
         mode, runtime, plan, workspace, request, descriptor,
+        tracker_source,
         ::_DivideLifecyclePlan,
     )
     anchor = @inbounds workspace.anchor[request]
@@ -226,7 +232,7 @@ function _stage_lifecycle_effect_base!(
         @inbounds workspace.partition_labels[position] == 2 || continue
         linear = Int(record.site)
         _stage_owner_change!(
-            mode, runtime, plan, workspace, linear, allocation
+            mode, runtime, plan, workspace, tracker_source, linear, allocation
         ) || return false
     end
     return true

@@ -276,7 +276,7 @@ end
 end
 
 @kernel function _stage_lifecycle_structure_backend_kernel!(
-        state, workspace, control, plan_class
+        state, tracker_source, workspace, control, plan_class
     )
     index = @index(Global, Linear)
     if index == 1 && _lifecycle_backend_open(workspace) &&
@@ -297,6 +297,7 @@ end
                     workspace,
                     request,
                     descriptor,
+                    tracker_source,
                     plan_class,
                 )
             end
