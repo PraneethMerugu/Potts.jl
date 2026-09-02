@@ -24,5 +24,17 @@ jobs:
       - uses: julia-actions/cache@v3
       - name: Package tests
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.test("MakiePotts")'
+      - name: Rendering backend environment
+        run: julia --project=test/backends --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); Pkg.precompile()'
+      - name: CairoMakie backend and clean-install journey
+        run: |
+          julia --project=test/backends --startup-file=no test/backends/cairo.jl
+          julia --project=test/backends --startup-file=no test/clean_install_smoke.jl
+      - name: WGLMakie backend
+        run: julia --project=test/backends --startup-file=no test/backends/wgl.jl
+      - name: GLMakie backend
+        run: xvfb-run -a julia --project=test/backends --startup-file=no test/backends/gl.jl
+      - name: Visual regression
+        run: julia --project=test/backends --startup-file=no test/visual_regression.jl
       - name: Documentation
         run: julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); include("docs/make.jl")'
