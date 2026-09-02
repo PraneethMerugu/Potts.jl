@@ -1,0 +1,40 @@
+all_commands_passed = true
+schema_version = 1
+
+[command_seconds]
+root = 1147.710031125
+standalone = 264.258274
+cpu-performance = 116.500350292
+metal = 1072.134224833
+cpu-witnesses = 29.659430334
+corepotts = 265.997973333
+
+[metal_zbuffer]
+samples = 1000
+ratio = 1.011416935846588
+upper95 = 1.0143378194118473
+
+[checkerboard]
+submitted = 12
+committed = 12
+synchronizations = 1
+
+[cpu_zbuffer]
+samples = 1000
+ratio = 0.9982776532810596
+upper95 = 0.9984557417438221
+
+[metal_d2q9]
+samples = 1000
+ratio = 1.0198044195884879
+upper95 = 1.0207628835179496
+
+[cpu_d2q9]
+samples = 1000
+ratio = 0.9526084046246913
+upper95 = 0.9529322491385808
+
+[corepotts]
+samples = 50
+ratio = 0.9985898447635364
+upper95 = 1.00232890798878

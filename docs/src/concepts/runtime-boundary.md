@@ -1,47 +1,58 @@
-# [Runtime and orchestration boundary](@id runtime-boundary)
+# [Runtime boundary](@id runtime-boundary)
 
-ProcessBigraphs and the current CorePotts execution engine are separate authorities during the
-runtime transition.
+Potts and CorePotts have one downward numerical boundary:
 
-## Stable documentation boundary
+- Potts produces a scheduled symbolic system, runtime schemas, and an immutable private
+  lowering request.
+- CorePotts initializes and advances CPM state for an explicit algorithm/backend profile.
+- CorePotts returns settled observations, checkpoints, capability reports, and generation-safe
+  lifecycle receipts.
+- Potts coordinates any native SciML component integrators outside copy-attempt kernels.
 
-This manual documents behavior available through the current PottsToolkit, CorePotts, and
-MakiePotts interfaces. ProcessBigraphs is an unpublished internal beta with canonical hierarchy,
-open composition, serial orchestration, structural transactions, solver and field adapters,
-observation, continuation, and logical checkpoint contracts documented inside its package.
-Read the
-[independent ProcessBigraphs manual](https://praneethmerugu.github.io/Potts.jl/ProcessBigraphs/dev/) for that
-qualified boundary; its deployment is versioned separately under the
-`ProcessBigraphs` documentation directory.
+Runtime state is materialized once per `init`. A public executable is not a required authoring
+stage, and an extension cannot introduce another model authority, scheduler, lifecycle engine,
+parameter store, or checkpoint format.
 
-That internal capability is not presented here as:
+## Native component boundary
 
-- a public runtime release;
-- complete upstream parity;
-- a replacement for CorePotts;
-- evidence that an uncut Potts path uses ProcessBigraphs.
+A component declares scope, IO, cadence, duration per MCS, split order, solver policy,
+initialization, events, lifecycle transfer, and required capabilities. Unsupported combinations
+fail during preflight. GPU profiles cannot satisfy this contract through host fallback, scalar
+device indexing, or hidden transfers.
 
-## Coupled-runtime integration
+Global component state and per-cell component pools use the same explicit publication boundary.
+Per-cell pools are fixed-capacity and generation safe; creation, deletion, division, and transition
+are applied from CorePotts lifecycle receipts.
 
-ProcessBigraphs owns when and why coupled computation occurs. CorePotts, SciML solvers, and custom
-engines retain authority over how their heavy computation executes inside each authorized
-interval. The internal-beta integration includes checked structural add, remove, divide, move, and
-rewire transactions, structural restart, and bounded Merks and CNV assemblies.
+`CPMThenComponents()` stages one complete CPM step, then gives every due native island the same
+staged Core snapshot. Native outputs are collected without mutating that snapshot and publish only
+after every due solve succeeds. Islands therefore use simultaneous (Jacobi) coupling within a
+boundary: declaration or scheduling order cannot let one island observe another island's new
+output early.
 
-These capabilities do not automatically replace CorePotts execution or promote a public
-ProcessBigraph API. A user-facing PottsToolkit workflow is documented only after its public
-integration contract passes, while package-local capability pages record internal runtime
-authority and checkpoint compatibility.
+Native MTK execution retains continuous and discrete events through upstream structural compilation,
+but admits only event-free coupled runtime profiles. The pinned public API exposes recursive event
+collections but no stable public accessors for classifying every affect, initialization/finalization
+effect, and reinitialization policy. Nonempty event sets or a structural event-count change therefore
+fail preflight rather than relying on callback struct fields or private helpers.
 
-## Merge rule for this manual
+The native runtime admits structurally supported ODE and DAE islands through
+the standard SciML problem and solver interfaces. Batched and device execution
+retain their additional fixed-shape and backend requirements. Exact restart additionally binds the
+scheduled-system fingerprint, logical state schema, native solver profile, complete MTK/SciML/Julia
+stack, outer-event mode, and save/observation mode. Functional execution does
+not by itself authorize a native checkpoint.
 
-ProcessBigraph integration documentation enters this structure in three places:
+Native execution is available only through the composed `init`/`step!`/`solve!` boundary. Extension
+hooks for native problem construction, initialization, advance, and value extraction are private
+implementation SPI and are not a public bypass around capability admission. Likewise, an outer
+SciML discrete callback is a supported in-process host protocol without exact replay: its code and captures receive
+a process-local identity, but it has no state codec and therefore cannot be checkpointed. Native
+islands currently reject outer callbacks altogether.
 
-1. **Learn/Examples** only for admitted user workflows;
-2. **Concepts and Guarantees** for hierarchy, ports, structural barriers, lifecycle, failure, and
-   checkpoint semantics;
-3. **API** only for names that have passed the applicable stability gate.
+## Capability boundary
 
-Every page must state its support level and avoid describing a roadmap intention as implemented
-behavior. Package-local ProcessBigraphs docs remain the authority for internal adapter and runtime
-extension details during incubation.
+Structural compilation, successful storage adaptation, or a working profile
+for another algorithm, component scope, scalar type, or device is not runtime
+evidence. Consult [Capability status](@ref capability-status) before choosing
+an execution profile.

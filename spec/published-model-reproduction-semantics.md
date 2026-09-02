@@ -118,7 +118,7 @@ MUST NOT invent a unique source configuration.
 
 ## Library Boundary
 
-Reusable scientific behavior belongs in CorePotts or PottsToolkit. Model source MAY assemble
+Reusable scientific behavior belongs in CorePotts or Potts. Model source MAY assemble
 components, encode paper parameters and schedules, and define paper-specific analyses, but MUST NOT
 implement a private proposal engine, hidden state transition, field solver, lifecycle path, or
 backend-specific scientific law.

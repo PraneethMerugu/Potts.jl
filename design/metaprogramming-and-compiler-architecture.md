@@ -2,6 +2,11 @@
 
 Status: Draft engineering standard for the refactor
 
+Current disposition: use this as compatible implementation guidance only. The public lifecycle,
+late-lowering boundary, native MTK-component ownership, and current work order are governed by
+[Decision 0044](../spec/decisions/0044-pre-g6-cohesion-and-mtk-hardening.md) and the
+[G5H Hardening Contract](../spec/symbolic-potts-v1-hardening.md).
+
 ## Authority and Scope
 
 This document governs how PottsToolkit authoring syntax is compiled into CorePotts execution. It is

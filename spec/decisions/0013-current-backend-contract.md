@@ -2,6 +2,12 @@
 
 Status: Accepted
 
+Current disposition: the backend-neutral, fail-closed, and real-hardware principles remain active.
+The blanket requirement that every phase or release claim pass both Metal and ROCm is superseded by
+[Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md). G5H qualifies explicit capability
+profiles using CPU reference evidence and at least one real GPU witness; unqualified vendors report
+`Unsupported` without fallback.
+
 Date: 2026-07-18
 
 ## Context

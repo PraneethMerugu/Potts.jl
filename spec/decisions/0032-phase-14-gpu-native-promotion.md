@@ -2,6 +2,12 @@
 
 Status: Accepted
 
+Current disposition: the no-fallback and real-hardware principles remain active. Promotion is now
+qualified by the explicit component and backend capability profiles in
+[Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md), not by a blanket feature-wide GPU claim.
+The G3/G4 route and simultaneous Metal-and-ROCm promotion language below are historical scheduling,
+not the current G5H gate.
+
 Date: 2026-07-24
 
 Amended by [Decision 0035](0035-wang-sequential-gpu-disposition.md): the stable reusable-capability

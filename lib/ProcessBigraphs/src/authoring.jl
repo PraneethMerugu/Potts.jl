@@ -1,8 +1,0 @@
-include("authoring/model.jl")
-include("authoring/builder.jl")
-include("authoring/validation.jl")
-include("authoring/lowering.jl")
-include("authoring/inspection.jl")
-include("authoring/serialization.jl")
-include("authoring/problem.jl")
-include("authoring/structure.jl")

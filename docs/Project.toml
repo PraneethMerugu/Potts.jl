@@ -1,16 +1,27 @@
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-
-[sources]
-CorePotts = {path = "../lib/CorePotts"}
-MakiePotts = {path = "../lib/MakiePotts"}
-PottsToolkit = {path = ".."}
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
 CairoMakie = "0.15"
 Documenter = "1"
+DomainSets = "0.8"
+KernelAbstractions = "0.9"
+MethodOfLines = "0.11"
+ModelingToolkit = "11"
+ModelingToolkitBase = "1"
+OrdinaryDiffEqTsit5 = "2"
+SciMLBase = "3"
+SymbolicIndexingInterface = "0.3"
+Symbolics = "7"
 julia = "1.12"

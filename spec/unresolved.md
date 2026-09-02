@@ -2,6 +2,11 @@
 
 Status: Under Investigation
 
+Current disposition: historical registry under G5H revalidation. Only an item explicitly admitted
+by the [G5H Hardening Contract](symbolic-potts-v1-hardening.md) or a later accepted decision may
+drive current implementation. References to `PottsModel`, `ModelFragment`, Lottery, old phase
+ordering, or earlier capability claims are not active requirements.
+
 This registry prevents open questions from being silently resolved by implementation convenience.
 Identifiers remain stable when a question is moved into an accepted specification or decision
 record.
@@ -26,10 +31,12 @@ transforms. Specify which transforms are bitwise portable and which are only sta
 
 ### SEM-RNG-006: Default generator implementation
 
-Resolved by `Philox4x32x10V1`, RNG contract version `1.0.0`. Known-answer vectors, semantic-address
-packing, compilation, and raw-word identity are qualified on CPU, Metal, and AMDGPU through the
-CorePotts RNG suite and backend qualification matrix. CUDA remains outside the current first-class
-backend contract and does not block the accepted default.
+Resolved by `Philox4x32x10V2`, current RNG contract version `2.0.0`, and lowering identity
+`philox4x32x10_semantic_address_fisher_yates_v2`. Known-answer vectors, nonoverlapping
+semantic-address packing,
+compilation, raw-word identity, and the checkerboard color-permutation lowering are qualified only
+for the backend/environment conjunctions admitted by the current CorePotts capability matrix. CUDA
+remains outside the current first-class backend contract and does not block the accepted default.
 
 ## Energy, Proposals, and Trackers
 
@@ -158,18 +165,18 @@ correlations, and kinetics.
 Determine the exact operation implemented by subgroup reductions and establish equivalence to a
 named generic algorithm before making scientific claims.
 
-## PottsToolkit Rule Language
+## Potts Rule Language
 
 ### SEM-DSL-001: Rule snapshot behavior
 
 Resolved by
-[PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md): all outputs in one
+[Potts Rule and Model Semantics](potts-rule-and-model-semantics.md): all outputs in one
 rule phase read one snapshot and commit simultaneously after successful validation.
 
 ### SEM-DSL-002: Supported language subset
 
 Resolved by the accepted Julia-first Level 1 language in
-[PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md). Rules use thin
+[Potts Rule and Model Semantics](potts-rule-and-model-semantics.md). Rules use thin
 `@rule`/`@rules` syntax over ordinary builders, callable typed references, Julia conditionals and
 local expressions, explicit interpolation, declarative `draw`, lazy query reductions, and no general
 dynamic loops or collections. The exact registered method list is maintained as a release inventory.
@@ -178,7 +185,7 @@ dynamic loops or collections. The exact registered method list is maintained as 
 
 Resolved for the core vocabulary by
 [Cartesian Surface, Queries, and Fields](cartesian-surface-queries-and-fields.md) and incorporated
-into [PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md).
+into [Potts Rule and Model Semantics](potts-rule-and-model-semantics.md).
 
 ### SEM-DSL-004: Extension and escape-hatch contract
 
@@ -200,20 +207,20 @@ paths, declaration order, object identity, and unstable object-memory hashing ar
 ### SEM-DSL-006: Authoring and composition architecture
 
 Resolved by
-[PottsToolkit Authoring, Composition, and API Semantics](pottstoolkit-authoring-composition-and-api-semantics.md):
+[Potts Authoring, Composition, and API Semantics](potts-authoring-composition-and-api-semantics.md):
 macros are optional sugar over a complete programmatic interface; models are immutable; declarations
 are order-independent outside explicit phases; fragments are namespaced and composable; validation
 is staged; inspection and semantic manifests are required; reconstructable serialization is
-opt-in; and DSL/IR versions are independent of package versions. PottsToolkit DSL and typed
+opt-in; and DSL/IR versions are independent of package versions. Potts DSL and typed
 authoring forms share normalized semantic IR;
 CorePotts remains an independently usable, first-class scientific and execution API governed by the
-same scientific contracts rather than forced through PottsToolkit IR.
+same scientific contracts rather than forced through Potts IR.
 
 ### SEM-DSL-007: Exact surface syntax and usability contract
 
 Resolved by the accepted Level 1 surface in
-[PottsToolkit Authoring, Composition, and API Semantics](pottstoolkit-authoring-composition-and-api-semantics.md)
-and [PottsToolkit Rule and Model Semantics](pottstoolkit-rule-and-model-semantics.md). The contract
+[Potts Authoring, Composition, and API Semantics](potts-authoring-composition-and-api-semantics.md)
+and [Potts Rule and Model Semantics](potts-rule-and-model-semantics.md). The contract
 defines top-level declarations, typed properties and parameters, fields, pairwise laws, model and
 problem construction, rule/trigger/query/random-draw syntax, explicit phases, fragments and roles,
 inspection, diagnostics, observables, optional units, persistence, and editor independence.
@@ -231,7 +238,7 @@ Resolved by
 CorePotts uses meaningful scientific categories, immutable structs, ordinary public functions,
 multiple dispatch, typed requirements and capabilities, stable state accessors, reference behavior,
 package extensions, centralized workspaces, preflight validation, and category conformance helpers.
-Direct CorePotts use is first-class and does not require PottsToolkit authoring IR.
+Direct CorePotts use is first-class and does not require Potts authoring IR.
 
 ## SciML Integration
 

@@ -2,6 +2,11 @@
 
 Status: Accepted
 
+Current disposition: superseded in part by the
+[G5H Hardening Contract](symbolic-potts-v1-hardening.md). Integer-MCS stepping, genuine SciML
+behavior, replay, saving, and ensemble intent survive. `PottsModel`, old problem ownership,
+algorithm inventory, and early executable lowering are not current API authority.
+
 ## Purpose
 
 This document defines genuine SciML integration for Potts.jl. It governs the relationship among
@@ -96,7 +101,7 @@ provenance, and is never inferred merely because an input contains GPU arrays.
 
 The final `PottsProblem`, `PottsIntegrator`, and `PottsSolution` names belong exclusively to this
 replacement interface. Historical concrete types are renamed to explicitly internal legacy names
-before the final bindings are introduced. Existing PottsToolkit constructors MAY temporarily return
+before the final bindings are introduced. Existing Potts constructors MAY temporarily return
 the renamed legacy problem only through the frozen containment boundary until Phase 10 replaces
 their compiler. The bridge gains no features, is never a replacement fallback, and is deleted at
 typed-compiler parity. No provisional `ScientificPottsProblem` family is introduced.
@@ -260,8 +265,24 @@ are not public steps. They never change the meaning of `step!`.
 
 The public step includes proposal/mechanics execution, lifecycle commit, MCS advancement, due
 observations and saves, discrete callbacks and accepted controls, and final invariant/status
-bookkeeping. `solve!` is a loop over this same step. A private `perform_mcs!`-like algorithm hook may
-implement the inner transition but is not a second public stepping path.
+bookkeeping. Before returning, it requests full settlement through the sole CorePotts settlement
+authority, translates any backend status, and makes `integrator.t` and `integrator.u` represent the
+same completed MCS. Four calls to public `step!` therefore create four settled return boundaries.
+
+`solve!` uses the same nonblocking CorePotts MCS transaction as `step!`, but it MUST NOT implement
+its fast path as repeated public `step!` calls. It enqueues through the next required host-visible
+boundary, settles once, performs the coincident save/callback/checkpoint/progress actions, and
+continues. This is one scientific stepping path with two visibility policies, not a second executor.
+`step!(integrator, n)` may use the chunked path between real intermediate boundaries but returns
+fully settled and materialized at its final requested MCS.
+
+The next boundary is the earliest applicable final time, save time, host callback, checkpoint,
+host parameter or external-input update, progress report, or explicit
+observation. The scheduler is a small closed value-level mechanism; it is not a general event-query
+language and boundary occurrences do not enter types. Coincident consumers share one settlement.
+Because one KernelAbstractions settlement drains the current ordered queue, `solve!` MUST NOT submit
+past this earliest known boundary. Every settlement targets the then-current submitted MCS; a
+previous MCS cannot be settled selectively after later work has entered the same queue.
 
 Stepping after `Success`, `Terminated`, or `MaxIters` throws `IntegratorTerminatedError`. Calling
 `solve!` on a terminal integrator returns its existing finalized solution without duplicate saves,
@@ -380,6 +401,12 @@ The default snapshot policy makes an independent copy in the execution backend's
 snapshots remain on CPU and GPU snapshots remain device resident. Host materialization is explicit
 and recorded. Typed host, observable-only, streaming, and out-of-core policies MAY replace the
 default.
+
+The first asynchronous implementation remains conservative: `save_start` materializes when
+requested during initialization, `save_end` settles once at the end, every `saveat` value settles
+once, and `save_everystep` settles every MCS. A later device-to-device snapshot queue may defer host
+transfer, but it is not introduced before the simple settlement-count contract is correct and
+measured.
 
 ## PottsSolution
 
@@ -514,7 +541,6 @@ confused with execution inputs.
 The following throw before or during execution rather than returning a misleading solution:
 
 - Invalid model, problem, algorithm, backend, or solver option
-- Structured cell-capacity exhaustion
 - Broken state or transaction invariants
 - Unsupported required capability
 - Device execution or compilation failure
@@ -522,6 +548,26 @@ The following throw before or during execution rather than returning a misleadin
 
 Expected deliberate termination returns a valid solution with `Terminated`. Reaching `maxiters`
 returns a partial solution with `MaxIters`.
+
+An expected data-dependent failure reported by the admitted device status protocol returns a
+coherent partial solution with `SciMLBase.ReturnCode.Failure`. This includes fixed cell or
+relationship capacity exhaustion, configured error-on-inadmissible/conflict behavior, generation
+exhaustion, and an evaluator failure caused by the realized model state. The solution and
+integrator retain one immutable typed failure report containing the exact first failing MCS,
+execution stage, qualified source/action identity, and bounded detail/capacity payload. Their public
+time and state remain the last successfully committed MCS. `SciMLBase.successful_retcode` is false,
+and `SciMLBase.check_error` on the integrator returns the same failure retcode.
+
+The device status protocol does not turn broken software assumptions into ordinary unsuccessful
+science. A stale generation, footprint-proof violation, transaction invariant failure, unknown
+status, or backend/compiler/driver failure throws its typed exception when the sole settlement
+authority observes it. A backend failure discovered only at a later queue drain reports an honest
+submission interval rather than an invented exact MCS.
+
+Public `step!` settles one attempted MCS. On an expected device failure it returns the terminal
+integrator with `ReturnCode.Failure`, does not advance `t`, and leaves `u` at the last committed
+state. `solve!` stops submission at the first settlement that observes failure and returns the
+partial failed solution. Neither path polls device status inside an uninterrupted execution chunk.
 
 ## Biological Events and SciML Callbacks
 
@@ -552,6 +598,11 @@ An ordinary SciML `DiscreteCallback` is a host callback. All standard host callb
 boundary share one immutable host analysis snapshot and one recorded synchronization/materialization
 boundary; its condition receives that snapshot, integer MCS, and the live integrator. GPU
 initialization emits one informational cost notice and names the typed device alternative.
+
+A scheduled host callback settles at its known MCS. An arbitrary Julia condition evaluated after
+every MCS necessarily settles every MCS unless it consumes only a separately admitted reduced
+observation. A device-native compiled callback adds no host boundary, but V1 does not grow a general
+callback DSL merely to avoid synchronization.
 
 A device callback declares required observables, condition, permitted control effect, schedule,
 priority/dependencies, and capabilities. It lowers during `init` into concrete bounded descriptors
@@ -586,6 +637,12 @@ A snapshot represents observable state at a named MCS. A checkpoint promises con
 therefore includes all required model, scientific state, algorithm, RNG, identity, and semantic
 counter state under its checkpoint contract. Stable capture occurs only at finalized MCS `0` or a
 completed positive integer MCS; replaceable caches and execution workspaces are rebuilt.
+
+Checkpoint capture requests full settlement from CorePotts, inspects sticky device status, confirms
+that the requested scientific-state bank published completely, and materializes every checksum and
+continuation input. Checkpoint code never synchronizes, indexes device storage, or converts a device
+array independently. A scheduled checkpoint is one ordinary boundary reason and combines with any
+save, callback, or observation due at the same MCS.
 
 They MAY share storage infrastructure but neither silently claims the other's guarantees.
 
@@ -711,6 +768,13 @@ interface. Unique symbols MAY be aliases; missing or ambiguous names fail during
 Indexing never becomes a device dictionary lookup and an unsaved observable is not recomputed or
 transferred implicitly.
 
+A host state getter requests the minimum required settlement visibility and cannot hide an
+`Array(device_storage)` conversion below the boundary service. A coherent defensive host parameter
+shadow may be read without settlement; a device-dependent parameter or observable follows its
+declared visibility. Setters settle outstanding work once, validate a typed update against the
+coherent host shadow, and enqueue one ordered backend publication before execution resumes.
+Transactional multi-getters and multi-setters settle at most once per call.
+
 Phase 9 rejects `sensealg`, generic trajectory differentiation, and automatic differentiation
 through `solve`. Discrete ownership, addressed random decisions, and accept/reject transitions do
 not have ordinary pathwise derivatives. Differentiable surrogates or estimators belong to separately
@@ -762,6 +826,12 @@ an undocumented coupling substitute.
 - Capacity and invariant failures follow their structured error contracts.
 - Biological events remain model effects rather than generic callbacks.
 - Host callback synchronization is declared and reported.
+- Public `step!` returns settled; internal `solve!` batches only across boundaries with no host
+  consumer.
+- CorePotts contains the sole physical synchronization/materialization authority; SciML, saving,
+  checkpoints, SII, statistics, and adapters request it rather than synchronizing directly.
+- Settlement-count fixtures distinguish submission, drained queue position, committed scientific
+  time, and host materialization.
 - Snapshots and continuation checkpoints remain distinct.
 - Ensemble seeds are independent of scheduling and batching.
 - Displays do not cause hidden GPU synchronization.

@@ -3,6 +3,21 @@
 Decision records explain why accepted semantics were chosen. The normative rule remains in the
 corresponding specification document.
 
+## Current disposition
+
+- Decision 0044 governs the active pre-G6 hardening program and supersedes conflicting authoring,
+  compilation, coupled-scheduling, capability-promotion, simultaneous-vendor,
+  documentation-order, and phase-order portions of Decisions 0013, 0016, 0025, 0026, and 0029
+  through 0033.
+- Decision 0043 governs the retired ProcessBigraphs boundary and supersedes Decisions 0034,
+  0036–0040, and 0042 wherever they require that package. Those retired records are removed from the
+  active index and remain recoverable from Git history. Decision 0041 remains indexed only for its
+  repository-wide one-authority, bounded-DRY, independent-oracle, impact-map, and responsibility-
+  review rules; its ProcessBigraphs program and old qualification are historical.
+- Decision 0035 remains active scientific disposition for the Wang sequential reference.
+- Older compatible scientific choices remain accepted. `Status: Accepted` in an older record does
+  not override a later record's explicit scoped supersession.
+
 ## Accepted Decisions
 
 - [0001: Project direction and primary interface](0001-project-direction.md)
@@ -38,14 +53,10 @@ corresponding specification document.
 - [0031: Phase 14 single semantic kernel](0031-phase-14-single-semantic-kernel.md)
 - [0032: Phase 14 GPU-native promotion](0032-phase-14-gpu-native-promotion.md)
 - [0033: Phase 14 generic hierarchical authoring](0033-phase-14-generic-hierarchical-authoring.md)
-- [0034: ProcessBigraphs.jl as the domain-neutral runtime platform](0034-process-bigraph-runtime-platform.md)
 - [0035: Wang sequential reference and GPU suitability disposition](0035-wang-sequential-gpu-disposition.md)
-- [0036: AlgebraicJulia as the ProcessBigraphs structural foundation](0036-algebraicjulia-process-bigraph-foundation.md)
-- [0037: ProcessBigraphs open-composition semantics](0037-process-bigraph-open-composition.md)
-- [0038: ProcessBigraphs Phase 15.C serial internal alpha](0038-process-bigraph-serial-alpha.md)
-- [0039: Phase 16 compute ownership, field coupling, and internal-beta scope](0039-phase-16-compute-ownership-and-scope.md)
-- [0040: ProcessBigraphs high-level authoring and Phase 16.HC](0040-process-bigraph-high-level-authoring.md)
-- [0041: Semantic-preserving repository consolidation](0041-semantic-preserving-repository-consolidation.md) — accepted and qualified; repository consolidation closed
+- [0041: Semantic-preserving repository consolidation (repository-wide principles only)](0041-semantic-preserving-repository-consolidation.md)
+- [0043: Retire ProcessBigraphs and restore the PottsToolkit/CorePotts focus](0043-retire-processbigraphs.md)
+- [0044: Insert pre-G6 cohesion, MTK, and product hardening](0044-pre-g6-cohesion-and-mtk-hardening.md)
 
 ## Record Template
 

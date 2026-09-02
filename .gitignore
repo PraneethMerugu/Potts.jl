@@ -11,8 +11,6 @@
 # Documentation build output
 /docs/build/
 /docs/site/
-/lib/ProcessBigraphs/docs/browser/artifacts/
-/lib/ProcessBigraphs/docs/browser/tests/visual.spec.ts-snapshots/*-darwin.png
 /.pnpm-store/
 
 # OS/Editor files
@@ -49,3 +47,4 @@ __pycache__/
 
 # Independently installable packages do not carry local manifests
 /lib/*/Manifest.toml
+.empryo

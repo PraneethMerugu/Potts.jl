@@ -1,0 +1,29 @@
+schema_version = 1
+status = "complete"
+date = "2026-08-22"
+backend = "Metal.MetalBackend"
+device = "Apple M1"
+julia_version = "1.12.6"
+execution_path = "packed storage -> KernelAbstractions -> Metal"
+raw_vendor_kernel_in_library = false
+
+[[packet]]
+name = "public_stage_program"
+command = "julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/lm1_stage_program.jl"
+passed = 38
+total = 38
+scope = "Unique, Reduce, Collect, OrderedFold, Candidate conflict, 513-item hierarchical scan, dynamic relation receipts, success and no-write failure"
+
+[[packet]]
+name = "resolve_success_and_failure"
+command = "julia --project=benchmark/backends/metal --startup-file=no -e 'ENV[\"LM1_DESTINATION_CASE\"]=\"resolve\"; include(\"benchmark/backends/metal/lm1_destination_grouping.jl\")'"
+passed = 15
+total = 15
+scope = "ArgMin, ArgMax, tuple rank, explicit ties, duplicate tie failure, rank-bounds failure, relation requalification"
+
+[[packet]]
+name = "cross_domain_relation_authority"
+command = "julia --project=benchmark/backends/metal --startup-file=no -e 'using Metal, LocalWorksets; import KernelAbstractions; Metal.allowscalar(false); include(\"test/localworksets_witnesses/zbuffer.jl\"); include(\"test/localworksets_witnesses/lattice_spring.jl\"); backend=Metal.MetalBackend(); z=run_lw_zbuffer_witness(Metal.MtlArray; backend); s=run_lw_lattice_spring_witness(Metal.MtlArray; backend); z.result==z.reference || error(\"zbuffer mismatch\"); s.result==s.reference || error(\"spring mismatch\")'"
+passed = 2
+total = 2
+scope = "public FixedRelation generation/status declarations, Resolve z-buffer, multi-stage LSM"

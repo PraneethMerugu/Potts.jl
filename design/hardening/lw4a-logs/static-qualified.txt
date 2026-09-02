@@ -1,0 +1,12 @@
+^D]0;Julia]0;JuliaJulia 1.12.6; Darwin aarch64; apple-m1; LLVM 18.1.7; 1 Julia thread
+forbidden_loaded = String[]
+public = [:LocalWork, :LocalWorksets, :PreparedWork, :WorkEvent, :WorkPlan, :inspect, :localwork, :masked, :plan, :prepare, :resolved, :run!, :sequence, :storage_slot, :value_slot]
+exports = [:LocalWorksets]
+source_files = 10
+nonblank_noncomment = 4072
+maximum_file_lines = 951
+per_file_lines = ["lib/LocalWorksets/src/LocalWorksets.jl" => 20, "lib/LocalWorksets/src/execution.jl" => 425, "lib/LocalWorksets/src/execution/localworksets_conjunctive.jl" => 773, "lib/LocalWorksets/src/execution/localworksets_evidence.jl" => 108, "lib/LocalWorksets/src/execution/localworksets_kernelabstractions.jl" => 274, "lib/LocalWorksets/src/execution/localworksets_resolved.jl" => 951, "lib/LocalWorksets/src/inspection.jl" => 212, "lib/LocalWorksets/src/model.jl" => 322, "lib/LocalWorksets/src/planning.jl" => 420, "lib/LocalWorksets/src/preparation.jl" => 567]
+synchronize_file = lib/LocalWorksets/src/execution/localworksets_kernelabstractions.jl
+forbidden_execution_hits = Pair{String, String}[]
+stale_nested_sources = ()
+runtime_dependencies = ["Adapt", "Atomix", "KernelAbstractions", "SHA"]

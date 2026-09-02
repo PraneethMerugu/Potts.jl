@@ -2,6 +2,10 @@
 
 Status: Accepted policy; exact constructor spellings remain Provisional
 
+Current disposition: superseded in part by [Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md).
+`PottsSystem` and native MTK composition replace `PottsModel`/`ModelFragment` as the current
+authoring authority; the readability and hierarchical-composition goals survive.
+
 Date: 2026-07-25
 
 ## Context
@@ -86,10 +90,10 @@ transfer, synchronization, or allocation.
 Every stable or release fragment capability remains subject to Decision 0032: sequential CPU
 reference plus backend-resident Metal and ROCm implementation and qualification.
 
-Decision 0034 later introduces `ProcessBigraphs.jl` as the domain-neutral runtime beneath migrated
-models. `ModelFragment` remains PottsToolkit's generic biological authoring and composition
-surface; it may lower to runtime composites without becoming a second runtime IR. The runtime does
-not authorize paper-specific builders, hidden schedules, or dual Potts execution authority.
+Decision 0043 retires the later orchestration-package experiment. `ModelFragment` remains
+historical PottsToolkit authoring authority only where it survives the Symbolic Potts V1
+construction contracts; it does not authorize paper-specific builders, hidden schedules, or dual
+Potts execution authority.
 
 ## Consequences
 

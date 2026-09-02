@@ -1,0 +1,8 @@
+julia = "1.12.6"
+disposition = "pass"
+validator_sha256 = "32ade4fefc9ad35314acecad045f3ddd9923414ab1e77a73c5295e68bb5b9fdf"
+validated_utc = "2026-08-13T02:46:35.384"
+detail = "raw evidence reconstructed"
+schema_version = 1
+artifact_digest = "49002d9542b64c4c03388ab9bbe30632dfe20a64eac6c2e4bbcb89c50a486641"
+artifact = "/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/hardening/lw4-final-qualification-bundle"

@@ -2,8 +2,8 @@
 
 Status: Superseded by Decision 0031; retained as historical design and prototype evidence
 
-GPU promotion note: Decision 0032 supersedes any CPU-only or optional-GPU promotion language in
-this historical document; stable Phase 14 execution requires qualified Metal and ROCm paths.
+GPU promotion note: the simultaneous Metal-and-ROCm language formerly supplied by Decision 0032 is
+itself superseded for current work. Explicit G5H capability profiles control promotion.
 
 Implementation maturity: Specified only
 

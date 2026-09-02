@@ -1,0 +1,725 @@
+schema_version = "1.0.0"
+specification = "spec/localmath-direct-cutover.md"
+baseline_ledger = "design/audits/localmath-cutover-authority-ledger.toml"
+target_gate = "LM-1"
+status = "implemented_review_approved"
+
+completion_rule = "LM-1 may be marked implemented only after every row has a row-level disposition check, every required target anchor exists, every forbidden anchor is absent from its declared scope, and all evidence queries pass. Aggregate symbols, files, kernels, lines added, or lines deleted are never substitutes for these checks."
+atomicity_rule = "The rows are implementation work packages, not supported migration states. The repository presented to the LM-1 gate must satisfy all rows together and expose no old/new selector, adapter, overload, alias, or fallback execution route."
+authority_rule = "This file records the approved LM-1 row dispositions and machine-checkable source, compiler, and real-GPU facts. The LM-0 numerical ceilings remain frozen; the explicit LM-1 flagship amendment supersedes only the deleted 13-stage structural identity. Compiler/Julia, GPU/performance, scientific-modeling, and simplification/maintainability reviews approve the final source."
+
+required_rows = [
+  "semantic-waist",
+  "plan-and-prepared-lifecycle",
+  "spaces-fields-relations",
+  "relation-proof-minting",
+  "read-and-access-declarations",
+  "control-selection",
+  "parameter-schema",
+  "publication-declarations",
+  "field-and-relation-binding",
+  "physical-storage-layout",
+  "workspace-planning",
+  "prepared-relation-views",
+  "freshness-and-runtime-content",
+  "evidence-and-inspection",
+  "lowering-and-execution",
+  "event-dependency-status",
+  "kernel-families",
+  "legacy-authoring-grammar",
+  "downstream-direct-rewrite",
+]
+
+[compiler_gate]
+synthetic_manifest = "design/evidence/localmath/lm1/compiler-final-synthetic/manifest.toml"
+flagship_manifest = "design/evidence/localmath/lm1/compiler-final-flagship/manifest.toml"
+minimum_fresh_replicates = 3
+minimum_warm_samples = 7
+expected_environment = { backend = "cpu", hardware = "apple-m1", julia_version = "1.12.6", machine = "arm64-apple-darwin24.0.0", threads = 1 }
+synthetic_stage_counts = [1, 4, 8, 13, 32]
+synthetic_physical_launch_counts = [1, 21, 52, 89, 230]
+host_intercept_seconds = -1.2144189439500006
+host_slope_seconds_per_stage = 4.065405549
+one_stage_guarded_seconds = 2.8509866050499997
+process_intercept_seconds = 7.9761839993538395
+process_slope_seconds_per_stage = 7.10845248622279
+one_stage_process_guarded_seconds = 15.08463648557663
+flagship_stage_count = 1
+flagship_physical_launch_count = 9
+flagship_physical_bank_count = 2
+flagship_operation_fact_count = 3
+flagship_qualified_operation_fact_count = 3
+flagship_lowering_identity = "stage_local_erased_kernelabstractions_v1"
+flagship_logical_stage_identity = "collect:LocalWorksets._PreparedCollectLaw{CorePotts._LifecycleSelectedRequest, 1, LocalWorksets._OneGroup, LocalWorksets._CanonicalBy{CorePotts._LifecycleSelectedOrder, CorePotts._LifecycleSelectedIdentity}, LocalWorksets._PersistentSourcePosition}"
+flagship_physical_phase_identities = [
+  "CorePotts._lifecycle_selection_transaction_kernel!",
+  "collect_reset",
+  "collect_evaluate",
+  "compacted_scan_block",
+  "compacted_scatter",
+  "compacted_local_bitonic",
+  "compacted_validate_order",
+  "collect_finalize",
+  "compacted_publish",
+]
+flagship_planning_bound_seconds = 135.82995287614997
+flagship_process_bound_seconds = 214.3763473510742
+
+[gpu_gate]
+evidence = "design/evidence/localmath/lm1/real-metal-final.toml"
+backend = "Metal.MetalBackend"
+minimum_total_assertions = 55
+
+[inventories]
+public_exports = [
+  "Access", "AffineRelation", "BoundaryRelation", "BoundedGroup",
+  "BoundedGroupView", "Collection", "CollectionAccess", "CollectionCount",
+  "CompactedStorage", "Control", "Field", "FixedRelation",
+  "IdentityRelation", "InverseRelation", "LocalWork",
+  "LocalWorkValidationError", "MaskedRelation", "PackedRelation",
+  "PreparedWork", "ProductRelation", "Relation",
+  "RuntimeRelation", "SelectedRelation", "SourceOrigin",
+  "SourcePositionAccess", "SourcePositions", "Space", "Stage", "WorkEvent",
+  "WorkPlan", "@localwork", "allocate_workspace", "candidate", "canonical_by",
+  "compose", "emit", "group_by", "ispending", "localwork", "one_group",
+  "persistent_source_position", "plan", "prepare", "run!", "sequence",
+  "source_order", "submission_capacity", "success_gate", "waitall",
+  "workspace_requirements",
+]
+localworksets_kernels = [
+  "_candidate_stage_atomic_kernel!",
+  "_candidate_stage_atomic_initialize_kernel!",
+  "_candidate_stage_evaluate_kernel!", "_candidate_stage_finalize_kernel!",
+  "_candidate_stage_publish_kernel!", "_candidate_stage_reset_kernel!",
+  "_candidate_stage_validate_kernel!",
+  "_collect_stage_evaluate_kernel!",
+  "_collect_stage_finalize_kernel!", "_collect_stage_reset_kernel!",
+  "_compacted_directory_kernel!", "_compacted_local_bitonic_kernel!",
+  "_compacted_merge_kernel!", "_compacted_publish_kernel!",
+  "_compacted_scan_add_kernel!", "_compacted_scan_block_kernel!",
+  "_compacted_scatter_kernel!", "_compacted_validate_order_kernel!",
+  "_destination_grouping_directory_kernel!",
+  "_destination_grouping_local_sort_kernel!", "_destination_grouping_merge_kernel!",
+  "_direct_identity_unique_kernel!",
+  "_ordered_fold_stage_bitonic_kernel!", "_ordered_fold_stage_evaluate_kernel!",
+  "_ordered_fold_stage_finalize_kernel!", "_ordered_fold_stage_initialize_kernel!",
+  "_ordered_fold_stage_kernel!", "_ordered_fold_stage_reset_kernel!",
+  "_ordered_fold_stage_validate_order_kernel!",
+  "_finalize_relation_content_validation_kernel!",
+  "_reset_relation_content_validation_kernel!",
+  "_stage_backend_qualification_gate_kernel!", "_stage_program_status_reset_kernel!",
+  "_stage_relation_receipt_kernel!",
+  "_validate_relation_content_kernel!",
+]
+
+[disposition_meanings]
+in_place = "Strengthen the sole current owner directly; no peer semantic or lifecycle type may coexist."
+replaced = "Delete every current semantic owner and install the listed sole target owner in the same atomic boundary."
+retained = "Retain only the named domain-neutral physical or lifecycle mechanism; it may not own a deleted semantic fact."
+
+[proof_construction_policy]
+owner = "LocalWorksets planning"
+construction_inventory_required = true
+extensions_may_construct_proof = false
+extensions_may_assert_semantic_traits = false
+required_relation_families = [
+  "identity",
+  "fixed_degree",
+  "packed",
+  "affine",
+  "grouped_inverse",
+  "composed",
+  "runtime_key",
+  "subset",
+  "product_index",
+  "periodic_boundary",
+  "exterior_boundary",
+  "masked_boundary",
+  "strict_interior",
+  "ghost",
+]
+
+[global_forbidden]
+scopes = [
+  "lib/LocalWorksets/src",
+  "lib/CorePotts/src",
+  "lib/LocalWorksets/test",
+  "lib/CorePotts/test",
+  "benchmark",
+]
+patterns = [
+  { name = "old-topology-plan-overload", regex = '''plan\s*\([^\n]*LocalWork[^\n]*topology''' },
+  { name = "topology-relation-adapter", regex = '''[Tt]opology(To|2)[Rr]elation|[Rr]elation(From|2)[Tt]opology''' },
+  { name = "old-new-execution-selector", regex = '''\b(?:legacy|old|new)_(?:execution|pipeline|topology|binding)''' },
+  { name = "compatibility-alias", regex = '''\b(?:compat|legacy)_(?:topology|route|binding|localwork)''' },
+  { name = "fallback-executor", regex = '''fallback_(execute|execution|pipeline|run)''' },
+]
+
+[[cutover]]
+id = "semantic-waist"
+semantic_fact = "finite ordered program, stage source, accesses, publications, evaluator, control, origin, and runtime parameter schema"
+planned_disposition = "in_place"
+target_owner = "one nonempty concrete Stage tuple stored by the sole LocalWork"
+deletion_boundary = "LM-1"
+permitted_residue = ["_StageProgramLowering as one private proof-slot lowering envelope", "_PreparedStageProgram as one private prepared physical representation"]
+validation_query = "required target anchors exist; forbidden sequence and old field anchors are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct LocalWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _SequenceOperation{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function sequence(works::LocalWork" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct Stage{", recursive = true },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct LocalWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "stages::" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "parameters::" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_SequenceOperation", recursive = true },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "operation::F" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "items::I" },
+]
+evidence = ["one-stage and heterogeneous-sequence inspection", "LM-0 compiler scaling envelope", "exact stage-order witnesses"]
+
+[[cutover]]
+id = "plan-and-prepared-lifecycle"
+semantic_fact = "validated plan and prepared execution ownership"
+planned_disposition = "in_place"
+target_owner = "the sole WorkPlan and PreparedWork, strengthened around proofs, slots, and prepared views"
+deletion_boundary = "LM-1"
+permitted_residue = ["current type names until LM-3", "one prepared phase pipeline"]
+validation_query = "current lifecycle types remain sole; topology-owned fields and caches are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct WorkPlan{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "mutable struct PreparedWork{" },
+  { path = "lib/LocalWorksets/src/preparation.jl", pattern = "function prepare(" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/structural_binding.jl", pattern = "proofs::P" },
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "struct _PreparedStageProgram{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "topology::T" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "topology_identities::" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "topology_arrays::" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "freshness::F" },
+]
+evidence = ["constructor inventory shows one plan and one prepared owner", "prepared type inspection contains proof slots and concrete views"]
+
+[[cutover]]
+id = "spaces-fields-relations"
+semantic_fact = "domain and codomain identity, extent, field identity, relation representation, and structural routing"
+planned_disposition = "replaced"
+target_owner = "Space, Field, and one concrete outer Relation descriptor with immutable representation payload"
+deletion_boundary = "LM-1"
+permitted_residue = ["representation-specific concrete device views", "physical relation arrays"]
+validation_query = "descriptor anchors and relation-family inventory exist; old topology and route semantic owners are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function topology(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _RuntimeRoute{" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _FixedOffsetRoute{" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "struct _IdentityRoute" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct Space{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct Field{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct Relation{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "domain::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "codomain::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "representation::", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "function topology(", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_RuntimeRoute", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_FixedOffsetRoute", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_IdentityRoute", recursive = true },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export topology" },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export identity_route, fixed_offset_route" },
+]
+evidence = ["stable-identity and serialization tests", "all required relation-family witnesses", "descriptor equality and wrong-identity rejection"]
+
+[[cutover]]
+id = "relation-proof-minting"
+semantic_fact = "bounds, multiplicity, coverage, canonical order, ownership, footprint, halo strength, and admitted freshness"
+planned_disposition = "replaced"
+target_owner = "sealed RelationProof minted only by planning"
+deletion_boundary = "LM-1"
+permitted_residue = ["representation-specific package validators called by planning"]
+validation_query = "RelationProof construction inventory is allowlisted to package planning and extension self-certification is rejected"
+current = [
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _topology_fingerprint(" },
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "function _static_topology_payload end" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct RelationProof{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_RelationProofSeal", recursive = true },
+  { path = "lib/LocalWorksets/src/structural_binding.jl", pattern = "function _mint_relation_proof(" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_topology_fingerprint", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_static_topology_payload", recursive = true },
+]
+evidence = ["proof-constructor call-site inventory", "malicious extension cannot mint or forge a proof", "proof inspection exposes every required semantic fact once"]
+
+[[cutover]]
+id = "read-and-access-declarations"
+semantic_fact = "field access placement, version, pointwise identity access, bounded gather, and bounded downstream Collection access"
+planned_disposition = "replaced"
+target_owner = "typed Field/Relation Access plus bounded CollectionAccess over one exact preceding Collect"
+deletion_boundary = "LM-1"
+permitted_residue = ["evaluator-local NamedTuple role labels", "register-friendly bounded gathered value"]
+validation_query = "all access declarations reference field and relation slots; old name- and route-parameterized declarations are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BindingRead{Name}" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _PointwiseRead{Name}" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BoundedRead{Binding, Route, K}" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct Access{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct CollectionAccess{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct BoundedGroupView{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct SourcePositions{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "field::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "relation::", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_BindingRead", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_PointwiseRead", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_BoundedRead", recursive = true },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export identity_route, fixed_offset_route, bounded_read, GatheredValues" },
+]
+evidence = ["pointwise, fixed gather, affine stencil, packed gather, and wrong-relation tests", "whole-array and Collection-storage introspection rejection", "bounded group, source-position, CollectionCount, occupancy no-write, and missing-producer tests"]
+
+[[cutover]]
+id = "control-selection"
+semantic_fact = "source selection and stage gate references"
+planned_disposition = "replaced"
+target_owner = "typed Control containing parameter, Field, Relation, or preceding Collection-count references"
+deletion_boundary = "LM-1"
+permitted_residue = ["device-resident event/status gate storage"]
+validation_query = "typed control targets exist and no selector or work gate resolves a Symbol against topology"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "abstract type _AbstractActiveSelection" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActivePrefix{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActiveMask{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ActiveIndices{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _WorkGate{" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct Control{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct _CollectionCount{", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_AbstractActiveSelection", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_ActivePrefix", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_ActiveMask", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_ActiveIndices", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_WorkGate", recursive = true },
+]
+evidence = ["parameter/Field/Collection-count prefix, mask, subset/index, gate, empty-selection, and invalid-target tests", "warm-path type inspection"]
+
+[[cutover]]
+id = "parameter-schema"
+semantic_fact = "runtime scalar and small isbits record names, types, positional slots, and warm submission layout"
+planned_disposition = "replaced"
+target_owner = "one ParameterSchema, cold exact-name validation, and warm positional isbits tuple"
+deletion_boundary = "LM-1"
+permitted_residue = ["cold parameter names and exact types", "prepared positional tuple layout"]
+validation_query = "parameter schema is sole runtime-value authority; value/storage slot and dynamic array submission machinery are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ValueSlot{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _StorageSlot{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function value_slot(" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "function storage_slot(" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct ParameterSchema{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "parameter_slots", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_ValueSlot", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_StorageSlot", recursive = true },
+  { path = "lib/LocalWorksets/src/LocalWorksets.jl", pattern = "export value_slot, storage_slot" },
+]
+evidence = ["exact-name and exact-type rejection", "isbits and allocation checks", "CPU/GPU argument-layout parity"]
+
+[[cutover]]
+id = "publication-declarations"
+semantic_fact = "assignment, fold, resolution, bounded collection, ordered recurrence, and multi-publication declarations"
+planned_disposition = "replaced"
+target_owner = "the existing publication-law declarations retargeted to Field and Relation slots"
+deletion_boundary = "LM-1 semantics; LM-2 consolidation"
+permitted_residue = ["existing distinct law mechanisms and physical kernels", "evaluator/publication role labels"]
+validation_query = "publication semantics are unchanged, but destination extent and routing come only from field/relation proofs"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _IndependentOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _CombinedOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _GenericResolvedOutput{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _ConjunctiveResolvedOutput{" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct Publication{" },
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct _UniqueLaw{" },
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct _ReduceLaw{" },
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct _ResolveLaw{" },
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct _CollectLaw{" },
+  { path = "lib/LocalWorksets/src/stage_model.jl", pattern = "struct _OrderedFoldLaw{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "destination_counts::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "semantic_ids::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "read_routes::", recursive = true },
+]
+evidence = ["bitwise or tolerance-equivalent results for every law family", "deterministic order and tie evidence", "empty, overflow, and failure parity"]
+
+[[cutover]]
+id = "field-and-relation-binding"
+semantic_fact = "exact descriptor-to-storage association, alias validation, positional proof slots, and stage-local demand projection"
+planned_disposition = "replaced"
+target_owner = "one thin bound envelope plus positional field/relation proof and prepared-view slots"
+deletion_boundary = "LM-1"
+permitted_residue = ["cold evaluator role labels", "package-owned exact binding tuple"]
+validation_query = "bound envelope stores no derived facts; all warm projections are positional; name-keyed authorities are absent"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _BindingAuthority{" },
+  { path = "lib/LocalWorksets/src", pattern = "struct _BindingProjection{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_required_bindings", recursive = true },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct Bound", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "function bind(", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "field_slots", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "relation_slots", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_BindingAuthority", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_required_bindings", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_BindingProjection{Names", recursive = true },
+]
+evidence = ["missing, duplicate, unreferenced, wrong-identity, wrong-backend, and alias rejection", "stage-local demand closure", "warm-path absence of Symbol lookup"]
+
+[[cutover]]
+id = "physical-storage-layout"
+semantic_fact = "array, StructArray, structured publication, physical leaves, backend identity, and alias/layout facts"
+planned_disposition = "retained"
+target_owner = "one domain-neutral physical binding protocol shared by field and relation storage"
+deletion_boundary = "retained at LM-1"
+permitted_residue = ["_BindingProtocol", "_StructuredPreparedBindingFact", "typed physical leaf facts"]
+validation_query = "retained protocol owns layout only and cannot resolve semantic fields, relations, or names"
+current = [
+  { path = "lib/LocalWorksets/src", pattern = "_BindingProtocol", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_StructuredPreparedBindingFact", recursive = true },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "_BindingProtocol", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "struct _TopologyLeaf", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_topology_leaf_value", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_topology_arrays", recursive = true },
+]
+evidence = ["array/StructArray/structured-storage witnesses", "backend, identity, shape, stride, access, and alias facts inspect once"]
+
+[[cutover]]
+id = "workspace-planning"
+semantic_fact = "bounded temporary allocation requirements and prepared workspace ownership"
+planned_disposition = "retained"
+target_owner = "the sole workspace authority and typed workspace leaves"
+deletion_boundary = "retained at LM-1"
+permitted_residue = ["law-specific workspace requests", "workspace-only topology/shape metadata"]
+validation_query = "workspace leaves describe allocation only and never carry bound relation data or scientific routing authority"
+current = [
+  { path = "lib/LocalWorksets/src", pattern = "struct _WorkspaceAuthority{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct _WorkspaceLeaf", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "function workspace_requirements(", recursive = true },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "struct _WorkspaceAuthority{", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct _WorkspaceLeaf", recursive = true },
+]
+forbidden = []
+evidence = ["typed workspace traversal", "workspace allocation parity", "no relation payload appears in workspace inspection"]
+
+[[cutover]]
+id = "prepared-relation-views"
+semantic_fact = "backend-specific concrete access to admitted relation storage and computed geometry"
+planned_disposition = "replaced"
+target_owner = "one concrete prepared relation view per proof slot through one CPU/GPU protocol"
+deletion_boundary = "LM-1"
+permitted_residue = ["specialized affine, packed, fixed-degree, inverse, keyed, subset, product, and boundary view types"]
+validation_query = "all relation families prepare concrete views; no generic-matrix normalization or topology payload cache remains"
+current = [
+  { path = "lib/LocalWorksets/src/execution/topology_support.jl", pattern = "function _prepared_topology_arrays" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "topology_arrays::TA" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/execution/relation_preparation.jl", pattern = "function _prepare_relation_view(" },
+  { path = "lib/LocalWorksets/src/execution/relation_views.jl", pattern = "struct _IdentityRelationView{" },
+  { path = "lib/LocalWorksets/src/execution/relation_views.jl", pattern = "struct _PackedIncidenceRelationView{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_prepared_topology_arrays", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_prepared_topology_identities", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_static_topology_payload", recursive = true },
+]
+evidence = ["concrete return-type inspection for every relation family", "same view protocol on CPU and real GPU", "packed storage remains packed"]
+
+[[cutover]]
+id = "freshness-and-runtime-content"
+semantic_fact = "cold relation schema validity and warm mutable content generation"
+planned_disposition = "replaced"
+target_owner = "RelationProof schema epoch plus device-resident relation content generation and validation receipt"
+deletion_boundary = "LM-1"
+permitted_residue = ["current event/status carrier until LM-2", "representation-specific immutable content fingerprint when required"]
+validation_query = "global topology freshness is absent; schema invalidation and within-bound content advancement are independently tested"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _TopologyFreshness{" },
+  { path = "lib/LocalWorksets/src/planning.jl", pattern = "function _topology_fingerprint(" },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "schema_epoch", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "content_generation", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "_TopologyFreshness", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "_topology_fingerprint", recursive = true },
+]
+evidence = ["schema change invalidates plan/view", "bounded device mutation advances generation without host replanning", "stale generation rejects dependent publication"]
+
+[[cutover]]
+id = "evidence-and-inspection"
+semantic_fact = "inspectable scientific meaning, proof facts, algorithm choice, workspace, and executable structure"
+planned_disposition = "in_place"
+target_owner = "existing evidence/inspection surface projected from stages, descriptor/proof slots, and physical phases"
+deletion_boundary = "LM-1"
+permitted_residue = ["boxed cold evidence", "source provenance"]
+validation_query = "inspection exposes each semantic fact from its sole owner and contains no reconstructed topology record"
+current = [
+  { path = "lib/LocalWorksets/src", pattern = "evidence", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "inspect", recursive = true },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "relation_proofs", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "field_slots", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "topology =", recursive = true },
+]
+evidence = ["source-to-stage-to-proof-to-phase inspection witness", "semantic authority duplication audit"]
+
+[[cutover]]
+id = "lowering-and-execution"
+semantic_fact = "one proof-slot lowering, stage grouping, prepared phase dispatch, and KernelAbstractions submission"
+planned_disposition = "replaced"
+target_owner = "the sole _StageProgramLowering, _PreparedStageProgram, and KernelAbstractions execution route"
+deletion_boundary = "LM-1"
+permitted_residue = ["stage-group cold evidence barriers", "physically distinct law mechanisms and kernels"]
+validation_query = "one lowering and execution family remains; mechanisms reference proof/view slots and not copied topology facts"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _LoweredWork{" },
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct _PreparedPipeline{" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function run!(prepared::PreparedWork" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "struct _StageProgramLowering" },
+  { path = "lib/LocalWorksets/src/execution/stage_program.jl", pattern = "struct _PreparedStageProgram{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "routes::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "destination_counts::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "semantic_ids::", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "read_routes::", recursive = true },
+]
+evidence = ["execution-entry-point inventory", "lowered semantic-field inventory", "LM-0 cold-evidence and compiler scaling evidence"]
+
+[[cutover]]
+id = "event-dependency-status"
+semantic_fact = "submission identity, dependency token, device validation status, receipt, wait, and settlement"
+planned_disposition = "retained"
+target_owner = "the sole WorkEvent and existing event/status path pending LM-2"
+deletion_boundary = "retained at LM-1; strengthened at LM-2"
+permitted_residue = ["one KernelAbstractions provider token wrapper", "device status/receipt storage", "current WorkEvent name"]
+validation_query = "no second relation event, validation event, waiter, or settlement route is introduced"
+current = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct WorkEvent{" },
+  { path = "lib/LocalWorksets/src/execution.jl", pattern = "function Base.wait(event::WorkEvent)" },
+  { path = "lib/LocalWorksets/src/execution/validation_support.jl", pattern = "struct _ValidatedPublicationStatus{" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/model.jl", pattern = "struct WorkEvent{" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "struct RelationEvent", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "struct ValidationEvent", recursive = true },
+]
+evidence = ["dependency, failure, poison, settlement, and wait parity", "device content validation uses the same event/status authority"]
+
+[[cutover]]
+id = "kernel-families"
+semantic_fact = "portable physical algorithms for publication laws and supporting validation/collection"
+planned_disposition = "retained"
+target_owner = "the exact KernelAbstractions kernel family set required by the sole execution route"
+deletion_boundary = "retained at LM-1; consolidation audited at LM-2"
+permitted_residue = ["distinct kernels whose algorithms differ materially by law or representation"]
+validation_query = "kernel inventory is compared exactly with the LM-0 baseline; every addition/deletion has a row-level semantic justification"
+current = [
+  { path = "lib/LocalWorksets/src", pattern = "@kernel", recursive = true },
+]
+target = [
+  { path = "lib/LocalWorksets/src", pattern = "@kernel", recursive = true },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src", pattern = "Metal.@", recursive = true },
+  { path = "lib/LocalWorksets/src", pattern = "@metal", recursive = true },
+]
+evidence = ["exact kernel-name set diff against LM-0", "CPU and real-GPU witness matrix through KernelAbstractions"]
+
+[[cutover]]
+id = "legacy-authoring-grammar"
+semantic_fact = "temporary old @localwork syntax translation during the atomic LM-1/LM-3 public cutover"
+planned_disposition = "in_place"
+target_owner = "the existing translator only as syntax-to-Stage translation"
+deletion_boundary = "LM-3"
+permitted_residue = ["@localwork spelling and source diagnostics until LM-3"]
+validation_query = "old syntax can construct only the new Stage/descriptors and cannot call topology or old route constructors"
+current = [
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "macro localwork(" },
+]
+target = [
+  { path = "lib/LocalWorksets/src/authoring/syntax.jl", pattern = "stage isa Stage" },
+]
+forbidden = [
+  { path = "lib/LocalWorksets/src/authoring", pattern = "topology(", recursive = true },
+  { path = "lib/LocalWorksets/src/authoring", pattern = "identity_route(", recursive = true },
+  { path = "lib/LocalWorksets/src/authoring", pattern = "fixed_offset_route(", recursive = true },
+]
+evidence = ["programmatic constructor and syntax lowering produce the same inspected Stage tuple", "all old grammar witnesses use the sole new execution path"]
+
+[[cutover]]
+id = "downstream-direct-rewrite"
+semantic_fact = "all LocalWorksets witnesses and eligible CorePotts mechanical compiler output construct the sole descriptor/stage/binding model"
+planned_disposition = "replaced"
+target_owner = "direct Space/Field/Relation/Stage construction and structural bind calls"
+deletion_boundary = "LM-1"
+permitted_residue = [
+  "domain-owned field names that happen to say semantic_ids",
+  "scientific prose about routing",
+  "the single CorePotts-owned KernelAbstractions K02 proposal kernel pending the LM-6 ResourceAccess-to-gathered-context compiler",
+  "the single CorePotts-owned KernelAbstractions accepted relationship recurrence over canonical PackedRelationshipBank storage; BoundedWrites and FoldStep are typed update values, not a retained executor",
+  "the single CorePotts-owned KernelAbstractions lifecycle-selection transaction kernel for cross-request packed-incidence conflict and finite-resource settlement, followed by one typed LocalWorksets Collect publication on the same queue",
+]
+validation_query = "scoped call-site scan finds no old topology or route construction and no compatibility adapter"
+current = [
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.topology", recursive = true },
+  { path = "lib/LocalWorksets/test", pattern = "topology(", recursive = true },
+  { path = "benchmark", pattern = "topology(", recursive = true },
+]
+target = [
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.Stage", recursive = true },
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.bind", recursive = true },
+  { path = "lib/LocalWorksets/test", pattern = "bind(", recursive = true },
+]
+forbidden = [
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.topology", recursive = true },
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.identity_route", recursive = true },
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.fixed_offset_route", recursive = true },
+  { path = "lib/CorePotts/src", pattern = "LocalWorksets.runtime_route", recursive = true },
+  { path = "lib/LocalWorksets/test", pattern = "topology(", recursive = true },
+  { path = "benchmark", pattern = "topology(", recursive = true },
+]
+evidence = [
+  "scoped call-site absence scan",
+  "CorePotts compiler inspection",
+  "K02 contains no deleted LocalWorksets API, selector, opaque Field, or array-bearing evaluator capture",
+  "the next LocalWorksets provider-tail receipt orders and settles K02 on the same KernelAbstractions queue",
+  "accepted-copy contains no deleted LocalWorksets plan, prepared-work, event, workspace, inspection, or execution wrapper",
+  "lifecycle selection contains no deleted topology/result/slot API or alternate Stage prototype and its independent physical differential and decision oracles pass 8/8 and 15/15",
+  "accepted relationship oracle passes 25/25 with canonical (order_key, order_identity) recurrence and gated staged publication",
+  "structured Stage storage qualification passes 42/42 and rejects unsupported scalar and record leaves",
+  "all direct downstream tests and benchmarks rewritten without adapter",
+]
+
+[corepotts_lifecycle_compaction_evidence]
+status = "implemented; adjacent lifecycle-selection gate remains independently responsible for full runtime construction"
+localworksets_owned = [
+  "site indexing: typed Stage/Collect, owner grouping, source order, persistent source position",
+  "request indexing: typed Stage/Collect, one group, canonical key/identity order, persistent source position",
+  "canonical CompactedStorage binding on every backend",
+]
+corepotts_owned = [
+  "lifecycle cadence/domain/generation/evaluator request emission",
+  "canonical first-failure ProgramStatus reduction",
+  "MCS, source/action identity, and lifecycle stage meaning",
+]
+deleted = [
+  "_LifecycleScienceRead",
+  "legacy lifecycle localwork/topology programs",
+  "runtime value_slot and storage_slot submission",
+  "singleton lifecycle route and ordinal-identity wrappers",
+  "LocalWorksets emit/candidate lifecycle adapters",
+]
+focused_evidence = [
+  "site grouped count=3, segment_starts=[1,3,4], source_position=[1,3,2,0]",
+  "request active count=2 with canonical order and source_position=[2,0,1]",
+  "deterministic Core-owned KA first-failure and closed-gate no-write witnesses",
+  "CorePotts package load",
+  "global CorePotts deleted-authority scan count=0",
+  "no raw Metal or ProgramRelationshipState in the lifecycle compaction boundary",
+]
+
+[corepotts_lifecycle_selection_evidence]
+status = "implemented; focused CPU gate green and included in the completed LM-1 GPU and independent review"
+localworksets_owned = [
+  "selected-request publication: typed Stage/Collect with canonical request key and identity order",
+  "persistent source-position provenance bound directly to canonical CompactedStorage",
+  "same WorkPlan, workspace authority, and KernelAbstractions queue as every Stage",
+]
+corepotts_owned = [
+  "cross-request conflicts over anchors, planned sites, and packed relationship incidence",
+  "stable-priority versus reject conflict policy and exact tie witnesses",
+  "finite cell high-water, free-cell/demand settlement, capacity failure, generation overflow, and allocation",
+  "ProgramStatus source/action provenance and success/no-write transaction boundary",
+]
+deleted = [
+  "CompactedResult and result/view aliases",
+  "topology, route, slot, emit, candidate, ordered-fold, resolve, reduce, and compacted accessor APIs",
+  "the never-executed 13-stage lifecycle-selection prototype and all exclusive helper laws",
+  "old/new selector, fallback, host count read, and warm host-array conversion paths",
+]
+focused_evidence = [
+  "CorePotts package load with --compiled-modules=no",
+  "physical differential lifecycle-selection oracle passes 8/8",
+  "independent lifecycle-selection decision oracle passes 15/15",
+  "deleted-authority and displaced-prototype scan count=0",
+  "one CorePotts KernelAbstractions kernel and no raw Metal in lifecycle_selection.jl",
+  "lifecycle_selection.jl reduced from 1619 to 897 lines after deleting the displaced prototype",
+]
+
+[review_gate]
+compiler_and_julia = [
+  "one nonempty Stage tuple is the sole semantic program",
+  "no second sequence or traversal IR",
+  "runtime descriptor identities and extents are values rather than arbitrary type parameters",
+  "stage-group scaling remains within the LM-0 envelope",
+  "prepared views, evaluators, parameters, and workspace templates are concrete and type-stable",
+]
+gpu_and_performance = [
+  "CPU and GPU use the same relation-view and KernelAbstractions execution path",
+  "canonical packed relation storage remains packed on every backend",
+  "no unpacked relationship conversion or host round-trip occurs on queued, settlement, lifecycle, or warm execution paths",
+  "content generation validation stays on device and uses the sole event/status authority",
+  "no abstract object graph, boxed executable fact, dynamic Symbol lookup, or runtime eval reaches a kernel",
+]
+scientific_modeling = [
+  "relation proofs preserve exact multiplicity, coverage, canonical order, ownership, footprint, and halo strength",
+  "publication, tie, determinism, overflow, failure, and empty semantics are unchanged",
+  "identity, fixed-degree, packed, affine, inverse, runtime-key, subset, product/index, and boundary witnesses are complete",
+  "CorePotts retains Hamiltonian, RNG, acceptance, MCS, lifecycle, checkpoint, and capability meaning",
+]
+simplification_and_maintainability = [
+  "every required row has direct absence/presence evidence",
+  "topology, read-route, name-binding, and duplicate freshness authorities are deleted rather than wrapped",
+  "the retained storage and workspace protocols own only physical layout and allocation",
+  "no compatibility overload, adapter, alias, selector, migration constructor, or fallback route exists",
+  "the LM-1 source boundary begins LM-2 from one principled semantic and execution waist",
+]

@@ -1,0 +1,12 @@
+backend = "cpu"
+julia_executable = "/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia"
+profile = "synthetic"
+project = "lib/LocalWorksets"
+repetitions = 1
+results = ["stages-01-run-1.toml"]
+schema_version = 1
+stage_counts = [1, 4, 8, 13, 32]
+started_utc = "2026-08-20T17:54:44.210"
+status = "running"
+timeout_seconds = 600.0
+warm_samples = 7

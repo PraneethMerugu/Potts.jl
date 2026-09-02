@@ -1,0 +1,12 @@
+LW-4A post-LW-R2A-remediation CorePotts qualification
+Date: 2026-08-10
+Command: julia --project=lib/CorePotts -e 'using Pkg; Pkg.test()'
+Exit: 0
+Result: CorePotts tests passed
+Total: 17,462/17,462
+Candidate vertical: 55/55
+Trusted public run/wait adapter witness: 7/7
+Provider failure poison mapping: 6/6
+Note: an initial non-authoritative --threads=auto run correctly rejected its changed replay
+environment before candidate tests; the authoritative one-thread command above passed completely.
+

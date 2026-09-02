@@ -1,0 +1,371 @@
+# Qualified compiler resources mapped onto CorePotts-owned canonical layouts.
+
+function _state_layout(
+        ir::AnalyzedTermIR, ::Type{T}
+    ) where {T <: AbstractFloat}
+    records = QualifiedStatement[]
+    schemas = CorePotts.CompilerSPI.StateBlockSchema[]
+    handles = Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle}()
+    lattice_shape = _lattice_shape(ir)
+    for record in ir.source.records
+        record.kind in (
+            :SiteState,
+            :CellState,
+            :MediumState,
+            :ModelState,
+            :FieldState,
+            :HistoryState,
+            :RelationshipState,
+        ) || continue
+        declared_capacity = if record.shape isa NamedTuple &&
+                haskey(record.shape, :capacity)
+            Int(record.shape.capacity)
+        elseif record.shape isa Tuple &&
+                all(item -> item isa Integer, record.shape)
+            prod(record.shape; init = 1)
+        else
+            0
+        end
+        # Storage domain is a declaration-schema fact. `record.ownership` may
+        # instead hold a qualified biological owner (for example a SiteState
+        # owned by a CellKind), so it cannot authoritatively select layout.
+        domain = record.kind === :HistoryState ? :history :
+                 record.kind === :RelationshipState ? :relationship :
+                 record.kind === :CellState ? :cell :
+                 record.kind === :MediumState ? :medium :
+                 record.kind === :ModelState ? :model : :site
+        shape = if domain === :site && !isempty(lattice_shape)
+            lattice_shape
+        elseif domain === :cell
+            (_cell_capacity(ir),)
+        elseif domain === :history && record.shape isa Tuple &&
+                all(item -> item isa Integer && item > 0, record.shape)
+            Tuple(Int.(record.shape))
+        elseif record.shape isa Tuple &&
+                all(item -> item isa Integer && item > 0, record.shape)
+            Tuple(Int.(record.shape))
+        elseif declared_capacity > 0
+            (declared_capacity,)
+        else
+            (1,)
+        end
+        capacity = prod(shape; init = 1)
+        element_type = record.result_type isa Type &&
+                       record.result_type <: Integer ?
+                       record.result_type : T
+        schema = CorePotts.CompilerSPI.StateBlockSchema(
+            _qualified_resource_identity(record.identity),
+            record.schema_version,
+            domain,
+            element_type,
+            shape,
+            capacity,
+            :structure_of_arrays,
+            :provided_or_zero,
+            :shape_and_finite,
+            record.persistence,
+            record.lifecycle,
+            :declared,
+            record.effect isa PureRead ? :read_only : :bounded_write,
+            :adapt_storage,
+            :copy,
+            record.persistence === :logical ?
+                :logical_copy : :reconstruct_from_initial,
+            :qualified,
+            record.persistence === :logical,
+        )
+        push!(records, record)
+        push!(schemas, schema)
+    end
+    layout = CorePotts.CompilerSPI.StateLayout(schemas)
+    record_identities = Dict{Any, QualifiedStatementID}(
+        schema.identity => record.identity
+        for (schema, record) in zip(schemas, records)
+    )
+    for entry in layout.entries
+        handles[record_identities[entry.schema.identity]] = entry.handle
+    end
+    return layout, handles
+end
+
+function _cell_capacity(ir::AnalyzedTermIR)
+    index = findfirst(record -> record.kind === :LatticeDomain, ir.source.records)
+    index === nothing && return 0
+    record = ir.source.records[index]
+    lattice_shape = record.shape isa Tuple ? record.shape : ()
+    maximum = get(_record_options(record), :max_cells, prod(lattice_shape; init = 1))
+    maximum = _numeric_value(maximum)
+    maximum isa Real && isinteger(maximum) || throw(ArgumentError(
+        "max_cells must be structurally resolved to an integer"
+    ))
+    capacity = Int(maximum)
+    0 < capacity <= prod(lattice_shape; init = 1) || throw(ArgumentError(
+        "max_cells must be between one and the number of lattice sites"
+    ))
+    return capacity
+end
+
+function _lattice_shape(ir::AnalyzedTermIR)
+    index = findfirst(record -> record.kind === :LatticeDomain, ir.source.records)
+    index === nothing && return ()
+    shape = ir.source.records[index].shape
+    return shape isa Tuple ? shape : ()
+end
+
+function _effective_descriptor_identity(record::QualifiedStatement)
+    provenance = record.provenance
+    if provenance isa NamedTuple &&
+            haskey(provenance, :registered_lowering_identity)
+        return provenance.registered_lowering_identity
+    end
+    return record.lowering_identity
+end
+
+_descriptor_source(record::QualifiedStatement) = DescriptorSource(
+    record.identity,
+    record.kind,
+    record.schema_version,
+    _effective_descriptor_identity(record),
+    record.provenance,
+)
+
+function _descriptor_candidate_enabled(record::QualifiedStatement)
+    _registered_record(record) && return true
+    record.kind === :HamiltonianTerm && return true
+    record.kind === :ProposalDrive && return true
+    record.kind === :ProposalConstraint && return true
+    payload = record.normalized_payload
+    payload isa Tuple && length(payload) >= 2 || return true
+    options = payload[2]
+    options isa NamedTuple || return true
+    mechanism = haskey(options, :mechanism) ? options.mechanism : nothing
+    return mechanism in (nothing, :symbolic)
+end
+
+function _workspace_layout(ir::AnalyzedTermIR, ::Type{T}) where {
+        T <: AbstractFloat,
+    }
+    schemas = CorePotts.CompilerSPI.WorkspaceSchema[]
+    schema_keys = Vector{Vector{Tuple{
+        QualifiedStatementID,
+        CorePotts.CompilerSPI.QualifiedResourceIdentity,
+    }}}()
+    handles = Dict{
+        Tuple{QualifiedStatementID, CorePotts.CompilerSPI.QualifiedResourceIdentity},
+        CorePotts.CompilerSPI.WorkspaceHandle,
+    }()
+    shape = _lattice_shape(ir)
+    for candidate in ir.candidates
+        candidate.category in (
+            :hamiltonian, :drive, :constraint, :modifier,
+        ) || continue
+        record = ir.source.records[candidate.record]
+        _descriptor_candidate_enabled(record) || continue
+        source = _descriptor_source(record)
+        declarations = registered_workspace_schemas(
+            Val(_effective_descriptor_identity(record)), source, T, shape
+        )
+        declarations isa Tuple || throw(ArgumentError(
+            "registered_workspace_schemas must return a tuple"
+        ))
+        for schema in declarations
+            schema isa CorePotts.CompilerSPI.WorkspaceSchema || throw(ArgumentError(
+                "registered workspace declarations must be WorkspaceSchema values"
+            ))
+            key = (record.identity, schema.identity)
+            existing = findfirst(
+                candidate -> candidate.identity == schema.identity,
+                schemas,
+            )
+            if existing === nothing
+                push!(schemas, schema)
+                push!(schema_keys, [key])
+            else
+                existing_schema = schemas[existing]
+                (
+                    existing_schema.version,
+                    existing_schema.element_type,
+                    existing_schema.shape,
+                    existing_schema.capacity,
+                    existing_schema.container_type,
+                    existing_schema.initialization,
+                    existing_schema.lifetime,
+                    existing_schema.access,
+                    existing_schema.adaptation,
+                    existing_schema.inspection,
+                    existing_schema.shareable,
+                ) == (
+                    schema.version,
+                    schema.element_type,
+                    schema.shape,
+                    schema.capacity,
+                    schema.container_type,
+                    schema.initialization,
+                    schema.lifetime,
+                    schema.access,
+                    schema.adaptation,
+                    schema.inspection,
+                    schema.shareable,
+                ) || throw(ArgumentError(
+                    "conflicting qualified workspace identity $(schema.identity)"
+                ))
+                push!(schema_keys[existing], key)
+            end
+        end
+    end
+    layout = CorePotts.CompilerSPI.WorkspaceLayout(schemas)
+    handles_by_identity = Dict{Any, CorePotts.CompilerSPI.WorkspaceHandle}(
+        entry.schema.identity => entry.handle for entry in layout.entries
+    )
+    for index in eachindex(schemas)
+        handle = handles_by_identity[schemas[index].identity]
+        for key in schema_keys[index]
+            handles[key] = handle
+        end
+    end
+    return layout, handles
+end
+
+function _record_state_handles(
+        ir::AnalyzedTermIR,
+        record::QualifiedStatement,
+        handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
+    )
+    result = CorePotts.CompilerSPI.StateHandle[]
+    for identity in record.resources
+        haskey(handles, identity) || continue
+        handle = handles[identity]
+        handle in result || push!(result, handle)
+    end
+    for state_record in ir.source.records
+        haskey(handles, state_record.identity) || continue
+        variable = _state_record_variable(state_record)
+        variable === nothing && continue
+        any(read -> isequal(read, variable), record.reads) || continue
+        handle = handles[state_record.identity]
+        handle in result || push!(result, handle)
+    end
+    sort!(
+        result;
+        by = handle -> (
+            CorePotts.CompilerSPI.handle_bank(handle),
+            CorePotts.CompilerSPI.handle_slot(handle),
+        ),
+    )
+    return Tuple(result)
+end
+
+function _record_workspace_handles(
+        record::QualifiedStatement,
+        workspace_layout::CorePotts.CompilerSPI.WorkspaceLayout,
+        handles,
+    )
+    values = CorePotts.CompilerSPI.WorkspaceHandle[]
+    for schema in workspace_layout.schemas
+        key = (record.identity, schema.identity)
+        haskey(handles, key) || continue
+        push!(values, handles[key])
+    end
+    sort!(
+        values;
+        by = handle -> (
+            CorePotts.CompilerSPI.handle_bank(handle),
+            CorePotts.CompilerSPI.handle_slot(handle),
+        ),
+    )
+    return Tuple(values)
+end
+
+function _domain_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
+    fact = candidate.energy_domain
+    fact.kind === :sites && return CorePotts.CompilerSPI.SiteEnergyDomainPlan()
+    if fact.kind === :cells
+        owner = ir.source.records[candidate.record]
+        kind = _compiled_kind_index(
+            ir, owner, fact.resource
+        )
+        kind === nothing && throw(ArgumentError(
+            "cell energy domain has no compiled kind index"
+        ))
+        return CorePotts.CompilerSPI.CellEnergyDomainPlan(kind)
+    end
+    owner = ir.source.records[candidate.record]
+    if fact.kind === :contacts
+        relation = _resource_record(
+            ir.source, owner, :SpatialRelation, fact.resource
+        )
+        relation === nothing && throw(ArgumentError(
+            "contact energy domain has no compiled relation handle"
+        ))
+        handle = findfirst(
+            record -> record.identity == relation.identity,
+            ir.source.records,
+        )
+        return CorePotts.CompilerSPI.ContactEnergyDomainPlan(Int32(handle))
+    end
+    if fact.kind === :edges
+        relationship = _resource_record(
+            ir.source, owner, :RelationshipState, fact.resource
+        )
+        relationship === nothing && throw(ArgumentError(
+            "relationship energy domain has no compiled resource handle"
+        ))
+        handle = findfirst(
+            record -> record.identity == relationship.identity,
+            ir.source.records,
+        )
+        return CorePotts.CompilerSPI.RelationshipEnergyDomainPlan(Int32(handle))
+    end
+    throw(ArgumentError("unsupported energy domain plan `$(fact.kind)`"))
+end
+
+function _affected_plan(ir::AnalyzedTermIR, candidate::DescriptorCandidate)
+    fact = candidate.affected_anchors
+    maximum = Int32(fact.maximum)
+    fact.kind === :target_site &&
+        return CorePotts.CompilerSPI.TargetSiteAffectedPlan(maximum)
+    if fact.kind === :neighborhood_sites
+        handle = findfirst(
+            record -> record.identity == fact.resource,
+            ir.source.records,
+        )
+        handle === nothing && throw(ArgumentError(
+            "neighborhood-site affected plan has no compiled relation handle"
+        ))
+        return CorePotts.CompilerSPI.NeighborhoodSitesAffectedPlan(
+            maximum, Int32(handle))
+    end
+    fact.kind === :source_and_target_cells &&
+        return CorePotts.CompilerSPI.SourceTargetCellsAffectedPlan(maximum)
+    fact.kind === :incident_contacts &&
+        return CorePotts.CompilerSPI.IncidentContactsAffectedPlan(maximum)
+    fact.kind === :incident_relationships &&
+        return CorePotts.CompilerSPI.IncidentRelationshipsAffectedPlan(maximum)
+    throw(ArgumentError("unsupported affected-anchor plan `$(fact.kind)`"))
+end
+
+function _proposal_role(
+        ir::AnalyzedTermIR,
+        candidate::DescriptorCandidate,
+        record::QualifiedStatement,
+    )
+    record.kind === :HamiltonianTerm && return CorePotts.CompilerSPI.HamiltonianRole(
+        _domain_plan(ir, candidate),
+        _affected_plan(ir, candidate),
+    )
+    if record.kind === :ProposalDrive
+        options = last(record.normalized_payload)
+        scale = options isa NamedTuple && haskey(options, :drive_scale) ?
+                options.drive_scale : :log_bias
+        scale === :energy && return CorePotts.CompilerSPI.ProposalEnergyDriveRole()
+        scale === :log_bias && return CorePotts.CompilerSPI.ProposalDriveRole()
+        throw(ArgumentError(
+            "proposal drive $(record.identity) has unsupported scale $(repr(scale))"
+        ))
+    end
+    record.kind === :ProposalConstraint &&
+        return CorePotts.CompilerSPI.ProposalConstraintRole()
+    record.kind === :ProposalModifier &&
+        return CorePotts.CompilerSPI.ProposalModifierRole()
+    throw(ArgumentError("record $(record.identity) is not a proposal term"))
+end

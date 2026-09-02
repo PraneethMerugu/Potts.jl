@@ -1,0 +1,60 @@
+noise_margin_fraction = 0.15
+schema_version = 1
+status = "candidate_requires_committee_freeze"
+
+[environment]
+backend = "cpu"
+compile_enabled = 1
+hardware = "apple-m1"
+julia_version = "1.12.6"
+machine = "arm64-apple-darwin24.0.0"
+opt_level = 2
+threads = 1
+use_compiled_modules = 2
+
+[flagship]
+fresh_process_bound_seconds = 214.3763473510742
+fresh_process_raw_maximum_seconds = 186.41421508789062
+planning_through_first_execution_bound_seconds = 135.82995287614997
+raw_maximum_seconds = 118.113002501
+replicates = 3
+
+[process_scaling]
+intercept_seconds = 7.9761839993538395
+model = "T(n) <= intercept_seconds + slope_seconds_per_stage * n"
+one_stage_guarded_seconds = 15.08463648557663
+slope_seconds_per_stage = 7.10845248622279
+
+    [process_scaling.raw_maximum_seconds]
+    1 = 13.117075204849243
+    13 = 54.08799910545349
+    32 = 204.73622918128967
+    4 = 26.79560613632202
+    8 = 37.6503701210022
+
+    [process_scaling.replicates]
+    1 = 3
+    13 = 3
+    32 = 3
+    4 = 3
+    8 = 3
+
+[scaling]
+intercept_seconds = -1.2144189439500006
+model = "T(n) <= intercept_seconds + slope_seconds_per_stage * n"
+one_stage_guarded_seconds = 2.8509866050499997
+slope_seconds_per_stage = 4.065405549
+
+    [scaling.raw_maximum_seconds]
+    1 = 2.479118787
+    13 = 31.085275759
+    32 = 93.53802859499999
+    4 = 13.084524567
+    8 = 20.367679405
+
+    [scaling.replicates]
+    1 = 3
+    13 = 3
+    32 = 3
+    4 = 3
+    8 = 3

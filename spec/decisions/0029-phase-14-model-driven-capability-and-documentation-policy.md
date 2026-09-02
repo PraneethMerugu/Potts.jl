@@ -2,6 +2,10 @@
 
 Status: Accepted; project-owner documentation and published-model interview complete
 
+Current disposition: superseded in part by [Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md)
+for phase order, active authoring API, and documentation timing. Source-bounded model requirements
+remain evidence for the G5H preservation and proof-model gates.
+
 Date: 2026-07-24
 
 ## Context

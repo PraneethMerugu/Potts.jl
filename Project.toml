@@ -1,51 +1,72 @@
-name = "PottsToolkit"
+name = "Potts"
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-version = "0.2.0"
+version = "0.3.0-rc1"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
-OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LocalMath = "82808884-8acc-4a5c-a056-be440a0fbea1"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-ProcessBigraphs = "efcc6515-205e-41e3-b553-f38f05ad529c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
-
-[sources]
-CorePotts = {path = "lib/CorePotts"}
-ProcessBigraphs = {path = "lib/ProcessBigraphs"}
+SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
 Aqua = "0.8"
 CorePotts = "0.2"
+DynamicQuantities = "1"
+ExplicitImports = "1"
 KernelAbstractions = "0.9.42"
-OrdinaryDiffEqTsit5 = "2"
+LinearAlgebra = "1"
+LocalMath = "0.2"
+Metal = "1"
+DiffEqGPU = "3.16"
+ModelingToolkit = "11"
+ModelingToolkitBase = "1.51"
+MethodOfLines = "0.11.12"
 PrecompileTools = "1"
-ProcessBigraphs = "0.6"
 SciMLBase = "3"
+StaticArrays = "1.9"
+StructArrays = "0.7"
 SHA = "0.7"
-StaticArrays = "1"
+SymbolicIndexingInterface = "0.3"
+Symbolics = "7"
 Test = "1"
 TOML = "1"
 Unitful = "1"
 julia = "1.12"
 
 [weakdeps]
+DiffEqGPU = "071ae1c0-96b5-11e9-1965-c90190d839ea"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [extensions]
-PottsToolkitUnitfulExt = "Unitful"
+PottsMetalExt = "Metal"
+PottsMetalNativeExt = ["DiffEqGPU", "Metal", "ModelingToolkit", "StaticArrays"]
+PottsModelingToolkitExt = "ModelingToolkit"
+PottsMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
+PottsUnitfulExt = "Unitful"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LocalMath = "82808884-8acc-4a5c-a056-be440a0fbea1"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "KernelAbstractions", "Test", "TOML", "Unitful"]
-
-[workspace]
-projects = ["integration", "lib/CorePotts", "lib/MakiePotts", "lib/ProcessBigraphs"]
+test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "StaticArrays", "StructArrays", "Test", "TOML", "Unitful"]

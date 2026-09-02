@@ -1,0 +1,76 @@
+schema_version = 1
+status = "frozen"
+gate = "LM-0"
+noise_margin_fraction = 0.15
+minimum_fresh_replicates = 3
+minimum_warm_samples = 7
+minimum_gpu_warm_samples = 3
+measurement_contract = "benchmark/lm0/README.md"
+synthetic_manifest = "design/evidence/localmath/lm0/cpu-synthetic-final/manifest.toml"
+flagship_manifest = "design/evidence/localmath/lm0/cpu-flagship-final/manifest.toml"
+candidate_source = "design/evidence/localmath/lm0/cpu-compiler-bounds-candidate.toml"
+current_source_synthetic_report = "design/evidence/localmath/lm0/post-qualification-current-synthetic/stages-32-run-1.toml"
+current_source_flagship_report = "design/evidence/localmath/lm0/post-qualification-current-flagship/flagship-run-1.toml"
+real_gpu_report = "design/evidence/localmath/lm0/metal-current/stages-08-run-1.toml"
+real_gpu_semantic_evidence = "design/evidence/localmath/lm0/metal-semantic-final.toml"
+
+[environment]
+backend = "cpu"
+compile_enabled = 1
+hardware = "apple-m1"
+julia_version = "1.12.6"
+machine = "arm64-apple-darwin24.0.0"
+opt_level = 2
+threads = 1
+use_compiled_modules = 2
+
+[host_compiler_envelope]
+model = "T(n) <= intercept_seconds + slope_seconds_per_stage * n"
+intercept_seconds = -1.2144189439500006
+slope_seconds_per_stage = 4.065405549
+one_stage_guarded_seconds = 2.8509866050499997
+
+[fresh_process_envelope]
+model = "T(n) <= intercept_seconds + slope_seconds_per_stage * n"
+intercept_seconds = 7.9761839993538395
+slope_seconds_per_stage = 7.10845248622279
+one_stage_guarded_seconds = 15.08463648557663
+
+[synthetic_physical_launch_counts]
+1 = 1
+4 = 11
+8 = 15
+13 = 27
+32 = 74
+
+[flagship]
+logical_stage_count = 13
+physical_launch_count = 39
+physical_bank_count = 2
+operation_fact_count = 15
+qualified_operation_fact_count = 2
+planning_through_first_execution_bound_seconds = 135.82995287614997
+fresh_process_bound_seconds = 214.3763473510742
+logical_stage_identities = ["direct_independent_v1", "direct_independent_v1", "ordered_fold_singleton_v1", "direct_independent_v1", "compacted_canonical_v1", "fused_terminal_fold_v1", "compacted_canonical_v1", "direct_independent_v1", "fused_single_resolved_v1", "direct_independent_v1", "runtime_keyed_stable_grouped_v2", "compacted_canonical_v1", "direct_independent_v1"]
+lowering_identity = "sequence_direct_independent_v1_direct_independent_v1_ordered_fold_singleton_v1_direct_independent_v1_compacted_canonical_v1_fused_terminal_fold_v1_compacted_canonical_v1_direct_independent_v1_fused_single_resolved_v1_direct_independent_v1_runtime_keyed_stable_grouped_v2_compacted_canonical_v1_direct_independent_v1"
+physical_phase_identities = ["apply_publish", "apply_publish", "ordered_state_fold", "apply_publish", "compacted_initialize", "compacted_collect_validate", "compacted_scan_demands_1", "compacted_scatter_demands", "compacted_local_sort_demands", "compacted_directory_demands", "compacted_validate_order_demands", "compacted_finalize_gate", "compacted_publish_demands", "terminal_fold_publish", "compacted_initialize", "compacted_collect_validate", "compacted_scan_free_cells_1", "compacted_scatter_free_cells", "compacted_local_sort_free_cells", "compacted_directory_free_cells", "compacted_validate_order_free_cells", "compacted_finalize_gate", "compacted_publish_free_cells", "apply_publish", "resolve_publish", "apply_publish", "initialize_keyed_workspace", "apply_keyed_records", "index_validate_keyed_records", "publish_keyed_segments", "compacted_initialize", "compacted_collect_validate", "compacted_scan_selected_requests_1", "compacted_scatter_selected_requests", "compacted_local_sort_selected_requests", "compacted_validate_order_selected_requests", "compacted_finalize_gate", "compacted_publish_selected_requests", "apply_publish"]
+
+[flagship.operation_fact_purpose_counts]
+high_water_combination_operation = 1
+local_operation = 13
+ordered_fold_transition = 1
+
+[flagship.operation_fact_stage_counts]
+1 = 1
+2 = 1
+3 = 2
+4 = 1
+5 = 1
+6 = 2
+7 = 1
+8 = 1
+9 = 1
+10 = 1
+11 = 1
+12 = 1
+13 = 1

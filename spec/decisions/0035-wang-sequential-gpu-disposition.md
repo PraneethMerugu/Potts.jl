@@ -2,6 +2,11 @@
 
 Status: Accepted
 
+Current disposition: the Wang paper-faithful sequential CPU scientific result and the rejection of
+an assembled Wang GPU claim remain accepted. G3/G4 routing, “current gate” language, and blanket
+Metal-and-ROCm requirements below are historical and superseded for current work by
+[Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md).
+
 Date: 2026-07-26
 
 ## Context

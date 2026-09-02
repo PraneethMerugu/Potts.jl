@@ -284,7 +284,7 @@ implementations MUST agree within the numerical policy's advertised tolerance.
 ### Boundary Conditions
 
 Each field independently declares periodic, Dirichlet, Neumann, Robin, or another supported
-condition. PottsToolkit may offer a convenience that copies compatible CPM boundary choices, but the
+condition. Potts may offer a convenience that copies compatible CPM boundary choices, but the
 resulting field conditions remain explicit in the compiled report.
 
 Field no-flux means zero normal flux or derivative under the selected discretization. It does not

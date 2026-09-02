@@ -197,7 +197,7 @@ Deliverables:
 - reference invariants and statistical observables;
 - CPU, Metal, and ROCm compilation and runnable smoke evidence.
 
-This is OpenVT reference-model coverage only. Schema and bigraph compatibility are excluded.
+This is OpenVT reference-model coverage only. External schema compatibility is excluded.
 
 Exit gate:
 

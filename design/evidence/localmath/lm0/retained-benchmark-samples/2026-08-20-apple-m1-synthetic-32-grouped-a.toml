@@ -1,0 +1,82 @@
+backend = "cpu"
+backend_type = "KernelAbstractions.CPU"
+cache_state = "fresh process; package caches may be precompiled; workload methods cold"
+compile_mode = "ordinary --compile=yes --optimize=2"
+cpu_threads = 6
+hardware = "apple-m1"
+host_compile_seconds_total = 95.708135284
+host_recompile_seconds_total = 1.792e-6
+item_count = 16
+julia_version = "1.12.6"
+kernel = "Darwin"
+kernelabstractions_version = "0.9.42"
+localmath_version = "0.1.0"
+logical_stage_kinds = ["unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce", "resolve", "collect", "ordered", "unique", "reduce"]
+machine = "arm64-apple-darwin24.0.0"
+package_load_seconds = 3.188296292
+physical_launch_count = 74
+planning_through_first_execution_seconds = 91.73683804199999
+profile = "synthetic_scaling"
+program_arguments = ["--stages=32", "--backend=cpu", "--warm-samples=1"]
+schema_version = 1
+stage_count = 32
+threads = 1
+total_memory_bytes = 0x0400000000
+
+[construction]
+allocated_bytes = 400084624
+compile_seconds = 4.088439713
+elapsed_seconds = 4.097435292
+gc_seconds = 0.018454875
+recompile_seconds = 0.0
+
+[first_execution]
+allocated_bytes = 71830624
+compile_seconds = 0.604272165
+elapsed_seconds = 0.608957416
+gc_seconds = 0.0
+provider_compile_upper_bound_seconds = 0.0035485429999999457
+recompile_seconds = 0.0
+
+[julia_options]
+compile_enabled = 1
+opt_level = 2
+project = "/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalMath/Project.toml"
+startupfile = 2
+use_compiled_modules = 2
+
+[planning]
+allocated_bytes = 1654681056
+compile_seconds = 37.201809303
+elapsed_seconds = 37.243346542
+gc_seconds = 0.114582459
+recompile_seconds = 0.0
+
+[preparation]
+allocated_bytes = 2156692544
+compile_seconds = 50.590495311
+elapsed_seconds = 50.655574542
+gc_seconds = 0.192822626
+recompile_seconds = 1.792e-6
+
+[process]
+command = "julia --startup-file=no --project=lib/LocalMath --compiled-modules=existing --compile=yes --optimize=2 benchmark/compiler_scaling/stage_scaling.jl --stages=32 --backend=cpu --warm-samples=1"
+exit_code = 0
+poll_wait_lower_bound_seconds = 210.158691458
+elapsed_measurement = "poll_wait_lower_bound_not_wall_clock"
+stderr = ""
+
+[storage_allocation]
+allocated_bytes = 108675008
+compile_seconds = 3.223118792
+elapsed_seconds = 3.228959542
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[warm_execution]
+maximum_allocated_bytes = 511792
+maximum_seconds = 0.001136708
+median_allocated_bytes = 511792.0
+median_seconds = 0.001136708
+minimum_seconds = 0.001136708
+samples = 1

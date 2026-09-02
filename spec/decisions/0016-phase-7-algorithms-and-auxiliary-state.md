@@ -2,6 +2,10 @@
 
 Status: Accepted
 
+Current disposition: superseded in part by [Decision 0044](0044-pre-g6-cohesion-and-mtk-hardening.md).
+The scientific distinction between sequential and parallel processes survives; the old active
+algorithm inventory and product-roadmap placement do not govern G5H.
+
 Date: 2026-07-18
 
 ## Context

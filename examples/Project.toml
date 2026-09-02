@@ -1,22 +1,8 @@
 [deps]
-Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
-CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
-MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
-Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
-PottsToolkit = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-
-[sources]
-CorePotts = {path = "../lib/CorePotts"}
-KernelIntrinsics = {url = "https://github.com/PraneethMerugu/KernelIntrinsics.jl.git", rev = "b3a02b6e80f0839082a02f1838af7e10e992062c"}
-MakiePotts = {path = "../lib/MakiePotts"}
-PottsToolkit = {path = ".."}
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
 julia = "1.12"
-
-[extras]
-KernelIntrinsics = "f9588fbb-d238-4998-b15a-468e8766d49a"

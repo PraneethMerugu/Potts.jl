@@ -21,8 +21,10 @@ layout, proposal, acceptance, algorithm scheduling, auxiliary mechanics, rules, 
 ensemble randomness. Thread identity, workgroup structure, launch order, and asynchronous scheduling
 do not define draws.
 
-Raw addressed bits match across every first-class backend (currently CPU, Metal, and AMDGPU).
-Cross-backend simulations must be
+Raw addressed bits match only across backend profiles that explicitly carry
+that current guarantee. CPU is qualified and bounded Metal rows are exercised
+by the real-device runner; AMDGPU has no current public PottsToolkit backend
+profile. Cross-backend simulations must be
 statistically equivalent but need not follow identical trajectories. Trajectory reproducibility is a
 separate algorithm-specific claim that also depends on numerical and transactional determinism.
 
@@ -30,8 +32,10 @@ Exact and approximate distributions are separately named. Exact checkpoints reco
 RNG version, semantic counters, cell generations, complete state, model fingerprint, and execution
 provenance.
 
-`Philox4x32x10V1` is the accepted default contract after compilation, known-answer, semantic-address,
-and raw-word validation on CPU, Metal, and AMDGPU. Its public RNG contract version is `1.0.0`.
+`Philox4x32x10V2` is the accepted default contract after compilation,
+known-answer, semantic-address, trajectory-identity, and open-uniform endpoint
+validation. Its public RNG contract version is `2.0.0` and its lowering identity
+is `philox4x32x10_semantic_address_fisher_yates_v2`.
 
 ## Consequences
 

@@ -2,6 +2,10 @@
 
 Status: Accepted engineering standard
 
+Current disposition: compatible open-protocol principles survive. Exact public names, backend
+inventories, capability promotion, and CorePotts API breadth are requalified by the
+[G5H Hardening Contract](../spec/symbolic-potts-v1-hardening.md).
+
 ## Purpose
 
 Potts.jl is intended to be both a high-performance Cellular Potts engine and an extensible Julia
@@ -12,8 +16,9 @@ This standard defines how CorePotts and PottsToolkit remain open to new scientif
 retaining inference, compilation, device execution, reproducibility, validation, and semantic
 provenance. It governs new protocols and revisions to existing protocols.
 
-The accompanying [open-protocol audit](audits/open-protocol-audit.md) applies these rules to the
-current specifications and implementation.
+The accompanying [open-protocol audit](audits/open-protocol-audit.md) records an earlier repository
+state and is historical evidence. Current conformance must be re-established by the owning G5H
+gate and cannot be inferred from that audit.
 
 ## Governing Principle
 
@@ -30,8 +35,9 @@ Examples:
   controlled scientific taxonomy.
 - Random, major-axis, minor-axis, and vector-directed division are built-in division geometries,
   not the complete division protocol.
-- CPU, Metal, and ROCm are the currently required qualified backends, not the only backend types
-  that CorePotts may ever recognize.
+- CPU is the semantic reference; every GPU claim is an independently admitted concrete-device
+  profile. Metal is the first required real-GPU evidence lane during G5H, while CUDA and ROCm
+  remain unsupported until their own extensions pass the same applicable evidence.
 - Level 1 portable DSL syntax is closed and versioned; Level 2 and Level 3 scientific construction
   use ordinary Julia extension protocols.
 
@@ -162,8 +168,9 @@ Potts.jl uses two deliberately different forms of openness:
    bounded, device-valid descriptors and operations.
 
 An extension may be valid for host reference execution without being valid on a requested GPU. That
-limitation is explicit in its capabilities. A stable paper-facing component intended for the
-hardware-agnostic API MUST provide the required CPU, Metal, and ROCm evidence.
+limitation is explicit in its capabilities. A stable component MUST provide CPU-reference evidence
+and real-device evidence for every GPU profile it claims; hardware-agnostic authoring does not
+imply simultaneous support for every vendor.
 
 The compiler boundary is a function barrier. Dynamic authoring work occurs before it; the MCS hot
 path operates on concrete compiled values after it.
@@ -264,7 +271,8 @@ The extension fixture MUST prove, where applicable:
 - lowering into a compiled plan;
 - inference and bounded allocation behavior;
 - CPU execution;
-- Metal and ROCm compilation and execution for device-capable fixtures;
+- compilation and execution on every concrete GPU/device profile the fixture claims, with Metal
+  as the first required G5H real-device lane and no blanket ROCm/CUDA claim;
 - semantic RNG and lifecycle behavior;
 - snapshot/checkpoint round-trip when claimed;
 - useful errors for an incomplete implementation; and

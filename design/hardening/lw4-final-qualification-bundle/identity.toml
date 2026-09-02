@@ -1,0 +1,30 @@
+generated_utc = "2026-08-13T01:34:39.129"
+workload_sha256 = "c7bd404d26f42db0a887094aa125f377e043fc196e54a8ca95fd8e1b1a1dfe69"
+architecture = "aarch64"
+threads = 1
+cpu = "apple-m1"
+kernelabstractions = "0.9.42"
+product_commit = "ee395bd2f70d210fe98a0fb748e6530824c50671"
+microbenchmark_samples = 1000
+machine = "arm64-apple-darwin24.0.0"
+qualification_tool_sha256 = "8a99ff0e698a635396899596d07f04b9667ca8b393701c540b0f6037f560f4ee"
+profile = "normal"
+julia = "1.12.6"
+threshold = 1.05
+kernel = "Darwin"
+workload_git_objects = ["test/localworksets_witnesses=cb38a264a4a8ea3cfa5c89f29b82c8c22222702e", "benchmark/backends/metal=ab07d9f25bac8d8756d11ff67aa57c9b7aff5642", "benchmark/src/lw3_localworksets_parity.jl=fa747e66b7a0fcd89d386eae45dc83a7f7be7f0c", "lib/LocalWorksets/test=859f964ce9537e2d9b22b487746a7e96b4adc328", "lib/CorePotts/test=61f1d73a26ba974011425224c4907301ac0f5c53", "test=b3aa5e747b583f2108a2f7b5b3924bd00d8730ba"]
+bootstrap_samples = 10000
+schema_version = 1
+product_tree = "b5ad1e71d73251fa6f932c8d275be8d1910f65fd"
+
+[project_manifest_sha256]
+"test/localworksets_witnesses/Project.toml" = "f647196346d3584638c79b89987e065631361c6a6dd317c818d209bc787296fd"
+"Project.toml" = "6548af18d3bca96b5c75bf3dc97fb86734fb292448f1e5a7cab53fd2596196cb"
+"benchmark/backends/metal/Project.toml" = "241ab7259c30695b609a124ab07779e470a88c12032e6a5c907ae02771d36743"
+"lib/LocalWorksets/Project.toml" = "dc480d9172382dc02fd37368a51d7880ba1d1cc948441e062a47538d28e9eca1"
+"lib/CorePotts/Manifest.toml" = "90cc72215f276d343edab851393d80d54d9e8809046e078a1057be5f9a92a558"
+"benchmark/backends/metal/Manifest.toml" = "272ea8dd150dd9217ea3b720e15c62b7d849b7f6775d62c52030d1b757640c60"
+"lib/CorePotts/Project.toml" = "2bdf2ec742b014d55be3dda01aac41aeadb9d70b83c0e131c4f6c5281587ee4b"
+"Manifest.toml" = "e99e568bd95de8416118f68886b3d5ede8455f4cf647fb1478ae28923fc5aac4"
+"lib/LocalWorksets/Manifest.toml" = "154293b47ad03292b17bab3574565576e5a75fbedbe2aa8c086149d1bccc42e8"
+"test/localworksets_witnesses/Manifest.toml" = "d941f9a7326d562269725402f638bf161f9cc65b3d0620644c392f78c451c508"

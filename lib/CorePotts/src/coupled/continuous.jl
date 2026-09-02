@@ -1,6 +1,0 @@
-include("continuous_parts/domains_and_systems.jl")
-include("continuous_parts/cell_dynamics.jl")
-include("continuous_parts/field_dynamics.jl")
-include("continuous_parts/field_exchange.jl")
-include("continuous_parts/portable_field_exchange.jl")
-include("continuous_parts/steady_state.jl")

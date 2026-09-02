@@ -1,0 +1,20 @@
+LW-4A post-LW-R2A-remediation static boundary
+Date: 2026-08-10
+Source files: 10
+Nonblank/noncomment production lines: 4,137
+Maximum file lines: 952
+Per-file lines:
+- LocalWorksets.jl: 20
+- execution.jl: 432
+- localworksets_conjunctive.jl: 774
+- localworksets_evidence.jl: 108
+- localworksets_kernelabstractions.jl: 283
+- localworksets_resolved.jl: 952
+- inspection.jl: 212
+- model.jl: 363
+- planning.jl: 421
+- preparation.jl: 572
+Portable synchronize occurrences: exactly one, in localworksets_kernelabstractions.jl
+Vendor execution hits outside inert evidence: none
+Production dependency inventory: Adapt, Atomix, KernelAbstractions, SHA
+git diff --check: exit 0 after final documentation/review packet

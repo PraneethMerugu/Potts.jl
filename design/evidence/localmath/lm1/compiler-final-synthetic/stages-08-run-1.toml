@@ -1,0 +1,83 @@
+backend = "cpu"
+backend_type = "KernelAbstractions.CPU"
+cache_state = "fresh process; package caches may be precompiled; workload methods cold"
+command = "`/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/bin/julia -C native -J/Users/praneethmerugu/.julia/juliaup/julia-1.12.6+0.aarch64.apple.darwin14/lib/julia/sys.dylib -g1 --startup-file=no --startup-file=no --threads=1 '--project=/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalWorksets' --compiled-modules=existing --compile=yes --optimize=2 '/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/benchmark/lm0/compiler_case.jl' --stages=8 --backend=cpu --warm-samples=7`"
+compile_mode = "ordinary --compile=yes --optimize=2"
+compiler_spine = "stage_local_erased"
+cpu_threads = 6
+exit_code = 0
+hardware = "apple-m1"
+host_compile_seconds_total = 16.559914281
+host_recompile_seconds_total = 0.0
+item_count = 16
+julia_version = "1.12.6"
+kernel = "Darwin"
+kernelabstractions_version = "0.9.42"
+localworksets_version = "0.1.0"
+logical_stage_kinds = ["unique", "reduce", "resolve", "collect", "ordered_fold", "unique", "reduce", "resolve"]
+machine = "arm64-apple-darwin24.0.0"
+orchestrator_status = "completed"
+package_load_seconds = 2.884495042
+physical_launch_count = 52
+planning_through_first_execution_seconds = 15.598037791000001
+process_elapsed_seconds = 27.5626540184021
+profile = "typed_stage_scaling"
+program_arguments = ["--stages=8", "--backend=cpu", "--warm-samples=7"]
+repetition = 1
+schema_version = 2
+stage_count = 8
+threads = 1
+total_memory_bytes = 0x0400000000
+
+[binding]
+allocated_bytes = 47183776
+compile_seconds = 0.2520945
+elapsed_seconds = 0.252334
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[construction]
+allocated_bytes = 191754048
+compile_seconds = 0.744375
+elapsed_seconds = 0.746035416
+gc_seconds = 0.0
+recompile_seconds = 0.0
+
+[first_execution]
+allocated_bytes = 15411264
+compile_seconds = 0.102638624
+elapsed_seconds = 0.103057333
+gc_seconds = 0.0
+provider_compile_upper_bound_seconds = 0.00033995900000000323
+recompile_seconds = 0.0
+
+[julia_options]
+compile_enabled = 1
+opt_level = 2
+project = "/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/lib/LocalWorksets/Project.toml"
+startupfile = 2
+use_compiled_modules = 2
+
+[planning]
+allocated_bytes = 687604304
+compile_seconds = 7.921145243
+elapsed_seconds = 7.948003208
+gc_seconds = 0.032761
+recompile_seconds = 0.0
+
+[preparation]
+allocated_bytes = 1235668656
+compile_seconds = 7.539660914
+elapsed_seconds = 7.54697725
+gc_seconds = 0.086330541
+recompile_seconds = 0.0
+
+[warm_execution]
+maximum_allocated_bytes = 28192
+maximum_compile_seconds = 0.0
+maximum_recompile_seconds = 0.0
+maximum_seconds = 0.000267083
+median_allocated_bytes = 28192.0
+median_seconds = 7.875e-5
+minimum_seconds = 7.7291e-5
+samples = 7

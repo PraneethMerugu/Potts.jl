@@ -1,5 +1,0 @@
-<Simulation version="4.2.5">
-    <XMLScript>Simulation/wang_order_oracle.xml</XMLScript>
-    <PythonScript>Simulation/wang_order_oracle.py</PythonScript>
-    <Resource Type="Python">Simulation/wang_order_oracle_Steppables.py</Resource>
-</Simulation>
