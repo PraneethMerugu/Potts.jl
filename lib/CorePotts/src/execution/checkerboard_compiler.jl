@@ -948,7 +948,13 @@ end
     return operation(_execute_proposal_scalar(first(arguments), context))
 end
 @inline function _execute_proposal_ordered(
-        operation, arguments::Tuple{A,B,Vararg}, context) where {A,B}
+        operation, arguments::Tuple{A,B}, context) where {A,B}
+    first_value = _execute_proposal_scalar(getfield(arguments, 1), context)
+    second_value = _execute_proposal_scalar(getfield(arguments, 2), context)
+    return operation(first_value, second_value)
+end
+@inline function _execute_proposal_ordered(
+        operation, arguments::Tuple{A,B,C,Vararg}, context) where {A,B,C}
     accumulator = _execute_proposal_scalar(first(arguments), context)
     return _execute_proposal_ordered_tail(
         operation, Base.tail(arguments), context, accumulator)

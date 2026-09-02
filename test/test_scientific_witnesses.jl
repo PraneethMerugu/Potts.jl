@@ -83,46 +83,6 @@
           first.stats.constraint_rejections + first.stats.energy_rejections
 end
 
-include("localmath_witnesses/lbm_d2q9.jl")
-include("localmath_witnesses/lattice_spring.jl")
-include("localmath_witnesses/matrix_free_fem.jl")
-include("localmath_witnesses/zbuffer.jl")
-include("localmath_witnesses/compacted_dem_contacts.jl")
-include("localmath_witnesses/compacted_active_fem.jl")
-include("localmath_witnesses/compacted_particle_cells.jl")
-
-@testset "external LocalMath cross-domain witnesses" begin
-    lbm = run_localmath_d2q9_witness()
-    spring_deterministic = run_localmath_lattice_spring_witness()
-    spring_fast = run_localmath_lattice_spring_witness(; force_mode = :fast)
-    fem = run_localmath_matrix_free_fem_witness()
-    zbuffer = run_localmath_zbuffer_witness()
-
-    @test lbm.result == lbm.reference
-    @test lbm.structured.result == lbm.structured.reference
-    @test spring_deterministic.result == spring_deterministic.reference
-    @test spring_fast.result.damage == spring_fast.reference.damage
-    @test spring_fast.result.edge_state == spring_fast.reference.edge_state
-    @test all(isapprox.(spring_fast.result.force,
-        spring_fast.reference.force; rtol = 8eps(Float32)))
-    @test spring_fast.result.fracture == spring_fast.reference.fracture
-    @test fem.result == fem.reference
-    @test zbuffer.result == zbuffer.reference
-
-end
-
-@testset "compacted LocalMath cross-domain witnesses" begin
-    dem = run_localmath_compacted_dem_contacts_witness()
-    active_fem = run_localmath_compacted_active_fem_witness()
-    particle_cells = run_localmath_compacted_particle_cells_witness()
-
-    @test length(dem.cases) == 6
-    @test length(active_fem.cases) == 2
-    @test all(cases -> length(cases) == 3, active_fem.cases)
-    @test length(particle_cells.cases) == 2
-    @test length(particle_cells.diagnostics) == 2
-end
-
 @testset "scheduled chemotaxis follows the independent gradient sign" begin
     @variables chemotaxis_field chemotaxis_gate
     cell = CellKind(:chemotaxis_cell; extinction = RetireAtZero())

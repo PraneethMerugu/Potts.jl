@@ -216,6 +216,20 @@ _compiler_test_tracker_plan() = CorePotts.TrackerExecutionPlan(
     "localmath-compiler-boundary-tracker",
 )
 
+@testset "ordered scalar execution specializes the binary case" begin
+    binary = (
+        CorePotts._ExecutableLiteral(2.0),
+        CorePotts._ExecutableLiteral(3.0),
+    )
+    longer = (
+        CorePotts._ExecutableLiteral(10.0),
+        CorePotts._ExecutableLiteral(3.0),
+        CorePotts._ExecutableLiteral(2.0),
+    )
+    @test CorePotts._execute_proposal_ordered(*, binary, nothing) == 6.0
+    @test CorePotts._execute_proposal_ordered(-, longer, nothing) == 5.0
+end
+
 @testset "Core compiler emits executable scalar terms in source order" begin
     terms = CorePotts._compile_proposal_terms(
         _literal_proposal_plan((1.0e16, -1.0e16, 1.0)))
