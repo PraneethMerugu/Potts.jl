@@ -4,7 +4,7 @@
 > tests, and documentation were developed with generative-AI assistance and
 > remain subject to maintainer review.
 
-MakiePotts v0.2 turns explicit Potts observations into native Makie recipes.
+MakiePotts v0.3 turns explicit Potts observations into native Makie recipes.
 
 ```julia
 using MakiePotts
@@ -32,7 +32,7 @@ observation.
 
 `PottsVolume`, `PottsExplorer`, and `RerunController` are experimental. The
 frame, request, channel, encoding, 2D recipe, boundary, inspection, and limited
-recording contracts are stable for the v0.2 line.
+recording contracts are release-candidate behavior for the v0.3 line.
 
 `record_potts` validates inputs and replaces its destination only after a
 successful temporary recording. Experimental explorers and rerun controllers
