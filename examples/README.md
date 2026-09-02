@@ -6,8 +6,6 @@ These examples are executable against the current public package interfaces:
   manual.
 - `merks_2006_serial.jl` is the bounded Merks integration witness used by the
   manual.
-- `makiepotts_native.jl` demonstrates explicit rendering and ordinary Makie
-  composition from a saved host observation.
 - `openvt_monolayer_serial.jl` replaces the monolayer/OpenVT notebooks with a
   bounded 11-cell relaxation calibration, zero-adhesion monolayer, explicit
   free-surface contact-inhibition classification, and public lifecycle division.
