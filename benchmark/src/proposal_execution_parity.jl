@@ -2,24 +2,18 @@ isdefined(@__MODULE__, :run_localmath_execution_parity) ||
     include("localmath_execution_parity.jl")
 
 function _proposal_parity_external_hamiltonian_disposition(
-        array_convert, backend_name, side
+        side
     )
-    fixture = localmath_graph_fixture(
-        ; side, include_external = true
-    )
+    fixture = localmath_graph_fixture(; side, include_external = true)
     try
-        runtime = _localmath_graph_runtime(fixture, array_convert)
-        CorePotts.enqueue_program_mcs!(runtime)
-        receipt = CorePotts.settle_program!(
-            runtime, _localmath_graph_request(; full_snapshot = true)
-        )
-        receipt.failure === nothing || throw(receipt.failure)
-        return :canonical_graph
+        _localmath_graph_runtime(fixture, identity)
     catch error
-        error isa CorePotts.BackendSPI.ProgramCapabilityError || rethrow()
-        backend_name === :cpu && rethrow()
-        return :explicit_capability_rejection
+        error isa ArgumentError || rethrow()
+        occursin("without a bounded gathered lowering", sprint(showerror, error)) ||
+            rethrow()
+        return :cold_compiler_rejection
     end
+    error("external contextual operation unexpectedly passed cold Core compilation")
 end
 
 function run_proposal_execution_parity(
@@ -30,9 +24,7 @@ function run_proposal_execution_parity(
         measured_batches::Integer = GRAPH_PARITY_MEASURED_BATCHES,
     )
     external_hamiltonian_disposition =
-        _proposal_parity_external_hamiltonian_disposition(
-            array_convert, backend_name, side
-        )
+        _proposal_parity_external_hamiltonian_disposition(side)
     report = run_localmath_execution_parity(
         array_convert;
         backend_name,
