@@ -14,7 +14,7 @@ member of four independently versioned packages:
 - **[LocalMath](https://github.com/PraneethMerugu/LocalMath.jl)**: typed bounded local computation.
 - **[MakiePotts](https://github.com/PraneethMerugu/MakiePotts.jl)**: native Makie recipes.
 
-The historical `Potts` umbrella package and pre-freeze engine have been removed.
+The historical monorepo layout and pre-freeze engine have been removed.
 
 ## Installation
 
@@ -28,6 +28,10 @@ Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", rev = "v0.3.0-rc1")
 ```
 
 Add MakiePotts separately when visualization is required.
+
+Before the RC tags exist, use immutable commit revisions from the standalone
+repositories in the same dependency order. A clean Potts checkout never
+expects an embedded sibling-package checkout layout.
 
 For development:
 

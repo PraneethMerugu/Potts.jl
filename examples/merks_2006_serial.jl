@@ -10,8 +10,8 @@ using ModelingToolkitBase: @parameters
 
 Build and execute the serial CPU integration witness for the field-coupled
 vasculogenesis mechanisms described by Merks et al. (2006). This checks the
-final API and split execution path; scientific reproduction remains a later
-review.
+final API and field-coupled CPM execution; scientific reproduction remains a
+later review.
 """
 function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
     mcs >= 1 || throw(ArgumentError("mcs must be positive"))

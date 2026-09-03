@@ -13,8 +13,8 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: 'v0.2.0-rc1'
-  COREPOTTS_REF: 'v0.2.0-rc1'
+  LOCALMATH_REF: '4df26f61cc802f255c6bf7b863b5a5e452ac5690'
+  COREPOTTS_REF: 'b3ff80b60706eb0354049ef73e05ddafd96c5bf0'
 
 jobs:
   package:
@@ -59,10 +59,13 @@ jobs:
         with: {version: '1.12.1'}
       - uses: julia-actions/cache@v3
       - name: Test exact replay environment
-        run: julia --project=integration/replay --startup-file=no integration/replay/runtests.jl
+        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
   metal:
-    runs-on: macos-15
+    if: >-
+      vars.METAL_RUNNER_ENABLED == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, metal]
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6

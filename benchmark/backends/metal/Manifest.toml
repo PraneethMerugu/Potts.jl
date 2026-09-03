@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "d4ce00d296e4370a8fdd909c76045af4e133eec2"
+project_hash = "12f347cbb888a8d6d39344a9adaf1c0960c9e7c2"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "0a81a018463de6c3f4f2c9360121c562e5add9e4"
@@ -318,9 +318,15 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
-path = "../../../lib/CorePotts"
+git-tree-sha1 = "25e370de8ef2808047ac1249f067b2b17a4b2f6d"
+repo-rev = "b3ff80b60706eb0354049ef73e05ddafd96c5bf0"
+repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
-version = "0.2.0"
+version = "0.2.0-rc1"
+weakdeps = ["Metal"]
+
+    [deps.CorePotts.extensions]
+    CorePottsMetalExt = "Metal"
 
 [[deps.Crayons]]
 git-tree-sha1 = "54b76cbb40d9a0f5368c880725b2f141da77c94f"
@@ -1045,7 +1051,9 @@ version = "5.4.0"
 
 [[deps.LocalMath]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "StructArrays", "UUIDs"]
-path = "../../../lib/LocalMath"
+git-tree-sha1 = "6f737d773eff399a1b1eba9d0c6cc920bf4f7f5d"
+repo-rev = "4df26f61cc802f255c6bf7b863b5a5e452ac5690"
+repo-url = "https://github.com/PraneethMerugu/LocalMath.jl"
 uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
 version = "0.2.0-rc1"
 
@@ -1331,7 +1339,7 @@ version = "0.4.13"
 deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
 path = "../../.."
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-version = "0.2.0"
+version = "0.3.0-rc1"
 
     [deps.Potts.extensions]
     PottsMetalExt = "Metal"
@@ -1872,9 +1880,9 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 version = "1.11.0"
 
 [[deps.TestItems]]
-git-tree-sha1 = "42fd9023fef18b9b78c8343a4e2f3813ffbcefcb"
+git-tree-sha1 = "a6dd904babc04670c784f81b67957a3545271610"
 uuid = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
-version = "1.0.0"
+version = "1.1.0"
 
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "PrettyTables", "Printf", "Tables"]

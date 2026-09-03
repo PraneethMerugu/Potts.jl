@@ -52,4 +52,31 @@
             end
         end
     end
+
+    @testset "exact environments pin standalone upstream repositories" begin
+        exact_manifests = (
+            joinpath(repository, "integration", "replay", "Manifest.toml") =>
+                "1.12.1",
+            joinpath(repository, "benchmark", "backends", "metal", "Manifest.toml") =>
+                "1.12.6",
+        )
+        upstream_urls = Dict(
+            "CorePotts" => "https://github.com/PraneethMerugu/CorePotts.jl",
+            "LocalMath" => "https://github.com/PraneethMerugu/LocalMath.jl",
+        )
+        full_revision = r"^[0-9a-f]{40}$"
+        for (manifest_path, julia_version) in exact_manifests
+            manifest = TOML.parsefile(manifest_path)
+            @test manifest["julia_version"] == julia_version
+            dependencies = manifest["deps"]
+            for (name, url) in upstream_urls
+                entries = dependencies[name]
+                entry = entries isa AbstractVector ? only(entries) : entries
+                @test !haskey(entry, "path")
+                @test entry["repo-url"] == url
+                @test occursin(full_revision, entry["repo-rev"])
+                @test occursin(full_revision, entry["git-tree-sha1"])
+            end
+        end
+    end
 end

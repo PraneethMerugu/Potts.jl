@@ -44,9 +44,14 @@
         joinpath(@__DIR__, "..", "src"),
         joinpath(@__DIR__, "..", "ext"),
         @__DIR__,
+        joinpath(@__DIR__, "..", "integration"),
+        joinpath(@__DIR__, "..", "benchmark"),
+        joinpath(@__DIR__, "..", "docs"),
+        joinpath(@__DIR__, "..", "examples"),
     )
     direct_references = Tuple{String, Symbol}[]
     spi_references = Tuple{String, Symbol, Symbol}[]
+    localmath_references = Tuple{String, Symbol}[]
 
     for root in roots
         isdir(root) || continue
@@ -56,7 +61,7 @@
                 file = joinpath(directory, name)
                 source = read(file, String)
                 for found in eachmatch(
-                        r"CorePotts\.([A-Za-z_][A-Za-z0-9_!]*)(?:\.([A-Za-z_][A-Za-z0-9_!]*))?",
+                        r"(?<!/)CorePotts\.([A-Za-z_][A-Za-z0-9_!]*)(?:\.([A-Za-z_][A-Za-z0-9_!]*))?",
                         source,
                     )
                     owner = Symbol(found.captures[1])
@@ -69,6 +74,12 @@
                     else
                         push!(direct_references, (file, owner))
                     end
+                end
+                for found in eachmatch(
+                        r"(?<!/)LocalMath\.(@?[A-Za-z_][A-Za-z0-9_!]*)",
+                        source,
+                    )
+                    push!(localmath_references, (file, Symbol(found.captures[1])))
                 end
             end
         end
@@ -88,4 +99,11 @@
         end
     end
     @test !isempty(spi_references)
+    @test !isempty(localmath_references)
+    for (file, name) in localmath_references
+        @test Base.ispublic(LocalMath, name) || begin
+            @info "private LocalMath package-level reach" file name
+            false
+        end
+    end
 end

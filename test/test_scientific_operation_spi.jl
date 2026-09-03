@@ -1,3 +1,5 @@
+import LocalMath
+
 struct ScientificProposalProbe <: CorePotts.CompilerSPI.AbstractProposalEvaluationContext
     ownership::Matrix{Int32}
     cell_kinds::Vector{Int16}
@@ -186,6 +188,139 @@ end
         )
         @test operation((Int16(2), Int32(1), Int32(2)), context) == expected
     end
+end
+
+@testset "bounded-values Hamiltonian matches an independent ordered energy oracle" begin
+    @variables bounded_oracle_signal bounded_oracle_gate
+    @parameters bounded_oracle_weight = -1.0
+    cell = CellKind(:bounded_oracle_cell; extinction = RetireAtZero())
+    medium = MediumKind(:bounded_oracle_medium)
+    signal = FieldState(
+        bounded_oracle_signal; name = :bounded_oracle_signal, initial = 0.0
+    )
+    gate = FieldState(
+        bounded_oracle_gate; name = :bounded_oracle_gate, initial = 0.0
+    )
+    site = SiteBinding(:bounded_oracle_site)
+    proposal = ProposalContext(:bounded_oracle_proposal)
+    canonical_sum = LocalMath.bounded_fold(
+        identity,
+        +,
+        0.0,
+        (total, count) -> total;
+        domain = LocalMath.Where(isfinite),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.RejectEmpty(),
+        order = LocalMath.CanonicalLeftFold(),
+    )
+    source = PottsSystem(
+        name = :bounded_values_energy_oracle,
+        statements = StatementSet((
+            Lattice((4, 4); relations = (
+                proposal = VonNeumann(), contact = VonNeumann())),
+            cell,
+            medium,
+            signal,
+            gate,
+            HamiltonianTerm(
+                :bounded_ordered_energy;
+                domain = sites(:lattice),
+                anchor = site,
+                expression = bounded_oracle_weight * occupancy(cell, site) *
+                    canonical_sum(bounded_values(
+                        signal, :contact, anchor_value(site))),
+            ),
+            ProposalConstraint(
+                :isolate_bounded_oracle_extension,
+                proposal.is_extension &
+                (field_value(gate, proposal.source_site) == 1) &
+                (field_value(gate, proposal.target_site) == 2),
+            ),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = [bounded_oracle_signal, bounded_oracle_gate],
+        parameters = [bounded_oracle_weight],
+    )
+    scheduled = mtkcompile(source)
+    labels = zeros(Int32, 4, 4)
+    labels[2:3, 2:3] .= 1
+    source_site = CartesianIndex(2, 2)
+    target_site = CartesianIndex(1, 2)
+    signal_values = zeros(Float64, 4, 4)
+    signal_values[2, 2] = 1.0e16
+    signal_values[4, 2] = -1.0e16
+    signal_values[1, 3] = 1.0
+    gate_values = zeros(Float64, 4, 4)
+    gate_values[source_site] = 1
+    gate_values[target_site] = 2
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        values = (
+            bounded_oracle_signal => signal_values,
+            bounded_oracle_gate => gate_values,
+        ),
+    )
+
+    # Independent full-energy definition. Von Neumann lanes use the declared
+    # dimension/distance/sign order and are folded left without reassociation.
+    offsets = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    function ordered_neighbor_sum(values, center)
+        total = 0.0
+        for offset in offsets
+            neighbor = CartesianIndex(
+                mod1(center[1] + offset[1], size(values, 1)),
+                mod1(center[2] + offset[2], size(values, 2)),
+            )
+            total = total + values[neighbor]
+        end
+        return total
+    end
+    function global_bounded_delta(before, after, values, weight)
+        total = 0.0
+        for center in CartesianIndices(before)
+            local_energy = weight * ordered_neighbor_sum(values, center)
+            total += (after[center] == 1 ? local_energy : 0.0) -
+                     (before[center] == 1 ? local_energy : 0.0)
+        end
+        return total
+    end
+    after_extension = copy(labels)
+    after_extension[target_site] = 1
+    favorable_delta = global_bounded_delta(
+        labels, after_extension, signal_values, -1.0)
+    unfavorable_delta = global_bounded_delta(
+        labels, after_extension, signal_values, 1.0)
+    @test ordered_neighbor_sum(signal_values, target_site) == 1.0
+    @test favorable_delta == -1.0
+    @test unfavorable_delta == 1.0
+
+    run(weight, seed) = solve(
+        PottsProblem(
+            scheduled,
+            initial,
+            (0, 1);
+            p = (bounded_oracle_weight => weight,),
+            seed,
+        ),
+        SequentialCPM();
+        backend = CPUBackend(),
+        scalar_type = Float64,
+        save_everystep = true,
+    )
+    witness = nothing
+    for seed in UInt64(1):UInt64(256)
+        favorable = run(-1.0, seed)
+        last(favorable).ownership == after_extension || continue
+        unfavorable = run(1.0, seed)
+        unfavorable.stats.energy_rejections > 0 || continue
+        witness = (; favorable, unfavorable)
+        break
+    end
+    @test witness !== nothing
+    witness === nothing && error("no bounded-values proposal witness found")
+    @test witness.favorable.stats.accepted == 1
+    @test last(witness.unfavorable).ownership == labels
+    @test witness.unfavorable.stats.accepted == 0
 end
 
 @testset "composed local Hamiltonian matches an independent global-energy sign oracle" begin

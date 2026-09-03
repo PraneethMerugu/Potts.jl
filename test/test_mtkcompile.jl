@@ -312,7 +312,7 @@ end
     @test is_scheduled(macro_scheduled)
     @test macro_scheduled isa PottsSystem
 
-    project = dirname(@__DIR__)
+    project = dirname(Base.active_project())
     script = """
         using Potts
         @assert !any(id -> id.name == \"ModelingToolkit\", keys(Base.loaded_modules))

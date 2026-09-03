@@ -1,7 +1,7 @@
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
-DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
@@ -27,8 +27,8 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 Catalyst = "=16.2.3"
-DynamicQuantities = "=1.13.0"
 DomainSets = "=0.8.1"
+DynamicQuantities = "=1.13.0"
 MethodOfLines = "=0.11.19"
 ModelingToolkit = "=11.37.1"
 ModelingToolkitBase = "=1.58.1"
