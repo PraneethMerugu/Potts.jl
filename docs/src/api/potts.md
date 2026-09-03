@@ -7,6 +7,7 @@ The exported API is organized by lifecycle rather than implementation files.
 | Author and compose | `PottsSystem`, `StatementSet`, `@statements`, `@named`, `compose`, `extend`, `flatten`, `complete`, `mtkcompile` |
 | Declare domains and state | `Lattice`, `CellKind`, `MediumKind`, `SpatialRelation`, `SiteState`, `CellState`, `MediumState`, `ModelState`, `FieldState`, `HistoryState`, `RelationshipState` |
 | Declare behavior | `HamiltonianTerm`, `ProposalDrive`, `ProposalConstraint`, `ProposalModifier`, `Synchronous`, `AcceptedCopy`, `LifecycleProcess`, `RelationshipProcess`, `DiscreteFieldEuler`, `Observation`, `Protocol` |
+| Author custom terms | `ProposalContext`, `SiteBinding`, `CellBinding`, `ContactBinding`, `RelationshipBinding`, `anchor_value`, `bounded_values` |
 | Initialize | `PottsInitialState`, `LabelledCells`, `OwnershipLayout`, `CellPlacement`, `MediumPlacement`, `RandomSitePlacement` |
 | Execute | `PottsProblem`, `SequentialCPM`, `CheckerboardSweepCPM`, `CPUBackend`, `MetalBackend`, `init`, `solve`, `step!`, `solve!`, `terminate!`, `remake` |
 | Persist and inspect | `checkpoint`, `PottsCheckpoint`, `inspect`, `StateSchema`, `Observations`, `Capabilities`, `ReplayContract`, `runtime_statistics` |

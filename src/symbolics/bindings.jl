@@ -104,21 +104,20 @@ anchor_value(binding::Union{
     SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
 }) = _binding_token(binding)
 
-"""
-    bounded_values(field, relation, anchor)
-
-Declare the finite field values reached from `anchor` through `relation` as
-the input to a `LocalMath.bounded_fold`.  This is a cold symbolic declaration;
-the Potts compiler resolves both resources and removes the declaration before
-execution planning.
-"""
 struct BoundedValues{F, R, A}
     field::F
     relation::R
     anchor::A
 end
 
-"""Construct a cold bounded-values declaration for a `LocalMath.bounded_fold`."""
+"""
+    bounded_values(field, relation, anchor)
+
+Declare the finite field values reached from `anchor` through `relation` as
+the input to a `LocalMath.bounded_fold`. This is a cold symbolic declaration;
+the Potts compiler resolves both resources and removes the declaration before
+execution planning.
+"""
 function bounded_values(field::FieldState, relation, anchor)
     relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
         "bounded_values relation must be a declared SpatialRelation or its local name"

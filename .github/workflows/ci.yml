@@ -13,8 +13,8 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: '4df26f61cc802f255c6bf7b863b5a5e452ac5690'
-  COREPOTTS_REF: 'b3ff80b60706eb0354049ef73e05ddafd96c5bf0'
+  LOCALMATH_REF: 'ba65753b95578ab43993963a0c5c0130ed727a06'
+  COREPOTTS_REF: 'cf5e729022ea11f77b26ffbcb0ef97c47517024c'
 
 jobs:
   package:
@@ -69,15 +69,11 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
       - uses: julia-actions/setup-julia@v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@v3
       - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("benchmark/backends/metal/runtests.jl")'
+        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("benchmark/backends/metal/runtests.jl")'
 
   sibling-main:
     if: github.event_name == 'schedule'

@@ -276,7 +276,9 @@ function _materialize_integrator(
         native_profiles = nothing,
         solve_controls...,
     )
-    plan = _lower_execution_plan(problem.system, algorithm, backend, scalar_type)
+    plan = _lower_scheduled_execution_plan(
+        problem.system, algorithm, backend, scalar_type
+    )
     capability = plan.reports.capability
     CorePotts.BackendSPI.capability_authorizes_execution(capability) ||
         throw(CorePotts.BackendSPI.ProgramCapabilityError(:init, capability))

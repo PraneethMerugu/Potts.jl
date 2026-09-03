@@ -6,6 +6,9 @@ The compiler is ordered by ownership stage:
 host/source_graph.jl
     freeze qualified source into indexed, host-only compiler data
 
+host/footprint_types.jl
+    define finite source, target, owner, and relationship footprint values
+
 host/operations.jl
     define the versioned operation-transfer authority
 
@@ -24,11 +27,32 @@ host/normalization.jl
 host/energy_domains.jl
     prove conservative energy domains and finite affected-anchor plans
 
-host/analysis.jl
-    infer and verify semantic facts over the normalized DAG
+host/footprints.jl
+    derive and combine bounded resource footprints from analyzed operations
+
+host/lifecycle_analysis.jl
+    validate lifecycle roles and derive their bounded compiler requirements
+
+host/operation_analysis.jl
+    resolve operation roles, contexts, and source requirements
+
+host/unit_analysis.jl
+    infer and verify physical units over the normalized DAG
+
+host/term_analysis.jl
+    propagate semantic facts and construct the analyzed compiler authority
+
+completion/scheduling.jl
+    project analyzed completion data into the public structural schedule
 
 execution/executable.jl
     define public engine/backend selections and the executable wrapper
+
+execution/observations.jl
+    define the settled observation boundary and compiled observation manifest
+
+execution/relationship_effects.jl
+    define relationship-effect values that cross the execution boundary
 
 host/coverage.jl
     validate compiler choices and complete statement/equation lowering coverage
@@ -86,6 +110,9 @@ lowering/constraints.jl
 
 lowering/trackers.jl
     infer, validate, canonicalize, and fingerprint typed derived-state trackers
+
+lowering/lifecycle_plan.jl
+    lower qualified lifecycle processes into the CorePotts lifecycle plan
 
 execution/boundary.jl
     validate that only concrete compiled data crosses into CorePotts

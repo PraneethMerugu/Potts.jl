@@ -222,7 +222,6 @@ end
     @test maximum(many_report.instances) == 6
     @test one_report.evaluator_nodes == many_report.evaluator_nodes
     @test one_report.group_splits == many_report.group_splits
-    @test one_report.kernel_families == many_report.kernel_families
     @test one_report.workspaces == 1
     @test many_report.workspaces == 6
 end

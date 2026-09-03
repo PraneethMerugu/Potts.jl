@@ -1,27 +1,27 @@
 # Top-level compiler orchestration only.
 
 """
-    _lower_execution_plan(scheduled, algorithm, backend, scalar_type)
+    _lower_scheduled_execution_plan(scheduled, algorithm, backend, scalar_type)
 
 Late-lower a structurally scheduled system for one concrete runtime profile.
 The result is private runtime materialization data, not a public authoring stage.
 """
-function _lower_execution_plan(
-        completed::PottsSystem,
+function _lower_scheduled_execution_plan(
+        scheduled::PottsSystem,
         engine::AbstractPottsAlgorithm,
         backend::AbstractPottsBackend,
         scalar_type::Type{<:AbstractFloat},
     )
-    is_scheduled(completed) || throw(ArgumentError(
+    is_scheduled(scheduled) || throw(ArgumentError(
         "late lowering requires a scheduled PottsSystem; call mtkcompile first"
     ))
-    _validate_compilation_choices(completed, engine, backend, scalar_type)
-    analyzed_ir = _analyze_completed_system(completed)
+    _validate_compilation_choices(scheduled, engine, backend, scalar_type)
+    analyzed_ir = _analyze_completed_system(scheduled)
     diagnostics = PottsDiagnostic[]
-    _validate_compilation_coverage!(diagnostics, completed)
-    _validate_equation_and_event_coverage!(diagnostics, completed)
+    _validate_compilation_coverage!(diagnostics, scheduled)
+    _validate_equation_and_event_coverage!(diagnostics, scheduled)
     _throw_diagnostics(:compilation, diagnostics)
-    manifest = _build_parameter_manifest(completed, scalar_type)
+    manifest = _build_parameter_manifest(scheduled, scalar_type)
     relationship_endpoint_policies =
         _compile_relationship_endpoint_policies(analyzed_ir)
     lowered_descriptors = _lower_descriptor_plan(
@@ -54,7 +54,7 @@ function _lower_execution_plan(
     )
     _assert_concrete_core_boundary(stage_plan; path = "stage_plan")
     _assert_concrete_core_boundary(lifecycle_plan; path = "lifecycle_plan")
-    completion_fingerprint = scheduled_system_fingerprint(completed)
+    completion_fingerprint = scheduled_system_fingerprint(scheduled)
     seed = _sha256_hex(
         "potts-executable-seed-v1",
         completion_fingerprint.hex,
@@ -81,18 +81,18 @@ function _lower_execution_plan(
     capability = CorePotts.program_capability_report(core_program)
     storage = _storage_report(core_program)
     workspace = _workspace_report(core_program)
-    statement_manifest = _compiled_statement_manifest(completed)
-    completion_fingerprints = inspect(completed, Fingerprints())
+    statement_manifest = _compiled_statement_manifest(scheduled)
+    completion_fingerprints = inspect(scheduled, Fingerprints())
     compiled_schedule = NamedTuple[
         (
             identity = _manifest_identity(record.identity),
             phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
         )
-        for record in inspect(completed, Schedule())
+        for record in inspect(scheduled, Schedule())
     ]
     records = analyzed_ir.source.records
     states = _compiled_state_manifest(
-        completed,
+        scheduled,
         records,
         manifest,
         descriptor_plan.state_layout,
@@ -143,7 +143,7 @@ function _lower_execution_plan(
         statements = statement_manifest,
         variables = Tuple(
             _manifest_symbol(value)
-            for value in inspect(completed, Variables())
+            for value in inspect(scheduled, Variables())
         ),
         schedule = compiled_schedule,
         replay = (

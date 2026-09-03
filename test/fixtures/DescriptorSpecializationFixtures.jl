@@ -34,7 +34,7 @@ end
 
 function lower_direct_model(count::Integer; weight_default = 2.0)
     scheduled = mtkcompile(complete(direct_model(count; weight_default)))
-    return Potts._lower_execution_plan(
+    return Potts._lower_scheduled_execution_plan(
         scheduled,
         SequentialCPM(),
         CPUBackend(),

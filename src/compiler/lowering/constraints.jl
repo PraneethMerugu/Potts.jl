@@ -297,9 +297,9 @@ function _lower_descriptor_plan(
         ir.structural_key,
         Tuple((
             group.split,
-            length(group.launch.instances),
-            group.launch.state_handles,
-            group.launch.workspace_handles,
+            length(group.instances),
+            group.state_handles,
+            group.workspace_handles,
         ) for group in groups),
         Tuple((
             schema.identity.path,

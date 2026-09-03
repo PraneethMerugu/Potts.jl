@@ -371,19 +371,6 @@ function _descriptor_groups(descriptors)
             CorePotts.CompilerSPI.handle_bank(handle),
             CorePotts.CompilerSPI.handle_slot(handle),
         )))
-        strategy = CorePotts.CompilerSPI.DescriptorKernelStrategy{
-            descriptor_type,
-            key.evaluator_type,
-            key.access_type,
-            key.role_type,
-            Val{:proposal},
-        }()
-        launch = CorePotts.CompilerSPI.DescriptorLaunch(
-            strategy,
-            typed_instances,
-            state_handles,
-            workspace_handles,
-        )
         split = (
             descriptor = nameof(descriptor_type),
             evaluator = nameof(key.evaluator_type),
@@ -397,7 +384,15 @@ function _descriptor_groups(descriptors)
             role = nameof(key.role_type),
             stage = key.stage,
         )
-        groups = (groups..., CorePotts.CompilerSPI.DescriptorGroup(launch, split))
+        groups = (
+            groups...,
+            CorePotts.CompilerSPI.ProposalDescriptorGroup(
+                typed_instances,
+                state_handles,
+                workspace_handles,
+                split,
+            ),
+        )
     end
     return groups
 end
