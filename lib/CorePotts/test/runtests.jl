@@ -1,8 +1,6 @@
-using Aqua
-using ExplicitImports
+using ParallelTestRunner
 using Test
 import CorePotts
-import LocalMath
 
 const _COREPOTTS_COMPILED_PROGRAM_TESTS = (
     "test_compiled_program_support.jl",
@@ -33,59 +31,87 @@ const _COREPOTTS_DEVICE_CONFORMANCE_WITNESSES = (
     "localmath_execution.jl",
 )
 
-@testset "ordinary test runner owns every CorePotts test file" begin
-    discovered = Set(filter(
-        name -> startswith(name, "test_") && endswith(name, ".jl"),
-        readdir(@__DIR__),
-    ))
-    included = Set((
-        _COREPOTTS_DIRECT_TESTS...,
-        _COREPOTTS_COMPILED_PROGRAM_TESTS...,
-    ))
-    exclusions = Set(_COREPOTTS_TEST_HELPER_EXCLUSIONS)
-    @test isempty(intersect(included, exclusions))
-    @test union(included, exclusions) == discovered
-end
+const _COREPOTTS_TEST_DIRECTORY = @__DIR__
 
-@testset "CorePotts owns every device conformance witness" begin
-    witness_directory = joinpath(@__DIR__, "backend_conformance")
-    discovered = Set(filter(
-        name -> endswith(name, ".jl"), readdir(witness_directory)
-    ))
-    @test discovered == Set(_COREPOTTS_DEVICE_CONFORMANCE_WITNESSES)
-end
+testsuite = Dict{String, Expr}(
+    replace(file, r"^test_|\.jl$" => "") =>
+        :(include(joinpath($(_COREPOTTS_TEST_DIRECTORY), $file)))
+    for file in _COREPOTTS_DIRECT_TESTS
+)
 
-for test_file in _COREPOTTS_DIRECT_TESTS
-    include(test_file)
-end
-
-@testset "CorePotts package quality" begin
-    Aqua.test_all(CorePotts; ambiguities = false)
-    # Exact non-public dependencies support device adaptation, atomic
-    # arbitration, world-age checks, and storage alias checks. LocalMath
-    # consumers use only its declared public compiler surface.
-    qualified_internal_boundary = (
-        Symbol("@adapt_structure"),
-        Symbol("@atomic"),
-        :dataids,
-        :device,
-        :GIT_VERSION_INFO,
-        :JLOptions,
-        :foreachindex,
-        :get_world_counter,
-        :invoke_in_world,
-        :libllvm_version,
-        :mightalias,
-        :setindex,
-    )
-    ExplicitImports.test_explicit_imports(
-        CorePotts;
-        all_qualified_accesses_are_public =
-            (; ignore = qualified_internal_boundary),
-    )
-    ambiguities = Test.detect_ambiguities(CorePotts, Base; recursive = true)
-    owned = filter(ambiguities) do pair
-        any(method -> method.module === CorePotts, pair)
+testsuite["inventory"] = quote
+    @testset "ordinary test runner owns every CorePotts test file" begin
+        discovered = Set(filter(
+            name -> startswith(name, "test_") && endswith(name, ".jl"),
+            readdir($(_COREPOTTS_TEST_DIRECTORY)),
+        ))
+        included = Set((
+            $(_COREPOTTS_DIRECT_TESTS)...,
+            $(_COREPOTTS_COMPILED_PROGRAM_TESTS)...,
+        ))
+        exclusions = Set($(_COREPOTTS_TEST_HELPER_EXCLUSIONS))
+        @test isempty(intersect(included, exclusions))
+        @test union(included, exclusions) == discovered
     end
-    @test isempty(owned)
+
+    @testset "CorePotts owns every device conformance witness" begin
+        witness_directory = joinpath(
+            $(_COREPOTTS_TEST_DIRECTORY), "backend_conformance"
+        )
+        discovered = Set(filter(
+            name -> endswith(name, ".jl"), readdir(witness_directory)
+        ))
+        @test discovered == Set($(_COREPOTTS_DEVICE_CONFORMANCE_WITNESSES))
+    end
 end
+
+testsuite["package_quality"] = quote
+    using Aqua
+    using ExplicitImports
+
+    @testset "CorePotts package quality" begin
+        Aqua.test_all(CorePotts; ambiguities = false)
+        # Exact non-public dependencies support device adaptation, atomic
+        # arbitration, world-age checks, and storage alias checks. LocalMath
+        # consumers use only its declared public compiler surface.
+        qualified_internal_boundary = (
+            Symbol("@adapt_structure"),
+            Symbol("@atomic"),
+            :dataids,
+            :device,
+            :GIT_VERSION_INFO,
+            :JLOptions,
+            :foreachindex,
+            :get_world_counter,
+            :invoke_in_world,
+            :libllvm_version,
+            :mightalias,
+            :setindex,
+        )
+        ExplicitImports.test_explicit_imports(
+            CorePotts;
+            all_qualified_accesses_are_public =
+                (; ignore = qualified_internal_boundary),
+        )
+        ambiguities = Test.detect_ambiguities(CorePotts, Base; recursive = true)
+        owned = filter(ambiguities) do pair
+            any(method -> method.module === CorePotts, pair)
+        end
+        @test isempty(owned)
+    end
+end
+
+init_code = quote
+    import CorePotts
+    import LocalMath
+    const _COREPOTTS_COMPILED_PROGRAM_TESTS =
+        $(_COREPOTTS_COMPILED_PROGRAM_TESTS)
+end
+
+ParallelTestRunner.runtests(
+    CorePotts,
+    ARGS;
+    testsuite,
+    init_code,
+    serial = ["inventory", "package_quality"],
+)

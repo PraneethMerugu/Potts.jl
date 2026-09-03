@@ -21,6 +21,7 @@ ExplicitImports = "1"
 KernelAbstractions = "0.9.42"
 LinearAlgebra = "1"
 LocalMath = "0.2"
+ParallelTestRunner = "2.8"
 SHA = "0.7"
 StaticArrays = "1"
 StructArrays = "0.7"
@@ -30,7 +31,8 @@ julia = "1.12"
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "Test"]
+test = ["Aqua", "ExplicitImports", "ParallelTestRunner", "Test"]
