@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Fields, batching, and ensembles · Potts.jl</title><meta name="title" content="Fields, batching, and ensembles · Potts.jl"/><meta property="og:title" content="Fields, batching, and ensembles · Potts.jl"/><meta property="twitter:title" content="Fields, batching, and ensembles · Potts.jl"/><meta name="description" content="Documentation for Potts.jl."/><meta property="og:description" content="Documentation for Potts.jl."/><meta property="twitter:description" content="Documentation for Potts.jl."/><meta property="og:url" content="https://praneethmerugu.github.io/Potts.jl/learn/fields-and-ensembles/"/><meta property="twitter:url" content="https://praneethmerugu.github.io/Potts.jl/learn/fields-and-ensembles/"/><link rel="canonical" href="https://praneethmerugu.github.io/Potts.jl/learn/fields-and-ensembles/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/docs.css" rel="stylesheet" type="text/css"/></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Potts.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Learn</span><ul><li><a class="tocitem" href="../authoring/">Author and compose</a></li><li><a class="tocitem" href="../execution/">Initialize and execute</a></li><li><a class="tocitem" href="../state-lifecycle/">Lifecycle and relationships</a></li><li><a class="tocitem" href="../native-components/">Native MTK components</a></li><li class="is-active"><a class="tocitem" href>Fields, batching, and ensembles</a><ul class="internal"><li><a class="tocitem" href="#Fields"><span>Fields</span></a></li><li><a class="tocitem" href="#Whole-trajectory-ensembles"><span>Whole-trajectory ensembles</span></a></li></ul></li><li><a class="tocitem" href="../reproducibility/">Observe, checkpoint, and reproduce</a></li></ul></li><li><span class="tocitem">Published-model integration</span><ul><li><a class="tocitem" href="../../published-models/wortel-2021/">Wortel 2021</a></li><li><a class="tocitem" href="../../published-models/merks-2006/">Merks 2006</a></li><li><a class="tocitem" href="../../published-models/openvt-monolayer/">OpenVT monolayer</a></li></ul></li><li><span class="tocitem">Concepts and support</span><ul><li><a class="tocitem" href="../../concepts/architecture/">Architecture</a></li><li><a class="tocitem" href="../../concepts/runtime-boundary/">Runtime boundary</a></li><li><a class="tocitem" href="../../concepts/capability-status/">Capability status</a></li><li><a class="tocitem" href="../../concepts/extension-boundary/">Extension boundary</a></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/potts/">Potts</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Learn</a></li><li class="is-active"><a href>Fields, batching, and ensembles</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Fields, batching, and ensembles</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/PraneethMerugu/Potts.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="fields-batching-ensembles"><a class="docs-heading-anchor" href="#fields-batching-ensembles">Fields, batching, and ensembles</a><a id="fields-batching-ensembles-1"></a><a class="docs-heading-anchor-permalink" href="#fields-batching-ensembles" title="Permalink"></a></h1><h2 id="Fields"><a class="docs-heading-anchor" href="#Fields">Fields</a><a id="Fields-1"></a><a class="docs-heading-anchor-permalink" href="#Fields" title="Permalink"></a></h2><p><code>DiscreteFieldEuler()</code> is an explicit <code>FieldState</code> evolution policy and the built-in prescribed lattice stencil. Its boundary, neighborhood, substeps, duration per MCS, secretion source, and ownership semantics are explicit. It is not presented as a generic PDE solver and does not copy a symbolic equation into a Potts process surrogate. The complete public form is exercised by the <a href="../../published-models/merks-2006/#merks-2006-integration">Merks program</a>.</p><p><code>MethodOfLinesComponent</code> is the checked CPU PDE adapter. It calls <code>symbolic_discretize</code>, retains the upstream compiled system, constructs a standard SciML problem, and maps ordered spatial coordinates to an exact Potts lattice shape.</p><pre><code class="language-julia hljs">using Potts
+using ModelingToolkit
+using DomainSets
+using MethodOfLines
+using OrdinaryDiffEqTsit5: Tsit5
+
+@parameters t x y
+@variables u(..) field(t)
+Dt = Differential(t)
+Dxx = Differential(x)^2
+Dyy = Differential(y)^2
+equations = [Dt(u(t, x, y)) ~ 0.1 * (Dxx(u(t, x, y)) + Dyy(u(t, x, y)))]
+boundaries = [
+    u(0, x, y) ~ 1 + x + y,
+    u(t, 0, y) ~ u(t, 1, y),
+    u(t, x, 0) ~ u(t, x, 1),
+]
+domains = [
+    t ∈ Interval(0.0, 1.0),
+    x ∈ Interval(0.0, 1.0),
+    y ∈ Interval(0.0, 1.0),
+]
+@named pde = PDESystem(equations, boundaries, domains, [t, x, y], [u(t, x, y)])
+discretization = MOLFiniteDifference([x=&gt;4, y=&gt;4], t; grid_align=center_align)
+
+cell = CellKind(:cell; extinction=RetireAtZero())
+medium = MediumKind(:medium)
+field_state = FieldState(field; name=:field, initial=0.0, stencil=:field_stencil)
+component = MethodOfLinesComponent(
+    pde,
+    discretization,
+    u(t, x, y),
+    field_state;
+    spatial=(x, y),
+    name=:pde,
+    time=FixedPhysicalTime(0.0, 0.125),
+)
+scheduled = mtkcompile(PottsSystem(
+    name=:mol_potts,
+    statements=StatementSet((
+        Lattice(
+            (4, 4);
+            boundary=Periodic(),
+            relations=(field_stencil=VonNeumann(),),
+        ),
+        cell,
+        medium,
+        field_state,
+        ProposalConstraint(:frozen, false),
+        Protocol(Sweep(; temperature=0.0); name=:main),
+    )),
+    unknowns=[field],
+    native_components=(component,),
+))
+path = (:mol_potts, :pde)
+labels = zeros(Int, 4, 4)
+labels[2, 2] = 1
+problem = PottsProblem(
+    scheduled,
+    PottsInitialState(
+        ownership=LabelledCells(labels; cells=[cell], medium),
+        native=(NativeOperatingPoint(path),),
+    ),
+    (0, 1);
+    seed=0x54e,
+)
+profile = NativeSolveProfile(
+    path,
+    Tsit5();
+    profile_id=&quot;docs-mol-tsit5-fixed-v1&quot;,
+    deterministic=true,
+    exact_replay=true,
+    adaptive=false,
+    dt=0.015625,
+)
+(size(labels), profile.deterministic, profile.exact_replay)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">((4, 4), true, true)</code></pre><p>This profile explicitly requests exact replay and therefore requires the pinned dependency and Julia runtime recorded by the replay environment. Set <code>exact_replay=false</code> for ordinary functional execution; structural and numerical preflight still completes before any CPM or native state advances.</p><h2 id="Whole-trajectory-ensembles"><a class="docs-heading-anchor" href="#Whole-trajectory-ensembles">Whole-trajectory ensembles</a><a id="Whole-trajectory-ensembles-1"></a><a class="docs-heading-anchor-permalink" href="#Whole-trajectory-ensembles" title="Permalink"></a></h2><p><code>SciMLBase.EnsembleProblem(::PottsProblem)</code> assigns deterministic <code>replica</code> identity. Serial, threaded, and distributed ensemble algorithms own trajectory scheduling, retries, reductions, and failures. The inner Potts trajectory still requires an admitted algorithm/backend/component profile.</p><pre><code class="language-julia hljs">using Potts
+using SciMLBase
+
+cell = CellKind(:cell; extinction=RetireAtZero())
+medium = MediumKind(:medium)
+scheduled = mtkcompile(PottsSystem(
+    name=:ensemble_model,
+    statements=StatementSet((
+        Lattice((3, 3); boundary=Periodic()),
+        cell,
+        medium,
+        Protocol(Sweep(; temperature=1.0); name=:main),
+    )),
+))
+labels = zeros(Int, 3, 3)
+labels[2, 2] = 1
+problem = PottsProblem(
+    scheduled,
+    PottsInitialState(
+        ownership=LabelledCells(labels; cells=[cell], medium),
+    ),
+    (0, 2);
+    seed=0x5eed,
+)
+ensemble = EnsembleProblem(problem)
+serial = solve(
+    ensemble,
+    SequentialCPM(),
+    EnsembleSerial();
+    trajectories=2,
+    backend=CPUBackend(),
+)
+([trajectory.prob.replica for trajectory in serial.u], length(serial.u))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(UInt32[0x00000001, 0x00000002], 2)</code></pre><p>Per-cell batching solves many fixed-shape component lanes inside one Potts trajectory. An ensemble solves multiple whole trajectories. Neither API is an alias for the other, and Dagger is not an internal scheduler.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../native-components/">« Native MTK components</a><a class="docs-footer-nextpage" href="../reproducibility/">Observe, checkpoint, and reproduce »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Thursday 3 September 2026 02:47">Thursday 3 September 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
