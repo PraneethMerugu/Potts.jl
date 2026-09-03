@@ -6,6 +6,22 @@ LocalMath.@localmath function _localmath_symbolic_geometric_mean(
     sqrt(x * y)
 end
 
+LocalMath.@localmath function _localmath_nested_square(x)
+    x * x
+end
+
+LocalMath.@localmath function _localmath_nested_penalty(x, y)
+    _localmath_nested_square(x - y) + _localmath_symbolic_geometric_mean(x, y)
+end
+
+LocalMath.@localmath function _localmath_symbolic_branch(x)
+    if x > zero(x)
+        x
+    else
+        -x
+    end
+end
+
 @testset "transparent LocalMath functions trace through Symbolics" begin
     @variables localmath_x localmath_y
     traced = _localmath_symbolic_geometric_mean(localmath_x, localmath_y)
@@ -14,6 +30,24 @@ end
         traced, localmath_x, localmath_y; expression = Val(false))
     @test compiled(4.0, 9.0) == 6.0
     @test _localmath_symbolic_geometric_mean(4.0, 9.0) == 6.0
+
+    nested = _localmath_nested_penalty(localmath_x, localmath_y)
+    nested_compiled = Symbolics.build_function(
+        nested, localmath_x, localmath_y; expression = Val(false))
+    @test nested_compiled(4.0, 9.0) == 31.0
+    @test _localmath_nested_penalty(4.0, 9.0) == 31.0
+
+    # Transparent definitions are ordinary Julia: unsupported data-dependent
+    # scalar control flow rejects where the authored function is invoked with
+    # symbolic values instead of becoming a hidden runtime interpreter.
+    branch_error = try
+        _localmath_symbolic_branch(localmath_x)
+        nothing
+    catch error
+        error
+    end
+    @test branch_error isa TypeError
+    @test occursin("non-boolean", sprint(showerror, branch_error))
 end
 
 @testset "bounded LocalMath terms lower through Potts semantics" begin
@@ -76,6 +110,35 @@ end
           checkerboard_solution.stats.null_attempts +
           checkerboard_solution.stats.rejected
     @test size(last(checkerboard_solution).ownership) == size(ownership)
+
+    @test_throws ArgumentError bounded_values(signal, 17, anchor_value(site))
+
+    missing_relation_source = PottsSystem(
+        name = :bounded_term_missing_relation,
+        statements = StatementSet((
+            Lattice((3, 3); relations = (proposal = VonNeumann(),)),
+            cell,
+            medium,
+            signal,
+            HamiltonianTerm(
+                :missing_bounded_relation;
+                domain = sites(:lattice),
+                anchor = site,
+                expression = neighbor_sum(bounded_values(
+                    signal, :missing_contact, anchor_value(site))),
+            ),
+            Protocol(Sweep(); name = :bounded_protocol),
+        )),
+        unknowns = [bounded_signal],
+    )
+    relation_error = try
+        mtkcompile(missing_relation_source)
+        nothing
+    catch error
+        error
+    end
+    @test relation_error isa Potts.PottsValidationError
+    @test occursin("missing_contact", sprint(showerror, relation_error))
 end
 
 @testset "PottsSystem contract" begin

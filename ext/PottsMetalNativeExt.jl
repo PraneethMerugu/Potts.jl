@@ -21,7 +21,7 @@ function _package_identity(module_value)
     )
 end
 
-const _TESTED_METAL_NATIVE_STACK_1_12_1 = (
+const _TESTED_METAL_NATIVE_STACK = (
     DiffEqGPU = (
         package = "DiffEqGPU",
         uuid = "071ae1c0-96b5-11e9-1965-c90190d839ea",
@@ -55,7 +55,7 @@ const _TESTED_METAL_NATIVE_STACK_1_12_1 = (
     Symbolics = (
         package = "Symbolics",
         uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7",
-        version = v"7.35.0",
+        version = v"7.37.0",
     ),
     StaticArrays = (
         package = "StaticArrays",
@@ -63,7 +63,7 @@ const _TESTED_METAL_NATIVE_STACK_1_12_1 = (
         version = v"1.9.18",
     ),
     Julia = (
-        version = v"1.12.1",
+        version = v"1.12.6",
         kernel = :Darwin,
         architecture = :aarch64,
         word_size = 64,
@@ -71,21 +71,7 @@ const _TESTED_METAL_NATIVE_STACK_1_12_1 = (
     ),
 )
 
-const _TESTED_METAL_NATIVE_STACK = merge(
-    _TESTED_METAL_NATIVE_STACK_1_12_1,
-    (Julia = (
-        version = v"1.12.6",
-        kernel = :Darwin,
-        architecture = :aarch64,
-        word_size = 64,
-        machine = "arm64-apple-darwin24.0.0",
-    ),),
-)
-
-const _TESTED_METAL_NATIVE_STACKS = (
-    _TESTED_METAL_NATIVE_STACK_1_12_1,
-    _TESTED_METAL_NATIVE_STACK,
-)
+const _TESTED_METAL_NATIVE_STACKS = (_TESTED_METAL_NATIVE_STACK,)
 
 function _metal_native_stack_identity()
     return (

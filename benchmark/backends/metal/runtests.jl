@@ -10,12 +10,7 @@ Metal.allowscalar(false)
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
     "corepotts_relationship_stages.jl",
-    "corepotts_stabilization.jl",
     "corepotts_relationship_energy.jl",
-    "localmath_execution_parity.jl",
-    "proposal_execution_parity.jl",
-    "queued_lifecycle_runtime.jl",
-    "lifecycle_transaction_conformance.jl",
     "native_component_execution.jl",
 )
 const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)

@@ -88,7 +88,7 @@ function _normalize_term!(
                     repr(value),
                     source.path,
                     "a qualified normalized binding payload",
-                    String(classified),
+                    string(classified, " ", repr(value)),
                     (),
                     record_value.source,
                 ),

@@ -4,7 +4,7 @@ The active manual is the executable final-interface documentation product. It
 covers symbolic authoring, structural compilation, the SciML lifecycle,
 dynamic identity and relationships, native ModelingToolkit components,
 fields, batching, ensembles, replay, package boundaries, and the exact support
-matrix. The Wortel and Merks integration pages execute their complete reusable
+matrix. The Wortel, Merks, and OpenVT integration pages execute their complete reusable
 programs during the strict build.
 
 ## Build locally

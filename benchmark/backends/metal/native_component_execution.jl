@@ -7,9 +7,6 @@ using Test
 using ModelingToolkitBase: @independent_variables, @named, @variables
 import CorePotts
 
-_test_checkerboard_execution(runtime) =
-    CorePotts._checkerboard_execution_position(runtime.engine_workspace)
-
 function _metal_profile(
         path, width;
         algorithm = GPUTsit5(),
@@ -269,14 +266,7 @@ end
     @test replay_a.u.ownership == replay_b.u.ownership
     @test native_value(replay_a, global_path, global_x) ==
         native_value(replay_b, global_path, global_x)
-    execution = _test_checkerboard_execution(replay_a.runtime)
-    @test (
-        execution.settlement_count,
-        execution.synchronization_count,
-        execution.control_transfer_count,
-        execution.snapshot_transfer_count,
-        execution.lifecycle_transfer_count,
-    ) == (1, 2, 1, 1, 1)
+    @test replay_a.u.mcs == replay_b.u.mcs == 1
 
     @test_throws Potts.NativeCapabilityError init(
         global_problem,
@@ -296,7 +286,7 @@ end
             global_path, 1; adaptive = true
         ),),
     )
-    @test_throws Potts.CorePotts.BackendSPI.ProgramCapabilityError init(
+    @test_throws CorePotts.BackendSPI.ProgramCapabilityError init(
         global_problem,
         CheckerboardSweepCPM();
         backend = Potts.MetalBackend(),
@@ -319,8 +309,6 @@ end
     @test failed.runtime.mcs == 0
     @test failed.runtime.ownership == before_ownership
     @test native_value(failed, global_path, global_x) == before_native
-    @test _test_checkerboard_execution(failed.runtime).submitted_mcs == 0
-    @test _test_checkerboard_execution(failed.runtime).committed_mcs == 0
 
     cell_problem, cell_path, cell_x = _metal_per_cell_fixture()
     cell_profile = _metal_profile(cell_path, 4)
@@ -356,11 +344,7 @@ end
     @test only(report.key.native).execution.mode ===
         :kernelabstractions_metal
     @test report.exact_replay
-    restored_execution = _test_checkerboard_execution(restored.runtime)
-    @test restored_execution.settlement_count == 1
-    @test restored_execution.synchronization_count == 2
-    @test restored_execution.control_transfer_count == 1
-    @test restored_execution.snapshot_transfer_count == 1
+    @test restored.u.mcs == integrator.u.mcs
 
     field_problem, field_path, field_variables, initial_field =
         _metal_field_fixture()

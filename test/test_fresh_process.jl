@@ -1,5 +1,5 @@
 @testset "fresh-process public authoring through solution" begin
-    project = dirname(@__DIR__)
+    project = dirname(Base.active_project())
     script = raw"""
         using Potts
         using SciMLBase

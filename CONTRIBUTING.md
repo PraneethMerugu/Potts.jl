@@ -147,7 +147,7 @@ julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
 ```
 
-The manual executes bounded serial Wortel and Merks integration programs. The
+The manual executes bounded serial Wortel, Merks, and OpenVT integration programs. The
 separate Makie package and backend suites exercise rendering; the published-
 model documentation does not claim to render figures or reproduce the papers.
 
@@ -166,10 +166,12 @@ Run real-Metal semantic tests independently from performance measurements:
 julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
 ```
 
-The runner includes the active semantic, parity, lifecycle, native-component,
-and extension-load witnesses; performance campaigns remain separate. Use the repository Julia version for these commands. The root `.julia-version`,
-root manifest, and Metal manifest all select Julia 1.12.6; do not invoke the
-Metal environment through a separate Julia release channel.
+The runner covers Potts-owned extension loading, symbolic relationship
+authoring, lifecycle authoring, and native-component execution. CorePotts and
+LocalMath qualify their own runtime and mathematical semantics in their
+standalone repositories. Performance campaigns remain separate. Use Julia
+1.12.6 for this command; do not invoke the Metal environment through a
+different Julia release channel.
 
 Current specifications and decisions live under `spec/`. Historical interviews and evidence under
 `design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier

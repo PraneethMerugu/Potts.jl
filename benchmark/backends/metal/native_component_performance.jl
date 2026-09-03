@@ -25,7 +25,6 @@ GC.gc()
 timed = @timed for _ in 1:6
     step!(integrator)
 end
-execution = _test_checkerboard_execution(integrator.runtime)
 println((;
     julia = VERSION,
     metal = Base.pkgversion(Metal),
@@ -38,9 +37,5 @@ println((;
     seconds_per_mcs = timed.time / 6,
     allocations = timed.bytes,
     gc_seconds = timed.gctime,
-    settlements = execution.settlement_count,
-    synchronizations = execution.synchronization_count,
-    control_transfers = execution.control_transfer_count,
-    snapshot_transfers = execution.snapshot_transfer_count,
-    lifecycle_transfers = execution.lifecycle_transfer_count,
+    completed_mcs = integrator.u.mcs,
 ))
