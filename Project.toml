@@ -24,6 +24,7 @@ KernelAbstractions = "0.9.42"
 LinearAlgebra = "1"
 LocalMath = "0.2"
 Metal = "1"
+ParallelTestRunner = "2.8"
 DiffEqGPU = "3.16"
 ModelingToolkit = "11"
 ModelingToolkitBase = "1.51"
@@ -62,6 +63,7 @@ KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LocalMath = "82808884-8acc-4a5c-a056-be440a0fbea1"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -69,4 +71,4 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "StaticArrays", "StructArrays", "Test", "TOML", "Unitful"]
+test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "ParallelTestRunner", "StaticArrays", "StructArrays", "Test", "TOML", "Unitful"]
