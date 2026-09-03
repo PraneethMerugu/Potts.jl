@@ -82,7 +82,8 @@ jobs:
         run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
 
   exact-replay:
-    runs-on: ubuntu-latest
+    # The closed replay row is qualified on Darwin/aarch64 with Julia 1.12.1.
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -90,17 +91,14 @@ jobs:
         with: {version: '1.12.1'}
       - uses: julia-actions/cache@v3
       - name: Test exact replay environment
-        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
+        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
   metal:
-    if: >-
-      vars.METAL_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, metal]
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("benchmark/backends/metal/runtests.jl")'
+        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("benchmark/backends/metal/runtests.jl")'
