@@ -54,3 +54,80 @@ Inspection (`Statements`, `Variables`, `Effects`, `Schedule`, `Capabilities`,
 `StateSchema`, `Observations`, `ReplayContract`, and `LifecyclePlans`) reads the
 same completed authority used by lowering. It does not reconstruct a second
 model description.
+
+## Custom bounded Hamiltonian terms
+
+`HamiltonianTerm` remains the custom scientific interface. Ordinary Julia and
+Symbolics expressions describe scalar mathematics; `bounded_values` declares a
+finite spatial input, and a LocalMath bounded fold makes its ordering, invalid
+value, and empty-neighborhood laws explicit.
+
+```@example custom_hamiltonian
+using Potts
+using LocalMath
+using Symbolics
+
+@variables signal_value
+
+cell = CellKind(:cell; extinction=RetireAtZero())
+medium = MediumKind(:medium)
+signal = FieldState(signal_value; name=:signal, initial=1.0)
+site = SiteBinding(:site)
+
+neighbor_mean = LocalMath.bounded_fold(
+    identity,
+    +,
+    0.0,
+    (sum, count) -> sum / count;
+    domain=LocalMath.Where(isfinite),
+    oninvalid=LocalMath.RejectInvalid(),
+    onempty=LocalMath.RejectEmpty(),
+    order=LocalMath.CanonicalLeftFold(),
+)
+
+system = PottsSystem(
+    name=:custom_bounded_term,
+    statements=StatementSet((
+        Lattice((8, 8); relations=(
+            proposal=VonNeumann(),
+            contact=VonNeumann(),
+        )),
+        cell,
+        medium,
+        signal,
+        HamiltonianTerm(
+            :neighbor_signal;
+            domain=sites(:lattice),
+            anchor=site,
+            expression=neighbor_mean(bounded_values(
+                signal, :contact, anchor_value(site)
+            )),
+        ),
+        Protocol(Sweep(); name=:main),
+    )),
+    unknowns=[signal_value],
+)
+
+scheduled = mtkcompile(system)
+is_scheduled(scheduled)
+```
+
+The ownership boundary is deliberate:
+
+```text
+Potts Hamiltonian expression and source order
+→ Potts resource and footprint analysis
+→ CorePotts proposal descriptors and scientific semantics
+→ LocalMath bounded spatial law and KernelAbstractions execution
+```
+
+The bounded declaration is eliminated during compilation. No Symbolics tree or
+authoring object reaches the runtime kernels.
+
+Here `:contact` names the bounded relation declared by the enclosing `Lattice`,
+and `anchor_value(site)` identifies the site at which the Hamiltonian term is
+evaluated. The compiler checks that the field, relation, anchor, and term domain
+are compatible before constructing the runtime law. `CanonicalLeftFold()` uses
+the relation's canonical endpoint order; `RejectInvalid()` and `RejectEmpty()`
+make evaluation reject an invalid value or empty neighborhood rather than
+silently choosing a numerical fallback.

@@ -16,21 +16,40 @@ import SymbolicIndexingInterface
 import Symbolics
 import SciMLBase: init, solve, solve!, step!, remake, terminate!
 
+# Public symbolic vocabulary and source-level model construction.
 include("statements/statements.jl")
+include("statements/statement_set.jl")
+include("statements/registry.jl")
 include("symbolics/bindings.jl")
 include("symbolics/operations.jl")
 include("symbolics/distributions.jl")
 include("statements/semantics.jl")
 include("statements/lifecycle.jl")
+
+# Completion turns authored hierarchy into qualified, validated scientific
+# meaning. Nothing below this boundary mutates the authored system.
 include("completion/qualified_ir.jl")
-include("native/declarations.jl")
+include("native/policies.jl")
+include("native/ports.jl")
+include("native/components.jl")
+include("native/scheduled_components.jl")
 include("completion/diagnostics.jl")
 include("systems.jl")
+include("completion/source_inventory.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/lifecycle.jl")
-include("completion/completion_contracts.jl")
-include("completion/completion_pipeline.jl")
+include("completion/completion_data.jl")
+include("completion/statement_contracts.jl")
+include("completion/registered_contracts.jl")
+include("completion/expansion.jl")
+include("completion/qualification.jl")
+include("completion/semantic_ordering.jl")
+include("completion/native_completion.jl")
+include("completion/completion.jl")
+
+# Host compiler analysis freezes symbolic meaning and proves bounded resource
+# requirements. The compiler README documents the required pass order.
 include("compiler/host/source_graph.jl")
 include("compiler/host/footprint_types.jl")
 include("compiler/host/operations.jl")
@@ -43,8 +62,12 @@ include("compiler/host/normalization.jl")
 include("compiler/host/energy_domains.jl")
 include("compiler/host/footprints.jl")
 include("compiler/host/lifecycle_analysis.jl")
-include("compiler/host/analysis.jl")
+include("compiler/host/operation_analysis.jl")
+include("compiler/host/unit_analysis.jl")
+include("compiler/host/term_analysis.jl")
 include("completion/scheduling.jl")
+
+# Execution-boundary values and late lowering to CorePotts.
 include("compiler/execution/executable.jl")
 include("compiler/execution/observations.jl")
 include("compiler/execution/relationship_effects.jl")
@@ -72,9 +95,17 @@ include("compiler/lowering/lifecycle_plan.jl")
 include("compiler/execution/boundary.jl")
 include("compiler/lowering/core_program.jl")
 include("compiler/compile.jl")
+
+# SciML-facing runtime orchestration and optional native component coupling.
 include("runtime/initial_state.jl")
 include("runtime/problem.jl")
-include("native/runtime.jl")
+include("native/runtime_errors.jl")
+include("native/logical_state.jl")
+include("native/component_pools.jl")
+include("native/preflight.jl")
+include("native/coupling_io.jl")
+include("native/initialization.jl")
+include("native/advancement.jl")
 include("runtime/capabilities.jl")
 include("runtime/saved_state.jl")
 include("runtime/integrator.jl")

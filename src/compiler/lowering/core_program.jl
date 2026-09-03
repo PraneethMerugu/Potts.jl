@@ -353,7 +353,7 @@ function _checkerboard_conflict_displacements(
     ) where {N}
     accesses = CorePotts.CompilerSPI.ResourceAccess[]
     for group in descriptor_plan.groups
-        for descriptor in group.launch.instances
+        for descriptor in group.instances
             push!(
                 accesses,
                 CorePotts.CompilerSPI.descriptor_resource_access(descriptor),

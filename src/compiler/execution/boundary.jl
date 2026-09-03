@@ -37,10 +37,14 @@ function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
     lifecycle = CorePotts.CompilerSPI.lifecycle_workspace_layout(
         program.lifecycle_plan, prod(program.shape)
     )
+    stage_groups = (
+        program.stage_plan.before_lifecycle...,
+        program.stage_plan.after_lifecycle...,
+    )
     return (
         stage_site_scratch = sum((
             1
-            for group in program.stage_plan.after_mcs
+            for group in stage_groups
             for descriptor in group.instances
             if descriptor.effect isa Union{
                 CorePotts.CompilerSPI.SiteAssignmentEffect,
@@ -49,7 +53,7 @@ function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
         ); init = 0) * prod(program.shape),
         stage_model_scratch = sum((
             1
-            for group in program.stage_plan.after_mcs
+            for group in stage_groups
             for descriptor in group.instances
             if descriptor.effect isa CorePotts.CompilerSPI.ModelAssignmentEffect
         ); init = 0),
@@ -60,7 +64,7 @@ function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
         relationship_lifecycle_scratch =
             sum((
                 program.relationships[Int(descriptor.effect.relationship_slot)].capacity
-                for group in program.stage_plan.after_mcs
+                for group in stage_groups
                 for descriptor in group.instances
                 if descriptor.effect isa Union{
                     CorePotts.CompilerSPI.RelationshipRemoveEffect,
