@@ -1452,7 +1452,9 @@ version = "0.4.13"
 
 [[deps.Potts]]
 deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
-path = "../.."
+git-tree-sha1 = "cdd4fbf84d3dcd5a4599ea461fe15f57b3d24518"
+repo-rev = "a958e3f516841183a79963cd1dc75fab82d5dd64"
+repo-url = "https://github.com/PraneethMerugu/Potts.jl"
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 version = "0.3.0-rc1"
 
