@@ -1,11 +1,4 @@
-using Metal
-using LocalMath
-using Potts
 using Test
-import KernelAbstractions
-
-Metal.functional() || error("the selected Metal witness is not functional")
-Metal.allowscalar(false)
 
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
@@ -22,19 +15,23 @@ const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
         Set(METAL_PERFORMANCE_PROGRAMS))
 end
 
-# With no argument, the authoritative device packet runs every semantic
-# witness. CI may name one witness so each large GPU compiler workload receives
-# a fresh Julia process without changing the covered set.
-selected_witnesses = if isempty(ARGS)
-    METAL_SEMANTIC_WITNESSES
+if isempty(ARGS)
+    project = dirname(Base.active_project())
+    for witness in METAL_SEMANTIC_WITNESSES
+        run(`$(Base.julia_cmd()) --project=$(project) --startup-file=no $(@__FILE__) $(witness)`)
+    end
 else
     length(ARGS) == 1 || error("expected at most one Metal witness argument")
     witness = only(ARGS)
     witness in METAL_SEMANTIC_WITNESSES ||
         error("unknown Metal semantic witness: $(repr(witness))")
-    (witness,)
-end
 
-for witness in selected_witnesses
+    using Metal
+    using LocalMath
+    using Potts
+    import KernelAbstractions
+
+    Metal.functional() || error("the selected Metal witness is not functional")
+    Metal.allowscalar(false)
     include(witness)
 end

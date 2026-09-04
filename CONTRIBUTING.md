@@ -155,10 +155,10 @@ model documentation does not claim to render figures or reproduce the papers.
 
 Pull requests target the four package suites, independently runnable
 integration families, applicable platform installation smokes, and the active
-documentation build. Real-GPU hardware tests are manual commands when suitable
-hardware is available; the hosted workflow does not currently provide Metal
-hardware. Benchmarks remain diagnostic and are run when their measured path
-changes.
+documentation build. The hosted `macos-15` workflow runs the functional Metal
+profile; the runner rejects immediately when Metal is unavailable. Local
+real-GPU runs remain useful for hardware-specific investigation. Benchmarks
+remain diagnostic and are run when their measured path changes.
 
 Run real-Metal semantic tests independently from performance measurements:
 
@@ -167,11 +167,12 @@ julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/me
 ```
 
 The runner covers Potts-owned extension loading, symbolic relationship
-authoring, lifecycle authoring, and native-component execution. CorePotts and
-LocalMath qualify their own runtime and mathematical semantics in their
-standalone repositories. Performance campaigns remain separate. Use Julia
-1.12.6 for this command; do not invoke the Metal environment through a
-different Julia release channel.
+authoring, lifecycle authoring, and native-component execution. Each witness
+runs in a fresh Julia process, and the runner's checked inventory is the sole
+authority for the semantic set. CorePotts and LocalMath qualify their own
+runtime and mathematical semantics in their standalone repositories.
+Performance campaigns remain separate. Use Julia 1.12.6 for this command; do
+not invoke the Metal environment through a different Julia release channel.
 
 Current specifications and decisions live under `spec/`. Historical interviews and evidence under
 `design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier

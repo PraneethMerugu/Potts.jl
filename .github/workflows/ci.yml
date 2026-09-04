@@ -102,11 +102,5 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - name: Instantiate qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
-      - name: Test extension loading
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl extension_load_order.jl
-      - name: Test relationship lifecycle stages
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl corepotts_relationship_stages.jl
-      - name: Test relationship energy
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl corepotts_relationship_energy.jl
-      - name: Test native component execution
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl native_component_execution.jl
+      - name: Test qualified Metal profile
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
