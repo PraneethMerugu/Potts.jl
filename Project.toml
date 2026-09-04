@@ -16,6 +16,7 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
+# SparseColumnPivotedQR 2.1.7 still calls AMD.SS_Int, removed in AMD 0.5.4.
 AMD = "=0.5.3"
 Aqua = "0.8"
 CorePotts = "0.2"
