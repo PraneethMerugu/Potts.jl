@@ -94,7 +94,7 @@ jobs:
         run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
   metal:
-    runs-on: macos-15
+    runs-on: macos-15-xlarge
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
