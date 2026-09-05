@@ -323,8 +323,8 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
-git-tree-sha1 = "bb75cce23d237df4283c510f8b656fbf7ee1cab8"
-repo-rev = "cf5e729022ea11f77b26ffbcb0ef97c47517024c"
+git-tree-sha1 = "324c077c4a5a6cf511a7e3b91eccae83167c1bd4"
+repo-rev = "ac45a1ceb63972a2d300aaf8cfc800d10addd4e1"
 repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0-rc1"
@@ -1038,8 +1038,8 @@ version = "5.13.0"
 
 [[deps.LocalMath]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "StructArrays", "UUIDs"]
-git-tree-sha1 = "6c159dc3be38bcbba3edcfb7943093e8df7192ca"
-repo-rev = "ba65753b95578ab43993963a0c5c0130ed727a06"
+git-tree-sha1 = "6eb911c55e29f43b3b70ad316827bc1ab52074c7"
+repo-rev = "b89d243bda0624e3335e191db8674617ff70bf20"
 repo-url = "https://github.com/PraneethMerugu/LocalMath.jl"
 uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
 version = "0.2.0-rc1"
