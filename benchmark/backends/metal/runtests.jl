@@ -2,8 +2,8 @@ using Test
 
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
-    "corepotts_relationship_stages.jl",
     "corepotts_relationship_energy.jl",
+    "corepotts_relationship_stages.jl",
     "native_component_execution.jl",
 )
 const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
