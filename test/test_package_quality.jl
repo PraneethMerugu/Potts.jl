@@ -56,7 +56,7 @@
     @testset "exact environments pin standalone upstream repositories" begin
         exact_manifests = (
             joinpath(repository, "integration", "replay", "Manifest.toml") =>
-                "1.12.1",
+                "1.12.6",
             joinpath(repository, "benchmark", "backends", "metal", "Manifest.toml") =>
                 "1.12.6",
         )

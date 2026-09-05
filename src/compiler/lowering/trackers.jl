@@ -3,6 +3,7 @@
 function _operation_tracker_context(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
+        transfer = node.transfer,
     )
     bindings = map(ir.facts.source_bindings[Int(node.identity)]) do binding
         handle = findfirst(
@@ -39,8 +40,8 @@ function _operation_tracker_context(
     end
     record = ir.source.records[Int(node.record)]
     return OperationTrackerContext(
-        node.operation,
-        node.transfer.schema_version,
+        transfer.identity,
+        transfer.schema_version,
         _descriptor_source(record),
         bindings,
     )
@@ -95,10 +96,12 @@ function _operation_tracker_descriptors(
         node::NormalizedTermNode,
         ::Type{T},
     ) where {T <: AbstractFloat}
-    transfer = node.transfer
+    tracker_source = _tracker_projection_operand(node, ir.graph)
+    tracker_node = tracker_source === nothing ? node : tracker_source
+    transfer = tracker_node.transfer
     transfer === nothing && return ()
     isempty(transfer.tracker_requirements) && return ()
-    context = _operation_tracker_context(ir, node)
+    context = _operation_tracker_context(ir, tracker_node, transfer)
     shape = _lattice_shape(ir)
     descriptors = ()
     for requirement in transfer.tracker_requirements
@@ -118,10 +121,16 @@ function _operation_tracker_keys(
         node::NormalizedTermNode,
         ::Type{T},
     ) where {T <: AbstractFloat}
-    return map(
+    keys = map(
         CorePotts.CompilerSPI.tracker_quantity,
         _operation_tracker_descriptors(ir, node, T),
     )
+    tracker_source = _tracker_projection_operand(node, ir.graph)
+    tracker_source === nothing && return keys
+    transfer = tracker_source.transfer
+    isempty(keys) && transfer.identity === :cell_volume &&
+        return (Val(:cell_volume),)
+    return keys
 end
 
 function _append_tracker_requirement!(descriptors, descriptor)

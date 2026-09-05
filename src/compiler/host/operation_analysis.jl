@@ -223,6 +223,30 @@ function _source_requirement_problem(
     return nothing
 end
 
+function _tracker_projection_operand(node, graph)
+    node.transfer === nothing && return nothing
+    node.transfer.identity === :bounded_fold || return nothing
+    length(node.operands) == 4 || return nothing
+    operand = graph.nodes[Int(node.operands[2])]
+    transfer = operand.transfer
+    transfer === nothing && return nothing
+    (!isempty(transfer.tracker_requirements) ||
+        transfer.identity === :cell_volume) || return nothing
+    return operand
+end
+
+function _is_tracker_projection_operand(node, graph)
+    any(root -> root.node == node.identity, graph.roots) && return false
+    consumers = filter(
+        consumer -> node.identity in consumer.operands,
+        graph.nodes,
+    )
+    isempty(consumers) && return false
+    return all(consumers) do consumer
+        _tracker_projection_operand(consumer, graph) === node
+    end
+end
+
 function _resolved_operation_source_bindings(
         transfer::OperationTransfer,
         node::NormalizedTermNode,
@@ -267,17 +291,26 @@ function _validate_operation_use!(
     transfer = node.transfer
     transfer === nothing && return nothing
     phase = _record_operation_phase(record)
+    tracker_projection = _is_tracker_projection_operand(node, graph)
+    tracker_fold = transfer.identity === :bounded_fold &&
+        _tracker_projection_operand(node, graph) !== nothing
     abi_role = transfer.lifecycle_abi === nothing ? nothing :
         transfer.lifecycle_abi.role === :binary_partition ?
         :lifecycle_partition :
         Symbol(:lifecycle_, transfer.lifecycle_abi.role)
-    problem = if abi_role !== nothing && role !== abi_role
+    problem = if tracker_fold && role === :hamiltonian
+        "folds over tracker gathers are proposal-snapshot inputs; use a proposal " *
+        "drive, constraint, or modifier"
+    elseif tracker_projection && phase !== :Proposal
+        "tracker gathers are proposal-snapshot inputs"
+    elseif abi_role !== nothing && role !== abi_role
         "lifecycle ABI role $(repr(abi_role)) cannot execute as $(repr(role))"
-    elseif !(role in transfer.allowed_roles)
+    elseif !tracker_projection && !(role in transfer.allowed_roles)
         "role $(repr(role)) is not in $(repr(transfer.allowed_roles))"
     elseif !(phase in transfer.allowed_phases)
         "phase $(repr(phase)) is not in $(repr(transfer.allowed_phases))"
-    elseif !_operation_context_admitted(transfer.required_context, role, phase)
+    elseif !tracker_projection &&
+            !_operation_context_admitted(transfer.required_context, role, phase)
         "required context $(repr(transfer.required_context)) is unavailable " *
         "for role $(repr(role)) in phase $(repr(phase))"
     elseif !_operation_operand_admitted(transfer.operand_rule, operand_types)
@@ -287,7 +320,8 @@ function _validate_operation_use!(
                 transfer, node, graph, source
             )) !== nothing
         source_problem
-    elseif (context = _operation_evaluation_context(role, phase)) !== nothing &&
+    elseif !tracker_projection &&
+            (context = _operation_evaluation_context(role, phase)) !== nothing &&
             !CorePotts.CompilerSPI.operation_context_supported(node.callable, context)
         "frozen callable $(typeof(node.callable)) has no implementation for " *
         "$(nameof(context))"
@@ -319,4 +353,3 @@ _unit_compatible(left, right) =
 _is_native_dimension(unit) = unit isa DynamicQuantities.AbstractDimensions
 _canonical_dimension(unit::DynamicQuantities.AbstractDimensions) =
     unit == one(unit) ? :dimensionless : unit
-

@@ -55,10 +55,80 @@ Inspection (`Statements`, `Variables`, `Effects`, `Schedule`, `Capabilities`,
 same completed authority used by lowering. It does not reconstruct a second
 model description.
 
+## Tracker-backed values and relation gathers
+
+Derived cell quantities remain ordinary symbolic values. Scalar terms read
+them directly:
+
+```julia
+cell = CellBinding(:cell)
+volume_penalty = HamiltonianTerm(
+    :volume_penalty;
+    domain=cells(kind),
+    anchor=cell,
+    expression=strength * (cell_volume(cell) - target)^2,
+)
+```
+
+A `LocalMath.BoundedFold` can consume the same quantity over a declared finite
+spatial relation:
+
+```@example bounded_tracker_authoring
+using Potts, LocalMath
+
+kind = CellKind(:cell; extinction=RetireAtZero())
+medium = MediumKind(:medium)
+proposal = ProposalContext(:copy)
+
+neighbor_mean = LocalMath.bounded_fold(
+    identity, +, 0.0, (sum, count) -> sum / count;
+    domain=LocalMath.Where(>=(0)),
+    oninvalid=LocalMath.RejectInvalid(),
+    onempty=LocalMath.FillEmpty(0.0),
+    order=LocalMath.CanonicalLeftFold(),
+)
+
+source = PottsSystem(
+    name=:tracker_authoring,
+    statements=StatementSet((
+        Lattice((4, 4); relations=(
+            contact=VonNeumann(), proposal=VonNeumann())),
+        kind,
+        medium,
+        ProposalDrive(
+            :neighbor_volume,
+            neighbor_mean(gather(
+                cell_volume, :contact; at=proposal.target_site)),
+        ),
+        Protocol(Sweep(); name=:main),
+    )),
+)
+
+is_scheduled(mtkcompile(source))
+```
+
+`gather` follows canonical relation-lane order. Missing boundary lanes
+and medium endpoints do not participate, while two lanes reaching the same
+finite owner contribute twice. It does not imply a distinct-neighbor-cell
+reduction. The Potts compiler discovers and maintains tracker storage; authors
+never bind tracker arrays or expose them to LocalMath. Freely mutable per-cell
+quantities are `CellState` values rather than derived trackers.
+Extension operations must explicitly declare that they are a direct scalar
+projection with
+`Potts.is_direct_scalar_tracker_projection(::typeof(operation)) = true`;
+structured tracker transformations are not silently treated as scalar storage.
+
+Tracker-backed bounded folds are proposal-snapshot inputs, so use them in a
+`ProposalDrive`, `ProposalConstraint`, or `ProposalModifier`. A site-domain
+Hamiltonian that references a derived owner tracker throughout a neighborhood
+does not have a compiler-proven bounded affected-anchor set and is rejected.
+Scalar cell-domain Hamiltonians such as the volume penalty above retain exact
+before/after tracker overlays.
+
 ## Custom bounded Hamiltonian terms
 
 `HamiltonianTerm` remains the custom scientific interface. Ordinary Julia and
-Symbolics expressions describe scalar mathematics; `bounded_values` declares a
+Symbolics expressions describe scalar mathematics; `gather` declares a
 finite spatial input, and a LocalMath bounded fold makes its ordering, invalid
 value, and empty-neighborhood laws explicit.
 
@@ -99,8 +169,8 @@ system = PottsSystem(
             :neighbor_signal;
             domain=sites(:lattice),
             anchor=site,
-            expression=neighbor_mean(bounded_values(
-                signal, :contact, anchor_value(site)
+            expression=neighbor_mean(gather(
+                signal, :contact; at=anchor_value(site)
             )),
         ),
         Protocol(Sweep(); name=:main),

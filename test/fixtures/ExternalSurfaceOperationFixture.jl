@@ -5,6 +5,7 @@ using Symbolics
 import CorePotts
 import Potts: operation_transfer
 import Potts: registered_operation_tracker_requirements
+import Potts: is_direct_scalar_tracker_projection
 
 const CompilerSPI = CorePotts.CompilerSPI
 
@@ -14,6 +15,8 @@ function external_cell_surface end
 Symbolics.@register_symbolic external_cell_surface(cell)::Real
 function external_cell_surface_alt end
 Symbolics.@register_symbolic external_cell_surface_alt(cell)::Real
+is_direct_scalar_tracker_projection(::typeof(external_cell_surface)) = true
+is_direct_scalar_tracker_projection(::typeof(external_cell_surface_alt)) = true
 
 struct ExternalCellSurfaceCallable <: CompilerSPI.AbstractContextualOperation end
 

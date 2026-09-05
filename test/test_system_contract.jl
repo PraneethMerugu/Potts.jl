@@ -57,6 +57,7 @@ end
     signal = FieldState(
         bounded_signal; name = :bounded_signal, initial = 1.0)
     site = SiteBinding(:bounded_site)
+    proposal = ProposalContext(:bounded_copy)
     neighbor_sum = LocalMath.bounded_fold(
         identity,
         +,
@@ -67,6 +68,18 @@ end
         onempty = LocalMath.FillEmpty(0.0),
         order = LocalMath.CanonicalLeftFold(),
     )
+    neighbor_volume_sum = LocalMath.bounded_fold(
+        identity,
+        +,
+        Int32(0),
+        (sum, count) -> sum;
+        domain = LocalMath.Where(>=(Int32(0))),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.FillEmpty(Int32(0)),
+        order = LocalMath.CanonicalLeftFold(),
+    )
+    @test_throws ArgumentError gather(
+        identity, :contact; at = anchor_value(site))
     source = PottsSystem(
         name = :bounded_term_system,
         statements = StatementSet((
@@ -79,8 +92,23 @@ end
                 :bounded_signal_energy;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(bounded_values(
-                    signal, :contact, anchor_value(site))),
+                expression = neighbor_sum(gather(
+                    signal, :contact; at = anchor_value(site))),
+            ),
+            ProposalDrive(
+                :bounded_neighbor_volume,
+                neighbor_volume_sum(gather(
+                    cell_volume, :contact; at = proposal.target_site)),
+            ),
+            ProposalConstraint(
+                :bounded_neighbor_volume_is_nonnegative,
+                neighbor_volume_sum(gather(
+                    cell_volume, :contact; at = proposal.target_site)) >= 0,
+            ),
+            ProposalModifier(
+                :bounded_neighbor_volume_identity_modifier,
+                1.0 + 0.0 * neighbor_volume_sum(gather(
+                    cell_volume, :contact; at = proposal.target_site)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),
@@ -88,6 +116,35 @@ end
     )
     scheduled = mtkcompile(source)
     @test is_scheduled(scheduled)
+
+    nonlocal_tracker_source = PottsSystem(
+        name = :nonlocal_tracker_hamiltonian,
+        statements = StatementSet((
+            Lattice((3, 3); relations = (
+                contact = VonNeumann(), proposal = VonNeumann())),
+            cell,
+            medium,
+            HamiltonianTerm(
+                :nonlocal_neighbor_volume;
+                domain = sites(:lattice),
+                anchor = site,
+                expression = neighbor_volume_sum(gather(
+                    cell_volume, :contact; at = anchor_value(site))),
+            ),
+            Protocol(Sweep(); name = :bounded_protocol),
+        )),
+    )
+    locality_error = try
+        mtkcompile(nonlocal_tracker_source)
+        nothing
+    catch error
+        error
+    end
+    @test locality_error isa Potts.PottsValidationError
+    @test occursin("proposal-snapshot", sprint(showerror, locality_error))
+
+    @test_throws ArgumentError gather(
+        cell_elongation, :contact; at = proposal.target_site)
 
     ownership = reshape(Int32[1, 1, 0, 1, 0, 0, 0, 0, 0], 3, 3)
     initial = PottsInitialState(
@@ -111,7 +168,7 @@ end
           checkerboard_solution.stats.rejected
     @test size(last(checkerboard_solution).ownership) == size(ownership)
 
-    @test_throws ArgumentError bounded_values(signal, 17, anchor_value(site))
+    @test_throws ArgumentError gather(signal, 17; at = anchor_value(site))
 
     missing_relation_source = PottsSystem(
         name = :bounded_term_missing_relation,
@@ -124,8 +181,8 @@ end
                 :missing_bounded_relation;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(bounded_values(
-                    signal, :missing_contact, anchor_value(site))),
+                expression = neighbor_sum(gather(
+                    signal, :missing_contact; at = anchor_value(site))),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),
