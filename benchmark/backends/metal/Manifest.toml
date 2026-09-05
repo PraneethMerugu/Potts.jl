@@ -319,7 +319,7 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
 git-tree-sha1 = "ffb145c2e0772beaaf35f7ee114685ea15fe4c93"
-repo-rev = "5312615f9708d206affe3a9189e66748004f7bf5"
+repo-rev = "da2b55b60892528cd0e4fa7ad0c84ecb478aa3c2"
 repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0-rc1"
