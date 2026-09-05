@@ -318,8 +318,8 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
-git-tree-sha1 = "bb75cce23d237df4283c510f8b656fbf7ee1cab8"
-repo-rev = "cf5e729022ea11f77b26ffbcb0ef97c47517024c"
+git-tree-sha1 = "1fec05db580f7341475bdb5d770e9737cb62549d"
+repo-rev = "2a340671a3b170177a640f4520e540f1a53124e1"
 repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0-rc1"
@@ -1337,8 +1337,8 @@ version = "0.4.13"
 
 [[deps.Potts]]
 deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
-git-tree-sha1 = "cdd4fbf84d3dcd5a4599ea461fe15f57b3d24518"
-repo-rev = "a958e3f516841183a79963cd1dc75fab82d5dd64"
+git-tree-sha1 = "c3769bbd1ef1366169ea3f09ae35c1728a08b9ce"
+repo-rev = "99414679e039710a85fc9a0325d59ae45865f6e0"
 repo-url = "https://github.com/PraneethMerugu/Potts.jl"
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 version = "0.3.0-rc1"

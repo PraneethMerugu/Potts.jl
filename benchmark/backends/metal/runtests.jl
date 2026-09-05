@@ -1,16 +1,9 @@
-using Metal
-using LocalMath
-using Potts
 using Test
-import KernelAbstractions
-
-Metal.functional() || error("the selected Metal witness is not functional")
-Metal.allowscalar(false)
 
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
-    "corepotts_relationship_stages.jl",
     "corepotts_relationship_energy.jl",
+    "corepotts_relationship_stages.jl",
     "native_component_execution.jl",
 )
 const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
@@ -22,8 +15,23 @@ const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
         Set(METAL_PERFORMANCE_PROGRAMS))
 end
 
-# The authoritative device packet runs every semantic witness. Performance
-# programs are intentionally separate and never implied by this runner.
-for witness in METAL_SEMANTIC_WITNESSES
+if isempty(ARGS)
+    project = dirname(Base.active_project())
+    for witness in METAL_SEMANTIC_WITNESSES
+        run(`$(Base.julia_cmd()) --project=$(project) --startup-file=no $(@__FILE__) $(witness)`)
+    end
+else
+    length(ARGS) == 1 || error("expected at most one Metal witness argument")
+    witness = only(ARGS)
+    witness in METAL_SEMANTIC_WITNESSES ||
+        error("unknown Metal semantic witness: $(repr(witness))")
+
+    using Metal
+    using LocalMath
+    using Potts
+    import KernelAbstractions
+
+    Metal.functional() || error("the selected Metal witness is not functional")
+    Metal.allowscalar(false)
     include(witness)
 end

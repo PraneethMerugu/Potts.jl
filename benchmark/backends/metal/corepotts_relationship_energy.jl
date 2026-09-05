@@ -100,6 +100,23 @@ end
         scalar_type = Float32,
         save_everystep = true,
     )
+    cpu_statistics = (
+        accepted = cpu.stats.accepted,
+        rejected = cpu.stats.rejected,
+        null_attempts = cpu.stats.null_attempts,
+        constraint_rejections = cpu.stats.constraint_rejections,
+        energy_rejections = cpu.stats.energy_rejections,
+        retired_cells = cpu.stats.retired_cells,
+    )
+    device_statistics = (
+        accepted = device.stats.accepted,
+        rejected = device.stats.rejected,
+        null_attempts = device.stats.null_attempts,
+        constraint_rejections = device.stats.constraint_rejections,
+        energy_rejections = device.stats.energy_rejections,
+        retired_cells = device.stats.retired_cells,
+    )
+    @test device_statistics == cpu_statistics
     @test Array(last(device).ownership) == last(cpu).ownership
     device_relationship = last(device)[:relationship_energy_links]
     cpu_relationship = last(cpu)[:relationship_energy_links]

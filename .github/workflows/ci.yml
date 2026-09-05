@@ -8,76 +8,21 @@ on:
   schedule:
     - cron: '23 5 * * 1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: 'ba65753b95578ab43993963a0c5c0130ed727a06'
-  COREPOTTS_REF: 'cf5e729022ea11f77b26ffbcb0ef97c47517024c'
 
 jobs:
   package:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-15]
-    runs-on: ${{ matrix.os }}
+    name: package (ubuntu-latest)
+    runs-on: ubuntu-latest
     timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
-        with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
-      - name: Test Potts
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts")'
-
-  integration:
-    runs-on: macos-15
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
-        with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
-      - name: Test integration
-        run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
-
-  exact-replay:
-    runs-on: macos-15
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v3
-        with: {version: '1.12.1'}
-      - uses: julia-actions/cache@v3
-      - name: Test exact replay environment
-        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
-
-  metal:
-    if: >-
-      vars.METAL_RUNNER_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, metal]
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v3
-        with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
-      - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true); include("benchmark/backends/metal/runtests.jl")'
-
-  sibling-main:
-    if: github.event_name == 'schedule'
-    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
@@ -86,5 +31,76 @@ jobs:
         with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
       - uses: julia-actions/setup-julia@v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - name: Test sibling main branches
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts")'
+      - uses: julia-actions/cache@v3
+      - name: Test Potts
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
+
+  macos-smoke:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@v3
+      - name: Test macOS package surface
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "test_public_api", "test_system_contract", "test_fresh_process"])'
+
+  macos-package:
+    if: github.event_name != 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@v3
+      - name: Complete macOS package tests
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
+      - uses: actions/checkout@v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@v3
+      - name: Test integration
+        run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
+
+  exact-replay:
+    # The closed replay row is qualified on Darwin/aarch64 with Julia 1.12.1.
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '1.12.1'}
+      - uses: julia-actions/cache@v3
+      - name: Test exact replay environment
+        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
+
+  metal:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - name: Instantiate qualified Metal profile
+        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
+      - name: Test qualified Metal profile
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
