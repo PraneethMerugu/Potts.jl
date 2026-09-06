@@ -39,7 +39,7 @@ jobs:
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
 
   macos-smoke:
-    if: github.event_name != 'schedule'
+    if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
