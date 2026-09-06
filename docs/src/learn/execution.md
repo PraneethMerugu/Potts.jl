@@ -51,6 +51,24 @@ solution = solve(
 (solution.retcode, solution.t, last(solution)[:occupied])
 ```
 
+`failure_report(integrator)` and `failure_report(solution)` return the exact
+failure object already retained by the corresponding execution result, or
+`nothing` after success:
+
+```@example execution
+failure_report(solution)
+```
+
+Querying an integrator is passive. It reports only its most recently settled
+state and never waits for pending work, synchronizes a device, or changes the
+integrator. When a report is present, `showerror` preserves its source-aware
+diagnostic context:
+
+```julia
+report = failure_report(integrator)
+report === nothing || showerror(stderr, report)
+```
+
 `SequentialCPM()` is the serial semantic reference.
 `CheckerboardSweepCPM()` is a distinct colored parallel schedule, not an
 acceleration mode for the sequential algorithm. `CPUBackend()` is available

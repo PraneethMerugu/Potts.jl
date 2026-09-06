@@ -14,6 +14,15 @@ struct PottsSolution{S, P, A, R, H} <:
     failure_report::Any
 end
 
+"""
+    failure_report(solution::PottsSolution)
+
+Return the exact failure retained when `solution` was constructed, or `nothing`
+for a solution without a retained failure. This is a local field projection and
+performs no execution, synchronization, mutation, or device query.
+"""
+failure_report(solution::PottsSolution) = getfield(solution, :failure_report)
+
 function PottsSolution(integrator::PottsIntegrator)
     problem = integrator.prob
     plan = integrator.plan
