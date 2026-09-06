@@ -20,6 +20,7 @@ const POTTS_TESTS = (
     "test_scientific_relationship_witnesses.jl",
     "test_scientific_activity_field_witnesses.jl",
     "test_product_programs.jl",
+    "test_platform_smoke.jl",
     "test_fresh_process.jl", "test_core_spi_boundary.jl",
     "test_package_quality.jl",
 )

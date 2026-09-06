@@ -52,7 +52,7 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Test macOS public trajectory
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); include("test/platform_smoke.jl")'
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=1", "test_platform_smoke"])'
 
   macos-package:
     if: github.event_name != 'pull_request' && github.event_name != 'schedule'
