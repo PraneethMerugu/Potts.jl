@@ -22,7 +22,6 @@
             sprint(showerror, error))
     end
 end
-
 @testset "validation-only problem boundary" begin
     fixture = _lifecycle_fixture(:lifecycle_validation)
     @test is_scheduled(fixture.system)
@@ -401,4 +400,3 @@ end
           solution.u[1][:lifecycle_marker_snapshot]
     @test target_getter(solution) == 7.0f0
 end
-

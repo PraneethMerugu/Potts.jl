@@ -82,7 +82,6 @@
     )
     @test_throws ArgumentError init(problem; callback = continuous)
 end
-
 @testset "checkpoint identity and exact continuation" begin
     fixture = _lifecycle_fixture(:lifecycle_checkpoint)
     problem = _lifecycle_problem(fixture; tspan = (0, 6), repeat = 2)
@@ -219,4 +218,3 @@ end
         checkpoint = captured,
     )
 end
-

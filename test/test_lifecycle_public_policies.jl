@@ -165,7 +165,6 @@
     @test all(iszero, solution(4).cell_kinds)
     @test all(name -> all(iszero, solution(4)[name][1:2]), state_names)
 end
-
 @testset "public binary partition policy matrix is preserved" begin
     cell = CellKind(:partition_cell; extinction = RetireAtZero())
     medium = MediumKind(:partition_medium)
@@ -351,4 +350,3 @@ end
     @test after.cell_kinds[7] != 0
     @test after.cell_kinds[9] == before.cell_kinds[9]
 end
-

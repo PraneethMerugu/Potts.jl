@@ -53,7 +53,6 @@
     @test last(resumed)[:lifecycle_activity] ==
           solution(5)[:lifecycle_activity]
 end
-
 @testset "lifecycle relationship consequence is public and generation safe" begin
     cell = CellKind(:linked_cell; extinction = RetireAtZero())
     medium = MediumKind(:linked_medium)
@@ -109,4 +108,3 @@ end
     @test solution(1).cell_kinds[1] == 0
     @test solution(1).cell_generations[1] == 1
 end
-

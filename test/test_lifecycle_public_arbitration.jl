@@ -65,7 +65,6 @@
               candidate.before.cell_generations
     end
 end
-
 @testset "stable lifecycle priority selects the declared winner" begin
     @variables priority_state
     state = CellState(
@@ -123,4 +122,3 @@ end
     @test count(!iszero, last(solution).cell_kinds) == 1
     @test last(solution)[:priority_state][1] == 10
 end
-

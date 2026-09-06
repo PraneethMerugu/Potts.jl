@@ -71,7 +71,6 @@ function _lifecycle_fixture(
         marker,
     )
 end
-
 function _lifecycle_problem(
         fixture;
         tspan = (0, 6),
@@ -104,4 +103,3 @@ function _lifecycle_same_state(left, right)
            left[:lifecycle_marker_snapshot] ==
            right[:lifecycle_marker_snapshot]
 end
-
