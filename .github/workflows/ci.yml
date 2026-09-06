@@ -17,90 +17,114 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
+  LOCALMATH_REF: main
+  COREPOTTS_REF: main
 
 jobs:
   package:
+    if: github.event_name != 'schedule'
     name: package (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Test Potts
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
 
   macos-smoke:
+    if: github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
-      - name: Test macOS package surface
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "test_public_api", "test_system_contract", "test_fresh_process"])'
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Test macOS public trajectory
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); include("test/platform_smoke.jl")'
 
   macos-package:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Complete macOS package tests
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
 
   integration:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
-      - uses: actions/checkout@v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Test integration
         run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
 
   exact-replay:
+    if: github.event_name != 'schedule'
     # The closed replay row uses the repository Julia 1.12.6 runtime.
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Test exact replay environment
         run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
   metal:
+    if: github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
       - name: Test qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
+
+  sibling-main:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Test sibling main branches
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'

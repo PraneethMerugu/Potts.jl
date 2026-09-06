@@ -55,7 +55,10 @@
 
     for root in roots
         isdir(root) || continue
-        for (directory, _, names) in walkdir(root)
+        for (directory, subdirectories, names) in walkdir(root)
+            # Generated benchmark reports are archived measurements, not
+            # package source or downstream API consumers.
+            filter!(name -> name != "results", subdirectories)
             for name in names
                 endswith(name, ".jl") || continue
                 file = joinpath(directory, name)
