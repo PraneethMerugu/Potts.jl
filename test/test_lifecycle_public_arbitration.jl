@@ -65,6 +65,7 @@
               candidate.before.cell_generations
     end
 end
+
 @testset "stable lifecycle priority selects the declared winner" begin
     @variables priority_state
     state = CellState(

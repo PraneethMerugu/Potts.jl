@@ -82,6 +82,7 @@
           first.stats.accepted + first.stats.null_attempts +
           first.stats.constraint_rejections + first.stats.energy_rejections
 end
+
 @testset "scheduled chemotaxis follows the independent gradient sign" begin
     @variables chemotaxis_field chemotaxis_gate
     cell = CellKind(:chemotaxis_cell; extinction = RetireAtZero())

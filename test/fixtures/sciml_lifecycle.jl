@@ -71,6 +71,7 @@ function _lifecycle_fixture(
         marker,
     )
 end
+
 function _lifecycle_problem(
         fixture;
         tspan = (0, 6),

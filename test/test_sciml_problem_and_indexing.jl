@@ -22,6 +22,7 @@
             sprint(showerror, error))
     end
 end
+
 @testset "validation-only problem boundary" begin
     fixture = _lifecycle_fixture(:lifecycle_validation)
     @test is_scheduled(fixture.system)

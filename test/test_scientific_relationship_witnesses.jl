@@ -61,6 +61,7 @@
     @test solution.stats.constraint_rejections > 0
     @test count(last(solution)[:constrained_links].active) == 1
 end
+
 @testset "relationship retune publishes payload and survives checkpoint" begin
     cell = CellKind(:retune_cell; extinction = RetireAtZero())
     medium = MediumKind(:retune_medium)
