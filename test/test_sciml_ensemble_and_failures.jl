@@ -87,13 +87,44 @@ end
     @test occursin("intentional callback failure", sprint(showerror, failure))
     @test integrator.retcode == SciMLBase.ReturnCode.Failure
     @test integrator.failure_report === failure
+    @test failure_report(integrator) === failure
+    @test failure_report(integrator) === failure_report(integrator)
     @test_throws ArgumentError step!(integrator)
     @test_throws ArgumentError checkpoint(integrator)
 
     solution = solve!(integrator)
     @test solution.retcode == SciMLBase.ReturnCode.Failure
     @test solution.failure_report === failure
+    @test failure_report(solution) === failure
     @test last(solution.t) == 1
+
+    provider_cause = ErrorException("intentional provider failure")
+    provider_failure = CorePotts.LifecycleBackendFailure(provider_cause, 1, 1)
+    provider_callback = SciMLBase.DiscreteCallback(
+        (_, time, _) -> time == 1,
+        _ -> throw(provider_failure);
+        save_positions = (false, false),
+    )
+    provider_integrator = init(
+        problem;
+        scalar_type = Float32,
+        callback = provider_callback,
+        save_start = false,
+    )
+    caught_provider_failure = try
+        step!(provider_integrator)
+        nothing
+    catch caught
+        caught
+    end
+    @test caught_provider_failure === provider_failure
+    @test failure_report(provider_integrator) === provider_failure
+    @test occursin(
+        "intentional provider failure",
+        sprint(showerror, failure_report(provider_integrator)),
+    )
+    provider_solution = solve!(provider_integrator)
+    @test failure_report(provider_solution) === provider_failure
 
     finalized = Pair{Symbol, Int}[]
     mutate_then_save = SciMLBase.DiscreteCallback(

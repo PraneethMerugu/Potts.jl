@@ -143,12 +143,20 @@ end
     @test step!(integrator) === integrator
     @test integrator.retcode == SciMLBase.ReturnCode.Failure
     @test integrator.failure_report isa CorePotts.ProgramFailureReport
+    retained_failure = failure_report(integrator)
+    @test retained_failure === integrator.failure_report
+    @test failure_report(integrator) === retained_failure
     @test integrator.failure_report.required == 2
     @test integrator.failure_report.available == 1
     @test integrator.failure_report.maximum == 1
     @test integrator.u.ownership == before.ownership
     @test integrator.u.cell_kinds == before.cell_kinds
     @test integrator.u.cell_generations == before.cell_generations
+
+    failed_solution = solve!(integrator)
+    @test failed_solution.retcode == SciMLBase.ReturnCode.Failure
+    @test failure_report(failed_solution) === retained_failure
+    @test failure_report(failed_solution) === failure_report(failed_solution)
 end
 
 @testset "lifecycle construction diagnostics stay source-located" begin

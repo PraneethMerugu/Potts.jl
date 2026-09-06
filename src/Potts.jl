@@ -136,7 +136,7 @@ export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
 export gather
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
-export PottsStats, init, solve, solve!, step!, remake, terminate!
+export PottsStats, init, solve, solve!, step!, remake, terminate!, failure_report
 export CellIdentity, relationship_transaction!
 export PottsCheckpoint, checkpoint
 export DeclaredReferenceUnits, ReferenceUnits

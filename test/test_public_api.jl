@@ -22,6 +22,7 @@
         :AbstractProceduralPlacement, :RandomSitePlacement, :PottsInitialState,
         :PottsProblem, :PottsIntegrator, :PottsSavedState, :PottsSolution,
         :PottsStats, :init, :solve, :solve!, :step!, :remake, :terminate!,
+        :failure_report,
         :PottsCheckpoint, :checkpoint, :runtime_statistics,
 
             # The narrow relationship-transaction boundary contributes two names.
@@ -155,6 +156,10 @@ end
     for binding in (PottsSystem, NativeComponent, NativeSolveProfile)
         @test Docs.doc(binding) !== nothing
     end
+
+    failure_help = sprint(show, MIME("text/plain"), Docs.doc(failure_report))
+    @test occursin("most recently settled", failure_help)
+    @test occursin("does not wait", failure_help)
     native_component_help = sprint(show, MIME"text/plain"(),
         Docs.doc(NativeComponent))
     solve_profile_help = sprint(show, MIME"text/plain"(),
