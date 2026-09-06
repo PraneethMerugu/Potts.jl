@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.1"
+julia_version = "1.12.6"
 manifest_format = "2.0"
 project_hash = "232e5bb8a29adb9ea6c3dc451dc3ad915e2f1f7e"
 
@@ -323,8 +323,8 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
-git-tree-sha1 = "bb75cce23d237df4283c510f8b656fbf7ee1cab8"
-repo-rev = "cf5e729022ea11f77b26ffbcb0ef97c47517024c"
+git-tree-sha1 = "324c077c4a5a6cf511a7e3b91eccae83167c1bd4"
+repo-rev = "ac45a1ceb63972a2d300aaf8cfc800d10addd4e1"
 repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
 version = "0.2.0-rc1"
@@ -519,7 +519,7 @@ version = "0.8.1"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
+version = "1.7.0"
 
 [[deps.DynamicPolynomials]]
 deps = ["LinearAlgebra", "MultivariatePolynomials", "MutableArithmetics", "Reexport", "StarAlgebras", "Test"]
@@ -903,7 +903,7 @@ version = "0.6.4"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.11.1+1"
+version = "8.15.0+0"
 
 [[deps.LibGit2]]
 deps = ["LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -1038,8 +1038,8 @@ version = "5.13.0"
 
 [[deps.LocalMath]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "StructArrays", "UUIDs"]
-git-tree-sha1 = "6c159dc3be38bcbba3edcfb7943093e8df7192ca"
-repo-rev = "ba65753b95578ab43993963a0c5c0130ed727a06"
+git-tree-sha1 = "6eb911c55e29f43b3b70ad316827bc1ab52074c7"
+repo-rev = "b89d243bda0624e3335e191db8674617ff70bf20"
 repo-url = "https://github.com/PraneethMerugu/LocalMath.jl"
 uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
 version = "0.2.0-rc1"
@@ -1178,7 +1178,7 @@ version = "0.3.12"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2025.5.20"
+version = "2025.11.4"
 
 [[deps.MuladdMacro]]
 deps = ["PrecompileTools"]
@@ -1331,7 +1331,7 @@ version = "0.8.7+0"
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.1+0"
+version = "3.5.4+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1438,7 +1438,7 @@ version = "0.13.1"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.12.0"
+version = "1.12.1"
 weakdeps = ["REPL"]
 
     [deps.Pkg.extensions]
@@ -2125,6 +2125,6 @@ uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
 version = "2022.3.0+0"
 
 [[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.5.0+2"
+version = "17.7.0+0"

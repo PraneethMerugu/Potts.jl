@@ -108,7 +108,7 @@ for (tracker_type, quantity, gpu) in (
             CompilerSPI.DenseOwnerScalarStorage{Int32}(),
             CompilerSPI.AcceptedCommitTrackerVisibility(),
             CompilerSPI.ClaimedOwnerExclusiveTrackerConcurrency(),
-            CompilerSPI.SourceTargetOwnerUpdateBound(),
+            CompilerSPI.OldNewOwnerUpdateBound(),
             CompilerSPI.ReconstructTrackerCheckpoint(),
             CompilerSPI.TrackerSupport(
                 true, true, true, $gpu, $gpu ? 0 : 0x08
@@ -146,9 +146,8 @@ function CompilerSPI.tracker_recompute(
     return values
 end
 
-@inline CompilerSPI.tracker_proposal_delta(
+@inline CompilerSPI.tracker_ownership_delta(
         ::Union{ExternalDoubleOccupancyTracker, ExternalCpuOnlyTracker},
-        source::CompilerSPI.TrackerSourceView,
         target,
         old_owner::Int32,
         new_owner::Int32,

@@ -190,7 +190,7 @@ end
     end
 end
 
-@testset "bounded-values Hamiltonian matches an independent ordered energy oracle" begin
+@testset "relation gather matches an independent ordered energy oracle" begin
     @variables bounded_oracle_signal bounded_oracle_gate
     @parameters bounded_oracle_weight = -1.0
     cell = CellKind(:bounded_oracle_cell; extinction = RetireAtZero())
@@ -214,7 +214,7 @@ end
         order = LocalMath.CanonicalLeftFold(),
     )
     source = PottsSystem(
-        name = :bounded_values_energy_oracle,
+        name = :gathered_values_energy_oracle,
         statements = StatementSet((
             Lattice((4, 4); relations = (
                 proposal = VonNeumann(), contact = VonNeumann())),
@@ -227,8 +227,8 @@ end
                 domain = sites(:lattice),
                 anchor = site,
                 expression = bounded_oracle_weight * occupancy(cell, site) *
-                    canonical_sum(bounded_values(
-                        signal, :contact, anchor_value(site))),
+                    canonical_sum(gather(
+                        signal, :contact; at = anchor_value(site))),
             ),
             ProposalConstraint(
                 :isolate_bounded_oracle_extension,
@@ -317,10 +317,98 @@ end
         break
     end
     @test witness !== nothing
-    witness === nothing && error("no bounded-values proposal witness found")
+    witness === nothing && error("no relation-gather proposal witness found")
     @test witness.favorable.stats.accepted == 1
     @test last(witness.unfavorable).ownership == labels
     @test witness.unfavorable.stats.accepted == 0
+end
+
+_tracker_lane_digits(accumulator, value) =
+    Int32(10) * accumulator + value
+_tracker_lane_digits_finish(accumulator, count) = accumulator
+
+@testset "tracker gathers preserve bounded relation-lane semantics" begin
+    @variables tracker_gather_gate
+    cell = CellKind(:tracker_gather_cell; extinction = RetireAtZero())
+    medium = MediumKind(:tracker_gather_medium)
+    gate = FieldState(
+        tracker_gather_gate; name = :tracker_gather_gate, initial = 0.0)
+    proposal = ProposalContext(:tracker_gather_proposal)
+    lane_digits = LocalMath.bounded_fold(
+        identity,
+        _tracker_lane_digits,
+        Int32(0),
+        _tracker_lane_digits_finish;
+        domain = LocalMath.Where(>=(Int32(0))),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.RejectEmpty(),
+        order = LocalMath.CanonicalLeftFold(),
+    )
+    source = PottsSystem(
+        name = :tracker_gather_oracle,
+        statements = StatementSet((
+            Lattice(
+                (3, 3);
+                boundary = Closed(),
+                relations = (
+                    proposal = VonNeumann(), contact = VonNeumann()),
+            ),
+            cell,
+            medium,
+            gate,
+            ProposalConstraint(
+                :one_tracker_gather_extension,
+                proposal.is_extension &
+                (field_value(gate, proposal.source_site) == 1) &
+                (field_value(gate, proposal.target_site) == 2) &
+                (lane_digits(gather(
+                    cell_volume, :contact; at = proposal.target_site)) == 22),
+            ),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = [tracker_gather_gate],
+    )
+    scheduled = mtkcompile(source)
+    labels = zeros(Int32, 3, 3)
+    source_site = CartesianIndex(2, 2)
+    repeated_owner_site = CartesianIndex(1, 3)
+    target_site = CartesianIndex(1, 2)
+    labels[source_site] = 1
+    labels[repeated_owner_site] = 1
+    gate_values = zeros(Float64, 3, 3)
+    gate_values[source_site] = 1
+    gate_values[target_site] = 2
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        values = (tracker_gather_gate => gate_values,),
+    )
+    expected = copy(labels)
+    expected[target_site] = 1
+
+    # Independent relation oracle. Von Neumann lanes are (+x, -x, +y, -y):
+    # volume two, absent boundary, the same volume two again, then medium.
+    # Only the two finite-owner lanes participate, in canonical lane order.
+    expected_digits = foldl(_tracker_lane_digits, Int32[2, 2]; init = Int32(0))
+    @test expected_digits == 22
+
+    function witness(algorithm)
+        for seed in UInt64(1):UInt64(512)
+            solution = solve(
+                PottsProblem(scheduled, initial, (0, 1); seed),
+                algorithm;
+                backend = CPUBackend(), scalar_type = Float64,
+                save_everystep = true,
+            )
+            last(solution).ownership == expected && return solution
+        end
+        return nothing
+    end
+    sequential = witness(SequentialCPM())
+    checkerboard = witness(CheckerboardSweepCPM())
+    @test sequential !== nothing
+    @test checkerboard !== nothing
+    sequential === nothing || (@test sequential.stats.accepted == 1)
+    checkerboard === nothing || (@test checkerboard.stats.accepted == 1)
 end
 
 @testset "composed local Hamiltonian matches an independent global-energy sign oracle" begin

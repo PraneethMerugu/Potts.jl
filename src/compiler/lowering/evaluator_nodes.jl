@@ -151,12 +151,33 @@ function _lower_static_node(
                 operation, slice.offset, slice.maximum
             )
         end
+        tracker_source = _tracker_projection_operand(node, graph)
+        if tracker_source !== nothing
+            descriptors = _operation_tracker_descriptors(
+                ir, tracker_source, T)
+            all(descriptor ->
+                CorePotts.CompilerSPI.tracker_contract(descriptor).storage isa
+                    CorePotts.CompilerSPI.DenseOwnerScalarStorage,
+                descriptors) || throw(PottsValidationError(
+                    :descriptor_lowering,
+                    (PottsDiagnostic(
+                        :unsupported_tracker_projection_storage,
+                        node.source,
+                        repr(tracker_source.transfer.identity),
+                        node.source.path,
+                        "one direct dense-scalar tracker quantity",
+                        "structured tracker storage",
+                        (),
+                        ir.source.records[Int(node.record)].source,
+                    ),),
+                ))
+        end
         tracker_keys = _operation_tracker_keys(ir, node, T)
         qualified_keys = filter(
             key -> key isa CorePotts.CompilerSPI.QualifiedTrackerKey,
             tracker_keys,
         )
-        if !isempty(qualified_keys)
+        if tracker_source === nothing && !isempty(qualified_keys)
             length(qualified_keys) == 1 || throw(ArgumentError(
                 "executable operations admit at most one qualified tracker binding"
             ))
@@ -167,21 +188,54 @@ function _lower_static_node(
                 key.source_handle,
             )
         end
-        arguments = Tuple(
-            _lower_static_node(
-                graph,
-                ir,
-                operand,
-                manifest,
-                T,
-                state_handles,
-                draw_handles,
-                cache,
-                state_binding,
-                workspace_slices,
+        arguments = if tracker_source === nothing
+            Tuple(
+                _lower_static_node(
+                    graph,
+                    ir,
+                    operand,
+                    manifest,
+                    T,
+                    state_handles,
+                    draw_handles,
+                    cache,
+                    state_binding,
+                    workspace_slices,
+                )
+                for operand in node.operands
             )
-            for operand in node.operands
-        )
+        else
+            length(tracker_keys) == 1 || throw(PottsValidationError(
+                :descriptor_lowering,
+                (PottsDiagnostic(
+                    :ambiguous_tracker_projection,
+                    node.source,
+                    repr(tracker_source.transfer.identity),
+                    node.source.path,
+                    "one canonical tracker quantity",
+                    "$(length(tracker_keys)) tracker quantities",
+                    (),
+                    ir.source.records[Int(node.record)].source,
+                ),),
+            ))
+            Tuple(map(enumerate(node.operands)) do indexed
+                index, operand = indexed
+                index == 2 && return CorePotts.CompilerSPI.LiteralExpression(
+                    only(tracker_keys))
+                return _lower_static_node(
+                    graph,
+                    ir,
+                    operand,
+                    manifest,
+                    T,
+                    state_handles,
+                    draw_handles,
+                    cache,
+                    state_binding,
+                    workspace_slices,
+                )
+            end)
+        end
         if operation isa CorePotts.CompilerSPI.ContextOperation
             CorePotts.CompilerSPI.ContextExpression(operation)
         else

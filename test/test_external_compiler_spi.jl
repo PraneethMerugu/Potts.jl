@@ -2,6 +2,10 @@ include("fixtures/ExternalCompilerSPIFixture.jl")
 include("fixtures/ExternalSurfaceOperationFixture.jl")
 using .ExternalCompilerSPIFixture
 
+@inline _external_tracker_lane_digits(accumulator, value) =
+    accumulator * Int32(100) + value
+@inline _external_tracker_lane_digits_finish(accumulator, count) = accumulator
+
 function external_spi_materialization(term_count; mismatched = false)
     fixture = ExternalCompilerSPIFixture.model(term_count; mismatched)
     completed = complete(
@@ -19,15 +23,26 @@ function external_spi_materialization(term_count; mismatched = false)
 end
 
 @testset "external tracker operations keep qualified relation identity" begin
+    @variables external_tracker_gate
     cell = CellKind(:external_surface_cell; extinction = RetireAtZero())
     medium = MediumKind(:external_surface_medium)
-    anchor = CellBinding(:external_surface_anchor)
+    gate = FieldState(
+        external_tracker_gate; name = :external_tracker_gate, initial = 0.0)
+    proposal = ProposalContext(:external_surface_copy)
+    surface_digits = LocalMath.bounded_fold(
+        identity, _external_tracker_lane_digits, Int32(0),
+        _external_tracker_lane_digits_finish;
+        domain = LocalMath.Where(>=(Int32(0))),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.RejectEmpty(),
+        order = LocalMath.CanonicalLeftFold(),
+    )
     source = PottsSystem(
         name = :external_surface_relations,
         statements = StatementSet((
             Lattice(
-                (5, 5);
-                boundary = Periodic(),
+                (3, 3);
+                boundary = Closed(),
                 relations = (
                     proposal = VonNeumann(),
                     surface = VonNeumann(),
@@ -36,32 +51,40 @@ end
             ),
             cell,
             medium,
-            HamiltonianTerm(
-                :external_surface_four;
-                domain = cells(cell),
-                anchor,
-                expression =
-                    ExternalSurfaceOperationFixture.external_cell_surface(
-                        anchor_value(anchor)
-                    ),
+            gate,
+            ProposalConstraint(
+                :external_neighbor_surface,
+                proposal.is_extension &
+                (field_value(gate, proposal.source_site) == 1) &
+                (field_value(gate, proposal.target_site) == 2) &
+                (surface_digits(gather(
+                    ExternalSurfaceOperationFixture.external_cell_surface,
+                    :surface_alt;
+                    at = proposal.target_site,
+                )) == 808) &
+                (surface_digits(gather(
+                    ExternalSurfaceOperationFixture.external_cell_surface_alt,
+                    :surface;
+                    at = proposal.target_site,
+                )) >= 0),
             ),
-            HamiltonianTerm(
-                :external_surface_eight;
-                domain = cells(cell),
-                anchor,
-                expression =
-                    ExternalSurfaceOperationFixture.external_cell_surface_alt(
-                        anchor_value(anchor)
-                    ),
-            ),
-            Protocol(Sweep(; temperature = 2.0); name = :main),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
         )),
+        unknowns = [external_tracker_gate],
     )
     scheduled = mtkcompile(source)
-    labels = zeros(Int32, 5, 5)
-    labels[3, 3] = 1
+    labels = zeros(Int32, 3, 3)
+    source_site = CartesianIndex(2, 2)
+    repeated_owner_site = CartesianIndex(1, 3)
+    target_site = CartesianIndex(1, 2)
+    labels[source_site] = 1
+    labels[repeated_owner_site] = 1
+    gate_values = zeros(Float64, 3, 3)
+    gate_values[source_site] = 1
+    gate_values[target_site] = 2
     initial = PottsInitialState(
-        ownership = LabelledCells(labels; cells = [cell], medium)
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        values = (external_tracker_gate => gate_values,),
     )
     integrator = init(
         PottsProblem(scheduled, initial, (0, 1); seed = 0x5e72),
@@ -86,8 +109,52 @@ end
     ))
     @test reports.execution.trackers.groups == 2
 
-    solution = solve!(integrator)
-    @test solution.retcode == SciMLBase.ReturnCode.Success
+    # The VN surface tracker reports eight exposed faces for the two
+    # diagonally separated owner sites. Moore traversal reaches that owner
+    # twice, in canonical lane order, while absent and medium lanes do not
+    # participate: 0 -> 8 -> 808.
+    function witness(algorithm)
+        return solve(
+            PottsProblem(scheduled, initial, (0, 1); seed = UInt64(0x5e72)),
+            algorithm;
+            backend = CPUBackend(), scalar_type = Float64,
+            save_everystep = true,
+        )
+    end
+    sequential = witness(SequentialCPM())
+    checkerboard = witness(CheckerboardSweepCPM())
+    @test last(sequential).ownership == labels
+    @test last(checkerboard).ownership == labels
+    @test sequential.stats.accepted == 0
+    @test checkerboard.stats.accepted == 0
+
+    mixed = PottsSystem(
+        name = :mixed_tracker_projection_use,
+        statements = StatementSet((
+            Lattice(
+                (3, 3); boundary = Closed(),
+                relations = (
+                    proposal = VonNeumann(), surface = VonNeumann(),
+                    surface_alt = Moore(),
+                ),
+            ),
+            cell,
+            medium,
+            HamiltonianTerm(
+                :mixed_tracker_projection,
+                domain = sites(:lattice),
+                anchor = SiteBinding(:mixed_tracker_projection_site),
+                expression = ExternalSurfaceOperationFixture.external_cell_surface(
+                    proposal.target_site) +
+                    surface_digits(gather(
+                        ExternalSurfaceOperationFixture.external_cell_surface,
+                        :surface_alt; at = proposal.target_site,
+                    )),
+            ),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+    )
+    @test_throws Potts.PottsValidationError mtkcompile(mixed)
 end
 
 @testset "external CompilerSPI lowering is authenticated and executable" begin

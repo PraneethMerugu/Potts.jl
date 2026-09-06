@@ -42,6 +42,15 @@ compilation is not device support. External code may provide functional
 execution, but exact replay additionally requires a matching package, source,
 version, and environment identity.
 
+An extension operation that directly projects one dense scalar tracker can opt
+into `gather` with
+`Potts.is_direct_scalar_tracker_projection(::typeof(operation)) = true`. This declaration
+is appropriate only when the operation's value is exactly the scalar tracker
+value; structured or transformed tracker semantics require their ordinary
+contextual lowering instead. This is an extension-owned semantic attestation:
+Potts can validate the scalar storage contract, but the extension must qualify
+the declared projection against an independent numerical oracle.
+
 The public extension-oriented names are distinguishable from the exported
 authoring API:
 

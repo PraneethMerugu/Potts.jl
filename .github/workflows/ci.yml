@@ -82,13 +82,13 @@ jobs:
         run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
 
   exact-replay:
-    # The closed replay row is qualified on Darwin/aarch64 with Julia 1.12.1.
+    # The closed replay row uses the repository Julia 1.12.6 runtime.
     runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v3
-        with: {version: '1.12.1'}
+        with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@v3
       - name: Test exact replay environment
         run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'

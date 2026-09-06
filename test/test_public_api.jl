@@ -38,7 +38,7 @@
         :neighbor_cell_count, :neighbor_property_sum, :neighbor_property_mean,
         :global_interface_measure, :field_value, :field_gradient, :laplacian,
         :occupancy, :linked, :degree, :endpoint_a, :endpoint_b, :edge_payload,
-        :lag, :history_value, :bounded_values,
+        :lag, :history_value, :gather,
 
         :AbstractPottsDistribution, :Bernoulli, :Uniform, :Normal,
         :UnitVector, :DrawKey, :draw, :PureRead, :SynchronousAssign,
@@ -99,7 +99,8 @@
         :DescriptorConstructionContext, :registered_descriptor_payload,
         :registered_workspace_schemas, :registered_tracker_requirements,
         :ResolvedOperationSourceBinding, :OperationTrackerContext,
-        :registered_operation_tracker_requirements, :QualifiedStatementID,
+        :registered_operation_tracker_requirements,
+        :is_direct_scalar_tracker_projection, :QualifiedStatementID,
         :QualifiedStatement, :EffectBound, :RandomOperation, :EngineAdmission,
         :SemanticFingerprint, :CompletedSystemFingerprint,
         :ScheduledSystemFingerprint, :PottsCapabilityKey,

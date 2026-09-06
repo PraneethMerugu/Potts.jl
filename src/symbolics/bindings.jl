@@ -104,31 +104,79 @@ anchor_value(binding::Union{
     SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
 }) = _binding_token(binding)
 
-struct BoundedValues{F, R, A}
-    field::F
+struct _RelationGather{S, R, A}
+    source::S
     relation::R
     anchor::A
 end
 
-"""
-    bounded_values(field, relation, anchor)
+"""Return whether a unary operation is exactly one direct scalar tracker view."""
+is_direct_scalar_tracker_projection(::Any) = false
 
-Declare the finite field values reached from `anchor` through `relation` as
+"""
+    gather(source, relation; at)
+
+Gather the finite values reached from `at` through `relation` as
 the input to a `LocalMath.bounded_fold`. This is a cold symbolic declaration;
 the Potts compiler resolves both resources and removes the declaration before
 execution planning.
 """
-function bounded_values(field::FieldState, relation, anchor)
+function gather(field::FieldState, relation; at)
     relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
-        "bounded_values relation must be a declared SpatialRelation or its local name"
+        "gather relation must be a declared SpatialRelation or its local name"
     ))
-    return BoundedValues(field, relation, anchor)
+    return _RelationGather(field, relation, at)
 end
 
-function (fold::LocalMath.BoundedFold)(values::BoundedValues)
+"""
+    gather(tracker_operation, relation; at)
+
+Declare tracker values reached by mapping each relation endpoint site to its
+finite current owner and reading a unary direct scalar tracker projection such
+as `cell_volume`. Extension operations opt in with
+`is_direct_scalar_tracker_projection(::typeof(operation)) = true`. Values follow
+relation-lane order: repeated owners remain
+repeated, while absent boundary lanes and medium endpoints do not participate
+in the consuming `LocalMath.BoundedFold`.
+"""
+function gather(operation, relation; at)
+    relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
+        "gather relation must be a declared SpatialRelation or its local name"
+    ))
+    transfer = try
+        operation_transfer(operation, 1)
+    catch error
+        error isa MethodError && error.f === operation_transfer || rethrow(error)
+        throw(ArgumentError(
+            "gather tracker sources must be registered unary Potts operations"
+        ))
+    end
+    transfer.result_rule === :real || throw(ArgumentError(
+        "gather tracker operations must return one scalar real value"
+    ))
+    :Proposal in transfer.allowed_phases || throw(ArgumentError(
+        "gather tracker operations must support proposal evaluation"
+    ))
+    (!isempty(transfer.tracker_requirements) ||
+        transfer.identity === :cell_volume) || throw(ArgumentError(
+        "gather accepts only operations backed by a declared tracker"
+    ))
+    is_direct_scalar_tracker_projection(operation) || throw(ArgumentError(
+        "gather requires a declared direct scalar tracker projection"
+    ))
+    all(requirement -> requirement isa NamedSpatialRelationRequirement,
+        transfer.source_requirements) || throw(ArgumentError(
+        "gathered tracker projections currently require only named spatial resources"
+    ))
+    return _RelationGather(operation, relation, at)
+end
+
+function (fold::LocalMath.BoundedFold)(values::_RelationGather)
+    source = values.source isa FieldState ?
+             _field_token(values.source) : values.source(values.anchor)
     return _potts_bounded_fold(
         fold,
-        _field_token(values.field),
+        source,
         _spatial_relation_token(values.relation),
         values.anchor,
     )

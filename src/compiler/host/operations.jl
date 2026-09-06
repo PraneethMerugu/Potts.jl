@@ -498,9 +498,9 @@ operation_transfer(::typeof(_potts_bounded_fold), ::Int) =
         :declared;
         totality = :transaction_checked,
         footprint_rule = NeighborhoodFootprintRule(OperandNeighborhoodAnchors()),
-        allowed_roles = (:hamiltonian,),
+        allowed_roles = (:hamiltonian, :drive, :constraint, :modifier),
         allowed_phases = (:Proposal,),
-        required_context = :hamiltonian,
+        required_context = :any,
     )
 
 for operation in (

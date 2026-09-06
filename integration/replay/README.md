@@ -1,10 +1,10 @@
 # Exact replay integration
 
 This project pins the complete dependency and Julia version used by the native
-checkpoint/restart witnesses. Run it with Julia 1.12.1:
+checkpoint/restart witnesses. Run it with Julia 1.12.6:
 
 ```sh
-julia +1.12.1 --project=integration/replay integration/replay/runtests.jl
+julia +1.12.6 --project=integration/replay integration/replay/runtests.jl
 ```
 
 The ordinary `integration` project tests functional execution across its

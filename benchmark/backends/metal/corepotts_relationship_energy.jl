@@ -24,6 +24,17 @@ function _relationship_energy_problem()
         onempty = LocalMath.FillEmpty(0.0f0),
         order = LocalMath.CanonicalLeftFold(),
     )
+    neighbor_volume_sum = LocalMath.bounded_fold(
+        identity,
+        +,
+        Int32(0),
+        (sum, count) -> sum;
+        domain = LocalMath.Where(>=(Int32(0))),
+        oninvalid = LocalMath.RejectInvalid(),
+        onempty = LocalMath.FillEmpty(Int32(0)),
+        order = LocalMath.CanonicalLeftFold(),
+    )
+    proposal = ProposalContext(:relationship_energy_proposal)
     links = RelationshipState(
         :relationship_energy_links;
         endpoints = Undirected(cell, cell),
@@ -52,8 +63,13 @@ function _relationship_energy_problem()
                 :relationship_energy_bounded_signal;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(bounded_values(
-                    signal, :contact, anchor_value(site))),
+                expression = neighbor_sum(gather(
+                    signal, :contact; at = anchor_value(site))),
+            ),
+            ProposalConstraint(
+                :relationship_energy_neighbor_volume,
+                neighbor_volume_sum(gather(
+                    cell_volume, :contact; at = proposal.target_site)) >= 0,
             ),
             RelationshipEnergy(
                 :relationship_energy,

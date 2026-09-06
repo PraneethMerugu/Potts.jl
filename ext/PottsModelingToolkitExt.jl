@@ -426,7 +426,7 @@ const _TESTED_NATIVE_RUNTIME_STACK = (
         version = v"7.37.0",
     ),
     Julia = (
-        version = v"1.12.1",
+        version = v"1.12.6",
         kernel = :Darwin,
         architecture = :aarch64,
         word_size = 64,

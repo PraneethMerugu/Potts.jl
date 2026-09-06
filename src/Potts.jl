@@ -133,7 +133,7 @@ export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
 export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
 export anchor_value
-export bounded_values
+export gather
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
 export PottsStats, init, solve, solve!, step!, remake, terminate!
@@ -215,6 +215,7 @@ public registered_descriptor_payload, registered_workspace_schemas
 public registered_tracker_requirements
 public ResolvedOperationSourceBinding, OperationTrackerContext
 public registered_operation_tracker_requirements
+public is_direct_scalar_tracker_projection
 public QualifiedStatementID, QualifiedStatement, EffectBound, RandomOperation
 public EngineAdmission, SemanticFingerprint, CompletedSystemFingerprint
 public ScheduledSystemFingerprint
