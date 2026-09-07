@@ -126,7 +126,7 @@ jobs:
       - name: Exact replay at selected commits
         run: julia --project=ecosystem/Potts/integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/integration/replay/runtests.jl")'
       - name: MakiePotts package tests
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.add(PackageSpec(name="AMD", version="0.5.3")); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.test("MakiePotts")'
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.test("MakiePotts")'
       - name: Documentation and doctests
         run: |
           julia --project=ecosystem/LocalMath/docs --startup-file=no -e 'using Pkg; Pkg.develop(path="ecosystem/LocalMath"); Pkg.instantiate(); include("ecosystem/LocalMath/docs/make.jl")'

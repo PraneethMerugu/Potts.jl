@@ -17,8 +17,6 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-# SparseColumnPivotedQR 2.1.7 still calls AMD.SS_Int, removed in AMD 0.5.4.
-AMD = "=0.5.3"
 Aqua = "0.8"
 CorePotts = "0.2"
 DynamicQuantities = "1"
@@ -61,7 +59,6 @@ PottsMethodOfLinesExt = ["MethodOfLines", "ModelingToolkit"]
 PottsUnitfulExt = "Unitful"
 
 [extras]
-AMD = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
@@ -76,4 +73,4 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["AMD", "Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "ParallelTestRunner", "StaticArrays", "StructArrays", "Test", "TOML", "Unitful"]
+test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "ParallelTestRunner", "StaticArrays", "StructArrays", "Test", "TOML", "Unitful"]
