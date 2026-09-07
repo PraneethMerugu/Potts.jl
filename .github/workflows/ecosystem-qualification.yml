@@ -76,14 +76,27 @@ jobs:
           julia --startup-file=no -e '
             using TOML
             expected = (
-                "ecosystem/LocalMath" => ("LocalMath", "0.2.0-rc2"),
-                "ecosystem/CorePotts" => ("CorePotts", "0.2.0-rc2"),
-                "ecosystem/Potts" => ("Potts", "0.3.0-rc2"),
-                "ecosystem/MakiePotts" => ("MakiePotts", "0.3.0-rc2"),
+                "ecosystem/LocalMath" => (
+                    "LocalMath", "82808884-8acc-4a5c-a056-be440a0fbea1",
+                    "0.2.0-rc2",
+                ),
+                "ecosystem/CorePotts" => (
+                    "CorePotts", "047998c1-3edd-4edf-b561-cee99549c5a6",
+                    "0.2.0-rc2",
+                ),
+                "ecosystem/Potts" => (
+                    "Potts", "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
+                    "0.3.0-rc2",
+                ),
+                "ecosystem/MakiePotts" => (
+                    "MakiePotts", "95794c00-c762-4965-bf31-de18bcca2bc9",
+                    "0.3.0-rc2",
+                ),
             )
             for (directory, identity) in expected
                 project = TOML.parsefile(joinpath(directory, "Project.toml"))
-                (project["name"], project["version"]) == identity ||
+                (project["name"], project["uuid"], project["version"]) ==
+                    identity ||
                     error("unexpected release identity in $directory")
                 isfile(joinpath(directory, "RELEASE_NOTES.md")) ||
                     error("missing release notes in $directory")

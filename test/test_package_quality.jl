@@ -66,8 +66,8 @@ using ExplicitImports
                 entry = entries isa AbstractVector ? only(entries) : entries
                 @test !haskey(entry, "path")
                 @test entry["repo-url"] == url
-                @test occursin(full_revision, entry["repo-rev"])
-                @test occursin(full_revision, entry["git-tree-sha1"])
+                @test match(full_revision, entry["repo-rev"]) !== nothing
+                @test match(full_revision, entry["git-tree-sha1"]) !== nothing
             end
 
             path_dependencies = String[]
