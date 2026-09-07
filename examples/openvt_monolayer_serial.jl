@@ -65,7 +65,7 @@ function run_openvt_monolayer(; mcs::Integer=2, seed::Integer=0x3306,
         :openvt_division;
         domain=cells(tissue),
         anchor,
-        expression=cell_volume(anchor_value(anchor)) >= division_threshold,
+        expression=cell_volume(anchor) >= division_threshold,
         effects=(Divide(
             anchor;
             geometry=SpecifiedNormalPlane((1.0, 0.0)),

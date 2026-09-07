@@ -44,7 +44,7 @@
         LifecycleProcess(
             :lifecycle; domain = cells(declarations[1]),
             anchor = cell_anchor,
-            expression = cell_volume(anchor_value(cell_anchor)) == 0,
+            expression = cell_volume(cell_anchor) == 0,
             effects = (Retire(
                 cell_anchor; on_inadmissible = ErrorOnInadmissible()
             ),),
@@ -119,44 +119,6 @@
     @test occursin("edge_payload", string(edge.strength))
     @test draw(Normal(0.0, k), DrawKey(:noise)) isa Num
 
-    query_contracts = (
-        (contact_edge_count, 2, contact_edge_count(x, k)),
-        (contact_measure, 3, contact_measure(x, k, 1.0)),
-        (boundary_site_count, 2, boundary_site_count(x, k)),
-        (neighbor_cell_count, 2, neighbor_cell_count(x, k)),
-        (neighbor_property_sum, 3, neighbor_property_sum(x, k, x)),
-        (
-            neighbor_property_mean,
-            4,
-            neighbor_property_mean(x, k, x, 0.0),
-        ),
-        (
-            global_interface_measure,
-            3,
-            global_interface_measure(x, k, 1.0),
-        ),
-    )
-    for (operation, arity, expression) in query_contracts
-        @test expression isa Num
-        transfer = Potts.operation_transfer(operation, arity)
-        @test transfer.arity == arity:arity
-        @test transfer.allowed_roles == (:observation,)
-        @test transfer.allowed_phases == (:none,)
-        @test !transfer.cpu
-        @test !transfer.gpu
-    end
-    @test !applicable(neighbor_property_mean, x, k, x)
-    collection_error = try
-        neighbor_cells(x, k)
-        nothing
-    catch caught
-        caught
-    end
-    @test collection_error isa ArgumentError
-    @test occursin("collection-valued settled-snapshot", sprint(
-        showerror, collection_error
-    ))
-    @test occursin("not implemented", sprint(showerror, collection_error))
     @test_throws ArgumentError Protocol(:invalid; stages = (EveryMCS(),))
 
     phase_cell = CellKind(:phase_cell; extinction = RetireAtZero())

@@ -88,6 +88,103 @@ private compiler IR is never exposed to extensions.
 """
 function registered_operation_tracker_requirements end
 
+const _GatherReductionNumber = Union{
+    Bool,
+    Int8, Int16, Int32, Int64,
+    UInt8, UInt16, UInt32, UInt64,
+    Float16, Float32, Float64,
+}
+
+struct _GatherReductionConvert{T} end
+(::_GatherReductionConvert{T})(value) where {T} = convert(T, value)
+
+struct _GatherReductionResult end
+(::_GatherReductionResult)(accumulator, ::Int32) = accumulator
+
+struct _GatherMeanResult{T} end
+(::_GatherMeanResult{T})(accumulator, count::Int32) where {T} =
+    accumulator / T(count)
+
+struct _GatherGeometricMap end
+(::_GatherGeometricMap)(value) = log(value)
+
+struct _GatherGeometricResult{T} end
+(::_GatherGeometricResult{T})(accumulator, count::Int32) where {T} =
+    exp(accumulator / T(count))
+
+struct _GatherPositive end
+(::_GatherPositive)(value) = value > zero(value)
+
+_gather_sum_type(::Type{Bool}) = Int
+_gather_sum_type(::Type{T}) where {T <: Signed} = promote_type(Int, T)
+_gather_sum_type(::Type{T}) where {T <: Unsigned} = promote_type(UInt, T)
+_gather_sum_type(::Type{T}) where {T <: AbstractFloat} = T
+_gather_mean_type(::Type{T}) where {T <: Integer} = Float64
+_gather_mean_type(::Type{T}) where {T <: AbstractFloat} = T
+
+function _unsupported_gather_reduction(kind::Symbol, ::Type{T}) where {T}
+    throw(ArgumentError(
+        "$(kind) does not support gathered values with element type $(T)"
+    ))
+end
+
+function _materialize_gather_reduction(::Val{:sum}, ::Type{T}) where {T}
+    T <: _GatherReductionNumber ||
+        return _unsupported_gather_reduction(:sum, T)
+    R = _gather_sum_type(T)
+    return LocalMath.BoundedFold(
+        T, _GatherReductionConvert{R}(), +, zero(R), _GatherReductionResult();
+        onempty = LocalMath.FillEmpty(zero(R)),
+    )
+end
+
+
+function _materialize_gather_reduction(::Val{:minimum}, ::Type{T}) where {T}
+    T <: _GatherReductionNumber ||
+        return _unsupported_gather_reduction(:minimum, T)
+    return LocalMath.BoundedFold(
+        T, identity, min, typemax(T), _GatherReductionResult())
+end
+
+function _materialize_gather_reduction(::Val{:maximum}, ::Type{T}) where {T}
+    T <: _GatherReductionNumber ||
+        return _unsupported_gather_reduction(:maximum, T)
+    return LocalMath.BoundedFold(
+        T, identity, max, typemin(T), _GatherReductionResult())
+end
+
+function _materialize_gather_reduction(::Val{:mean}, ::Type{T}) where {T}
+    T <: _GatherReductionNumber ||
+        return _unsupported_gather_reduction(:mean, T)
+    R = _gather_mean_type(T)
+    return LocalMath.BoundedFold(
+        T, _GatherReductionConvert{R}(), +, zero(R), _GatherMeanResult{R}();
+        onempty = LocalMath.FillEmpty(R(NaN)),
+    )
+end
+
+function _materialize_gather_reduction(
+        ::Val{:geometric_mean}, ::Type{T},
+    ) where {T}
+    T <: Union{Float16,Float32,Float64} ||
+        return _unsupported_gather_reduction(:geometric_mean, T)
+    return LocalMath.BoundedFold(
+        T, _GatherGeometricMap(), +, zero(T),
+        _GatherGeometricResult{T}();
+        domain = LocalMath.Where(_GatherPositive()),
+    )
+end
+
+function _gather_reduction_kind(reduction::_GatherReduction)
+    kind = reduction.kind
+    kind === _GatherSum && return :sum
+    kind === _GatherMinimum && return :minimum
+    kind === _GatherMaximum && return :maximum
+    kind === _GatherMean && return :mean
+    kind === _GatherGeometricMean && return :geometric_mean
+    error("unknown gathered reduction kind")
+end
+
 _dense_gather_scalar_type(
     ::CorePotts.CompilerSPI.DenseOwnerScalarStorage{T},
 ) where {T} = T
@@ -140,16 +237,26 @@ function _checked_gather_fold(
     )
 end
 
+_materialize_gather_fold(fold::LocalMath.BoundedFold, ::Type{T}) where {T} =
+    _checked_gather_fold(fold, T)
+_materialize_gather_fold(reduction::_GatherReduction, ::Type{T}) where {T} =
+    _materialize_gather_reduction(
+        Val(_gather_reduction_kind(reduction)), T)
+
+_gather_fold_name(::LocalMath.BoundedFold) = "bounded fold"
+_gather_fold_name(reduction::_GatherReduction) =
+    String(_gather_reduction_kind(reduction))
+
 function _materialize_checked_gather_fold(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
         graph::NormalizedTermGraph,
-        fold::LocalMath.BoundedFold,
+        fold,
         ::Type{T},
     ) where {T <: AbstractFloat}
     try
         input_type = _resolved_gather_scalar_type(ir, node, graph, T)
-        return _checked_gather_fold(fold, input_type)
+        return _materialize_gather_fold(fold, input_type)
     catch error
         error isa ArgumentError ||
             error isa LocalMath.LocalMathValidationError || rethrow(error)
@@ -159,7 +266,7 @@ function _materialize_checked_gather_fold(
             (PottsDiagnostic(
                 :invalid_gather_fold,
                 node.source,
-                "bounded fold",
+                _gather_fold_name(fold),
                 node.source.path,
                 "a fold closed over the resolved gathered scalar type",
                 sprint(showerror, error),

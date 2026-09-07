@@ -118,9 +118,9 @@ end
     site = SiteBinding(:bounded_site)
     proposal = ProposalContext(:bounded_copy)
     @test_throws ArgumentError gather(
-        identity, :contact; at = anchor_value(site))
+        identity, :contact; at = site)
     symbolic_fold = _localmath_neighbor_sum(gather(
-        signal, :contact; at = anchor_value(site)))
+        signal, :contact; at = site))
     fold_node = Symbolics.unwrap(symbolic_fold)
     @test Symbolics.operation(fold_node) === Potts._potts_bounded_fold
     fold_arguments = Symbolics.arguments(fold_node)
@@ -174,7 +174,7 @@ end
                 domain = sites(:lattice),
                 anchor = site,
                 expression = _localmath_neighbor_volume_sum(gather(
-                    cell_volume, :contact; at = anchor_value(site))),
+                    cell_volume, :contact; at = site)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),
@@ -219,7 +219,7 @@ end
     end
 
     invalid_fold = _invalid_type_changing_fold(gather(
-        signal, :contact; at = anchor_value(site)))
+        signal, :contact; at = site))
     invalid_scheduled = fold_contract_system(
         :invalid_gather_fold, invalid_fold)
     invalid_error = try
@@ -239,7 +239,7 @@ end
         "resolved gathered scalar type", sprint(showerror, invalid_error))
 
     valid_fold = _valid_type_changing_fold(gather(
-        signal, :contact; at = anchor_value(site)))
+        signal, :contact; at = site))
     valid_scheduled = fold_contract_system(:valid_gather_fold, valid_fold)
     valid_integrator = init(
         PottsProblem(valid_scheduled, initial, (0, 1); seed = 0x1a),
@@ -266,7 +266,7 @@ end
           checkerboard_solution.stats.rejected
     @test size(last(checkerboard_solution).ownership) == size(ownership)
 
-    @test_throws ArgumentError gather(signal, 17; at = anchor_value(site))
+    @test_throws ArgumentError gather(signal, 17; at = site)
 
     missing_relation_source = PottsSystem(
         name = :bounded_term_missing_relation,
@@ -280,7 +280,7 @@ end
                 domain = sites(:lattice),
                 anchor = site,
                 expression = _localmath_neighbor_sum(gather(
-                    signal, :missing_contact; at = anchor_value(site))),
+                    signal, :missing_contact; at = site)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),

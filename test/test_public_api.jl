@@ -33,10 +33,8 @@
         :target_kind, :is_extension, :is_retraction, :new_contact,
         :lost_contact, :cell_volume, :cell_surface, :cell_elongation,
         :cell_center, :unwrapped_center, :distance, :contact_owner_a,
-        :contact_owner_b, :contact_kind_a, :contact_kind_b, :contact_measure,
-        :contact_edge_count, :boundary_site_count, :neighbor_cells,
-        :neighbor_cell_count, :neighbor_property_sum, :neighbor_property_mean,
-        :global_interface_measure, :field_value, :field_gradient, :laplacian,
+        :contact_owner_b, :contact_kind_a, :contact_kind_b,
+        :field_value, :field_gradient, :laplacian,
         :occupancy, :linked, :degree, :endpoint_a, :endpoint_b, :edge_payload,
         :lag, :history_value, :gather,
 
@@ -132,6 +130,9 @@
         :PottsExecutable, :SequentialEngine, :CheckerboardEngine,
         :TiledCheckerboard, :EquationProcess, :ExplicitDiffusion,
         :CUDABackend, :ROCmBackend,
+        :contact_edge_count, :contact_measure, :boundary_site_count,
+        :neighbor_cells, :neighbor_cell_count, :neighbor_property_sum,
+        :neighbor_property_mean, :global_interface_measure,
     ))
     @test isempty(intersect(actual, retired))
     @test all(name -> !isdefined(Potts, name), retired)
@@ -144,7 +145,9 @@ end
     extension_api = setdiff(public_names, exported)
     @test :PottsSystem in exported
     @test :operation_transfer in extension_api
+    @test :anchor_value in extension_api
     @test !(:operation_transfer in exported)
+    @test !(:anchor_value in exported)
 end
 
 @testset "curated public help is attached and truthful" begin

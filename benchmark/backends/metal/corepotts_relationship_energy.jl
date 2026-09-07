@@ -64,7 +64,7 @@ function _relationship_energy_problem()
                 domain = sites(:lattice),
                 anchor = site,
                 expression = neighbor_sum(gather(
-                    signal, :contact; at = anchor_value(site))),
+                    signal, :contact; at = site)),
             ),
             ProposalConstraint(
                 :relationship_energy_neighbor_volume,

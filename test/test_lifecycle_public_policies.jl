@@ -190,7 +190,7 @@ end
             Symbol(:partition_policy_, cell_id);
             domain = cells(cell),
             anchor,
-            expression = anchor_value(anchor) == cell_id,
+            expression = Potts.anchor_value(anchor) == cell_id,
             effects = (Divide(
                 anchor;
                 geometry,
@@ -301,7 +301,7 @@ end
             Symbol(:relationship_policy_, cell_id);
             domain = cells(cell),
             anchor,
-            expression = anchor_value(anchor) == cell_id,
+            expression = Potts.anchor_value(anchor) == cell_id,
             effects = (effect,),
             cadence = AtMCS(1),
         )

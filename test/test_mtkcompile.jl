@@ -147,40 +147,6 @@ end
     @test only(inspect(second, StateSchema()).states).initial == 9.0
 end
 
-@testset "PT03 spatial queries reject unsupported executable lowering" begin
-    @variables query_owner query_filter
-    cell = CellKind(:query_cell; extinction = RetireAtZero())
-    medium = MediumKind(:query_medium)
-    source = PottsSystem(
-        name = :interface_only_query,
-        statements = StatementSet((
-            Lattice((2, 2)),
-            cell,
-            medium,
-            ModelState(query_owner; name = :query_owner, initial = 1.0),
-            ModelState(query_filter; name = :query_filter, initial = 1.0),
-            Observation(
-                :contact_edges,
-                contact_edge_count(query_owner, query_filter),
-            ),
-            Protocol(Sweep(); name = :query_protocol),
-        )),
-        unknowns = [query_owner, query_filter],
-    )
-    error = try
-        mtkcompile(source)
-        nothing
-    catch caught
-        caught
-    end
-    @test error isa Potts.PottsValidationError
-    @test error.stage === :scheduling
-    @test occursin("interface-only settled-snapshot spatial query", sprint(
-        showerror, error
-    ))
-    @test occursin("not implemented", sprint(showerror, error))
-end
-
 function _contains_corepotts_value(value)
     module_name = string(parentmodule(typeof(value)))
     startswith(module_name, "CorePotts") && return true

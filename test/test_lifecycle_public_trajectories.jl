@@ -69,7 +69,7 @@ end
         :remove_linked_endpoint;
         domain = cells(cell),
         anchor,
-        expression = anchor_value(anchor) == 1,
+        expression = Potts.anchor_value(anchor) == 1,
         effects = (RemoveCell(
             anchor;
             replacement = medium,

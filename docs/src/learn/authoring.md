@@ -173,7 +173,7 @@ system = PottsSystem(
             domain=sites(:lattice),
             anchor=site,
             expression=neighbor_mean(gather(
-                signal, :contact; at=anchor_value(site)
+                signal, :contact; at=site
             )),
         ),
         Protocol(Sweep(); name=:main),
@@ -194,13 +194,36 @@ Potts Hamiltonian expression and source order
 → LocalMath bounded spatial law and KernelAbstractions execution
 ```
 
-The bounded declaration is eliminated during compilation. No Symbolics tree or
-authoring object reaches the runtime kernels.
+The symbolic `_RelationGather` and friendly-reduction tag are eliminated during
+compilation, as is the surrounding Symbolics syntax. Their checked concrete
+`LocalMath.BoundedFold` remains in the Core static evaluator as the executable
+compiler law; no symbolic authoring object reaches the runtime kernels.
 
 Here `:contact` names the bounded relation declared by the enclosing `Lattice`,
-and `anchor_value(site)` identifies the site at which the Hamiltonian term is
-evaluated. The compiler checks that the field, relation, anchor, and term domain
-are compatible before constructing the runtime law. `CanonicalLeftFold()` uses
-the relation's canonical endpoint order; `RejectInvalid()` and `RejectEmpty()`
-make evaluation reject an invalid value or empty neighborhood rather than
-silently choosing a numerical fallback.
+and `site` identifies the Hamiltonian anchor. The compiler checks that the
+field, relation, anchor, and term domain are compatible before constructing the
+runtime law. `order=:canonical` uses the relation's endpoint order, while
+`invalid=:reject` and `empty=:reject` make invalid values or empty neighborhoods
+reject the containing transaction.
+
+Familiar Julia reductions work directly on a gather. Load `Statistics` for
+`mean`:
+
+```julia
+using Statistics
+
+neighbor_total(values) = sum(values)
+neighbor_low(values) = minimum(values)
+neighbor_high(values) = maximum(values)
+neighbor_average(values) = Statistics.mean(values)
+neighbor_geometric_mean(values) = LocalMath.geometric_mean(values)
+```
+
+Relations retain canonical lane order. Repeated endpoints therefore
+participate repeatedly, while absent boundary lanes do not participate.
+`sum` of an empty gather returns its correctly typed additive identity;
+`Statistics.mean` returns its correctly typed `NaN`; and `minimum` and
+`maximum` reject an empty gather. `LocalMath.geometric_mean` is available for
+concrete floating-point values and rejects nonpositive present values and empty
+input. Use `LocalMath.fold` when a custom map, combination, result function, or
+invalid/empty policy is scientifically required.
