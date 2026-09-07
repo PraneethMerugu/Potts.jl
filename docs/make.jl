@@ -28,6 +28,7 @@ makedocs(
         "Home" => "index.md",
         "Learn" => [
             "Author and compose" => "learn/authoring.md",
+            "Build a custom model" => "learn/custom-model.md",
             "Initialize and execute" => "learn/execution.md",
             "Lifecycle and relationships" => "learn/state-lifecycle.md",
             "Native MTK components" => "learn/native-components.md",

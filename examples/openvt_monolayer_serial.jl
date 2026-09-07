@@ -97,12 +97,12 @@ function run_openvt_monolayer(; mcs::Integer=2, seed::Integer=0x3306,
         unknowns=[division_mass],
         parameters=[target_volume, volume_strength, temperature, division_threshold],
     )
-    scheduled = mtkcompile(source)
     labels = zeros(Int32, 12, 8)
     labels[5:8, 4:5] .= 1
     initial = PottsInitialState(ownership=LabelledCells(
         labels; cells=[tissue], medium), values=(division_mass => [8.0],))
-    solution = solve(PottsProblem(scheduled, initial, (0, Int(mcs)); seed),
+    problem = PottsProblem(source, initial, (0, Int(mcs)); seed)
+    solution = solve(problem,
         SequentialCPM(); backend=CPUBackend(), scalar_type=Float64,
         save_everystep=true, observables=(:tissue_sites,))
 
@@ -118,7 +118,14 @@ function run_openvt_monolayer(; mcs::Integer=2, seed::Integer=0x3306,
     @assert relaxation_steps > 0
     @assert final[:tissue_sites] == count(!iszero, final.ownership)
     @assert !isempty(inhibition)
-    return (; source, scheduled, solution, relaxation_steps, fractions, inhibition)
+    return (;
+        source,
+        scheduled = problem.system,
+        solution,
+        relaxation_steps,
+        fractions,
+        inhibition,
+    )
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

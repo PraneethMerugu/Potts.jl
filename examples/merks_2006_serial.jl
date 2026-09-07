@@ -81,8 +81,6 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
             temperature,
         ],
     )
-    scheduled = mtkcompile(source)
-
     labels = zeros(Int32, 8, 8)
     labels[3:5, 3:5] .= 1
     initial = PottsInitialState(
@@ -93,7 +91,7 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
         ),
         values=(concentration => zeros(Float64, 8, 8),),
     )
-    problem = PottsProblem(scheduled, initial, (0, Int(mcs)); seed)
+    problem = PottsProblem(source, initial, (0, Int(mcs)); seed)
     solution = solve(
         problem,
         SequentialCPM();
@@ -109,7 +107,13 @@ function run_merks_2006(; mcs::Integer=2, seed::Integer=0x3303)
     @assert sum(final[:concentration]) > 0
     @assert final[:field_snapshot] == final[:concentration]
 
-    return (; source, scheduled, problem, solution, concentration)
+    return (;
+        source,
+        scheduled = problem.system,
+        problem,
+        solution,
+        concentration,
+    )
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

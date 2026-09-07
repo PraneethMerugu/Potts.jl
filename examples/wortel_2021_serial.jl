@@ -104,8 +104,6 @@ function run_wortel_2021(; mcs::Integer=2, seed::Integer=0x3302)
             temperature,
         ],
     )
-    scheduled = mtkcompile(source)
-
     labels = zeros(Int32, 8, 8)
     labels[2:3, 2:3] .= 1
     labels[6:7, 6:7] .= 2
@@ -117,7 +115,7 @@ function run_wortel_2021(; mcs::Integer=2, seed::Integer=0x3302)
         ),
         values=(activity_value => zeros(Float32, 8, 8),),
     )
-    problem = PottsProblem(scheduled, initial, (0, Int(mcs)); seed)
+    problem = PottsProblem(source, initial, (0, Int(mcs)); seed)
     solution = solve(
         problem,
         SequentialCPM();
@@ -135,7 +133,13 @@ function run_wortel_2021(; mcs::Integer=2, seed::Integer=0x3302)
     @assert last(final[:activity_history]) == final[:activity]
     @assert final[:occupied_sites] == count(!iszero, final.ownership)
 
-    return (; source, scheduled, problem, solution, activity_value)
+    return (;
+        source,
+        scheduled = problem.system,
+        problem,
+        solution,
+        activity_value,
+    )
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

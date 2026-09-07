@@ -54,6 +54,66 @@
     )
     @test problem.seed == 0x1234
     @test problem.replica == 1
+    @test problem.system === scheduled
+
+    implicit_source_traversals = Ref(0)
+    implicit = Potts._with_source_traversal_witness(
+        (kind, _, value) ->
+            kind === :system && value === source &&
+            (implicit_source_traversals[] += 1),
+    ) do
+        PottsProblem(
+            source,
+            initial,
+            (0, 5);
+            p = (
+                initial_strength => 2.0,
+                initial_temperature => 4.0,
+            ),
+            seed = 0x1234,
+        )
+    end
+    @test is_scheduled(implicit.system)
+    @test implicit_source_traversals[] == 1
+    @test inspect(implicit.system, Fingerprints()) ==
+          inspect(problem.system, Fingerprints())
+    @test Potts._lower_scheduled_execution_plan(
+        implicit.system, SequentialCPM(), CPUBackend(), Float32
+    ).fingerprint == Potts._lower_scheduled_execution_plan(
+        problem.system, SequentialCPM(), CPUBackend(), Float32
+    ).fingerprint
+    implicit_solution = solve(
+        implicit, SequentialCPM();
+        backend = CPUBackend(), scalar_type = Float32, save_everystep = true,
+    )
+    explicit_solution = solve(
+        problem, SequentialCPM();
+        backend = CPUBackend(), scalar_type = Float32, save_everystep = true,
+    )
+    @test implicit_solution.t == explicit_solution.t
+    @test getfield.(implicit_solution.u, :ownership) ==
+          getfield.(explicit_solution.u, :ownership)
+    @test implicit_solution.stats == explicit_solution.stats
+
+    invalid_source = PottsSystem(
+        name = :invalid_problem_source,
+        statements = (@statements begin
+            Lattice((8, 8))
+            CellKind(:conflicting_kind; extinction = RetireAtZero())
+            MediumKind(:conflicting_kind)
+            Protocol(Sweep(); name = :main)
+        end),
+    )
+    construction_error = try
+        PottsProblem(invalid_source, initial, (0, 1); seed = 1)
+        nothing
+    catch error
+        error
+    end
+    @test construction_error isa Potts.PottsValidationError
+    @test only(construction_error.diagnostics).kind ===
+          :duplicate_statement_identity
+    @test only(construction_error.diagnostics).source isa SourceLocation
 
     # `problem.u0` is a public SciML property, but it must not expose the
     # frozen initialization recipe used by later `init` or ensemble runs.

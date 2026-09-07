@@ -9,7 +9,8 @@
         @parameters target = 4.0 strength = 1.0 temperature = 2.0
         cell = CellKind(:cell; extinction = RetireAtZero())
         medium = MediumKind(:medium)
-        @mtkcompile model = PottsSystem(
+        model = PottsSystem(
+            name = :fresh_process_model,
             statements = StatementSet((
                 Lattice((4, 4); boundary = Periodic()),
                 cell,

@@ -2,9 +2,11 @@
     PottsProblem(system, u0, tspan; p=(), seed, replica=1, repeat=1, policies=(;))
 
 Bind immutable initial data, runtime parameters, and stochastic identity to a
-structurally scheduled `PottsSystem`. Construction performs host validation but
-does not lower a CorePotts program or allocate runtime state. Algorithm,
-backend, and scalar type are selected later by `init` or `solve`.
+`PottsSystem`. An unscheduled system is completed and structurally scheduled by
+the idempotent `mtkcompile` authority during construction. An already scheduled
+system is retained exactly. Construction performs host validation but does not
+lower a CorePotts program or allocate runtime state. Algorithm, backend, and
+scalar type are selected later by `init` or `solve`.
 """
 struct PottsProblem{S, U, P, R} <: SciMLBase.AbstractSciMLProblem
     system::S
@@ -249,14 +251,12 @@ function PottsProblem(
         repeat::Integer = 1,
         policies::NamedTuple = NamedTuple(),
     )
-    is_scheduled(system) || throw(ArgumentError(
-        "PottsProblem requires a scheduled PottsSystem; call mtkcompile first"
-    ))
+    scheduled = is_scheduled(system) ? system : mtkcompile(system)
     normalized_u0 = _defensive_copy(u0)
-    _validate_problem_initial(system, normalized_u0)
-    normalized_p = _normalize_problem_parameters(system, p)
+    _validate_problem_initial(scheduled, normalized_u0)
+    normalized_p = _normalize_problem_parameters(scheduled, p)
     return PottsProblem(
-        system,
+        scheduled,
         normalized_u0,
         normalized_p,
         _normalize_tspan(tspan),
