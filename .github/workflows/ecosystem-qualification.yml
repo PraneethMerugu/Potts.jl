@@ -172,7 +172,7 @@ jobs:
                 for (package, dependencies) in downstream
                     import_pattern = Regex(
                         "(?m)^\\s*(?:using|import)\\s+(?:" *
-                        join(dependencies, "|") * ")(?=\\.|:|\\s|$)",
+                        join(dependencies, "|") * ")(?=\\.|:|\\s|\$)",
                     )
                     for path in selected_julia_files(roots[package])
                         @test !occursin(import_pattern, read(path, String))
