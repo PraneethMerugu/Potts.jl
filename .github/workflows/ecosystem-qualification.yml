@@ -98,8 +98,19 @@ jobs:
                 (project["name"], project["uuid"], project["version"]) ==
                     identity ||
                     error("unexpected release identity in $directory")
-                isfile(joinpath(directory, "RELEASE_NOTES.md")) ||
-                    error("missing release notes in $directory")
+                citation = joinpath(directory, "CITATION.cff")
+                citation_version = only(
+                    split(line, ": "; limit=2)[2]
+                    for line in eachline(citation)
+                    if startswith(line, "version: ")
+                )
+                citation_version == identity[3] ||
+                    error("stale citation version in $directory")
+                release_notes = joinpath(directory, "RELEASE_NOTES.md")
+                startswith(
+                    read(release_notes, String),
+                    "# $(identity[1]) $(identity[3])",
+                ) || error("stale release-note identity in $directory")
             end
           '
       - name: Verify selected repository boundaries
