@@ -48,6 +48,39 @@ function _localmath_neighbor_volume_sum(values)
     )
 end
 
+struct _InvalidGatherTupleMap end
+(::_InvalidGatherTupleMap)(value) = (value, value)
+
+struct _GatherFloat32Map end
+(::_GatherFloat32Map)(value) = Float32(value)
+
+struct _GatherIdentityResult end
+(::_GatherIdentityResult)(accumulator, ::Int32) = accumulator
+
+struct _GatherFloat64Mean end
+(::_GatherFloat64Mean)(accumulator, count::Int32) =
+    Float64(accumulator) / Float64(count)
+
+function _invalid_type_changing_fold(values)
+    return LocalMath.fold(values;
+        map = _InvalidGatherTupleMap(),
+        combine = +,
+        init = 0.0,
+        finish = _GatherIdentityResult(),
+        empty = 0.0,
+    )
+end
+
+function _valid_type_changing_fold(values)
+    return LocalMath.fold(values;
+        map = _GatherFloat32Map(),
+        combine = +,
+        init = 0.0f0,
+        finish = _GatherFloat64Mean(),
+        empty = 0.0,
+    )
+end
+
 @testset "transparent LocalMath functions trace through Symbolics" begin
     @variables localmath_x localmath_y
     traced = _localmath_symbolic_geometric_mean(localmath_x, localmath_y)
@@ -163,6 +196,59 @@ end
         ownership = LabelledCells(ownership; cells = [cell], medium),
         values = (bounded_signal => ones(3, 3),),
     )
+
+    function fold_contract_system(name, expression)
+        return mtkcompile(PottsSystem(
+            name = name,
+            statements = StatementSet((
+                Lattice((3, 3); relations = (
+                    contact = VonNeumann(), proposal = VonNeumann())),
+                cell,
+                medium,
+                signal,
+                HamiltonianTerm(
+                    Symbol(name, :_energy);
+                    domain = sites(:lattice),
+                    anchor = site,
+                    expression,
+                ),
+                Protocol(Sweep(); name = Symbol(name, :_protocol)),
+            )),
+            unknowns = [bounded_signal],
+        ))
+    end
+
+    invalid_fold = _invalid_type_changing_fold(gather(
+        signal, :contact; at = anchor_value(site)))
+    invalid_scheduled = fold_contract_system(
+        :invalid_gather_fold, invalid_fold)
+    invalid_error = try
+        init(
+            PottsProblem(invalid_scheduled, initial, (0, 1); seed = 0x19),
+            SequentialCPM();
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test invalid_error isa Potts.PottsValidationError
+    @test invalid_error.stage === :descriptor_lowering
+    @test occursin(
+        "resolved gathered scalar type", sprint(showerror, invalid_error))
+
+    valid_fold = _valid_type_changing_fold(gather(
+        signal, :contact; at = anchor_value(site)))
+    valid_scheduled = fold_contract_system(:valid_gather_fold, valid_fold)
+    valid_integrator = init(
+        PottsProblem(valid_scheduled, initial, (0, 1); seed = 0x1a),
+        SequentialCPM();
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test valid_integrator isa PottsIntegrator
+
     solution = solve(
         PottsProblem(scheduled, initial, (0, 1); seed = 0x61),
         SequentialCPM(); backend = CPUBackend(), scalar_type = Float64,
