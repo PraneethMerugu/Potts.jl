@@ -16,13 +16,23 @@ using ExplicitImports
     weak_dependencies = Set(keys(get(project, "weakdeps", Dict())))
 
     # Optional integrations remain extensions rather than hard requirements.
-    @test isempty(intersect(
-        dependencies,
-        Set(("DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-            "StaticArrays", "Unitful")),
-    ))
-    @test Set(("DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-        "StaticArrays", "Unitful")) ⊆ weak_dependencies
+    @test isempty(
+        intersect(
+            dependencies,
+            Set(
+                (
+                    "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
+                    "StaticArrays", "Unitful",
+                )
+            ),
+        )
+    )
+    @test Set(
+        (
+            "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
+            "StaticArrays", "Unitful",
+        )
+    ) ⊆ weak_dependencies
 
     repository = pkgdir(Potts)
     # Ordinary package, docs, examples, and integration environments resolve

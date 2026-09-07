@@ -39,20 +39,24 @@ const POTTS_TEST_FIXTURES = (
 
 const POTTS_TEST_SUITE = Dict(
     splitext(file)[1] => :(include($(joinpath(@__DIR__, file))))
-    for file in POTTS_TESTS
+        for file in POTTS_TESTS
 )
 POTTS_TEST_SUITE["inventory"] = quote
-    discovered = Set(filter(
-        name -> startswith(name, "test_") && endswith(name, ".jl"),
-        readdir(@__DIR__),
-    ))
+    discovered = Set(
+        filter(
+            name -> startswith(name, "test_") && endswith(name, ".jl"),
+            readdir(@__DIR__),
+        )
+    )
     @test discovered == Set($(POTTS_TESTS))
 
     fixture_directory = joinpath(@__DIR__, "fixtures")
-    discovered_fixtures = Set(filter(
-        name -> endswith(name, ".jl"),
-        readdir(fixture_directory),
-    ))
+    discovered_fixtures = Set(
+        filter(
+            name -> endswith(name, ".jl"),
+            readdir(fixture_directory),
+        )
+    )
     @test discovered_fixtures == Set($(POTTS_TEST_FIXTURES))
 end
 
@@ -65,8 +69,8 @@ end
 ParallelTestRunner.runtests(
     Potts,
     ARGS;
-    testsuite=POTTS_TEST_SUITE,
-    init_code=POTTS_TEST_INIT,
-    serial=["inventory", "test_package_quality"],
-    serial_position=:after,
+    testsuite = POTTS_TEST_SUITE,
+    init_code = POTTS_TEST_INIT,
+    serial = ["inventory", "test_package_quality"],
+    serial_position = :after,
 )
