@@ -29,9 +29,10 @@ Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", rev = "v0.3.0-rc1")
 
 Add MakiePotts separately when visualization is required.
 
-Before the RC tags exist, use immutable commit revisions from the standalone
-repositories in the same dependency order. A clean Potts checkout never
-expects an embedded sibling-package checkout layout.
+The four `main` branches currently contain the RC2 candidates, but no RC2 tags
+exist yet. To exercise them before the release, use immutable commit revisions
+from the standalone repositories in the same dependency order. A clean Potts
+checkout never expects an embedded sibling-package checkout layout.
 
 For development:
 
