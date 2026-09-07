@@ -61,8 +61,8 @@ history-rewritten in place.
 Each repository must instantiate, precompile, load, test, build strict
 documentation, and pass its owned quality and supported-backend checks from a
 fresh clone. One sibling-checkout integration run validates the complete
-dependency chain. Julia 1.12.6 is the current package and Metal qualification
-version; the exact Potts replay claim remains pinned to Julia 1.12.1.
+dependency chain. Julia 1.12.6 is the current package, Metal qualification, and
+exact Potts replay version.
 
 This cutover ends with independently qualified Git release-candidate tags in
 dependency order. General registration is a later release operation. CUDA and
