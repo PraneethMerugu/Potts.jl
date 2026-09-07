@@ -117,7 +117,7 @@ is_direct_scalar_tracker_projection(::Any) = false
     gather(source, relation; at)
 
 Gather the finite values reached from `at` through `relation` as
-the input to a `LocalMath.bounded_fold`. This is a cold symbolic declaration;
+the input to `LocalMath.fold`. This is a cold symbolic declaration;
 the Potts compiler resolves both resources and removes the declaration before
 execution planning.
 """
@@ -180,6 +180,11 @@ function (fold::LocalMath.BoundedFold)(values::_RelationGather)
         _spatial_relation_token(values.relation),
         values.anchor,
     )
+end
+
+"""Lower data-first LocalMath folds over Potts relation gathers symbolically."""
+function LocalMath.fold(values::_RelationGather; kwargs...)
+    return invoke(LocalMath.fold, Tuple{Any}, values; kwargs...)
 end
 
 function Base.getproperty(binding::ProposalContext, name::Symbol)

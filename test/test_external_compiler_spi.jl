@@ -29,13 +29,15 @@ end
     gate = FieldState(
         external_tracker_gate; name = :external_tracker_gate, initial = 0.0)
     proposal = ProposalContext(:external_surface_copy)
-    surface_digits = LocalMath.bounded_fold(
-        identity, _external_tracker_lane_digits, Int32(0),
-        _external_tracker_lane_digits_finish;
-        domain = LocalMath.Where(>=(Int32(0))),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.RejectEmpty(),
-        order = LocalMath.CanonicalLeftFold(),
+    surface_digits(values) = LocalMath.fold(values;
+        map = identity,
+        combine = _external_tracker_lane_digits,
+        init = Int32(0),
+        finish = _external_tracker_lane_digits_finish,
+        domain = >=(Int32(0)),
+        invalid = :reject,
+        empty = :reject,
+        order = :canonical,
     )
     source = PottsSystem(
         name = :external_surface_relations,

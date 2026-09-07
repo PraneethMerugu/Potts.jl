@@ -203,15 +203,15 @@ end
     )
     site = SiteBinding(:bounded_oracle_site)
     proposal = ProposalContext(:bounded_oracle_proposal)
-    canonical_sum = LocalMath.bounded_fold(
-        identity,
-        +,
-        0.0,
-        (total, count) -> total;
-        domain = LocalMath.Where(isfinite),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.RejectEmpty(),
-        order = LocalMath.CanonicalLeftFold(),
+    canonical_sum(values) = LocalMath.fold(values;
+        map = identity,
+        combine = +,
+        init = 0.0,
+        finish = (total, count) -> total,
+        domain = isfinite,
+        invalid = :reject,
+        empty = :reject,
+        order = :canonical,
     )
     source = PottsSystem(
         name = :gathered_values_energy_oracle,
@@ -334,15 +334,15 @@ _tracker_lane_digits_finish(accumulator, count) = accumulator
     gate = FieldState(
         tracker_gather_gate; name = :tracker_gather_gate, initial = 0.0)
     proposal = ProposalContext(:tracker_gather_proposal)
-    lane_digits = LocalMath.bounded_fold(
-        identity,
-        _tracker_lane_digits,
-        Int32(0),
-        _tracker_lane_digits_finish;
-        domain = LocalMath.Where(>=(Int32(0))),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.RejectEmpty(),
-        order = LocalMath.CanonicalLeftFold(),
+    lane_digits(values) = LocalMath.fold(values;
+        map = identity,
+        combine = _tracker_lane_digits,
+        init = Int32(0),
+        finish = _tracker_lane_digits_finish,
+        domain = >=(Int32(0)),
+        invalid = :reject,
+        empty = :reject,
+        order = :canonical,
     )
     source = PottsSystem(
         name = :tracker_gather_oracle,

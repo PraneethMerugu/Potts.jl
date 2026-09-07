@@ -22,6 +22,65 @@ LocalMath.@localmath function _localmath_symbolic_branch(x)
     end
 end
 
+LocalMath.@localmath function _localmath_neighbor_sum(values)
+    LocalMath.fold(values;
+        map = identity,
+        combine = +,
+        init = 0.0,
+        finish = (sum, count) -> sum,
+        domain = isfinite,
+        invalid = :reject,
+        empty = 0.0,
+        order = :canonical,
+    )
+end
+
+function _localmath_neighbor_volume_sum(values)
+    return LocalMath.fold(values;
+        map = identity,
+        combine = +,
+        init = Int32(0),
+        finish = (sum, count) -> sum,
+        domain = >=(Int32(0)),
+        invalid = :reject,
+        empty = Int32(0),
+        order = :canonical,
+    )
+end
+
+struct _InvalidGatherTupleMap end
+(::_InvalidGatherTupleMap)(value) = (value, value)
+
+struct _GatherFloat32Map end
+(::_GatherFloat32Map)(value) = Float32(value)
+
+struct _GatherIdentityResult end
+(::_GatherIdentityResult)(accumulator, ::Int32) = accumulator
+
+struct _GatherFloat64Mean end
+(::_GatherFloat64Mean)(accumulator, count::Int32) =
+    Float64(accumulator) / Float64(count)
+
+function _invalid_type_changing_fold(values)
+    return LocalMath.fold(values;
+        map = _InvalidGatherTupleMap(),
+        combine = +,
+        init = 0.0,
+        finish = _GatherIdentityResult(),
+        empty = 0.0,
+    )
+end
+
+function _valid_type_changing_fold(values)
+    return LocalMath.fold(values;
+        map = _GatherFloat32Map(),
+        combine = +,
+        init = 0.0f0,
+        finish = _GatherFloat64Mean(),
+        empty = 0.0,
+    )
+end
+
 @testset "transparent LocalMath functions trace through Symbolics" begin
     @variables localmath_x localmath_y
     traced = _localmath_symbolic_geometric_mean(localmath_x, localmath_y)
@@ -58,28 +117,15 @@ end
         bounded_signal; name = :bounded_signal, initial = 1.0)
     site = SiteBinding(:bounded_site)
     proposal = ProposalContext(:bounded_copy)
-    neighbor_sum = LocalMath.bounded_fold(
-        identity,
-        +,
-        0.0,
-        (sum, count) -> sum;
-        domain = LocalMath.Where(isfinite),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.FillEmpty(0.0),
-        order = LocalMath.CanonicalLeftFold(),
-    )
-    neighbor_volume_sum = LocalMath.bounded_fold(
-        identity,
-        +,
-        Int32(0),
-        (sum, count) -> sum;
-        domain = LocalMath.Where(>=(Int32(0))),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.FillEmpty(Int32(0)),
-        order = LocalMath.CanonicalLeftFold(),
-    )
     @test_throws ArgumentError gather(
         identity, :contact; at = anchor_value(site))
+    symbolic_fold = _localmath_neighbor_sum(gather(
+        signal, :contact; at = anchor_value(site)))
+    fold_node = Symbolics.unwrap(symbolic_fold)
+    @test Symbolics.operation(fold_node) === Potts._potts_bounded_fold
+    fold_arguments = Symbolics.arguments(fold_node)
+    @test length(fold_arguments) == 4
+    @test Symbolics.value(first(fold_arguments)) isa LocalMath.BoundedFold
     source = PottsSystem(
         name = :bounded_term_system,
         statements = StatementSet((
@@ -92,22 +138,21 @@ end
                 :bounded_signal_energy;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(gather(
-                    signal, :contact; at = anchor_value(site))),
+                expression = symbolic_fold,
             ),
             ProposalDrive(
                 :bounded_neighbor_volume,
-                neighbor_volume_sum(gather(
+                _localmath_neighbor_volume_sum(gather(
                     cell_volume, :contact; at = proposal.target_site)),
             ),
             ProposalConstraint(
                 :bounded_neighbor_volume_is_nonnegative,
-                neighbor_volume_sum(gather(
+                _localmath_neighbor_volume_sum(gather(
                     cell_volume, :contact; at = proposal.target_site)) >= 0,
             ),
             ProposalModifier(
                 :bounded_neighbor_volume_identity_modifier,
-                1.0 + 0.0 * neighbor_volume_sum(gather(
+                1.0 + 0.0 * _localmath_neighbor_volume_sum(gather(
                     cell_volume, :contact; at = proposal.target_site)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
@@ -128,7 +173,7 @@ end
                 :nonlocal_neighbor_volume;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_volume_sum(gather(
+                expression = _localmath_neighbor_volume_sum(gather(
                     cell_volume, :contact; at = anchor_value(site))),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
@@ -151,6 +196,59 @@ end
         ownership = LabelledCells(ownership; cells = [cell], medium),
         values = (bounded_signal => ones(3, 3),),
     )
+
+    function fold_contract_system(name, expression)
+        return mtkcompile(PottsSystem(
+            name = name,
+            statements = StatementSet((
+                Lattice((3, 3); relations = (
+                    contact = VonNeumann(), proposal = VonNeumann())),
+                cell,
+                medium,
+                signal,
+                HamiltonianTerm(
+                    Symbol(name, :_energy);
+                    domain = sites(:lattice),
+                    anchor = site,
+                    expression,
+                ),
+                Protocol(Sweep(); name = Symbol(name, :_protocol)),
+            )),
+            unknowns = [bounded_signal],
+        ))
+    end
+
+    invalid_fold = _invalid_type_changing_fold(gather(
+        signal, :contact; at = anchor_value(site)))
+    invalid_scheduled = fold_contract_system(
+        :invalid_gather_fold, invalid_fold)
+    invalid_error = try
+        init(
+            PottsProblem(invalid_scheduled, initial, (0, 1); seed = 0x19),
+            SequentialCPM();
+            backend = CPUBackend(),
+            scalar_type = Float64,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test invalid_error isa Potts.PottsValidationError
+    @test invalid_error.stage === :descriptor_lowering
+    @test occursin(
+        "resolved gathered scalar type", sprint(showerror, invalid_error))
+
+    valid_fold = _valid_type_changing_fold(gather(
+        signal, :contact; at = anchor_value(site)))
+    valid_scheduled = fold_contract_system(:valid_gather_fold, valid_fold)
+    valid_integrator = init(
+        PottsProblem(valid_scheduled, initial, (0, 1); seed = 0x1a),
+        SequentialCPM();
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test valid_integrator isa PottsIntegrator
+
     solution = solve(
         PottsProblem(scheduled, initial, (0, 1); seed = 0x61),
         SequentialCPM(); backend = CPUBackend(), scalar_type = Float64,
@@ -181,7 +279,7 @@ end
                 :missing_bounded_relation;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(gather(
+                expression = _localmath_neighbor_sum(gather(
                     signal, :missing_contact; at = anchor_value(site))),
             ),
             Protocol(Sweep(); name = :bounded_protocol),

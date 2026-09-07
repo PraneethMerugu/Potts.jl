@@ -88,6 +88,88 @@ private compiler IR is never exposed to extensions.
 """
 function registered_operation_tracker_requirements end
 
+_dense_gather_scalar_type(
+    ::CorePotts.CompilerSPI.DenseOwnerScalarStorage{T},
+) where {T} = T
+
+function _resolved_gather_scalar_type(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        graph::NormalizedTermGraph,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    tracker_source = _tracker_projection_operand(node, graph)
+    tracker_source === nothing && return T
+    descriptors = _operation_tracker_descriptors(ir, tracker_source, T)
+    if isempty(descriptors) && tracker_source.transfer.identity === :cell_volume
+        storage = CorePotts.CompilerSPI.tracker_contract(
+            CorePotts.CompilerSPI.OwnershipCountTracker()).storage
+        return _dense_gather_scalar_type(storage)
+    end
+    isempty(descriptors) && throw(ArgumentError(
+        "gathered tracker operation has no resolved tracker descriptor"
+    ))
+    storages = map(descriptors) do descriptor
+        storage = CorePotts.CompilerSPI.tracker_contract(descriptor).storage
+        storage isa CorePotts.CompilerSPI.DenseOwnerScalarStorage ||
+            throw(ArgumentError(
+                "gathered folds require direct dense scalar tracker storage"
+            ))
+        storage
+    end
+    types = map(_dense_gather_scalar_type, storages)
+    all(==(first(types)), types) || throw(ArgumentError(
+        "gathered tracker descriptors must have one scalar element type"
+    ))
+    return first(types)
+end
+
+function _checked_gather_fold(
+        fold::LocalMath.BoundedFold, ::Type{T},
+    ) where {T}
+    return LocalMath.BoundedFold(
+        T,
+        fold.map,
+        fold.combine,
+        fold.seed,
+        fold.finish;
+        domain = fold.domain,
+        oninvalid = fold.oninvalid,
+        onempty = fold.onempty,
+        order = fold.order,
+    )
+end
+
+function _materialize_checked_gather_fold(
+        ir::AnalyzedTermIR,
+        node::NormalizedTermNode,
+        graph::NormalizedTermGraph,
+        fold::LocalMath.BoundedFold,
+        ::Type{T},
+    ) where {T <: AbstractFloat}
+    try
+        input_type = _resolved_gather_scalar_type(ir, node, graph, T)
+        return _checked_gather_fold(fold, input_type)
+    catch error
+        error isa ArgumentError ||
+            error isa LocalMath.LocalMathValidationError || rethrow(error)
+        record = ir.source.records[Int(node.record)]
+        throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :invalid_gather_fold,
+                node.source,
+                "bounded fold",
+                node.source.path,
+                "a fold closed over the resolved gathered scalar type",
+                sprint(showerror, error),
+                (),
+                record.source,
+            ),),
+        ))
+    end
+end
+
 function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
         T <: AbstractFloat,
     }
