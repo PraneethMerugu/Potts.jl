@@ -26,16 +26,38 @@ const POTTS_TESTS = (
     "test_package_quality.jl",
 )
 
+# Each helper is owned either by the worker-wide setup or by one test unit.
+# Keeping that inventory explicit prevents detached fixture artifacts without
+# turning helpers into a second test suite.
+const POTTS_TEST_FIXTURES = (
+    "ExternalCompilerSPIFixture.jl",
+    "ExternalSurfaceOperationFixture.jl",
+    "LifecycleOperationFixtures.jl",
+    "lifecycle_public.jl",
+    "sciml_lifecycle.jl",
+)
+
 const POTTS_TEST_SUITE = Dict(
     splitext(file)[1] => :(include($(joinpath(@__DIR__, file))))
-    for file in POTTS_TESTS
+        for file in POTTS_TESTS
 )
 POTTS_TEST_SUITE["inventory"] = quote
-    discovered = Set(filter(
-        name -> startswith(name, "test_") && endswith(name, ".jl"),
-        readdir(@__DIR__),
-    ))
+    discovered = Set(
+        filter(
+            name -> startswith(name, "test_") && endswith(name, ".jl"),
+            readdir(@__DIR__),
+        )
+    )
     @test discovered == Set($(POTTS_TESTS))
+
+    fixture_directory = joinpath(@__DIR__, "fixtures")
+    discovered_fixtures = Set(
+        filter(
+            name -> endswith(name, ".jl"),
+            readdir(fixture_directory),
+        )
+    )
+    @test discovered_fixtures == Set($(POTTS_TEST_FIXTURES))
 end
 
 const POTTS_TEST_INIT = quote
@@ -47,8 +69,8 @@ end
 ParallelTestRunner.runtests(
     Potts,
     ARGS;
-    testsuite=POTTS_TEST_SUITE,
-    init_code=POTTS_TEST_INIT,
-    serial=["inventory", "test_package_quality"],
-    serial_position=:after,
+    testsuite = POTTS_TEST_SUITE,
+    init_code = POTTS_TEST_INIT,
+    serial = ["inventory", "test_package_quality"],
+    serial_position = :after,
 )

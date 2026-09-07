@@ -177,3 +177,12 @@ not invoke the Metal environment through a different Julia release channel.
 Current specifications and decisions live under `spec/`. Historical interviews and evidence under
 `design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier
 repository states but are not active development gates.
+
+Before an ecosystem release candidate is tagged, dispatch the
+`Ecosystem qualification` workflow with the full 40-character commit SHA for
+LocalMath, CorePotts, Potts, and MakiePotts. The selected commits must carry the
+release-candidate names, UUIDs, and versions declared by that workflow. The run
+checks the exact dependency chain through temporary checkouts: it does not write
+those paths or revisions into package projects or runtime identities. Both the
+CPU/documentation/rendering job and the real-Metal job must pass for that exact
+four-commit selection.

@@ -318,11 +318,11 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CorePotts]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "LinearAlgebra", "LocalMath", "SHA", "StaticArrays", "StructArrays"]
-git-tree-sha1 = "324c077c4a5a6cf511a7e3b91eccae83167c1bd4"
-repo-rev = "ac45a1ceb63972a2d300aaf8cfc800d10addd4e1"
+git-tree-sha1 = "c61e198c89d6ee6003c1627d3da784b35a42ac88"
+repo-rev = "3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4"
 repo-url = "https://github.com/PraneethMerugu/CorePotts.jl"
 uuid = "047998c1-3edd-4edf-b561-cee99549c5a6"
-version = "0.2.0-rc1"
+version = "0.2.0-rc2"
 weakdeps = ["Metal"]
 
     [deps.CorePotts.extensions]
@@ -1050,12 +1050,12 @@ version = "5.4.0"
     cuSOLVER = "887afef0-6a32-4de5-add4-7827692ba8fc"
 
 [[deps.LocalMath]]
-deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "StructArrays", "UUIDs"]
-git-tree-sha1 = "6eb911c55e29f43b3b70ad316827bc1ab52074c7"
-repo-rev = "b89d243bda0624e3335e191db8674617ff70bf20"
+deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "Statistics", "StructArrays", "UUIDs"]
+git-tree-sha1 = "ee7104291e87505149764af97b5e059543bacfb1"
+repo-rev = "b699002a05f84e240e34162d509d6b952bf7d437"
 repo-url = "https://github.com/PraneethMerugu/LocalMath.jl"
 uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
-version = "0.2.0-rc1"
+version = "0.2.0-rc2"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
@@ -1336,12 +1336,12 @@ uuid = "e409e4f3-bfea-5376-8464-e040bb5c01ab"
 version = "0.4.13"
 
 [[deps.Potts]]
-deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "SymbolicIndexingInterface", "Symbolics"]
-git-tree-sha1 = "c3769bbd1ef1366169ea3f09ae35c1728a08b9ce"
-repo-rev = "99414679e039710a85fc9a0325d59ae45865f6e0"
+deps = ["CorePotts", "DynamicQuantities", "KernelAbstractions", "LocalMath", "ModelingToolkitBase", "PrecompileTools", "SHA", "SciMLBase", "Statistics", "SymbolicIndexingInterface", "Symbolics"]
+git-tree-sha1 = "cce1c77e0db08463808dd527e56bb13571b11d25"
+repo-rev = "d5d3173566b0471a929378a15fa6a94831d64e14"
 repo-url = "https://github.com/PraneethMerugu/Potts.jl"
 uuid = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-version = "0.3.0-rc1"
+version = "0.3.0-rc2"
 
     [deps.Potts.extensions]
     PottsMetalExt = "Metal"

@@ -7,5 +7,5 @@ authors:
     given-names: Praneeth
 repository-code: "https://github.com/PraneethMerugu/Potts.jl"
 license: MIT
-version: 0.3.0-rc1
-date-released: 2026-09-01
+version: 0.3.0-rc2
+date-released: 2026-09-07

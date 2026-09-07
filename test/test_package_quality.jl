@@ -16,13 +16,23 @@ using ExplicitImports
     weak_dependencies = Set(keys(get(project, "weakdeps", Dict())))
 
     # Optional integrations remain extensions rather than hard requirements.
-    @test isempty(intersect(
-        dependencies,
-        Set(("DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-            "StaticArrays", "Unitful")),
-    ))
-    @test Set(("DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-        "StaticArrays", "Unitful")) ⊆ weak_dependencies
+    @test isempty(
+        intersect(
+            dependencies,
+            Set(
+                (
+                    "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
+                    "StaticArrays", "Unitful",
+                )
+            ),
+        )
+    )
+    @test Set(
+        (
+            "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
+            "StaticArrays", "Unitful",
+        )
+    ) ⊆ weak_dependencies
 
     repository = pkgdir(Potts)
     # Ordinary package, docs, examples, and integration environments resolve
@@ -34,29 +44,6 @@ using ExplicitImports
     )
     @test all(isfile, live_manifests)
 
-    @testset "live path-manifest closure" begin
-        for manifest_path in sort(collect(live_manifests))
-            manifest = TOML.parsefile(manifest_path)
-            for (recorded_name, entries) in get(manifest, "deps", Dict())
-                for entry in (entries isa AbstractVector ? entries : (entries,))
-                    haskey(entry, "path") || continue
-                    package_directory = normpath(joinpath(
-                        dirname(manifest_path), entry["path"]))
-                    target_project_path = joinpath(package_directory, "Project.toml")
-                    @test isfile(target_project_path)
-                    isfile(target_project_path) || continue
-                    target = TOML.parsefile(target_project_path)
-                    recorded_dependencies = Set(get(entry, "deps", String[]))
-                    target_dependencies = Set(keys(get(target, "deps", Dict())))
-                    @test recorded_name == target["name"]
-                    @test entry["uuid"] == target["uuid"]
-                    @test get(entry, "version", nothing) == get(target, "version", nothing)
-                    @test recorded_dependencies == target_dependencies
-                end
-            end
-        end
-    end
-
     @testset "exact environments pin standalone upstream repositories" begin
         exact_manifests = (
             joinpath(repository, "integration", "replay", "Manifest.toml") =>
@@ -64,23 +51,46 @@ using ExplicitImports
             joinpath(repository, "benchmark", "backends", "metal", "Manifest.toml") =>
                 "1.12.6",
         )
-        upstream_urls = Dict(
-            "CorePotts" => "https://github.com/PraneethMerugu/CorePotts.jl",
-            "LocalMath" => "https://github.com/PraneethMerugu/LocalMath.jl",
+        upstream_sources = Dict(
+            "CorePotts" => (
+                "https://github.com/PraneethMerugu/CorePotts.jl",
+                "3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4",
+            ),
+            "LocalMath" => (
+                "https://github.com/PraneethMerugu/LocalMath.jl",
+                "b699002a05f84e240e34162d509d6b952bf7d437",
+            ),
+            # Potts cannot pin the commit containing its own exact manifest.
+            # Its immutable self revision is still syntax-checked below.
+            "Potts" => (
+                "https://github.com/PraneethMerugu/Potts.jl",
+                nothing,
+            ),
         )
         full_revision = r"^[0-9a-f]{40}$"
         for (manifest_path, julia_version) in exact_manifests
             manifest = TOML.parsefile(manifest_path)
             @test manifest["julia_version"] == julia_version
             dependencies = manifest["deps"]
-            for (name, url) in upstream_urls
+            for (name, (url, qualified_revision)) in upstream_sources
                 entries = dependencies[name]
                 entry = entries isa AbstractVector ? only(entries) : entries
                 @test !haskey(entry, "path")
                 @test entry["repo-url"] == url
-                @test occursin(full_revision, entry["repo-rev"])
-                @test occursin(full_revision, entry["git-tree-sha1"])
+                @test match(full_revision, entry["repo-rev"]) !== nothing
+                @test match(full_revision, entry["git-tree-sha1"]) !== nothing
+                if qualified_revision !== nothing
+                    @test entry["repo-rev"] == qualified_revision
+                end
             end
+
+            path_dependencies = String[]
+            for (name, records) in dependencies
+                for entry in (records isa AbstractVector ? records : (records,))
+                    haskey(entry, "path") && push!(path_dependencies, name)
+                end
+            end
+            @test isempty(path_dependencies)
         end
     end
 end

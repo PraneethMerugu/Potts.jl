@@ -28,7 +28,7 @@ UUID `e4c62a4c-8889-4cc8-ad3a-75efc86c53b9`. No alias module, compatibility
 package, deprecated import, old checkpoint decoder, or old/new selector is
 retained.
 
-The release-candidate versions are:
+The initial repository-cutover release-candidate versions were:
 
 - LocalMath `0.2.0-rc1`;
 - CorePotts `0.2.0-rc1`;
@@ -61,12 +61,14 @@ history-rewritten in place.
 Each repository must instantiate, precompile, load, test, build strict
 documentation, and pass its owned quality and supported-backend checks from a
 fresh clone. One sibling-checkout integration run validates the complete
-dependency chain. Julia 1.12.6 is the current package and Metal qualification
-version; the exact Potts replay claim remains pinned to Julia 1.12.1.
+dependency chain. Julia 1.12.6 is the current package, Metal qualification, and
+exact Potts replay version.
 
-This cutover ends with independently qualified Git release-candidate tags in
-dependency order. General registration is a later release operation. CUDA and
-ROCm remain unsupported until separately qualified.
+The initial cutover ended with independently qualified Git release-candidate
+tags in dependency order. Later release-candidate revisions are qualified by
+the ordinary package workflows and an exact-revision ecosystem run. General
+registration is a separate release operation. CUDA and ROCm remain unsupported
+until separately qualified.
 
 Every repository carries the MIT license, tailored contributor guidance, an
 honest disclosure of substantial generative-AI assistance, and a
