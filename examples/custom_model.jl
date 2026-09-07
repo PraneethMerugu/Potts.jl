@@ -92,6 +92,8 @@ function run_custom_model(; seed::Integer = 0x6c21)
         activity,
         links,
         Volume(cell; target = 2.0, strength = 1.0),
+        # Isolate the authored gather from stochastic copy dynamics so the
+        # lifecycle and continuation behavior remains easy to inspect.
         ProposalConstraint(:freeze_copy_attempts, false),
         retune,
         transition,
@@ -159,27 +161,59 @@ function run_custom_model(; seed::Integer = 0x6c21)
         backend = CPUBackend(),
         scalar_type = Float64,
         save_start = false,
+        observables = (:signal_snapshot,),
     )
     step!(integrator)
     captured = checkpoint(integrator)
-    resumed = solve!(init(
+    resumed_integrator = init(
         replay_problem,
         SequentialCPM();
         backend = CPUBackend(),
         scalar_type = Float64,
         checkpoint = captured,
         save_start = false,
-    ))
+        observables = (:signal_snapshot,),
+    )
+    resumed = solve!(resumed_integrator)
 
     @assert solution.retcode == SciMLBase.ReturnCode.Success failure_report(solution)
     @assert !inspect(solution, Capabilities()).exact_replay
     @assert uninterrupted.retcode == SciMLBase.ReturnCode.Success
     @assert inspect(uninterrupted, Capabilities()).exact_replay
     @assert resumed.retcode == SciMLBase.ReturnCode.Success
-    @assert last(uninterrupted).ownership == last(resumed).ownership
-    @assert last(uninterrupted)[:activity] == last(resumed)[:activity]
-    @assert last(uninterrupted)[:custom_links].active ==
-            last(resumed)[:custom_links].active
+    uninterrupted_final = last(uninterrupted)
+    resumed_final = last(resumed)
+    @assert uninterrupted_final.mcs == resumed_final.mcs
+    @assert uninterrupted_final.ownership == resumed_final.ownership
+    @assert uninterrupted_final.cell_kinds == resumed_final.cell_kinds
+    @assert uninterrupted_final.cell_generations ==
+            resumed_final.cell_generations
+    @assert uninterrupted_final.volumes == resumed_final.volumes
+    @assert uninterrupted_final[:signal] == resumed_final[:signal]
+    @assert uninterrupted_final[:activity] == resumed_final[:activity]
+    @assert uninterrupted_final[:signal_snapshot] ==
+            resumed_final[:signal_snapshot]
+    @assert uninterrupted_final.native == resumed_final.native
+    uninterrupted_links = uninterrupted_final[:custom_links]
+    resumed_links = resumed_final[:custom_links]
+    @assert uninterrupted_links.active == resumed_links.active
+    @assert uninterrupted_links.endpoint_a == resumed_links.endpoint_a
+    @assert uninterrupted_links.endpoint_b == resumed_links.endpoint_b
+    @assert uninterrupted_links.generation_a == resumed_links.generation_a
+    @assert uninterrupted_links.generation_b == resumed_links.generation_b
+    @assert uninterrupted_links.payload == resumed_links.payload
+    @assert uninterrupted_links.degree == resumed_links.degree
+    @assert uninterrupted_links.incident_edges == resumed_links.incident_edges
+    @assert uninterrupted.stats.candidate_attempts ==
+            resumed.stats.candidate_attempts
+    @assert uninterrupted.stats.accepted == resumed.stats.accepted
+    @assert uninterrupted.stats.rejected == resumed.stats.rejected
+    @assert uninterrupted.stats.null_attempts == resumed.stats.null_attempts
+    @assert uninterrupted.stats.constraint_rejections ==
+            resumed.stats.constraint_rejections
+    @assert uninterrupted.stats.energy_rejections ==
+            resumed.stats.energy_rejections
+    @assert uninterrupted.stats.retired_cells == resumed.stats.retired_cells
 
     return (;
         system,

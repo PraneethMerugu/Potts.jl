@@ -7,6 +7,7 @@ The complete executable program below combines those extension paths in one
 small model.
 
 ```@example custom_model
+using Potts
 include(joinpath(dirname(dirname(dirname(@__DIR__))), "examples", "custom_model.jl"))
 result = CustomModel.run_custom_model()
 
@@ -27,6 +28,11 @@ the declared contact relation at the proposal target. One reads a lattice
 preserves relation-lane order and repeated endpoints; missing boundary lanes
 and medium endpoints do not participate.
 
+The intentionally false proposal constraint keeps stochastic copy dynamics
+fixed in this compact tutorial. That isolates the authored gather from the
+lifecycle and continuation behavior shown below; the independent gathered-fold
+tests provide the numerical oracle for the reduction itself.
+
 `PottsProblem` accepts the authored system and performs structural compilation
 immediately. The explicit `mtkcompile(system)` spelling remains useful when a
 compiler or extension author wants to inspect scheduling before creating a
@@ -41,7 +47,9 @@ executable identities do not yet carry CorePotts's stronger exact-replay
 qualification. The example therefore executes the complete custom model, then
 uses the same state, relationship, and lifecycle model without the custom drive
 to demonstrate the checkpoint boundary. Restored continuation reaches the same
-ownership, cell state, and relationship state as uninterrupted execution.
+MCS, ownership, generations, tracker values, field and cell state, observation,
+relationship endpoints, relationship generations, payload, and incidence as
+uninterrupted execution.
 
 `failure_report(solution)` returns `nothing` for the successful custom run. For
 a failed trajectory it returns the exact retained scientific or provider

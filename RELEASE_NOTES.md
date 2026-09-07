@@ -1,5 +1,14 @@
 # Potts 0.3.0-rc2
 
+- Gathered values now compose with data-first `LocalMath.fold`, `sum`,
+  `minimum`, `maximum`, `Statistics.mean`, and
+  `LocalMath.geometric_mean`. The resulting scalar type follows the declared
+  source and runtime scalar profile.
+- `gather(...; at=binding)` accepts supported bindings directly.
+  `anchor_value` is now qualified compiler vocabulary, and the eight inert
+  spatial-query declarations that had no executable semantics were removed.
+- `failure_report` exposes the exact retained integrator or solution failure
+  without waiting, synchronizing, or reconstructing execution state.
 - `PottsProblem` accepts authored, completed, or scheduled `PottsSystem` values.
   Unscheduled input passes through the sole idempotent `mtkcompile` authority;
   scheduled input is retained without another source traversal.
