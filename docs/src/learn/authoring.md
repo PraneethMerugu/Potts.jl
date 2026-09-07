@@ -70,7 +70,7 @@ volume_penalty = HamiltonianTerm(
 )
 ```
 
-A `LocalMath.BoundedFold` can consume the same quantity over a declared finite
+An ordinary Julia function can fold the same quantity over a declared finite
 spatial relation:
 
 ```@example bounded_tracker_authoring
@@ -80,12 +80,15 @@ kind = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)
 proposal = ProposalContext(:copy)
 
-neighbor_mean = LocalMath.bounded_fold(
-    identity, +, 0.0, (sum, count) -> sum / count;
-    domain=LocalMath.Where(>=(0)),
-    oninvalid=LocalMath.RejectInvalid(),
-    onempty=LocalMath.FillEmpty(0.0),
-    order=LocalMath.CanonicalLeftFold(),
+neighbor_mean(values) = LocalMath.fold(values;
+    map=identity,
+    combine=+,
+    init=0.0,
+    finish=(sum, count) -> sum / count,
+    domain = >=(0),
+    invalid=:reject,
+    empty=0.0,
+    order=:canonical,
 )
 
 source = PottsSystem(
@@ -129,8 +132,8 @@ before/after tracker overlays.
 
 `HamiltonianTerm` remains the custom scientific interface. Ordinary Julia and
 Symbolics expressions describe scalar mathematics; `gather` declares a
-finite spatial input, and a LocalMath bounded fold makes its ordering, invalid
-value, and empty-neighborhood laws explicit.
+finite spatial input, and `LocalMath.fold` makes its ordering, invalid-value,
+and empty-neighborhood laws explicit.
 
 ```@example custom_hamiltonian
 using Potts
@@ -144,15 +147,15 @@ medium = MediumKind(:medium)
 signal = FieldState(signal_value; name=:signal, initial=1.0)
 site = SiteBinding(:site)
 
-neighbor_mean = LocalMath.bounded_fold(
-    identity,
-    +,
-    0.0,
-    (sum, count) -> sum / count;
-    domain=LocalMath.Where(isfinite),
-    oninvalid=LocalMath.RejectInvalid(),
-    onempty=LocalMath.RejectEmpty(),
-    order=LocalMath.CanonicalLeftFold(),
+neighbor_mean(values) = LocalMath.fold(values;
+    map=identity,
+    combine=+,
+    init=0.0,
+    finish=(sum, count) -> sum / count,
+    domain=isfinite,
+    invalid=:reject,
+    empty=:reject,
+    order=:canonical,
 )
 
 system = PottsSystem(

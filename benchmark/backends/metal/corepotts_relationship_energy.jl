@@ -14,25 +14,25 @@ function _relationship_energy_problem()
         initial = 1.0f0,
     )
     site = SiteBinding(:relationship_energy_site)
-    neighbor_sum = LocalMath.bounded_fold(
-        identity,
-        +,
-        0.0f0,
-        (sum, count) -> sum;
-        domain = LocalMath.Where(isfinite),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.FillEmpty(0.0f0),
-        order = LocalMath.CanonicalLeftFold(),
+    neighbor_sum(values) = LocalMath.fold(values;
+        map = identity,
+        combine = +,
+        init = 0.0f0,
+        finish = (sum, count) -> sum,
+        domain = isfinite,
+        invalid = :reject,
+        empty = 0.0f0,
+        order = :canonical,
     )
-    neighbor_volume_sum = LocalMath.bounded_fold(
-        identity,
-        +,
-        Int32(0),
-        (sum, count) -> sum;
-        domain = LocalMath.Where(>=(Int32(0))),
-        oninvalid = LocalMath.RejectInvalid(),
-        onempty = LocalMath.FillEmpty(Int32(0)),
-        order = LocalMath.CanonicalLeftFold(),
+    neighbor_volume_sum(values) = LocalMath.fold(values;
+        map = identity,
+        combine = +,
+        init = Int32(0),
+        finish = (sum, count) -> sum,
+        domain = >=(Int32(0)),
+        invalid = :reject,
+        empty = Int32(0),
+        order = :canonical,
     )
     proposal = ProposalContext(:relationship_energy_proposal)
     links = RelationshipState(
