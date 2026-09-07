@@ -1,9 +1,10 @@
 # [Initialize and execute](@id initialize-and-execute)
 
-`PottsProblem` combines a scheduled system, immutable initialization recipe,
-integer MCS span, parameter values, and semantic RNG identity. Algorithm,
-backend, scalar type, save policy, callbacks, and native solve profiles are
-selected at `init` or `solve`.
+`PottsProblem` combines a model, immutable initialization recipe, integer MCS
+span, parameter values, and semantic RNG identity. It completes and
+structurally schedules an authored model immediately; an already scheduled
+model passes through unchanged. Algorithm, backend, scalar type, save policy,
+callbacks, and native solve profiles are selected at `init` or `solve`.
 
 ```@example execution
 using Potts
@@ -14,7 +15,7 @@ using ModelingToolkitBase: @parameters
 @parameters target = 4.0 strength = 1.0 temperature = 2.0
 cell = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)
-scheduled = mtkcompile(PottsSystem(
+system = PottsSystem(
     name=:execution_example,
     statements=StatementSet((
         Lattice((4, 4); boundary=Periodic()),
@@ -25,7 +26,7 @@ scheduled = mtkcompile(PottsSystem(
         Observation(:occupied, occupancy(cell, :lattice)),
     )),
     parameters=[target, strength, temperature],
-))
+)
 
 labels = zeros(Int, 4, 4)
 labels[2:3, 2:3] .= 1
@@ -33,7 +34,7 @@ initial = PottsInitialState(
     ownership=LabelledCells(labels; cells=[cell], medium),
 )
 problem = PottsProblem(
-    scheduled,
+    system,
     initial,
     (0, 2);
     p=(target=>4.0, strength=>1.0, temperature=>2.0),

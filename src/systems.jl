@@ -16,8 +16,9 @@ ReferenceUnits(; kwargs...) = ReferenceUnits((; kwargs...))
                 continuous_events=(), discrete_events=events)
 
 Declarative Potts model compatible with ModelingToolkit composition. Use
-`@named model = PottsSystem(...)` to supply `name`, then call `complete` and
-`mtkcompile` before constructing a `PottsProblem`.
+`@named model = PottsSystem(...)` to supply `name`. `PottsProblem` completes
+and structurally schedules an unscheduled system; call `complete` or
+`mtkcompile` explicitly when inspecting those compiler boundaries.
 """
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol

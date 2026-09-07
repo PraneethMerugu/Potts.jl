@@ -13,17 +13,21 @@ package responsibilities:
 The public lifecycle is:
 
 ```text
-PottsSystem -> complete / mtkcompile -> PottsProblem
+PottsSystem -> PottsProblem (complete / mtkcompile)
             -> init / solve -> PottsIntegrator / PottsSolution
 ```
 
 Algorithm, backend, scalar type, seed, and runtime state are late choices.
-`mtkcompile` is structural and does not select a device or create a public
-executable artifact.
+`PottsProblem` invokes the structural, idempotent `mtkcompile` boundary for an
+authored model. Call `mtkcompile` yourself when you want to inspect that
+boundary; it does not select a device or create a public executable artifact.
 
 ## Start here
 
 - [Author and compose](@ref author-and-compose) introduces the symbolic model.
+- [Build a custom model](@ref custom-model) combines transparent functions,
+  gathered reductions, tracker projections, state, relationships, lifecycle,
+  and checkpoint continuation in one executable workflow.
 - [Initialize and execute](@ref initialize-and-execute) runs the model through
   the standard SciML lifecycle.
 - [Native MTK components](@ref native-mtk-components) embeds global or

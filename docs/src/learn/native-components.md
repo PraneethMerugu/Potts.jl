@@ -31,7 +31,7 @@ component = NativeComponent(
 
 cell = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)
-scheduled = mtkcompile(PottsSystem(
+system = PottsSystem(
     name=:coupled,
     statements=StatementSet((
         Lattice((3, 3); boundary=Closed()),
@@ -44,7 +44,7 @@ scheduled = mtkcompile(PottsSystem(
     )),
     unknowns=[potts_drive, potts_output],
     native_components=(component,),
-))
+)
 path = (:coupled, :island)
 labels = zeros(Int, 3, 3)
 labels[2, 2] = 1
@@ -52,7 +52,7 @@ initial = PottsInitialState(
     ownership=LabelledCells(labels; cells=[cell], medium),
     native=(NativeOperatingPoint(path; values=(x=>1.0,)),),
 )
-problem = PottsProblem(scheduled, initial, (0, 1); seed=0x503)
+problem = PottsProblem(system, initial, (0, 1); seed=0x503)
 profile = NativeSolveProfile(
     path,
     Tsit5();
