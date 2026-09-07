@@ -33,18 +33,21 @@ volume_penalty = HamiltonianTerm(
     domain=cells(kind),
     anchor=cell,
     expression=strength * (cell_volume(cell) - target)^2,
-)</code></pre><p>A <code>LocalMath.BoundedFold</code> can consume the same quantity over a declared finite spatial relation:</p><pre><code class="language-julia hljs">using Potts, LocalMath
+)</code></pre><p>An ordinary Julia function can fold the same quantity over a declared finite spatial relation:</p><pre><code class="language-julia hljs">using Potts, LocalMath
 
 kind = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)
 proposal = ProposalContext(:copy)
 
-neighbor_mean = LocalMath.bounded_fold(
-    identity, +, 0.0, (sum, count) -&gt; sum / count;
-    domain=LocalMath.Where(&gt;=(0)),
-    oninvalid=LocalMath.RejectInvalid(),
-    onempty=LocalMath.FillEmpty(0.0),
-    order=LocalMath.CanonicalLeftFold(),
+neighbor_mean(values) = LocalMath.fold(values;
+    map=identity,
+    combine=+,
+    init=0.0,
+    finish=(sum, count) -&gt; sum / count,
+    domain = &gt;=(0),
+    invalid=:reject,
+    empty=0.0,
+    order=:canonical,
 )
 
 source = PottsSystem(
@@ -63,7 +66,7 @@ source = PottsSystem(
     )),
 )
 
-is_scheduled(mtkcompile(source))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">true</code></pre><p><code>gather</code> follows canonical relation-lane order. Missing boundary lanes and medium endpoints do not participate, while two lanes reaching the same finite owner contribute twice. It does not imply a distinct-neighbor-cell reduction. The Potts compiler discovers and maintains tracker storage; authors never bind tracker arrays or expose them to LocalMath. Freely mutable per-cell quantities are <code>CellState</code> values rather than derived trackers. Extension operations must explicitly declare that they are a direct scalar projection with <code>Potts.is_direct_scalar_tracker_projection(::typeof(operation)) = true</code>; structured tracker transformations are not silently treated as scalar storage.</p><p>Tracker-backed bounded folds are proposal-snapshot inputs, so use them in a <code>ProposalDrive</code>, <code>ProposalConstraint</code>, or <code>ProposalModifier</code>. A site-domain Hamiltonian that references a derived owner tracker throughout a neighborhood does not have a compiler-proven bounded affected-anchor set and is rejected. Scalar cell-domain Hamiltonians such as the volume penalty above retain exact before/after tracker overlays.</p><h2 id="Custom-bounded-Hamiltonian-terms"><a class="docs-heading-anchor" href="#Custom-bounded-Hamiltonian-terms">Custom bounded Hamiltonian terms</a><a id="Custom-bounded-Hamiltonian-terms-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-bounded-Hamiltonian-terms" title="Permalink"></a></h2><p><code>HamiltonianTerm</code> remains the custom scientific interface. Ordinary Julia and Symbolics expressions describe scalar mathematics; <code>gather</code> declares a finite spatial input, and a LocalMath bounded fold makes its ordering, invalid value, and empty-neighborhood laws explicit.</p><pre><code class="language-julia hljs">using Potts
+is_scheduled(mtkcompile(source))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">true</code></pre><p><code>gather</code> follows canonical relation-lane order. Missing boundary lanes and medium endpoints do not participate, while two lanes reaching the same finite owner contribute twice. It does not imply a distinct-neighbor-cell reduction. The Potts compiler discovers and maintains tracker storage; authors never bind tracker arrays or expose them to LocalMath. Freely mutable per-cell quantities are <code>CellState</code> values rather than derived trackers. Extension operations must explicitly declare that they are a direct scalar projection with <code>Potts.is_direct_scalar_tracker_projection(::typeof(operation)) = true</code>; structured tracker transformations are not silently treated as scalar storage.</p><p>Tracker-backed bounded folds are proposal-snapshot inputs, so use them in a <code>ProposalDrive</code>, <code>ProposalConstraint</code>, or <code>ProposalModifier</code>. A site-domain Hamiltonian that references a derived owner tracker throughout a neighborhood does not have a compiler-proven bounded affected-anchor set and is rejected. Scalar cell-domain Hamiltonians such as the volume penalty above retain exact before/after tracker overlays.</p><h2 id="Custom-bounded-Hamiltonian-terms"><a class="docs-heading-anchor" href="#Custom-bounded-Hamiltonian-terms">Custom bounded Hamiltonian terms</a><a id="Custom-bounded-Hamiltonian-terms-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-bounded-Hamiltonian-terms" title="Permalink"></a></h2><p><code>HamiltonianTerm</code> remains the custom scientific interface. Ordinary Julia and Symbolics expressions describe scalar mathematics; <code>gather</code> declares a finite spatial input, and <code>LocalMath.fold</code> makes its ordering, invalid-value, and empty-neighborhood laws explicit.</p><pre><code class="language-julia hljs">using Potts
 using LocalMath
 using Symbolics
 
@@ -74,15 +77,15 @@ medium = MediumKind(:medium)
 signal = FieldState(signal_value; name=:signal, initial=1.0)
 site = SiteBinding(:site)
 
-neighbor_mean = LocalMath.bounded_fold(
-    identity,
-    +,
-    0.0,
-    (sum, count) -&gt; sum / count;
-    domain=LocalMath.Where(isfinite),
-    oninvalid=LocalMath.RejectInvalid(),
-    onempty=LocalMath.RejectEmpty(),
-    order=LocalMath.CanonicalLeftFold(),
+neighbor_mean(values) = LocalMath.fold(values;
+    map=identity,
+    combine=+,
+    init=0.0,
+    finish=(sum, count) -&gt; sum / count,
+    domain=isfinite,
+    invalid=:reject,
+    empty=:reject,
+    order=:canonical,
 )
 
 system = PottsSystem(
@@ -112,4 +115,4 @@ scheduled = mtkcompile(system)
 is_scheduled(scheduled)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">true</code></pre><p>The ownership boundary is deliberate:</p><pre><code class="language-text hljs">Potts Hamiltonian expression and source order
 → Potts resource and footprint analysis
 → CorePotts proposal descriptors and scientific semantics
-→ LocalMath bounded spatial law and KernelAbstractions execution</code></pre><p>The bounded declaration is eliminated during compilation. No Symbolics tree or authoring object reaches the runtime kernels.</p><p>Here <code>:contact</code> names the bounded relation declared by the enclosing <code>Lattice</code>, and <code>anchor_value(site)</code> identifies the site at which the Hamiltonian term is evaluated. The compiler checks that the field, relation, anchor, and term domain are compatible before constructing the runtime law. <code>CanonicalLeftFold()</code> uses the relation&#39;s canonical endpoint order; <code>RejectInvalid()</code> and <code>RejectEmpty()</code> make evaluation reject an invalid value or empty neighborhood rather than silently choosing a numerical fallback.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« Home</a><a class="docs-footer-nextpage" href="../execution/">Initialize and execute »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 6 September 2026 20:19">Sunday 6 September 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+→ LocalMath bounded spatial law and KernelAbstractions execution</code></pre><p>The bounded declaration is eliminated during compilation. No Symbolics tree or authoring object reaches the runtime kernels.</p><p>Here <code>:contact</code> names the bounded relation declared by the enclosing <code>Lattice</code>, and <code>anchor_value(site)</code> identifies the site at which the Hamiltonian term is evaluated. The compiler checks that the field, relation, anchor, and term domain are compatible before constructing the runtime law. <code>CanonicalLeftFold()</code> uses the relation&#39;s canonical endpoint order; <code>RejectInvalid()</code> and <code>RejectEmpty()</code> make evaluation reject an invalid value or empty neighborhood rather than silently choosing a numerical fallback.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« Home</a><a class="docs-footer-nextpage" href="../execution/">Initialize and execute »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Monday 7 September 2026 04:55">Monday 7 September 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
