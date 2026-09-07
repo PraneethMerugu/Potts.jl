@@ -102,6 +102,81 @@ jobs:
                     error("missing release notes in $directory")
             end
           '
+      - name: Verify selected repository boundaries
+        run: |
+          julia --startup-file=no -e '
+            using Test, TOML
+
+            roots = Dict(
+                "LocalMath" => "ecosystem/LocalMath",
+                "CorePotts" => "ecosystem/CorePotts",
+                "Potts" => "ecosystem/Potts",
+                "MakiePotts" => "ecosystem/MakiePotts",
+            )
+            excluded = Set((".git", "build", "design"))
+
+            function tracked_files(root)
+                relative = split(
+                    read(`git -C $root ls-files -z`, String), '\0';
+                    keepempty=false,
+                )
+                return (
+                    joinpath(root, path) for path in relative
+                    if all(part -> part ∉ excluded, splitpath(path))
+                )
+            end
+
+            selected_files(root, filename) =
+                (path for path in tracked_files(root) if basename(path) == filename)
+            selected_julia_files(root) =
+                (path for path in tracked_files(root) if endswith(path, ".jl"))
+
+            @testset "selected repository boundaries" begin
+                for root in values(roots)
+                    for project in selected_files(root, "Project.toml")
+                        @test !haskey(TOML.parsefile(project), "sources")
+                    end
+                    for manifest_path in selected_files(root, "Manifest.toml")
+                        manifest = TOML.parsefile(manifest_path)
+                        for records in values(get(manifest, "deps", Dict()))
+                            for record in (
+                                    records isa AbstractVector ? records : (records,)
+                                )
+                                @test !haskey(record, "path")
+                            end
+                        end
+                    end
+                end
+
+                downstream = Dict(
+                    "LocalMath" => ("CorePotts", "Potts", "MakiePotts"),
+                    "CorePotts" => ("Potts", "MakiePotts"),
+                    "Potts" => ("MakiePotts",),
+                )
+                private_upstreams = Dict(
+                    "CorePotts" => ("LocalMath",),
+                    "Potts" => ("LocalMath", "CorePotts"),
+                    "MakiePotts" => ("LocalMath", "CorePotts", "Potts"),
+                )
+                for (package, dependencies) in downstream
+                    import_pattern = Regex(
+                        "(?m)^\\s*(?:using|import)\\s+(?:" *
+                        join(dependencies, "|") * ")(?=\\.|:|\\s|$)",
+                    )
+                    for path in selected_julia_files(roots[package])
+                        @test !occursin(import_pattern, read(path, String))
+                    end
+                end
+                for (package, dependencies) in private_upstreams
+                    private_pattern = Regex(
+                        "\\b(?:" * join(dependencies, "|") * ")\\._",
+                    )
+                    for path in selected_julia_files(roots[package])
+                        @test !occursin(private_pattern, read(path, String))
+                    end
+                end
+            end
+          '
       - name: Fresh ecosystem load
         run: |
           julia --startup-file=no -e '

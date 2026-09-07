@@ -51,23 +51,37 @@ using ExplicitImports
             joinpath(repository, "benchmark", "backends", "metal", "Manifest.toml") =>
                 "1.12.6",
         )
-        upstream_urls = Dict(
-            "CorePotts" => "https://github.com/PraneethMerugu/CorePotts.jl",
-            "LocalMath" => "https://github.com/PraneethMerugu/LocalMath.jl",
-            "Potts" => "https://github.com/PraneethMerugu/Potts.jl",
+        upstream_sources = Dict(
+            "CorePotts" => (
+                "https://github.com/PraneethMerugu/CorePotts.jl",
+                "3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4",
+            ),
+            "LocalMath" => (
+                "https://github.com/PraneethMerugu/LocalMath.jl",
+                "3ec009f92a1976824b9e58c407006c6b19fbd33b",
+            ),
+            # Potts cannot pin the commit containing its own exact manifest.
+            # Its immutable self revision is still syntax-checked below.
+            "Potts" => (
+                "https://github.com/PraneethMerugu/Potts.jl",
+                nothing,
+            ),
         )
         full_revision = r"^[0-9a-f]{40}$"
         for (manifest_path, julia_version) in exact_manifests
             manifest = TOML.parsefile(manifest_path)
             @test manifest["julia_version"] == julia_version
             dependencies = manifest["deps"]
-            for (name, url) in upstream_urls
+            for (name, (url, qualified_revision)) in upstream_sources
                 entries = dependencies[name]
                 entry = entries isa AbstractVector ? only(entries) : entries
                 @test !haskey(entry, "path")
                 @test entry["repo-url"] == url
                 @test match(full_revision, entry["repo-rev"]) !== nothing
                 @test match(full_revision, entry["git-tree-sha1"]) !== nothing
+                if qualified_revision !== nothing
+                    @test entry["repo-rev"] == qualified_revision
+                end
             end
 
             path_dependencies = String[]
