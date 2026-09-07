@@ -34,29 +34,6 @@ using ExplicitImports
     )
     @test all(isfile, live_manifests)
 
-    @testset "live path-manifest closure" begin
-        for manifest_path in sort(collect(live_manifests))
-            manifest = TOML.parsefile(manifest_path)
-            for (recorded_name, entries) in get(manifest, "deps", Dict())
-                for entry in (entries isa AbstractVector ? entries : (entries,))
-                    haskey(entry, "path") || continue
-                    package_directory = normpath(joinpath(
-                        dirname(manifest_path), entry["path"]))
-                    target_project_path = joinpath(package_directory, "Project.toml")
-                    @test isfile(target_project_path)
-                    isfile(target_project_path) || continue
-                    target = TOML.parsefile(target_project_path)
-                    recorded_dependencies = Set(get(entry, "deps", String[]))
-                    target_dependencies = Set(keys(get(target, "deps", Dict())))
-                    @test recorded_name == target["name"]
-                    @test entry["uuid"] == target["uuid"]
-                    @test get(entry, "version", nothing) == get(target, "version", nothing)
-                    @test recorded_dependencies == target_dependencies
-                end
-            end
-        end
-    end
-
     @testset "exact environments pin standalone upstream repositories" begin
         exact_manifests = (
             joinpath(repository, "integration", "replay", "Manifest.toml") =>
@@ -67,6 +44,7 @@ using ExplicitImports
         upstream_urls = Dict(
             "CorePotts" => "https://github.com/PraneethMerugu/CorePotts.jl",
             "LocalMath" => "https://github.com/PraneethMerugu/LocalMath.jl",
+            "Potts" => "https://github.com/PraneethMerugu/Potts.jl",
         )
         full_revision = r"^[0-9a-f]{40}$"
         for (manifest_path, julia_version) in exact_manifests
@@ -81,6 +59,14 @@ using ExplicitImports
                 @test occursin(full_revision, entry["repo-rev"])
                 @test occursin(full_revision, entry["git-tree-sha1"])
             end
+
+            path_dependencies = String[]
+            for (name, records) in dependencies
+                for entry in (records isa AbstractVector ? records : (records,))
+                    haskey(entry, "path") && push!(path_dependencies, name)
+                end
+            end
+            @test isempty(path_dependencies)
         end
     end
 end
