@@ -76,12 +76,20 @@ end
 
     unscheduled = complete(fixture.source)
     @test !is_scheduled(unscheduled)
-    @test_throws ArgumentError PottsProblem(
+    compiled_problem = PottsProblem(
         unscheduled,
         fixture.initial,
         (0, 1);
+        p = (
+            lifecycle_target => 5.0,
+            lifecycle_strength => 1.5,
+            lifecycle_temperature => 2.5,
+        ),
         seed = 1,
     )
+    @test is_scheduled(compiled_problem.system)
+    @test scheduled_system_fingerprint(compiled_problem.system) ==
+          scheduled_system_fingerprint(fixture.system)
     @test_throws UndefKeywordError PottsProblem(
         fixture.system,
         fixture.initial,

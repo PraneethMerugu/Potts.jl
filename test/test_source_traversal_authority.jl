@@ -236,3 +236,119 @@ using .SourceTraversalAuthorityFixtures
     @test same_scheduled === scheduled
     @test iszero(idempotent_schedule_visits[])
 end
+
+@testset "problem construction is the final source traversal boundary" begin
+    fixture = _lifecycle_fixture(
+        :problem_source_traversal;
+        attempts = AttemptsPerSite(1),
+    )
+    parameters = (
+        lifecycle_target => 5.0,
+        lifecycle_strength => 1.5,
+        lifecycle_temperature => 2.5,
+    )
+
+    authored_visits = Dict{Any, Int}()
+    authored_problem = Potts._with_source_traversal_witness(
+        (kind, path, value) -> begin
+            key = SourceTraversalAuthorityFixtures.visit_key(kind, path, value)
+            authored_visits[key] = get(authored_visits, key, 0) + 1
+        end,
+    ) do
+        PottsProblem(
+            fixture.source,
+            fixture.initial,
+            (0, 2);
+            p = parameters,
+            seed = 0x6a5b_0003,
+        )
+    end
+    @test !isempty(authored_visits)
+    @test all(==(1), values(authored_visits))
+    @test is_scheduled(authored_problem.system)
+
+    completed = complete(fixture.source)
+    completed_visits = Ref(0)
+    completed_problem = Potts._with_source_traversal_witness(
+        (_, _, _) -> (completed_visits[] += 1),
+    ) do
+        PottsProblem(
+            completed,
+            fixture.initial,
+            (0, 2);
+            p = parameters,
+            seed = 0x6a5b_0003,
+        )
+    end
+    @test iszero(completed_visits[])
+    @test is_scheduled(completed_problem.system)
+
+    scheduled_visits = Ref(0)
+    scheduled_problem = Potts._with_source_traversal_witness(
+        (_, _, _) -> (scheduled_visits[] += 1),
+    ) do
+        PottsProblem(
+            fixture.system,
+            fixture.initial,
+            (0, 2);
+            p = parameters,
+            seed = 0x6a5b_0003,
+        )
+    end
+    @test iszero(scheduled_visits[])
+    @test scheduled_problem.system === fixture.system
+
+    execution_visits = Ref(0)
+    direct, remade, ensemble_solution, resumed =
+        Potts._with_source_traversal_witness(
+            (_, _, _) -> (execution_visits[] += 1),
+        ) do
+            remade_problem = remake(authored_problem; repeat = 2)
+            direct_solution = solve(
+                authored_problem,
+                SequentialCPM();
+                backend = CPUBackend(),
+                scalar_type = Float32,
+                save_everystep = true,
+            )
+            ensemble = SciMLBase.EnsembleProblem(authored_problem)
+            ensemble_result = solve(
+                ensemble,
+                SequentialCPM(),
+                SciMLBase.EnsembleSerial();
+                trajectories = 1,
+                backend = CPUBackend(),
+                scalar_type = Float32,
+            )
+            continued = init(
+                authored_problem,
+                SequentialCPM();
+                backend = CPUBackend(),
+                scalar_type = Float32,
+                save_start = false,
+            )
+            step!(continued)
+            captured = checkpoint(continued)
+            restored = solve!(init(
+                authored_problem,
+                SequentialCPM();
+                backend = CPUBackend(),
+                scalar_type = Float32,
+                checkpoint = captured,
+                save_start = false,
+            ))
+            return (
+                direct_solution,
+                remade_problem,
+                only(ensemble_result.u),
+                restored,
+            )
+        end
+    @test iszero(execution_visits[])
+    @test remade.system === authored_problem.system
+    @test remade.repeat == UInt32(2)
+    @test direct.retcode == SciMLBase.ReturnCode.Success
+    @test ensemble_solution.retcode == SciMLBase.ReturnCode.Success
+    @test resumed.retcode == SciMLBase.ReturnCode.Success
+    @test last(direct).ownership == last(resumed).ownership
+end

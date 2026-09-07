@@ -3,10 +3,12 @@
     include(joinpath(project_root, "examples", "wortel_2021_serial.jl"))
     include(joinpath(project_root, "examples", "merks_2006_serial.jl"))
     include(joinpath(project_root, "examples", "openvt_monolayer_serial.jl"))
+    include(joinpath(project_root, "examples", "custom_model.jl"))
 
     wortel = Wortel2021Serial.run_wortel_2021()
     merks = Merks2006Serial.run_merks_2006()
     openvt = OpenVTMonolayerSerial.run_openvt_monolayer()
+    custom = CustomModel.run_custom_model()
 
     @test wortel.solution.retcode == SciMLBase.ReturnCode.Success
     @test last(wortel.solution).mcs == 2
@@ -19,6 +21,11 @@
     @test last(openvt.solution).mcs == 2
     @test openvt.relaxation_steps > 0
     @test !isempty(openvt.inhibition)
+    @test custom.solution.retcode == SciMLBase.ReturnCode.Success
+    @test failure_report(custom.solution) === nothing
+    @test custom.uninterrupted.retcode == SciMLBase.ReturnCode.Success
+    @test last(custom.uninterrupted).ownership == last(custom.resumed).ownership
+    @test last(custom.uninterrupted)[:activity] == last(custom.resumed)[:activity]
 
     wortel_replay = Wortel2021Serial.run_wortel_2021()
     merks_replay = Merks2006Serial.run_merks_2006()

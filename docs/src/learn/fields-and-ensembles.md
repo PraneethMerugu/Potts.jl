@@ -53,7 +53,7 @@ component = MethodOfLinesComponent(
     name=:pde,
     time=FixedPhysicalTime(0.0, 0.125),
 )
-scheduled = mtkcompile(PottsSystem(
+system = PottsSystem(
     name=:mol_potts,
     statements=StatementSet((
         Lattice(
@@ -69,12 +69,12 @@ scheduled = mtkcompile(PottsSystem(
     )),
     unknowns=[field],
     native_components=(component,),
-))
+)
 path = (:mol_potts, :pde)
 labels = zeros(Int, 4, 4)
 labels[2, 2] = 1
 problem = PottsProblem(
-    scheduled,
+    system,
     PottsInitialState(
         ownership=LabelledCells(labels; cells=[cell], medium),
         native=(NativeOperatingPoint(path),),
@@ -112,7 +112,7 @@ using SciMLBase
 
 cell = CellKind(:cell; extinction=RetireAtZero())
 medium = MediumKind(:medium)
-scheduled = mtkcompile(PottsSystem(
+system = PottsSystem(
     name=:ensemble_model,
     statements=StatementSet((
         Lattice((3, 3); boundary=Periodic()),
@@ -120,11 +120,11 @@ scheduled = mtkcompile(PottsSystem(
         medium,
         Protocol(Sweep(; temperature=1.0); name=:main),
     )),
-))
+)
 labels = zeros(Int, 3, 3)
 labels[2, 2] = 1
 problem = PottsProblem(
-    scheduled,
+    system,
     PottsInitialState(
         ownership=LabelledCells(labels; cells=[cell], medium),
     ),
