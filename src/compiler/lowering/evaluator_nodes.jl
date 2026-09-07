@@ -189,8 +189,18 @@ function _lower_static_node(
             )
         end
         arguments = if tracker_source === nothing
-            Tuple(
-                _lower_static_node(
+            Tuple(map(enumerate(node.operands)) do indexed
+                index, operand = indexed
+                if node.transfer.identity === :bounded_fold && index == 1
+                    operand_node = graph.nodes[operand]
+                    if operand_node.payload_kind === :literal &&
+                            operand_node.payload.value isa LocalMath.BoundedFold
+                        return CorePotts.CompilerSPI.LiteralExpression(
+                            _materialize_checked_gather_fold(
+                                ir, node, graph, operand_node.payload.value, T))
+                    end
+                end
+                return _lower_static_node(
                     graph,
                     ir,
                     operand,
@@ -202,8 +212,7 @@ function _lower_static_node(
                     state_binding,
                     workspace_slices,
                 )
-                for operand in node.operands
-            )
+            end)
         else
             length(tracker_keys) == 1 || throw(PottsValidationError(
                 :descriptor_lowering,
@@ -222,6 +231,15 @@ function _lower_static_node(
                 index, operand = indexed
                 index == 2 && return CorePotts.CompilerSPI.LiteralExpression(
                     only(tracker_keys))
+                if node.transfer.identity === :bounded_fold && index == 1
+                    operand_node = graph.nodes[operand]
+                    if operand_node.payload_kind === :literal &&
+                            operand_node.payload.value isa LocalMath.BoundedFold
+                        return CorePotts.CompilerSPI.LiteralExpression(
+                            _materialize_checked_gather_fold(
+                                ir, node, graph, operand_node.payload.value, T))
+                    end
+                end
                 return _lower_static_node(
                     graph,
                     ir,
