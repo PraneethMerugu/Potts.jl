@@ -128,7 +128,7 @@ jobs:
 
             function tracked_files(root)
                 relative = split(
-                    read(`git -C $root ls-files -z`, String), '\0';
+                    read(`git -C $root ls-files -z`, String), Char(0);
                     keepempty=false,
                 )
                 return (
