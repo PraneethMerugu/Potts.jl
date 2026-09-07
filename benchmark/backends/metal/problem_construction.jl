@@ -52,7 +52,7 @@ end
         solve(
             implicit,
             CheckerboardSweepCPM();
-            backend = MetalBackend(),
+            backend = Potts.MetalBackend(),
             scalar_type = Float32,
             save_everystep = true,
         )
@@ -60,7 +60,7 @@ end
     explicit_solution = solve(
         explicit,
         CheckerboardSweepCPM();
-        backend = MetalBackend(),
+        backend = Potts.MetalBackend(),
         scalar_type = Float32,
         save_everystep = true,
     )
