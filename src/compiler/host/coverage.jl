@@ -166,27 +166,6 @@ function _field_evolution_rejection(statement, statements, system)
     return numerical_field_rejection(evolution, statement, statements, system)
 end
 
-function _first_interface_only_spatial_query(value)
-    unwrapped = try
-        Symbolics.unwrap(value)
-    catch
-        value
-    end
-    is_call = try
-        Symbolics.iscall(unwrapped)
-    catch
-        false
-    end
-    is_call || return nothing
-    operation = Symbolics.operation(unwrapped)
-    operation in _INTERFACE_ONLY_SPATIAL_QUERY_OPERATIONS && return operation
-    for argument in Symbolics.arguments(unwrapped)
-        found = _first_interface_only_spatial_query(argument)
-        found === nothing || return found
-    end
-    return nothing
-end
-
 function _statement_lowering_rejection(statement, statements, system)
     if statement isa SynchronousProcess
         return _synchronous_rejection(statement, statements)
@@ -198,14 +177,6 @@ function _statement_lowering_rejection(statement, statements, system)
         return _relationship_process_rejection(statement, statements)
     elseif statement isa FieldState
         return _field_evolution_rejection(statement, statements, system)
-    elseif statement isa Observation
-        operation = _first_interface_only_spatial_query(
-            _statement_arguments(statement).expression
-        )
-        if operation !== nothing
-            return "$(nameof(operation)) is an interface-only settled-snapshot " *
-                "spatial query; executable spatial-query lowering is not implemented"
-        end
     elseif statement isa Protocol
         all(stage -> stage isa SweepStage,
             _statement_arguments(statement).stages) ||

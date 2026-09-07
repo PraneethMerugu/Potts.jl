@@ -363,7 +363,7 @@ function ExternalWeightedSiteTerm(
         weight,
         state,
         site,
-        external_site_value(state, anchor_value(site)) *
+        external_site_value(state, Potts.anchor_value(site)) *
         occupancy(kind, site),
     )
 end

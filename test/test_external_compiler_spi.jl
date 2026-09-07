@@ -59,6 +59,11 @@ end
                 proposal.is_extension &
                 (field_value(gate, proposal.source_site) == 1) &
                 (field_value(gate, proposal.target_site) == 2) &
+                (sum(gather(
+                    ExternalSurfaceOperationFixture.external_cell_surface,
+                    :surface_alt;
+                    at = proposal.target_site,
+                )) == 16) &
                 (surface_digits(gather(
                     ExternalSurfaceOperationFixture.external_cell_surface,
                     :surface_alt;

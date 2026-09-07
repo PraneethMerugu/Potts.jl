@@ -12,6 +12,7 @@ import ModelingToolkitBase: @named, @mtkcompile, mtkcompile
 import PrecompileTools
 import SciMLBase
 import SHA
+import Statistics
 import SymbolicIndexingInterface
 import Symbolics
 import SciMLBase: init, solve, solve!, step!, remake, terminate!
@@ -132,7 +133,6 @@ export AbstractPottsBackend, CPUBackend, MetalBackend
 export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
 export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
-export anchor_value
 export gather
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
@@ -145,9 +145,7 @@ export source_site, target_site, source_cell, target_cell, source_kind, target_k
 export is_extension, is_retraction, new_contact, lost_contact
 export cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, distance
 export contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b
-export contact_edge_count, contact_measure, boundary_site_count, neighbor_cells
-export neighbor_cell_count, neighbor_property_sum, neighbor_property_mean
-export global_interface_measure, field_value, field_gradient, laplacian, occupancy
+export field_value, field_gradient, laplacian, occupancy
 export linked, degree, endpoint_a, endpoint_b, edge_payload, lag, history_value
 export AbstractPottsDistribution, Bernoulli, Uniform, Normal, UnitVector, DrawKey, draw
 export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
@@ -180,6 +178,7 @@ export inspect, Statements, Variables, Effects, RandomOperations, Schedule
 export Capabilities, Fingerprints
 export ParameterSchema, StateSchema, Observations, ExternalIO, ReplayContract
 export LifecyclePlans
+public anchor_value
 export semantic_fingerprint, completed_system_fingerprint, scheduled_system_fingerprint
 export NativeComponent, ODEComponent, DAEComponent, Global, PerCell
 export FixedPhysicalTime, CPMThenComponents, NativeInput, NativeOutput

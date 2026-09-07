@@ -1,6 +1,7 @@
 using Test
 import Metal
 import LocalMath
+import Statistics
 using Potts
 using ModelingToolkitBase: @variables
 
@@ -14,26 +15,9 @@ function _relationship_energy_problem()
         initial = 1.0f0,
     )
     site = SiteBinding(:relationship_energy_site)
-    neighbor_sum(values) = LocalMath.fold(values;
-        map = identity,
-        combine = +,
-        init = 0.0f0,
-        finish = (sum, count) -> sum,
-        domain = isfinite,
-        invalid = :reject,
-        empty = 0.0f0,
-        order = :canonical,
-    )
-    neighbor_volume_sum(values) = LocalMath.fold(values;
-        map = identity,
-        combine = +,
-        init = Int32(0),
-        finish = (sum, count) -> sum,
-        domain = >=(Int32(0)),
-        invalid = :reject,
-        empty = Int32(0),
-        order = :canonical,
-    )
+    neighbor_summary(values) =
+        sum(values) + minimum(values) + maximum(values) +
+        Statistics.mean(values) + LocalMath.geometric_mean(values)
     proposal = ProposalContext(:relationship_energy_proposal)
     links = RelationshipState(
         :relationship_energy_links;
@@ -63,12 +47,12 @@ function _relationship_energy_problem()
                 :relationship_energy_bounded_signal;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = neighbor_sum(gather(
-                    signal, :contact; at = anchor_value(site))),
+                expression = neighbor_summary(gather(
+                    signal, :contact; at = site)),
             ),
             ProposalConstraint(
                 :relationship_energy_neighbor_volume,
-                neighbor_volume_sum(gather(
+                sum(gather(
                     cell_volume, :contact; at = proposal.target_site)) >= 0,
             ),
             RelationshipEnergy(

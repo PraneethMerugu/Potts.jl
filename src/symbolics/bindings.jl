@@ -104,6 +104,20 @@ anchor_value(binding::Union{
     SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
 }) = _binding_token(binding)
 
+_gather_anchor(binding::Union{
+    SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
+}) = _binding_token(binding)
+_gather_anchor(::ProposalContext) = throw(ArgumentError(
+    "gather requires a concrete proposal property such as " *
+    "`proposal.target_site`, not a bare ProposalContext",
+))
+_gather_anchor(value::Symbolics.Num) = value
+_gather_anchor(value) = throw(ArgumentError(
+    "gather anchor must be a SiteBinding, CellBinding, ContactBinding, " *
+    "RelationshipBinding, or a concrete symbolic proposal property; got " *
+    string(typeof(value)),
+))
+
 struct _RelationGather{S, R, A}
     source::S
     relation::R
@@ -125,7 +139,7 @@ function gather(field::FieldState, relation; at)
     relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
         "gather relation must be a declared SpatialRelation or its local name"
     ))
-    return _RelationGather(field, relation, at)
+    return _RelationGather(field, relation, _gather_anchor(at))
 end
 
 """
@@ -168,10 +182,30 @@ function gather(operation, relation; at)
         transfer.source_requirements) || throw(ArgumentError(
         "gathered tracker projections currently require only named spatial resources"
     ))
-    return _RelationGather(operation, relation, at)
+    return _RelationGather(operation, relation, _gather_anchor(at))
 end
 
-function (fold::LocalMath.BoundedFold)(values::_RelationGather)
+@enum _GatherReductionKind::UInt8 begin
+    _GatherSum = 0x01
+    _GatherMinimum = 0x02
+    _GatherMaximum = 0x03
+    _GatherMean = 0x04
+    _GatherGeometricMean = 0x05
+end
+
+struct _GatherReduction
+    kind::_GatherReductionKind
+end
+
+# SymbolicUtils canonically orders literal operation arguments while building a
+# normalized expression. This cold tag order is part of Potts's deterministic
+# source representation; the tag is replaced by a checked BoundedFold before
+# Core planning.
+Base.isless(left::_GatherReduction, right::_GatherReduction) =
+    UInt8(left.kind) < UInt8(right.kind)
+Base.isless(::Type{_GatherReduction}, ::Type{_GatherReduction}) = false
+
+function _symbolic_gather_fold(fold, values::_RelationGather)
     source = values.source isa FieldState ?
              _field_token(values.source) : values.source(values.anchor)
     return _potts_bounded_fold(
@@ -182,10 +216,25 @@ function (fold::LocalMath.BoundedFold)(values::_RelationGather)
     )
 end
 
+function (fold::LocalMath.BoundedFold)(values::_RelationGather)
+    return _symbolic_gather_fold(fold, values)
+end
+
 """Lower data-first LocalMath folds over Potts relation gathers symbolically."""
 function LocalMath.fold(values::_RelationGather; kwargs...)
     return invoke(LocalMath.fold, Tuple{Any}, values; kwargs...)
 end
+
+Base.sum(values::_RelationGather) =
+    _symbolic_gather_fold(_GatherReduction(_GatherSum), values)
+Base.minimum(values::_RelationGather) =
+    _symbolic_gather_fold(_GatherReduction(_GatherMinimum), values)
+Base.maximum(values::_RelationGather) =
+    _symbolic_gather_fold(_GatherReduction(_GatherMaximum), values)
+Statistics.mean(values::_RelationGather) =
+    _symbolic_gather_fold(_GatherReduction(_GatherMean), values)
+LocalMath.geometric_mean(values::_RelationGather) =
+    _symbolic_gather_fold(_GatherReduction(_GatherGeometricMean), values)
 
 function Base.getproperty(binding::ProposalContext, name::Symbol)
     name === :name && return getfield(binding, :name)

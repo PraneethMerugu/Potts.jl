@@ -42,12 +42,6 @@ function endpoint_b end
 
 """Return the metric distance between two bounded spatial values."""
 function distance end
-"""Return the number of lattice edges in a canonical contact."""
-function contact_edge_count end
-"""Return the number of boundary sites of a finite cell."""
-function boundary_site_count end
-"""Return the number of distinct neighboring cells selected by a relation."""
-function neighbor_cell_count end
 """Sample a declared field at a bounded site."""
 function field_value end
 """Sample the gradient of a declared field at a bounded site."""
@@ -61,12 +55,6 @@ function history_value end
 """Return the live degree of an endpoint in a relationship state."""
 function degree end
 
-"""Return the measure associated with a canonical contact."""
-function contact_measure end
-"""Return the sum of a neighboring-cell property."""
-function neighbor_property_sum end
-"""Return a model-wide interface measure for a pair of kinds."""
-function global_interface_measure end
 
 for (operation_name, result_type) in (
         (:source_site, Int),
@@ -96,9 +84,6 @@ end
 
 for (operation_name, result_type) in (
         (:distance, Real),
-        (:contact_edge_count, Int),
-        (:boundary_site_count, Int),
-        (:neighbor_cell_count, Int),
         (:field_value, Real),
         (:field_gradient, Real),
         (:laplacian, Real),
@@ -109,36 +94,6 @@ for (operation_name, result_type) in (
     @eval begin
         Symbolics.@register_symbolic $(operation_name)(x, y)::$(result_type)
     end
-end
-
-for (operation_name, result_type) in (
-        (:contact_measure, Real),
-        (:neighbor_property_sum, Real),
-        (:global_interface_measure, Real),
-    )
-    @eval begin
-        Symbolics.@register_symbolic $(operation_name)(x, y, z)::$(result_type)
-    end
-end
-
-# A mean is total only when its empty-neighborhood behavior is explicit. The
-# fourth argument is that policy/value; the compiler deliberately admits no
-# ambiguous three-argument spelling.
-"""Return the mean of a neighboring-cell property under an explicit empty policy."""
-function neighbor_property_mean end
-Symbolics.@register_symbolic neighbor_property_mean(x, y, z, empty)::Real
-
-# `neighbor_cells` is collection-valued settled-snapshot vocabulary, not a
-# scalar operation in the current executable DAG. Reject at authoring time
-# until the bounded snapshot query object exists; pretending it returns a
-# scalar would corrupt its distinct-identity semantics.
-"""Collection-valued neighbor query; currently rejects until bounded materialization exists."""
-function neighbor_cells(owner, filter)
-    throw(ArgumentError(
-        "neighbor_cells(owner, filter) is a collection-valued settled-snapshot " *
-                "query; executable collection materialization is not implemented. " *
-        "Use neighbor_cell_count(owner, filter) when only cardinality is needed."
-    ))
 end
 
 """Test whether a contact is created by the proposal."""
@@ -175,6 +130,24 @@ Symbolics.@register_symbolic _potts_act_energy(
 Symbolics.@register_symbolic _potts_bounded_fold(
     fold::LocalMath.BoundedFold, field, relation, anchor
 )::Real
+
+# Reduction tags are cold and scalar-profile independent. Completion replaces
+# them with a checked concrete `BoundedFold` before Core planning.
+function _potts_bounded_fold(
+        fold::_GatherReduction,
+        field::Symbolics.Num,
+        relation::Symbolics.Num,
+        anchor::Symbolics.Num,
+    )
+    return Symbolics.wrap(Symbolics.term(
+        _potts_bounded_fold,
+        fold,
+        Symbolics.unwrap(field),
+        Symbolics.unwrap(relation),
+        Symbolics.unwrap(anchor);
+        type = Real,
+    ))
+end
 
 _kind_token(kind::Union{CellKind, MediumKind}) =
     _potts_token(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)

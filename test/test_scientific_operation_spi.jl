@@ -1,4 +1,23 @@
 import LocalMath
+import Statistics
+
+function _static_evaluator_values(expression)
+    values = Any[expression]
+    if expression isa CorePotts.CompilerSPI.LiteralExpression
+        push!(values, expression.value)
+    elseif expression isa CorePotts.CompilerSPI.OperationExpression
+        push!(values, expression.operation)
+        for argument in expression.arguments
+            append!(values, _static_evaluator_values(argument))
+        end
+    end
+    return values
+end
+
+function _is_symbolic_runtime_value(value)
+    owner = string(parentmodule(typeof(value)))
+    return startswith(owner, "Symbolics") || startswith(owner, "SymbolicUtils")
+end
 
 struct ScientificProposalProbe <: CorePotts.CompilerSPI.AbstractProposalEvaluationContext
     ownership::Matrix{Int32}
@@ -203,16 +222,6 @@ end
     )
     site = SiteBinding(:bounded_oracle_site)
     proposal = ProposalContext(:bounded_oracle_proposal)
-    canonical_sum(values) = LocalMath.fold(values;
-        map = identity,
-        combine = +,
-        init = 0.0,
-        finish = (total, count) -> total,
-        domain = isfinite,
-        invalid = :reject,
-        empty = :reject,
-        order = :canonical,
-    )
     source = PottsSystem(
         name = :gathered_values_energy_oracle,
         statements = StatementSet((
@@ -227,8 +236,7 @@ end
                 domain = sites(:lattice),
                 anchor = site,
                 expression = bounded_oracle_weight * occupancy(cell, site) *
-                    canonical_sum(gather(
-                        signal, :contact; at = anchor_value(site))),
+                    sum(gather(signal, :contact; at = site)),
             ),
             ProposalConstraint(
                 :isolate_bounded_oracle_extension,
@@ -242,6 +250,20 @@ end
         parameters = [bounded_oracle_weight],
     )
     scheduled = mtkcompile(source)
+    lowered = Potts._lower_scheduled_execution_plan(
+        scheduled, SequentialCPM(), CPUBackend(), Float64)
+    descriptor_plan = lowered.core_program.descriptor_plan
+    evaluator_values = Any[]
+    for group in descriptor_plan.groups, descriptor in group.instances
+        append!(evaluator_values,
+            _static_evaluator_values(descriptor.evaluator.expression))
+    end
+    @test any(value -> value isa LocalMath.BoundedFold, evaluator_values)
+    @test all(evaluator_values) do value
+        !(value isa Potts._RelationGather) &&
+            !(value isa Potts._GatherReduction) &&
+            !_is_symbolic_runtime_value(value)
+    end
     labels = zeros(Int32, 4, 4)
     labels[2:3, 2:3] .= 1
     source_site = CartesianIndex(2, 2)
@@ -361,6 +383,14 @@ _tracker_lane_digits_finish(accumulator, count) = accumulator
                 proposal.is_extension &
                 (field_value(gate, proposal.source_site) == 1) &
                 (field_value(gate, proposal.target_site) == 2) &
+                (sum(gather(
+                    cell_volume, :contact; at = proposal.target_site)) == 4) &
+                (minimum(gather(
+                    cell_volume, :contact; at = proposal.target_site)) == 2) &
+                (maximum(gather(
+                    cell_volume, :contact; at = proposal.target_site)) == 2) &
+                (Statistics.mean(gather(
+                    cell_volume, :contact; at = proposal.target_site)) == 2) &
                 (lane_digits(gather(
                     cell_volume, :contact; at = proposal.target_site)) == 22),
             ),

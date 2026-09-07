@@ -34,7 +34,7 @@
         domain = cells(cell),
         anchor,
         expression = LifecycleOperationFixtures.external_lifecycle_trigger(
-            anchor_value(anchor)
+            Potts.anchor_value(anchor)
         ),
         effects = (Transition(
             anchor,
@@ -57,7 +57,7 @@
             anchor;
             geometry =
                 LifecycleOperationFixtures.external_lifecycle_partition(
-                    anchor_value(anchor)
+                    Potts.anchor_value(anchor)
                 ),
             relation,
             side = CanonicalSide(),

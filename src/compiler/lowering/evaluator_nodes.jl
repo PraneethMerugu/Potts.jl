@@ -193,11 +193,14 @@ function _lower_static_node(
                 index, operand = indexed
                 if node.transfer.identity === :bounded_fold && index == 1
                     operand_node = graph.nodes[operand]
-                    if operand_node.payload_kind === :literal &&
-                            operand_node.payload.value isa LocalMath.BoundedFold
-                        return CorePotts.CompilerSPI.LiteralExpression(
-                            _materialize_checked_gather_fold(
-                                ir, node, graph, operand_node.payload.value, T))
+                    if operand_node.payload_kind === :literal
+                        fold = operand_node.payload.value
+                        if fold isa LocalMath.BoundedFold ||
+                                fold isa _GatherReduction
+                            return CorePotts.CompilerSPI.LiteralExpression(
+                                _materialize_checked_gather_fold(
+                                    ir, node, graph, fold, T))
+                        end
                     end
                 end
                 return _lower_static_node(
@@ -233,11 +236,14 @@ function _lower_static_node(
                     only(tracker_keys))
                 if node.transfer.identity === :bounded_fold && index == 1
                     operand_node = graph.nodes[operand]
-                    if operand_node.payload_kind === :literal &&
-                            operand_node.payload.value isa LocalMath.BoundedFold
-                        return CorePotts.CompilerSPI.LiteralExpression(
-                            _materialize_checked_gather_fold(
-                                ir, node, graph, operand_node.payload.value, T))
+                    if operand_node.payload_kind === :literal
+                        fold = operand_node.payload.value
+                        if fold isa LocalMath.BoundedFold ||
+                                fold isa _GatherReduction
+                            return CorePotts.CompilerSPI.LiteralExpression(
+                                _materialize_checked_gather_fold(
+                                    ir, node, graph, fold, T))
+                        end
                     end
                 end
                 return _lower_static_node(

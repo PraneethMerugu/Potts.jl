@@ -16,6 +16,7 @@ const POTTS_TESTS = (
     "test_lifecycle_public_policies.jl",
     "test_relationship_host_transactions.jl",
     "test_external_compiler_spi.jl", "test_scientific_operation_spi.jl",
+    "test_gather_reductions.jl",
     "test_scientific_reference_witnesses.jl",
     "test_scientific_relationship_witnesses.jl",
     "test_scientific_activity_field_witnesses.jl",

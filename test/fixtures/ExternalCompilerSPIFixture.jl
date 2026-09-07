@@ -178,7 +178,7 @@ function ExternalSiteEnergy(id, weight, state, kind, anchor)
         weight,
         state,
         anchor,
-        external_site_value(state, anchor_value(anchor)) *
+        external_site_value(state, Potts.anchor_value(anchor)) *
         occupancy(kind, anchor),
     )
 end

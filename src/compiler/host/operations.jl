@@ -575,61 +575,6 @@ operation_transfer(::typeof(occupancy), ::Int) =
         footprint_rule = InheritFootprintRule(),
     )
 
-function _spatial_query_interface_transfer(
-        identity::Symbol,
-        arity::Integer,
-        result_rule::Symbol,
-    )
-    return _transfer(
-        identity,
-        arity,
-        result_rule,
-        :declared;
-        cpu = false,
-        gpu = false,
-        footprint_rule = InheritFootprintRule(),
-        allowed_roles = (:observation,),
-        allowed_phases = (:none,),
-        required_context = :any,
-        owner = :PottsSpatialQueryInterface,
-    )
-end
-
-operation_transfer(::typeof(contact_edge_count), ::Int) =
-    _spatial_query_interface_transfer(:contact_edge_count, 2, :integer)
-operation_transfer(::typeof(contact_measure), ::Int) =
-    _spatial_query_interface_transfer(:contact_measure, 3, :real)
-operation_transfer(::typeof(boundary_site_count), ::Int) =
-    _spatial_query_interface_transfer(:boundary_site_count, 2, :integer)
-operation_transfer(::typeof(neighbor_cell_count), ::Int) =
-    _spatial_query_interface_transfer(:neighbor_cell_count, 2, :integer)
-operation_transfer(::typeof(neighbor_property_sum), ::Int) =
-    _spatial_query_interface_transfer(:neighbor_property_sum, 3, :real)
-operation_transfer(::typeof(neighbor_property_mean), ::Int) =
-    _spatial_query_interface_transfer(:neighbor_property_mean, 4, :real)
-operation_transfer(::typeof(global_interface_measure), ::Int) =
-    _spatial_query_interface_transfer(:global_interface_measure, 3, :real)
-
-const _INTERFACE_ONLY_SPATIAL_QUERY_OPERATIONS = (
-    contact_edge_count,
-    contact_measure,
-    boundary_site_count,
-    neighbor_cell_count,
-    neighbor_property_sum,
-    neighbor_property_mean,
-    global_interface_measure,
-)
-
-const _INTERFACE_ONLY_SPATIAL_QUERY_IDENTITIES = (
-    :contact_edge_count,
-    :contact_measure,
-    :boundary_site_count,
-    :neighbor_cell_count,
-    :neighbor_property_sum,
-    :neighbor_property_mean,
-    :global_interface_measure,
-)
-
 for operation in (
         distance, field_value, field_gradient, laplacian, history_value,
         edge_payload, lag,
