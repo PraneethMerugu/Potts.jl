@@ -37,6 +37,21 @@ mutable struct PottsIntegrator{P, A, B, L, R, S, C, N, F, Q}
     capability_report::Q
 end
 
+"""
+    failure_report(integrator::PottsIntegrator)
+
+Return the failure retained at the integrator's most recently settled boundary,
+or `nothing` when no failure has been retained.
+
+This query is passive: it does not wait for pending work, synchronize a device,
+mutate the integrator, or decode an execution-layer report. The returned value
+is the exact retained failure object, so its source-aware `showerror` output and
+concrete detail remain available to the caller.
+
+See also [`failure_report(::PottsSolution)`](@ref).
+"""
+failure_report(integrator::PottsIntegrator) = getfield(integrator, :failure_report)
+
 function _normalize_saveat(saveat, tspan)
     saveat === nothing && return ()
     saveat isa Integer && begin

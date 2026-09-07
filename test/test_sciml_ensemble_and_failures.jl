@@ -87,12 +87,15 @@ end
     @test occursin("intentional callback failure", sprint(showerror, failure))
     @test integrator.retcode == SciMLBase.ReturnCode.Failure
     @test integrator.failure_report === failure
+    @test failure_report(integrator) === failure
+    @test failure_report(integrator) === failure_report(integrator)
     @test_throws ArgumentError step!(integrator)
     @test_throws ArgumentError checkpoint(integrator)
 
     solution = solve!(integrator)
     @test solution.retcode == SciMLBase.ReturnCode.Failure
     @test solution.failure_report === failure
+    @test failure_report(solution) === failure
     @test last(solution.t) == 1
 
     finalized = Pair{Symbol, Int}[]

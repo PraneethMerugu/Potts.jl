@@ -10,7 +10,7 @@ The exported API is organized by lifecycle rather than implementation files.
 | Author custom terms | `ProposalContext`, `SiteBinding`, `CellBinding`, `ContactBinding`, `RelationshipBinding`, `gather` |
 | Initialize | `PottsInitialState`, `LabelledCells`, `OwnershipLayout`, `CellPlacement`, `MediumPlacement`, `RandomSitePlacement` |
 | Execute | `PottsProblem`, `SequentialCPM`, `CheckerboardSweepCPM`, `CPUBackend`, `MetalBackend`, `init`, `solve`, `step!`, `solve!`, `terminate!`, `remake` |
-| Persist and inspect | `checkpoint`, `PottsCheckpoint`, `inspect`, `StateSchema`, `Observations`, `Capabilities`, `ReplayContract`, `runtime_statistics` |
+| Persist and inspect | `checkpoint`, `PottsCheckpoint`, `failure_report`, `inspect`, `StateSchema`, `Observations`, `Capabilities`, `ReplayContract`, `runtime_statistics` |
 | Native coupling | `NativeComponent`, `NativeInput`, `NativeOutput`, `NativeFieldOutput`, `MethodOfLinesComponent`, `NativeOperatingPoint`, `NativeSolveProfile`, `SerialNativeExecution`, `BatchedNativeExecution`, `MetalNativeExecution` |
 | Dynamic identity | `CellIdentity`, `relationship_transaction!`, `CreateCell`, `RemoveCell`, `Transition`, `Divide`, `Retire`, `Create`, `Remove`, `Retune` |
 

@@ -68,6 +68,7 @@
         scalar_type = Float32,
         save_start = false,
     )
+    @test failure_report(integrator) === nothing
     saved = integrator.u
     @test saved[:stored_site_marker] == reshape(Float32.(1:12), 4, 3)
     @test saved[:stored_cell_marker][1] == 7.0f0
@@ -90,8 +91,13 @@
         checkpoint = captured,
         save_start = false,
     )
+    @test failure_report(restored) === nothing
     @test restored.u[:stored_site_marker] == saved[:stored_site_marker]
     @test restored.u[:stored_cell_marker] == saved[:stored_cell_marker]
     @test restored.u[:stored_medium_marker] == saved[:stored_medium_marker]
     @test restored.u[:stored_model_marker] == saved[:stored_model_marker]
+
+    restored_solution = solve!(restored)
+    @test restored_solution.retcode == SciMLBase.ReturnCode.Success
+    @test failure_report(restored_solution) === nothing
 end
