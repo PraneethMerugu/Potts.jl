@@ -1,4 +1,8 @@
 using Test
+using Metal
+using LocalMath
+using Potts
+import KernelAbstractions
 
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
@@ -15,23 +19,10 @@ const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
         Set(METAL_PERFORMANCE_PROGRAMS))
 end
 
-if isempty(ARGS)
-    project = dirname(Base.active_project())
-    for witness in METAL_SEMANTIC_WITNESSES
-        run(`$(Base.julia_cmd()) --project=$(project) --startup-file=no $(@__FILE__) $(witness)`)
-    end
-else
-    length(ARGS) == 1 || error("expected at most one Metal witness argument")
-    witness = only(ARGS)
-    witness in METAL_SEMANTIC_WITNESSES ||
-        error("unknown Metal semantic witness: $(repr(witness))")
+isempty(ARGS) || error("the complete Metal profile does not accept selectors")
+Metal.functional() || error("the selected Metal witness is not functional")
+Metal.allowscalar(false)
 
-    using Metal
-    using LocalMath
-    using Potts
-    import KernelAbstractions
-
-    Metal.functional() || error("the selected Metal witness is not functional")
-    Metal.allowscalar(false)
+for witness in METAL_SEMANTIC_WITNESSES
     include(witness)
 end

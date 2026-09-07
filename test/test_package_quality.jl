@@ -1,3 +1,6 @@
+using Aqua
+using ExplicitImports
+
 @testset "package quality" begin
     Aqua.test_all(Potts; ambiguities = false, persistent_tasks = false)
     ExplicitImports.test_explicit_imports(Potts)
@@ -22,16 +25,17 @@
         "StaticArrays", "Unitful")) ⊆ weak_dependencies
 
     repository = pkgdir(Potts)
-    live_manifests = String[]
-    for (directory, subdirectories, files) in walkdir(repository)
-        filter!(name -> name != ".git" && name != "design" &&
-            !(directory == repository && name == "scripts"), subdirectories)
-        "Manifest.toml" in files && push!(live_manifests,
-            joinpath(directory, "Manifest.toml"))
-    end
+    # Ordinary package, docs, examples, and integration environments resolve
+    # from Project.toml. Only exact scientific replay and backend
+    # qualification intentionally commit manifests.
+    live_manifests = (
+        joinpath(repository, "integration", "replay", "Manifest.toml"),
+        joinpath(repository, "benchmark", "backends", "metal", "Manifest.toml"),
+    )
+    @test all(isfile, live_manifests)
 
     @testset "live path-manifest closure" begin
-        for manifest_path in sort!(live_manifests)
+        for manifest_path in sort(collect(live_manifests))
             manifest = TOML.parsefile(manifest_path)
             for (recorded_name, entries) in get(manifest, "deps", Dict())
                 for entry in (entries isa AbstractVector ? entries : (entries,))

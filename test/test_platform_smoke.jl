@@ -1,8 +1,3 @@
-using Potts
-using ModelingToolkitBase
-using SciMLBase
-using Symbolics
-
 @parameters target = 4.0 strength = 1.0 temperature = 2.0
 cell = CellKind(:cell; extinction = RetireAtZero())
 medium = MediumKind(:medium)
@@ -35,6 +30,5 @@ solution = solve(
     backend = CPUBackend(),
     scalar_type = Float32,
 )
-solution.retcode == SciMLBase.ReturnCode.Success ||
-    error("tiny scheduled sequential trajectory did not complete")
-last(solution).mcs == 1 || error("platform smoke stopped before one MCS")
+@test solution.retcode == SciMLBase.ReturnCode.Success
+@test last(solution).mcs == 1
