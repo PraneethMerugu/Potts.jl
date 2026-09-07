@@ -1038,8 +1038,8 @@ version = "5.13.0"
 
 [[deps.LocalMath]]
 deps = ["Adapt", "Atomix", "KernelAbstractions", "StaticArrays", "Statistics", "StructArrays", "UUIDs"]
-git-tree-sha1 = "d2693cba3d210345fc7e8fddaf89369769c40bbe"
-repo-rev = "3ec009f92a1976824b9e58c407006c6b19fbd33b"
+git-tree-sha1 = "ee7104291e87505149764af97b5e059543bacfb1"
+repo-rev = "b699002a05f84e240e34162d509d6b952bf7d437"
 repo-url = "https://github.com/PraneethMerugu/LocalMath.jl"
 uuid = "82808884-8acc-4a5c-a056-be440a0fbea1"
 version = "0.2.0-rc2"

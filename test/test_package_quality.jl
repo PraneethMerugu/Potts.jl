@@ -58,7 +58,7 @@ using ExplicitImports
             ),
             "LocalMath" => (
                 "https://github.com/PraneethMerugu/LocalMath.jl",
-                "3ec009f92a1976824b9e58c407006c6b19fbd33b",
+                "b699002a05f84e240e34162d509d6b952bf7d437",
             ),
             # Potts cannot pin the commit containing its own exact manifest.
             # Its immutable self revision is still syntax-checked below.
