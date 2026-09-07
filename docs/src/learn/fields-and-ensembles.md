@@ -95,7 +95,8 @@ profile = NativeSolveProfile(
 ```
 
 This profile explicitly requests exact replay and therefore requires the pinned
-dependency and Julia runtime recorded by the replay environment. Set
+dependencies and Julia 1.12.6 runtime on the qualified ARM macOS platform
+recorded by the replay environment. Set
 `exact_replay=false` for ordinary functional execution; structural and
 numerical preflight still completes before any CPM or native state advances.
 
