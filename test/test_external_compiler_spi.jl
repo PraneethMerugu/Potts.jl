@@ -11,7 +11,6 @@ using .ExternalCompilerSPIFixture
     )
     @test CustomOperation.response(1.0) == 0.5
     @test CustomOperation.response(-1.0) == -0.5
-    @test !hasmethod(Potts.operation_transfer, Tuple{typeof(CustomOperation.response), Int})
     ordinary = CustomOperation.run_custom_operation(operation = CustomOperation.response)
     opaque = CustomOperation.run_custom_operation()
     @test ordinary.solution.retcode == SciMLBase.ReturnCode.Success

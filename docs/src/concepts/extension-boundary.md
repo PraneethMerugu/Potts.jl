@@ -82,6 +82,33 @@ completion. A source requirement naming an operand must be valid for every
 arity admitted by the contract. CPU semantics are required; `gpu=true` is an
 explicit declaration and does not itself establish device or whole-model support.
 
+The following complete example executes both authoring choices. Its generic
+`response` function expands through ordinary Julia/Symbolics dispatch. The
+deliberately opaque `opaque_response` keeps one symbolic call, declares a named
+transfer, and binds its public execution callable to that same `response`
+function. A context-free operation therefore needs neither a contextual wrapper
+type nor a descriptor registry. The example declares CPU support only.
+
+```@example custom_operation
+using Potts
+include(joinpath(dirname(dirname(dirname(@__DIR__))), "examples", "custom_operation.jl"))
+ordinary = CustomOperation.run_custom_operation(operation=CustomOperation.response)
+opaque = CustomOperation.run_custom_operation()
+(
+    CustomOperation.response(1.0),
+    ordinary.solution.stats.constraint_rejections,
+    opaque.solution.stats.constraint_rejections,
+    last(ordinary.solution).ownership == last(opaque.solution).ownership,
+)
+```
+
+Each model evaluates four proposals and rejects them through its actual
+constraint evaluator. Symbolic registration alone is insufficient for an opaque
+operation: completion reports the missing transfer or callable, including the
+captured statement location and available remedies. A contextual operation that
+reads evaluator resources must instead declare support for each required public
+context; the context-free example does not grant access to hidden runtime state.
+
 The public extension-oriented names are distinguishable from the exported
 authoring API:
 
