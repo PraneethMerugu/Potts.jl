@@ -453,3 +453,34 @@ a conflicting explicit declaration initial is rejected. Supply `ReferenceUnits`
 when system-only dimensional initial conditions do not have declared reference
 anchors. Scheduling inspection and runtime conversion use the same selected
 initial value as expression unit analysis.
+
+## Named-product initialization
+
+A concrete `NamedTuple` declaration keeps related values under one state owner:
+
+```julia
+@variables memory::NamedTuple{(:amount, :enabled, :direction), Tuple{Float64, Bool, SVector{2, Float64}}}
+memory_state = ModelState(memory; initial=(
+    amount=2.0, enabled=true, direction=SVector(1.0, 0.0),
+))
+```
+
+At `scalar_type=Float32`, this value becomes
+`(amount=2.0f0, enabled=true, direction=SVector(1.0f0, 0.0f0))`.
+Integer and Boolean fields retain their declared types. `SiteState` stores one
+such product per lattice site; a supplied site initializer is a lattice-shaped
+array of products. Field names and order must match the declaration, nested
+products retain their structure, and array fields must have fixed size.
+Omitted initializers recursively produce zero values, including fixed arrays
+of products. Dynamic arrays and nonfinite numerical leaves are rejected.
+
+Dimensional product fields are converted independently, using the same reference
+inference and explicit `ReferenceUnits` choices as scalar states. Nested
+quantity leaves participate in reference inference; inconsistent inferred scales
+need an explicit reference. A supplied replacement must preserve field structure,
+fixed-array shape, and each field's dimensions.
+
+These storage and initialization contracts are exercised for model and site
+state on both CPU algorithms, including checkpoint restoration. Field-expression
+execution is tested separately from storage; neither storage nor CPU execution
+by itself establishes cell-process or accelerator support.

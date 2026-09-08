@@ -130,6 +130,15 @@ from model, site, and cell storage shape; saved values and checkpoints consume
 the resulting Core-owned storage. The owning behavioral tests are in
 `test/test_structured_state_authoring.jl`.
 
+Named products use the same conversion owner recursively: declared field names,
+types, and fixed-array shapes determine the stored value, including omitted
+defaults. Completion's reference-anchor traversal visits nested quantity leaves;
+it does not create independent field state owners. Runtime supplied values reuse
+the compiled conversion contract. Product initialization and checkpoint witnesses
+live in `test/test_product_state_authoring.jl`, recursive defaults in
+`test/test_product_state_defaults.jl`, and dimensional conversion in
+`test/test_state_reference_inference.jl`.
+
 Fixed-vector construction and indexing use the existing operation catalog and
 normalized expression graph. `compiler/host/term_analysis.jl` derives logical
 shape and proves literal index bounds; unit analysis checks component dimensions.
