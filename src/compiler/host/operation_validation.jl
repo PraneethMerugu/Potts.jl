@@ -89,6 +89,8 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         return "operation schema version must be positive"
     isempty(transfer.serialization_identity) &&
         return "operation serialization identity must be nonempty"
+    !isempty(transfer.arity) && first(transfer.arity) >= 0 ||
+        return "operation arity must be a nonempty range of nonnegative integers"
     arity in transfer.arity ||
         return "arity $arity is outside $(transfer.arity)"
     transfer.result_rule in _RESULT_TRANSFER_RULES ||

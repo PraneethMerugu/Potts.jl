@@ -1,6 +1,58 @@
 import LocalMath
 import Statistics
 
+@testset "named operation contracts validate at construction" begin
+    contract(; kwargs...) = Potts.OperationTransfer(
+        :test_numeric_operation;
+        arity = 2,
+        result_rule = :real,
+        unit_rule = :dimensionless,
+        footprint_rule = Potts.InheritFootprintRule(),
+        kwargs...,
+    )
+    transfer = contract()
+    @test transfer.arity == 2:2
+    @test transfer.cpu
+    @test !transfer.gpu
+    @test contract(arity = 0).arity == 0:0
+    @test contract(arity = 1:3).arity == 1:3
+    @test contract(gpu = true).gpu
+    for invalid in (
+            (; arity = -1), (; arity = 3:2), (; arity = -1:2),
+            (; arity = (1, 2)), (; result_rule = :unknown),
+            (; unit_rule = :unknown), (; purity = :unknown),
+            (; totality = :unknown), (; operand_rule = :unknown),
+            (; schema_version = v"0.0.0"), (; serialization_identity = ""),
+            (; owner = Symbol("")), (; callable_identity = ""),
+            (; allowed_roles = ()), (; allowed_roles = (:unknown,)),
+            (; allowed_roles = (:hamiltonian, :hamiltonian)),
+            (; allowed_phases = (:unknown,)), (; required_context = :unknown),
+            (; tracker_requirements = (:b, :a)),
+            (; source_requirements = (Potts.LatticeRankRequirement(0),)),
+            (; source_requirements = (Potts.SpatialRelationRequirement(3, :moore, 1),)),
+            (; source_requirements = (Potts.NamedSpatialRelationRequirement(Symbol("")),)),
+            (; cpu = false),
+        )
+        @test_throws ArgumentError contract(; invalid...)
+    end
+    # Source operands must exist for every admitted arity, not just the widest call.
+    @test_throws ArgumentError contract(
+        arity = 1:3,
+        source_requirements = (Potts.SpatialRelationRequirement(2, :moore, 1),),
+    )
+    @test_throws ArgumentError contract(
+        lifecycle_abi = Potts.LifecycleOperationABI(
+            :trigger; input_context = :lifecycle_trigger,
+            result_shape = :scalar_boolean, validator = :trigger_boolean,
+        ),
+    )
+    @test_throws MethodError Potts.OperationTransfer(
+        :test_numeric_operation, v"1.0.0", 2:2,
+        :real, :dimensionless, :pure, :total,
+        Potts.InheritFootprintRule(), true, false,
+    )
+end
+
 function _static_evaluator_values(expression)
     values = Any[expression]
     if expression isa CorePotts.CompilerSPI.LiteralExpression

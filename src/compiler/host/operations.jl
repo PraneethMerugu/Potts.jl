@@ -90,7 +90,20 @@ function LifecycleOperationABI(
     )
 end
 
-"""Versioned compiler contract for one registered symbolic operation."""
+"""
+    OperationTransfer(identity; arity, result_rule, unit_rule, footprint_rule, kwargs...)
+
+Versioned compiler contract for one registered symbolic operation. Construct it
+with named semantic fields. Invalid semantic contracts throw `ArgumentError` at
+construction; incorrect argument types receive ordinary Julia type errors.
+`arity` accepts a nonnegative integer or a nonempty `UnitRange{Int}`. Context,
+source binding, and operand compatibility are also checked when used in a model.
+
+The defaults describe a pure, total CPU operation. GPU admission is opt-in with
+`gpu=true` and still requires a device-compatible callable and whole-model
+qualification. Set `schema_version`, `serialization_identity`, `owner`, and
+`callable_identity` to identify an external operation's execution contract.
+"""
 struct OperationTransfer
     identity::Symbol
     schema_version::VersionNumber
@@ -112,52 +125,54 @@ struct OperationTransfer
     callable_identity::String
     source_requirements::Tuple
     lifecycle_abi::Union{Nothing, LifecycleOperationABI}
-end
 
-# Preserve the established full positional construction contract while the
-# lifecycle ABI remains an optional schema extension.
-OperationTransfer(
-    identity::Symbol,
-    schema_version::VersionNumber,
-    serialization_identity::String,
-    arity::UnitRange{Int},
-    result_rule::Symbol,
-    unit_rule::Symbol,
-    purity::Symbol,
-    totality::Symbol,
-    footprint_rule::AbstractFootprintTransferRule,
-    cpu::Bool,
-    gpu::Bool,
-    tracker_requirements::Tuple{Vararg{Symbol}},
-    operand_rule::Symbol,
-    allowed_roles::Tuple{Vararg{Symbol}},
-    allowed_phases::Tuple{Vararg{Symbol}},
-    required_context::Symbol,
-    owner::Symbol,
-    callable_identity::String,
-    source_requirements::Tuple,
-) = OperationTransfer(
-    identity,
-    schema_version,
-    serialization_identity,
-    arity,
-    result_rule,
-    unit_rule,
-    purity,
-    totality,
-    footprint_rule,
-    cpu,
-    gpu,
-    tracker_requirements,
-    operand_rule,
-    allowed_roles,
-    allowed_phases,
-    required_context,
-    owner,
-    callable_identity,
-    source_requirements,
-    nothing,
-)
+    function OperationTransfer(
+            identity::Symbol;
+            schema_version::VersionNumber = v"1.0.0",
+            serialization_identity = "potts-operation:" * String(identity) * ":" *
+                string(schema_version),
+            arity,
+            result_rule::Symbol,
+            unit_rule::Symbol,
+            footprint_rule::AbstractFootprintTransferRule,
+            purity::Symbol = :pure,
+            totality::Symbol = :total,
+            cpu::Bool = true,
+            gpu::Bool = false,
+            tracker_requirements = (),
+            operand_rule::Symbol = :any,
+            allowed_roles = _CLOSED_OPERATION_ROLES,
+            allowed_phases = _CLOSED_OPERATION_PHASES,
+            required_context::Symbol = :any,
+            owner::Symbol = :external,
+            callable_identity = "CorePotts.CompilerSPI.operation_callable:" *
+                String(identity) * ":" * string(schema_version),
+            source_requirements = (),
+            lifecycle_abi::Union{Nothing, LifecycleOperationABI} = nothing,
+        )
+        admitted_arity = arity isa Integer ? (Int(arity):Int(arity)) : arity
+        admitted_arity isa UnitRange{Int} || throw(
+            ArgumentError(
+                "operation arity must be an integer or UnitRange{Int}"
+            )
+        )
+        transfer = new(
+            identity, schema_version, String(serialization_identity),
+            admitted_arity, result_rule, unit_rule, purity, totality,
+            footprint_rule, cpu, gpu, Tuple(tracker_requirements),
+            operand_rule, Tuple(allowed_roles), Tuple(allowed_phases),
+            required_context, owner, String(callable_identity),
+            Tuple(source_requirements), lifecycle_abi,
+        )
+        reason = _operation_transfer_error(transfer, first(admitted_arity))
+        reason === nothing || throw(
+            ArgumentError(
+                "invalid operation $(repr(identity)): $reason"
+            )
+        )
+        return transfer
+    end
+end
 
 const _CLOSED_OPERATION_ROLES = (
     :hamiltonian,
@@ -183,77 +198,32 @@ const _CLOSED_OPERATION_PHASES = (
     :Lifecycle,
 )
 
-OperationTransfer(
-    identity::Symbol,
-    schema_version::VersionNumber,
-    serialization_identity::String,
-    arity::UnitRange{Int},
-    result_rule::Symbol,
-    unit_rule::Symbol,
-    purity::Symbol,
-    totality::Symbol,
-    footprint_rule::AbstractFootprintTransferRule,
-    cpu::Bool,
-    gpu::Bool,
-    ;
+"""Return the registered `OperationTransfer` for a symbolic operation."""
+function operation_transfer end
+
+_transfer(
+    identity, arity, result_rule, unit_rule;
+    version = v"1.0.0",
+    serialization_identity = "potts-operation:" * String(identity) * ":v1",
+    purity = :pure,
+    totality = :total,
+    footprint_rule = InheritFootprintRule(),
+    cpu = true,
+    gpu = true,
     tracker_requirements = (),
     operand_rule = :any,
     allowed_roles = _CLOSED_OPERATION_ROLES,
     allowed_phases = _CLOSED_OPERATION_PHASES,
     required_context = :any,
-    owner = :external,
-    callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) *
-        ":" * string(schema_version),
+    owner = :Potts,
+    callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) * ":" *
+        string(version),
     source_requirements = (),
     lifecycle_abi = nothing,
 ) = OperationTransfer(
-    identity,
-    schema_version,
-    serialization_identity,
-    arity,
-    result_rule,
-    unit_rule,
-    purity,
-    totality,
-    footprint_rule,
-    cpu,
-    gpu,
-    Tuple(tracker_requirements),
-    operand_rule,
-    Tuple(allowed_roles),
-    Tuple(allowed_phases),
-    required_context,
-    owner,
-    String(callable_identity),
-    Tuple(source_requirements),
-    lifecycle_abi,
-)
-
-OperationTransfer(
-    identity::Symbol,
-    schema_version::VersionNumber,
-    arity::UnitRange{Int},
-    result_rule::Symbol,
-    unit_rule::Symbol,
-    purity::Symbol,
-    totality::Symbol,
-    footprint_rule::AbstractFootprintTransferRule,
-    cpu::Bool,
-    gpu::Bool,
-    tracker_requirements::Tuple{Vararg{Symbol}} = ();
-    operand_rule = :any,
-    allowed_roles = _CLOSED_OPERATION_ROLES,
-    allowed_phases = _CLOSED_OPERATION_PHASES,
-    required_context = :any,
-    owner = :external,
-    callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) *
-        ":" * string(schema_version),
-    source_requirements = (),
-    lifecycle_abi = nothing,
-) = OperationTransfer(
-    identity,
-    schema_version,
-    "potts-operation:" * String(identity) * ":" * string(schema_version),
+    identity;
+    schema_version = version,
+    serialization_identity = String(serialization_identity),
     arity,
     result_rule,
     unit_rule,
@@ -264,58 +234,14 @@ OperationTransfer(
     gpu,
     tracker_requirements,
     operand_rule,
-    Tuple(allowed_roles),
-    Tuple(allowed_phases),
+    allowed_roles,
+    allowed_phases,
     required_context,
     owner,
-    String(callable_identity),
-    Tuple(source_requirements),
+    callable_identity,
+    source_requirements,
     lifecycle_abi,
 )
-
-"""Return the registered `OperationTransfer` for a symbolic operation."""
-function operation_transfer end
-
-_transfer(identity, arity, result_rule, unit_rule;
-        version = v"1.0.0",
-        serialization_identity = "potts-operation:" * String(identity) * ":v1",
-        purity = :pure,
-        totality = :total,
-        footprint_rule = InheritFootprintRule(),
-        cpu = true,
-        gpu = true,
-        tracker_requirements = (),
-        operand_rule = :any,
-        allowed_roles = _CLOSED_OPERATION_ROLES,
-        allowed_phases = _CLOSED_OPERATION_PHASES,
-        required_context = :any,
-        owner = :Potts,
-        callable_identity = "CorePotts.CompilerSPI.operation_callable:" * String(identity) * ":" *
-            string(version),
-        source_requirements = (),
-        lifecycle_abi = nothing,
-    ) = OperationTransfer(
-        identity,
-        version,
-        String(serialization_identity),
-        arity isa Integer ? (Int(arity):Int(arity)) : arity,
-        result_rule,
-        unit_rule,
-        purity,
-        totality,
-        footprint_rule,
-        cpu,
-        gpu,
-        tracker_requirements,
-        operand_rule,
-        Tuple(allowed_roles),
-        Tuple(allowed_phases),
-        required_context,
-        owner,
-        String(callable_identity),
-        Tuple(source_requirements),
-        lifecycle_abi,
-    )
 
 function numerical_operation_requirements end
 numerical_operation_requirements(::Any) = ()

@@ -10,13 +10,13 @@ host/footprint_types.jl
     define finite source, target, owner, and relationship footprint values
 
 host/operations.jl
-    define the versioned operation-transfer authority
+    define the versioned operation-transfer authority and named construction
 
 host/normalized_payloads.jl
     define the closed normalized leaf grammar and qualified binding identities
 
 host/operation_validation.jl
-    validate complete operation contracts and role/phase/backend legality
+    validate complete operation contracts at construction and normalized use
 
 host/operation_closure.jl
     derive the minimal frozen per-model operation closure from proven dependencies

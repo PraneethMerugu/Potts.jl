@@ -43,17 +43,17 @@ end
 
 operation_transfer(::typeof(external_site_value), ::Int) =
     Potts.OperationTransfer(
-        :external_site_value,
-        VERSION,
-        "external-site-value-v1",
-        2:2,
-        :real,
-        :declared,
-        :pure,
-        :total,
-        Potts.InheritFootprintRule(),
-        true,
-        true;
+        :external_site_value;
+        schema_version = VERSION,
+        serialization_identity = "external-site-value-v1",
+        arity = 2:2,
+        result_rule = :real,
+        unit_rule = :declared,
+        purity = :pure,
+        totality = :total,
+        footprint_rule = Potts.InheritFootprintRule(),
+        cpu = true,
+        gpu = true,
         allowed_roles = (:hamiltonian, :constraint),
         allowed_phases = (:Proposal,),
         required_context = :proposal,
