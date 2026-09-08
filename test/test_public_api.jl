@@ -4,6 +4,7 @@
         Symbol("@named"), Symbol("@mtkcompile"), Symbol("@statements"),
 
         :PottsSystem, :StatementSet, :StatementID, :SourceLocation,
+        :ComponentReference, :replace_component,
         :UnknownSource, :AbstractPottsStatement, :AbstractPottsEffect,
         :AbstractPottsPhase, :CellKind, :MediumKind, :LatticeDomain,
         :SpatialRelation, :SiteState, :CellState, :MediumState, :ModelState,

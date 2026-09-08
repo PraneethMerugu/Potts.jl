@@ -42,6 +42,57 @@ Use `@named` when a parent expression should supply the component name. Use
 `flatten` only when a downstream operation genuinely needs a flat namespace.
 Namespacing is structural identity, not display metadata.
 
+## Explicit imports and structural replacement
+
+An ordinary component constructor can consume another component's declared scalar
+parameter or symbolic state without declaring a second owner. Bind its local
+symbol with `imports=(local_input => ComponentReference(path, declaration),)`.
+Paths are relative to the enclosing model root; `()` selects the root. The alias
+must not also occur in the component's `parameters`, `unknowns`, or state
+declarations. Inputs and outputs still describe symbolic IO roles, not ownership.
+
+A statement reference must match the declaration at that owner, including its
+scientific data; another state with the same name and a different initial value
+does not bind. Authored file/line information is not scientific identity.
+Parameter references use their symbolic identity at the explicitly selected owner.
+
+```@example component_replacement
+using Potts
+include(joinpath(dirname(dirname(dirname(@__DIR__))), "examples", "component_replacement.jl"))
+shared = ComponentReplacementExample.shared_input_model()
+changed = ComponentReplacementExample.replaced_input_model()
+(
+    length(inspect(mtkcompile(shared.source), StateSchema()).states),
+    length(inspect(mtkcompile(changed.replaced), StateSchema()).states),
+)
+```
+
+The example's `accumulator` factory returns ordinary source and its owned state
+declaration. Two instances share one root-owned forcing parameter. Its replacement
+example changes one accumulator and reconnects a reader explicitly:
+
+```julia
+updated = replace_component(source, (:left,) => replacement.source;
+    reconnect=(old_output => ComponentReference((:left,), replacement.state),))
+```
+
+Every surviving import of an output from the removed subtree needs a reconnection,
+even when the replacement uses the same names. Unrelated components and external
+input owners remain present. Missing owners, incompatible declarations, duplicate
+synchronous writers, unused reconnections, and implicit cross-component connections
+are rejected. The result is new, validated, incomplete source; neither the original
+source nor an existing simulation is mutated. Use numerical `remake` for parameter
+changes, not structural replacement.
+
+This source-binding surface currently supports scalar symbolic parameters and states.
+Structured references and scoped declaration syntax require the structured-authoring
+extension. Imports within a component containing native declarations and replacement
+of a subtree containing native declarations remain unsupported: native port/substitution
+reconnection is follow-up work, not a completed component-replacement guarantee.
+Generic symbolic substitution of a source with imports is also rejected until its
+binding updates have explicit semantics; use the supported replacement operation.
+Backend support is determined by the resulting complete model.
+
 Keep declarations in `@statements` to retain their authored file and line through
 composition. Validation errors show the qualified statement, failing expression,
 and available remedies. Programmatically built statements without source metadata

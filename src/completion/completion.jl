@@ -27,6 +27,7 @@ function _complete_inventory_subtree(
         registry,
     )
     _validate_random_key_uniqueness!(diagnostics, records)
+    _validate_synchronous_writers!(diagnostics, records)
     _throw_diagnostics(:completion, diagnostics)
 
     qualified_records = _semantic_phase_schedule(records)

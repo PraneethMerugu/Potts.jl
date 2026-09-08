@@ -1,5 +1,8 @@
 function _collect_symbolics!(found, value)
-    if value isa NamedTuple
+    if value isa Symbolics.Equation
+        _collect_symbolics!(found, value.lhs)
+        _collect_symbolics!(found, value.rhs)
+    elseif value isa NamedTuple
         foreach(item -> _collect_symbolics!(found, item), values(value))
     elseif value isa Tuple || value isa AbstractArray
         foreach(item -> _collect_symbolics!(found, item), value)

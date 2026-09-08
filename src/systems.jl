@@ -8,10 +8,70 @@ end
 
 ReferenceUnits(; kwargs...) = ReferenceUnits((; kwargs...))
 
+function _is_component_symbol(value)
+    SymbolicIndexingInterface.symbolic_type(value) isa
+        SymbolicIndexingInterface.ScalarSymbolic || return false
+    variables = Symbolics.get_variables(value)
+    return length(variables) == 1 && isequal(
+        Symbolics.unwrap(only(variables)), Symbolics.unwrap(value)
+    )
+end
+
+"""
+    ComponentReference(path, reference)
+
+Identify a declared symbolic parameter or symbolic state in the component at
+`path`, relative to the enclosing model root. The empty path denotes the root.
+Use these source identities in `PottsSystem(imports=...)` and
+`replace_component(...; reconnect=...)`; a matching display name is not a binding.
+"""
+struct ComponentReference{R}
+    path::Tuple{Vararg{Symbol}}
+    reference::R
+    function ComponentReference(path::Tuple{Vararg{Symbol}}, reference)
+        all(name -> !isempty(String(name)), path) || throw(
+            ArgumentError(
+                "component reference paths cannot contain empty names"
+            )
+        )
+        arguments = reference isa AbstractPottsStatement ?
+            _statement_arguments(reference) : nothing
+        value = reference isa AbstractPottsStatement ?
+            arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing : reference
+        _is_component_symbol(value) || throw(
+            ArgumentError(
+                "a component reference requires a declared scalar symbolic parameter or state"
+            )
+        )
+        return new{typeof(reference)}(path, _defensive_copy(reference))
+    end
+end
+
+function _component_imports(values)
+    result = Pair[]
+    for binding in values
+        binding isa Pair && last(binding) isa ComponentReference ||
+            throw(ArgumentError("component imports require local_symbol => ComponentReference pairs"))
+        alias = first(binding)
+        _is_component_symbol(alias) || throw(
+            ArgumentError(
+                "a component import alias must be a scalar symbolic reference"
+            )
+        )
+        any(item -> isequal(first(item), alias), result) && throw(
+            ArgumentError(
+                "a component import alias may be bound only once"
+            )
+        )
+        push!(result, _defensive_copy(alias) => last(binding))
+    end
+    return Tuple(result)
+end
+
 """
     PottsSystem(; name, statements=StatementSet(), equations=(), unknowns=(),
                 parameters=(), independent_variables=(), systems=(),
-                native_components=(), inputs=(), outputs=(),
+                native_components=(), inputs=(), outputs=(), imports=(),
                 initial_conditions=Dict(), observed=(), events=(),
                 continuous_events=(), discrete_events=events)
 
@@ -32,6 +92,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     native_components::Vector{NativeComponent}
     inputs::Vector{Any}
     outputs::Vector{Any}
+    imports::Tuple
     initial_conditions::Dict{Any, Any}
     observed::Vector{Any}
     continuous_events::Vector{Any}
@@ -53,6 +114,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             native_components::Vector{NativeComponent},
             inputs::Vector{Any},
             outputs::Vector{Any},
+            imports::Tuple,
             initial_conditions::Dict{Any, Any},
             observed::Vector{Any},
             continuous_events::Vector{Any},
@@ -78,6 +140,7 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
             native_components,
             inputs,
             outputs,
+            imports,
             initial_conditions,
             observed,
             continuous_events,
@@ -102,6 +165,7 @@ function PottsSystem(;
         native_components = (),
         inputs = (),
         outputs = (),
+        imports = (),
         initial_conditions = Dict(),
         observed = (),
         events = (),
@@ -143,6 +207,7 @@ function PottsSystem(;
         native_values,
         Any[_defensive_copy(value) for value in inputs],
         Any[_defensive_copy(value) for value in outputs],
+        _component_imports(imports),
         Dict{Any, Any}(
             _defensive_copy(key) => _defensive_copy(value)
             for (key, value) in pairs(initial_conditions)
@@ -169,6 +234,7 @@ function _rebuild(
         native_components = getfield(system, :native_components),
         inputs = getfield(system, :inputs),
         outputs = getfield(system, :outputs),
+        imports = getfield(system, :imports),
         initial_conditions = getfield(system, :initial_conditions),
         observed = getfield(system, :observed),
         continuous_events = getfield(system, :continuous_events),
@@ -192,6 +258,7 @@ function _rebuild(
         NativeComponent[component for component in native_components],
         Any[_defensive_copy(value) for value in inputs],
         Any[_defensive_copy(value) for value in outputs],
+        _component_imports(imports),
         Dict{Any, Any}(
             _defensive_copy(key) => _defensive_copy(value)
             for (key, value) in pairs(initial_conditions)
@@ -272,6 +339,9 @@ function Symbolics.substitute(
         system::PottsSystem, rules::Union{Vector{<:Pair}, Dict}
     )
     _ensure_incomplete(system, "substitute")
+    isempty(rules) || !_has_component_imports(system) || throw(ArgumentError(
+        "symbolic substitution of source component imports is not yet supported; use explicit component replacement"
+    ))
     normalized = Dict(rules)
     if !isempty(normalized) && all(key -> key isa Symbol, keys(normalized))
         children = PottsSystem[
@@ -329,6 +399,11 @@ end
 function _has_native_components(system::PottsSystem)
     !isempty(getfield(system, :native_components)) && return true
     return any(_has_native_components, getfield(system, :systems))
+end
+
+function _has_component_imports(system::PottsSystem)
+    !isempty(getfield(system, :imports)) && return true
+    return any(_has_component_imports, getfield(system, :systems))
 end
 
 function _assert_unique_system_names(systems)
@@ -444,6 +519,7 @@ function ModelingToolkitBase.extend(
         native_components = natives,
         inputs = _stable_union(getfield(base, :inputs), getfield(system, :inputs)),
         outputs = _stable_union(getfield(base, :outputs), getfield(system, :outputs)),
+        imports = (getfield(base, :imports)..., getfield(system, :imports)...),
         initial_conditions,
         observed = [getfield(base, :observed); getfield(system, :observed)],
         continuous_events = [
@@ -480,6 +556,7 @@ end
 
 function _flatten(system::PottsSystem, prefix::Tuple)
     inventory = _source_inventory(system)
+    system, inventory = _resolve_component_imports(inventory)
     flat_statements = AbstractPottsStatement[]
     for occurrence in inventory.statements
         relative_path = occurrence.path[2:end]
@@ -552,6 +629,7 @@ function ModelingToolkitBase.complete(
     # This is the sole hierarchy discovery for completion. Every later pass
     # transforms or projects these occurrences without walking `systems` again.
     inventory = _source_inventory(system)
+    _, inventory = _resolve_component_imports(inventory)
     _, inventory, structural_parameters =
         _resolve_structural_parameters(inventory)
     diagnostics = PottsDiagnostic[]

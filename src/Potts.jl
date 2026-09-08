@@ -37,6 +37,8 @@ include("native/scheduled_components.jl")
 include("completion/diagnostics.jl")
 include("systems.jl")
 include("completion/source_inventory.jl")
+include("completion/component_imports.jl")
+include("component_replacement.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/lifecycle.jl")
@@ -117,6 +119,7 @@ include("runtime/symbolic_indexing.jl")
 include("inspection.jl")
 
 export PottsSystem, StatementSet, StatementID, SourceLocation, UnknownSource
+export ComponentReference, replace_component
 export AbstractPottsStatement, AbstractPottsEffect, AbstractPottsPhase
 export CellKind, MediumKind, LatticeDomain, SpatialRelation
 export SiteState, CellState, MediumState, ModelState, FieldState, HistoryState

@@ -34,10 +34,7 @@ function _scheduled_symbolic_name(value)
 end
 
 function _scheduled_reference_name(path::Tuple, value)
-    local_name = _scheduled_symbolic_name(value)
-    relative_path = length(path) <= 1 ? () : path[2:end]
-    isempty(relative_path) && return local_name
-    return Symbol(join(String.((relative_path..., local_name)), "₊"))
+    return _scheduled_symbolic_name(_namespace_symbolic_value(value, path[2:end]))
 end
 
 function _scheduled_public_name(identity::QualifiedStatementID)

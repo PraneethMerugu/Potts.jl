@@ -28,6 +28,17 @@ Potts owns the public symbolic and SciML-facing product:
 - structural `mtkcompile` and explicit component IO, time, scope, and coupling schedules;
 - `PottsProblem`, late private lowering, integrator/solution integration, and symbolic indexing.
 
+Source component bindings follow one chain: `PottsSystem(imports=...)` and
+`ComponentReference` declarations in `systems.jl` → the existing source inventory
+and `completion/component_imports.jl` → ordinary MTK-scoped symbols and qualified
+statement records → the unchanged evaluator/state execution path. Imports do not
+create a runtime registry or additional state. `component_replacement.jl` rebuilds
+source and asks completion to validate it; it does not modify compiled plans.
+Synchronous writer uniqueness is checked after qualification in
+`completion/qualification.jl`, so aliases cannot conceal multiple writers.
+`test/test_component_replacement.jl` checks shared-input/state trajectories,
+replacement, and binding failures through public constructors.
+
 An external ModelingToolkit system remains native through structural compilation. Potts
 does not recreate that system by copying equations, unknowns, parameters, defaults, events, or
 hierarchy into a parallel Potts representation.

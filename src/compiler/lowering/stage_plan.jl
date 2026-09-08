@@ -164,13 +164,6 @@ function _lower_stage_plan(
             end
         end
     end
-    targets = map(
-        descriptor -> descriptor.effect.target,
-        after_mcs_assignments,
-    )
-    allunique(targets) || throw(ArgumentError(
-        "state blocks permit at most one synchronous assignment"
-    ))
     accepted_groups = _stage_descriptor_groups(accepted)
     before_lifecycle = (
         after_mcs_assignments...,

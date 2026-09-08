@@ -17,6 +17,21 @@ function _declared_record_unit(record::QualifiedStatement)
     return (:declared_dimension, declared)
 end
 
+function _declared_parameter_unit(value)
+    default = try
+        ModelingToolkitBase.hasdefault(value) ?
+            ModelingToolkitBase.getdefault(value) : nothing
+    catch
+        nothing
+    end
+    default isa DynamicQuantities.UnionAbstractQuantity && return (
+        _canonical_dimension(DynamicQuantities.dimension(default))
+    )
+    default isa Number && return :dimensionless
+    # Required parameters use ordinary dimensionless runtime numbers.
+    return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
+end
+
 function _normalized_leaf_unit(
         node::NormalizedTermNode,
         source::FrozenSourceGraph,
@@ -27,21 +42,7 @@ function _normalized_leaf_unit(
     if value isa DynamicQuantities.UnionAbstractQuantity
         return _canonical_dimension(DynamicQuantities.dimension(value))
     elseif payload isa ParameterBindingPayload
-        default = try
-            ModelingToolkitBase.hasdefault(value) ?
-                ModelingToolkitBase.getdefault(value) : nothing
-        catch
-            nothing
-        end
-        default isa DynamicQuantities.UnionAbstractQuantity && return(
-            _canonical_dimension(DynamicQuantities.dimension(default))
-        )
-        default isa Number && return :dimensionless
-        # Required parameters have no default from which to infer a dimension.
-        # Runtime parameter normalization deliberately admits only ordinary
-        # numbers for those entries, so their compiler-visible unit is
-        # dimensionless as well.
-        return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
+        return _declared_parameter_unit(value)
     elseif payload isa Union{StateBindingPayload, VariableBindingPayload}
         index = findfirst(
             record -> record.identity == payload.identity,
@@ -316,4 +317,3 @@ function _footprint_analysis_error(record, node, error)
         ),),
     )
 end
-

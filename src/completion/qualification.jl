@@ -350,6 +350,32 @@ function _completion_variables(inventory::_PottsSourceInventory, records)
     return result
 end
 
+function _validate_synchronous_writers!(diagnostics, records)
+    writers = Dict{Any, QualifiedStatementID}()
+    for record in records
+        record.kind === :SynchronousProcess || continue
+        for target in record.writes
+            if haskey(writers, target)
+                push!(
+                    diagnostics, PottsDiagnostic(
+                        :multiple_synchronous_writers,
+                        record.identity,
+                        repr(target),
+                        record.identity.path,
+                        "one synchronous assignment per state",
+                        "also written by $(writers[target])",
+                        (),
+                        record.source,
+                    )
+                )
+            else
+                writers[target] = record.identity
+            end
+        end
+    end
+    return nothing
+end
+
 function _with_ordering_dependencies(record, dependencies)
     return QualifiedStatement(
         record.identity,
@@ -379,4 +405,3 @@ function _with_ordering_dependencies(record, dependencies)
         record.lowering_identity,
     )
 end
-
