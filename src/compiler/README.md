@@ -64,6 +64,10 @@ lowering/parameters.jl
 execution/manifests.jl
     construct compiled statement/state/I/O manifests and time contracts
 
+execution/executable.jl
+    retain operational state/relationship/kind manifests and the owned Core
+    program; derive display from Core execution inspection rather than a cache
+
 lowering/evaluator_protocols.jl
     own registered payload metadata, callable admission, and evaluator construction
 
@@ -122,7 +126,8 @@ lowering/core_program.jl
     lower non-descriptor universal runtime structures
 
 compile.jl
-    orchestrate the passes and assemble the final executable/fingerprint
+    orchestrate the passes and assemble the operational manifests/fingerprint;
+    derived fingerprint descriptions are not retained as runtime authority
 ```
 
 Package-owned operation declarations live outside the compiler:

@@ -5,7 +5,7 @@ function _native_state_entry(plan::_PottsExecutionPlan, endpoint)
         "only ModelState, CellState, and checked field-output endpoints are admitted; got $(endpoint.potts_kind)",
     ))
     identity = _qualified_resource_identity(potts_endpoint(endpoint))
-    matches = filter(entry -> entry.identity == identity, plan.reports.states)
+    matches = filter(entry -> entry.identity == identity, plan.state_manifest)
     length(matches) == 1 || throw(NativeCapabilityError(
         endpoint.component_path,
         :typed_io,
@@ -205,4 +205,3 @@ function _validate_native_outputs(
     end
     return nothing
 end
-

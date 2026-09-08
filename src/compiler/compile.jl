@@ -12,9 +12,11 @@ function _lower_scheduled_execution_plan(
         backend::AbstractPottsBackend,
         scalar_type::Type{<:AbstractFloat},
     )
-    is_scheduled(scheduled) || throw(ArgumentError(
-        "late lowering requires a scheduled PottsSystem; call mtkcompile first"
-    ))
+    is_scheduled(scheduled) || throw(
+        ArgumentError(
+            "late lowering requires a scheduled PottsSystem; call mtkcompile first"
+        )
+    )
     _validate_compilation_choices(scheduled, engine, backend, scalar_type)
     analyzed_ir = _analyze_completed_system(scheduled)
     diagnostics = PottsDiagnostic[]
@@ -61,8 +63,10 @@ function _lower_scheduled_execution_plan(
         nameof(typeof(engine)),
         nameof(typeof(backend)),
         scalar_type,
-        Tuple((entry.name, entry.required, entry.unit)
-            for entry in manifest),
+        Tuple(
+            (entry.name, entry.required, entry.unit)
+                for entry in manifest
+        ),
     )
     core_program, kinds, observation_manifest = _lower_core_program(
         analyzed_ir,
@@ -85,10 +89,10 @@ function _lower_scheduled_execution_plan(
     completion_fingerprints = inspect(scheduled, Fingerprints())
     compiled_schedule = NamedTuple[
         (
-            identity = _manifest_identity(record.identity),
-            phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
-        )
-        for record in inspect(scheduled, Schedule())
+                identity = _manifest_identity(record.identity),
+                phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
+            )
+            for record in inspect(scheduled, Schedule())
     ]
     records = analyzed_ir.source.records
     states = _compiled_state_manifest(
@@ -101,38 +105,50 @@ function _lower_scheduled_execution_plan(
     )
     relationship_states = Tuple(
         let
-            statement = _relationship_policy_record(
-                analyzed_ir, endpoint_policy
-            )
-            payload = _statement_option(statement, :payload, NamedTuple())
-            (
-                name = _qualified_public_name(statement.identity),
-                local_name = Symbol(statement.identity.local_id),
-                identity = _qualified_resource_identity(statement.identity),
-                capacity = Int(_numeric_value(
-                    _statement_option(statement, :capacity)
-                )),
-                maximum_degree = Int(_numeric_value(
-                    _statement_option(statement, :maximum_degree)
-                )),
-                endpoints = (
-                    direction = endpoint_policy.direction,
-                    kind_a = endpoint_policy.kind_a_name,
-                    kind_b = endpoint_policy.kind_b_name,
-                ),
-                lifecycle = nameof(typeof(_statement_option(
-                    statement, :lifecycle, RejectEndpointRetirement()
-                ))),
-                payload_units = NamedTuple{keys(payload)}(map(
-                    value -> _compiled_value_unit(value, manifest),
-                    values(payload),
-                )),
-            )
+                statement = _relationship_policy_record(
+                    analyzed_ir, endpoint_policy
+                )
+                payload = _statement_option(statement, :payload, NamedTuple())
+                (
+                    name = _qualified_public_name(statement.identity),
+                    local_name = Symbol(statement.identity.local_id),
+                    identity = _qualified_resource_identity(statement.identity),
+                    capacity = Int(
+                        _numeric_value(
+                            _statement_option(statement, :capacity)
+                        )
+                    ),
+                    maximum_degree = Int(
+                        _numeric_value(
+                            _statement_option(statement, :maximum_degree)
+                        )
+                    ),
+                    endpoints = (
+                        direction = endpoint_policy.direction,
+                        kind_a = endpoint_policy.kind_a_name,
+                        kind_b = endpoint_policy.kind_b_name,
+                    ),
+                    lifecycle = nameof(
+                        typeof(
+                            _statement_option(
+                                statement, :lifecycle, RejectEndpointRetirement()
+                            )
+                        )
+                    ),
+                    payload_units = NamedTuple{keys(payload)}(
+                        map(
+                            value -> _compiled_value_unit(value, manifest),
+                            values(payload),
+                        )
+                    ),
+                )
         end
-        for endpoint_policy in relationship_endpoint_policies
+            for endpoint_policy in relationship_endpoint_policies
     )
     time = _compiled_time_contract(records)
-    reports = (
+    # Fingerprinting consumes derived inspection data without retaining a
+    # second runtime copy of facts owned by the executable or scheduled system.
+    fingerprint_payload = (
         execution,
         capability,
         compiler = _compiler_analysis_report(analyzed_ir),
@@ -143,14 +159,10 @@ function _lower_scheduled_execution_plan(
         statements = statement_manifest,
         variables = Tuple(
             _manifest_symbol(value)
-            for value in inspect(scheduled, Variables())
+                for value in inspect(scheduled, Variables())
         ),
         schedule = compiled_schedule,
-        replay = (
-            class = :exact_same_executable,
-            cross_engine = false,
-            addressed_rng = true,
-        ),
+        replay = _execution_replay_contract(),
         checkpoint = (
             schema = v"2.0.0",
             codec = :CorePottsProgramCheckpoint,
@@ -160,36 +172,38 @@ function _lower_scheduled_execution_plan(
         kinds = Tuple(entry.name for entry in kinds),
         kind_identities = kinds,
         fingerprints = completion_fingerprints,
-        states,
+        states = Tuple(
+            (
+                    key = state.key,
+                    name = state.name,
+                    kind = state.kind,
+                    role = state.role,
+                    storage = state.storage,
+                    shape = state.shape,
+                    scalar_type = state.scalar_type,
+                    unit = state.unit,
+                )
+                for state in states
+        ),
         relationship_states,
         time,
     )
     observations = observation_manifest
-    fingerprint_states = Tuple(
-        (
-            key = state.key,
-            name = state.name,
-            kind = state.kind,
-            role = state.role,
-            storage = state.storage,
-            shape = state.shape,
-            scalar_type = state.scalar_type,
-            unit = state.unit,
+    fingerprint = ExecutableFingerprint(
+        _sha256_hex(
+            "potts-executable-v1",
+            seed,
+            core_program.fingerprint,
+            fingerprint_payload,
         )
-        for state in states
     )
-    fingerprint_reports = merge(reports, (states = fingerprint_states,))
-    fingerprint = ExecutableFingerprint(_sha256_hex(
-        "potts-executable-v1",
-        seed,
-        core_program.fingerprint,
-        fingerprint_reports,
-    ))
     plan = _PottsExecutionPlan(
         core_program,
         manifest,
         relationship_endpoint_policies,
-        reports,
+        states,
+        relationship_states,
+        kinds,
         observations,
         fingerprint,
     )

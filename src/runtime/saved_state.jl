@@ -67,7 +67,7 @@ function _descriptor_saved_value(descriptor_state, entry)
 end
 
 function _descriptor_saved_states(executable, snapshot)
-    entries = executable.reports.states
+    entries = executable.state_manifest
     values = map(
         entry -> _descriptor_saved_value(snapshot.descriptor_state, entry),
         entries,
@@ -76,7 +76,7 @@ function _descriptor_saved_states(executable, snapshot)
 end
 
 function _descriptor_saved_topology(executable, snapshot)
-    entries = executable.reports.relationship_states
+    entries = executable.relationship_manifest
     isempty(entries) && return NamedTuple()
     length(entries) == length(snapshot.relationships) || throw(ArgumentError(
         "compiled topology declarations and runtime stores are misaligned"

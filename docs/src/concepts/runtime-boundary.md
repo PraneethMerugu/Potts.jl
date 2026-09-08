@@ -13,6 +13,13 @@ Runtime state is materialized once per `init`. A public executable is not a requ
 stage, and an extension cannot introduce another model authority, scheduler, lifecycle engine,
 parameter store, or checkpoint format.
 
+The private Potts execution plan retains explicit state, relationship, and kind
+manifests for initialization, symbolic indexing, native IO, and saved values.
+These manifests map authoring identities to the compiled execution schema;
+they are operational data, not cached inspection reports. Execution and
+capability inspection derive from the owned CorePotts program. Fingerprinting
+consumes derived descriptions without keeping another runtime copy of them.
+
 ## Native component boundary
 
 A component declares scope, IO, cadence, duration per MCS, split order, solver policy,
