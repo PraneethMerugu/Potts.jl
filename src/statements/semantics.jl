@@ -36,7 +36,7 @@ struct AtMCS <: AbstractCadence
     mcs::Int
     function AtMCS(mcs::Integer)
         mcs >= 0 || throw(ArgumentError("AtMCS must be nonnegative"))
-        new(Int(mcs))
+        return new(Int(mcs))
     end
 end
 """`Every(cadence)` is due at positive multiples of `cadence`."""
@@ -44,7 +44,7 @@ struct Every{T <: Integer} <: AbstractCadence
     cadence::T
     function Every(cadence::Integer)
         cadence > 0 || throw(ArgumentError("cadence must be positive"))
-        new{typeof(cadence)}(cadence)
+        return new{typeof(cadence)}(cadence)
     end
 end
 
@@ -88,12 +88,14 @@ function HamiltonianTerm(
         source = UnknownSource(),
         kwargs...,
     )
-    return HamiltonianTerm(_statement_core(
-        id,
-        (; domain, anchor, expression),
-        (; kwargs...),
-        source,
-    ))
+    return HamiltonianTerm(
+        _statement_core(
+            id,
+            (; domain, anchor, expression),
+            (; kwargs...),
+            source,
+        )
+    )
 end
 
 """`Assign(target, value)` publishes `value` to a declared state target."""
@@ -197,14 +199,16 @@ function _symbolic_local_name(value)
     return try
         Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(value)))
     catch
-        throw(ArgumentError(
-            "a state declared from a symbolic value requires an explicit `name`"
-        ))
+        throw(
+            ArgumentError(
+                "a state declared from a symbolic value requires an explicit `name`"
+            )
+        )
     end
 end
 
 for state_type in (
-        SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
+        SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
     )
     @eval function (::Type{$state_type})(
             variable::Union{Symbolics.Num, Symbolics.Arr};
@@ -213,9 +217,11 @@ for state_type in (
             source = UnknownSource(),
             kwargs...,
         )
-        return $state_type(_statement_core(
-            name, (; variable, initial), (; kwargs...), source
-        ))
+        return $state_type(
+            _statement_core(
+                name, (; variable, initial), (; kwargs...), source
+            )
+        )
     end
 end
 
@@ -224,7 +230,7 @@ struct AttemptsPerSite
     count::Int
     function AttemptsPerSite(count::Integer = 1)
         count > 0 || throw(ArgumentError("attempt count must be positive"))
-        new(Int(count))
+        return new(Int(count))
     end
 end
 
@@ -236,7 +242,8 @@ end
 (↔)(a, b) = SymmetricPair(a, b)
 
 """Declare a regular lattice and any named neighborhood relations."""
-function Lattice(shape::Tuple{Vararg{Integer}};
+function Lattice(
+        shape::Tuple{Vararg{Integer}};
         name::Symbol = :lattice,
         spacing = ntuple(_ -> 1.0, length(shape)),
         boundary::AbstractBoundaryPolicy = Periodic(),
@@ -246,9 +253,11 @@ function Lattice(shape::Tuple{Vararg{Integer}};
     all(>(0), shape) || throw(ArgumentError("lattice dimensions must be positive"))
     length(spacing) == length(shape) ||
         throw(ArgumentError("lattice spacing must match lattice dimensions"))
-    0 < max_cells <= prod(shape) || throw(ArgumentError(
-        "max_cells must be between one and the number of lattice sites"
-    ))
+    0 < max_cells <= prod(shape) || throw(
+        ArgumentError(
+            "max_cells must be between one and the number of lattice sites"
+        )
+    )
     domain = LatticeDomain(
         name;
         shape = Tuple(Int.(shape)),
@@ -258,16 +267,20 @@ function Lattice(shape::Tuple{Vararg{Integer}};
     )
     relation_statements = AbstractPottsStatement[]
     for (relation_name, neighborhood) in pairs(relations)
-        push!(relation_statements, SpatialRelation(
-            Symbol(relation_name); domain = name, neighborhood
-        ))
+        push!(
+            relation_statements, SpatialRelation(
+                Symbol(relation_name); domain = name, neighborhood
+            )
+        )
     end
     return StatementSet((domain, relation_statements...))
 end
 
 """Construct the standard quadratic cell-volume Hamiltonian term."""
-function Volume(kind; target, strength,
-        name::Symbol = Symbol(:volume_, Symbol(statement_id(kind))))
+function Volume(
+        kind; target, strength,
+        name::Symbol = Symbol(:volume_, Symbol(statement_id(kind)))
+    )
     cell = CellBinding(:cell)
     expression = strength * (cell_volume(cell) - target)^2
     return HamiltonianTerm(
@@ -283,14 +296,15 @@ function Volume(kind; target, strength,
 end
 
 """Construct a contact-energy term from unordered kind-pair energy laws."""
-function ContactEnergy(laws;
+function ContactEnergy(
+        laws;
         relation = :contact,
         name::Symbol = :contact_energy,
     )
     normalized = Tuple(
         law isa Pair && first(law) isa SymmetricPair ? law :
-        throw(ArgumentError("contact laws use `(kind_a ↔ kind_b) => energy`"))
-        for law in laws
+            throw(ArgumentError("contact laws use `(kind_a ↔ kind_b) => energy`"))
+            for law in laws
     )
     contact = ContactBinding(:contact, relation)
     expression = 0.0
@@ -319,8 +333,10 @@ function ContactEnergy(laws;
 end
 
 """Construct the standard quadratic cell-elongation Hamiltonian term."""
-function Elongation(kind; target, strength,
-        name::Symbol = Symbol(:elongation_, Symbol(statement_id(kind))))
+function Elongation(
+        kind; target, strength,
+        name::Symbol = Symbol(:elongation_, Symbol(statement_id(kind)))
+    )
     cell = CellBinding(:cell)
     return HamiltonianTerm(
         name;
@@ -335,10 +351,12 @@ function Elongation(kind; target, strength,
 end
 
 """Construct a chemotactic proposal term sampling `field`."""
-function Chemotaxis(kind, field; strength,
+function Chemotaxis(
+        kind, field; strength,
         mode::AbstractChemotaxisMode = ExtensionsOnly(),
         sample::AbstractInterpolationPolicy = Nearest(),
-        name::Symbol = Symbol(:chemotaxis_, Symbol(statement_id(kind))))
+        name::Symbol = Symbol(:chemotaxis_, Symbol(statement_id(kind)))
+    )
     copy = ProposalContext(:copy)
     response = -strength * (
         field_value(field, copy.target_site) - field_value(field, copy.source_site)
@@ -362,10 +380,12 @@ function Chemotaxis(kind, field; strength,
 end
 
 """Construct a local-connectivity proposal constraint for `kind`."""
-function LocalConnectivity(kind;
+function LocalConnectivity(
+        kind;
         foreground::Symbol = :connectivity,
         background::Symbol = :connectivity_background,
-        name::Symbol = Symbol(:connectivity_, Symbol(statement_id(kind))))
+        name::Symbol = Symbol(:connectivity_, Symbol(statement_id(kind)))
+    )
     expression = _potts_merks_local_connectivity(
         _kind_token(kind),
         _spatial_relation_token(foreground),
@@ -383,9 +403,11 @@ function LocalConnectivity(kind;
 end
 
 """Construct the activity proposal drive for a bounded activity state."""
-function ActEnergy(kind, activity; maximum, strength,
+function ActEnergy(
+        kind, activity; maximum, strength,
         reduction::Symbol = :activity_neighborhood,
-        name::Symbol = Symbol(:activity_, Symbol(statement_id(kind))))
+        name::Symbol = Symbol(:activity_, Symbol(statement_id(kind)))
+    )
     expression = _potts_act_energy(
         _kind_token(kind),
         activity,
@@ -405,11 +427,11 @@ function ActEnergy(kind, activity; maximum, strength,
     )
 end
 
-"""Construct a synchronous process containing one effect."""
-Synchronous(id, effect; phase = AfterMCS(), kwargs...) =
-    SynchronousProcess(id; effects = (effect,), phase, kwargs...)
-AcceptedCopy(id::Symbol, effect; when = true, phase = AcceptedCopy(), kwargs...) =
-    AcceptedCopyProcess(id; expression = when, effects = (effect,), phase, kwargs...)
+"""Construct a synchronous process whose effects read the same boundary-entry state."""
+Synchronous(id, effect, effects...; phase = AfterMCS(), kwargs...) =
+    SynchronousProcess(id; effects = (effect, effects...), phase, kwargs...)
+AcceptedCopy(id::Symbol, effect, effects...; when = true, phase = AcceptedCopy(), kwargs...) =
+    AcceptedCopyProcess(id; expression = when, effects = (effect, effects...), phase, kwargs...)
 
 """One named CPM sweep stage with an attempt budget and options."""
 struct SweepStage{A, O}
@@ -461,14 +483,14 @@ Protocol(stages...; name::Symbol = :protocol, source = UnknownSource(), kwargs..
 """Construct a Hamiltonian term iterating over a relationship state."""
 RelationshipEnergy(id, edge::RelationshipBinding, expression; kwargs...) =
     HamiltonianTerm(
-        id;
-        domain = edges(edge.relationship),
-        anchor = edge,
-        expression,
-        mechanism = :relationship,
-        relationship = edge.relationship,
-        kwargs...,
-    )
+    id;
+    domain = edges(edge.relationship),
+    anchor = edge,
+    expression,
+    mechanism = :relationship,
+    relationship = edge.relationship,
+    kwargs...,
+)
 """Construct a proposal constraint derived from relationship state."""
 RelationshipConstraint(id, relationship, constraint; kwargs...) =
     ProposalConstraint(id, constraint; mechanism = :relationship, relationship, kwargs...)

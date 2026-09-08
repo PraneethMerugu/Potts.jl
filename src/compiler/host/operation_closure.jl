@@ -35,8 +35,8 @@ function _record_has_model_assignment(
     record.kind === :SynchronousProcess || return false
     arguments = _record_arguments(record)
     arguments isa NamedTuple && haskey(arguments, :effects) || return false
-    length(arguments.effects) == 1 || return false
-    effect = only(arguments.effects)
+    isempty(arguments.effects) && return false
+    effect = first(arguments.effects)
     effect isa Assign || return false
     return any(source.records) do candidate
         candidate.kind === :ModelState || return false
@@ -44,7 +44,7 @@ function _record_has_model_assignment(
         variable !== nothing && isequal(variable, effect.target) && return true
         effect.target isa AbstractPottsStatement || return false
         return statement_id(effect.target) == candidate.identity.local_id &&
-               candidate.identity in record.resources
+            candidate.identity in record.resources
     end
 end
 
@@ -109,9 +109,11 @@ function _compiler_synthesized_operation_requirements(
         end
     end
 
-    sort!(requirements; by = item -> (
-        String(operation_transfer(first(item), last(item)).identity),
-        last(item),
-    ))
+    sort!(
+        requirements; by = item -> (
+            String(operation_transfer(first(item), last(item)).identity),
+            last(item),
+        )
+    )
     return Tuple((first(item), last(item)) for item in requirements)
 end

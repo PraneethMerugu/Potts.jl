@@ -42,6 +42,25 @@ Use `@named` when a parent expression should supply the component name. Use
 `flatten` only when a downstream operation genuinely needs a flat namespace.
 Namespacing is structural identity, not display metadata.
 
+## Simultaneous assignments
+
+Pass multiple effects to `Synchronous` to read one boundary-entry snapshot:
+
+```julia
+@variables left right
+ModelState(left; initial=2.0)
+ModelState(right; initial=7.0)
+Synchronous(:exchange, Assign(left, right), Assign(right, left))
+```
+
+Include these declarations in the model's `StatementSet`. The exchange swaps
+the two values; the second assignment does not read the first assignment's
+new value. Each target must have one synchronous writer, including within a
+single process. All assignments in this process must share an iteration domain:
+model assignments execute once, while site assignments execute per site. Use
+separate processes for different domains. This does not make source order an
+implicit sequential update policy.
+
 ## Explicit imports and structural replacement
 
 An ordinary component constructor can consume another component's declared scalar

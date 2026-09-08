@@ -14,7 +14,7 @@ function _namespace_symbolic_value(value, names)
             return variable
         return foldr(
             (scope, current) ->
-                ModelingToolkitBase.renamespace(scope, current),
+            ModelingToolkitBase.renamespace(scope, current),
             namespace;
             init = variable,
         )
@@ -56,14 +56,14 @@ function _namespace_reference_payload(value, names)
         return map(item -> _namespace_reference_payload(item, names), value)
     elseif value isa Pair
         return _namespace_reference_payload(first(value), names) =>
-               _namespace_reference_payload(last(value), names)
+            _namespace_reference_payload(last(value), names)
     elseif value isa AbstractArray
         return map(item -> _namespace_reference_payload(item, names), value)
     elseif value isa AbstractDict
         return Dict(
             _namespace_reference_payload(key, names) =>
                 _namespace_reference_payload(item, names)
-            for (key, item) in value
+                for (key, item) in value
         )
     elseif value isa Union{
             AbstractPottsEffect, AbstractIterationDomain, AbstractBoundaryPolicy,
@@ -86,16 +86,22 @@ function _namespace_statement_for_lowering(
     isempty(names) && return statement
     namespaced = _namespace_statement_names(statement, names)
     core = getfield(namespaced, :core)
-    qualified_id = StatementID(Symbol(join(
-        (String(name) for name in (names..., Symbol(core.id))), "₊"
-    )))
+    qualified_id = StatementID(
+        Symbol(
+            join(
+                (String(name) for name in (names..., Symbol(core.id))), "₊"
+            )
+        )
+    )
     statement_type = typeof(namespaced).name.wrapper
-    return statement_type(StatementCore(
-        qualified_id,
-        _namespace_reference_payload(core.arguments, names),
-        _namespace_reference_payload(core.options, names),
-        core.source,
-    ))
+    return statement_type(
+        StatementCore(
+            qualified_id,
+            _namespace_reference_payload(core.arguments, names),
+            _namespace_reference_payload(core.options, names),
+            core.source,
+        )
+    )
 end
 
 _namespace_statement(statement::AbstractPottsStatement, current_path::Tuple) =
@@ -110,7 +116,7 @@ function _qualify_records!(
         registry::StatementRegistry,
     )
     seen_by_system = Dict{
-        Int32, Dict{StatementID, AbstractPottsStatement}
+        Int32, Dict{StatementID, AbstractPottsStatement},
     }()
     for occurrence in inventory.statements
         current_path = occurrence.path
@@ -123,16 +129,18 @@ function _qualify_records!(
         id = statement_id(originating_statement)
         if haskey(seen, id)
             first_statement = seen[id]
-            push!(diagnostics, PottsDiagnostic(
-                :duplicate_statement_identity,
-                QualifiedStatementID(current_path, id),
-                _statement_expression(originating_statement),
-                current_path,
-                "a namespace-local unique StatementID",
-                "duplicates $(_statement_expression(first_statement))",
-                (),
-                statement_source(originating_statement),
-            ))
+            push!(
+                diagnostics, PottsDiagnostic(
+                    :duplicate_statement_identity,
+                    QualifiedStatementID(current_path, id),
+                    _statement_expression(originating_statement),
+                    current_path,
+                    "a namespace-local unique StatementID",
+                    "duplicates $(_statement_expression(first_statement))",
+                    (),
+                    statement_source(originating_statement),
+                )
+            )
             continue
         end
         seen[id] = originating_statement
@@ -140,35 +148,39 @@ function _qualify_records!(
         identity = QualifiedStatementID(current_path, id)
         options = _statement_options(statement)
         origin = haskey(options, :__registered_origin) ?
-                 options.__registered_origin : nothing
+            options.__registered_origin : nothing
         if origin !== nothing &&
                 _authenticated_registered_origin(registry, origin) === nothing
-            push!(diagnostics, PottsDiagnostic(
-                :unauthenticated_registered_origin,
-                identity,
-                _statement_expression(originating_statement),
-                current_path,
-                "internal provenance exactly matching one frozen registry definition",
-                repr(origin),
-                (),
-                statement_source(originating_statement),
-            ))
+            push!(
+                diagnostics, PottsDiagnostic(
+                    :unauthenticated_registered_origin,
+                    identity,
+                    _statement_expression(originating_statement),
+                    current_path,
+                    "internal provenance exactly matching one frozen registry definition",
+                    repr(origin),
+                    (),
+                    statement_source(originating_statement),
+                )
+            )
             continue
         end
         registered = statement isa RegisteredStatement ?
-                     _registered_definition(registry, statement) : nothing
+            _registered_definition(registry, statement) : nothing
         if statement isa RegisteredStatement && registered === nothing
             arguments = _statement_arguments(statement)
-            push!(diagnostics, PottsDiagnostic(
-                :unregistered_statement_schema,
-                identity,
-                _statement_expression(originating_statement),
-                current_path,
-                "a frozen registered schema $(arguments.schema) $(arguments.version)",
-                "no matching definition",
-                (),
-                statement_source(originating_statement),
-            ))
+            push!(
+                diagnostics, PottsDiagnostic(
+                    :unregistered_statement_schema,
+                    identity,
+                    _statement_expression(originating_statement),
+                    current_path,
+                    "a frozen registered schema $(arguments.schema) $(arguments.version)",
+                    "no matching definition",
+                    (),
+                    statement_source(originating_statement),
+                )
+            )
             continue
         end
         if registered !== nothing
@@ -176,55 +188,61 @@ function _qualify_records!(
             expected = registered.contract.argument_types
             if length(arguments) != length(expected) ||
                     !all(
-                        index -> arguments[index] isa expected[index],
-                        eachindex(arguments),
+                    index -> arguments[index] isa expected[index],
+                    eachindex(arguments),
+                )
+                push!(
+                    diagnostics, PottsDiagnostic(
+                        :registered_argument_type_mismatch,
+                        identity,
+                        _statement_expression(originating_statement),
+                        current_path,
+                        repr(expected),
+                        repr(typeof.(arguments)),
+                        (),
+                        statement_source(originating_statement),
                     )
-                push!(diagnostics, PottsDiagnostic(
-                    :registered_argument_type_mismatch,
-                    identity,
-                    _statement_expression(originating_statement),
-                    current_path,
-                    repr(expected),
-                    repr(typeof.(arguments)),
-                    (),
-                    statement_source(originating_statement),
-                ))
+                )
                 continue
             end
         end
         writes = _statement_writes(statement)
         reads = _statement_reads(statement, writes)
         effect = registered === nothing ?
-                 _statement_effect(statement) :
-                 _registered_effect(registered.contract)
+            _statement_effect(statement) :
+            _registered_effect(registered.contract)
         phase = registered === nothing ?
-                _statement_phase(statement) : registered.contract.phase
+            _statement_phase(statement) : registered.contract.phase
         if !_phase_contract(statement, phase)
-            push!(diagnostics, PottsDiagnostic(
-                :illegal_effect_phase,
-                identity,
-                _statement_expression(originating_statement),
-                current_path,
-                "the semantic phase admitted by $(statement_kind(statement))",
-                repr(phase),
-                (),
-                statement_source(originating_statement),
-            ))
+            push!(
+                diagnostics, PottsDiagnostic(
+                    :illegal_effect_phase,
+                    identity,
+                    _statement_expression(originating_statement),
+                    current_path,
+                    "the semantic phase admitted by $(statement_kind(statement))",
+                    repr(phase),
+                    (),
+                    statement_source(originating_statement),
+                )
+            )
             continue
         end
         try
             _phase_rank(phase)
         catch error
-            push!(diagnostics, PottsDiagnostic(
-                :unsupported_semantic_phase,
-                identity,
-                _statement_expression(originating_statement),
-                current_path,
-                "an executable semantic anchor or Before/After anchor",
-                sprint(showerror, error),
-                (),
-                statement_source(originating_statement),
-            ))
+            push!(
+                diagnostics, PottsDiagnostic(
+                    :unsupported_semantic_phase,
+                    identity,
+                    _statement_expression(originating_statement),
+                    current_path,
+                    "an executable semantic anchor or Before/After anchor",
+                    sprint(showerror, error),
+                    (),
+                    statement_source(originating_statement),
+                )
+            )
             continue
         end
         _validate_statement_draws!(
@@ -238,22 +256,24 @@ function _qualify_records!(
         else
             Tuple(
                 RandomOperation(
-                    operation.identity,
-                    operation.family,
-                    operation.reserved,
-                )
-                for operation in registered.contract.rng
+                        operation.identity,
+                        operation.family,
+                        operation.reserved,
+                    )
+                    for operation in registered.contract.rng
             )
         end
         units = _record_units(statement, inventory)
         reference_conversion = _record_reference_conversion(
             units, reference_anchors
         )
-        resources = Tuple(_record_resources!(
-            QualifiedStatementID[],
-            (_statement_arguments(statement), _statement_options(statement)),
-            current_path,
-        ))
+        resources = Tuple(
+            _record_resources!(
+                QualifiedStatementID[],
+                (_statement_arguments(statement), _statement_options(statement)),
+                current_path,
+            )
+        )
         mutating = !(effect isa PureRead)
         record = QualifiedStatement(
             identity,
@@ -262,26 +282,26 @@ function _qualify_records!(
             statement_source(statement),
             statement,
             origin === nothing ? (
-                source_capture = statement_source(statement) isa SourceLocation ?
-                                 :captured : :direct,
-                schema = :built_in_v1,
-            ) : (
-                source_capture = statement_source(statement) isa SourceLocation ?
-                                 :captured : :direct,
-                schema = origin.schema,
-                registered_version = origin.version,
-                serialization_identity = origin.serialization_identity,
-                registered_lowering_identity = origin.lowering_identity,
-                registered_descriptor_payload_type =
+                    source_capture = statement_source(statement) isa SourceLocation ?
+                    :captured : :direct,
+                    schema = :built_in_v1,
+                ) : (
+                    source_capture = statement_source(statement) isa SourceLocation ?
+                    :captured : :direct,
+                    schema = origin.schema,
+                    registered_version = origin.version,
+                    serialization_identity = origin.serialization_identity,
+                    registered_lowering_identity = origin.lowering_identity,
+                    registered_descriptor_payload_type =
                     origin.descriptor_payload_type,
-                registered_scientific_category =
+                    registered_scientific_category =
                     origin.scientific_category,
-                registered_energy_domain = origin.energy_domain,
-                registered_affected_region = origin.affected_region,
-            ),
+                    registered_energy_domain = origin.energy_domain,
+                    registered_affected_region = origin.affected_region,
+                ),
             (_statement_arguments(statement), _statement_options(statement)),
             registered === nothing ?
-            _record_result_type(statement) : registered.contract.result_type,
+                _record_result_type(statement) : registered.contract.result_type,
             _record_shape(statement, root_shape),
             units,
             reference_conversion,
@@ -289,41 +309,41 @@ function _qualify_records!(
             writes,
             _record_ownership(statement),
             statement isa Union{
-                SiteState, CellState, MediumState, ModelState, FieldState,
-                HistoryState, RelationshipState,
-            } ? :logical : :none,
+                    SiteState, CellState, MediumState, ModelState, FieldState,
+                    HistoryState, RelationshipState,
+                } ? :logical : :none,
             resources,
             effect,
             registered === nothing ?
-            _effect_bound(statement) :
-            EffectBound(
-                registered.contract.boundedness.maximum,
-                registered.contract.boundedness.basis,
-            ),
+                _effect_bound(statement) :
+                EffectBound(
+                    registered.contract.boundedness.maximum,
+                    registered.contract.boundedness.basis,
+                ),
             mutating ? identity : nothing,
             _record_lifecycle(statement),
             random_operations,
             phase,
             (),
             registered === nothing ?
-            _engine_admission(statement) :
-            (
-                EngineAdmission(
-                    :sequential,
-                    registered.contract.capabilities.sequential,
-                    registered.contract.capabilities.sequential ?
-                    "" : registered.contract.capabilities.reason,
+                _engine_admission(statement) :
+                (
+                    EngineAdmission(
+                        :sequential,
+                        registered.contract.capabilities.sequential,
+                        registered.contract.capabilities.sequential ?
+                        "" : registered.contract.capabilities.reason,
+                    ),
+                    EngineAdmission(
+                        :checkerboard,
+                        registered.contract.capabilities.checkerboard,
+                        registered.contract.capabilities.checkerboard ?
+                        "" : registered.contract.capabilities.reason,
+                    ),
                 ),
-                EngineAdmission(
-                    :checkerboard,
-                    registered.contract.capabilities.checkerboard,
-                    registered.contract.capabilities.checkerboard ?
-                    "" : registered.contract.capabilities.reason,
-                ),
-            ),
             registered === nothing ?
-            _lowering_identity(statement) :
-            registered.contract.lowering_identity,
+                _lowering_identity(statement) :
+                registered.contract.lowering_identity,
         )
         push!(records, record)
     end
@@ -354,7 +374,7 @@ function _validate_synchronous_writers!(diagnostics, records)
     writers = Dict{Any, QualifiedStatementID}()
     for record in records
         record.kind === :SynchronousProcess || continue
-        for target in record.writes
+        for effect in first(record.normalized_payload).effects, target in _effect_writes(effect)
             if haskey(writers, target)
                 push!(
                     diagnostics, PottsDiagnostic(

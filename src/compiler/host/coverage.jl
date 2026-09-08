@@ -8,20 +8,28 @@ function _validate_compilation_choices(
         backend,
         scalar_type,
     )
-    is_scheduled(completed) || throw(ArgumentError(
-        "late lowering requires a scheduled PottsSystem"
-    ))
-    engine isa AbstractPottsAlgorithm || throw(ArgumentError(
-        "algorithm must be SequentialCPM() or CheckerboardSweepCPM()"
-    ))
-    backend isa AbstractPottsBackend || throw(ArgumentError(
-        "backend must be a Potts backend selector"
-    ))
+    is_scheduled(completed) || throw(
+        ArgumentError(
+            "late lowering requires a scheduled PottsSystem"
+        )
+    )
+    engine isa AbstractPottsAlgorithm || throw(
+        ArgumentError(
+            "algorithm must be SequentialCPM() or CheckerboardSweepCPM()"
+        )
+    )
+    backend isa AbstractPottsBackend || throw(
+        ArgumentError(
+            "backend must be a Potts backend selector"
+        )
+    )
     engine isa SequentialCPM && !(backend isa CPUBackend) &&
-        throw(ArgumentError(
+        throw(
+        ArgumentError(
             "SequentialCPM is the CPU semantic reference; accelerator " *
-            "backends require CheckerboardSweepCPM()"
-        ))
+                "backends require CheckerboardSweepCPM()"
+        )
+    )
     _validate_backend_available(backend)
     scalar_type isa Type && scalar_type <: AbstractFloat ||
         throw(ArgumentError("scalar_type must be a concrete AbstractFloat type"))
@@ -30,18 +38,20 @@ function _validate_compilation_choices(
     engine_name = engine isa SequentialCPM ? :sequential : :checkerboard
     rejections = Tuple(
         (record.identity, admission.reason)
-        for record in _completion_data(completed).records
-        for admission in record.engine_admission
-        if admission.engine === engine_name && !admission.admitted
+            for record in _completion_data(completed).records
+            for admission in record.engine_admission
+            if admission.engine === engine_name && !admission.admitted
     )
     if !isempty(rejections)
         reasons = join(
             ("$(identity): $reason" for (identity, reason) in rejections),
             "; ",
         )
-        throw(ArgumentError(
-            "scheduled system is not admitted by $(nameof(typeof(engine))): $reasons"
-        ))
+        throw(
+            ArgumentError(
+                "scheduled system is not admitted by $(nameof(typeof(engine))): $reasons"
+            )
+        )
     end
     return nothing
 end
@@ -81,10 +91,19 @@ _same_statement_resource(left, right) =
 
 function _accepted_copy_rejection(statement, statements)
     effects = _statement_arguments(statement).effects
-    length(effects) == 1 ||
-        return "accepted-copy lowering requires exactly one bounded effect"
-    effect = only(effects)
+    isempty(effects) && return "accepted-copy process requires at least one bounded effect"
     condition = _statement_arguments(statement).expression
+    for effect in effects
+        reason = _accepted_copy_effect_rejection(effect, condition, statements)
+        reason === nothing || return reason
+    end
+    targets = Tuple(effect.target for effect in effects if effect isa Assign)
+    length(unique(targets)) == length(targets) ||
+        return "accepted-copy assignments must have distinct targets"
+    return nothing
+end
+
+function _accepted_copy_effect_rejection(effect, condition, statements)
     if effect isa Assign
         state = _declared_assignment_state(effect.target, statements)
         state === nothing &&
@@ -114,9 +133,20 @@ end
 
 function _synchronous_rejection(statement, statements)
     effects = _statement_arguments(statement).effects
-    length(effects) == 1 ||
-        return "synchronous lowering requires exactly one bounded assignment"
-    effect = only(effects)
+    isempty(effects) && return "synchronous process requires at least one assignment"
+    domains = Symbol[]
+    for effect in effects
+        reason = _synchronous_assignment_rejection(effect, statements)
+        reason === nothing || return reason
+        state = _declared_assignment_state(effect.target, statements)
+        push!(domains, state isa ModelState ? :model : :site)
+    end
+    all(==(first(domains)), domains) ||
+        return "synchronous effects must share one iteration domain; use separate processes for model and site assignments"
+    return nothing
+end
+
+function _synchronous_assignment_rejection(effect, statements)
     effect isa Assign ||
         return "synchronous lowering currently requires Assign"
     state = _declared_assignment_state(effect.target, statements)
@@ -178,8 +208,10 @@ function _statement_lowering_rejection(statement, statements, system)
     elseif statement isa FieldState
         return _field_evolution_rejection(statement, statements, system)
     elseif statement isa Protocol
-        all(stage -> stage isa SweepStage,
-            _statement_arguments(statement).stages) ||
+        all(
+            stage -> stage isa SweepStage,
+            _statement_arguments(statement).stages
+        ) ||
             return "Protocol admits only SweepStage values"
     elseif statement isa RegisteredStatement
         return "RegisteredStatement was not lowered during completion"
@@ -190,9 +222,11 @@ end
 function _validate_compilation_coverage!(
         diagnostics, system::PottsSystem, parent_path::Tuple = ()
     )
-    isempty(parent_path) || throw(ArgumentError(
-        "compilation coverage starts from the completed root authority"
-    ))
+    isempty(parent_path) || throw(
+        ArgumentError(
+            "compilation coverage starts from the completed root authority"
+        )
+    )
     completion = getfield(system, :completion)::CompletedPottsData
     records = completion.records
     all_statements = AbstractPottsStatement[
@@ -204,16 +238,18 @@ function _validate_compilation_coverage!(
             statement, all_statements, system
         )
         reason === nothing && continue
-        push!(diagnostics, PottsDiagnostic(
-            :unsupported_statement_lowering,
-            record.identity,
-            _statement_expression(statement),
-            record.identity.path,
-            "a concrete, semantics-preserving statement lowering",
-            reason,
-            (),
-            record.source,
-        ))
+        push!(
+            diagnostics, PottsDiagnostic(
+                :unsupported_statement_lowering,
+                record.identity,
+                _statement_expression(statement),
+                record.identity.path,
+                "a concrete, semantics-preserving statement lowering",
+                reason,
+                (),
+                record.source,
+            )
+        )
     end
     return diagnostics
 end
@@ -223,32 +259,36 @@ function _validate_equation_and_event_coverage!(diagnostics, system::PottsSystem
     # become a tuple type parameter and trigger one specialization per size.
     records = _completion_data(system).records
     for equation in ModelingToolkitBase.equations(system)
-        push!(diagnostics, PottsDiagnostic(
-            :unowned_equation,
-            _try_symbolic_name(equation.lhs),
-            string(equation),
-            (nameof(system),),
-            "a native MTK component or bounded FieldState evolution policy",
-            "a copied root equation with no native owner",
-            (),
-            UnknownSource(),
-        ))
+        push!(
+            diagnostics, PottsDiagnostic(
+                :unowned_equation,
+                _try_symbolic_name(equation.lhs),
+                string(equation),
+                (nameof(system),),
+                "a native MTK component or bounded FieldState evolution policy",
+                "a copied root equation with no native owner",
+                (),
+                UnknownSource(),
+            )
+        )
     end
     for (kind, events) in (
             :continuous_event => ModelingToolkitBase.continuous_events(system),
             :discrete_event => ModelingToolkitBase.discrete_events(system),
         )
         isempty(events) && continue
-        push!(diagnostics, PottsDiagnostic(
-            :unsupported_event_lowering,
-            nameof(system),
-            join(string.(events), "; "),
-            (nameof(system),),
-            "symbolic event effects lowerable into the closed effect language",
-            "$(length(events)) $kind declaration(s) have no concrete lowering",
-            (),
-            UnknownSource(),
-        ))
+        push!(
+            diagnostics, PottsDiagnostic(
+                :unsupported_event_lowering,
+                nameof(system),
+                join(string.(events), "; "),
+                (nameof(system),),
+                "symbolic event effects lowerable into the closed effect language",
+                "$(length(events)) $kind declaration(s) have no concrete lowering",
+                (),
+                UnknownSource(),
+            )
+        )
     end
     return diagnostics
 end

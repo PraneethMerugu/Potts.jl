@@ -35,8 +35,10 @@ function _collect_symbolics!(found, value)
     elseif value isa AbstractPottsStatement
         # Statement references are semantic identities, not nested declarations.
         return found
-    elseif !(SymbolicIndexingInterface.symbolic_type(value) isa
-            SymbolicIndexingInterface.NotSymbolic)
+    elseif !(
+            SymbolicIndexingInterface.symbolic_type(value) isa
+                SymbolicIndexingInterface.NotSymbolic
+        )
         variables = try
             Symbolics.get_variables(value)
         catch
@@ -70,11 +72,11 @@ function _statement_writes(statement::AbstractPottsStatement)
         }
         arguments = _statement_arguments(statement)
         return arguments isa NamedTuple && haskey(arguments, :variable) ?
-               (arguments.variable,) : ()
+            (arguments.variable,) : ()
     end
     arguments = _statement_arguments(statement)
     effects = arguments isa NamedTuple && haskey(arguments, :effects) ?
-              arguments.effects : ()
+        arguments.effects : ()
     writes = Any[]
     for effect in effects
         for value in _effect_writes(effect)
@@ -86,18 +88,34 @@ end
 
 function _statement_reads(statement::AbstractPottsStatement, writes)
     found = Any[]
-    _collect_symbolics!(found, _statement_arguments(statement))
+    arguments = _statement_arguments(statement)
+    if arguments isa NamedTuple && haskey(arguments, :effects)
+        for (name, value) in pairs(arguments)
+            name === :effects && continue
+            _collect_symbolics!(found, value)
+        end
+        for effect in arguments.effects
+            # An assignment target is not a read, but its RHS may read any
+            # target in the same simultaneous process, including itself.
+            _collect_symbolics!(found, effect isa Assign ? effect.value : effect)
+        end
+        _collect_symbolics!(found, _statement_options(statement))
+        return Tuple(found)
+    end
+    _collect_symbolics!(found, arguments)
     _collect_symbolics!(found, _statement_options(statement))
     filter!(value -> !any(isequal(value), writes), found)
     return Tuple(found)
 end
 
-_statement_effect(::Union{
-    CellKind, MediumKind, LatticeDomain, SpatialRelation,
-    SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
-    RelationshipState, HamiltonianTerm, ProposalDrive, ProposalConstraint,
-    ProposalModifier, Observation, Protocol,
-}) = PureRead()
+_statement_effect(
+    ::Union{
+        CellKind, MediumKind, LatticeDomain, SpatialRelation,
+        SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
+        RelationshipState, HamiltonianTerm, ProposalDrive, ProposalConstraint,
+        ProposalModifier, Observation, Protocol,
+    }
+) = PureRead()
 _statement_effect(::SynchronousProcess) = SynchronousAssign()
 _statement_effect(::AcceptedCopyProcess) = AcceptedCopyEffect()
 _statement_effect(::Union{RelationshipProcess, LifecycleProcess}) = OrderedBatchEffect()
@@ -108,7 +126,7 @@ function _statement_phase(statement)
     options isa NamedTuple && haskey(options, :phase) &&
         options.phase !== nothing && return options.phase
     statement isa Union{
-        HamiltonianTerm, ProposalDrive, ProposalConstraint, ProposalModifier
+        HamiltonianTerm, ProposalDrive, ProposalConstraint, ProposalModifier,
     } && return Proposal()
     statement isa AcceptedCopyProcess && return AcceptedCopy()
     statement isa SynchronousProcess && return AfterMCS()
@@ -123,10 +141,10 @@ end
 function _effect_bound(statement)
     arguments = _statement_arguments(statement)
     effects = arguments isa NamedTuple && haskey(arguments, :effects) ?
-              arguments.effects : ()
+        arguments.effects : ()
     isempty(effects) && return EffectBound(0, :read_only)
     domain = arguments isa NamedTuple && haskey(arguments, :domain) ?
-             arguments.domain : nothing
+        arguments.domain : nothing
     domain isa Sites && return EffectBound(length(effects), :per_site)
     domain isa Cells && return EffectBound(length(effects), :per_cell)
     domain isa ModelDomain && return EffectBound(length(effects), :per_model)
@@ -178,8 +196,10 @@ function _collect_draw_calls!(result, value)
             field -> _collect_draw_calls!(result, getfield(value, field)),
             fieldnames(typeof(value)),
         )
-    elseif !(SymbolicIndexingInterface.symbolic_type(value) isa
-            SymbolicIndexingInterface.NotSymbolic)
+    elseif !(
+            SymbolicIndexingInterface.symbolic_type(value) isa
+                SymbolicIndexingInterface.NotSymbolic
+        )
         unwrapped = Symbolics.unwrap(value)
         Symbolics.iscall(unwrapped) || return result
         operation = Symbolics.operation(unwrapped)
@@ -190,10 +210,12 @@ function _collect_draw_calls!(result, value)
     return result
 end
 
-_draw_calls(statement) = Tuple(_collect_draw_calls!(
-    Tuple[],
-    (_statement_arguments(statement), _statement_options(statement)),
-))
+_draw_calls(statement) = Tuple(
+    _collect_draw_calls!(
+        Tuple[],
+        (_statement_arguments(statement), _statement_options(statement)),
+    )
+)
 
 function _draw_literal(value)
     unwrapped = Symbolics.unwrap(value)
@@ -225,26 +247,28 @@ end
 function _random_operations(statement, identity::QualifiedStatementID)
     result = RandomOperation[
         RandomOperation(_draw_key(arguments), _draw_family(arguments), false)
-        for arguments in _draw_calls(statement)
+            for arguments in _draw_calls(statement)
     ]
     if statement isa Protocol
-        append!(result, (
-            RandomOperation(
-                Symbol(string(identity), "__proposal_recipient"),
-                :proposal_recipient,
-                true,
-            ),
-            RandomOperation(
-                Symbol(string(identity), "__proposal_direction"),
-                :proposal_direction,
-                true,
-            ),
-            RandomOperation(
-                Symbol(string(identity), "__metropolis_acceptance"),
-                :metropolis_acceptance,
-                true,
-            ),
-        ))
+        append!(
+            result, (
+                RandomOperation(
+                    Symbol(string(identity), "__proposal_recipient"),
+                    :proposal_recipient,
+                    true,
+                ),
+                RandomOperation(
+                    Symbol(string(identity), "__proposal_direction"),
+                    :proposal_direction,
+                    true,
+                ),
+                RandomOperation(
+                    Symbol(string(identity), "__metropolis_acceptance"),
+                    :metropolis_acceptance,
+                    true,
+                ),
+            )
+        )
     end
     return Tuple(result)
 end

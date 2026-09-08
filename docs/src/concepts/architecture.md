@@ -36,6 +36,17 @@ create a runtime registry or additional state. `component_replacement.jl` rebuil
 source and asks completion to validate it; it does not modify compiled plans.
 Synchronous writer uniqueness is checked after qualification in
 `completion/qualification.jl`, so aliases cannot conceal multiple writers.
+The validator examines individual effects, including repeated targets inside
+one process. `compiler/host/coverage.jl` validates their common iteration domain;
+`compiler/lowering/stage_plan.jl` assigns each effect its own descriptor and
+scratch slot, using its indexed normalized expression root. CorePotts owns
+boundary-entry evaluation and publication; Potts does not execute assignments.
+`test/test_compound_effects.jl` exercises this path through public models.
+`completion/inference.jl` retains actual effect RHS reads even when the same
+process writes those states. `compiler/host/footprints.jl` gives direct site-state
+reads their iteration-site or proposal-target footprint; both inspection and
+descriptor lowering consume this analyzed fact. Model-state reads do not acquire
+a lattice footprint merely because the model also contains a lattice.
 `test/test_component_replacement.jl` checks shared-input/state trajectories,
 replacement, and binding failures through public constructors.
 

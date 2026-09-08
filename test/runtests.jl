@@ -4,6 +4,7 @@ import Potts
 const POTTS_TESTS = (
     "test_public_api.jl", "test_system_contract.jl",
     "test_component_replacement.jl",
+    "test_compound_effects.jl",
     "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",
     "test_units_and_parameters.jl", "test_mtkcompile.jl",
     "test_initial_problem_remake.jl", "test_runtime_solution_sii.jl",
