@@ -61,11 +61,6 @@ function _reject_implicit_component_connections(inventory, replaced_path)
         for statement in statements(source)
             push!(payloads, (_statement_arguments(statement), _statement_options(statement)))
         end
-        for native in getfield(source, :native_components)
-            for port in (native_inputs(native)..., native_outputs(native)...)
-                push!(payloads, _statement_arguments(potts_endpoint(port)))
-            end
-        end
         for value in _collect_symbolics(payloads)
             any(alias -> isequal(alias, value), aliases) && continue
             qualified = _namespace_symbolic_value(value, occurrence.path[2:end])
@@ -73,6 +68,25 @@ function _reject_implicit_component_connections(inventory, replaced_path)
             throw(
                 ArgumentError(
                     "replacement requires explicit component imports for surviving reference $(repr(qualified))"
+                )
+            )
+        end
+    end
+    for native in inventory.natives
+        _inventory_path_iswithin(native.system_path[2:end], replaced_path) && continue
+        aliases = first.(getfield(inventory.systems[native.system].system, :imports))
+        for port in (native_inputs(native.component)..., native_outputs(native.component)...)
+            arguments = _statement_arguments(potts_endpoint(port))
+            if arguments isa NamedTuple && haskey(arguments, :variable)
+                any(alias -> isequal(alias, arguments.variable), aliases) && continue
+            end
+            # Direct ports hold declaration references, not consumer-local
+            # variable spellings. Resolve them before removing their owner.
+            owner = _native_endpoint_occurrence(inventory, native, port)
+            _inventory_path_iswithin(owner.path[2:end], replaced_path) || continue
+            throw(
+                ArgumentError(
+                    "replacement requires explicit component imports for surviving native port at $(repr(native.path))"
                 )
             )
         end
@@ -102,8 +116,9 @@ nonempty root-relative tuple. Surviving imports of removed outputs require
 explicit `ComponentReference => ComponentReference` reconnections, including
 when the replacement reuses their names. External declaration owners are retained.
 
-Cross-component consumers must use explicit imports. Native-component replacement
-and imports in a component containing native declarations are not supported yet.
+Cross-component consumers, including native Potts ports, must use explicit imports.
+Replacement accepts PottsSystem subtrees, including their owned native components;
+it does not accept a bare NativeComponent as the replacement target.
 This operation rebuilds and validates source; it does not modify a running problem.
 """
 function replace_component(source::PottsSystem, replacement_pair::Pair; reconnect = ())
@@ -120,19 +135,9 @@ function replace_component(source::PottsSystem, replacement_pair::Pair; reconnec
         )
     )
     _ensure_incomplete(replacement, "replace_component")
-    _has_native_components(replacement) && throw(
-        ArgumentError(
-            "replacement of a subtree containing native declarations is not yet supported"
-        )
-    )
     before = _source_inventory(source)
     target = filter(item -> item.path[2:end] == path, before.systems)
     length(target) == 1 || throw(ArgumentError("unknown component replacement path $(repr(path))"))
-    _has_native_components(only(target).system) && throw(
-        ArgumentError(
-            "replacement of a subtree containing native declarations is not yet supported"
-        )
-    )
     _resolve_component_imports(before)
     _reject_implicit_component_connections(before, path)
     completed_before = complete(source)

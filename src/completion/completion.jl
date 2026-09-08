@@ -6,6 +6,7 @@ function _complete_inventory_subtree(
         reference_units,
         registry::StatementRegistry,
         parameter_roles,
+        context_inventory,
     )
     records = QualifiedStatement[]
     diagnostics = PottsDiagnostic[]
@@ -33,7 +34,7 @@ function _complete_inventory_subtree(
     qualified_records = _semantic_phase_schedule(records)
     schedule = qualified_records
     native_components = _resolve_native_components(
-        inventory, qualified_records
+        inventory, qualified_records; context_inventory
     )
     variables = _completion_variables(inventory, qualified_records)
     capabilities = _completion_capabilities(qualified_records)
@@ -112,6 +113,7 @@ function _complete_inventory_hierarchy(
             reference_units,
             registry,
             parameter_roles,
+            inventory,
         )
         completed_children = PottsSystem[
             completed[Int(child)] for child in children[index]

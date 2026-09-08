@@ -91,8 +91,9 @@ mutable struct _TermGraphBuilder
 end
 
 function _qualified_source_reference(reference::FrozenSourceReference)
-    return _namespace_symbolic_value(
-        reference.value, reference.path[2:end]
+    return _map_symbolic_payload(
+        value -> _namespace_symbolic_value(value, reference.path[2:end]),
+        reference.value,
     )
 end
 

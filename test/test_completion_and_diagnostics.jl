@@ -64,7 +64,7 @@ Potts.operation_transfer(::typeof(wrong_arity_diagnostic_operation), ::Int) =
     @test diagnostic.kind === :missing_operation_transfer
     # Qualified identities are relative to the composed system's root.
     @test diagnostic.identity == Potts.QualifiedStatementID(
-        (:child,), StatementID(:opaque_drive)
+        (:parent, :child), StatementID(:opaque_drive)
     )
     source = statement_source(only(declarations))
     @test diagnostic.source == source

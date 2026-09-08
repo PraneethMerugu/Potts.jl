@@ -319,9 +319,6 @@ _potts_outputs(system::PottsSystem, ::Val{:local}) =
 _potts_outputs(system::PottsSystem) =
     _recursive_namespaced_io(system, _potts_outputs)
 
-ModelingToolkitBase.inputs(system::PottsSystem) = _potts_inputs(system)
-ModelingToolkitBase.outputs(system::PottsSystem) = _potts_outputs(system)
-
 function _substitute_value(value, rules)
     return try
         Symbolics.substitute(value, rules)

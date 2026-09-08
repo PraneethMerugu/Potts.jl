@@ -39,6 +39,24 @@ Synchronous writer uniqueness is checked after qualification in
 `test/test_component_replacement.jl` checks shared-input/state trajectories,
 replacement, and binding failures through public constructors.
 
+Native port imports follow the same source mapping through
+`native/components.jl`'s endpoint rebuild. Original native systems and symbols
+are retained. `completion/native_completion.jl` resolves endpoints against the
+ephemeral enclosing source inventory, so an imported owner is not copied into a
+child's state inventory. `ExternalIO` derives bindings from completed or scheduled
+native declarations. Scheduling rejects a child that lacks an external endpoint
+owner and directs the caller to compile its containing model.
+`integration/test_native_component_replacement.jl` checks CPU shared-input and
+replacement trajectories, sampled publication, native symbol identity, and failed
+port reconnections. Native solver execution remains owned by the existing coupling
+and native runtime path.
+
+`completion/symbolic_interface.jl` projects completed equations, observations,
+unknowns, parameters, IO roles, and initial conditions from qualified frozen source
+references. It does not recursively namespace completed children or cache a second
+symbol table. Incomplete source retains the ordinary MTK source query behavior;
+the low-level `get_*` accessors still expose local source fields.
+
 An external ModelingToolkit system remains native through structural compilation. Potts
 does not recreate that system by copying equations, unknowns, parameters, defaults, events, or
 hierarchy into a parallel Potts representation.

@@ -84,11 +84,45 @@ are rejected. The result is new, validated, incomplete source; neither the origi
 source nor an existing simulation is mutated. Use numerical `remake` for parameter
 changes, not structural replacement.
 
+Native ports use the same source imports. Supply a symbolic `ModelState` or
+`CellState` declaration as the port's local alias, but do not include that alias in
+the component's owned statements or unknowns. Its variable binds to the actual
+state owner; its local initial value does not initialize or copy the shared state.
+The endpoint kind must match the owner's declaration kind. Native inputs cannot
+import a parameter in place of their required state endpoint.
+
+```@example native_component_replacement
+using Potts
+include(joinpath(dirname(dirname(dirname(@__DIR__))), "examples", "native_component_replacement.jl"))
+native_example = NativeComponentReplacementExample.replaced_input_model()
+inspect(mtkcompile(native_example.replaced), ExternalIO())
+```
+
+Here two ODE components share one held Potts state, and a third ODE reads one
+component's published output. Replacement removes that component's owned ODE and
+output declaration, preserves the shared input, and explicitly reconnects the
+reader. Original MTK systems and native symbols retain their identity; only Potts
+port bindings are rebuilt. The existing native initialization, solver profiles,
+sampled inputs, cadence, and atomic publication rules are unchanged. Structural
+replacement starts new source, not a continuation or transfer of existing native
+solver state. Replace the containing `PottsSystem` subtree, not a bare
+`NativeComponent` declaration.
+
+Completion preserves context: a child obtained from `get_systems(complete(parent))`
+retains the enclosing root's qualified identities, including its own state namespace.
+Completing the original child source independently uses that child's own root instead.
+`inspect(child, ExternalIO())` shows native endpoints and their actual owners even
+when those owners are external to the child. Such a child cannot be scheduled alone:
+compile the containing model with all endpoint owners. A closed child remains
+executable in its retained namespace.
+Completed `parameters`, `unknowns`, `inputs`, `outputs`, `equations`, `observed`,
+and `initial_conditions` queries use those same qualified symbols. Their parent
+queries do not add another namespace. Low-level MTK `get_*` accessors remain local
+source-field queries.
+
 This source-binding surface currently supports scalar symbolic parameters and states.
 Structured references and scoped declaration syntax require the structured-authoring
-extension. Imports within a component containing native declarations and replacement
-of a subtree containing native declarations remain unsupported: native port/substitution
-reconnection is follow-up work, not a completed component-replacement guarantee.
+extension. General native equation substitution is separate from port reconnection.
 Generic symbolic substitution of a source with imports is also rejected until its
 binding updates have explicit semantics; use the supported replacement operation.
 Backend support is determined by the resulting complete model.

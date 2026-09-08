@@ -1,5 +1,129 @@
 include(joinpath(@__DIR__, "..", "examples", "component_replacement.jl"))
 
+@testset "completed child ownership retains its enclosing qualification" begin
+    @variables amount
+    @parameters increment = 1.0
+    source = PottsSystem(
+        name = :unit,
+        statements = StatementSet(
+            (
+                Lattice((2, 2); boundary = Closed()),
+                CellKind(:cell; extinction = RetireAtZero()),
+                MediumKind(:medium),
+                ModelState(amount; initial = 0.0),
+                Synchronous(:advance, Assign(amount, amount + increment)),
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
+        parameters = (increment,), unknowns = (amount,),
+        inputs = (increment,), outputs = (amount,),
+    )
+    independent = complete(source)
+    parent = complete(PottsSystem(name = :enclosing, systems = (source,)))
+    contextual = only(ModelingToolkitBase.get_systems(parent))
+    @test all(record -> record.identity.path == (:unit,), inspect(independent, Statements()))
+    @test all(record -> record.identity.path == (:enclosing, :unit), inspect(contextual, Statements()))
+    @test complete(contextual) === contextual
+    @test isequal(only(parameters(contextual)), ModelingToolkitBase.renamespace(:unit, increment))
+    scheduled = mtkcompile(contextual)
+    for accessor in (
+            parameters, unknowns, ModelingToolkitBase.inputs, ModelingToolkitBase.outputs,
+            equations, ModelingToolkitBase.observed, initial_conditions,
+        )
+        @test isequal(accessor(scheduled), accessor(contextual))
+    end
+    initial = PottsInitialState(
+        ownership = LabelledCells(
+            ones(Int, 2, 2);
+            cells = [CellKind(:cell; extinction = RetireAtZero())],
+            medium = MediumKind(:medium),
+        )
+    )
+    independent_solution = solve(PottsProblem(independent, initial, (0, 2); seed = 17), SequentialCPM())
+    contextual_solution = solve(
+        PottsProblem(
+            contextual, initial, (0, 2); seed = 17,
+            p = (only(parameters(contextual)) => 3.0,),
+        ), SequentialCPM()
+    )
+    @test independent_solution.u[end][:amount] == 2.0
+    @test contextual_solution.u[end][:unit₊amount] == 6.0
+end
+
+@testset "completed symbolic getters share the contextual source coordinate system" begin
+    @variables x y
+    @parameters k = 2.0
+    child = PottsSystem(
+        name = :child,
+        statements = StatementSet((ModelState(x; initial = 0.0), Observation(:sample, x))),
+        equations = (x ~ k,), unknowns = (x,), parameters = (k, ModelingToolkitBase.Initial(x)),
+        inputs = (k,), outputs = (x,), observed = (y ~ x + k,),
+        initial_conditions = Dict(x => k),
+    )
+    independent = complete(child)
+    parent = complete(PottsSystem(name = :parent, systems = (child,)))
+    contextual = only(ModelingToolkitBase.get_systems(parent))
+    qualified_x = ModelingToolkitBase.renamespace(:child, x)
+    qualified_y = ModelingToolkitBase.renamespace(:child, y)
+    qualified_k = ModelingToolkitBase.renamespace(:child, k)
+    for system in (contextual, parent)
+        @test isequal(unknowns(system), [qualified_x])
+        @test isequal(parameters(system), [qualified_k])
+        @test isequal(ModelingToolkitBase.inputs(system), [qualified_k])
+        @test isequal(ModelingToolkitBase.outputs(system), [qualified_x])
+        @test equations(system) == [qualified_x ~ qualified_k]
+        @test ModelingToolkitBase.observed(system) == [qualified_y ~ qualified_x + qualified_k]
+        @test isequal(initial_conditions(system), Dict(qualified_x => qualified_k))
+        @test ModelingToolkitBase.getdefault(only(parameters(system))) == 2.0
+        @test isequal(parameters(system; initial_parameters = true), [qualified_k, ModelingToolkitBase.Initial(qualified_x)])
+    end
+    for system in (child, independent)
+        @test isequal(unknowns(system), [x])
+        @test isequal(parameters(system), [k])
+        @test isequal(ModelingToolkitBase.inputs(system), [k])
+        @test isequal(ModelingToolkitBase.outputs(system), [x])
+        @test equations(system) == [x ~ k]
+        @test ModelingToolkitBase.observed(system) == [y ~ x + k]
+        @test isequal(initial_conditions(system), Dict(x => k))
+        @test isequal(parameters(system; initial_parameters = true), [k, ModelingToolkitBase.Initial(x)])
+    end
+end
+
+@testset "shared imported IO is unique and parent initial conditions take precedence" begin
+    @variables x imported_parameter imported_state
+    @parameters k = 2.0
+    state = ModelState(x; initial = 0.0)
+    function consumer(name)
+        return PottsSystem(
+            name = name,
+            inputs = (imported_parameter, imported_state),
+            imports = (
+                imported_parameter => ComponentReference((), k),
+                imported_state => ComponentReference((), state),
+            ),
+            initial_conditions = Dict(imported_state => 99.0),
+        )
+    end
+    source = PottsSystem(
+        name = :shared_io, statements = StatementSet(state),
+        parameters = (k,), unknowns = (x,), inputs = (k,), outputs = (x,),
+        initial_conditions = Dict(x => 4.0),
+        systems = (consumer(:first), consumer(:second)),
+    )
+    completed = complete(source)
+    @test isequal(parameters(completed), [k])
+    @test isequal(unknowns(completed), [x])
+    @test isequal(ModelingToolkitBase.inputs(completed), [k, x])
+    @test isequal(ModelingToolkitBase.outputs(completed), [x])
+    @test isequal(initial_conditions(completed), Dict(x => 4.0))
+    for child in ModelingToolkitBase.get_systems(completed)
+        @test isempty(parameters(child))
+        @test isempty(unknowns(child))
+        @test isequal(ModelingToolkitBase.inputs(child), [k, x])
+        @test isequal(initial_conditions(child), Dict(x => 99.0))
+    end
+end
+
 function component_test_problem(source; p = ())
     initial = PottsInitialState(
         ownership = LabelledCells(

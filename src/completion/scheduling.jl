@@ -424,6 +424,19 @@ function _stable_scheduled_fingerprint(
     return ScheduledSystemFingerprint(_erased_canonical_digest(parts))
 end
 
+function _validate_native_endpoint_owners(data::CompletedPottsData)
+    for component in data.native_components, endpoint in native_coupling_endpoints(component)
+        identity = potts_endpoint(endpoint)
+        any(record -> isequal(record.identity, identity), data.records) || throw(
+            ArgumentError(
+                "native coupling endpoint $identity belongs to an external declaration owner; " *
+                    "compile the containing PottsSystem with that owner, not this child alone"
+            )
+        )
+    end
+    return nothing
+end
+
 function _build_scheduled_data(data::CompletedPottsData, analysis)
     schedule = data.schedule
     native_components = _schedule_native_components(data.native_components)
@@ -544,6 +557,8 @@ function ModelingToolkitBase.mtkcompile(system::PottsSystem; kwargs...)
     is_scheduled(system) && return system
     completed = ModelingToolkitBase.iscomplete(system) ?
                 system : ModelingToolkitBase.complete(system)
+    completion = getfield(completed, :completion)::CompletedPottsData
+    _validate_native_endpoint_owners(completion)
 
     # Coverage and analysis project the one completion record/source-graph
     # authority.  Neither pass reconstructs the authored hierarchy.
@@ -553,7 +568,6 @@ function ModelingToolkitBase.mtkcompile(system::PottsSystem; kwargs...)
     _throw_diagnostics(:scheduling, diagnostics)
     analysis = _analyze_completed_system(completed)
 
-    completion = getfield(completed, :completion)::CompletedPottsData
     scheduled = _build_scheduled_data(completion, analysis)
     return _rebuild(
         completed;

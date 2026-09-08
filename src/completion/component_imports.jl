@@ -59,6 +59,11 @@ function _map_component_source(system::PottsSystem, rules)
         observed = map(substitute_one, getfield(system, :observed)),
         continuous_events = map(substitute_one, getfield(system, :continuous_events)),
         discrete_events = map(substitute_one, getfield(system, :discrete_events)),
+        native_components = map(getfield(system, :native_components)) do component
+            _map_native_potts_endpoints(
+                endpoint -> map_symbolics(substitute_one, endpoint), component
+            )
+        end,
         imports = (),
     )
 end
@@ -76,11 +81,6 @@ function _resolve_component_imports(inventory::_PottsSourceInventory)
             push!(statement_groups, collect(AbstractPottsStatement, statements(system)))
             continue
         end
-        isempty(getfield(system, :native_components)) || throw(
-            ArgumentError(
-                "source imports in a component with native declarations are not yet supported"
-            )
-        )
         owned = Any[getfield(system, :ps)...; getfield(system, :unknowns)...]
         for statement in statements(system)
             arguments = _statement_arguments(statement)
@@ -99,6 +99,24 @@ function _resolve_component_imports(inventory::_PottsSourceInventory)
                     "a component import must refer to another declaration owner"
                 )
             )
+            for native in getfield(system, :native_components)
+                for port in (native_inputs(native)..., native_outputs(native)...)
+                    endpoint = potts_endpoint(port)
+                    arguments = _statement_arguments(endpoint)
+                    arguments isa NamedTuple && haskey(arguments, :variable) || continue
+                    isequal(arguments.variable, alias) || continue
+                    any(statements(owner.system)) do declaration
+                        payload = _statement_arguments(declaration)
+                        statement_kind(declaration) === statement_kind(endpoint) &&
+                            payload isa NamedTuple && haskey(payload, :variable) &&
+                            isequal(payload.variable, value)
+                    end || throw(
+                        ArgumentError(
+                            "native port import must identify an owned $(statement_kind(endpoint)) declaration"
+                        )
+                    )
+                end
+            end
             rules[alias] = _component_scoped_value(owner, value, occurrence.path)
         end
         mapped = _map_component_source(system, rules)

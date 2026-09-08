@@ -374,6 +374,8 @@ _map_symbolic_payload(f, value::Tuple) =
     map(item -> _map_symbolic_payload(f, item), value)
 _map_symbolic_payload(f, value::Pair) =
     _map_symbolic_payload(f, first(value)) => _map_symbolic_payload(f, last(value))
+_map_symbolic_payload(f, value::Symbolics.Equation) =
+    _map_symbolic_payload(f, value.lhs) ~ _map_symbolic_payload(f, value.rhs)
 _map_symbolic_payload(f, value::AbstractArray) =
     map(item -> _map_symbolic_payload(f, item), value)
 _map_symbolic_payload(f, value::AbstractDict) =
