@@ -2,6 +2,25 @@ include("fixtures/ExternalCompilerSPIFixture.jl")
 include("fixtures/ExternalSurfaceOperationFixture.jl")
 using .ExternalCompilerSPIFixture
 
+@testset "ordinary helpers and opaque public operations execute equivalently" begin
+    include(joinpath(dirname(@__DIR__), "examples", "custom_operation.jl"))
+    @parameters response_value
+    @test isequal(
+        CustomOperation.response(response_value),
+        response_value / (1 + abs(response_value)),
+    )
+    @test CustomOperation.response(1.0) == 0.5
+    @test CustomOperation.response(-1.0) == -0.5
+    @test !hasmethod(Potts.operation_transfer, Tuple{typeof(CustomOperation.response), Int})
+    ordinary = CustomOperation.run_custom_operation(operation = CustomOperation.response)
+    opaque = CustomOperation.run_custom_operation()
+    @test ordinary.solution.retcode == SciMLBase.ReturnCode.Success
+    @test opaque.solution.retcode == SciMLBase.ReturnCode.Success
+    @test ordinary.solution.stats.constraint_rejections == 4
+    @test opaque.solution.stats.constraint_rejections == 4
+    @test last(ordinary.solution).ownership == last(opaque.solution).ownership
+end
+
 @inline _external_tracker_lane_digits(accumulator, value) =
     accumulator * Int32(100) + value
 @inline _external_tracker_lane_digits_finish(accumulator, count) = accumulator
