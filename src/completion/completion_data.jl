@@ -96,6 +96,21 @@ function _completion_quantities(
     return quantities
 end
 
+function _append_state_reference_anchors!(anchors, name, value)
+    if value isa DynamicQuantities.UnionAbstractQuantity
+        push!(anchors, name => value)
+    elseif value isa NamedTuple
+        for (index, component) in enumerate(values(value))
+            _append_state_reference_anchors!(anchors, Symbol(name, :_field_, index), component)
+        end
+    elseif value isa StaticArrays.StaticArray
+        for (index, component) in enumerate(value)
+            _append_state_reference_anchors!(anchors, Symbol(name, :_component_, index), component)
+        end
+    end
+    return anchors
+end
+
 function _completion_reference_anchors(normalized_statements, option)
     if option isa ReferenceUnits
         return Pair{Symbol, Any}[
@@ -130,14 +145,7 @@ function _completion_reference_anchors(normalized_statements, option)
                 HistoryState,
             }
             value = _statement_arguments(statement).initial
-            value isa DynamicQuantities.UnionAbstractQuantity &&
-                push!(anchors, Symbol(:state_, statement_id(statement)) => value)
-            if value isa StaticArrays.StaticArray
-                for (index, component) in enumerate(value)
-                    component isa DynamicQuantities.UnionAbstractQuantity &&
-                        push!(anchors, Symbol(:state_, statement_id(statement), :_component_, index) => component)
-                end
-            end
+            _append_state_reference_anchors!(anchors, Symbol(:state_, statement_id(statement)), value)
             duration = _statement_option(statement, :duration_per_mcs, nothing)
             duration isa DynamicQuantities.UnionAbstractQuantity &&
                 push!(anchors, Symbol(:time_, statement_id(statement)) => duration)

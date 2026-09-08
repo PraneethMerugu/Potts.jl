@@ -8,6 +8,7 @@ const POTTS_TESTS = (
     "test_structured_state_authoring.jl",
     "test_state_initial_value_types.jl",
     "test_product_state_authoring.jl",
+    "test_product_state_defaults.jl",
     "test_structured_assignments.jl",
     "test_dimensional_state_values.jl",
     "test_state_reference_inference.jl",

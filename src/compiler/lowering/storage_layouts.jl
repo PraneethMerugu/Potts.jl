@@ -259,7 +259,16 @@ function _record_state_handles(
         haskey(handles, state_record.identity) || continue
         variable = _state_record_variable(state_record)
         variable === nothing && continue
-        any(read -> isequal(read, variable), record.reads) || continue
+        references_variable = any(record.reads) do read
+            isequal(read, variable) && return true
+            variable isa Symbolics.Arr || return false
+            # Completion retains the indexed symbolic read; execution binds
+            # the existing logical array owner's complete storage value.
+            term = Symbolics.unwrap(read)
+            return Symbolics.iscall(term) && Symbolics.operation(term) === getindex &&
+                isequal(first(Symbolics.arguments(term)), variable)
+        end
+        references_variable || continue
         handle = handles[state_record.identity]
         handle in result || push!(result, handle)
     end

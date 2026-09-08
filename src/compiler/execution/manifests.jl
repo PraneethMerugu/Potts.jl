@@ -151,7 +151,9 @@ function _default_state_initial(::Type{D}, ::Type{T}) where {D, T <: AbstractFlo
         isconcretetype(D) || throw(ArgumentError("product state requires concrete declared field types"))
         return NamedTuple{fieldnames(D)}(ntuple(index -> _default_state_initial(fieldtype(D, index), T), fieldcount(D)))
     elseif D <: StaticArrays.StaticArray
-        return zero(D)
+        return StaticArrays.SArray{Tuple{size(D)...}}(
+            ntuple(_ -> _default_state_initial(eltype(D), T), prod(size(D)))
+        )
     elseif D <: Integer && isconcretetype(D)
         return zero(D)
     elseif D <: Real
