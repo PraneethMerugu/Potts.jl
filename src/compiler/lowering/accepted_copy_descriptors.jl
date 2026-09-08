@@ -26,6 +26,23 @@ function _stage_descriptor(
             "staged assignment target does not resolve to declared state"
         )
     )
+    target_arguments = _record_arguments(target_record)
+    target_variable = get(target_arguments, :variable, nothing)
+    target_shape = target_variable isa Symbolics.Arr ? Tuple(size(target_variable)) : ()
+    value_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_value))
+    value_shape = value_root === nothing ? () : ir.facts.shape[value_root]
+    value_shape == target_shape || throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :assignment_value_shape, record.identity, repr(effect.value),
+                    record.identity.path, "logical value shape $target_shape",
+                    "logical value shape $value_shape", (), record.source,
+                ),
+            ),
+        )
+    )
     is_model_assignment =
         stage isa CorePotts.CompilerSPI.AfterMCSStage &&
         target_record.kind === :ModelState
@@ -70,7 +87,7 @@ function _stage_descriptor(
         )
         all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
             ArgumentError(
-                "a synchronous ModelState assignment requires scalar ModelState reads and target"
+                "a synchronous ModelState assignment requires one logical value per model state"
             )
         )
     end

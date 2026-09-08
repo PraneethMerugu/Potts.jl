@@ -13,6 +13,7 @@ import PrecompileTools
 import SciMLBase
 import SHA
 import Statistics
+import StaticArrays
 import SymbolicIndexingInterface
 import Symbolics
 import SciMLBase: init, solve, solve!, step!, remake, terminate!

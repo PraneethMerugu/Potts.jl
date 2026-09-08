@@ -15,10 +15,12 @@ function _ordered_kind_records(records)
     declarations = filter(
         record -> record.kind in (:CellKind, :MediumKind), records
     )
-    return sort(declarations; by = record -> (
-        record.kind === :MediumKind ? 0 : 1,
-        string(record.identity),
-    ))
+    return sort(
+        declarations; by = record -> (
+            record.kind === :MediumKind ? 0 : 1,
+            string(record.identity),
+        )
+    )
 end
 
 _relationship_order_key(identity::QualifiedStatementID) = string(identity)
@@ -47,56 +49,89 @@ end
 function _compiled_statement_manifest(completed::PottsSystem)
     return NamedTuple[
         (
-            identity = _manifest_identity(record.identity),
-            kind = record.kind,
-            schema_version = record.schema_version,
-            source = record.source isa SourceLocation ? (
-                file = record.source.file,
-                line = record.source.line,
-                module_name = record.source.module_name,
-            ) : nothing,
-            provenance = record.provenance,
-            result_type = record.result_type isa Type ?
-                          nameof(record.result_type) : record.result_type,
-            shape = record.shape,
-            units = record.units,
-            reference_conversion = record.reference_conversion,
-            reads = Tuple(_manifest_symbol(value) for value in record.reads),
-            writes = Tuple(_manifest_symbol(value) for value in record.writes),
-            ownership = record.ownership,
-            persistence = record.persistence,
-            resources = record.resources,
-            effect = nameof(typeof(record.effect)),
-            bound = (
-                maximum = record.bound.maximum,
-                basis = record.bound.basis,
-            ),
-            transaction_identity = record.transaction_identity === nothing ?
-                                   nothing :
-                                   _manifest_identity(record.transaction_identity),
-            lifecycle = record.lifecycle,
-            random_operations = Tuple(
-                (
-                    identity = operation.identity,
-                    family = operation.family,
-                    reserved = operation.reserved,
-                )
-                for operation in record.random_operations
-            ),
-            phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
-            ordering_dependencies = Tuple(string.(record.ordering_dependencies)),
-            engine_admission = Tuple(
-                (
-                    engine = admission.engine,
-                    admitted = admission.admitted,
-                    reason = admission.reason,
-                )
-                for admission in record.engine_admission
-            ),
-            lowering_identity = record.lowering_identity,
-        )
-        for record in inspect(completed, Statements())
+                identity = _manifest_identity(record.identity),
+                kind = record.kind,
+                schema_version = record.schema_version,
+                source = record.source isa SourceLocation ? (
+                    file = record.source.file,
+                    line = record.source.line,
+                    module_name = record.source.module_name,
+                ) : nothing,
+                provenance = record.provenance,
+                result_type = record.result_type isa Type ?
+                nameof(record.result_type) : record.result_type,
+                shape = record.shape,
+                units = record.units,
+                reference_conversion = record.reference_conversion,
+                reads = Tuple(_manifest_symbol(value) for value in record.reads),
+                writes = Tuple(_manifest_symbol(value) for value in record.writes),
+                ownership = record.ownership,
+                persistence = record.persistence,
+                resources = record.resources,
+                effect = nameof(typeof(record.effect)),
+                bound = (
+                    maximum = record.bound.maximum,
+                    basis = record.bound.basis,
+                ),
+                transaction_identity = record.transaction_identity === nothing ?
+                nothing :
+                _manifest_identity(record.transaction_identity),
+                lifecycle = record.lifecycle,
+                random_operations = Tuple(
+                    (
+                        identity = operation.identity,
+                        family = operation.family,
+                        reserved = operation.reserved,
+                    )
+                    for operation in record.random_operations
+                ),
+                phase = record.phase === nothing ? nothing : nameof(typeof(record.phase)),
+                ordering_dependencies = Tuple(string.(record.ordering_dependencies)),
+                engine_admission = Tuple(
+                    (
+                        engine = admission.engine,
+                        admitted = admission.admitted,
+                        reason = admission.reason,
+                    )
+                    for admission in record.engine_admission
+                ),
+                lowering_identity = record.lowering_identity,
+            )
+            for record in inspect(completed, Statements())
     ]
+end
+
+function _convert_state_initial_value(value, reference, ::Type{T}) where {T <: Real}
+    if reference === nothing
+        _is_quantity(value) && throw(ArgumentError("dimensionless state initial value cannot carry units"))
+    else
+        _is_quantity(value) || throw(ArgumentError("state initial value requires units compatible with $reference"))
+    end
+    converted = T(_numeric_value(value, reference))
+    isfinite(converted) || throw(ArgumentError("state initial value must be finite"))
+    return converted
+end
+
+function _convert_state_initial_value(
+        value::StaticArrays.StaticArray, reference, ::Type{T}
+    ) where {T <: Real}
+    # Logical array axes are distinct from the lattice/cell storage axes.
+    return StaticArrays.SArray{Tuple{size(value)...}}(
+        map(item -> _convert_state_initial_value(item, reference, T), value)
+    )
+end
+
+_state_initial_reference(references, value) = _reference_for(references, value)
+
+function _state_initial_reference(references, value::StaticArrays.StaticArray)
+    units = unique(map(item -> _state_initial_reference(references, item), value))
+    isempty(units) && return nothing
+    length(units) == 1 || throw(
+        ArgumentError(
+            "a fixed array state initial value must have one compatible reference dimension"
+        )
+    )
+    return only(units)
 end
 
 function _compiled_state_initial(
@@ -109,21 +144,49 @@ function _compiled_state_initial(
     display_identity = record.identity
     declared = arguments.initial
     variable = arguments.variable
+    declared_type = record.result_type
+    value_type = declared_type <: AbstractArray ? eltype(declared_type) : declared_type
+    numeric_type = value_type <: Integer && isconcretetype(value_type) ? value_type : T
     initial_conditions = ModelingToolkitBase.initial_conditions(completed)
     has_system_initial = haskey(initial_conditions, variable)
     if has_system_initial && declared !== nothing &&
             !isequal(initial_conditions[variable], declared)
-        throw(ArgumentError(
-            "state `$display_identity` has conflicting declaration and " *
-            "PottsSystem initial conditions"
-        ))
+        throw(
+            ArgumentError(
+                "state `$display_identity` has conflicting declaration and " *
+                    "PottsSystem initial conditions"
+            )
+        )
     end
     value = has_system_initial ? initial_conditions[variable] : declared
-    value === nothing && (value = zero(T))
-    reference = _reference_for(manifest.reference_units, value)
-    converted = T(_numeric_value(value, reference))
-    isfinite(converted) ||
-        throw(ArgumentError("state `$display_identity` initial value must be finite"))
+    if variable isa Symbolics.Arr
+        logical_shape = size(variable)
+        if value === nothing
+            value = StaticArrays.SArray{Tuple{logical_shape...}}(
+                ntuple(_ -> zero(numeric_type), prod(logical_shape))
+            )
+        end
+        value isa StaticArrays.StaticArray && size(value) == logical_shape ||
+            throw(
+            ArgumentError(
+                "state `$display_identity` requires a fixed-size initial value with shape $logical_shape"
+            )
+        )
+        all(component -> !(component isa AbstractArray), value) || throw(
+            ArgumentError(
+                "state `$display_identity` requires scalar components in its fixed-size initial value"
+            )
+        )
+    else
+        value === nothing && (value = zero(numeric_type))
+        value isa AbstractArray && throw(
+            ArgumentError(
+                "state `$display_identity` requires a scalar initial value"
+            )
+        )
+    end
+    reference = _state_initial_reference(manifest.reference_units, value)
+    converted = _convert_state_initial_value(value, reference, numeric_type)
     return converted, reference
 end
 
@@ -144,48 +207,52 @@ function _compiled_state_manifest(
         arguments = _record_arguments(record)
         haskey(arguments, :variable) || continue
         role = record.kind === :FieldState ? :field :
-               record.kind === :HistoryState ? :history :
-               :stored
+            record.kind === :HistoryState ? :history :
+            :stored
         storage = record.kind in (:SiteState, :FieldState) ? :site :
-                  record.kind === :CellState ? :cell :
-                  record.kind === :MediumState ? :medium :
-                  record.kind === :ModelState ? :model : :history
+            record.kind === :CellState ? :cell :
+            record.kind === :MediumState ? :medium :
+            record.kind === :ModelState ? :model : :history
         initial, unit = _compiled_state_initial(
             completed, record, manifest, T
         )
         state_shape = storage === :site ? shape :
-                      storage === :cell ? :cells :
-                      storage === :history ? (
-                          shape...,
-                          Int(_numeric_value(_statement_option(record, :depth, 1))),
-                      ) : ()
+            storage === :cell ? :cells :
+            storage === :history ? (
+                shape...,
+                Int(_numeric_value(_statement_option(record, :depth, 1))),
+            ) : ()
         identity = _qualified_resource_identity(record.identity)
         matching_entries = filter(
             entry -> entry.schema.identity == identity,
             state_layout.entries,
         )
-        length(matching_entries) == 1 || throw(ArgumentError(
-            "compiled state `$(record.identity)` does not resolve to exactly " *
-            "one canonical state-layout entry"
-        ))
+        length(matching_entries) == 1 || throw(
+            ArgumentError(
+                "compiled state `$(record.identity)` does not resolve to exactly " *
+                    "one canonical state-layout entry"
+            )
+        )
         layout_entry = only(matching_entries)
         key = _symbolic_name(arguments.variable)
         local_key = Symbol(last(split(String(key), '₊')))
-        push!(result, (
-            key,
-            local_key,
-            name = _qualified_public_name(record.identity),
-            local_name = Symbol(record.identity.local_id),
-            identity,
-            handle = layout_entry.handle,
-            kind = record.kind,
-            role,
-            storage,
-            shape = state_shape,
-            scalar_type = T,
-            initial,
-            unit,
-        ))
+        push!(
+            result, (
+                key,
+                local_key,
+                name = _qualified_public_name(record.identity),
+                local_name = Symbol(record.identity.local_id),
+                identity,
+                handle = layout_entry.handle,
+                kind = record.kind,
+                role,
+                storage,
+                shape = state_shape,
+                scalar_type = T,
+                initial,
+                unit,
+            )
+        )
     end
     return Tuple(result)
 end
@@ -199,9 +266,11 @@ end
 function _exact_physical_duration(value)
     _is_quantity(value) || return nothing
     magnitude = Float64(DynamicQuantities.ustrip(value))
-    isfinite(magnitude) && magnitude > 0 || throw(ArgumentError(
-        "duration_per_mcs must be finite and positive"
-    ))
+    isfinite(magnitude) && magnitude > 0 || throw(
+        ArgumentError(
+            "duration_per_mcs must be finite and positive"
+        )
+    )
     exact = rationalize(
         Int64,
         magnitude;
@@ -221,9 +290,11 @@ function _compiled_time_contract(statements)
         value === nothing || push!(durations, value)
     end
     physical = unique(filter(!isnothing, _exact_physical_duration.(durations)))
-    length(physical) <= 1 || throw(ArgumentError(
-        "all physical duration_per_mcs declarations must identify one exact interval"
-    ))
+    length(physical) <= 1 || throw(
+        ArgumentError(
+            "all physical duration_per_mcs declarations must identify one exact interval"
+        )
+    )
     return (
         native_unit = :mcs,
         ticks_per_mcs = 1,

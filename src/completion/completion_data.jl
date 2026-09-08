@@ -24,20 +24,22 @@ struct CompletedPottsData
     scheduled::Any
 end
 
-const _STRUCTURAL_OPTION_NAMES = Set((
-    :shape,
-    :max_cells,
-    :capacity,
-    :maximum_degree,
-    :substeps,
-    :cadence,
-    :phase,
-    :solver,
-    :attempts,
-    :boundary,
-    :relations,
-    :neighborhood,
-))
+const _STRUCTURAL_OPTION_NAMES = Set(
+    (
+        :shape,
+        :max_cells,
+        :capacity,
+        :maximum_degree,
+        :substeps,
+        :cadence,
+        :phase,
+        :solver,
+        :attempts,
+        :boundary,
+        :relations,
+        :neighborhood,
+    )
+)
 
 function _collect_quantities!(found, value)
     if value isa DynamicQuantities.UnionAbstractQuantity
@@ -98,14 +100,14 @@ function _completion_reference_anchors(normalized_statements, option)
     if option isa ReferenceUnits
         return Pair{Symbol, Any}[
             name => getproperty(option.values, name)
-            for name in keys(option.values)
+                for name in keys(option.values)
         ]
     end
     anchors = Pair{Symbol, Any}[]
     for statement in normalized_statements
         if statement isa LatticeDomain
             for (index, value) in
-                    enumerate(_statement_option(statement, :spacing, ()))
+                enumerate(_statement_option(statement, :spacing, ()))
                 value isa DynamicQuantities.UnionAbstractQuantity &&
                     push!(anchors, Symbol(:length_axis_, index) => value)
             end
@@ -130,6 +132,12 @@ function _completion_reference_anchors(normalized_statements, option)
             value = _statement_arguments(statement).initial
             value isa DynamicQuantities.UnionAbstractQuantity &&
                 push!(anchors, Symbol(:state_, statement_id(statement)) => value)
+            if value isa StaticArrays.StaticArray
+                for (index, component) in enumerate(value)
+                    component isa DynamicQuantities.UnionAbstractQuantity &&
+                        push!(anchors, Symbol(:state_, statement_id(statement), :_component_, index) => component)
+                end
+            end
             duration = _statement_option(statement, :duration_per_mcs, nothing)
             duration isa DynamicQuantities.UnionAbstractQuantity &&
                 push!(anchors, Symbol(:time_, statement_id(statement)) => duration)
@@ -146,32 +154,42 @@ function _validate_completion_reference_units(
     anchors = _completion_reference_anchors(normalized_statements, option)
     by_dimension = Dict{String, Tuple{Symbol, Float64}}()
     for (name, anchor) in anchors
-        anchor isa DynamicQuantities.UnionAbstractQuantity || throw(ArgumentError(
-            "reference unit `$name` must be a DynamicQuantities quantity"
-        ))
+        anchor isa DynamicQuantities.UnionAbstractQuantity || throw(
+            ArgumentError(
+                "reference unit `$name` must be a DynamicQuantities quantity"
+            )
+        )
         dimension = string(DynamicQuantities.dimension(anchor))
         scale = abs(Float64(DynamicQuantities.ustrip(anchor)))
-        scale > 0 && isfinite(scale) || throw(ArgumentError(
-            "reference unit `$name` must have a finite nonzero scale"
-        ))
+        scale > 0 && isfinite(scale) || throw(
+            ArgumentError(
+                "reference unit `$name` must have a finite nonzero scale"
+            )
+        )
         existing = get(by_dimension, dimension, nothing)
         if existing !== nothing && existing[2] != scale
-            throw(ArgumentError(
-                "ambiguous declared reference scale for dimension $dimension: " *
-                "$(existing[1]) and $name; supply ReferenceUnits(...) explicitly"
-            ))
+            throw(
+                ArgumentError(
+                    "ambiguous declared reference scale for dimension $dimension: " *
+                        "$(existing[1]) and $name; supply ReferenceUnits(...) explicitly"
+                )
+            )
         end
         by_dimension[dimension] = (name, scale)
     end
-    required = sort!(unique(
-        string(DynamicQuantities.dimension(value)) for value in quantities
-    ))
+    required = sort!(
+        unique(
+            string(DynamicQuantities.dimension(value)) for value in quantities
+        )
+    )
     missing = filter(dimension -> !haskey(by_dimension, dimension), required)
-    isempty(missing) || throw(ArgumentError(
-        "missing reference-unit anchor for dimension" *
-        (length(missing) == 1 ? " " : "s ") *
-        join(missing, ", ") * "; supply ReferenceUnits(...) explicitly"
-    ))
+    isempty(missing) || throw(
+        ArgumentError(
+            "missing reference-unit anchor for dimension" *
+                (length(missing) == 1 ? " " : "s ") *
+                join(missing, ", ") * "; supply ReferenceUnits(...) explicitly"
+        )
+    )
     return nothing
 end
 
@@ -226,11 +244,13 @@ function _structural_parameters(inventory::_PottsSourceInventory)
         system_index === nothing && error(
             "parameter reference is detached from its source-system occurrence"
         )
-        push!(result, (
-            system = Int32(system_index),
-            raw = reference.value,
-            qualified,
-        ))
+        push!(
+            result, (
+                system = Int32(system_index),
+                raw = reference.value,
+                qualified,
+            )
+        )
     end
     return Tuple(result)
 end
@@ -251,49 +271,55 @@ function _substitute_source_inventory(inventory, structural)
             substitutions[entry.raw] = entry.value
         end
         substitute_one = value -> _substitute_value(value, substitutions)
-        is_symbolic = value -> !isempty(try
-            Symbolics.get_variables(value)
-        catch
-            ()
-        end)
+        is_symbolic = value -> !isempty(
+            try
+                Symbolics.get_variables(value)
+            catch
+                ()
+            end
+        )
         for statement in statement_groups[index]
-            push!(transformed_groups[index], map_symbolics(
-                substitute_one, statement
-            ))
+            push!(
+                transformed_groups[index], map_symbolics(
+                    substitute_one, statement
+                )
+            )
         end
         source = occurrence.system
-        push!(local_systems, _rebuild(
-            source;
-            statements = StatementSet(transformed_groups[index]),
-            equations = map(substitute_one, getfield(source, :eqs)),
-            unknowns = filter(
-                is_symbolic, map(substitute_one, getfield(source, :unknowns))
-            ),
-            parameters = filter(
-                is_symbolic, map(substitute_one, getfield(source, :ps))
-            ),
-            independent_variables = filter(
-                is_symbolic, map(substitute_one, getfield(source, :ivs))
-            ),
-            systems = PottsSystem[],
-            inputs = filter(
-                is_symbolic, map(substitute_one, getfield(source, :inputs))
-            ),
-            outputs = filter(
-                is_symbolic, map(substitute_one, getfield(source, :outputs))
-            ),
-            initial_conditions = Dict(
-                substitute_one(key) => substitute_one(value)
-                for (key, value) in getfield(source, :initial_conditions)
-            ),
-            observed = map(substitute_one, getfield(source, :observed)),
-            continuous_events = map(
-                substitute_one, getfield(source, :continuous_events)
-            ),
-            discrete_events = map(
-                substitute_one, getfield(source, :discrete_events)
-            ),
-        ))
+        push!(
+            local_systems, _rebuild(
+                source;
+                statements = StatementSet(transformed_groups[index]),
+                equations = map(substitute_one, getfield(source, :eqs)),
+                unknowns = filter(
+                    is_symbolic, map(substitute_one, getfield(source, :unknowns))
+                ),
+                parameters = filter(
+                    is_symbolic, map(substitute_one, getfield(source, :ps))
+                ),
+                independent_variables = filter(
+                    is_symbolic, map(substitute_one, getfield(source, :ivs))
+                ),
+                systems = PottsSystem[],
+                inputs = filter(
+                    is_symbolic, map(substitute_one, getfield(source, :inputs))
+                ),
+                outputs = filter(
+                    is_symbolic, map(substitute_one, getfield(source, :outputs))
+                ),
+                initial_conditions = Dict(
+                    substitute_one(key) => substitute_one(value)
+                        for (key, value) in getfield(source, :initial_conditions)
+                ),
+                observed = map(substitute_one, getfield(source, :observed)),
+                continuous_events = map(
+                    substitute_one, getfield(source, :continuous_events)
+                ),
+                discrete_events = map(
+                    substitute_one, getfield(source, :discrete_events)
+                ),
+            )
+        )
     end
     return _rebuild_source_inventory(
         inventory, local_systems, transformed_groups
@@ -309,14 +335,18 @@ function _resolve_structural_parameters(inventory::_PottsSourceInventory)
         parameter = entry.qualified
         name = _symbolic_name(parameter; context = "structural parameter")
         raw = entry.raw
-        ModelingToolkitBase.hasdefault(raw) || throw(ArgumentError(
-            "structural parameter `$name` must have a concrete default or be " *
-            "substituted before completion"
-        ))
+        ModelingToolkitBase.hasdefault(raw) || throw(
+            ArgumentError(
+                "structural parameter `$name` must have a concrete default or be " *
+                    "substituted before completion"
+            )
+        )
         value = ModelingToolkitBase.getdefault(raw)
-        isempty(Symbolics.get_variables(value)) || throw(ArgumentError(
-            "structural parameter `$name` did not resolve to a concrete value"
-        ))
+        isempty(Symbolics.get_variables(value)) || throw(
+            ArgumentError(
+                "structural parameter `$name` did not resolve to a concrete value"
+            )
+        )
         push!(resolved, merge(entry, (; value)))
         push!(manifest, (; name, value))
     end
@@ -326,4 +356,3 @@ function _resolve_structural_parameters(inventory::_PottsSourceInventory)
     )
     return system, next_inventory, Tuple(manifest)
 end
-

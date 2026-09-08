@@ -1,38 +1,52 @@
 # Closed schema and normalized-graph validation.
 
-const _RESULT_TRANSFER_RULES = Set((
-    :promote_numeric,
-    :boolean,
-    :branch_promote,
-    :preserve_numeric,
-    :integer,
-    :real,
-    :site_selection,
-))
-const _UNIT_TRANSFER_RULES = Set((
-    :arithmetic,
-    :comparison,
-    :dimensionless,
-    :branch,
-    :unary,
-    :square_root,
-    :declared,
-    :distribution,
-    :lattice_volume,
-))
+const _RESULT_TRANSFER_RULES = Set(
+    (
+        :promote_numeric,
+        :boolean,
+        :branch_promote,
+        :preserve_numeric,
+        :integer,
+        :real,
+        :site_selection,
+        :fixed_vector,
+        :fixed_index,
+    )
+)
+const _UNIT_TRANSFER_RULES = Set(
+    (
+        :arithmetic,
+        :comparison,
+        :dimensionless,
+        :branch,
+        :unary,
+        :square_root,
+        :declared,
+        :distribution,
+        :lattice_volume,
+        :fixed_vector,
+        :fixed_index,
+    )
+)
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
-const _TOTALITY_TRANSFER_RULES = Set((
-    :total, :domain_checked, :requires_prelaunch_validation,
-    :transaction_checked,
-))
-const _OPERAND_TRANSFER_RULES = Set((
-    :any, :numeric, :boolean, :integer, :same_type, :ifelse,
-))
-const _OPERATION_CONTEXT_RULES = Set((
-    :any, :proposal, :hamiltonian, :iteration, :relationship,
-    :lifecycle_trigger, :lifecycle_placement, :lifecycle_partition,
-    :lifecycle_state_transform,
-))
+const _TOTALITY_TRANSFER_RULES = Set(
+    (
+        :total, :domain_checked, :requires_prelaunch_validation,
+        :transaction_checked,
+    )
+)
+const _OPERAND_TRANSFER_RULES = Set(
+    (
+        :any, :numeric, :boolean, :integer, :same_type, :ifelse, :fixed_index,
+    )
+)
+const _OPERATION_CONTEXT_RULES = Set(
+    (
+        :any, :proposal, :hamiltonian, :iteration, :relationship,
+        :lifecycle_trigger, :lifecycle_placement, :lifecycle_partition,
+        :lifecycle_state_transform,
+    )
+)
 
 function _lifecycle_operation_abi_error(
         transfer::OperationTransfer,
@@ -53,7 +67,7 @@ function _lifecycle_operation_abi_error(
     abi.workspace_maximum >= 0 ||
         return "lifecycle workspace maximum must be nonnegative"
     role = abi.role === :binary_partition ? :lifecycle_partition :
-           Symbol(:lifecycle_, abi.role)
+        Symbol(:lifecycle_, abi.role)
     role in transfer.allowed_roles ||
         return "lifecycle ABI role $role is absent from allowed_roles"
     :Lifecycle in transfer.allowed_phases ||
@@ -61,8 +75,8 @@ function _lifecycle_operation_abi_error(
     transfer.required_context === abi.input_context ||
         return "required_context must equal lifecycle ABI input_context"
     expected_shape = abi.role === :trigger ? :scalar_boolean :
-                     abi.role === :placement ? :bounded_site_selection :
-                     abi.role === :binary_partition ? :site_region_label : nothing
+        abi.role === :placement ? :bounded_site_selection :
+        abi.role === :binary_partition ? :site_region_label : nothing
     expected_shape === nothing || abi.result_shape === expected_shape ||
         return "lifecycle role $(abi.role) requires result shape $expected_shape"
     abi.role === :trigger && transfer.result_rule !== :boolean &&
@@ -74,9 +88,9 @@ function _lifecycle_operation_abi_error(
     abi.role === :placement && abi.emission_maximum <= 0 &&
         return "lifecycle placement must declare a positive finite emission maximum"
     validator = abi.role === :trigger ? :trigger_boolean :
-                abi.role === :placement ? :placement_selection :
-                abi.role === :binary_partition ? :binary_partition :
-                :state_schema
+        abi.role === :placement ? :placement_selection :
+        abi.role === :binary_partition ? :binary_partition :
+        :state_schema
     abi.validator === validator ||
         return "lifecycle role $(abi.role) requires validator $validator"
     return nothing
@@ -120,14 +134,18 @@ function _operation_transfer_error(transfer::OperationTransfer, arity::Int)
         return "operation callable identity must be nonempty"
     transfer.footprint_rule isa AbstractFootprintTransferRule ||
         return "operation footprint transfer must use the closed rule algebra"
-    all(requirement -> !isempty(String(requirement)),
-        transfer.tracker_requirements) ||
+    all(
+        requirement -> !isempty(String(requirement)),
+        transfer.tracker_requirements
+    ) ||
         return "tracker requirement identities must be nonempty"
     Tuple(sort!(unique!(collect(transfer.tracker_requirements)))) ==
         transfer.tracker_requirements ||
         return "tracker requirements must be unique and canonically ordered"
-    all(requirement -> requirement isa AbstractOperationSourceRequirement,
-        transfer.source_requirements) ||
+    all(
+        requirement -> requirement isa AbstractOperationSourceRequirement,
+        transfer.source_requirements
+    ) ||
         return "source requirements must use the closed requirement algebra"
     for requirement in transfer.source_requirements
         if requirement isa LatticeRankRequirement
@@ -188,7 +206,7 @@ function _normalized_payload_error(node::NormalizedTermNode)
         return "unknown normalized payload tag $(repr(node.payload_kind))"
     end
     node.payload isa expected || return
-        "payload tag $(repr(node.payload_kind)) requires $expected, got $(typeof(node.payload))"
+    "payload tag $(repr(node.payload_kind)) requires $expected, got $(typeof(node.payload))"
     node.payload_kind === :operation && node.transfer === nothing &&
         return "operation payload requires a frozen operation transfer"
     node.payload_kind !== :operation && node.transfer !== nothing &&
@@ -302,18 +320,18 @@ function _verify_normalized_graph!(
         operation = node.callable
         operation === nothing &&
             push!(
-                diagnostics,
-                PottsDiagnostic(
-                    :missing_concrete_operation_callable,
-                    node.source,
-                    string(node.operation),
-                    node.source.path,
-                    "the concrete callable frozen during completion",
-                    "nothing",
-                    (),
-                    UnknownSource(),
-                ),
-            )
+            diagnostics,
+            PottsDiagnostic(
+                :missing_concrete_operation_callable,
+                node.source,
+                string(node.operation),
+                node.source.path,
+                "the concrete callable frozen during completion",
+                "nothing",
+                (),
+                UnknownSource(),
+            ),
+        )
         operation === nothing || isbits(operation) || push!(
             diagnostics,
             PottsDiagnostic(

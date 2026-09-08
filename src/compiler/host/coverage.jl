@@ -153,11 +153,7 @@ function _synchronous_assignment_rejection(effect, statements)
     state === nothing && return "Assign must target one declared state"
     state isa SiteState && return nothing
     state isa ModelState ||
-        return "synchronous Assign requires a SiteState or scalar ModelState target"
-    arguments = _statement_arguments(state)
-    variable = haskey(arguments, :variable) ? arguments.variable : nothing
-    variable isa Symbolics.Arr &&
-        return "synchronous ModelState assignment requires a scalar target"
+        return "synchronous Assign requires a SiteState or ModelState target"
     return nothing
 end
 

@@ -110,6 +110,28 @@ Those remain domain responsibilities. Hardware-neutral kernel source is also
 distinct from runtime support: the currently tested execution paths
 are CPU and real Metal, not untested CUDA or ROCm claims.
 
+## Logical state values and storage axes
+
+An array-valued symbolic state describes one logical value, not extra lattice
+axes. Completion retains Symbolics' declared value type, including Boolean and
+integer meaning. `compiler/execution/manifests.jl` owns declaration/system initial-value
+reconciliation and numerical conversion. `compiler/lowering/storage_layouts.jl`
+uses that conversion to derive a fixed array's element type for the canonical
+CorePotts state layout. The runtime initializer separates logical value shape
+from model, site, and cell storage shape; saved values and checkpoints consume
+the resulting Core-owned storage. The owning behavioral tests are in
+`test/test_structured_state_authoring.jl`.
+
+Fixed-vector construction and indexing use the existing operation catalog and
+normalized expression graph. `compiler/host/term_analysis.jl` derives logical
+shape and proves literal index bounds; unit analysis checks component dimensions.
+Assignment lowering compares the expression's shape to the declared target.
+CorePotts supplies the corresponding static callables through its public compiler
+interface, and its existing stage transaction executes the expression. The
+analysis contracts live in `test/test_fixed_vector_operations.jl`; the shared
+`test/fixtures/vector_rotation.jl` supplies the ordinary and Metal execution
+witness without adding another evaluator.
+
 ## Time
 
 The completed integer Monte Carlo step is the master CPM clock and lifecycle boundary. Each native

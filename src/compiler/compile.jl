@@ -28,6 +28,7 @@ function _lower_scheduled_execution_plan(
         _compile_relationship_endpoint_policies(analyzed_ir)
     lowered_descriptors = _lower_descriptor_plan(
         analyzed_ir,
+        scheduled,
         manifest,
         scalar_type,
         relationship_endpoint_policies,

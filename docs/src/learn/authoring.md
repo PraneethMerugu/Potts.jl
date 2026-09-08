@@ -336,3 +336,57 @@ participate repeatedly, while absent boundary lanes do not participate.
 concrete floating-point values and rejects nonpositive present values and empty
 input. Use `LocalMath.fold` when a custom map, combination, result function, or
 invalid/empty policy is scientifically required.
+
+## Fixed-size state values
+
+Declare the logical shape symbolically and supply a fixed-size initial value:
+
+```julia
+using StaticArrays
+using Symbolics
+
+@variables position[1:2]
+position_state = SiteState(position; initial=SVector(1.0, 2.0))
+```
+
+On a two-dimensional lattice, this declaration stores one two-component vector
+at each site, not two unrelated scalar states or another lattice axis.
+`ModelState(position; initial=SVector(1.0, 2.0))` instead retains one vector for
+the whole model. A symbolic matrix similarly uses an `SMatrix` initial value.
+Floating-point components follow the `scalar_type` selected at `init` or
+`solve`; their logical shape is unchanged. Omitted array initial values are zero
+values with the declared shape.
+
+Explicit symbolic integer and Boolean types retain their meaning rather than
+following floating-point precision selection: for example, declare a counter
+with `@variables counter::Int32` and a switch with `@variables enabled::Bool`.
+Supplied values must convert to the declared type; a fractional value cannot
+silently become an integer counter.
+
+For `PottsInitialState(values=...)`, a model value has the logical shape itself;
+a site value is a lattice-shaped array whose elements have that logical shape.
+Wrong logical shapes and nonfinite components are rejected. Storage support
+does not by itself admit every array operation, process scope, or backend:
+those combinations also require an executable expression and an admitted
+execution profile.
+
+Fixed-vector expressions can construct an `SVector` from scalar expressions and
+read a declared vector component with a literal, in-bounds index. For example,
+`Synchronous(:rotate, Assign(position, SVector(-position[2], position[1])))`
+declares a quarter-turn from the boundary-entry value. The assignment must
+preserve the target's logical shape, and constructed components must have
+compatible units. Runtime-selected indices are rejected during analysis; this
+surface does not imply general tensor algebra or arbitrary Julia array calls.
+
+Dimensional fixed arrays use one compatible dimension across their components.
+For example, `SVector(2.0u"m", 4.0u"m")` with an explicit two-metre reference
+length is stored numerically as `SVector(1.0, 2.0)`. Supplied initial values must
+carry compatible units on every component; an unlabelled numerical vector does
+not silently acquire the declaration's units. Reference conversion is the same
+one used for scalar state values.
+
+Array initializers participate in the same reference inference as scalar
+initializers. All inferred anchors for a dimension must have the same finite,
+nonzero magnitude. If components suggest different scales, provide
+`ReferenceUnits(...)` explicitly; the compiler does not select an arbitrary
+component as the reference.
