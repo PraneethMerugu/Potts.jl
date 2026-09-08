@@ -7,6 +7,7 @@ import KernelAbstractions
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
     "problem_construction.jl",
+    "fixed_vector_operations.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",
     "native_component_execution.jl",
@@ -14,10 +15,16 @@ const METAL_SEMANTIC_WITNESSES = (
 const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
 
 @testset "real-Metal runner inventory" begin
-    discovered = Set(filter(name -> endswith(name, ".jl") && name != "runtests.jl",
-        readdir(@__DIR__)))
-    @test discovered == union(Set(METAL_SEMANTIC_WITNESSES),
-        Set(METAL_PERFORMANCE_PROGRAMS))
+    discovered = Set(
+        filter(
+            name -> endswith(name, ".jl") && name != "runtests.jl",
+            readdir(@__DIR__)
+        )
+    )
+    @test discovered == union(
+        Set(METAL_SEMANTIC_WITNESSES),
+        Set(METAL_PERFORMANCE_PROGRAMS)
+    )
 end
 
 isempty(ARGS) || error("the complete Metal profile does not accept selectors")

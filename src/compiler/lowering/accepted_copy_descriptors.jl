@@ -14,24 +14,47 @@ function _stage_descriptor(
     record = ir.source.records[record_index]
     arguments = first(record.normalized_payload)
     effects = arguments.effects
-    length(effects) == 1 || throw(ArgumentError(
-        "staged assignment descriptors require exactly one effect"
-    ))
+    length(effects) == 1 || throw(
+        ArgumentError(
+            "staged assignment descriptors require exactly one effect"
+        )
+    )
     effect = only(effects)
-    effect isa Assign || throw(ArgumentError(
-        "staged assignment descriptors require Assign"
-    ))
+    effect isa Assign || throw(
+        ArgumentError(
+            "staged assignment descriptors require Assign"
+        )
+    )
     target_record = _stage_state_record(ir, record, effect.target)
-    target_record === nothing && throw(ArgumentError(
-        "staged assignment target does not resolve to declared state"
-    ))
+    target_record === nothing && throw(
+        ArgumentError(
+            "staged assignment target does not resolve to declared state"
+        )
+    )
+    target_arguments = _record_arguments(target_record)
+    target_variable = get(target_arguments, :variable, nothing)
+    target_shape = target_variable isa Symbolics.Arr ? Tuple(size(target_variable)) : ()
+    value_root = _stage_root(ir, record_index, :effect_1_value)
+    value_shape = value_root === nothing ? () : ir.facts.shape[value_root]
+    value_shape == target_shape || throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :assignment_value_shape, record.identity, repr(effect.value),
+                    record.identity.path, "logical value shape $target_shape",
+                    "logical value shape $value_shape", (), record.source,
+                ),
+            ),
+        )
+    )
     is_model_assignment =
         stage isa CorePotts.CompilerSPI.AfterMCSStage &&
         target_record.kind === :ModelState
     binding = stage isa CorePotts.CompilerSPI.AcceptedCopyStage ?
-              CorePotts.CompilerSPI.ProposalTargetStageSite() :
-              is_model_assignment ? CorePotts.CompilerSPI.ModelStageSite() :
-              CorePotts.CompilerSPI.IterationStageSite()
+        CorePotts.CompilerSPI.ProposalTargetStageSite() :
+        is_model_assignment ? CorePotts.CompilerSPI.ModelStageSite() :
+        CorePotts.CompilerSPI.IterationStageSite()
     condition = _stage_evaluator(
         ir,
         record_index,
@@ -60,7 +83,7 @@ function _stage_descriptor(
     if is_model_assignment
         entries = Tuple(
             only(entry for entry in state_layout.entries if entry.handle == handle)
-            for handle in reads
+                for handle in reads
         )
         all(entry -> entry.schema.domain === :model, entries) || throw(
             ArgumentError(
@@ -69,7 +92,7 @@ function _stage_descriptor(
         )
         all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
             ArgumentError(
-                "a synchronous ModelState assignment requires scalar ModelState reads and target"
+                "a synchronous ModelState assignment requires one logical value per model state"
             )
         )
     end
@@ -106,16 +129,20 @@ function _relationship_create_stage_descriptor(
     record = ir.source.records[record_index]
     arguments = first(record.normalized_payload)
     length(arguments.effects) == 1 && only(arguments.effects) isa Create ||
-        throw(ArgumentError(
+        throw(
+        ArgumentError(
             "a relationship-create stage requires exactly one Create effect"
-        ))
+        )
+    )
     effect = only(arguments.effects)
     relationship = _resource_record(
         ir.source, record, :RelationshipState, effect.relationship
     )
-    relationship === nothing && throw(ArgumentError(
-        "relationship-create effect does not resolve to a declared store"
-    ))
+    relationship === nothing && throw(
+        ArgumentError(
+            "relationship-create effect does not resolve to a declared store"
+        )
+    )
     endpoint_policy = _relationship_endpoint_policy(
         relationship_endpoint_policies, relationship.identity
     )
@@ -160,25 +187,29 @@ function _relationship_create_stage_descriptor(
         relationship_options, :payload, NamedTuple()
     )
     declared_payload isa NamedTuple && effect.payload isa NamedTuple ||
-        throw(ArgumentError(
+        throw(
+        ArgumentError(
             "relationship payload declarations and requests must be named tuples"
-        ))
-    keys(effect.payload) == keys(declared_payload) || throw(ArgumentError(
-        "relationship-create payload must exactly match its declared schema"
-    ))
+        )
+    )
+    keys(effect.payload) == keys(declared_payload) || throw(
+        ArgumentError(
+            "relationship-create payload must exactly match its declared schema"
+        )
+    )
     payload = Tuple(
         _stage_evaluator(
-            ir,
-            record_index,
-            Symbol(:effect_1_payload_, name),
-            getproperty(effect.payload, name),
-            manifest,
-            T,
-            state_handles,
-            draw_handles,
-            CorePotts.CompilerSPI.ProposalTargetStageSite(),
-        )
-        for name in keys(declared_payload)
+                ir,
+                record_index,
+                Symbol(:effect_1_payload_, name),
+                getproperty(effect.payload, name),
+                manifest,
+                T,
+                state_handles,
+                draw_handles,
+                CorePotts.CompilerSPI.ProposalTargetStageSite(),
+            )
+            for name in keys(declared_payload)
     )
 
     kind_condition = _compiler_synthesized_operation_expression(
@@ -197,8 +228,8 @@ function _relationship_create_stage_descriptor(
             ir.graph,
             (&),
             (
-            condition.expression,
-            kind_condition,
+                condition.expression,
+                kind_condition,
             ),
             record,
         ),
@@ -206,9 +237,11 @@ function _relationship_create_stage_descriptor(
         record,
     )
     priority = _numeric_value(effect.priority)
-    priority isa Real && isinteger(priority) || throw(ArgumentError(
-        "relationship request priority must be structurally resolved"
-    ))
+    priority isa Real && isinteger(priority) || throw(
+        ArgumentError(
+            "relationship request priority must be structurally resolved"
+        )
+    )
     reads = _record_state_handles(ir, record, state_handles)
     return CorePotts.CompilerSPI.CompiledStageDescriptor(
         compiled_condition,

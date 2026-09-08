@@ -73,12 +73,16 @@ function LifecycleOperationABI(
         validator,
         rng_entity = :none,
     )
-    emission_maximum >= 0 || throw(ArgumentError(
-        "lifecycle operation emission_maximum must be nonnegative"
-    ))
-    workspace_maximum >= 0 || throw(ArgumentError(
-        "lifecycle operation workspace_maximum must be nonnegative"
-    ))
+    emission_maximum >= 0 || throw(
+        ArgumentError(
+            "lifecycle operation emission_maximum must be nonnegative"
+        )
+    )
+    workspace_maximum >= 0 || throw(
+        ArgumentError(
+            "lifecycle operation workspace_maximum must be nonnegative"
+        )
+    )
     return LifecycleOperationABI(
         role,
         input_context,
@@ -252,6 +256,18 @@ numerical_field_rejection(::Any, statement, statements, system) =
 
 function numerical_field_stage_descriptor end
 
+operation_transfer(::Type{StaticArrays.SVector}, ::Int) =
+    _transfer(
+    :fixed_vector, 1:typemax(Int), :fixed_vector, :fixed_vector;
+    operand_rule = :numeric
+)
+
+operation_transfer(::typeof(getindex), ::Int) =
+    _transfer(
+    :fixed_index, 2, :fixed_index, :fixed_index;
+    operand_rule = :fixed_index, totality = :requires_prelaunch_validation
+)
+
 for operation in (+, -, *, /, ^, max, min)
     identity = if operation === (+)
         :add
@@ -271,10 +287,12 @@ for operation in (+, -, *, /, ^, max, min)
     admitted_arity = operation === (^) ? (2:2) : (1:typemax(Int))
     totality = operation === (^) ? :domain_checked : :total
     @eval operation_transfer(::typeof($operation), ::Int) =
-        _transfer($(QuoteNode(identity)), $admitted_arity,
-            :promote_numeric, :arithmetic;
-            totality = $(QuoteNode(totality)),
-            operand_rule = :numeric)
+        _transfer(
+        $(QuoteNode(identity)), $admitted_arity,
+        :promote_numeric, :arithmetic;
+        totality = $(QuoteNode(totality)),
+        operand_rule = :numeric
+    )
 end
 
 for operation in (<, <=, >, >=, ==, !=)
@@ -293,8 +311,10 @@ for operation in (<, <=, >, >=, ==, !=)
     end
     operand_rule = operation in (==, !=) ? :any : :numeric
     @eval operation_transfer(::typeof($operation), ::Int) =
-        _transfer($(QuoteNode(identity)), 2, :boolean, :comparison;
-            operand_rule = $(QuoteNode(operand_rule)))
+        _transfer(
+        $(QuoteNode(identity)), 2, :boolean, :comparison;
+        operand_rule = $(QuoteNode(operand_rule))
+    )
 end
 
 operation_transfer(::typeof(&), ::Int) =
@@ -304,8 +324,10 @@ operation_transfer(::typeof(|), ::Int) =
 operation_transfer(::typeof(!), ::Int) =
     _transfer(:not, 1, :boolean, :dimensionless; operand_rule = :boolean)
 operation_transfer(::typeof(ifelse), ::Int) =
-    _transfer(:ifelse, 3, :branch_promote, :branch;
-        operand_rule = :ifelse)
+    _transfer(
+    :ifelse, 3, :branch_promote, :branch;
+    operand_rule = :ifelse
+)
 
 for operation in (abs, exp, log, sqrt)
     identity = if operation === abs
@@ -318,17 +340,17 @@ for operation in (abs, exp, log, sqrt)
         :square_root
     end
     unit_rule = operation in (exp, log) ? :dimensionless :
-                operation === sqrt ? :square_root : :unary
+        operation === sqrt ? :square_root : :unary
     totality = operation in (log, sqrt) ? :domain_checked : :total
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)),
-            1,
-            :preserve_numeric,
-            $(QuoteNode(unit_rule));
-            totality = $(QuoteNode(totality)),
-            operand_rule = :numeric,
-        )
+        $(QuoteNode(identity)),
+        1,
+        :preserve_numeric,
+        $(QuoteNode(unit_rule));
+        totality = $(QuoteNode(totality)),
+        operand_rule = :numeric,
+    )
 end
 
 for operation in (
@@ -337,16 +359,16 @@ for operation in (
     )
     identity = nameof(operation)
     footprint_rule = operation in (source_site, source_cell, source_kind) ?
-                     ProposalSourceFootprintRule() :
-                     ProposalTargetFootprintRule()
+        ProposalSourceFootprintRule() :
+        ProposalTargetFootprintRule()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)), 1, :integer, :dimensionless;
-            footprint_rule = $footprint_rule,
-            allowed_roles = (:drive, :constraint, :modifier, :process),
-            allowed_phases = (:Proposal, :AcceptedCopy),
-            required_context = :proposal,
-        )
+        $(QuoteNode(identity)), 1, :integer, :dimensionless;
+        footprint_rule = $footprint_rule,
+        allowed_roles = (:drive, :constraint, :modifier, :process),
+        allowed_phases = (:Proposal, :AcceptedCopy),
+        required_context = :proposal,
+    )
 end
 
 for operation in (is_extension, is_retraction, new_contact, lost_contact, linked)
@@ -357,77 +379,77 @@ for operation in (is_extension, is_retraction, new_contact, lost_contact, linked
         ProposalSourceTargetFootprintRule()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)), $arity, :boolean, :dimensionless;
-            footprint_rule = $footprint_rule,
-            allowed_roles = (:drive, :constraint, :modifier, :process),
-            allowed_phases = (:Proposal, :AcceptedCopy),
-            required_context = :proposal,
-        )
+        $(QuoteNode(identity)), $arity, :boolean, :dimensionless;
+        footprint_rule = $footprint_rule,
+        allowed_roles = (:drive, :constraint, :modifier, :process),
+        allowed_phases = (:Proposal, :AcceptedCopy),
+        required_context = :proposal,
+    )
 end
 
 operation_transfer(::typeof(_potts_proposal_bound_state_value), ::Int) =
     _transfer(
-        :proposal_bound_state_value,
-        1,
-        :real,
-        :declared;
-        footprint_rule = ProposalTargetFootprintRule(),
-        allowed_phases = (:Proposal, :AcceptedCopy),
-        required_context = :proposal,
-    )
+    :proposal_bound_state_value,
+    1,
+    :real,
+    :declared;
+    footprint_rule = ProposalTargetFootprintRule(),
+    allowed_phases = (:Proposal, :AcceptedCopy),
+    required_context = :proposal,
+)
 
 operation_transfer(::typeof(_potts_iteration_bound_state_value), ::Int) =
     _transfer(
-        :iteration_bound_state_value,
-        1,
-        :real,
-        :declared;
-        footprint_rule = IterationSiteFootprintRule(),
-        allowed_phases = (:AfterMCS,),
-        required_context = :iteration,
-    )
+    :iteration_bound_state_value,
+    1,
+    :real,
+    :declared;
+    footprint_rule = IterationSiteFootprintRule(),
+    allowed_phases = (:AfterMCS,),
+    required_context = :iteration,
+)
 
 operation_transfer(::typeof(_potts_model_bound_state_value), ::Int) =
     _transfer(
-        :model_bound_state_value,
-        1,
-        :real,
-        :declared;
-        footprint_rule = InheritFootprintRule(),
-        allowed_phases = (:AfterMCS,),
-        required_context = :iteration,
-    )
+    :model_bound_state_value,
+    1,
+    :real,
+    :declared;
+    footprint_rule = InheritFootprintRule(),
+    allowed_phases = (:AfterMCS,),
+    required_context = :iteration,
+)
 
 operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
     _transfer(
-        :lifecycle_bound_state_value,
-        1,
-        :real,
-        :declared;
-        footprint_rule = OwnerFootprintRule(),
-        allowed_roles = (
-            :lifecycle_trigger,
-            :lifecycle_placement,
-            :lifecycle_partition,
-            :lifecycle_state_transform,
-        ),
-        allowed_phases = (:Lifecycle,),
-        required_context = :any,
-        owner = :PottsLifecycleCompiler,
-    )
+    :lifecycle_bound_state_value,
+    1,
+    :real,
+    :declared;
+    footprint_rule = OwnerFootprintRule(),
+    allowed_roles = (
+        :lifecycle_trigger,
+        :lifecycle_placement,
+        :lifecycle_partition,
+        :lifecycle_state_transform,
+    ),
+    allowed_phases = (:Lifecycle,),
+    required_context = :any,
+    owner = :PottsLifecycleCompiler,
+)
 
 operation_transfer(::typeof(_potts_bounded_fold), ::Int) =
     _transfer(
-        :bounded_fold,
-        4,
-        :real,
-        :declared;
-        totality = :transaction_checked,
-        footprint_rule = NeighborhoodFootprintRule(OperandNeighborhoodAnchors()),
-        allowed_roles = (:hamiltonian, :drive, :constraint, :modifier),
-        allowed_phases = (:Proposal,),
-        required_context = :any,
-    )
+    :bounded_fold,
+    4,
+    :real,
+    :declared;
+    totality = :transaction_checked,
+    footprint_rule = NeighborhoodFootprintRule(OperandNeighborhoodAnchors()),
+    allowed_roles = (:hamiltonian, :drive, :constraint, :modifier),
+    allowed_phases = (:Proposal,),
+    required_context = :any,
+)
 
 for operation in (
         cell_elongation, cell_center, unwrapped_center, endpoint_a,
@@ -436,53 +458,53 @@ for operation in (
     identity = nameof(operation)
     result_rule = operation in (endpoint_a, endpoint_b) ? :integer : :real
     footprint_rule = operation in (endpoint_a, endpoint_b) ?
-                     IncidentRelationshipFootprintRule() :
-                     OwnerFootprintRule()
+        IncidentRelationshipFootprintRule() :
+        OwnerFootprintRule()
     tracker_requirements = operation in (
-        cell_elongation, cell_center, unwrapped_center,
-    ) ? (:cell_moments,) : ()
+            cell_elongation, cell_center, unwrapped_center,
+        ) ? (:cell_moments,) : ()
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)), 1, $(QuoteNode(result_rule)), :declared;
-            footprint_rule = $footprint_rule,
-            tracker_requirements = $(QuoteNode(tracker_requirements)),
-        )
+        $(QuoteNode(identity)), 1, $(QuoteNode(result_rule)), :declared;
+        footprint_rule = $footprint_rule,
+        tracker_requirements = $(QuoteNode(tracker_requirements)),
+    )
 end
 
 
 operation_transfer(::typeof(cell_volume), ::Int) =
     _transfer(
-        :cell_volume,
-        1,
-        :real,
-        :lattice_volume;
-        footprint_rule = OwnerFootprintRule(),
-    )
+    :cell_volume,
+    1,
+    :real,
+    :lattice_volume;
+    footprint_rule = OwnerFootprintRule(),
+)
 
 
 operation_transfer(::typeof(cell_surface), ::Int) =
     _transfer(
-        :cell_surface,
-        1,
-        :real,
-        :dimensionless;
-        footprint_rule = OwnerFootprintRule(),
-        tracker_requirements = (:cell_surface,),
-        allowed_roles = (
-            :hamiltonian,
-            :lifecycle_trigger,
-            :lifecycle_state_transform,
-        ),
-        allowed_phases = (:Proposal, :Lifecycle),
-        required_context = :any,
-        source_requirements = (NamedSpatialRelationRequirement(:surface),),
-    )
+    :cell_surface,
+    1,
+    :real,
+    :dimensionless;
+    footprint_rule = OwnerFootprintRule(),
+    tracker_requirements = (:cell_surface,),
+    allowed_roles = (
+        :hamiltonian,
+        :lifecycle_trigger,
+        :lifecycle_state_transform,
+    ),
+    allowed_phases = (:Proposal, :Lifecycle),
+    required_context = :any,
+    source_requirements = (NamedSpatialRelationRequirement(:surface),),
+)
 
 operation_transfer(::typeof(degree), ::Int) =
     _transfer(
-        :degree, 2, :integer, :declared;
-        footprint_rule = IncidentRelationshipFootprintRule(),
-    )
+    :degree, 2, :integer, :declared;
+    footprint_rule = IncidentRelationshipFootprintRule(),
+)
 
 for operation in (
         contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b,
@@ -490,16 +512,16 @@ for operation in (
     identity = nameof(operation)
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)), 1, :integer, :dimensionless;
-            footprint_rule = ContactFootprintRule(),
-        )
+        $(QuoteNode(identity)), 1, :integer, :dimensionless;
+        footprint_rule = ContactFootprintRule(),
+    )
 end
 
 operation_transfer(::typeof(occupancy), ::Int) =
     _transfer(
-        :occupancy, 2, :real, :declared;
-        footprint_rule = InheritFootprintRule(),
-    )
+    :occupancy, 2, :real, :declared;
+    footprint_rule = InheritFootprintRule(),
+)
 
 for operation in (
         distance, field_value, field_gradient, laplacian, history_value,
@@ -516,27 +538,27 @@ for operation in (
     end
     @eval operation_transfer(::typeof($operation), ::Int) =
         _transfer(
-            $(QuoteNode(identity)), 2, $(QuoteNode(result_rule)), :declared;
-            footprint_rule = $footprint_rule,
-        )
+        $(QuoteNode(identity)), 2, $(QuoteNode(result_rule)), :declared;
+        footprint_rule = $footprint_rule,
+    )
 end
 
 operation_transfer(::typeof(_potts_draw), ::Int) =
     _transfer(
-        :draw, 4, :real, :distribution;
-        purity = :semantic_rng,
-        totality = :requires_prelaunch_validation,
-        footprint_rule = InheritFootprintRule(),
-        allowed_roles = (
-            :drive,
-            :constraint,
-            :modifier,
-            :process,
-            :lifecycle_trigger,
-            :lifecycle_placement,
-            :lifecycle_partition,
-            :lifecycle_state_transform,
-        ),
-        allowed_phases = (:Proposal, :AcceptedCopy, :Lifecycle),
-        required_context = :any,
-    )
+    :draw, 4, :real, :distribution;
+    purity = :semantic_rng,
+    totality = :requires_prelaunch_validation,
+    footprint_rule = InheritFootprintRule(),
+    allowed_roles = (
+        :drive,
+        :constraint,
+        :modifier,
+        :process,
+        :lifecycle_trigger,
+        :lifecycle_placement,
+        :lifecycle_partition,
+        :lifecycle_state_transform,
+    ),
+    allowed_phases = (:Proposal, :AcceptedCopy, :Lifecycle),
+    required_context = :any,
+)

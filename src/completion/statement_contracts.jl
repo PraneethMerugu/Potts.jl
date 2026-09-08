@@ -38,9 +38,11 @@ function _record_units(statement, inventory::_PottsSourceInventory)
     quantities = Any[]
     _collect_quantities!(quantities, _statement_arguments(statement))
     _collect_quantities!(quantities, _statement_options(statement))
-    variables = _collect_symbolics((
-        _statement_arguments(statement), _statement_options(statement)
-    ))
+    variables = _collect_symbolics(
+        (
+            _statement_arguments(statement), _statement_options(statement),
+        )
+    )
     for reference in inventory.references
         reference.kind === :parameter || continue
         parameter = _namespace_symbolic_value(
@@ -54,10 +56,10 @@ function _record_units(statement, inventory::_PottsSourceInventory)
     end
     descriptors = unique(
         (
-            dimension = string(DynamicQuantities.dimension(value)),
-            scale = Float64(DynamicQuantities.ustrip(value)),
-        )
-        for value in quantities
+                dimension = string(DynamicQuantities.dimension(value)),
+                scale = Float64(DynamicQuantities.ustrip(value)),
+            )
+            for value in quantities
     )
     return Tuple(sort!(collect(descriptors); by = item -> item.dimension))
 end
@@ -66,18 +68,18 @@ function _record_reference_conversion(units, anchors)
     isempty(units) && return ()
     by_dimension = Dict(
         string(DynamicQuantities.dimension(value)) => (
-            name,
-            scale = abs(Float64(DynamicQuantities.ustrip(value))),
-        )
-        for (name, value) in anchors
+                name,
+                scale = abs(Float64(DynamicQuantities.ustrip(value))),
+            )
+            for (name, value) in anchors
     )
     return Tuple(
         (
-            dimension = unit.dimension,
-            reference = by_dimension[unit.dimension].name,
-            scale = by_dimension[unit.dimension].scale,
-        )
-        for unit in units
+                dimension = unit.dimension,
+                reference = by_dimension[unit.dimension].name,
+                scale = by_dimension[unit.dimension].scale,
+            )
+            for unit in units
     )
 end
 
@@ -94,9 +96,11 @@ function _record_shape(statement, root_shape)
     )
     statement isa RelationshipState && return (
         capacity = Int(_numeric_value(_statement_option(statement, :capacity))),
-        maximum_degree = Int(_numeric_value(
-            _statement_option(statement, :maximum_degree)
-        )),
+        maximum_degree = Int(
+            _numeric_value(
+                _statement_option(statement, :maximum_degree)
+            )
+        ),
     )
     return ()
 end
@@ -105,9 +109,10 @@ function _symbolic_result_type(value)
     classification = SymbolicIndexingInterface.symbolic_type(value)
     classification isa SymbolicIndexingInterface.NotSymbolic &&
         return typeof(value)
-    classification isa SymbolicIndexingInterface.ScalarSymbolic && return Real
-    classification isa SymbolicIndexingInterface.ArraySymbolic &&
-        return AbstractArray
+    classification isa Union{
+        SymbolicIndexingInterface.ScalarSymbolic,
+        SymbolicIndexingInterface.ArraySymbolic,
+    } && return Symbolics.symtype(Symbolics.unwrap(value))
     return Any
 end
 
@@ -123,9 +128,9 @@ function _record_result_type(statement)
     statement isa Union{
         SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
     } && return haskey(arguments, :variable) ?
-          _symbolic_result_type(arguments.variable) :
-          arguments.initial === nothing ? Any :
-          _symbolic_result_type(arguments.initial)
+        _symbolic_result_type(arguments.variable) :
+        arguments.initial === nothing ? Any :
+        _symbolic_result_type(arguments.initial)
     return Nothing
 end
 
@@ -143,10 +148,9 @@ end
 function _record_lifecycle(statement)
     options = _statement_options(statement)
     declared = haskey(options, :lifecycle) ?
-               nameof(typeof(options.lifecycle)) : nothing
+        nameof(typeof(options.lifecycle)) : nothing
     effects = _statement_arguments(statement)
     effect_names = effects isa NamedTuple && haskey(effects, :effects) ?
-                   Tuple(nameof(typeof(effect)) for effect in effects.effects) : ()
+        Tuple(nameof(typeof(effect)) for effect in effects.effects) : ()
     return (declared, effects = effect_names)
 end
-

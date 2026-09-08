@@ -22,11 +22,11 @@ function _push_term_node!(
         payload_kind,
         _normalized_payload_key(payload),
         transfer === nothing ? nothing : (
-            transfer.serialization_identity,
-            transfer.footprint_rule,
-            transfer.tracker_requirements,
-            transfer.lifecycle_abi,
-        ),
+                transfer.serialization_identity,
+                transfer.footprint_rule,
+                transfer.tracker_requirements,
+                transfer.lifecycle_abi,
+            ),
     )
     intern_key = _sha256_hex("potts-term-intern-v1", record, key)
     intern && haskey(builder.interned, intern_key) &&
@@ -58,7 +58,7 @@ function _normalize_term!(
         source_graph::FrozenSourceGraph,
         record::Int32,
         source::QualifiedStatementID,
-)
+    )
     classified = _compiler_leaf_kind(value, source_graph)
     if classified in (
             :parameter,
@@ -119,7 +119,8 @@ function _normalize_term!(
     catch
         false
     end
-    if !is_call
+    fixed_vector = value isa StaticArrays.SVector
+    if !is_call && !fixed_vector
         kind = classified
         payload = _resolve_normalized_payload(
             kind,
@@ -160,8 +161,10 @@ function _normalize_term!(
         )
     end
 
-    operation = Symbolics.operation(unwrapped)
-    arguments = Tuple(Symbolics.arguments(unwrapped))
+    # A materialized immutable vector is syntax for one logical construction,
+    # not a literal containing unevaluated symbolic element expressions.
+    operation = fixed_vector ? StaticArrays.SVector : Symbolics.operation(unwrapped)
+    arguments = fixed_vector ? Tuple(value) : Tuple(Symbolics.arguments(unwrapped))
     transfer = try
         operation_transfer(operation, length(arguments))
     catch error
@@ -208,9 +211,9 @@ function _normalize_term!(
     end
     operands = Int32[
         _normalize_term!(
-            builder, argument, source_graph, record, source
-        )
-        for argument in arguments
+                builder, argument, source_graph, record, source
+            )
+            for argument in arguments
     ]
     any(iszero, operands) && return Int32(0)
     callable = try
@@ -249,7 +252,10 @@ function _normalize_term!(
 end
 
 function _push_effect_expression_roots!(roots, role::Symbol, value)
-    if value isa NamedTuple
+    if value isa StaticArrays.SVector
+        push!(roots, role => value)
+        return roots
+    elseif value isa NamedTuple
         for name in keys(value)
             _push_effect_expression_roots!(
                 roots,
@@ -266,11 +272,13 @@ function _push_effect_expression_roots!(roots, role::Symbol, value)
         end
         return roots
     end
-    isempty(try
-        Symbolics.get_variables(value)
-    catch
-        ()
-    end) || push!(roots, role => value)
+    isempty(
+        try
+            Symbolics.get_variables(value)
+        catch
+            ()
+        end
+    ) || push!(roots, role => value)
     return roots
 end
 
@@ -315,8 +323,10 @@ function _push_lifecycle_expression_roots!(roots, role::Symbol, value)
         }
         return roots
     end
-    symbolic = !(SymbolicIndexingInterface.symbolic_type(value) isa
-        SymbolicIndexingInterface.NotSymbolic)
+    symbolic = !(
+        SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic
+    )
     symbolic && push!(roots, role => value)
     return roots
 end
@@ -444,32 +454,38 @@ function _normalize_source_graph(graph::FrozenSourceGraph)
             operation_snapshot[existing] = schema
         end
     end
-    sort!(operation_snapshot; by = schema -> (
-        String(schema.transfer.identity), schema.transfer.schema_version,
-    ))
+    sort!(
+        operation_snapshot; by = schema -> (
+            String(schema.transfer.identity), schema.transfer.schema_version,
+        )
+    )
     key = _sha256_hex(
         "potts-normalized-term-graph-v1",
         graph.structural_key,
-        Tuple((
-            node.operation,
-            node.schema_version,
-            Tuple(node.operands),
-            node.payload_kind,
-            node.structural_key,
-        ) for node in builder.nodes),
+        Tuple(
+            (
+                    node.operation,
+                    node.schema_version,
+                    Tuple(node.operands),
+                    node.payload_kind,
+                    node.structural_key,
+                ) for node in builder.nodes
+        ),
         Tuple((root.record, root.role, root.node) for root in roots),
-        Tuple((
-            schema.transfer.serialization_identity,
-            schema.transfer.owner,
-            schema.transfer.operand_rule,
-            schema.transfer.allowed_roles,
-            schema.transfer.allowed_phases,
-            schema.transfer.required_context,
-            schema.transfer.source_requirements,
-            schema.transfer.lifecycle_abi,
-            schema.transfer.callable_identity,
-            string(typeof(schema.callable)),
-        ) for schema in operation_snapshot),
+        Tuple(
+            (
+                    schema.transfer.serialization_identity,
+                    schema.transfer.owner,
+                    schema.transfer.operand_rule,
+                    schema.transfer.allowed_roles,
+                    schema.transfer.allowed_phases,
+                    schema.transfer.required_context,
+                    schema.transfer.source_requirements,
+                    schema.transfer.lifecycle_abi,
+                    schema.transfer.callable_identity,
+                    string(typeof(schema.callable)),
+                ) for schema in operation_snapshot
+        ),
     )
     graph = NormalizedTermGraph(
         builder.nodes, roots, Tuple(operation_snapshot), key

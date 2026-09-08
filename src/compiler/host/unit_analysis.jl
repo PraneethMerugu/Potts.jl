@@ -38,7 +38,7 @@ function _normalized_leaf_unit(
     )
     payload = node.payload
     value = payload isa Union{LiteralPayload, ParameterBindingPayload} ?
-            payload.value : nothing
+        payload.value : nothing
     if value isa DynamicQuantities.UnionAbstractQuantity
         return _canonical_dimension(DynamicQuantities.dimension(value))
     elseif payload isa ParameterBindingPayload
@@ -54,10 +54,10 @@ function _normalized_leaf_unit(
         # unit variable: equal bindings can be proven equal, while the value
         # cannot unify with a concrete or unrelated dimension.
         return index === nothing ? (:binding_dimension, payload.identity) :
-               _declared_record_unit(source.records[index])
+            _declared_record_unit(source.records[index])
     elseif payload isa LiteralPayload
         return value isa Number && iszero(value) ?
-               :polymorphic_zero : :dimensionless
+            :polymorphic_zero : :dimensionless
     elseif node.payload_kind in (
             :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
             :relationship_context, :relationship_set, :spatial_relation,
@@ -103,7 +103,7 @@ function _unit_power(unit, exponent::Rational)
     exponent == 1 && return (unit, nothing)
     if _is_native_dimension(unit)
         result = try
-            unit ^ exponent
+            unit^exponent
         catch error
             return (nothing, "cannot represent dimension exponent $exponent: $(sprint(showerror, error))")
         end
@@ -144,20 +144,20 @@ function _lattice_volume_unit(source::FrozenSourceGraph)
     domains = filter(
         record -> record.kind === :LatticeDomain, source.records
     )
-    length(domains) == 1 || return(
-        nothing, "lattice-volume units require exactly one lattice domain"
+    length(domains) == 1 || return (
+        nothing, "lattice-volume units require exactly one lattice domain",
     )
     spacing = get(_record_options(only(domains)), :spacing, nothing)
-    spacing isa Tuple && !isempty(spacing) || return(
-        nothing, "lattice-volume units require a nonempty spacing tuple"
+    spacing isa Tuple && !isempty(spacing) || return (
+        nothing, "lattice-volume units require a nonempty spacing tuple",
     )
     unit = :dimensionless
     for value in spacing
         factor = value isa DynamicQuantities.UnionAbstractQuantity ?
-                 _canonical_dimension(DynamicQuantities.dimension(value)) :
-                 value isa Number ? :dimensionless : :unknown
-        _is_unknown_unit(factor) && return(
-            nothing, "lattice spacing has an unproven unit"
+            _canonical_dimension(DynamicQuantities.dimension(value)) :
+            value isa Number ? :dimensionless : :unknown
+        _is_unknown_unit(factor) && return (
+            nothing, "lattice spacing has an unproven unit",
         )
         unit = _unit_product(unit, factor)
     end
@@ -177,29 +177,41 @@ function _operation_unit_result(
         nothing,
         "cannot prove units for operands $(repr(operand_units))",
     )
-    if rule === :dimensionless
+    if rule === :fixed_vector
+        common = _common_unit(operand_units)
+        common === nothing && return (
+            nothing, "fixed-vector elements have incompatible units $(repr(operand_units))",
+        )
+        return (common, nothing)
+    elseif rule === :fixed_index
+        length(operand_units) == 2 &&
+            _unit_compatible(operand_units[2], :dimensionless) || return (
+            nothing, "fixed-vector indexing requires a dimensionless index",
+        )
+        return (first(operand_units), nothing)
+    elseif rule === :dimensionless
         all(unit -> _unit_compatible(unit, :dimensionless), operand_units) ||
             return (
-                nothing,
-                "requires dimensionless operands, got $(repr(operand_units))",
-            )
+            nothing,
+            "requires dimensionless operands, got $(repr(operand_units))",
+        )
         return (:dimensionless, nothing)
     elseif rule === :comparison
         common = _common_unit(operand_units)
-        common === nothing && return(
+        common === nothing && return (
             nothing,
             "comparison operands have incompatible units $(repr(operand_units))",
         )
         return (:dimensionless, nothing)
     elseif rule === :branch
-        length(operand_units) == 3 || return(
-            nothing, "branch unit rule requires three operands"
+        length(operand_units) == 3 || return (
+            nothing, "branch unit rule requires three operands",
         )
-        _unit_compatible(operand_units[1], :dimensionless) || return(
-            nothing, "branch condition must be dimensionless"
+        _unit_compatible(operand_units[1], :dimensionless) || return (
+            nothing, "branch condition must be dimensionless",
         )
         common = _common_unit((operand_units[2], operand_units[3]))
-        common === nothing && return(
+        common === nothing && return (
             nothing,
             "branch values have incompatible units $(repr(operand_units[2:3]))",
         )
@@ -207,15 +219,15 @@ function _operation_unit_result(
     elseif rule === :unary
         return (isempty(operand_units) ? :unknown : first(operand_units), nothing)
     elseif rule === :square_root
-        length(operand_units) == 1 || return(
-            nothing, "square-root unit rule requires one operand"
+        length(operand_units) == 1 || return (
+            nothing, "square-root unit rule requires one operand",
         )
         return _unit_power(first(operand_units), 1 // 2)
     elseif rule === :arithmetic
         identity = transfer.identity
         if identity in (:add, :subtract, :maximum, :minimum)
             common = _common_unit(operand_units)
-            common === nothing && return(
+            common === nothing && return (
                 nothing,
                 "arithmetic operands have incompatible units $(repr(operand_units))",
             )
@@ -229,15 +241,15 @@ function _operation_unit_result(
             return (_unit_quotient(operand_units...), nothing)
         elseif identity === :power
             length(operand_units) == 2 || return (:unknown, nothing)
-            _unit_compatible(operand_units[2], :dimensionless) || return(
-                nothing, "power exponent must be dimensionless"
+            _unit_compatible(operand_units[2], :dimensionless) || return (
+                nothing, "power exponent must be dimensionless",
             )
             exponent = _literal_integer_exponent(node, graph)
-            exponent === nothing && return(
+            exponent === nothing && return (
                 nothing,
                 "power requires a literal integer exponent; use sqrt for square roots",
             )
-            operand_units[1] === :dimensionless && return(:dimensionless, nothing)
+            operand_units[1] === :dimensionless && return (:dimensionless, nothing)
             return _unit_power(operand_units[1], exponent // 1)
         end
         return (:unknown, nothing)
@@ -246,10 +258,10 @@ function _operation_unit_result(
     elseif rule === :distribution
         parameters = length(operand_units) >= 3 ? operand_units[2:3] : operand_units
         common = _common_unit(parameters)
-        common === nothing && return(
+        common === nothing && return (
             nothing,
             "distribution parameters have incompatible or unproven units " *
-            repr(parameters),
+                repr(parameters),
         )
         return (common, nothing)
     elseif rule === :lattice_volume
@@ -271,49 +283,57 @@ function _validated_operation_unit(
         transfer, operand_units, record, node, graph, source
     )
     problem === nothing && return unit
-    throw(PottsValidationError(
-        :analysis,
-        (PottsDiagnostic(
-            :illegal_operation_units,
-            record.identity,
-            String(transfer.identity),
-            record.identity.path,
-            "the frozen operation unit-transfer contract",
-            problem,
-            (),
-            record.source,
-        ),),
-    ))
+    throw(
+        PottsValidationError(
+            :analysis,
+            (
+                PottsDiagnostic(
+                    :illegal_operation_units,
+                    record.identity,
+                    String(transfer.identity),
+                    record.identity.path,
+                    "the frozen operation unit-transfer contract",
+                    problem,
+                    (),
+                    record.source,
+                ),
+            ),
+        )
+    )
 end
 
 function _hamiltonian_analysis_error(record, error)
     return PottsValidationError(
         :analysis,
-        (PottsDiagnostic(
-            :invalid_hamiltonian_domain,
-            record.identity,
-            repr(first(record.normalized_payload).expression),
-            record.identity.path,
-            "a conservative energy expression with a compiler-proven finite affected-anchor plan",
-            sprint(showerror, error),
-            (),
-            record.source,
-        ),),
+        (
+            PottsDiagnostic(
+                :invalid_hamiltonian_domain,
+                record.identity,
+                repr(first(record.normalized_payload).expression),
+                record.identity.path,
+                "a conservative energy expression with a compiler-proven finite affected-anchor plan",
+                sprint(showerror, error),
+                (),
+                record.source,
+            ),
+        ),
     )
 end
 
 function _footprint_analysis_error(record, node, error)
     return PottsValidationError(
         :analysis,
-        (PottsDiagnostic(
-            :invalid_footprint_transfer,
-            record.identity,
-            string(node.operation),
-            record.identity.path,
-            "a closed, compositional, fully resolved footprint fact",
-            sprint(showerror, error),
-            (),
-            record.source,
-        ),),
+        (
+            PottsDiagnostic(
+                :invalid_footprint_transfer,
+                record.identity,
+                string(node.operation),
+                record.identity.path,
+                "a closed, compositional, fully resolved footprint fact",
+                sprint(showerror, error),
+                (),
+                record.source,
+            ),
+        ),
     )
 end

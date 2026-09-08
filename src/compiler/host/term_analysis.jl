@@ -38,6 +38,20 @@ function _analyze_term_graph(
         operand_indices = Int.(node.operands)
         operand_footprints = Any[footprint[item] for item in operand_indices]
         transfer = node.transfer
+        binding_record = if node.payload isa Union{StateBindingPayload, VariableBindingPayload}
+            binding_index = findfirst(
+                candidate -> candidate.identity == node.payload.identity, source.records
+            )
+            binding_index === nothing ? nothing : source.records[binding_index]
+        else
+            nothing
+        end
+        if binding_record !== nothing
+            variable = _state_record_variable(binding_record)
+            if variable isa Symbolics.Arr || variable isa StaticArrays.StaticArray
+                shape[index] = Tuple(size(variable))
+            end
+        end
         if transfer !== nothing
             for role in operation_roles[index]
                 _validate_operation_use!(
@@ -49,9 +63,44 @@ function _analyze_term_graph(
                     role,
                 )
             end
+            if transfer.result_rule === :fixed_index
+                input_shape = shape[first(operand_indices)]
+                index_payload = graph.nodes[last(operand_indices)].payload
+                problem = if !(
+                        input_shape isa Tuple && length(input_shape) == 1 &&
+                            only(input_shape) isa Integer && only(input_shape) > 0
+                    )
+                    "indexing requires one declared nonempty fixed-vector shape"
+                elseif !(
+                        index_payload isa LiteralPayload &&
+                            index_payload.value isa Integer && !(index_payload.value isa Bool)
+                    )
+                    "fixed-vector indexing requires a literal integer index"
+                elseif !(1 <= index_payload.value <= only(input_shape))
+                    "index $(index_payload.value) is outside fixed-vector shape $input_shape"
+                else
+                    nothing
+                end
+                problem === nothing || throw(
+                    PottsValidationError(
+                        :analysis,
+                        (
+                            PottsDiagnostic(
+                                :invalid_fixed_index, record.identity, String(node.operation),
+                                record.identity.path, "a literal in-bounds fixed-vector index",
+                                problem, (), record.source,
+                            ),
+                        ),
+                    )
+                )
+            end
         end
         result_type[index] = if node.payload_kind === :literal
             typeof(node.payload.value)
+        elseif node.payload isa ParameterBindingPayload
+            _symbolic_result_type(node.payload.value)
+        elseif binding_record !== nothing
+            binding_record.result_type === Nothing ? Real : binding_record.result_type
         elseif node.payload_kind in (:parameter, :variable, :state)
             record.result_type === Nothing ? Real : record.result_type
         elseif node.payload_kind in (
@@ -68,7 +117,18 @@ function _analyze_term_graph(
             Int
         elseif transfer.result_rule === :site_selection
             CorePotts.CompilerSPI.AbstractLifecycleSiteSelection
+        elseif transfer.result_rule === :fixed_vector
+            shape[index] = (length(operand_indices),)
+            StaticArrays.SVector{
+                length(operand_indices), promote_type(
+                    (result_type[item] for item in operand_indices)...
+                ),
+            }
+        elseif transfer.result_rule === :fixed_index
+            eltype(result_type[first(operand_indices)])
         elseif transfer.result_rule === :branch_promote && length(operand_indices) == 3
+            shape[index] = shape[operand_indices[2]] == shape[operand_indices[3]] ?
+                shape[operand_indices[2]] : nothing
             promote_type(
                 result_type[operand_indices[2]],
                 result_type[operand_indices[3]],
@@ -89,7 +149,7 @@ function _analyze_term_graph(
                 source,
             )
         parameter_role[index] = node.payload_kind === :parameter ? :runtime :
-                                node.payload_kind === :literal ? :literal : :none
+            node.payload_kind === :literal ? :literal : :none
         purity[index] = transfer === nothing ? :pure : transfer.purity
         totality[index] = transfer === nothing ? :total : transfer.totality
         reads[index] = record.reads
@@ -115,11 +175,13 @@ function _analyze_term_graph(
         dependencies[index] = record.ordering_dependencies
         rng_sites[index] = record.random_operations
         state_participation[index] = record.persistence === :logical ||
-                                     !isempty(record.reads) ||
-                                     !isempty(record.writes)
+            !isempty(record.reads) ||
+            !isempty(record.writes)
         workspace_participation[index] = !(record.effect isa PureRead) ||
-                                         !(footprint[index] isa
-                                           EmptyAnalyzedFootprint)
+            !(
+            footprint[index] isa
+                EmptyAnalyzedFootprint
+        )
         adaptation_participation[index] =
             state_participation[index] || workspace_participation[index]
         checkpoint_participation[index] = record.persistence === :logical
@@ -198,43 +260,51 @@ function _analyze_term_graph(
         if _is_unknown_unit(units[Int(root.node)])
             node = graph.nodes[Int(root.node)]
             record = source.records[Int(root.record)]
-            throw(PottsValidationError(
-                :analysis,
-                (PottsDiagnostic(
-                    :illegal_operation_units,
-                    record.identity,
-                    String(node.operation),
-                    record.identity.path,
-                    "a compiler-proven root expression unit",
-                    "the root expression retains an unproven unit",
-                    (),
-                    record.source,
-                ),),
-            ))
+            throw(
+                PottsValidationError(
+                    :analysis,
+                    (
+                        PottsDiagnostic(
+                            :illegal_operation_units,
+                            record.identity,
+                            String(node.operation),
+                            record.identity.path,
+                            "a compiler-proven root expression unit",
+                            "the root expression retains an unproven unit",
+                            (),
+                            record.source,
+                        ),
+                    ),
+                )
+            )
         end
         root_footprint = footprint[Int(root.node)]
         if _footprint_has_unresolved_reference(root_footprint)
             node = graph.nodes[Int(root.node)]
             record = source.records[Int(root.record)]
-            throw(_footprint_analysis_error(
-                record,
-                node,
-                ArgumentError(
-                    "root footprint retains an unconsumed relation/resource reference"
-                ),
-            ))
+            throw(
+                _footprint_analysis_error(
+                    record,
+                    node,
+                    ArgumentError(
+                        "root footprint retains an unconsumed relation/resource reference"
+                    ),
+                )
+            )
         end
         record = source.records[Int(root.record)]
         if record.kind !== :HamiltonianTerm &&
                 _footprint_has_unbounded_relationship(root_footprint)
             node = graph.nodes[Int(root.node)]
-            throw(_footprint_analysis_error(
-                record,
-                node,
-                ArgumentError(
-                    "relationship footprint requires a bounded maximum_degree"
-                ),
-            ))
+            throw(
+                _footprint_analysis_error(
+                    record,
+                    node,
+                    ArgumentError(
+                        "relationship footprint requires a bounded maximum_degree"
+                    ),
+                )
+            )
         end
         push!(get!(roots_by_record, root.record, Int32[]), root.node)
     end
@@ -250,14 +320,18 @@ function _analyze_term_graph(
                 forbidden = _normalized_hamiltonian_forbidden_dependency(
                     graph, roots
                 )
-                forbidden === nothing || throw(ArgumentError(
-                    "Hamiltonian energy expressions cannot depend on " *
-                    "$(first(forbidden)) $(last(forbidden))"
-                ))
+                forbidden === nothing || throw(
+                    ArgumentError(
+                        "Hamiltonian energy expressions cannot depend on " *
+                            "$(first(forbidden)) $(last(forbidden))"
+                    )
+                )
                 transition = CopyProposalTransition()
-                root_footprint = _footprint_union(Tuple(
-                    footprint[Int(root)] for root in roots
-                ))
+                root_footprint = _footprint_union(
+                    Tuple(
+                        footprint[Int(root)] for root in roots
+                    )
+                )
                 affected = _affected_anchor_fact(
                     source,
                     record,
@@ -269,10 +343,12 @@ function _analyze_term_graph(
                 if record.provenance isa NamedTuple &&
                         haskey(record.provenance, :registered_affected_region)
                     declared = record.provenance.registered_affected_region
-                    declared === affected.kind || throw(ArgumentError(
-                        "registered affected_region $(repr(declared)) does not match " *
-                        "the compiler-proven class $(repr(affected.kind))"
-                    ))
+                    declared === affected.kind || throw(
+                        ArgumentError(
+                            "registered affected_region $(repr(declared)) does not match " *
+                                "the compiler-proven class $(repr(affected.kind))"
+                        )
+                    )
                 end
                 bound = ExpressionAnchorReadFact(
                     domain.anchor_kind,
@@ -306,11 +382,11 @@ function _analyze_term_graph(
                     Tuple(graph.nodes[root].structural_key for root in roots),
                     category,
                     energy_domain === nothing ? nothing :
-                    (
-                        energy_domain.kind,
-                        energy_domain.resource_identity,
-                        energy_domain.anchor_kind,
-                    ),
+                        (
+                            energy_domain.kind,
+                            energy_domain.resource_identity,
+                            energy_domain.anchor_kind,
+                        ),
                     affected_anchors,
                     affected_proof,
                 ),
@@ -322,20 +398,22 @@ function _analyze_term_graph(
     key = _sha256_hex(
         "potts-analyzed-term-ir-v1",
         graph.structural_key,
-        Tuple((
-            result_type[index],
-            shape[index],
-            units[index],
-            parameter_role[index],
-            purity[index],
-            totality[index],
-            footprint[index],
-            locality[index],
-            emission_bound[index].maximum,
-            emission_bound[index].basis,
-            scientific_category[index],
-            backend_admission[index],
-        ) for index in eachindex(graph.nodes)),
+        Tuple(
+            (
+                    result_type[index],
+                    shape[index],
+                    units[index],
+                    parameter_role[index],
+                    purity[index],
+                    totality[index],
+                    footprint[index],
+                    locality[index],
+                    emission_bound[index].maximum,
+                    emission_bound[index].basis,
+                    scientific_category[index],
+                    backend_admission[index],
+                ) for index in eachindex(graph.nodes)
+        ),
         Tuple(candidate.structural_key for candidate in candidates),
         Tuple(fact.structural_key for fact in lifecycle),
     )

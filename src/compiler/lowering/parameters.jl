@@ -24,13 +24,17 @@ _is_quantity(value) = value isa DynamicQuantities.UnionAbstractQuantity
 
 function _numeric_value(value, reference = nothing)
     if _is_quantity(value)
-        reference isa ReferenceUnitDescriptor || throw(ArgumentError(
-            "a dimensional value requires a compiled reference-unit descriptor"
-        ))
+        reference isa ReferenceUnitDescriptor || throw(
+            ArgumentError(
+                "a dimensional value requires a compiled reference-unit descriptor"
+            )
+        )
         dimension = string(DynamicQuantities.dimension(value))
-        dimension == reference.dimension || throw(ArgumentError(
-            "expected dimensions $(reference.dimension), got $dimension"
-        ))
+        dimension == reference.dimension || throw(
+            ArgumentError(
+                "expected dimensions $(reference.dimension), got $dimension"
+            )
+        )
         return DynamicQuantities.ustrip(value) / reference.scale
     elseif value isa Real &&
             SymbolicIndexingInterface.symbolic_type(value) isa
@@ -48,82 +52,42 @@ function _numeric_value(value, reference = nothing)
 end
 
 function _reference_descriptor(name::Symbol, anchor)
-    _is_quantity(anchor) || throw(ArgumentError(
-        "reference unit `$name` must be a DynamicQuantities quantity"
-    ))
+    _is_quantity(anchor) || throw(
+        ArgumentError(
+            "reference unit `$name` must be a DynamicQuantities quantity"
+        )
+    )
     scale = abs(Float64(DynamicQuantities.ustrip(anchor)))
-    scale > 0 && isfinite(scale) || throw(ArgumentError(
-        "reference unit `$name` must have a finite nonzero scale"
-    ))
+    scale > 0 && isfinite(scale) || throw(
+        ArgumentError(
+            "reference unit `$name` must have a finite nonzero scale"
+        )
+    )
     return ReferenceUnitDescriptor(
         name, string(DynamicQuantities.dimension(anchor)), scale
     )
 end
 
-function _declared_reference_anchors(records::Vector{QualifiedStatement})
-    anchors = Pair{Symbol, Any}[]
-    for record in records
-        statement = record.normalized_statement
-        if statement isa LatticeDomain
-            spacing = _statement_option(statement, :spacing, ())
-            for (index, value) in enumerate(spacing)
-                _is_quantity(value) &&
-                    push!(anchors, Symbol(:length_axis_, index) => value)
-            end
-        elseif statement isa Protocol
-            for stage in _statement_arguments(statement).stages
-                stage isa SweepStage || continue
-                haskey(stage.options, :temperature) &&
-                    _is_quantity(stage.options.temperature) &&
-                    push!(anchors, :energy => stage.options.temperature)
-            end
-            duration = _statement_option(
-                statement, :duration_per_mcs, nothing
-            )
-            _is_quantity(duration) &&
-                push!(
-                    anchors,
-                    Symbol(:time_, statement_id(statement)) => duration,
-                )
-        elseif statement isa Union{
-                SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
-            }
-            initial = _statement_arguments(statement).initial
-            _is_quantity(initial) &&
-                push!(anchors, Symbol(:state_, statement_id(statement)) => initial)
-            duration = _statement_option(statement, :duration_per_mcs, nothing)
-            _is_quantity(duration) &&
-                push!(anchors, Symbol(:time_, statement_id(statement)) => duration)
-        end
-    end
-    return anchors
-end
-
 function _build_reference_descriptors(system::PottsSystem)
     data = _completion_data(system)
-    option = data.reference_units
-    anchors = if option isa ReferenceUnits
-        Pair{Symbol, Any}[
-            name => getproperty(option.values, name) for name in keys(option.values)
-        ]
-    else
-        # The frozen source graph deliberately stores a type-erased vector.
-        # Do not iterate `data.records`, whose complete heterogeneous tuple
-        # type grows with every authored statement and causes inference to
-        # unroll reference discovery at the PottsProblem boundary.
-        _declared_reference_anchors(data.source_graph.records)
-    end
+    # Retain type-erased traversal while sharing completion's reference owner.
+    anchors = _completion_reference_anchors(
+        (record.normalized_statement for record in data.source_graph.records),
+        data.reference_units,
+    )
     descriptors = ReferenceUnitDescriptor[]
     by_dimension = Dict{String, ReferenceUnitDescriptor}()
     for (name, anchor) in anchors
         descriptor = _reference_descriptor(name, anchor)
         existing = get(by_dimension, descriptor.dimension, nothing)
         if existing !== nothing && existing.scale != descriptor.scale
-            throw(ArgumentError(
-                "ambiguous declared reference scale for dimension " *
-                "$(descriptor.dimension): $(existing.name) and $(descriptor.name); " *
-                "supply ReferenceUnits(...) explicitly"
-            ))
+            throw(
+                ArgumentError(
+                    "ambiguous declared reference scale for dimension " *
+                        "$(descriptor.dimension): $(existing.name) and $(descriptor.name); " *
+                        "supply ReferenceUnits(...) explicitly"
+                )
+            )
         end
         existing === nothing || continue
         by_dimension[descriptor.dimension] = descriptor
@@ -148,9 +112,11 @@ function _reference_for(reference_units, value)
     _is_quantity(value) || return nothing
     dimension = string(DynamicQuantities.dimension(value))
     index = findfirst(reference -> reference.dimension == dimension, reference_units)
-    index === nothing && throw(ArgumentError(
-        "no reference-unit anchor was declared for dimension $dimension"
-    ))
+    index === nothing && throw(
+        ArgumentError(
+            "no reference-unit anchor was declared for dimension $dimension"
+        )
+    )
     return reference_units[index]
 end
 
@@ -180,10 +146,10 @@ function _build_parameter_manifest(system::PottsSystem, ::Type{T}) where {
     end
     structural = Tuple(
         StructuralParameter(
-            entry.name,
-            _compiled_structural_value(entry.value, reference_units),
-        )
-        for entry in completion.parameter_roles.structural
+                entry.name,
+                _compiled_structural_value(entry.value, reference_units),
+            )
+            for entry in completion.parameter_roles.structural
     )
     return ParameterManifest(Tuple(entries), structural, reference_units)
 end
@@ -232,13 +198,15 @@ function _compiled_scalar(
     catch
         ()
     end
-    isempty(variables) || throw(ArgumentError(
-        "runtime numerical expressions must be a literal or one declared parameter; " *
-        "got $(repr(value))"
-    ))
+    isempty(variables) || throw(
+        ArgumentError(
+            "runtime numerical expressions must be a literal or one declared parameter; " *
+                "got $(repr(value))"
+        )
+    )
     resolved_reference = reference === nothing ?
-                         _reference_for(manifest.reference_units, value) :
-                         reference
+        _reference_for(manifest.reference_units, value) :
+        reference
     return CorePotts.CompilerSPI.CompiledScalar(T(_numeric_value(value, resolved_reference)))
 end
 
@@ -285,10 +253,12 @@ function _normalize_parameters(
         structural_name = key isa Symbol ? key : _try_symbolic_name(key)
         if index === nothing && structural_name !== nothing &&
                 any(entry -> entry.name === structural_name, manifest.structural)
-            throw(ArgumentError(
-                "parameter `$structural_name` is structural; substitute it on " *
-                "the incomplete system and recompile"
-            ))
+            throw(
+                ArgumentError(
+                    "parameter `$structural_name` is structural; substitute it on " *
+                        "the incomplete system and recompile"
+                )
+            )
         end
         index === nothing &&
             throw(ArgumentError("unknown runtime parameter $(repr(key))"))
@@ -301,12 +271,14 @@ function _normalize_parameters(
     end
     missing = Symbol[
         entry.name for entry in manifest
-        if entry.required && !assigned[entry.index]
+            if entry.required && !assigned[entry.index]
     ]
-    isempty(missing) || throw(ArgumentError(
-        "missing required runtime parameter$(length(missing) == 1 ? "" : "s"): " *
-        join(string.(missing), ", ")
-    ))
+    isempty(missing) || throw(
+        ArgumentError(
+            "missing required runtime parameter$(length(missing) == 1 ? "" : "s"): " *
+                join(string.(missing), ", ")
+        )
+    )
     names = Tuple(entry.name for entry in manifest)
     named = NamedTuple{names}(Tuple(buffer))
     CorePotts.CompilerSPI.validate_parameters(
@@ -319,14 +291,18 @@ function _convert_parameter_value(entry::RuntimeParameter, value, ::Type{T}) whe
         T <: AbstractFloat,
     }
     converted = if entry.unit === nothing
-        _is_quantity(value) && throw(ArgumentError(
-            "parameter `$(entry.name)` is dimensionless"
-        ))
+        _is_quantity(value) && throw(
+            ArgumentError(
+                "parameter `$(entry.name)` is dimensionless"
+            )
+        )
         T(_numeric_value(value))
     else
-        _is_quantity(value) || throw(ArgumentError(
-            "parameter `$(entry.name)` requires units compatible with $(entry.unit)"
-        ))
+        _is_quantity(value) || throw(
+            ArgumentError(
+                "parameter `$(entry.name)` requires units compatible with $(entry.unit)"
+            )
+        )
         T(_numeric_value(value, entry.unit))
     end
     isfinite(converted) ||
