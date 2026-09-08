@@ -35,11 +35,7 @@ makedocs(
             "Fields, batching, and ensembles" => "learn/fields-and-ensembles.md",
             "Observe, checkpoint, and reproduce" => "learn/reproducibility.md",
         ],
-        "Published-model integration" => [
-            "Wortel 2021" => "published-models/wortel-2021.md",
-            "Merks 2006" => "published-models/merks-2006.md",
-            "OpenVT monolayer" => "published-models/openvt-monolayer.md",
-        ],
+        "Scientific model library" => "learn/model-library.md",
         "Concepts and support" => [
             "Architecture" => "concepts/architecture.md",
             "Runtime boundary" => "concepts/runtime-boundary.md",
