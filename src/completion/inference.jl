@@ -249,6 +249,27 @@ function _random_operations(statement, identity::QualifiedStatementID)
         RandomOperation(_draw_key(arguments), _draw_family(arguments), false)
             for arguments in _draw_calls(statement)
     ]
+    if statement isa LifecycleProcess
+        for effect in _statement_arguments(statement).effects
+            _cell_lifecycle_effect(effect) || continue
+            if effect isa Divide
+                effect.geometry isa RandomPlane && push!(
+                    result,
+                    RandomOperation(Symbol(effect.geometry.draw), :division_geometry, false)
+                )
+                effect.side isa StableRandomSide && push!(
+                    result,
+                    RandomOperation(Symbol(effect.side.draw_identity), :division_side, false)
+                )
+            end
+            for item in effect.state
+                policy = _policy_value(item)
+                policy isa RedrawDaughters || continue
+                push!(result, RandomOperation(Symbol(policy.parent_draw), :state_redraw, false))
+                push!(result, RandomOperation(Symbol(policy.daughter_draw), :state_redraw, false))
+            end
+        end
+    end
     if statement isa Protocol
         append!(
             result, (

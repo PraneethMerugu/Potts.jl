@@ -46,9 +46,10 @@ abstract type AbstractProceduralPlacement end
     RandomSitePlacement(name, kind; count, sites_per_cell=1, first_label=1)
 
 Place a fixed number of cells by sampling distinct currently unassigned lattice
-sites from the dedicated initialization RNG stream. The placement identity,
-master seed, and replica determine the result without consuming any simulation
-draw site.
+sites from the dedicated initialization RNG stream. The explicit placement name,
+master seed, replica, and repeat address the draws without consuming a simulation
+draw site. Placements execute in name order and compete for unassigned sites;
+stable draw identities do not make placement results independent of that pool.
 """
 struct RandomSitePlacement{K} <: AbstractProceduralPlacement
     name::Symbol
@@ -362,7 +363,12 @@ function _materialize_layout(
         "procedural placements require $required_sites unassigned sites but " *
         "only $(length(available)) are available"
     ))
-    for (operation_index, placement) in enumerate(procedural_placements)
+    placement_keys = CorePotts.CompilerSPI.rng_operation_keys(Tuple(
+        (namespace = _POTTS_RNG_NAMESPACE,
+            identity = _canonical_value((:potts_initial_placement, placement.name)))
+        for placement in procedural_placements
+    ))
+    for (operation_key, placement) in zip(placement_keys, procedural_placements)
         name = _kind_symbol(placement.kind)
         kind_index = get(kinds, name, nothing)
         kind_index !== nothing &&
@@ -379,13 +385,14 @@ function _materialize_layout(
                     seed,
                     replica,
                     repeat,
-                    operation_index,
+                    operation_key,
                     invocation,
                     length(available),
                 )
                 invocation += 1
                 linear_index = available[selected]
-                available[selected] = pop!(available)
+                available[selected] = last(available)
+                pop!(available)
                 labels[linear_index] = Int32(label)
                 assigned[linear_index] = true
             end

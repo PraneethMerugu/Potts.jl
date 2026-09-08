@@ -8,6 +8,7 @@ const POTTS_TESTS = (
     "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",
     "test_units_and_parameters.jl", "test_mtkcompile.jl",
     "test_initial_problem_remake.jl", "test_runtime_solution_sii.jl",
+    "test_addressed_randomness.jl",
     "test_source_traversal_authority.jl", "test_native_authoring.jl",
     "test_native_component_pools.jl", "test_sciml_problem_and_indexing.jl",
     "test_sciml_callbacks_and_replay.jl",

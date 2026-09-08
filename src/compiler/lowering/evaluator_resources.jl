@@ -4,7 +4,7 @@ function _state_handle_for_leaf(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
         handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
-)
+    )
     if node.payload isa StateBindingPayload
         return get(handles, node.payload.identity, nothing)
     end
@@ -19,55 +19,40 @@ function _state_handle_for_leaf(
     return nothing
 end
 
-const _FIRST_EXPLICIT_DRAW_OPERATION = UInt16(0x0010)
-const _EXPLICIT_DRAW_OPERATION_COUNT =
-    Int(CorePotts.CompilerSPI.rng_operation_limit() - _FIRST_EXPLICIT_DRAW_OPERATION + 1)
-
-function _stable_draw_operation(path::Tuple, identity::Symbol)
-    digest = SHA.sha256(codeunits(_canonical_value((
-        :potts_draw_operation_v1,
-        path,
-        identity,
-    ))))
-    word = (UInt16(digest[1]) << 8) | UInt16(digest[2])
-    return _FIRST_EXPLICIT_DRAW_OPERATION +
-           UInt16(Int(word) % _EXPLICIT_DRAW_OPERATION_COUNT)
-end
+# The package UUID is the durable owner namespace, independent of a model's
+# contents and of declaration order.
+const _POTTS_RNG_NAMESPACE = CorePotts.CompilerSPI.RNGNamespace(
+    (
+        0xe4c62a4c88894cc8, 0xad3a75efc86c53b9,
+    )
+)
 
 function _draw_operation_handles(ir::AnalyzedTermIR)
-    handles = Dict{Tuple{Tuple, Symbol}, UInt16}()
-    owners = Dict{UInt16, Tuple{Tuple, Symbol}}()
-    for record in ir.source.records
-        for operation in record.random_operations
-            operation.reserved && continue
-            key = (record.identity.path, operation.identity)
-            handle = _stable_draw_operation(key...)
-            if haskey(owners, handle) && owners[handle] != key
-                other = owners[handle]
-                throw(PottsValidationError(
-                    :descriptor_lowering,
-                    (PottsDiagnostic(
-                        :draw_operation_identity_collision,
-                        record.identity,
-                        String(operation.identity),
-                        record.identity.path,
-                        "a collision-free stable namespace-local draw identity",
-                        "$(other[1]).$(other[2]) and $(key[1]).$(key[2]) map to " *
-                        "operation $(Int(handle))",
-                        (),
-                        record.source,
-                    ),),
-                ))
-            end
-            handles[key] = handle
-            owners[handle] = key
-        end
-    end
-    return handles
+    sites = Tuple(
+        (record, operation)
+            for record in ir.source.records
+            for operation in record.random_operations if !operation.reserved
+    )
+    keys = CorePotts.CompilerSPI.rng_operation_keys(
+        Tuple(
+            (
+                    namespace = _POTTS_RNG_NAMESPACE,
+                    identity = _canonical_value(
+                        (
+                            :potts_authored_draw, record.identity, record.phase, operation.identity,
+                        )
+                    ),
+                ) for (record, operation) in sites
+        )
+    )
+    return Dict{Tuple{Tuple, Symbol}, CorePotts.CompilerSPI.RNGOperationKey}(
+        (record.identity.path, operation.identity) => key
+            for ((record, operation), key) in zip(sites, keys)
+    )
 end
 
 function _draw_handle_for_leaf(
-        handles::Dict{Tuple{Tuple, Symbol}, UInt16},
+        handles::Dict{Tuple{Tuple, Symbol}, CorePotts.CompilerSPI.RNGOperationKey},
         node::NormalizedTermNode,
     )
     node.payload isa DrawBindingPayload || return nothing

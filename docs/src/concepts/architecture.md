@@ -74,6 +74,17 @@ hierarchy into a parallel Potts representation.
 
 ## CorePotts
 
+Authored randomness follows `draw(..., DrawKey(...))` and lifecycle declarations
+→ `completion/inference.jl`'s qualified random-operation inventory and
+`completion/semantic_ordering.jl`'s duplicate validation →
+`compiler/lowering/evaluator_resources.jl`'s one public CorePotts key-derivation
+batch → concrete evaluator/lifecycle descriptors → CorePotts addressed draws.
+`RandomOperations` and lifecycle inspection derive from that same source
+inventory. Procedural initialization uses the same public key derivation with
+its explicitly named placement identity in `runtime/initial_state.jl`.
+`test/test_addressed_randomness.jl` checks scoped identities, source-order
+stability, lifecycle validation, CPU execution, and same-profile continuation.
+
 CorePotts is the independently testable numerical kernel. It owns CPM state and invariants,
 proposal and acceptance semantics, trackers, relationships, generation-safe lifecycle,
 counter-based randomness, checkpoints, and backend execution. It has no ModelingToolkit dependency

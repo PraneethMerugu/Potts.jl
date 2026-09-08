@@ -278,8 +278,8 @@ function _lifecycle_state_rule!(
     rounding = CorePotts.CompilerSPI.ExactLifecycleRounding
     parent_distribution = UInt8(0)
     daughter_distribution = UInt8(0)
-    parent_draw = UInt16(0)
-    daughter_draw = UInt16(0)
+    parent_draw = CorePotts.CompilerSPI.RNGOperationKey()
+    daughter_draw = CorePotts.CompilerSPI.RNGOperationKey()
     if policy isa InitializeFrom
         action = CorePotts.CompilerSPI.InitializeLifecycleState
         evaluator_a = _lifecycle_evaluator!(
@@ -365,12 +365,8 @@ function _lifecycle_state_rule!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             daughter_parameters[2], cursor, manifest, T, state_handles, draw_handles,
         )
-        parent_draw = _stable_draw_operation(
-            record.identity.path, Symbol(policy.parent_draw)
-        )
-        daughter_draw = _stable_draw_operation(
-            record.identity.path, Symbol(policy.daughter_draw)
-        )
+        parent_draw = draw_handles[(record.identity.path, Symbol(policy.parent_draw))]
+        daughter_draw = draw_handles[(record.identity.path, Symbol(policy.daughter_draw))]
     else
         throw(ArgumentError("unsupported lifecycle state policy $(typeof(policy))"))
     end
@@ -572,8 +568,8 @@ function _lower_lifecycle_plan(
         point = ntuple(_ -> zero(T), N)
         normal = ntuple(_ -> zero(T), N)
         side = CorePotts.CompilerSPI.CanonicalLifecycleSide
-        geometry_draw = UInt16(0)
-        side_draw = UInt16(0)
+        geometry_draw = CorePotts.CompilerSPI.RNGOperationKey()
+        side_draw = CorePotts.CompilerSPI.RNGOperationKey()
         parent_kind = Int16(0)
         daughter_kind = Int16(0)
         if effect isa Divide
@@ -586,9 +582,7 @@ function _lower_lifecycle_plan(
                 point_from_centroid, point = _lifecycle_point(
                     geometry.point, T, Val(N)
                 )
-                geometry_draw = _stable_draw_operation(
-                    record.identity.path, Symbol(geometry.draw)
-                )
+                geometry_draw = draw_handles[(record.identity.path, Symbol(geometry.draw))]
             elseif geometry isa PrincipalAxisPlane
                 partition = geometry.axis === :major ?
                     CorePotts.CompilerSPI.PrincipalMajorLifecyclePartition :
@@ -611,9 +605,7 @@ function _lower_lifecycle_plan(
             end
             if effect.side isa StableRandomSide
                 side = CorePotts.CompilerSPI.StableRandomLifecycleSide
-                side_draw = _stable_draw_operation(
-                    record.identity.path, Symbol(effect.side.draw_identity)
-                )
+                side_draw = draw_handles[(record.identity.path, Symbol(effect.side.draw_identity))]
             elseif !(effect.side isa CanonicalSide)
                 throw(ArgumentError("unsupported lifecycle side policy"))
             end

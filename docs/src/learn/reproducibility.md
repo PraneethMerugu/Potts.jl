@@ -53,3 +53,22 @@ integrator.u.ownership == restored.u.ownership
 profiles. `replica` identifies an ensemble trajectory; `repeat` identifies a
 retry of that trajectory. Both are part of semantic RNG addressing and persist
 through checkpoints.
+
+An authored `DrawKey` belongs to its qualified component and process at its
+declared execution boundary. Draw identities use the Potts package UUID as their
+owner namespace and are resolved together by CorePotts into two-word operation
+keys. Reordering declarations, adding an unrelated draw, or changing a
+distribution's parameters does not renumber existing operation keys. Renaming a
+component, process, or draw does change its identity. Each component still
+requires unique draw labels, including division geometry, random side selection,
+and daughter-state redraws. Initialization uses the declared
+`RandomSitePlacement` name, not its position in the placement list.
+
+Stable random addresses are not a promise of unchanged trajectories after
+changing a model: proposals, state, acceptance, and competing initialization
+placements can change. CorePotts owns the versioned generator/address protocol;
+its current protocol consumes both operation-key words and the full
+seed/replica/repeat identity. Checkpoint replay requires a matching execution
+identity and protocol, not merely the same seed. A protocol change does not
+preserve earlier seeded trajectories, and cross-backend floating-point replay
+is a separate guarantee.
