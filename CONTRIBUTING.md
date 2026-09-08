@@ -113,8 +113,10 @@ julia --project=integration integration/runtests.jl
 
 The normal integration environment exercises functional behavior across its
 declared compatibility ranges. Exact native checkpoint replay is tested
-separately in `integration/replay`; its pinned Julia and dependency graph are
-part of that stronger replay claim and do not restrict ordinary execution.
+separately in `integration/replay`; its pinned Julia, dependency graph, and
+ARM macOS platform are part of that stronger replay claim and do not restrict
+ordinary functional execution. Use the qualified platform documented in
+`integration/replay/README.md` for that suite.
 
 The package suites include Aqua checks. Published stochastic models test both
 exact fixed-seed replay and seed-sensitive, bounded behavior. A random seed is
@@ -184,5 +186,5 @@ LocalMath, CorePotts, Potts, and MakiePotts. The selected commits must carry the
 release-candidate names, UUIDs, and versions declared by that workflow. The run
 checks the exact dependency chain through temporary checkouts: it does not write
 those paths or revisions into package projects or runtime identities. Both the
-CPU/documentation/rendering job and the real-Metal job must pass for that exact
-four-commit selection.
+CPU/documentation/rendering job and the macOS Metal/exact-replay job must pass
+for that exact four-commit selection.

@@ -29,6 +29,9 @@ closed.
 Exact replay additionally binds system, state, algorithm/backend/scalar,
 native profile, dependency environment, observation mode, and checkpoint
 identity. A functional run is not automatically an exact-continuation claim.
+The current native ODE exact-replay profile is qualified on ARM macOS with
+Julia 1.12.6 and the pinned `integration/replay` dependencies; it does not grant
+native exact replay on Linux merely because package versions match.
 
 The ordinary package and integration tests exercise these boundaries,
 including intentionally rejected profiles.

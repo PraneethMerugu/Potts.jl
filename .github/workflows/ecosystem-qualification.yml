@@ -209,8 +209,6 @@ jobs:
         run: |
           julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
           julia --project=ecosystem/Potts/integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(); include("ecosystem/Potts/integration/runtests.jl")'
-      - name: Exact replay at selected commits
-        run: julia --project=ecosystem/Potts/integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/integration/replay/runtests.jl")'
       - name: MakiePotts package tests
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.test("MakiePotts")'
       - name: Documentation and doctests
@@ -229,8 +227,8 @@ jobs:
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/clean_install_smoke.jl
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/visual_regression.jl
 
-  metal:
-    name: Exact-revision Metal
+  macos:
+    name: Exact-revision Metal and replay
     runs-on: macos-15
     timeout-minutes: 240
     steps:
@@ -267,3 +265,6 @@ jobs:
         run: julia --project=ecosystem/CorePotts/test/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts")]); Pkg.instantiate(); include("ecosystem/CorePotts/test/metal/runtests.jl")'
       - name: Potts Metal qualification
         run: julia --project=ecosystem/Potts/benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/benchmark/backends/metal/runtests.jl")'
+      # Native exact replay is qualified on ARM macOS, not the Ubuntu CPU job.
+      - name: Exact replay at selected commits
+        run: julia --project=ecosystem/Potts/integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/integration/replay/runtests.jl")'
