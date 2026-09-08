@@ -22,7 +22,8 @@ host/operation_closure.jl
     derive the minimal frozen per-model operation closure from proven dependencies
 
 host/normalization.jl
-    orchestrate symbolic normalization into the ordered term DAG
+    orchestrate symbolic normalization into the ordered term DAG, retaining authored
+    source locations in operation diagnostics
 
 host/energy_domains.jl
     prove conservative energy domains and finite affected-anchor plans

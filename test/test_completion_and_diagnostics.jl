@@ -32,6 +32,86 @@ Base.IndexStyle(::Type{<:FingerprintAxisVector}) = IndexCartesian()
 Base.getindex(value::FingerprintAxisVector, index::Int) =
     value.values[index - value.offset + 1]
 
+function opaque_diagnostic_operation end
+Symbolics.@register_symbolic opaque_diagnostic_operation(value)::Real
+function wrong_arity_diagnostic_operation end
+Symbolics.@register_symbolic wrong_arity_diagnostic_operation(value)::Real
+Potts.operation_transfer(::typeof(wrong_arity_diagnostic_operation), ::Int) =
+    Potts.OperationTransfer(
+    :wrong_arity_diagnostic_operation; arity = 2,
+    result_rule = :real, unit_rule = :dimensionless,
+    footprint_rule = Potts.InheritFootprintRule(),
+)
+
+@testset "nested operation errors retain authored source and remedies" begin
+    @parameters diagnostic_strength
+    declarations = @statements begin
+        ProposalDrive(:opaque_drive, opaque_diagnostic_operation(diagnostic_strength))
+    end
+    child = PottsSystem(
+        name = :child, statements = declarations,
+        parameters = [diagnostic_strength],
+    )
+    nested = compose(PottsSystem(name = :parent), [child])
+    failure = try
+        complete(nested)
+        nothing
+    catch caught
+        caught
+    end
+    @test failure isa Potts.PottsValidationError
+    diagnostic = only(failure.diagnostics)
+    @test diagnostic.kind === :missing_operation_transfer
+    @test diagnostic.identity == Potts.QualifiedStatementID(
+        (:parent, :child), StatementID(:opaque_drive)
+    )
+    source = statement_source(only(declarations))
+    @test diagnostic.source == source
+    @test source isa SourceLocation
+    rendered = sprint(showerror, failure)
+    @test occursin("$(source.file):$(source.line)", rendered)
+    @test occursin(string(diagnostic.identity), rendered)
+    @test occursin(diagnostic.expression, rendered)
+    @test occursin("expression:", rendered)
+    @test all(alternative -> occursin(alternative, rendered), diagnostic.alternatives)
+    @test occursin("Potts.operation_transfer", rendered)
+    @test occursin("CorePotts.CompilerSPI.operation_callable", rendered)
+    @test !occursin("UnknownSource", rendered)
+
+    wrong_arity = @statements begin
+        ProposalDrive(:wrong_arity, wrong_arity_diagnostic_operation(diagnostic_strength))
+    end
+    arity_failure = try
+        complete(
+            PottsSystem(
+                name = :arity_model, statements = wrong_arity,
+                parameters = [diagnostic_strength],
+            )
+        )
+        nothing
+    catch caught
+        caught
+    end
+    @test arity_failure isa Potts.PottsValidationError
+    arity_diagnostic = only(arity_failure.diagnostics)
+    @test arity_diagnostic.kind === :invalid_operation_arity
+    arity_source = statement_source(only(wrong_arity))
+    @test arity_diagnostic.source == arity_source
+    @test occursin("$(arity_source.file):$(arity_source.line)", sprint(showerror, arity_failure))
+
+    # Rendering projects captured data, including source-only diagnostics.
+    source_only = Potts.PottsDiagnostic(
+        :invalid_declaration, nothing, "", (), "valid declaration", "invalid",
+        ("Check the declaration.",), source,
+    )
+    @test occursin(source.expression, sprint(show, MIME"text/plain"(), source_only))
+    unknown = Potts.PottsDiagnostic(
+        :invalid_declaration, nothing, "", (), "valid declaration", "invalid",
+        (), UnknownSource(),
+    )
+    @test sprint(show, MIME"text/plain"(), unknown) == sprint(show, unknown)
+end
+
 @testset "completion and diagnostics" begin
     @variables t activity(t)
     @parameters target strength maximum activity_strength

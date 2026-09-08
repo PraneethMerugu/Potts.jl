@@ -42,6 +42,11 @@ Use `@named` when a parent expression should supply the component name. Use
 `flatten` only when a downstream operation genuinely needs a flat namespace.
 Namespacing is structural identity, not display metadata.
 
+Keep declarations in `@statements` to retain their authored file and line through
+composition. Validation errors show the qualified statement, failing expression,
+and available remedies. Programmatically built statements without source metadata
+still report their semantic identity; Potts does not invent a source location.
+
 The stable statement families are:
 
 - domains, cell/media kinds, relations, and stored site/cell/medium/model/field/history state;
