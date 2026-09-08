@@ -95,6 +95,13 @@ updated = replace_component(source, (:left,) => replacement.source;
     reconnect=(old_output => ComponentReference((:left,), replacement.state),))
 ```
 
+For explicit physical reference scales, pass `reference_units=ReferenceUnits(...)`
+to `replace_component`; both the original and rebuilt component contracts are
+validated with that choice. The returned value is still editable source, not a
+completed system retaining compiler options. Pass the same reference option when
+subsequently calling `complete` on it. The default remains declared-reference
+inference.
+
 Every surviving import of an output from the removed subtree needs a reconnection,
 even when the replacement uses the same names. Unrelated components and external
 input owners remain present. Missing owners, incompatible declarations, duplicate
@@ -339,6 +346,33 @@ invalid/empty policy is scientifically required.
 
 ## Fixed-size state values
 
+Named products retain one symbolic state owner. Keep the state declaration to
+write ordinary field expressions, including nested fields and fixed vectors:
+
+```julia
+using StaticArrays, Symbolics
+@variables memory::NamedTuple{(:amount, :polarity, :flags),
+    Tuple{Float64, SVector{2,Float64}, NamedTuple{(:enabled,),Tuple{Bool}}}}
+state = ModelState(memory; initial=(amount=2.0,
+    polarity=SVector(1.0, 0.0), flags=(enabled=true,)))
+amount_expression = state.amount + 1
+rotated = SVector(-state.polarity[2], state.polarity[1])
+enabled = state.flags.enabled
+```
+
+Put `state` in the model's statements and use these expressions in ordinary
+assignments or constraints. Field access creates expressions over `memory`;
+it does not declare separate field states. Import the whole symbolic state
+through `ComponentReference` before projecting a local declaration's fields.
+Names such as `core` and `name` are available as scientific product fields.
+Symbolic renaming and substitution preserve the complete declared product type.
+Changing field order, a nested field type, or a fixed-array shape requires
+rebuilding the declaration and its field references; incompatible structural
+substitution is rejected rather than retaining stale type or shape information.
+Stored field units remain distinct, and array fields retain their declared shape.
+This expression surface does not add arbitrary field-expression indexing of saved
+solutions; read the saved whole product or declare a supported observation.
+
 Declare the logical shape symbolically and supply a fixed-size initial value:
 
 ```julia
@@ -390,3 +424,12 @@ initializers. All inferred anchors for a dimension must have the same finite,
 nonzero magnitude. If components suggest different scales, provide
 `ReferenceUnits(...)` explicitly; the compiler does not select an arbitrary
 component as the reference.
+
+State dimensions also follow `PottsSystem(initial_conditions=...)` when the
+declaration leaves its initial value unspecified. For named products, each field
+retains its own dimension, including nested fields. A parent's initial condition
+for a qualified child state takes precedence over the child's system default;
+a conflicting explicit declaration initial is rejected. Supply `ReferenceUnits`
+when system-only dimensional initial conditions do not have declared reference
+anchors. Scheduling inspection and runtime conversion use the same selected
+initial value as expression unit analysis.

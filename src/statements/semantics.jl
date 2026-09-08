@@ -195,6 +195,37 @@ struct Multilinear <: AbstractInterpolationPolicy end
 """Marker for fields sampled at lattice-cell centers."""
 struct CellCentered end
 
+# The source type supplies fixed-array shape to Symbolics' shape-only promotion
+# hook. Field result types are derived from the actual symbolic input type.
+struct _ProductField{T, Field} end
+(::_ProductField{T, Field})(value::NamedTuple) where {T, Field} = getfield(value, Field)
+function SymbolicUtils.promote_symtype(::_ProductField{D, Field}, ::Type{T}) where {D, T, Field}
+    T === D || throw(
+        ArgumentError(
+            "product field substitution requires the same declared product type; rebuild the declaration and its field references for a structural type change"
+        )
+    )
+    return fieldtype(T, Field)
+end
+SymbolicUtils.promote_shape(::_ProductField{T, Field}, ::SymbolicUtils.ShapeT) where {T, Field} =
+    fieldtype(T, Field) <: StaticArrays.StaticArray ?
+    SymbolicUtils.ShapeVecT(collect(axes(fieldtype(T, Field)))) : SymbolicUtils.ShapeVecT()
+
+function _product_field_reference(variable, ::Type{T}, name::Symbol) where {T <: NamedTuple}
+    isconcretetype(T) || throw(ArgumentError("product field access requires concrete declared field types"))
+    name in fieldnames(T) || throw(ArgumentError("product state has no field `$name`; available fields are $(fieldnames(T))"))
+    field_type = fieldtype(T, name)
+    expression = Symbolics.term(_ProductField{T, name}(), Symbolics.unwrap(variable))
+    if field_type <: NamedTuple
+        return NamedTuple{fieldnames(field_type)}(
+            ntuple(fieldcount(field_type)) do index
+                _product_field_reference(expression, field_type, fieldnames(field_type)[index])
+            end
+        )
+    end
+    return Symbolics.wrap(expression)
+end
+
 function _symbolic_local_name(value)
     return try
         Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(value)))
@@ -210,6 +241,19 @@ end
 for state_type in (
         SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
     )
+    @eval function Base.getproperty(statement::$state_type, name::Symbol)
+        arguments = _statement_arguments(statement)
+        variable = arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing
+        declared_type = variable === nothing ? Nothing : Symbolics.symtype(Symbolics.unwrap(variable))
+        declared_type <: NamedTuple && return _product_field_reference(variable, declared_type, name)
+        return getfield(statement, name)
+    end
+    @eval function Base.propertynames(statement::$state_type, private::Bool = false)
+        arguments = _statement_arguments(statement)
+        variable = arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing
+        declared_type = variable === nothing ? Nothing : Symbolics.symtype(Symbolics.unwrap(variable))
+        return declared_type <: NamedTuple ? fieldnames(declared_type) : fieldnames(typeof(statement))
+    end
     @eval function (::Type{$state_type})(
             variable;
             name::Symbol = _symbolic_local_name(variable),

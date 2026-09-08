@@ -181,23 +181,11 @@ function _compiled_state_initial(
     ) where {T <: AbstractFloat}
     arguments = _record_arguments(record)
     display_identity = record.identity
-    declared = arguments.initial
     variable = arguments.variable
     declared_type = record.result_type
     value_type = declared_type <: AbstractArray ? eltype(declared_type) : declared_type
     numeric_type = value_type <: Integer && isconcretetype(value_type) ? value_type : T
-    initial_conditions = ModelingToolkitBase.initial_conditions(completed)
-    has_system_initial = haskey(initial_conditions, variable)
-    if has_system_initial && declared !== nothing &&
-            !isequal(initial_conditions[variable], declared)
-        throw(
-            ArgumentError(
-                "state `$display_identity` has conflicting declaration and " *
-                    "PottsSystem initial conditions"
-            )
-        )
-    end
-    value = has_system_initial ? initial_conditions[variable] : declared
+    value = _effective_state_initial(_completion_data(completed).source_graph, record).value
     if variable isa Symbolics.Arr
         logical_shape = size(variable)
         if value === nothing

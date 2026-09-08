@@ -63,7 +63,23 @@ function _analyze_term_graph(
                     role,
                 )
             end
-            if transfer.result_rule === :fixed_index
+            if transfer.result_rule === :product_field
+                product_type = result_type[first(operand_indices)]
+                field_payload = graph.nodes[last(operand_indices)].payload
+                valid = field_payload isa LiteralPayload && field_payload.value isa Integer &&
+                    !(field_payload.value isa Bool) && 1 <= field_payload.value <= fieldcount(product_type)
+                valid || throw(
+                    PottsValidationError(
+                        :analysis, (
+                            PottsDiagnostic(
+                                :invalid_product_field, record.identity, String(node.operation),
+                                record.identity.path, "a literal declared product-field ordinal",
+                                "product projection does not select one declared field", (), record.source
+                            ),
+                        )
+                    )
+                )
+            elseif transfer.result_rule === :fixed_index
                 input_shape = shape[first(operand_indices)]
                 index_payload = graph.nodes[last(operand_indices)].payload
                 problem = if !(
@@ -126,6 +142,11 @@ function _analyze_term_graph(
             }
         elseif transfer.result_rule === :fixed_index
             eltype(result_type[first(operand_indices)])
+        elseif transfer.result_rule === :product_field
+            ordinal = graph.nodes[last(operand_indices)].payload.value
+            field_type = fieldtype(result_type[first(operand_indices)], ordinal)
+            shape[index] = field_type <: StaticArrays.StaticArray ? Tuple(size(field_type)) : ()
+            field_type
         elseif transfer.result_rule === :branch_promote && length(operand_indices) == 3
             shape[index] = shape[operand_indices[2]] == shape[operand_indices[3]] ?
                 shape[operand_indices[2]] : nothing

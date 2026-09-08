@@ -114,8 +114,9 @@ are CPU and real Metal, not untested CUDA or ROCm claims.
 
 An array-valued symbolic state describes one logical value, not extra lattice
 axes. Completion retains Symbolics' declared value type, including Boolean and
-integer meaning. `compiler/execution/manifests.jl` owns declaration/system initial-value
-reconciliation and numerical conversion. `compiler/lowering/storage_layouts.jl`
+integer meaning. `completion/symbolic_interface.jl` owns declaration/system
+initial-value selection, and `compiler/execution/manifests.jl` owns numerical
+conversion. `compiler/lowering/storage_layouts.jl`
 uses that conversion to derive a fixed array's element type for the canonical
 CorePotts state layout. The runtime initializer separates logical value shape
 from model, site, and cell storage shape; saved values and checkpoints consume
@@ -131,6 +132,35 @@ interface, and its existing stage transaction executes the expression. The
 analysis contracts live in `test/test_fixed_vector_operations.jl`; the shared
 `test/fixtures/vector_rotation.jl` supplies the ordinary and Metal execution
 witness without adding another evaluator.
+
+Named-product field syntax belongs to the existing state declaration in
+`statements/semantics.jl`. Its owned symbolic callable uses SymbolicUtils' public
+type and shape promotion hooks, so same-declared-type substitution retains the
+original state owner and projected type. Structural type changes are rejected
+before captured shape or ordinal information can become stale; the owning
+regression is `test/test_product_field_substitution.jl`.
+Normalization consumes the field spelling and source
+type into the sole `product_field` operation plus a literal declared ordinal;
+the frozen operation catalog does not grow one schema per field. Existing
+analysis derives the selected type, shape, and field units, and CorePotts consumes
+the literal selection before execution. `test/test_product_field_authoring.jl`
+owns composition, unit, and scalar/vector consumer tests. No product wrapper or
+independent symbolic field owner participates in completion.
+
+`completion/symbolic_interface.jl` selects each effective state initial from the
+qualified source references, using the same parent-first precedence as MTK's
+completed initial-condition query. Scheduling, storage conversion, host unit
+analysis, and component reconnection contracts consume that selection directly.
+A declaration/system disagreement remains an error; a parent's explicit value
+for a qualified child overrides the child's system default. The ordinary
+`test/test_state_initial_selection.jl` defends these distinctions and their
+dimensional execution consequences.
+
+`compiler/lowering/storage_layouts.jl` resolves indexed symbolic reads back to
+their declared logical array owner when inventorying state handles. Completion
+retains the indexed expression, but execution reads the existing owner's whole
+stored value before projecting a component. An indexed read does not create
+another state handle or expand a vector into scalar states.
 
 ## Time
 

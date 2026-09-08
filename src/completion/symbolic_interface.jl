@@ -60,3 +60,27 @@ function ModelingToolkitBase.initial_conditions(system::PottsSystem)
     end
     return result
 end
+
+# Initial selection shares MTK's qualified, parent-first source precedence.
+# Keep the selected value transient: storage, scheduling, and unit analysis
+# project the same declaration/source references rather than retaining copies.
+function _effective_state_initial(source::FrozenSourceGraph, record::QualifiedStatement)
+    arguments = _record_arguments(record)
+    declared = get(arguments, :initial, nothing)
+    for reference in source.references
+        reference.source == 0 && reference.kind === :initial_condition || continue
+        pair = _qualified_source_reference(reference)
+        isequal(first(pair), arguments.variable) || continue
+        value = last(pair)
+        if declared !== nothing && !isequal(value, declared)
+            throw(
+                ArgumentError(
+                    "state `$(record.identity)` has conflicting declaration and " *
+                        "PottsSystem initial conditions"
+                )
+            )
+        end
+        return (; value, origin = :system)
+    end
+    return (; value = declared, origin = :statement)
+end

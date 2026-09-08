@@ -17,6 +17,29 @@ function _declared_record_unit(record::QualifiedStatement)
     return (:declared_dimension, declared)
 end
 
+function _declared_record_unit(record::QualifiedStatement, source::FrozenSourceGraph)
+    _state_record_variable(record) === nothing && return _declared_record_unit(record)
+    return _state_initial_unit(record.result_type, _effective_state_initial(source, record).value)
+end
+
+function _state_initial_unit(::Type{T}, value) where {T}
+    if T <: NamedTuple
+        return NamedTuple{fieldnames(T)}(
+            ntuple(fieldcount(T)) do index
+                _state_initial_unit(fieldtype(T, index), value isa NamedTuple ? get(value, fieldnames(T)[index], nothing) : nothing)
+            end
+        )
+    elseif value isa StaticArrays.StaticArray
+        isempty(value) && return :dimensionless
+        units = map(component -> _state_initial_unit(eltype(T), component), value)
+        common = _common_unit(Tuple(units))
+        return common === nothing ? :unknown : common
+    elseif value isa DynamicQuantities.UnionAbstractQuantity
+        return _canonical_dimension(DynamicQuantities.dimension(value))
+    end
+    return :dimensionless
+end
+
 function _declared_parameter_unit(value)
     default = try
         ModelingToolkitBase.hasdefault(value) ?
@@ -54,7 +77,7 @@ function _normalized_leaf_unit(
         # unit variable: equal bindings can be proven equal, while the value
         # cannot unify with a concrete or unrelated dimension.
         return index === nothing ? (:binding_dimension, payload.identity) :
-            _declared_record_unit(source.records[index])
+            _declared_record_unit(source.records[index], source)
     elseif payload isa LiteralPayload
         return value isa Number && iszero(value) ?
             :polymorphic_zero : :dimensionless
@@ -173,6 +196,12 @@ function _operation_unit_result(
         source::FrozenSourceGraph,
     )
     rule = transfer.unit_rule
+    if rule === :product_field
+        product_units = first(operand_units)
+        ordinal = graph.nodes[last(node.operands)].payload.value
+        product_units isa NamedTuple || return (nothing, "product projection requires declared field units")
+        return (getfield(product_units, ordinal), nothing)
+    end
     any(_is_unknown_unit, operand_units) && return (
         nothing,
         "cannot prove units for operands $(repr(operand_units))",
@@ -254,7 +283,7 @@ function _operation_unit_result(
         end
         return (:unknown, nothing)
     elseif rule === :declared
-        return (_declared_record_unit(record), nothing)
+        return (_declared_record_unit(record, source), nothing)
     elseif rule === :distribution
         parameters = length(operand_units) >= 3 ? operand_units[2:3] : operand_units
         common = _common_unit(parameters)

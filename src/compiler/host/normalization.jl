@@ -165,6 +165,14 @@ function _normalize_term!(
     # not a literal containing unevaluated symbolic element expressions.
     operation = fixed_vector ? StaticArrays.SVector : Symbolics.operation(unwrapped)
     arguments = fixed_vector ? Tuple(value) : Tuple(Symbolics.arguments(unwrapped))
+    if operation isa _ProductField
+        # Field spelling is source syntax. The closed evaluator receives one
+        # ordinary product-field operation and a declaration-derived ordinal.
+        source_type, field = typeof(operation).parameters
+        ordinal = findfirst(==(field), fieldnames(source_type))
+        ordinal === nothing && throw(ArgumentError("unknown declared product field `$field`"))
+        arguments = (only(arguments), ordinal)
+    end
     transfer = try
         operation_transfer(operation, length(arguments))
     catch error

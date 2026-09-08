@@ -9,6 +9,7 @@ const METAL_SEMANTIC_WITNESSES = (
     "problem_construction.jl",
     "authored_randomness.jl",
     "fixed_vector_operations.jl",
+    "product_fields.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",
     "native_component_execution.jl",

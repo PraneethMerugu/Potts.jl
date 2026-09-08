@@ -16,6 +16,7 @@ import Statistics
 import StaticArrays
 import SymbolicIndexingInterface
 import Symbolics
+import SymbolicUtils
 import SciMLBase: init, solve, solve!, step!, remake, terminate!
 
 # Public symbolic vocabulary and source-level model construction.

@@ -98,6 +98,8 @@ function _operation_operand_admitted(rule::Symbol, types::Tuple)
     rule === :integer && return all(type -> type <: Integer, types)
     rule === :fixed_index && return length(types) == 2 &&
         types[1] <: AbstractVector && types[2] <: Integer
+    rule === :product_field && return length(types) == 2 &&
+        types[1] <: NamedTuple && isconcretetype(types[1]) && types[2] <: Integer
     rule === :same_type && return isempty(types) || all(==(first(types)), types)
     rule === :ifelse && return length(types) == 3 && types[1] <: Bool &&
         promote_type(types[2], types[3]) !== Any

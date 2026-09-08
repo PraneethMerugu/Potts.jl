@@ -256,6 +256,9 @@ numerical_field_rejection(::Any, statement, statements, system) =
 
 function numerical_field_stage_descriptor end
 
+operation_transfer(::_ProductField, ::Int) =
+    _transfer(:product_field, 2, :product_field, :product_field; operand_rule = :product_field)
+
 operation_transfer(::Type{StaticArrays.SVector}, ::Int) =
     _transfer(
     :fixed_vector, 1:typemax(Int), :fixed_vector, :fixed_vector;

@@ -11,6 +11,7 @@ const _RESULT_TRANSFER_RULES = Set(
         :site_selection,
         :fixed_vector,
         :fixed_index,
+        :product_field,
     )
 )
 const _UNIT_TRANSFER_RULES = Set(
@@ -26,6 +27,7 @@ const _UNIT_TRANSFER_RULES = Set(
         :lattice_volume,
         :fixed_vector,
         :fixed_index,
+        :product_field,
     )
 )
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
@@ -37,7 +39,7 @@ const _TOTALITY_TRANSFER_RULES = Set(
 )
 const _OPERAND_TRANSFER_RULES = Set(
     (
-        :any, :numeric, :boolean, :integer, :same_type, :ifelse, :fixed_index,
+        :any, :numeric, :boolean, :integer, :same_type, :ifelse, :fixed_index, :product_field,
     )
 )
 const _OPERATION_CONTEXT_RULES = Set(

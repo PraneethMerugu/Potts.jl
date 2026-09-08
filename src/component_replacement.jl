@@ -105,11 +105,11 @@ function _component_reference_contract(completed, inventory, reference)
         return (:parameter, _symbolic_result_type(value), (), _declared_parameter_unit(value))
     end
     record = only(records)
-    return (record.kind, record.result_type, record.shape, _declared_record_unit(record))
+    return (record.kind, record.result_type, record.shape, _declared_record_unit(record, _completion_data(completed).source_graph))
 end
 
 """
-    replace_component(source, path => replacement; reconnect=())
+    replace_component(source, path => replacement; reconnect=(), reference_units=DeclaredReferenceUnits())
 
 Replace an owned PottsSystem subtree in incomplete symbolic source. `path` is a
 nonempty root-relative tuple. Surviving imports of removed outputs require
@@ -120,8 +120,14 @@ Cross-component consumers, including native Potts ports, must use explicit impor
 Replacement accepts PottsSystem subtrees, including their owned native components;
 it does not accept a bare NativeComponent as the replacement target.
 This operation rebuilds and validates source; it does not modify a running problem.
+`reference_units` is passed to completion on both sides of the reconnection.
+The result remains editable source, without a stored completion policy; pass the
+same explicit reference units when subsequently completing it.
 """
-function replace_component(source::PottsSystem, replacement_pair::Pair; reconnect = ())
+function replace_component(
+        source::PottsSystem, replacement_pair::Pair;
+        reconnect = (), reference_units = DeclaredReferenceUnits(),
+    )
     _ensure_incomplete(source, "replace_component")
     path, replacement = replacement_pair
     path isa Tuple{Vararg{Symbol}} && !isempty(path) || throw(
@@ -140,7 +146,7 @@ function replace_component(source::PottsSystem, replacement_pair::Pair; reconnec
     length(target) == 1 || throw(ArgumentError("unknown component replacement path $(repr(path))"))
     _resolve_component_imports(before)
     _reject_implicit_component_connections(before, path)
-    completed_before = complete(source)
+    completed_before = complete(source; reference_units)
     candidate = _replace_component_subtree(source, path, replacement)
     after = _source_inventory(candidate)
     new_path = (path[1:(end - 1)]..., nameof(replacement))
@@ -188,7 +194,7 @@ function replace_component(source::PottsSystem, replacement_pair::Pair; reconnec
     rebuilt, _ = _rebuild_source_inventory(after, locals, groups)
     # Completion owns binding and operation validation. Retain the editable
     # source, not its completed graph, as the structural operation's result.
-    completed_after = complete(rebuilt)
+    completed_after = complete(rebuilt; reference_units)
     for (identity, reference) in rules
         isequal(
             _component_reference_contract(completed_before, before, ComponentReference(identity...)),
