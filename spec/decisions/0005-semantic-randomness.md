@@ -32,10 +32,20 @@ Exact and approximate distributions are separately named. Exact checkpoints reco
 RNG version, semantic counters, cell generations, complete state, model fingerprint, and execution
 provenance.
 
-`Philox4x32x10V2` is the accepted default contract after compilation,
-known-answer, semantic-address, trajectory-identity, and open-uniform endpoint
-validation. Its public RNG contract version is `2.0.0` and its lowering identity
-is `philox4x32x10_semantic_address_fisher_yates_v2`.
+The execution contract is versioned by CorePotts. Its current addressed generator
+is `Philox4x64x10V3`, with two-word operation keys and the full two-word
+seed/replica/repeat trajectory identity. Potts derives authored operation keys
+through the public CorePotts `rng_operation_keys` batch interface, using its
+package UUID namespace and length-framed qualified process, boundary, and draw
+identity. Distribution parameters and declaration order do not define those keys.
+Procedural initialization uses its declared placement name. Lifecycle draw labels
+participate in the same completion inventory and namespace-local duplicate checks
+as symbolic draws. This direct protocol change intentionally changes earlier
+seeded trajectories; it does not provide a compatibility execution path.
+
+Generator correctness, raw-bit backend parity, distribution behavior, and
+simulation continuation remain separate ordinary validation obligations. The
+protocol's wider address space alone establishes none of those stronger claims.
 
 ## Consequences
 

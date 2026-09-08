@@ -7,7 +7,7 @@ function _lower_static_node(
         manifest::ParameterManifest,
         ::Type{T},
         state_handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
-        draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
+        draw_handles::Dict{Tuple{Tuple, Symbol}, CorePotts.CompilerSPI.RNGOperationKey},
         cache::Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression},
         state_binding = nothing,
         workspace_slices = nothing,
