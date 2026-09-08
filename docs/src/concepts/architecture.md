@@ -47,6 +47,10 @@ process writes those states. `compiler/host/footprints.jl` gives direct site-sta
 reads their iteration-site or proposal-target footprint; both inspection and
 descriptor lowering consume this analyzed fact. Model-state reads do not acquire
 a lattice footprint merely because the model also contains a lattice.
+Indexed reads remain indexed in completion; `compiler/lowering/storage_layouts.jl`
+resolves their exact declared array owner to its existing whole logical-value
+storage handle. `test/test_structured_assignments.jl` checks this dependency
+through compound scalar/vector assignments on both CPU engines.
 `test/test_component_replacement.jl` checks shared-input/state trajectories,
 replacement, and binding failures through public constructors.
 
