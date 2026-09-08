@@ -41,6 +41,19 @@ one process. `compiler/host/coverage.jl` validates their common iteration domain
 `compiler/lowering/stage_plan.jl` assigns each effect its own descriptor and
 scratch slot, using its indexed normalized expression root. CorePotts owns
 boundary-entry evaluation and publication; Potts does not execute assignments.
+For `Synchronous(...; domain=cells(kind))`, the same lowering resolves the
+qualified kind through `evaluator_resources.jl` and emits CorePotts'
+`CellAssignmentEffect`. The existing operation closure supplies the cell-bound
+state read, and CorePotts owns finite-cell eligibility and the cell-domain
+execution. Cell processes do not borrow a lattice traversal.
+`test/test_cell_process_authoring.jl` checks per-cell frequency, kind selection,
+inactive slots, simultaneous scalar/vector writes, and domain rejection.
+State-policy literals reuse the compiled state manifest's logical type and
+reference units. `compiler/lowering/lifecycle_plan.jl` resolves the target's
+existing handle; `_static_literal` delegates numerical conversion to the same
+recursive owner in `compiler/execution/manifests.jl` used by initialization.
+No additional lifecycle state schema is retained. The actual retirement and
+invalid literal tests live in `test/test_structured_lifecycle_literals.jl`.
 `test/test_compound_effects.jl` exercises this path through public models.
 `completion/inference.jl` retains actual effect RHS reads even when the same
 process writes those states. `compiler/host/footprints.jl` gives direct site-state

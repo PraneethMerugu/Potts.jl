@@ -277,9 +277,18 @@ function _materialize_checked_gather_fold(
     end
 end
 
-function _static_literal(value, manifest::ParameterManifest, ::Type{T}) where {
+function _static_literal(value, manifest::ParameterManifest, ::Type{T}; state = nothing) where {
         T <: AbstractFloat,
     }
+    if state !== nothing
+        isbitstype(typeof(value)) || throw(
+            ArgumentError(
+                "state-policy literals require immutable fixed-shape numerical values"
+            )
+        )
+        converted = _convert_state_initial_value(value, state.unit, typeof(state.initial), T)
+        return CorePotts.CompilerSPI.LiteralExpression(converted)
+    end
     value isa LocalMath.BoundedFold &&
         return CorePotts.CompilerSPI.LiteralExpression(value)
     if value isa Bool || value isa Integer || value isa Symbol

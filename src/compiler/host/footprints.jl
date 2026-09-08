@@ -203,6 +203,9 @@ function _leaf_footprint(source, node, record, dimensions)
         if state !== nothing && source.records[state].kind === :SiteState
             anchor = record.kind === :AcceptedCopyProcess ? ProposalTargetAnchor() : IterationSiteAnchor()
             return _spatial_anchor_fact(anchor, dimensions)
+        elseif state !== nothing && source.records[state].kind === :CellState &&
+                record.kind === :SynchronousProcess
+            return OwnerFootprintFact(:owner)
         end
     elseif kind === :site_anchor
         name = node.payload.name

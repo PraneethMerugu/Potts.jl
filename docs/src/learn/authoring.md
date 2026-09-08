@@ -57,9 +57,31 @@ Include these declarations in the model's `StatementSet`. The exchange swaps
 the two values; the second assignment does not read the first assignment's
 new value. Each target must have one synchronous writer, including within a
 single process. All assignments in this process must share an iteration domain:
-model assignments execute once, while site assignments execute per site. Use
+model assignments execute once, site assignments execute per site, and cell
+assignments execute once per eligible finite cell. Use
 separate processes for different domains. This does not make source order an
 implicit sequential update policy.
+
+Cell assignments name their finite-kind domain explicitly:
+
+```julia
+@variables store
+cell = CellKind(:cell; extinction=RetireAtZero())
+CellState(store; initial=1.0, retirement=RetireTo(0.0))
+Synchronous(:accumulate, Assign(store, store + 1); domain=cells(cell))
+```
+
+Cell size does not multiply the update. Inactive slots, medium, and cells of
+other kinds are not selected. The current cell-stage binding supports reads of
+cell state and parameters; combining model-scoped state reads with cell updates
+requires an explicit model-state binding and is not yet supported. This limit
+does not restrict separate model and cell processes from appearing in one model.
+
+Lifecycle state policies such as `RetireTo` and `ResetTo` also accept immutable
+fixed-array and named-product literals. They must match the target state's
+logical shape, field names, and reference dimensions. Floating leaves use the
+selected execution precision; declared Boolean and integer leaves retain their
+types. Mutable arrays and nonfinite literal values are rejected before execution.
 
 ## Explicit imports and structural replacement
 

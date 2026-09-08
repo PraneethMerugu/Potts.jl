@@ -63,7 +63,10 @@ function _stage_evaluator(
         ::Type{T},
         state_handles,
         draw_handles,
-        binding::Union{Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector},
+        binding::Union{
+            Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector,
+            CorePotts.CompilerSPI.BoundCellStateValueOperation,
+        },
     ) where {T <: AbstractFloat}
     root = _stage_root(ir, record_index, role)
     expression = if root === nothing
@@ -83,6 +86,8 @@ function _stage_evaluator(
     end
     execution_context = binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
         CorePotts.CompilerSPI.AbstractProposalEvaluationContext :
+        binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation ?
+        CorePotts.CompilerSPI.AbstractCellStageEvaluationContext :
         binding isa Union{
             CorePotts.CompilerSPI.IterationStageSite,
             CorePotts.CompilerSPI.ModelStageSite,

@@ -110,6 +110,7 @@ function _potts_act_energy end
 function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
 function _potts_model_bound_state_value end
+function _potts_cell_bound_state_value end
 function _potts_lifecycle_bound_state_value end
 function _potts_bounded_fold end
 """Test whether two endpoints are linked by a relationship state."""

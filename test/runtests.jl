@@ -10,6 +10,8 @@ const POTTS_TESTS = (
     "test_product_state_authoring.jl",
     "test_product_state_defaults.jl",
     "test_structured_assignments.jl",
+    "test_cell_process_authoring.jl",
+    "test_structured_lifecycle_literals.jl",
     "test_dimensional_state_values.jl",
     "test_state_reference_inference.jl",
     "test_fixed_vector_operations.jl",

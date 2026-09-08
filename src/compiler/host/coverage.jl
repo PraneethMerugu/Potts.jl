@@ -132,17 +132,29 @@ function _accepted_copy_effect_rejection(effect, condition, statements)
 end
 
 function _synchronous_rejection(statement, statements)
-    effects = _statement_arguments(statement).effects
+    arguments = _statement_arguments(statement)
+    effects = arguments.effects
     isempty(effects) && return "synchronous process requires at least one assignment"
     domains = Symbol[]
     for effect in effects
         reason = _synchronous_assignment_rejection(effect, statements)
         reason === nothing || return reason
         state = _declared_assignment_state(effect.target, statements)
-        push!(domains, state isa ModelState ? :model : :site)
+        push!(domains, state isa ModelState ? :model : state isa CellState ? :cell : :site)
     end
     all(==(first(domains)), domains) ||
-        return "synchronous effects must share one iteration domain; use separate processes for model and site assignments"
+        return "synchronous effects must share one iteration domain; use separate processes for model, cell, and site assignments"
+    if first(domains) === :cell
+        arguments.domain isa Cells ||
+            return "synchronous CellState assignments require an explicit cells(kind) domain"
+        any(
+            candidate -> candidate isa CellKind &&
+                _same_statement_resource(arguments.domain.kind, candidate), statements
+        ) ||
+            return "synchronous cells(kind) domain must resolve to a declared CellKind"
+    elseif arguments.domain isa Cells
+        return "synchronous cells(kind) domain requires CellState targets"
+    end
     return nothing
 end
 
@@ -151,9 +163,9 @@ function _synchronous_assignment_rejection(effect, statements)
         return "synchronous lowering currently requires Assign"
     state = _declared_assignment_state(effect.target, statements)
     state === nothing && return "Assign must target one declared state"
-    state isa SiteState && return nothing
+    state isa Union{SiteState, CellState} && return nothing
     state isa ModelState ||
-        return "synchronous Assign requires a SiteState or ModelState target"
+        return "synchronous Assign requires a SiteState, CellState, or ModelState target"
     return nothing
 end
 
