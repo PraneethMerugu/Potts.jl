@@ -10,6 +10,13 @@ breadth PRs.** This replaces the earlier conversational 60–80 estimate with an
 enumerated base allocation. It is not a guaranteed final count or a ceiling on
 scientific discoveries.
 
+Implementation has identified one required additional PR: a **G04 LocalMath
+companion for immutable named-product and nested-record storage/publication**.
+The current identified allocation is therefore **49 repository PRs: the 48 base
+PRs below plus this companion**. It supplies the actual R08 structured-state
+consumer; it is not a second executor or a new feature outside the existing scope.
+Further demonstrated companions can still increase the count.
+
 The [feature plan](authoring-and-model-ecosystem-plan.md) and
 [ideal authoring spec](../spec/ideal_api_vision.md) continue to define scope and
 scientific requirements. This document owns the proposed grouping, dependency
