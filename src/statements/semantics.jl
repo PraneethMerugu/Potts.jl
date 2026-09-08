@@ -211,12 +211,16 @@ for state_type in (
         SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
     )
     @eval function (::Type{$state_type})(
-            variable::Union{Symbolics.Num, Symbolics.Arr};
+            variable;
             name::Symbol = _symbolic_local_name(variable),
             initial = nothing,
             source = UnknownSource(),
             kwargs...,
         )
+        SymbolicIndexingInterface.symbolic_type(variable) isa Union{
+            SymbolicIndexingInterface.ScalarSymbolic,
+            SymbolicIndexingInterface.ArraySymbolic,
+        } || throw(ArgumentError("state variables must be symbolic declarations"))
         return $state_type(
             _statement_core(
                 name, (; variable, initial), (; kwargs...), source

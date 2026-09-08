@@ -44,7 +44,7 @@ end
             @test integrator.u[:amount] === expected_amount
             @test integrator.u[:pair] == expected_pair
         end
-        mismatched = PottsProblem(source(SVector(amount, 0.0, 0.0)), initial, (0, 1))
+        mismatched = PottsProblem(source(SVector(amount, 0.0, 0.0)), initial, (0, 1); seed = 17)
         @test_throws r"logical value shape" init(mismatched, algorithm; scalar_type = Float32)
     end
 end
@@ -66,5 +66,5 @@ end
         unknowns = (polarity,),
     )
     initial = PottsInitialState(ownership = LabelledCells(ones(Int, 2, 2); cells = [cell], medium))
-    @test_throws r"logical value shape" init(PottsProblem(mismatched, initial, (0, 1)))
+    @test_throws r"logical value shape" init(PottsProblem(mismatched, initial, (0, 1); seed = 17))
 end

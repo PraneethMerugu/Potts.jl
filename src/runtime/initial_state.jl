@@ -501,9 +501,7 @@ end
 function _convert_supplied_state_value(entry, value, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    numeric_type = entry.initial isa StaticArrays.StaticArray ?
-        eltype(entry.initial) : typeof(entry.initial)
-    converted = _convert_state_initial_value(value, entry.unit, numeric_type)
+    converted = _convert_state_initial_value(value, entry.unit, typeof(entry.initial), T)
     if entry.initial isa StaticArrays.StaticArray
         converted isa StaticArrays.StaticArray && size(converted) == size(entry.initial) ||
             throw(ArgumentError("initial state `$(entry.name)` has the wrong logical shape"))

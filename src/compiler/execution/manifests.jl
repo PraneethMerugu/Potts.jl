@@ -112,16 +112,53 @@ function _convert_state_initial_value(value, reference, ::Type{T}) where {T <: R
     return converted
 end
 
-function _convert_state_initial_value(
-        value::StaticArrays.StaticArray, reference, ::Type{T}
-    ) where {T <: Real}
-    # Logical array axes are distinct from the lattice/cell storage axes.
-    return StaticArrays.SArray{Tuple{size(value)...}}(
-        map(item -> _convert_state_initial_value(item, reference, T), value)
-    )
+_state_initial_reference(references, value) = _reference_for(references, value)
+
+_state_initial_reference(references, value::NamedTuple) =
+    map(item -> _state_initial_reference(references, item), value)
+
+function _convert_state_initial_value(value, reference, ::Type{D}, ::Type{T}) where {D, T <: AbstractFloat}
+    if D <: NamedTuple
+        isconcretetype(D) || throw(ArgumentError("product state requires concrete declared field types"))
+        value isa NamedTuple && keys(value) == fieldnames(D) ||
+            throw(ArgumentError("product state initial value must match declared fields $(fieldnames(D)) in order"))
+        return NamedTuple{fieldnames(D)}(
+            ntuple(fieldcount(D)) do index
+                field_type = fieldtype(D, index)
+                field_type <: AbstractArray && !(field_type <: StaticArrays.StaticArray) &&
+                    throw(ArgumentError("product array fields require a declared fixed-size array type"))
+                _convert_state_initial_value(getfield(value, index), getfield(reference, index), field_type, T)
+            end
+        )
+    elseif D <: AbstractArray
+        value isa StaticArrays.StaticArray || throw(ArgumentError("array state requires a fixed-size initial value"))
+        if D <: StaticArrays.StaticArray
+            size(value) == size(D) || throw(ArgumentError("initial state has the wrong logical shape"))
+        end
+        return StaticArrays.SArray{Tuple{size(value)...}}(
+            map(item -> _convert_state_initial_value(item, reference, eltype(D), T), value)
+        )
+    end
+    D <: Real || throw(ArgumentError("state leaves must have declared real, integer, or Boolean types"))
+    value isa Union{AbstractArray, NamedTuple, Tuple} &&
+        throw(ArgumentError("a scalar state component cannot contain a structured initial value"))
+    numeric_type = D <: Integer && isconcretetype(D) ? D : T
+    return _convert_state_initial_value(value, reference, numeric_type)
 end
 
-_state_initial_reference(references, value) = _reference_for(references, value)
+function _default_state_initial(::Type{D}, ::Type{T}) where {D, T <: AbstractFloat}
+    if D <: NamedTuple
+        isconcretetype(D) || throw(ArgumentError("product state requires concrete declared field types"))
+        return NamedTuple{fieldnames(D)}(ntuple(index -> _default_state_initial(fieldtype(D, index), T), fieldcount(D)))
+    elseif D <: StaticArrays.StaticArray
+        return zero(D)
+    elseif D <: Integer && isconcretetype(D)
+        return zero(D)
+    elseif D <: Real
+        return zero(T)
+    end
+    throw(ArgumentError("state leaves require real scalar or fixed-size declared types"))
+end
 
 function _state_initial_reference(references, value::StaticArrays.StaticArray)
     units = unique(map(item -> _state_initial_reference(references, item), value))
@@ -178,7 +215,7 @@ function _compiled_state_initial(
             )
         )
     else
-        value === nothing && (value = zero(numeric_type))
+        value === nothing && (value = _default_state_initial(declared_type, T))
         value isa AbstractArray && throw(
             ArgumentError(
                 "state `$display_identity` requires a scalar initial value"
@@ -186,7 +223,7 @@ function _compiled_state_initial(
         )
     end
     reference = _state_initial_reference(manifest.reference_units, value)
-    converted = _convert_state_initial_value(value, reference, numeric_type)
+    converted = _convert_state_initial_value(value, reference, declared_type, T)
     return converted, reference
 end
 

@@ -53,8 +53,7 @@ function _state_layout(
         element_type = record.result_type isa Type &&
             record.result_type <: Integer ?
             record.result_type : T
-        if haskey(_record_arguments(record), :variable) &&
-                _record_arguments(record).variable isa Symbolics.Arr
+        if haskey(_record_arguments(record), :variable)
             initial, _ = _compiled_state_initial(completed, record, manifest, T)
             element_type = typeof(initial)
         end
