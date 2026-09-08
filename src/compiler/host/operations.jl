@@ -423,6 +423,17 @@ operation_transfer(::typeof(_potts_model_bound_state_value), ::Int) =
     required_context = :any,
 )
 
+operation_transfer(::typeof(_potts_cell_bound_state_value), ::Int) =
+    _transfer(
+    :cell_bound_state_value,
+    1,
+    :real,
+    :declared;
+    footprint_rule = OwnerFootprintRule(),
+    allowed_phases = (:AfterMCS,),
+    required_context = :iteration,
+)
+
 operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
     _transfer(
     :lifecycle_bound_state_value,

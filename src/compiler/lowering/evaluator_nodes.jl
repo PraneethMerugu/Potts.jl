@@ -49,7 +49,9 @@ function _lower_static_node(
                 _potts_iteration_bound_state_value :
             state_binding isa CorePotts.CompilerSPI.ModelStageSite ?
                 _potts_model_bound_state_value :
-            state_binding isa Symbol && startswith(
+                state_binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation ?
+                _potts_cell_bound_state_value :
+                state_binding isa Symbol && startswith(
                     String(state_binding), "lifecycle_"
                 ) ?
                 _potts_lifecycle_bound_state_value :

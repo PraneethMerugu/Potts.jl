@@ -28,24 +28,28 @@ function _record_has_relationship_create(record::QualifiedStatement)
     return any(effect -> effect isa Create, arguments.effects)
 end
 
-function _record_has_model_assignment(
+function _record_assignment_domain(
         source::FrozenSourceGraph,
         record::QualifiedStatement,
     )
-    record.kind === :SynchronousProcess || return false
+    record.kind === :SynchronousProcess || return :site
     arguments = _record_arguments(record)
-    arguments isa NamedTuple && haskey(arguments, :effects) || return false
-    isempty(arguments.effects) && return false
+    arguments isa NamedTuple && haskey(arguments, :effects) || return :site
+    isempty(arguments.effects) && return :site
     effect = first(arguments.effects)
-    effect isa Assign || return false
-    return any(source.records) do candidate
-        candidate.kind === :ModelState || return false
+    effect isa Assign || return :site
+    for candidate in source.records
+        candidate.kind in (:ModelState, :CellState, :SiteState) || continue
         variable = _state_record_variable(candidate)
-        variable !== nothing && isequal(variable, effect.target) && return true
-        effect.target isa AbstractPottsStatement || return false
-        return statement_id(effect.target) == candidate.identity.local_id &&
+        matches = variable !== nothing && isequal(variable, effect.target)
+        matches |= effect.target isa AbstractPottsStatement &&
+            statement_id(effect.target) == candidate.identity.local_id &&
             candidate.identity in record.resources
+        matches || continue
+        return candidate.kind === :ModelState ? :model :
+            candidate.kind === :CellState ? :cell : :site
     end
+    return :site
 end
 
 function _compiler_synthesized_operation_requirements(
@@ -86,10 +90,13 @@ function _compiler_synthesized_operation_requirements(
                 requirements, _potts_proposal_bound_state_value, 1
             )
         elseif record.phase isa AfterMCS
+            domain = _record_assignment_domain(source, record)
             _push_operation_requirement!(
                 requirements,
-                _record_has_model_assignment(source, record) ?
+                domain === :model ?
                     _potts_model_bound_state_value :
+                    domain === :cell ?
+                    _potts_cell_bound_state_value :
                     _potts_iteration_bound_state_value,
                 1,
             )

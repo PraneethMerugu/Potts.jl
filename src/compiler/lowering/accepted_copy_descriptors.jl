@@ -46,9 +46,13 @@ function _stage_descriptor(
     is_model_assignment =
         stage isa CorePotts.CompilerSPI.AfterMCSStage &&
         target_record.kind === :ModelState
+    is_cell_assignment =
+        stage isa CorePotts.CompilerSPI.AfterMCSStage &&
+        target_record.kind === :CellState
     binding = stage isa CorePotts.CompilerSPI.AcceptedCopyStage ?
         CorePotts.CompilerSPI.ProposalTargetStageSite() :
         is_model_assignment ? CorePotts.CompilerSPI.ModelStageSite() :
+        is_cell_assignment ? CorePotts.CompilerSPI.BoundCellStateValueOperation() :
         CorePotts.CompilerSPI.IterationStageSite()
     condition = _stage_evaluator(
         ir,
@@ -75,27 +79,40 @@ function _stage_descriptor(
     target = _stage_state_handle(ir, record, effect.target, state_handles)
     reads = _record_state_handles(ir, record, state_handles)
     target in reads || (reads = (reads..., target))
-    if is_model_assignment
+    if is_model_assignment || is_cell_assignment
         entries = Tuple(
             only(entry for entry in state_layout.entries if entry.handle == handle)
                 for handle in reads
         )
-        all(entry -> entry.schema.domain === :model, entries) || throw(
+        domain = is_model_assignment ? :model : :cell
+        all(entry -> entry.schema.domain === domain, entries) || throw(
             ArgumentError(
-                "a synchronous ModelState assignment may read only ModelState values and parameters"
+                is_model_assignment ?
+                    "a synchronous ModelState assignment may read only ModelState values and parameters" :
+                    "a synchronous CellState assignment currently requires CellState reads and parameters"
             )
         )
-        all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
+        is_cell_assignment || all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
             ArgumentError(
                 "a synchronous ModelState assignment requires one logical value per model state"
             )
         )
+    end
+    cell_kind = if is_cell_assignment
+        arguments.domain isa Cells || throw(ArgumentError("cell assignment requires cells(kind)"))
+        kind = _compiled_kind_index(ir, record, arguments.domain.kind)
+        kind === nothing && throw(ArgumentError("cell assignment kind does not resolve"))
+        kind
+    else
+        nothing
     end
     return CorePotts.CompilerSPI.CompiledStageDescriptor(
         condition,
         value,
         is_model_assignment ?
             CorePotts.CompilerSPI.ModelAssignmentEffect(target) :
+            is_cell_assignment ?
+            CorePotts.CompilerSPI.CellAssignmentEffect(target, cell_kind) :
             CorePotts.CompilerSPI.SiteAssignmentEffect(target),
         stage,
         CorePotts.CompilerSPI.ResourceAccess(
@@ -103,6 +120,7 @@ function _stage_descriptor(
             (target,),
             _record_read_footprint(ir, record_index),
             is_model_assignment ? CorePotts.CompilerSPI.ModelFootprint() :
+                is_cell_assignment ? CorePotts.CompilerSPI.OwnerFootprint() :
                 _site_write_footprint(ir, stage),
             CorePotts.CompilerSPI.ExclusiveWriteAccess(),
         ),

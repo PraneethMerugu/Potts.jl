@@ -16,6 +16,7 @@ function _lower_stage_plan(
     after_mcs_commits = Any[]
     after_mcs_site_slot = 0
     after_mcs_model_slot = 0
+    after_mcs_cell_slot = 0
     relationship_slot = 0
     for (record_index, record) in enumerate(ir.source.records)
         if record.kind === :AcceptedCopyProcess
@@ -58,8 +59,12 @@ function _lower_stage_plan(
                 target_record = _stage_state_record(ir, record, effect.target)
                 is_model_assignment =
                     target_record !== nothing && target_record.kind === :ModelState
+                is_cell_assignment =
+                    target_record !== nothing && target_record.kind === :CellState
                 if is_model_assignment
                     after_mcs_model_slot += 1
+                elseif is_cell_assignment
+                    after_mcs_cell_slot += 1
                 else
                     after_mcs_site_slot += 1
                 end
@@ -74,7 +79,8 @@ function _lower_stage_plan(
                         state_layout,
                         CorePotts.CompilerSPI.AfterMCSStage(),
                         is_model_assignment ?
-                            after_mcs_model_slot : after_mcs_site_slot,
+                            after_mcs_model_slot : is_cell_assignment ?
+                            after_mcs_cell_slot : after_mcs_site_slot,
                         effect_index,
                     )
                 )

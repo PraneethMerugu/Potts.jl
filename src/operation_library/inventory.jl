@@ -16,6 +16,7 @@ function _builtin_operation_declarations()
         (_potts_proposal_bound_state_value, 1),
         (_potts_iteration_bound_state_value, 1),
         (_potts_model_bound_state_value, 1),
+        (_potts_cell_bound_state_value, 1),
         (_potts_lifecycle_bound_state_value, 1),
         (_potts_bounded_fold, 4),
         (cell_volume, 1), (cell_surface, 1), (cell_elongation, 1),

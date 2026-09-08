@@ -34,6 +34,11 @@ function _lower_scheduled_execution_plan(
         relationship_endpoint_policies,
     )
     descriptor_plan = lowered_descriptors.plan
+    records = analyzed_ir.source.records
+    states = _compiled_state_manifest(
+        scheduled, records, manifest, descriptor_plan.state_layout,
+        _lattice_shape(analyzed_ir), scalar_type,
+    )
     stage_plan = _lower_stage_plan(
         analyzed_ir,
         manifest,
@@ -51,6 +56,7 @@ function _lower_scheduled_execution_plan(
         lowered_descriptors.draw_handles,
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
+        states,
     )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
@@ -95,15 +101,6 @@ function _lower_scheduled_execution_plan(
             )
             for record in inspect(scheduled, Schedule())
     ]
-    records = analyzed_ir.source.records
-    states = _compiled_state_manifest(
-        scheduled,
-        records,
-        manifest,
-        descriptor_plan.state_layout,
-        core_program.shape,
-        scalar_type,
-    )
     relationship_states = Tuple(
         let
                 statement = _relationship_policy_record(

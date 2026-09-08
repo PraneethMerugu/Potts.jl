@@ -98,6 +98,7 @@ function _lifecycle_evaluator!(
         draw_handles,
         ;
         always_root::Bool = false,
+        state = nothing,
     ) where {T <: AbstractFloat}
     symbolic = !(SymbolicIndexingInterface.symbolic_type(value) isa
         SymbolicIndexingInterface.NotSymbolic)
@@ -117,7 +118,7 @@ function _lifecycle_evaluator!(
             workspace_slices,
         )
     else
-        _static_literal(value, manifest, T)
+        _static_literal(value, manifest, T; state)
     end
     evaluator = _static_evaluator(
         expression,
@@ -262,9 +263,11 @@ function _lifecycle_state_rule!(
         ::Type{T},
         state_handles,
         draw_handles,
+        states,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     handle = _stage_state_handle(ir, record, target, state_handles)
+    state = only(entry for entry in states if entry.handle == handle)
     state_record = _resource_record(ir.source, record, :CellState, target)
     state_record === nothing && throw(ArgumentError(
         "lifecycle state rule does not resolve to a CellState"
@@ -284,7 +287,7 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.InitializeLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Unsupported
         action = CorePotts.CompilerSPI.UnsupportedLifecycleState
@@ -292,7 +295,7 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.RetireToLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Preserve
         action = CorePotts.CompilerSPI.PreserveLifecycleState
@@ -300,13 +303,13 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.ResetLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Transform
         action = CorePotts.CompilerSPI.TransformLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa CopyToDaughters
         action = CorePotts.CompilerSPI.CopyDaughtersLifecycleState
@@ -314,17 +317,17 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.PreserveParentResetDaughterLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa ResetBoth
         action = CorePotts.CompilerSPI.ResetBothLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
         evaluator_b = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa SplitConservatively
         action = CorePotts.CompilerSPI.SplitConservativelyLifecycleState
@@ -337,11 +340,11 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.TransformDaughtersLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
         evaluator_b = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa RedrawDaughters
         action = CorePotts.CompilerSPI.RedrawDaughtersLifecycleState
@@ -463,6 +466,7 @@ function _lower_lifecycle_plan(
         draw_handles,
         state_layout,
         relationship_endpoint_policies,
+        states,
     ) where {T <: AbstractFloat}
     shape = _lattice_shape(ir)
     N = length(shape)
@@ -631,6 +635,7 @@ function _lower_lifecycle_plan(
                 T,
                 state_handles,
                 draw_handles,
+                states,
             )
         end
         relationship_offset = Int32(length(relationship_rules) + 1)
