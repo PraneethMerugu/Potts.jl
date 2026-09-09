@@ -5,6 +5,8 @@ const POTTS_TESTS = (
     "test_fixed_array_scaling.jl",
     "test_scalar_site_aggregates.jl",
     "test_vector_site_aggregates.jl",
+    "test_tensor_site_aggregates.jl",
+    "test_fixed_array_scaling.jl",
     "test_scheduled_site_aggregates.jl",
     "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",

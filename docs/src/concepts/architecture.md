@@ -54,10 +54,23 @@ contributions, source/parameter refresh, mixed publication, units and continuati
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
-All three are ordinary registered test units.
-The scalar CPU owner is qualified; the vector and scheduled-maintenance units
+`test_tensor_site_aggregates.jl` uses the same owner and oracle for matrix-valued
+contributions, physical units, shape rejection, updates and continuation.
+These are ordinary registered test units.
+The scalar CPU owner is qualified; the vector, tensor and scheduled-maintenance units
 retain required behavior awaiting its implementation. Public aggregate device
 qualification is also pending.
+
+Scalar multiplication of declared fixed arrays uses the existing arithmetic
+operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
+in `term_analysis.jl`. Only builtin scalar-times-array or array-times-scalar
+scaling preserves the array shape; matrix multiplication is not reinterpreted
+as componentwise multiplication. Assignment lowering in `accepted_copy_descriptors.jl`
+checks each target/RHS shape and dimension pair before execution; analyzed roots
+own these facts, while unnormalized static literals reuse `unit_analysis.jl`'s
+literal-unit semantics. `test_fixed_array_scaling.jl` owns the public
+scalar, vector and tensor shape/unit regression; execution uses Core's existing
+multiply operation, not a tensor-specific evaluator.
 
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
