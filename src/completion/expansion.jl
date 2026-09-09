@@ -181,14 +181,17 @@ function _expand_structural_policies(
         end
         inherited = iszero(occurrence.parent) ? () :
                     visible_by_system[Int(occurrence.parent)]
-        local_declarations = Tuple(filter(statement -> statement isa Union{
-            CellState, SiteState, RelationshipState,
-        }, expanded))
+        local_declarations = Tuple(
+            (; statement, path = occurrence.path)
+            for statement in expanded if statement isa Union{
+                CellState, SiteState, HistoryState, RelationshipState,
+            }
+        )
         visible = (inherited..., local_declarations...)
         visible_by_system[index] = visible
         resolved = AbstractPottsStatement[
             statement isa LifecycleProcess ?
-                _resolve_lifecycle_process(statement, visible) : statement
+                _resolve_lifecycle_process(statement, visible, inventory) : statement
             for statement in expanded
         ]
         foreach(statement -> statement isa LifecycleProcess &&
@@ -202,4 +205,3 @@ function _expand_structural_policies(
         inventory, local_systems, expanded_groups
     )
 end
-

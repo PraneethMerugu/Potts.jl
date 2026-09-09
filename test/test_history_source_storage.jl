@@ -10,6 +10,60 @@ using StaticArrays
     @test_throws r"depth must be a positive integer" complete(source)
 end
 
+@testset "executable history extents report their owning storage schema" begin
+    @variables value memory
+    cell = CellKind(:cell; extinction = ForbidExtinction())
+    medium = MediumKind(:medium)
+    source = PottsSystem(
+        name = :unaddressable_retention,
+        statements = StatementSet(
+            (
+                Lattice((2, 2); max_cells = 1), cell, medium,
+                ModelState(value; initial = 1.0),
+                HistoryState(memory; of = value, depth = Int64(typemax(Int32)) + 1),
+                Protocol(Sweep(); name = :main),
+            )
+        ), unknowns = (value, memory)
+    )
+    completed = complete(source)
+    @test completed isa PottsSystem
+    initial = PottsInitialState(ownership = LabelledCells(ones(Int, 2, 2); cells = [cell], medium))
+    failure = try
+        init(PottsProblem(completed, initial, (0, 1); seed = 17))
+        nothing
+    catch exception
+        exception
+    end
+    @test failure isa ArgumentError
+    @test occursin("memory", sprint(showerror, failure))
+    @test occursin("Int32", sprint(showerror, failure))
+end
+
+@testset "history lifecycle source failures retain declaration provenance" begin
+    @variables value memory
+    location = SourceLocation(@__FILE__, @__LINE__, @__MODULE__, "HistoryState(memory; of=value, depth=true)")
+    child = PottsSystem(
+        name = :child, statements = StatementSet(
+            (
+                CellKind(:cell; extinction = RetireAtZero()),
+                CellState(value; initial = 1.0, retirement = RetireTo(0.0)),
+                HistoryState(memory; of = value, depth = true, retirement = RetireTo(0.0), source = location),
+            )
+        )
+    )
+    failure = try
+        complete(PottsSystem(name = :parent, systems = (child,)))
+        nothing
+    catch exception
+        exception
+    end
+    @test failure isa Potts.PottsValidationError
+    diagnostic = only(failure.diagnostics)
+    @test diagnostic.kind === :invalid_history_declaration
+    @test diagnostic.namespace == (:parent, :child)
+    @test diagnostic.source == location
+end
+
 @testset "history retains source domain and physical sample values" begin
     @variables position[1:2] memory
     cell = CellKind(:cell; extinction = ForbidExtinction())

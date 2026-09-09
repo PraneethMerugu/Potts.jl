@@ -154,12 +154,7 @@ function _qualify_records!(
             catch error
                 error isa ArgumentError || rethrow()
                 push!(
-                    diagnostics, PottsDiagnostic(
-                        :invalid_history_declaration, identity,
-                        _statement_expression(originating_statement), current_path,
-                        "a unique owned source, positive retention, and explicit completed-MCS cadence",
-                        sprint(showerror, error), (), statement_source(originating_statement),
-                    )
+                    diagnostics, _history_declaration_diagnostic(originating_statement, current_path, error)
                 )
                 continue
             end
