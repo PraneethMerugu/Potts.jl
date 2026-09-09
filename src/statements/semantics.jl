@@ -80,6 +80,15 @@ incident_edges(relationship, cell) = IncidentEdges(relationship, cell)
 """Construct the singleton model iteration domain."""
 model() = ModelDomain()
 
+function SiteBinding(name::Symbol, domain::Sites)
+    isempty(String(name)) && throw(ArgumentError("a site scope name cannot be empty"))
+    return SiteBinding(domain, Symbolics.variable(Symbol("__potts_scoped_site__", bytes2hex(codeunits(String(name)))); T = Int))
+end
+function CellBinding(name::Symbol, domain::Cells)
+    isempty(String(name)) && throw(ArgumentError("a cell scope name cannot be empty"))
+    return CellBinding(domain, Symbolics.variable(Symbol("__potts_scoped_cell__", bytes2hex(codeunits(String(name)))); T = Int))
+end
+
 function HamiltonianTerm(
         id::Union{Symbol, StatementID};
         domain::AbstractIterationDomain,

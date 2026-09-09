@@ -15,7 +15,7 @@ function _complete_inventory_subtree(
         normalized_statements,
     )
     root_shape = isempty(domains) ? () :
-                 _statement_option(first(domains), :shape, ())
+        _statement_option(first(domains), :shape, ())
     reference_anchors = _completion_reference_anchors(
         normalized_statements, reference_units
     )
@@ -31,6 +31,7 @@ function _complete_inventory_subtree(
     _validate_random_key_uniqueness!(diagnostics, records)
     _validate_synchronous_writers!(diagnostics, records)
     _throw_diagnostics(:completion, diagnostics)
+    _resolve_quantity_effect_bounds!(records)
 
     qualified_records = _semantic_phase_schedule(records)
     schedule = qualified_records
@@ -58,6 +59,10 @@ function _complete_inventory_subtree(
     # Compilation may re-run normalization deterministically, but it may not
     # discover a missing downstream operation implementation for the first time.
     normalized_graph = _normalize_source_graph(source_graph)
+    _validate_quantity_scopes(
+        source_graph, normalized_graph;
+        enclosing_root = inventory.systems[1].system === context_inventory.systems[1].system,
+    )
     # A completed subsystem may be structurally valid without being directly
     # executable (for example, a reusable child that inherits its lattice only
     # after composition).  Freeze its normalized graph now, but run the

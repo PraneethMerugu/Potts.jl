@@ -39,11 +39,16 @@ struct FrozenSourceGraph
 end
 
 function _state_sample_record(source::FrozenSourceGraph, record::QualifiedStatement)
+    return _state_sample_record(source.records, record)
+end
+function _state_sample_record(records::AbstractVector, record::QualifiedStatement)
     record.kind === :HistoryState || return record
     source_variable = get(_record_options(record), :of, nothing)
-    sources = filter(candidate -> candidate.identity in record.resources &&
-        candidate.kind in (:ModelState, :CellState, :SiteState, :FieldState) &&
-        isequal(_state_record_variable(candidate), source_variable), source.records)
+    sources = filter(
+        candidate -> candidate.identity in record.resources &&
+            candidate.kind in (:ModelState, :CellState, :SiteState, :FieldState) &&
+            isequal(_state_record_variable(candidate), source_variable), records
+    )
     length(sources) == 1 || throw(ArgumentError("history `$(record.identity)` requires exactly one completed source"))
     return only(sources)
 end
@@ -69,7 +74,7 @@ function _freeze_source_graph(
     record_table = QualifiedStatement[record for record in records]
     record_indices = Dict(
         record.identity => Int32(index)
-        for (index, record) in enumerate(record_table)
+            for (index, record) in enumerate(record_table)
     )
     source_indices = Dict{QualifiedStatementID, Int32}()
 
@@ -161,22 +166,24 @@ function _freeze_source_graph(
     end
     registry_snapshot = Any[
         (
-            schema = definition.schema,
-            version = definition.version,
-            contract = definition.contract,
-        )
-        for definition in registry.definitions
+                schema = definition.schema,
+                version = definition.version,
+                contract = definition.contract,
+            )
+            for definition in registry.definitions
     ]
     structural_key = _sha256_hex(
         "potts-frozen-source-graph-v1",
         Tuple((node.path, node.parent) for node in systems),
-        Tuple((
-            node.identity,
-            node.source_order,
-            node.kind,
-            Tuple(node.references),
-            node.provenance,
-        ) for node in source_nodes),
+        Tuple(
+            (
+                    node.identity,
+                    node.source_order,
+                    node.kind,
+                    Tuple(node.references),
+                    node.provenance,
+                ) for node in source_nodes
+        ),
         Tuple((item.kind, item.path, item.source, item.value) for item in references),
         Tuple(registry_snapshot),
     )
