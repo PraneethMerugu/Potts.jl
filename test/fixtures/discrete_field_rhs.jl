@@ -1,6 +1,7 @@
 using DynamicQuantities
-using ModelingToolkitBase: complete
-using Symbolics
+using ModelingToolkitBase: complete, @parameters
+using Symbolics: @variables
+using Test: @test, @test_throws
 
 # An ordinary Julia helper inlines symbolically; it needs no operation registration.
 _local_field_rate(value, forcing, loss, noise) = forcing - loss * value + noise
