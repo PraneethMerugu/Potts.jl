@@ -273,6 +273,132 @@ function SymbolicIndexingInterface.finalize_parameters_hook!(
     return nothing
 end
 
+struct PottsStateSetter{I <: Tuple, N}
+    indices::I
+    names::N
+    single::Bool
+end
+
+function _state_setter_selection(symbols)
+    if symbols isa NamedTuple
+        return Tuple(values(symbols)), keys(symbols), false
+    elseif symbols isa Tuple || (
+            symbols isa AbstractArray &&
+                SymbolicIndexingInterface.symbolic_type(symbols) isa SymbolicIndexingInterface.NotSymbolic
+        )
+        return Tuple(symbols), nothing, false
+    end
+    return (symbols,), nothing, true
+end
+
+function _state_setter_index(system, symbol)
+    entries = _scheduled_state_entries(system)
+    if symbol isa Integer
+        symbol isa Bool && throw(ArgumentError("a state index cannot be Bool"))
+        1 <= symbol <= length(entries) || throw(BoundsError(entries, symbol))
+        return Int(symbol)
+    end
+    index = SymbolicIndexingInterface.variable_index(system, symbol)
+    index === nothing && return nothing
+    # A field/index expression must not inherit write permission merely
+    # because its display name resolves to the containing state.
+    symbol isa Symbol || isequal(symbol, entries[index].variable) ||
+        throw(ArgumentError("state mutation requires a whole canonical state, not a projected expression"))
+    return index
+end
+
+function SymbolicIndexingInterface.setu(
+        provider::Union{PottsSystem, PottsProblem, PottsIntegrator}, symbols
+    )
+    system = SymbolicIndexingInterface.symbolic_container(provider)
+    is_scheduled(system) || throw(ArgumentError("state setters require a scheduled Potts system"))
+    requested, names, single = _state_setter_selection(symbols)
+    indices = map(symbol -> _state_setter_index(system, symbol), requested)
+    if !isempty(requested) && all(isnothing, indices) &&
+            all(symbol -> SymbolicIndexingInterface.is_parameter(system, symbol), requested)
+        return invoke(SymbolicIndexingInterface.setu, Tuple{Any, Any}, provider, symbols)
+    end
+    all(index -> index !== nothing, indices) || throw(
+        ArgumentError(
+            "state transactions accept only canonical stored states; observations, ownership, derived expressions, and mixed state/parameter targets are unsupported"
+        )
+    )
+    length(unique(indices)) == length(indices) ||
+        throw(ArgumentError("a state transaction cannot contain duplicate identities"))
+    return PottsStateSetter(indices, names, single)
+end
+
+function _state_setter_replacements(setter::PottsStateSetter, replacements)
+    setter.single && return setter.indices, (replacements,)
+    if setter.names !== nothing
+        replacements isa NamedTuple || throw(ArgumentError("named state targets require named replacement values"))
+        positions = map(keys(replacements)) do name
+            index = findfirst(isequal(name), setter.names)
+            index === nothing && throw(ArgumentError("unknown state replacement label `$name`"))
+            index
+        end
+        return map(index -> setter.indices[index], positions), Tuple(values(replacements))
+    end
+    replacements isa Union{Tuple, AbstractArray} ||
+        throw(ArgumentError("multiple state targets require a tuple or array of replacement values"))
+    selected_values = Tuple(replacements)
+    length(selected_values) == length(setter.indices) || throw(
+        ArgumentError(
+            "state transaction value count does not match its symbolic identities"
+        )
+    )
+    return setter.indices, selected_values
+end
+
+function (setter::PottsStateSetter)(integrator::PottsIntegrator, replacements)
+    _request_integrator_settlement!(integrator, CorePotts.BackendSPI.IndexMutationSettlement)
+    if CorePotts.program_failed(integrator.runtime) || integrator.failure_report !== nothing
+        throw(ArgumentError("state mutation cannot repair a terminal-failed integrator"))
+    end
+    indices, values = _state_setter_replacements(setter, replacements)
+    isempty(indices) && return nothing
+    SPI = CorePotts.CompilerSPI
+    program = integrator.plan.core_program
+    layout = program.descriptor_plan.state_layout
+    before = CorePotts.BackendSPI.program_snapshot_descriptor_state(CorePotts.program_snapshot(integrator.runtime))
+    candidate = SPI.copy_auxiliary_state(before)
+    for (index, value) in zip(indices, values)
+        entry = integrator.plan.state_manifest[index]
+        layout_entry = only(item for item in layout.entries if item.handle == entry.handle)
+        source = entry.storage === :history ? SPI.history_source(program.stage_plan, layout, entry.handle) : layout_entry
+        capacity = source.schema.domain === :cell ? only(source.schema.shape) : 0
+        # Runtime slot identities may contain holes. Unlike fresh initial
+        # values, mutation always supplies the complete canonical slot buffer.
+        normalized = _normalize_initial_state_entry(
+            entry, Dict(entry.name => value), program.shape, capacity, capacity,
+            integrator.scalar_type, entry.storage === :history ? source : nothing,
+        )
+        copyto!(SPI.state_block(candidate, entry.handle).values, _descriptor_state_value(layout_entry, normalized))
+    end
+    previous_u = integrator.u
+    SPI.update_program_descriptor_state!(integrator.runtime, candidate)
+    try
+        integrator.u = _current_saved_state(integrator)
+    catch
+        # Ordinary host observation errors restore through the same state
+        # publisher. Backend copy/execution failures are not a rollback claim.
+        CorePotts.program_failed(integrator.runtime) && rethrow()
+        SPI.update_program_descriptor_state!(integrator.runtime, before)
+        integrator.u = previous_u
+        rethrow()
+    end
+    return nothing
+end
+
+function SymbolicIndexingInterface.set_state!(integrator::PottsIntegrator, value, index::Integer)
+    setter = SymbolicIndexingInterface.setu(integrator, index)
+    return setter(integrator, value)
+end
+
+function SymbolicIndexingInterface.set_state!(::Union{PottsProblem, PottsSolution}, value, index)
+    throw(ArgumentError("saved and problem state is immutable; mutate a PottsIntegrator or remake the problem"))
+end
+
 function _state_values_for(
         plan::_PottsExecutionPlan,
         saved::PottsSavedState;
