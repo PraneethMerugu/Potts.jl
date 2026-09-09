@@ -419,8 +419,8 @@ operation_transfer(::typeof(_potts_model_bound_state_value), ::Int) =
     :real,
     :declared;
     footprint_rule = InheritFootprintRule(),
-    allowed_phases = (:AfterMCS,),
-    required_context = :iteration,
+    allowed_phases = (:Proposal, :AcceptedCopy, :AfterMCS),
+    required_context = :any,
 )
 
 operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =

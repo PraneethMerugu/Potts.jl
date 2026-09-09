@@ -246,6 +246,26 @@ before/after tracker overlays.
 
 ## Custom bounded Hamiltonian terms
 
+A model-wide state can supply a shared energy coefficient without allocating a
+copy at every site:
+
+```julia
+@variables weight
+weight_state = ModelState(weight; initial=2.0)
+site = SiteBinding(:energy_site)
+term = HamiltonianTerm(:occupied_energy;
+    domain=sites(:lattice), anchor=site,
+    expression=weight * occupancy(cell, site))
+```
+
+Include `weight_state` and `term` in the system's statements and `weight` in its
+unknowns. The coefficient is one model-owned value; `occupancy` remains local to
+the energy anchor. For this term, adding an occupied site changes energy by
+`weight`. Ordinary tests exercise positive and negative coefficients through
+actual extension acceptance on both CPU algorithms in two dimensions. This
+does not imply that every structured coefficient, contact law, or GPU
+combination is supported.
+
 `HamiltonianTerm` remains the custom scientific interface. Ordinary Julia and
 Symbolics expressions describe scalar mathematics; `gather` declares a
 finite spatial input, and `LocalMath.fold` makes its ordering, invalid-value,

@@ -41,6 +41,13 @@ one process. `compiler/host/coverage.jl` validates their common iteration domain
 `compiler/lowering/stage_plan.jl` assigns each effect its own descriptor and
 scratch slot, using its indexed normalized expression root. CorePotts owns
 boundary-entry evaluation and publication; Potts does not execute assignments.
+Read scope is independent of writer scope: `compiler/host/normalized_payloads.jl`
+resolves each state leaf to its qualified declaration. Operation closure and
+`compiler/lowering/evaluator_nodes.jl` reuse that owner to select a model-bound
+read for `ModelState`, including inside a site assignment. Core validates the
+declared storage domain and supplies the execution gather; Potts does not
+broadcast or duplicate model storage. `test_model_state_proposal_reads.jl`
+contains the public proposal and mixed model/site numerical witnesses.
 `test/test_compound_effects.jl` exercises this path through public models.
 `completion/inference.jl` retains actual effect RHS reads even when the same
 process writes those states. `compiler/host/footprints.jl` gives direct site-state

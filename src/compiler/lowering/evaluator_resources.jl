@@ -5,18 +5,8 @@ function _state_handle_for_leaf(
         node::NormalizedTermNode,
         handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
     )
-    if node.payload isa StateBindingPayload
-        return get(handles, node.payload.identity, nothing)
-    end
-    value = node.payload isa VariableBindingPayload ? node.payload.value : nothing
-    for record in ir.source.records
-        variable = _state_record_variable(record)
-        variable === nothing && continue
-        isequal(variable, value) || continue
-        haskey(handles, record.identity) || continue
-        return handles[record.identity]
-    end
-    return nothing
+    record = _state_record_for_leaf(ir.source, node)
+    return record === nothing ? nothing : get(handles, record.identity, nothing)
 end
 
 # The package UUID is the durable owner namespace, independent of a model's
