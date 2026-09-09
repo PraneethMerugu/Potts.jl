@@ -26,6 +26,60 @@ function _bound_state_expression(graph, ir, node, handle, owner, state_binding)
         semantic_phase = state_binding isa Symbol ? :Lifecycle : _record_operation_phase(record))
 end
 
+function _operation_reference_factor(ir, node, manifest)
+    units = ir.facts.units
+    result_unit = units[Int(node.identity)]
+    _is_polymorphic_zero_unit(result_unit) && return 1.0
+    rule = node.transfer.unit_rule
+    arithmetic = rule === :arithmetic && node.operation in (:multiply, :divide, :power)
+    (arithmetic || rule === :square_root) || return 1.0
+    raw_scales = map(index -> _expression_reference_scale(units[index], manifest), node.operands)
+    raw_result_scale = _expression_reference_scale(result_unit, manifest)
+    all(==(1), raw_scales) && raw_result_scale == 1 && return 1.0
+    # Julia 1.12 scopes this precision to the task without changing the caller's
+    # default. Wide intermediates avoid overflow before the final scalar cast.
+    return setprecision(BigFloat, 256) do
+        operand_scales = map(BigFloat, raw_scales)
+        result_scale = BigFloat(raw_result_scale)
+        scale = if rule === :square_root
+            sqrt(only(operand_scales))
+        elseif node.operation === :multiply
+            prod(operand_scales)
+        elseif node.operation === :divide
+            operand_scales[1] / operand_scales[2]
+        else
+            exponent = _literal_integer_exponent(node, ir.graph)
+            exponent === nothing && error("validated power has no literal integer exponent")
+            first(operand_scales)^exponent
+        end
+        return scale / result_scale
+    end
+end
+
+function _scaled_operation_expression(expression, ir, node, manifest, ::Type{T}, state_binding) where {T <: AbstractFloat}
+    factor = _operation_reference_factor(ir, node, manifest)
+    factor == 1 && return expression
+    converted = T(factor)
+    isfinite(converted) && converted > zero(T) || throw(
+        PottsValidationError(
+            :descriptor_lowering, (
+                PottsDiagnostic(
+                    :expression_reference_scale, node.source, String(node.operation), node.source.path,
+                    "a finite positive reference conversion representable by $T", string(factor), (),
+                    ir.source.records[Int(node.record)].source,
+                ),
+            ),
+        )
+    )
+    record = ir.source.records[Int(node.record)]
+    return _compiler_synthesized_operation_expression(
+        ir.graph, *,
+        (CorePotts.CompilerSPI.LiteralExpression(converted), expression), record;
+        semantic_role = state_binding isa Symbol ? state_binding : _record_operation_role(record),
+        semantic_phase = state_binding isa Symbol ? :Lifecycle : _record_operation_phase(record)
+    )
+end
+
 function _lower_static_node(
         graph::NormalizedTermGraph,
         ir::AnalyzedTermIR,
@@ -273,7 +327,7 @@ function _lower_static_node(
         if operation isa CorePotts.CompilerSPI.ContextOperation
             CorePotts.CompilerSPI.ContextExpression(operation)
         else
-            _bounded_static_operation(operation, arguments)
+            _scaled_operation_expression(_bounded_static_operation(operation, arguments), ir, node, manifest, T, state_binding)
         end
     end
     cache[node_index] = expression

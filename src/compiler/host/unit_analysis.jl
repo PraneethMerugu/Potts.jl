@@ -113,6 +113,8 @@ function _unit_quotient(numerator, denominator)
     denominator === :dimensionless && return numerator
     (_is_unknown_unit(numerator) || _is_unknown_unit(denominator)) && return :unknown
     numerator == denominator && return :dimensionless
+    numerator === :dimensionless && _is_native_dimension(denominator) &&
+        return _canonical_dimension(inv(denominator))
     if _is_native_dimension(numerator) && _is_native_dimension(denominator)
         return _canonical_dimension(numerator / denominator)
     end
