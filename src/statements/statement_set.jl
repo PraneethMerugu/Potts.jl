@@ -46,12 +46,96 @@ function _capture_statement(statement, source::SourceLocation)
     throw(ArgumentError("@statements entries must construct Potts statements"))
 end
 
-"""Construct a `StatementSet` from statement expressions while retaining source provenance."""
-macro statements(block)
+function _statement_capture_source(expression, location, line, caller)
+    return :(
+        $(GlobalRef(@__MODULE__, :SourceLocation))(
+            $(String(location.file)), $line, $(QuoteNode(nameof(caller))), $(string(expression)),
+        )
+    )
+end
+
+# Resolve only the binding explicitly named by a macro call. Never evaluate
+# author code or classify a declaration by the spelling of its macro name.
+function _statement_macro_binding(caller::Module, name)
+    if name isa Symbol
+        return isdefined(caller, name) ? getfield(caller, name) : nothing
+    elseif name isa GlobalRef
+        return isdefined(name.mod, name.name) ? getfield(name.mod, name.name) : nothing
+    elseif name isa Expr && name.head === :. && length(name.args) == 2
+        owner = _statement_macro_binding(caller, first(name.args))
+        field = last(name.args)
+        owner isa Module && field isa QuoteNode && field.value isa Symbol || return nothing
+        return isdefined(owner, field.value) ? getfield(owner, field.value) : nothing
+    end
+    return nothing
+end
+
+function _statement_declaration_kind(caller, expression)
+    expression isa Expr && expression.head === :macrocall || return nothing
+    binding = _statement_macro_binding(caller, first(expression.args))
+    binding === getfield(ModelingToolkitBase, Symbol("@parameters")) && return :parameters
+    binding === getfield(Symbolics, Symbol("@variables")) && return :unknowns
+    return nothing
+end
+
+function _capture_system_expression(constructor, block, location, caller)
+    constructor isa Expr && constructor.head === :call ||
+        throw(ArgumentError("@statements constructor form requires PottsSystem(; keywords...)"))
+    keywords = Any[]
+    for argument in constructor.args[2:end]
+        if argument isa Expr && argument.head === :parameters
+            append!(keywords, argument.args)
+        elseif argument isa Expr && argument.head === :kw
+            push!(keywords, argument)
+        else
+            throw(ArgumentError("@statements constructor accepts keyword arguments only"))
+        end
+    end
+    captured, variables, parameters = gensym.((:statements, :unknowns, :parameters))
+    body = Any[:($captured = Any[]), :($variables = Any[]), :($parameters = Any[])]
+    expressions = block isa Expr && block.head === :block ? block.args : Any[block]
+    line = location.line
+    for expression in expressions
+        if expression isa LineNumberNode
+            line = expression.line
+            continue
+        end
+        kind = _statement_declaration_kind(caller, expression)
+        if kind !== nothing
+            inventory = kind === :parameters ? parameters : variables
+            push!(body, :(append!($inventory, $(esc(expression)))))
+        else
+            source = _statement_capture_source(expression, location, line, caller)
+            push!(body, :(push!($captured, $(GlobalRef(@__MODULE__, :_capture_statement))($(esc(expression)), $source))))
+        end
+    end
+    keyword_values = Expr(:tuple, Expr(:parameters, map(esc, keywords)...))
+    push!(
+        body, :(
+            $(GlobalRef(@__MODULE__, :_assemble_declared_system))(
+                $(esc(first(constructor.args))), $keyword_values,
+                $(GlobalRef(@__MODULE__, :StatementSet))($captured), $variables, $parameters,
+            )
+        )
+    )
+    return Expr(:block, body...)
+end
+
+"""
+Construct a `StatementSet` while retaining source provenance.
+
+`@statements PottsSystem(; name, keywords...) begin ... end` also enrolls
+top-level `@variables` and `@parameters` declarations in the ordinary system's
+symbolic inventories. The block runs first, then constructor keywords, each
+exactly once. Declaring a symbolic variable does not declare physical state.
+"""
+macro statements(arguments...)
+    length(arguments) == 2 && return _capture_system_expression(arguments..., __source__, __module__)
+    length(arguments) == 1 || throw(ArgumentError("@statements expects a block or a constructor and block"))
+    block = only(arguments)
     expressions = block isa Expr && block.head === :block ? block.args : Any[block]
     captured = Any[]
     line = __source__.line
-    source_location = GlobalRef(@__MODULE__, :SourceLocation)
     capture_statement = GlobalRef(@__MODULE__, :_capture_statement)
     statement_set = GlobalRef(@__MODULE__, :StatementSet)
     for expression in expressions
@@ -59,14 +143,7 @@ macro statements(block)
             line = expression.line
             continue
         end
-        source = :(
-            $source_location(
-                $(String(__source__.file)),
-                $line,
-                $(QuoteNode(nameof(__module__))),
-                $(string(expression)),
-            )
-        )
+        source = _statement_capture_source(expression, __source__, line, __module__)
         push!(captured, :($capture_statement($(esc(expression)), $source)))
     end
     return :($statement_set(($(captured...),)))
