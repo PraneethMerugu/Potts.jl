@@ -2,6 +2,7 @@ using ParallelTestRunner
 import Potts
 
 const POTTS_TESTS = (
+    "test_fixed_array_scaling.jl",
     "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",

@@ -146,6 +146,10 @@ assignments execute once per eligible finite cell. Use
 separate processes for different domains. This does not make source order an
 implicit sequential update policy.
 
+At `init`, assignment lowering proves that every assignment effect preserves its target's
+logical shape and physical dimensions. A plain literal zero is dimension-polymorphic;
+a quantity, including a zero quantity, retains its explicitly declared dimensions.
+
 Cell assignments can name their finite-kind domain explicitly:
 
 ```julia
@@ -670,6 +674,12 @@ declares a quarter-turn from the boundary-entry value. The assignment must
 preserve the target's logical shape, and constructed components must have
 compatible units. Runtime-selected indices are rejected during analysis; this
 surface does not imply general tensor algebra or arbitrary Julia array calls.
+
+A whole declared fixed vector or tensor also supports scalar multiplication in
+either order, such as `gain * position` or `position * gain`, preserving its
+logical shape and checking the result's dimensions against the assignment target.
+This does not reinterpret array-times-array multiplication as componentwise
+scaling or add literal tensor RHS construction.
 
 Dimensional fixed arrays use one compatible dimension across their components.
 For example, `SVector(2.0u"m", 4.0u"m")` with an explicit two-metre reference

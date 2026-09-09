@@ -61,6 +61,12 @@ function _declared_parameter_unit(value)
     return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
 end
 
+function _literal_unit(value)
+    value isa DynamicQuantities.UnionAbstractQuantity &&
+        return _canonical_dimension(DynamicQuantities.dimension(value))
+    return value isa Number && iszero(value) ? :polymorphic_zero : :dimensionless
+end
+
 function _normalized_leaf_unit(
         node::NormalizedTermNode,
         source::FrozenSourceGraph,
@@ -69,7 +75,7 @@ function _normalized_leaf_unit(
     value = payload isa Union{LiteralPayload, ParameterBindingPayload} ?
         payload.value : nothing
     if value isa DynamicQuantities.UnionAbstractQuantity
-        return _canonical_dimension(DynamicQuantities.dimension(value))
+        return _literal_unit(value)
     elseif payload isa ParameterBindingPayload
         return _declared_parameter_unit(value)
     elseif payload isa Union{StateBindingPayload, VariableBindingPayload}
@@ -85,8 +91,7 @@ function _normalized_leaf_unit(
         return index === nothing ? (:binding_dimension, payload.identity) :
             _declared_record_unit(source.records[index], source)
     elseif payload isa LiteralPayload
-        return value isa Number && iszero(value) ?
-            :polymorphic_zero : :dimensionless
+        return _literal_unit(value)
     elseif node.payload_kind in (
             :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
             :relationship_context, :relationship_set, :spatial_relation,

@@ -92,9 +92,24 @@ function _operation_context_admitted(
     return false
 end
 
-function _operation_operand_admitted(rule::Symbol, types::Tuple)
+function _scalar_array_product_operand(node, types::Tuple)
+    length(types) == 2 && node.operation === :multiply || return nothing
+    expected = operation_transfer(*, 2)
+    all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer)) || return nothing
+    node.callable === CorePotts.CompilerSPI.operation_callable(Val(:multiply), expected.schema_version) || return nothing
+    for index in (1, 2)
+        types[index] <: AbstractArray && eltype(types[index]) <: Number &&
+            types[3 - index] <: Number && return index
+    end
+    return nothing
+end
+
+function _operation_operand_admitted(rule::Symbol, types::Tuple, node)
     rule === :any && return true
-    rule === :numeric && return all(type -> type <: Number, types)
+    if rule === :numeric
+        return all(type -> type <: Number, types) ||
+            _scalar_array_product_operand(node, types) !== nothing
+    end
     rule === :real && return all(type -> type <: Real, types)
     rule === :boolean && return all(type -> type <: Bool, types)
     rule === :integer && return all(type -> type <: Integer, types)
@@ -332,7 +347,7 @@ function _validate_operation_use!(
             !_operation_context_admitted(transfer.required_context, role, phase)
         "required context $(repr(transfer.required_context)) is unavailable " *
             "for role $(repr(role)) in phase $(repr(phase))"
-    elseif !_operation_operand_admitted(transfer.operand_rule, operand_types)
+    elseif !_operation_operand_admitted(transfer.operand_rule, operand_types, node)
         "operand types $(repr(operand_types)) violate rule " *
             "$(repr(transfer.operand_rule))"
     elseif (

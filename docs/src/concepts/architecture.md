@@ -28,6 +28,17 @@ construction, remakes and setters, and reconstructs immutable logical snapshots
 from Core's flat scalar buffer. Fixed-vector loads use the existing synthesized
 operation closure and fixed-vector constructor, not a parallel evaluator.
 
+Scalar multiplication of declared fixed arrays uses the existing arithmetic
+operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
+in `term_analysis.jl`. Only builtin scalar-times-array or array-times-scalar
+scaling preserves the array shape; matrix multiplication is not reinterpreted
+as componentwise multiplication. Assignment lowering in `accepted_copy_descriptors.jl`
+checks each target/RHS shape and dimension pair before execution; analyzed roots
+own these facts, while unnormalized static literals reuse `unit_analysis.jl`'s
+literal-unit semantics. `test_fixed_array_scaling.jl` owns the public
+scalar, vector and tensor shape/unit regression; execution uses Core's existing
+multiply operation, not a tensor-specific evaluator.
+
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
 ```text
