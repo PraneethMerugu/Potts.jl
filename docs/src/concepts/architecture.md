@@ -197,6 +197,20 @@ from model, site, and cell storage shape; saved values and checkpoints consume
 the resulting Core-owned storage. The owning behavioral tests are in
 `test/test_structured_state_authoring.jl`.
 
+History sampling follows the qualified `of` declaration, not an inferred
+storage-domain tag. `_state_sample_record` in `compiler/host/source_graph.jl`
+also supplies that source identity to lifecycle lowering: cell-owned histories
+need explicit cell-state policies, SiteState histories need ownership-change
+laws, and Eulerian FieldState histories preserve fixed-site meaning unless an
+ownership law is explicitly declared. No parallel classification is retained
+in runtime manifests. `test/test_history_lifecycle.jl` and
+`test/test_history_ownership_change.jl` exercise the corresponding public
+creation, retirement, sampling order, and site-lifetime behavior.
+`test/fixtures/history_structured_samples.jl` supplies the same numerical
+vector, tensor, product, dimensional-reference, and checkpoint oracle to the
+ordinary CPU test and the Metal runner; invalid symbolic projections remain
+in the ordinary compiler test.
+
 Named products use the same conversion owner recursively: declared field names,
 types, and fixed-array shapes determine the stored value, including omitted
 defaults. Completion's reference-anchor traversal visits nested quantity leaves;

@@ -71,6 +71,13 @@ three retained samples to `9` while retiring the live source to `0` gives
 `(9, 9, 0)` after an `EveryMCS()` append, whereas a history not due for sampling
 retains `(9, 9, 9)`.
 
+Site-owned histories declare their own `ClearOnOwnershipChange()` or
+`PreserveOnOwnershipChange()` law. Clearing affects every retained sample at
+the changed site, not just its newest sample. `FieldState` is Eulerian: a
+field and its history remain attached to fixed sites when cell occupancy
+changes. They do not require an implicit ownership-change policy, but an
+explicit clear or preserve law is honored independently on either declaration.
+
 `RelationshipState` declares endpoint kinds, bounded capacity, payload schema,
 maximum degree, and endpoint-lifecycle policy. At a settled host boundary,
 `relationship_transaction!` applies `Create`, `Remove`, or `Retune` requests
