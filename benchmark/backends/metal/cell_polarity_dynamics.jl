@@ -6,7 +6,7 @@ include(joinpath(@__DIR__, "../../../test/fixtures/cell_polarity_dynamics.jl"))
     Metal.functional() || error("polarity dynamics requires functional Metal")
     Metal.allowscalar(false)
     host = _polarity_dynamics_contract(CheckerboardSweepCPM(), CPUBackend())
-    device = _polarity_dynamics_contract(CheckerboardSweepCPM(), MetalBackend())
+    device = _polarity_dynamics_contract(CheckerboardSweepCPM(), Potts.MetalBackend())
     for (cpu, gpu) in zip(host, device)
         @test cpu.turn == gpu.turn
         @test all(isapprox.(cpu.polarity, gpu.polarity; rtol = 3.0f-6, atol = 3.0f-6))
