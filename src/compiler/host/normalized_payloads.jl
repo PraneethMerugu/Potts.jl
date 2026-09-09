@@ -356,6 +356,19 @@ function _normalized_leaf_callable(kind::Symbol, version::VersionNumber)
     return CorePotts.CompilerSPI.operation_callable(Val(identity), version)
 end
 
+function _state_record_for_leaf(source::FrozenSourceGraph, node::NormalizedTermNode)
+    payload = node.payload
+    for record in source.records
+        if payload isa StateBindingPayload
+            record.identity == payload.identity && return record
+        elseif payload isa VariableBindingPayload
+            variable = _state_record_variable(record)
+            variable !== nothing && isequal(variable, payload.value) && return record
+        end
+    end
+    return nothing
+end
+
 function _compiler_literal(value)
     unwrapped = try
         Symbolics.unwrap(value)

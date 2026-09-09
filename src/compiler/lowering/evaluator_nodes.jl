@@ -34,7 +34,13 @@ function _lower_static_node(
             ),),
         ))
         state_expression = CorePotts.CompilerSPI.StateExpression(handle)
-        if state_binding === nothing
+        owner = _state_record_for_leaf(ir.source, node)
+        if owner !== nothing && owner.kind === :ModelState
+            _compiler_synthesized_operation_expression(
+                graph, _potts_model_bound_state_value, (state_expression,),
+                ir.source.records[node.record],
+            )
+        elseif state_binding === nothing
             state_expression
         else
             operation = state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
