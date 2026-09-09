@@ -431,30 +431,31 @@ function _lifecycle_effect_code(effect)
     throw(ArgumentError("unsupported lifecycle effect $(typeof(effect))"))
 end
 
-function _lifecycle_ownership_rules(layout, history_descriptors, required::Bool)
+function _lifecycle_ownership_rules(source, state_handles, required::Bool)
     required || return ()
-    return Tuple(
-        CorePotts.CompilerSPI.LifecycleOwnershipRule(
-            entry.handle,
-            begin
-                lifecycle = entry.schema.lifecycle
-                declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
-                    lifecycle.declared : nothing
-                declared === :ClearOnOwnershipChange ?
-                    CorePotts.CompilerSPI.ClearLifecycleOwnershipState :
-                    declared === :PreserveOnOwnershipChange ?
-                    CorePotts.CompilerSPI.PreserveLifecycleOwnershipState :
-                    throw(ArgumentError(
-                        "site-owned state has no compiled ownership-change law"
-                    ))
-            end,
+    rules = CorePotts.CompilerSPI.LifecycleOwnershipRule[]
+    for record in source.records
+        record.kind in (:SiteState, :FieldState, :HistoryState) || continue
+        sample = _state_sample_record(source, record)
+        sample.kind in (:SiteState, :FieldState) || continue
+        lifecycle = record.lifecycle
+        declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
+            lifecycle.declared : nothing
+        # Eulerian fields stay attached to their sites unless explicitly given
+        # an ownership-change law; physical site storage is not cell ownership.
+        sample.kind === :FieldState && declared === nothing && continue
+        action = declared === :ClearOnOwnershipChange ?
+            CorePotts.CompilerSPI.ClearLifecycleOwnershipState :
+            declared === :PreserveOnOwnershipChange ?
+            CorePotts.CompilerSPI.PreserveLifecycleOwnershipState :
+            throw(ArgumentError("site-owned state has no compiled ownership-change law"))
+        push!(
+            rules, CorePotts.CompilerSPI.LifecycleOwnershipRule(
+                state_handles[record.identity], action,
+            )
         )
-        for entry in layout.entries if (
-            entry.schema.domain === :history ?
-                CorePotts.CompilerSPI.history_source(history_descriptors, layout, entry.handle).schema.domain :
-                entry.schema.domain
-        ) === :site
-    )
+    end
+    return Tuple(rules)
 end
 
 function _lower_lifecycle_plan(
@@ -777,8 +778,8 @@ function _lower_lifecycle_plan(
         CorePotts.CompilerSPI.LifecycleStateRuleStorage(state_rules),
         relationship_rules,
         _lifecycle_ownership_rules(
-            state_layout,
-            history_descriptors,
+            ir.source,
+            state_handles,
             any(
                 descriptor -> descriptor.effect in (
                     CorePotts.CompilerSPI.CreateCellLifecycleEffect,
