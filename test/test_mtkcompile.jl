@@ -21,7 +21,6 @@ function _scheduling_fixture(name::Symbol)
                 scheduling_marker;
                 name = :scheduling_marker,
                 owner = cell,
-                initial = 0.0,
             ),
             Volume(cell; target = scheduling_target, strength = 1.0),
             Observation(:marker_observation, scheduling_marker),
