@@ -54,6 +54,8 @@ const POTTS_TEST_FIXTURES = (
     "LifecycleOperationFixtures.jl",
     "lifecycle_public.jl",
     "sciml_lifecycle.jl",
+    "vector_rotation.jl",
+    "product_fields.jl",
 )
 
 const POTTS_TEST_SUITE = Dict(
