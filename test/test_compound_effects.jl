@@ -42,6 +42,7 @@
                     Lattice((4, 4); boundary = Periodic()),
                     CellKind(:cell; extinction = RetireAtZero()),
                     MediumKind(:medium),
+                    ProposalConstraint(:extensions_only, copy_context.is_extension),
                     SiteState(first_value; initial = 2.0),
                     SiteState(second_value; initial = 7.0),
                     AcceptedCopy(
@@ -66,6 +67,7 @@
         for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
             solution = solve(PottsProblem(system, initial, (0, 2); seed = 17), algorithm)
             @test solution.retcode == SciMLBase.ReturnCode.Success
+            @test solution.stats.accepted > 0
             first_values = solution.u[end][:first_value]
             second_values = solution.u[end][:second_value]
             @test any(==(7.0), first_values)
