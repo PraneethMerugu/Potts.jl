@@ -79,13 +79,37 @@ each declaration/default and keyword expression is evaluated once. Explicit
 inventories come first, followed by captured declarations. Automatically captured
 import aliases and independent variables are excluded from owned inventories.
 
-Every other top-level entry explicitly enrolls a statement or `StatementSet`.
+Nested `begin` blocks, `if`/`elseif` branches, and ordinary Julia `for` and
+`while` loops enroll the declarations they actually execute, in execution order.
+Conditions and iterators run normally, including `break` and `continue`; an
+unselected branch or empty loop contributes nothing. Constructor-form symbolic
+declarations inside those bodies also join the ordinary inventories. Use finite
+factory loops: these are Julia construction-time operations, not simulation
+schedulers. Loop bindings retain normal Julia scope.
+
+For example, one finite factory loop can declare a pair of reservoirs without
+maintaining a second symbolic inventory:
+
+```@example declaration-loops
+using Potts, Symbolics
+source = @statements PottsSystem(; name=:reservoir_pair) begin
+    @variables stored released
+    for variable in (stored, released)
+        ModelState(variable; initial=0.0)
+    end
+end
+@assert length(statements(source)) == 2
+nothing # hide
+```
+
+Every other entry explicitly enrolls a statement or `StatementSet`.
 An assignment such as `state = ModelState(amount)` both binds and enrolls it;
 using `state` inside a later expression is a reference, but writing `state` again
 as a top-level entry attempts a second enrollment and is rejected. Equal statement
 values are never silently deduplicated. Ordinary factory helpers can return a
-`StatementSet` to splice; the macro does not reinterpret arbitrary control flow
-or discover declarations hidden in helper bodies. Plain `@statements begin ...
+`StatementSet` to splice; the macro does not inspect function definitions,
+discover declarations hidden in helper bodies, or treat arbitrary numeric
+assignments as declarations. Plain `@statements begin ...
 end` continues to return only a `StatementSet`.
 
 `examples/compartment_exchange.jl` is a complete factory using this
