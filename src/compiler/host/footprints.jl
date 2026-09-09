@@ -200,10 +200,11 @@ function _leaf_footprint(source, node, record, dimensions)
     if kind in (:state, :variable) &&
             record.kind in (:SynchronousProcess, :AcceptedCopyProcess)
         state = findfirst(candidate -> candidate.identity == node.payload.identity, source.records)
-        if state !== nothing && source.records[state].kind === :SiteState
+        sample = state === nothing ? nothing : _state_sample_record(source, source.records[state])
+        if sample !== nothing && sample.kind in (:SiteState, :FieldState)
             anchor = record.kind === :AcceptedCopyProcess ? ProposalTargetAnchor() : IterationSiteAnchor()
             return _spatial_anchor_fact(anchor, dimensions)
-        elseif state !== nothing && source.records[state].kind === :CellState &&
+        elseif sample !== nothing && sample.kind === :CellState &&
                 record.kind === :SynchronousProcess
             return OwnerFootprintFact(:owner)
         end

@@ -26,12 +26,16 @@ function _lower_scheduled_execution_plan(
     manifest = _build_parameter_manifest(scheduled, scalar_type)
     relationship_endpoint_policies =
         _compile_relationship_endpoint_policies(analyzed_ir)
+    state_layout, state_handles = _state_layout(analyzed_ir, scheduled, manifest, scalar_type)
+    draw_handles = _draw_operation_handles(analyzed_ir)
+    history_descriptors = _lower_history_descriptors(analyzed_ir, scalar_type, state_handles, state_layout)
     lowered_descriptors = _lower_descriptor_plan(
         analyzed_ir,
         scheduled,
         manifest,
         scalar_type,
         relationship_endpoint_policies,
+        state_layout, state_handles, draw_handles, history_descriptors,
     )
     descriptor_plan = lowered_descriptors.plan
     records = analyzed_ir.source.records
@@ -47,6 +51,7 @@ function _lower_scheduled_execution_plan(
         lowered_descriptors.draw_handles,
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
+        history_descriptors,
     )
     lifecycle_plan = _lower_lifecycle_plan(
         analyzed_ir,

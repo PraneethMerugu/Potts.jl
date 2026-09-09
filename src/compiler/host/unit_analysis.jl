@@ -18,6 +18,7 @@ function _declared_record_unit(record::QualifiedStatement)
 end
 
 function _declared_record_unit(record::QualifiedStatement, source::FrozenSourceGraph)
+    record = _state_sample_record(source, record)
     _state_record_variable(record) === nothing && return _declared_record_unit(record)
     return _state_initial_unit(record.result_type, _effective_state_initial(source, record).value)
 end
@@ -212,10 +213,10 @@ function _operation_unit_result(
             nothing, "fixed-vector elements have incompatible units $(repr(operand_units))",
         )
         return (common, nothing)
-    elseif rule === :fixed_index
+    elseif rule in (:fixed_index, :history_sample)
         length(operand_units) == 2 &&
             _unit_compatible(operand_units[2], :dimensionless) || return (
-            nothing, "fixed-vector indexing requires a dimensionless index",
+            nothing, "element or history-sample indexing requires a dimensionless index",
         )
         return (first(operand_units), nothing)
     elseif rule === :dimensionless

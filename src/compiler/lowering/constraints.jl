@@ -270,10 +270,12 @@ function _lower_descriptor_plan(
         manifest::ParameterManifest,
         ::Type{T},
         relationship_endpoint_policies,
+        state_layout,
+        state_handles,
+        draw_handles,
+        history_descriptors,
     ) where {T <: AbstractFloat}
-    state_layout, state_handles = _state_layout(ir, completed, manifest, T)
     workspace_layout, workspace_handles = _workspace_layout(ir, T)
-    draw_handles = _draw_operation_handles(ir)
     descriptors = Any[]
     for candidate in ir.candidates
         candidate.category in (
@@ -293,6 +295,7 @@ function _lower_descriptor_plan(
                 workspace_layout,
                 workspace_handles,
                 draw_handles,
+                ; state_layout, history_descriptors,
             ),
         )
     end

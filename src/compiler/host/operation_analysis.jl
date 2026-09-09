@@ -288,6 +288,13 @@ function _resolved_operation_source_bindings(
     return Tuple(bindings)
 end
 
+function _is_history_sample_projection(node)
+    node.operation === :lag && node.transfer !== nothing || return false
+    expected = operation_transfer(lag, 2)
+    all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer)) || return false
+    return node.callable === CorePotts.CompilerSPI.operation_callable(Val(:lag), expected.schema_version)
+end
+
 function _validate_operation_use!(
         node::NormalizedTermNode,
         record::QualifiedStatement,
@@ -300,6 +307,8 @@ function _validate_operation_use!(
     transfer === nothing && return nothing
     phase = _record_operation_phase(record)
     tracker_projection = _is_tracker_projection_operand(node, graph)
+    history_projection = _is_history_sample_projection(node)
+    history_projection && _history_sample_operand(source, graph, node)
     tracker_fold = transfer.identity === :bounded_fold &&
         _tracker_projection_operand(node, graph) !== nothing
     abi_role = transfer.lifecycle_abi === nothing ? nothing :
@@ -330,7 +339,7 @@ function _validate_operation_use!(
             )
         ) !== nothing
         source_problem
-    elseif !tracker_projection &&
+    elseif !tracker_projection && !history_projection &&
             (context = _operation_evaluation_context(role, phase)) !== nothing &&
             !CorePotts.CompilerSPI.operation_context_supported(node.callable, context)
         "frozen callable $(typeof(node.callable)) has no implementation for " *

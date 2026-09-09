@@ -39,6 +39,9 @@ function _state_layout(
         elseif domain === :cell
             (_cell_capacity(ir),)
         elseif domain === :history && record.shape isa Tuple &&
+                first(record.shape) === :cells
+            (_cell_capacity(ir), last(record.shape))
+        elseif domain === :history && record.shape isa Tuple &&
                 all(item -> item isa Integer && item > 0, record.shape)
             Tuple(Int.(record.shape))
         elseif record.shape isa Tuple &&
@@ -248,15 +251,18 @@ function _record_state_handles(
         ir::AnalyzedTermIR,
         record::QualifiedStatement,
         handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
+        ; expressions = (),
     )
     result = CorePotts.CompilerSPI.StateHandle[]
     for identity in record.resources
         haskey(handles, identity) || continue
+        !isempty(expressions) && any(candidate -> candidate.identity == identity && candidate.kind === :HistoryState, ir.source.records) && continue
         handle = handles[identity]
         handle in result || push!(result, handle)
     end
     for state_record in ir.source.records
         haskey(handles, state_record.identity) || continue
+        !isempty(expressions) && state_record.kind === :HistoryState && continue
         variable = _state_record_variable(state_record)
         variable === nothing && continue
         references_variable = any(record.reads) do read
@@ -270,6 +276,9 @@ function _record_state_handles(
         end
         references_variable || continue
         handle = handles[state_record.identity]
+        handle in result || push!(result, handle)
+    end
+    for expression in expressions, handle in CorePotts.CompilerSPI.expression_state_handles(expression)
         handle in result || push!(result, handle)
     end
     sort!(

@@ -1,4 +1,19 @@
 # Fact propagation and construction of the analyzed compiler authority.
+function _history_sample_operand(source, graph, node)
+    owner = length(node.operands) == 2 ? _state_record_for_leaf(source, graph.nodes[first(node.operands)]) : nothing
+    amount = length(node.operands) == 2 ? graph.nodes[last(node.operands)].payload : nothing
+    depth = owner === nothing ? nothing : get(_record_options(owner), :depth, nothing)
+    valid = owner !== nothing && owner.kind === :HistoryState &&
+        amount isa LiteralPayload && amount.value isa Integer && !(amount.value isa Bool) &&
+        depth isa Integer && 0 <= amount.value < depth
+    valid || throw(PottsValidationError(:analysis, (
+        PottsDiagnostic(:invalid_history_lag, node.source, String(node.operation), node.source.path,
+            "one declared HistoryState and a literal retained-sample index 0:depth-1",
+            "invalid history source or lag", (), source.records[node.record].source),
+    )))
+    return owner, Int(amount.value)
+end
+
 function _analyze_term_graph(
         source::FrozenSourceGraph,
         graph::NormalizedTermGraph,
@@ -47,7 +62,7 @@ function _analyze_term_graph(
             nothing
         end
         if binding_record !== nothing
-            variable = _state_record_variable(binding_record)
+            variable = _state_record_variable(_state_sample_record(source, binding_record))
             if variable isa Symbolics.Arr || variable isa StaticArrays.StaticArray
                 shape[index] = Tuple(size(variable))
             end
@@ -62,6 +77,9 @@ function _analyze_term_graph(
                     source,
                     role,
                 )
+            end
+            if transfer.result_rule === :history_sample
+                _history_sample_operand(source, graph, node)
             end
             if transfer.result_rule === :product_field
                 product_type = result_type[first(operand_indices)]
@@ -142,6 +160,9 @@ function _analyze_term_graph(
             }
         elseif transfer.result_rule === :fixed_index
             eltype(result_type[first(operand_indices)])
+        elseif transfer.result_rule === :history_sample
+            shape[index] = shape[first(operand_indices)]
+            result_type[first(operand_indices)]
         elseif transfer.result_rule === :product_field
             ordinal = graph.nodes[last(operand_indices)].payload.value
             field_type = fieldtype(result_type[first(operand_indices)], ordinal)

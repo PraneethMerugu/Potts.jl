@@ -139,19 +139,6 @@ function _lifecycle_hash64(value)
     return result
 end
 
-function _lifecycle_cadence(value)
-    value isa EveryMCS && return (
-        CorePotts.CompilerSPI.EveryMCSLifecycleCadence, Int32(1)
-    )
-    value isa AtMCS && return (
-        CorePotts.CompilerSPI.AtMCSLifecycleCadence, Int32(value.mcs)
-    )
-    value isa Every && return (
-        CorePotts.CompilerSPI.PeriodicLifecycleCadence, Int32(value.cadence)
-    )
-    throw(ArgumentError("unsupported compiled lifecycle cadence $(typeof(value))"))
-end
-
 _lifecycle_disposition(::FilterInadmissible) =
     CorePotts.CompilerSPI.FilterLifecycleInadmissible
 _lifecycle_disposition(::ErrorOnInadmissible) =
@@ -508,7 +495,8 @@ function _lower_lifecycle_plan(
             CorePotts.CompilerSPI.ModelLifecycleDomain : CorePotts.CompilerSPI.CellKindLifecycleDomain
         domain_kind = domain === CorePotts.CompilerSPI.CellKindLifecycleDomain ?
             _lifecycle_kind_index(ir, record, arguments.domain.kind) : Int16(0)
-        cadence, cadence_value = _lifecycle_cadence(get(
+        cadence, cadence_value = _completed_mcs_cadence(
+            get(
             _record_options(record), :cadence, EveryMCS()
         ))
         destination_kind = effect isa CreateCell ?

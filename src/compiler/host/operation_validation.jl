@@ -12,6 +12,7 @@ const _RESULT_TRANSFER_RULES = Set(
         :fixed_vector,
         :fixed_index,
         :product_field,
+        :history_sample,
     )
 )
 const _UNIT_TRANSFER_RULES = Set(
@@ -28,6 +29,7 @@ const _UNIT_TRANSFER_RULES = Set(
         :fixed_vector,
         :fixed_index,
         :product_field,
+        :history_sample,
     )
 )
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))

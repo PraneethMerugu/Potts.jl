@@ -52,12 +52,13 @@ function _copy_saved_value(value::NamedTuple)
 end
 _copy_saved_value(value) = value
 
-function _descriptor_saved_value(descriptor_state, entry)
+function _descriptor_saved_value(descriptor_state, entry, program)
     values = CorePotts.CompilerSPI.state_block(descriptor_state, entry.handle).values
     if entry.storage === :history
+        source = CorePotts.CompilerSPI.history_source(program.stage_plan, program.descriptor_plan.state_layout, entry.handle)
         axis = ndims(values)
         return ntuple(
-            index -> copy(selectdim(values, axis, index)),
+            index -> source.schema.domain === :model ? only(selectdim(values, axis, index)) : copy(selectdim(values, axis, index)),
             size(values, axis),
         )
     elseif entry.storage in (:medium, :model)
@@ -69,7 +70,7 @@ end
 function _descriptor_saved_states(executable, snapshot)
     entries = executable.state_manifest
     values = map(
-        entry -> _descriptor_saved_value(snapshot.descriptor_state, entry),
+        entry -> _descriptor_saved_value(snapshot.descriptor_state, entry, executable.core_program),
         entries,
     )
     return NamedTuple{Tuple(entry.name for entry in entries)}(values)

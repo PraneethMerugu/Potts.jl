@@ -26,6 +26,7 @@ function _complete_inventory_subtree(
         reference_anchors,
         root_shape,
         registry,
+        context_inventory,
     )
     _validate_random_key_uniqueness!(diagnostics, records)
     _validate_synchronous_writers!(diagnostics, records)

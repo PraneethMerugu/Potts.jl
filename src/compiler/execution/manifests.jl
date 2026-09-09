@@ -179,6 +179,19 @@ function _compiled_state_initial(
         manifest::ParameterManifest,
         ::Type{T},
     ) where {T <: AbstractFloat}
+    if record.kind === :HistoryState
+        source_graph = _completion_data(completed).source_graph
+        source_record = _state_sample_record(source_graph, record)
+        source_initial, reference = _compiled_state_initial(completed, source_record, manifest, T)
+        value = _effective_state_initial(source_graph, record).value
+        # Omitted or scalar-zero prehistory is logical zero in source units;
+        # other supplied samples use the same conversion as source values.
+        if value === nothing || (value isa Real && !_is_quantity(value) && iszero(value))
+            return _default_state_initial(typeof(source_initial), T), reference
+        end
+        converted = _convert_state_initial_value(value, reference, typeof(source_initial), T)
+        return converted, reference
+    end
     arguments = _record_arguments(record)
     display_identity = record.identity
     variable = arguments.variable
@@ -243,12 +256,6 @@ function _compiled_state_manifest(
         initial, unit = _compiled_state_initial(
             completed, record, manifest, T
         )
-        state_shape = storage === :site ? shape :
-            storage === :cell ? :cells :
-            storage === :history ? (
-                shape...,
-                Int(_numeric_value(_statement_option(record, :depth, 1))),
-            ) : ()
         identity = _qualified_resource_identity(record.identity)
         matching_entries = filter(
             entry -> entry.schema.identity == identity,
@@ -261,6 +268,9 @@ function _compiled_state_manifest(
             )
         )
         layout_entry = only(matching_entries)
+        state_shape = storage === :site ? shape :
+            storage === :cell ? :cells :
+            storage === :history ? Tuple(layout_entry.schema.shape) : ()
         key = _symbolic_name(arguments.variable)
         local_key = Symbol(last(split(String(key), '₊')))
         push!(

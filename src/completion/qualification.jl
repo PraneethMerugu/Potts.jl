@@ -58,6 +58,7 @@ function _namespace_reference_payload(value, names)
         return _namespace_reference_payload(first(value), names) =>
             _namespace_reference_payload(last(value), names)
     elseif value isa AbstractArray
+        SymbolicIndexingInterface.symbolic_type(value) isa SymbolicIndexingInterface.ArraySymbolic && return value
         return map(item -> _namespace_reference_payload(item, names), value)
     elseif value isa AbstractDict
         return Dict(
@@ -114,6 +115,7 @@ function _qualify_records!(
         reference_anchors,
         root_shape,
         registry::StatementRegistry,
+        context_inventory::_PottsSourceInventory,
     )
     seen_by_system = Dict{
         Int32, Dict{StatementID, AbstractPottsStatement},
@@ -146,6 +148,24 @@ function _qualify_records!(
         seen[id] = originating_statement
         statement = _namespace_statement(originating_statement, current_path)
         identity = QualifiedStatementID(current_path, id)
+        history_source = if statement isa HistoryState
+            try
+                _history_source_contract(statement, context_inventory)
+            catch error
+                error isa ArgumentError || rethrow()
+                push!(
+                    diagnostics, PottsDiagnostic(
+                        :invalid_history_declaration, identity,
+                        _statement_expression(originating_statement), current_path,
+                        "a unique owned source, positive retention, and explicit completed-MCS cadence",
+                        sprint(showerror, error), (), statement_source(originating_statement),
+                    )
+                )
+                continue
+            end
+        else
+            nothing
+        end
         options = _statement_options(statement)
         origin = haskey(options, :__registered_origin) ?
             options.__registered_origin : nothing
@@ -263,7 +283,7 @@ function _qualify_records!(
                     for operation in registered.contract.rng
             )
         end
-        units = _record_units(statement, inventory)
+        units = _record_units(history_source === nothing ? statement : history_source.declaration, context_inventory)
         reference_conversion = _record_reference_conversion(
             units, reference_anchors
         )
@@ -274,6 +294,9 @@ function _qualify_records!(
                 current_path,
             )
         )
+        if history_source !== nothing && !(history_source.identity in resources)
+            resources = (resources..., history_source.identity)
+        end
         mutating = !(effect isa PureRead)
         record = QualifiedStatement(
             identity,
@@ -301,13 +324,14 @@ function _qualify_records!(
                 ),
             (_statement_arguments(statement), _statement_options(statement)),
             registered === nothing ?
-                _record_result_type(statement) : registered.contract.result_type,
-            _record_shape(statement, root_shape),
+                _record_result_type(history_source === nothing ? statement : history_source.declaration) :
+                registered.contract.result_type,
+            _record_shape(statement, root_shape, history_source === nothing ? nothing : history_source.declaration),
             units,
             reference_conversion,
             reads,
             writes,
-            _record_ownership(statement),
+            _record_ownership(history_source === nothing ? statement : history_source.declaration),
             statement isa Union{
                     SiteState, CellState, MediumState, ModelState, FieldState,
                     HistoryState, RelationshipState,

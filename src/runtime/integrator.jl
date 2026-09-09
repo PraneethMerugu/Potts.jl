@@ -355,6 +355,7 @@ function _materialize_integrator(
             problem.replica;
             repeat = problem.repeat,
             initial_mcs = problem.tspan[1],
+            capture_initial_history = false,
         )
         runtime,
         Pair{Int, Any}[problem.tspan[1] => parameters],
@@ -403,6 +404,10 @@ function _materialize_integrator(
         capability_report,
     )
     _initialize_callbacks!(integrator)
+    if checkpoint === nothing && runtime.mcs == 0
+        CorePotts.initialize_history!(runtime)
+        integrator.u = _current_saved_state(integrator)
+    end
     policy.save_start && _save_current!(integrator)
     return integrator
 end

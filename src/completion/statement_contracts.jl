@@ -83,17 +83,55 @@ function _record_reference_conversion(units, anchors)
     )
 end
 
-function _record_shape(statement, root_shape)
+function _history_source_contract(statement::HistoryState, inventory::_PottsSourceInventory)
+    source = _statement_option(statement, :of, nothing)
+    source === nothing && throw(ArgumentError("HistoryState requires an explicit `of` source"))
+    matches = Any[]
+    for occurrence in inventory.statements
+        candidate = _namespace_statement(occurrence.statement, occurrence.path)
+        candidate isa Union{ModelState, CellState, SiteState, FieldState} || continue
+        arguments = _statement_arguments(candidate)
+        haskey(arguments, :variable) && isequal(arguments.variable, source) || continue
+        push!(
+            matches, (
+                declaration = candidate,
+                identity = QualifiedStatementID(occurrence.path, statement_id(occurrence.statement)),
+            )
+        )
+    end
+    length(matches) == 1 || throw(
+        ArgumentError(
+            "HistoryState source must identify exactly one declared model, cell, site, or field state"
+        )
+    )
+    depth = _numeric_value(_statement_option(statement, :depth, 1))
+    depth isa Integer && !(depth isa Bool) && depth > 0 || throw(
+        ArgumentError(
+            "HistoryState depth must be a positive integer number of retained samples"
+        )
+    )
+    cadence = _statement_option(statement, :cadence, EveryMCS())
+    cadence isa Union{EveryMCS, Every, AtMCS} || throw(
+        ArgumentError(
+            "HistoryState cadence must be EveryMCS(), Every(n), or AtMCS(n)"
+        )
+    )
+    return only(matches)
+end
+
+function _record_shape(statement, root_shape, history_source = nothing)
     statement isa LatticeDomain &&
         return _statement_option(statement, :shape, root_shape)
     statement isa Union{SiteState, FieldState} && return root_shape
     statement isa CellState && return :cells
     statement isa MediumState && return :media
     statement isa ModelState && return ()
-    statement isa HistoryState && return (
-        root_shape...,
-        Int(_numeric_value(_statement_option(statement, :depth, 1))),
-    )
+    if statement isa HistoryState
+        source_shape = _record_shape(history_source, root_shape)
+        extent = source_shape === :cells ? (:cells,) :
+            isempty(source_shape) ? (1,) : source_shape
+        return (extent..., Int(_numeric_value(_statement_option(statement, :depth, 1))))
+    end
     statement isa RelationshipState && return (
         capacity = Int(_numeric_value(_statement_option(statement, :capacity))),
         maximum_degree = Int(

@@ -259,6 +259,7 @@ function _proposal_descriptor(
         workspace_layout,
         workspace_handles,
         draw_handles,
+        ; state_layout, history_descriptors,
     ) where {T <: AbstractFloat}
     length(candidate.roots) == 1 || throw(ArgumentError(
         "a proposal descriptor requires exactly one expression root"
@@ -274,13 +275,14 @@ function _proposal_descriptor(
         state_handles,
         draw_handles,
         cache,
+        ; state_layout, history_descriptors,
     )
     record = ir.source.records[candidate.record]
     execution_context = candidate.category === :hamiltonian ?
         CorePotts.CompilerSPI.AbstractHamiltonianEvaluationContext :
         CorePotts.CompilerSPI.AbstractProposalEvaluationContext
     evaluator = _static_evaluator(expression, execution_context, record)
-    resolved_states = _record_state_handles(ir, record, state_handles)
+    resolved_states = _record_state_handles(ir, record, state_handles; expressions = (expression,))
     resolved_workspaces = _record_workspace_handles(
         record, workspace_layout, workspace_handles
     )

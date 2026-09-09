@@ -38,6 +38,16 @@ struct FrozenSourceGraph
     structural_key::String
 end
 
+function _state_sample_record(source::FrozenSourceGraph, record::QualifiedStatement)
+    record.kind === :HistoryState || return record
+    source_variable = get(_record_options(record), :of, nothing)
+    sources = filter(candidate -> candidate.identity in record.resources &&
+        candidate.kind in (:ModelState, :CellState, :SiteState, :FieldState) &&
+        isequal(_state_record_variable(candidate), source_variable), source.records)
+    length(sources) == 1 || throw(ArgumentError("history `$(record.identity)` requires exactly one completed source"))
+    return only(sources)
+end
+
 function _source_graph_reference!(
         references, kind, path, source, value
     )
