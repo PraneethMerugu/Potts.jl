@@ -16,6 +16,7 @@ const POTTS_TESTS = (
     "test_product_state_defaults.jl",
     "test_model_state_proposal_reads.jl",
     "test_model_state_energy.jl",
+    "test_model_site_transactions.jl",
     "test_structured_assignments.jl",
     "test_dimensional_state_values.jl",
     "test_state_reference_inference.jl",
