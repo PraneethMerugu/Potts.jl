@@ -377,9 +377,11 @@ _map_symbolic_payload(f, value::Pair) =
 _map_symbolic_payload(f, value::Symbolics.Equation) =
     _map_symbolic_payload(f, value.lhs) ~ _map_symbolic_payload(f, value.rhs)
 _map_symbolic_payload(f, value::AbstractArray) =
-    map(item -> _map_symbolic_payload(f, item), value)
+    SymbolicIndexingInterface.symbolic_type(value) isa SymbolicIndexingInterface.ArraySymbolic ?
+    f(value) : map(item -> _map_symbolic_payload(f, item), value)
 _map_symbolic_payload(f, value::AbstractDict) =
-    Dict(_map_symbolic_payload(f, key) => _map_symbolic_payload(f, item)
+    Dict(
+    _map_symbolic_payload(f, key) => _map_symbolic_payload(f, item)
         for (key, item) in value)
 
 function _map_symbolic_payload(f, value)

@@ -518,30 +518,46 @@ function _normalize_initial_state_entry(
         cell_count,
         cell_capacity,
         ::Type{T},
+        history_source = nothing,
     ) where {T <: AbstractFloat}
     supplied = haskey(values, entry.name)
     if entry.storage === :history
         depth = last(entry.shape)
+        source_shape = Tuple(history_source.schema.shape)
+        source_domain = history_source.schema.domain
+        source_domain === :cell && (cell_capacity = only(source_shape))
         if !supplied
-            return Tuple(fill(entry.initial, shape) for _ in 1:depth)
+            return Tuple(fill(entry.initial, source_shape) for _ in 1:depth)
         end
         value = values[entry.name]
         value isa Union{Tuple, AbstractVector} && length(value) == depth ||
             throw(
             ArgumentError(
-                "initial history `$(entry.name)` requires $depth lattice snapshots"
+                "initial history `$(entry.name)` requires $depth source-domain samples"
             )
         )
         return Tuple(
             begin
                     snapshot = value[index]
-                    snapshot isa AbstractArray && size(snapshot) == shape ||
+                    if source_domain === :model
+                        fill(_convert_supplied_state_value(entry, snapshot, T), source_shape)
+                elseif source_domain === :cell
+                        snapshot isa AbstractVector && length(snapshot) in (cell_count, cell_capacity) ||
+                        throw(ArgumentError("initial history `$(entry.name)` snapshot $index requires one sample per active cell or compiled cell slot"))
+                        result = fill(entry.initial, cell_capacity)
+                        for cell in eachindex(snapshot)
+                            result[cell] = _convert_supplied_state_value(entry, snapshot[cell], T)
+                    end
+                        result
+                else
+                        snapshot isa AbstractArray && size(snapshot) == source_shape ||
                     throw(
                         ArgumentError(
                             "initial history `$(entry.name)` snapshot $index has the wrong shape"
                         )
                     )
                     map(item -> _convert_supplied_state_value(entry, item, T), snapshot)
+                end
                 end
                 for index in 1:depth
         )
@@ -748,17 +764,27 @@ function _core_initial_state(
         )
     )
     normalized_states = Dict{CorePotts.CompilerSPI.QualifiedResourceIdentity, Any}()
+    descriptor_layout = executable.core_program.descriptor_plan.state_layout
     for entry in executable.state_manifest
+        storage_capacity = entry.storage === :cell ? only(
+                only(
+                    layout_entry for layout_entry in descriptor_layout.entries if layout_entry.handle == entry.handle
+                ).schema.shape
+            ) : cell_capacity
         normalized_states[entry.identity] = _normalize_initial_state_entry(
             entry,
             values,
             executable.core_program.shape,
             length(cell_kinds),
-            cell_capacity,
+            storage_capacity,
             T,
+            entry.storage === :history ? CorePotts.CompilerSPI.history_source(
+                    executable.core_program.stage_plan,
+                    executable.core_program.descriptor_plan.state_layout,
+                    entry.handle,
+                ) : nothing,
         )
     end
-    descriptor_layout = executable.core_program.descriptor_plan.state_layout
     descriptor_initial_values = map(descriptor_layout.entries) do layout_entry
         identity = layout_entry.schema.identity
         if haskey(normalized_states, identity)
