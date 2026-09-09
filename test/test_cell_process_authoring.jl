@@ -1,51 +1,8 @@
-using StaticArrays
+include("fixtures/cell_processes.jl")
 
 @testset "cell processes update each eligible finite identity once" begin
-    @variables amount direction[1:2]
-    selected = CellKind(:selected; extinction = RetireAtZero())
-    other = CellKind(:other; extinction = RetireAtZero())
-    medium = MediumKind(:medium)
-    source = PottsSystem(
-        name = :cell_exchange,
-        statements = StatementSet(
-            (
-                Lattice((4, 3); boundary = Closed(), max_cells = 4), selected, other, medium,
-                CellState(amount; initial = 9.0, retirement = RetireTo(0.0)),
-                CellState(direction; initial = SVector(8.0, 7.0), retirement = RetireTo(SVector(0.0, 0.0))),
-                ProposalConstraint(:fixed_ownership, false),
-                Synchronous(
-                    :exchange, Assign(amount, direction[1]),
-                    Assign(direction, SVector(amount, 0.0)); domain = cells(selected)
-                ),
-                Protocol(Sweep(; temperature = 0.0); name = :main),
-            )
-        ),
-        unknowns = (amount, direction),
-    )
-    labels = [1 0 0; 2 2 0; 2 0 0; 3 0 0]
-    initial = PottsInitialState(
-        ownership = LabelledCells(labels; cells = [selected, selected, other], medium),
-        values = (
-            amount => [2.0, 3.0, 4.0],
-            direction => [SVector(5.0, 1.0), SVector(6.0, 1.0), SVector(7.0, 1.0)],
-        ),
-    )
-    problem = PottsProblem(source, initial, (0, 2); seed = 17)
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
-        integrator = init(problem, algorithm; scalar_type = Float32)
-        step!(integrator)
-        @test Array(integrator.u[:amount]) == Float32[5, 6, 4, 9]
-        @test Array(integrator.u[:direction]) == [
-            SVector(2.0f0, 0.0f0), SVector(3.0f0, 0.0f0),
-            SVector(7.0f0, 1.0f0), SVector(8.0f0, 7.0f0),
-        ]
-        step!(integrator)
-        @test Array(integrator.u[:amount]) == Float32[2, 3, 4, 9]
-        @test Array(integrator.u[:direction]) == [
-            SVector(5.0f0, 0.0f0), SVector(6.0f0, 0.0f0),
-            SVector(7.0f0, 1.0f0), SVector(8.0f0, 7.0f0),
-        ]
-        @test failure_report(integrator) === nothing
+        _cell_process_contract(algorithm, CPUBackend())
     end
 end
 

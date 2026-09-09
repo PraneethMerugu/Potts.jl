@@ -10,6 +10,7 @@ const METAL_SEMANTIC_WITNESSES = (
     "authored_randomness.jl",
     "fixed_vector_operations.jl",
     "product_fields.jl",
+    "cell_processes.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",
     "native_component_execution.jl",

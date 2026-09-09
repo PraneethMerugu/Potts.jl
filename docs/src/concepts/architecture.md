@@ -192,6 +192,12 @@ retains the indexed expression, but execution reads the existing owner's whole
 stored value before projecting a component. An indexed read does not create
 another state handle or expand a vector into scalar states.
 
+The shared `test/fixtures/cell_processes.jl` checks selected-cell updates and
+structured retirement values through the public workflow. Ordinary CPU tests
+and `benchmark/backends/metal/cell_processes.jl` use these same independent
+numerical expectations; malformed declaration and literal checks remain in the
+ordinary owning tests.
+
 ## Time
 
 The completed integer Monte Carlo step is the master CPM clock and lifecycle boundary. Each native
