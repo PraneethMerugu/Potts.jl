@@ -112,7 +112,7 @@ function _symbolic_result_type(value)
     classification isa Union{
         SymbolicIndexingInterface.ScalarSymbolic,
         SymbolicIndexingInterface.ArraySymbolic,
-    } && return Symbolics.symtype(Symbolics.unwrap(value))
+    } && return SymbolicUtils.symtype(Symbolics.unwrap(value))
     return Any
 end
 
