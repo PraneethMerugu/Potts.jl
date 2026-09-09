@@ -9,8 +9,9 @@ end
 ReferenceUnits(; kwargs...) = ReferenceUnits((; kwargs...))
 
 function _is_component_symbol(value)
-    SymbolicIndexingInterface.symbolic_type(value) isa
-        SymbolicIndexingInterface.ScalarSymbolic || return false
+    SymbolicIndexingInterface.symbolic_type(value) isa Union{
+        SymbolicIndexingInterface.ScalarSymbolic, SymbolicIndexingInterface.ArraySymbolic,
+    } || return false
     variables = Symbolics.get_variables(value)
     return length(variables) == 1 && isequal(
         Symbolics.unwrap(only(variables)), Symbolics.unwrap(value)
@@ -40,7 +41,7 @@ struct ComponentReference{R}
             arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing : reference
         _is_component_symbol(value) || throw(
             ArgumentError(
-                "a component reference requires a declared scalar symbolic parameter or state"
+                "a component reference requires one whole declared symbolic parameter or state"
             )
         )
         return new{typeof(reference)}(path, _defensive_copy(reference))
@@ -55,7 +56,7 @@ function _component_imports(values)
         alias = first(binding)
         _is_component_symbol(alias) || throw(
             ArgumentError(
-                "a component import alias must be a scalar symbolic reference"
+                "a component import alias must be one whole declared symbolic reference"
             )
         )
         any(item -> isequal(first(item), alias), result) && throw(
@@ -222,7 +223,7 @@ function PottsSystem(;
     )
 end
 
-function _parameter_dependency_atom(value)
+function _declared_symbolic_atom(value)
     return SymbolicUtils.default_is_atomic(value) && !(
         SymbolicUtils.iscall(value) && SymbolicUtils.operation(value) === getindex
     )
@@ -262,7 +263,7 @@ function PottsSystem(
         # ordinary scalar read/projection identities.
         for reference in _collect_symbolics(value)
             any(binding -> isequal(first(binding), reference), bindings) && continue
-            for variable in Symbolics.get_variables(reference; is_atomic = _parameter_dependency_atom)
+            for variable in Symbolics.get_variables(reference; is_atomic = _declared_symbolic_atom)
                 ModelingToolkitBase.isparameter(variable) || continue
                 any(binding -> isequal(first(binding), variable), bindings) && continue
                 any(isequal(variable), independent_variables) && continue

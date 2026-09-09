@@ -1,5 +1,29 @@
 # [Architecture](@id architecture)
 
+Enclosing lifecycle/reference validation and source qualification run once through
+`completion/completion.jl` and `completion/qualification.jl`.
+Child completion projects its owned records from that canonical result;
+`compiler/host/source_graph.jl` retains only reached external state metadata and
+parameter/initial-value use references for analysis. Source nodes, rather than
+the analysis record table, identify owned declarations. Completed symbolic
+inspection excludes dependency uses, and runtime materialization verifies that
+the selected system owns the complete storage/parameter dependency closure.
+Reading an imported stored field does not enroll its producer's evolution
+coefficients; a history read additionally retains the history's source declaration.
+No execution path borrows another runtime's storage or clones an imported owner.
+
+Runtime parameter ownership follows `PottsProblem`/SymbolicIndexingInterface →
+the scheduled `ParameterManifest` → parameter normalization and static lowering →
+Core's public scalar parameter publisher → detached logical getters/history.
+`compiler/host/parameter_manifest.jl` owns canonical parameter identities, fixed
+logical shapes, and contiguous scalar-slot spans. Structural scheduling builds
+this manifest once; late lowering reuses it when choosing numerical precision.
+There is no separate scheduled parameter schema or live logical parameter store.
+`compiler/lowering/parameters.jl` shares physical-value validation across problem
+construction, remakes and setters, and reconstructs immutable logical snapshots
+from Core's flat scalar buffer. Fixed-vector loads use the existing synthesized
+operation closure and fixed-vector constructor, not a parallel evaluator.
+
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
 ```text

@@ -40,6 +40,10 @@ const POTTS_TESTS = (
     "test_state_mutation_observation_failure.jl",
     "test_state_reference_inference.jl",
     "test_fixed_vector_operations.jl",
+    "test_fixed_vector_parameters.jl",
+    "test_vector_parameter_units_and_imports.jl",
+    "test_parameter_contracts.jl",
+    "test_component_dependency_ownership.jl",
     "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",
     "test_units_and_parameters.jl", "test_mtkcompile.jl",
     "test_initial_problem_remake.jl", "test_runtime_solution_sii.jl",
@@ -87,6 +91,7 @@ const POTTS_TEST_FIXTURES = (
     "symbolic_mutation_observation_failure.jl",
     "sciml_lifecycle.jl",
     "vector_rotation.jl",
+    "vector_parameters.jl",
     "product_fields.jl",
 )
 

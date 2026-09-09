@@ -10,6 +10,10 @@ The compiler is ordered by ownership stage:
 host/source_graph.jl
     freeze qualified source into indexed, host-only compiler data
 
+host/parameter_manifest.jl
+    own logical runtime parameter identity, fixed shape, unit references and
+    contiguous Core scalar slots in the one scheduled manifest
+
 host/footprint_types.jl
     define finite source, target, owner, and relationship footprint values
 
@@ -48,7 +52,8 @@ host/term_analysis.jl
     propagate semantic facts and construct the analyzed compiler authority
 
 ../completion/scheduling.jl
-    project analyzed completion data into the public structural schedule
+    project analyzed completion data into the public structural schedule and
+    construct its precision-independent parameter manifest
 
 execution/executable.jl
     define public engine/backend selections and the executable wrapper
@@ -63,7 +68,8 @@ host/coverage.jl
     validate compiler choices and complete statement/equation lowering coverage
 
 lowering/parameters.jl
-    lower units, defaults, and runtime parameter indices
+    validate effective physical parameter inputs and convert into the existing
+    manifest's scalar slots; reconstruct immutable logical parameter snapshots
 
 execution/manifests.jl
     construct compiled statement/state/I/O manifests and time contracts

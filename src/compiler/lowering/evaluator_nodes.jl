@@ -98,7 +98,7 @@ function _lower_static_node(
     expression = if node.payload_kind === :literal
         _static_literal(node.payload.value, manifest, T)
     elseif node.payload_kind === :parameter
-        _static_parameter(node.payload.value, manifest, T)
+        _static_parameter(node.payload.value, manifest, T; graph, record = ir.source.records[node.record])
     elseif node.payload_kind in (:state, :variable)
         handle = _state_handle_for_leaf(ir, node, state_handles)
         handle === nothing && throw(PottsValidationError(

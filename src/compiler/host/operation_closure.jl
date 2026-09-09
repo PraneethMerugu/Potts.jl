@@ -1,8 +1,8 @@
 # Dependency-derived compiler-synthesized operation closure.
 
-function _push_operation_requirement!(requirements, operation, arity::Int)
-    any(item -> first(item) === operation && last(item) == arity, requirements) ||
-        push!(requirements, operation => arity)
+function _push_operation_requirement!(requirements, operation, arity::Int, record::QualifiedStatement)
+    any(item -> item.operation === operation && item.arity == arity, requirements) ||
+        push!(requirements, (; operation, arity, record))
     return requirements
 end
 
@@ -57,7 +57,13 @@ function _compiler_synthesized_operation_requirements(
         nodes::Vector{NormalizedTermNode},
         roots::Vector{NormalizedTermRoot},
     )
-    requirements = Pair{Any, Int}[]
+    requirements = NamedTuple[]
+
+    for node in nodes
+        node.payload isa ParameterBindingPayload || continue
+        shape = _parameter_shape(node.payload.value)
+        isempty(shape) || _push_operation_requirement!(requirements, StaticArrays.SVector, only(shape), source.records[node.record])
+    end
 
     # Runtime reference scales are selected after structural analysis. These
     # dimensional operations may need a scalar conversion at materialization.
@@ -65,29 +71,30 @@ function _compiler_synthesized_operation_requirements(
         node.transfer === nothing && continue
         if node.transfer.unit_rule === :square_root ||
                 node.transfer.unit_rule === :arithmetic && node.operation in (:multiply, :divide, :power)
-            _push_operation_requirement!(requirements, (*), 2)
+            _push_operation_requirement!(requirements, (*), 2, source.records[node.record])
         end
     end
 
     for node in nodes
         owner = _state_record_for_leaf(source, node)
         owner !== nothing && _state_sample_record(source, owner).kind === :ModelState || continue
-        _push_operation_requirement!(requirements, _potts_model_bound_state_value, 1)
+        _push_operation_requirement!(requirements, _potts_model_bound_state_value, 1, source.records[node.record])
     end
 
-    for record in source.records
+    for declaration in source.statements
+        record = source.records[declaration.record]
         if record.kind === :FieldState
             evolution = get(_record_options(record), :evolution, nothing)
             if evolution !== nothing
                 for (operation, arity) in numerical_operation_requirements(evolution, record)
-                    _push_operation_requirement!(requirements, operation, arity)
+                    _push_operation_requirement!(requirements, operation, arity, record)
                 end
             end
         end
         if _record_has_relationship_create(record)
-            _push_operation_requirement!(requirements, (&), 2)
+            _push_operation_requirement!(requirements, (&), 2, record)
             _push_operation_requirement!(
-                requirements, _potts_relationship_endpoint_kinds, 4
+                requirements, _potts_relationship_endpoint_kinds, 4, record
             )
         end
     end
@@ -97,7 +104,7 @@ function _compiler_synthesized_operation_requirements(
         _node_subgraph_has_state_binding(nodes, root.node) || continue
         if record.phase isa AcceptedCopy
             _push_operation_requirement!(
-                requirements, _potts_proposal_bound_state_value, 1
+                requirements, _potts_proposal_bound_state_value, 1, record
             )
         elseif record.phase isa AfterMCS
             domain = _record_assignment_domain(source, record)
@@ -108,11 +115,11 @@ function _compiler_synthesized_operation_requirements(
                     domain === :cell ?
                     _potts_cell_bound_state_value :
                     _potts_iteration_bound_state_value,
-                1,
+                1, record,
             )
         elseif record.phase isa Lifecycle
             _push_operation_requirement!(
-                requirements, _potts_lifecycle_bound_state_value, 1
+                requirements, _potts_lifecycle_bound_state_value, 1, record
             )
         end
     end
@@ -122,21 +129,22 @@ function _compiler_synthesized_operation_requirements(
         family_node = nodes[Int(first(node.operands))]
         family_node.payload isa LiteralPayload || continue
         family = family_node.payload.value
+        record = source.records[node.record]
         if family == 1
-            _push_operation_requirement!(requirements, (>=), 2)
-            _push_operation_requirement!(requirements, (<=), 2)
+            _push_operation_requirement!(requirements, (>=), 2, record)
+            _push_operation_requirement!(requirements, (<=), 2, record)
         elseif family == 2
-            _push_operation_requirement!(requirements, (<), 2)
+            _push_operation_requirement!(requirements, (<), 2, record)
         elseif family == 3
-            _push_operation_requirement!(requirements, (>), 2)
+            _push_operation_requirement!(requirements, (>), 2, record)
         end
     end
 
     sort!(
         requirements; by = item -> (
-            String(operation_transfer(first(item), last(item)).identity),
-            last(item),
+            String(operation_transfer(item.operation, item.arity).identity),
+            item.arity,
         )
     )
-    return Tuple((first(item), last(item)) for item in requirements)
+    return Tuple(requirements)
 end

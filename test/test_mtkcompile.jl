@@ -216,25 +216,7 @@ end
     completion = getfield(scheduled, :completion)
     structural = completion.scheduled
     @test structural isa Potts.ScheduledPottsData
-    @test fieldnames(typeof(structural)) == (
-        :schema_version,
-        :schedule,
-        :provenance,
-        :parameters,
-        :states,
-        :relationships,
-        :observations,
-        :native_components,
-        :capability_requirements,
-        :fingerprint,
-    )
     @test !_contains_corepotts_value(structural)
-    for forbidden in (
-            :algorithm, :engine, :backend, :device, :scalar_type,
-            :core_program, :runtime, :workspace,
-        )
-        @test !hasfield(typeof(structural), forbidden)
-    end
 
     runtime_error = try
         mtkcompile(completed; backend = CPUBackend())

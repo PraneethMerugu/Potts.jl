@@ -125,7 +125,7 @@ function _mixed_symbolic_mutation_contract(algorithms, backend)
                 invalid_candidate = SPI.copy_auxiliary_state(descriptor_before)
                 state_entry = integrator.plan.state_manifest[SII.variable_index(problem.system, amount)]
                 fill!(SPI.state_block(invalid_candidate, state_entry.handle).values, Inf32)
-                parameter_candidate = copy(SII.parameter_values(integrator))
+                parameter_candidate = collect(SII.parameter_values(integrator))
                 parameter_candidate[SII.parameter_index(problem.system, beta)] = 13.0f0
                 @test_throws r"state block contains a nonfinite value" Potts._commit_symbolic_update!(
                     integrator; parameters = parameter_candidate,

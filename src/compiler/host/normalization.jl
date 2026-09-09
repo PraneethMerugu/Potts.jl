@@ -52,6 +52,37 @@ function _push_term_node!(
     return index
 end
 
+function _insert_operation_schema!(snapshot, schema::FrozenOperationSchema, record::QualifiedStatement)
+    existing = findfirst(
+        candidate -> candidate.transfer.identity === schema.transfer.identity &&
+            candidate.transfer.schema_version == schema.transfer.schema_version,
+        snapshot,
+    )
+    if existing === nothing
+        push!(snapshot, schema)
+        return snapshot
+    end
+    previous = snapshot[existing]
+    if _canonical_value(previous.transfer) != _canonical_value(schema.transfer) ||
+            !isequal(previous.callable, schema.callable)
+        throw(
+            PottsValidationError(
+                :normalization, (
+                    PottsDiagnostic(
+                        :conflicting_operation_schema, record.identity, String(schema.transfer.identity), record.identity.path,
+                        "one consistent transfer and callable for operation identity/version",
+                        "conflicting scientific or execution contracts", (), record.source,
+                    ),
+                )
+            )
+        )
+    end
+    if previous.surface_operation === nothing && schema.surface_operation !== nothing
+        snapshot[existing] = schema
+    end
+    return snapshot
+end
+
 function _normalize_term!(
         builder::_TermGraphBuilder,
         value,
@@ -441,29 +472,16 @@ function _normalize_source_graph(graph::FrozenSourceGraph)
             node.transfer,
             node.callable,
         )
-        existing = findfirst(
-            candidate -> candidate.transfer.identity === node.transfer.identity &&
-                candidate.transfer.schema_version == node.transfer.schema_version,
-            operation_snapshot,
-        )
-        existing === nothing && push!(operation_snapshot, schema)
+        _insert_operation_schema!(operation_snapshot, schema, graph.records[node.record])
     end
-    for (operation, arity) in internal_operations
+    for requirement in internal_operations
+        operation, arity = requirement.operation, requirement.arity
         transfer = operation_transfer(operation, arity)
         callable = CorePotts.CompilerSPI.operation_callable(
             Val(transfer.identity), transfer.schema_version
         )
         schema = FrozenOperationSchema(operation, arity, transfer, callable)
-        existing = findfirst(
-            candidate -> candidate.transfer.identity === transfer.identity &&
-                candidate.transfer.schema_version == transfer.schema_version,
-            operation_snapshot,
-        )
-        if existing === nothing
-            push!(operation_snapshot, schema)
-        elseif operation_snapshot[existing].surface_operation === nothing
-            operation_snapshot[existing] = schema
-        end
+        _insert_operation_schema!(operation_snapshot, schema, requirement.record)
     end
     sort!(
         operation_snapshot; by = schema -> (

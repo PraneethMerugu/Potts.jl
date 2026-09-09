@@ -56,6 +56,7 @@ include("completion/completion.jl")
 # Host compiler analysis freezes symbolic meaning and proves bounded resource
 # requirements. The compiler README documents the required pass order.
 include("compiler/host/source_graph.jl")
+include("compiler/host/parameter_manifest.jl")
 include("compiler/host/footprint_types.jl")
 include("compiler/host/operations.jl")
 include("operation_library/scientific.jl")

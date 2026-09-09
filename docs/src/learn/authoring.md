@@ -351,9 +351,17 @@ and `initial_conditions` queries use those same qualified symbols. Their parent
 queries do not add another namespace. Low-level MTK `get_*` accessors remain local
 source-field queries.
 
-This source-binding surface currently supports scalar symbolic parameters and states.
-Structured references and scoped declaration syntax require the structured-authoring
-extension. General native equation substitution is separate from port reconnection.
+Whole fixed-vector parameters can also be imported without introducing another
+owner. `examples/vector_coefficients.jl` composes a response component with one
+parent-owned coefficient vector; whole-vector assignments and literal component
+reads observe the same parameter updates. General native equation substitution
+is separate from port reconnection.
+An ordinary completed child may analyze reads of enclosing-owned state and
+parameters, including indexed vectors, without acquiring those declarations.
+Its state/parameter inspection lists only its own declarations. Materialize the
+enclosing model to execute such imports; an independently initialized child must
+own all state and parameter dependencies, or be explicitly recomposed with their
+owners. Ordinary declared inputs do not create a second runtime's storage.
 Generic symbolic substitution of a source with imports is also rejected until its
 binding updates have explicit semantics; use the supported replacement operation.
 Backend support is determined by the resulting complete model.
