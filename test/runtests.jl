@@ -3,6 +3,8 @@ import Potts
 
 const POTTS_TESTS = (
     "test_public_api.jl", "test_system_contract.jl",
+    "test_declaration_assembly.jl",
+    "test_assembled_model.jl",
     "test_component_replacement.jl",
     "test_compound_effects.jl",
     "test_structured_state_authoring.jl",

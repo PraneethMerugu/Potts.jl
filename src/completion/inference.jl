@@ -1,9 +1,23 @@
+function _append_symbolic_variables!(found, value)
+    variables = try
+        Symbolics.get_variables(value)
+    catch
+        Any[value]
+    end
+    for variable in variables
+        any(isequal(variable), found) || push!(found, variable)
+    end
+    return found
+end
+
 function _collect_symbolics!(found, value)
     if value isa Symbolics.Equation
         _collect_symbolics!(found, value.lhs)
         _collect_symbolics!(found, value.rhs)
     elseif value isa NamedTuple
         foreach(item -> _collect_symbolics!(found, item), values(value))
+    elseif SymbolicIndexingInterface.symbolic_type(value) isa SymbolicIndexingInterface.ArraySymbolic
+        _append_symbolic_variables!(found, value)
     elseif value isa Tuple || value isa AbstractArray
         foreach(item -> _collect_symbolics!(found, item), value)
     elseif value isa Pair
@@ -39,14 +53,7 @@ function _collect_symbolics!(found, value)
             SymbolicIndexingInterface.symbolic_type(value) isa
                 SymbolicIndexingInterface.NotSymbolic
         )
-        variables = try
-            Symbolics.get_variables(value)
-        catch
-            Any[value]
-        end
-        for variable in variables
-            any(isequal(variable), found) || push!(found, variable)
-        end
+        _append_symbolic_variables!(found, value)
     end
     return found
 end
@@ -65,15 +72,21 @@ _effect_writes(effect::Transition) = (effect.cell,)
 _effect_writes(effect::Divide) = (effect.cell,)
 _effect_writes(effect::Retire) = (effect.cell,)
 
-function _statement_writes(statement::AbstractPottsStatement)
-    if statement isa Union{
+_state_declaration_variables(::AbstractPottsStatement) = ()
+function _state_declaration_variables(
+        statement::Union{
             SiteState, CellState, MediumState, ModelState, FieldState, HistoryState,
             RelationshipState,
         }
-        arguments = _statement_arguments(statement)
-        return arguments isa NamedTuple && haskey(arguments, :variable) ?
-            (arguments.variable,) : ()
-    end
+    )
+    arguments = _statement_arguments(statement)
+    return arguments isa NamedTuple && haskey(arguments, :variable) ?
+        (arguments.variable,) : ()
+end
+
+function _statement_writes(statement::AbstractPottsStatement)
+    declared = _state_declaration_variables(statement)
+    isempty(declared) || return declared
     arguments = _statement_arguments(statement)
     effects = arguments isa NamedTuple && haskey(arguments, :effects) ?
         arguments.effects : ()

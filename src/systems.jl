@@ -222,6 +222,72 @@ function PottsSystem(;
     )
 end
 
+function _parameter_dependency_atom(value)
+    return SymbolicUtils.default_is_atomic(value) && !(
+        SymbolicUtils.iscall(value) && SymbolicUtils.operation(value) === getindex
+    )
+end
+
+"""
+    PottsSystem(statements::StatementSet; name, unknowns=(), parameters=(), kwargs...)
+
+Construct an ordinary source system, collecting variables owned by state
+declarations and explicitly declared symbolic parameters reached by its payloads.
+Explicit inventories are retained first, including unused declarations. Imported
+aliases remain references; process targets do not declare state. The keyword-only
+constructor remains available when supplying the complete inventories explicitly.
+"""
+function PottsSystem(
+        declarations::StatementSet;
+        unknowns = (), parameters = (), imports = (), independent_variables = (),
+        kwargs...,
+    )
+    bindings = _component_imports(imports)
+    variables = Any[unknowns...]
+    discovered_parameters = Any[parameters...]
+    payloads = Any[]
+    for statement in declarations
+        for variable in _state_declaration_variables(statement)
+            any(isequal(variable), variables) || push!(variables, variable)
+        end
+        push!(payloads, (_statement_arguments(statement), _statement_options(statement)))
+    end
+    for (key, value) in pairs(kwargs)
+        key in (:systems, :native_components) && continue
+        push!(payloads, value)
+    end
+    function discover_parameters(value)
+        # Indexed parameter reads retain one array owner, while a symbolic
+        # index is still a dependency. Other expression consumers keep their
+        # ordinary scalar read/projection identities.
+        for reference in _collect_symbolics(value)
+            any(binding -> isequal(first(binding), reference), bindings) && continue
+            for variable in Symbolics.get_variables(reference; is_atomic = _parameter_dependency_atom)
+                ModelingToolkitBase.isparameter(variable) || continue
+                any(binding -> isequal(first(binding), variable), bindings) && continue
+                any(isequal(variable), independent_variables) && continue
+                any(isequal(variable), discovered_parameters) || push!(discovered_parameters, variable)
+            end
+        end
+        return nothing
+    end
+    discover_parameters(payloads)
+    # Defaults may refer to further declared parameters. Walk this finite list
+    # once per identity; cycles remain for ordinary completion to diagnose.
+    index = 1
+    while index <= length(discovered_parameters)
+        parameter = discovered_parameters[index]
+        ModelingToolkitBase.hasdefault(parameter) &&
+            discover_parameters(ModelingToolkitBase.getdefault(parameter))
+        index += 1
+    end
+    return PottsSystem(;
+        statements = declarations, unknowns = variables,
+        parameters = discovered_parameters, imports = bindings,
+        independent_variables, kwargs...,
+    )
+end
+
 function _rebuild(
         system::PottsSystem;
         name = getfield(system, :name),

@@ -24,6 +24,14 @@ KernelAbstractions
 
 ## Potts
 
+The positional `PottsSystem(::StatementSet; ...)` constructor in `systems.jl`
+normalizes declaration-derived symbolic inventories into the ordinary keyword
+constructor. State enrollment and expression discovery reuse
+`completion/inference.jl`; imported aliases remain references. Completion,
+execution and inspection consume the resulting ordinary source object, without
+a retained construction graph. `test_declaration_assembly.jl` defends ownership,
+default dependency closure and equivalence to explicit inventories.
+
 Potts owns the public symbolic and SciML-facing product:
 
 - typed Potts statements, names, hierarchy, units, parameters, and observations;
