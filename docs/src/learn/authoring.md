@@ -185,6 +185,8 @@ declared duration divided by `substeps`. Draws use the existing qualified proces
 identity, completed MCS, site, and substep address. This is an explicitly sampled
 random rate in a clipped Euler update, not an SDE integrator or an automatic
 mass-conservation guarantee. Choose the timestep and noise model scientifically.
+For field evolution, `draw` is valid only in the explicit `DiscreteFieldEuler`
+`rhs`, not in initial values, duration, substeps, or shorthand options.
 Concrete dimensional literals such as `rhs=1.0u"m/s"` are supported. For symbolic
 quantities, attach units through parameter defaults or state initial values;
 wrapping a symbolic expression inside a `Quantity` is rejected explicitly.
