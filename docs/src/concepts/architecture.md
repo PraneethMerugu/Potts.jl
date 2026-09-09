@@ -139,6 +139,14 @@ Authored randomness follows `draw(..., DrawKey(...))` and lifecycle declarations
 `completion/semantic_ordering.jl`'s duplicate validation →
 `compiler/lowering/evaluator_resources.jl`'s one public CorePotts key-derivation
 batch → concrete evaluator/lifecycle descriptors → CorePotts addressed draws.
+
+The same operation catalog admits `:draw` in scheduled assignments. No separate
+scheduled key registry is built: qualified process identity and `DrawKey` enter
+the same complete batch. Core owns model/site/cell identity, cell generation,
+MCS, and scientific substep addressing. `test_scheduled_process_draws.jl` and
+its shared fixture exercise public model/cell/site updates, declaration-order
+noninterference, and checkpoint continuation; the ordinary Metal witness
+reuses that fixture.
 `RandomOperations` and lifecycle inspection derive from that same source
 inventory. Procedural initialization uses the same public key derivation with
 its explicitly named placement identity in `runtime/initial_state.jl`.

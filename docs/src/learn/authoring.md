@@ -99,6 +99,9 @@ solution = solve(CompartmentExchangeExample.exchange_problem(), SequentialCPM();
 (last(solution)[:stored], last(solution)[:released])
 ```
 
+Symbolic arrays remain whole symbolic values during component qualification;
+ordinary Julia containers still have their symbolic elements traversed.
+
 ## Simultaneous assignments
 
 Pass multiple effects to `Synchronous` to read one boundary-entry snapshot:
@@ -140,6 +143,73 @@ fixed-array and named-product literals. They must match the target state's
 logical shape, field names, and reference dimensions. Floating leaves use the
 selected execution precision; declared Boolean and integer leaves retain their
 types. Mutable arrays and nonfinite literal values are rejected before execution.
+
+## Retained samples and feedback
+
+`HistoryState(memory; of=signal, depth=3, cadence=Every(2))` retains samples of
+the exact declared `signal` owner. The source supplies the sample's logical
+type, shape, dimensions, and model/cell/site domain. Retention adds a dense
+storage axis, not fields of one large tuple or static array. Cell storage
+capacity remains distinct from the number of active cell identities.
+
+`lag(memory, 0)` reads the newest retained sample; `lag(memory, 1)` reads the
+previous sample. Indices must be literal nonnegative integers less than the
+declared depth; Boolean indices are rejected. There is no interpolation and a
+lagged read does not read the source's current live value.
+
+With `EveryMCS()` or `Every(n)`, initialization does not implicitly capture a
+sample. The declared prehistory remains until the first due positive completed
+MCS. Ordinary simultaneous assignments read boundary-entry samples; sampling
+then captures their updated source values at a due boundary. `initial=nothing`
+or numeric zero fills prehistory with the logical zero of the source type and
+dimensions. Explicit sample values must match that type and reference units.
+
+`AtMCS(0)` explicitly captures once after fresh native and callback
+initialization, before `save_start`. Only the newest slot is replaced; older
+supplied prehistory remains intact. It does not execute ordinary updates at
+zero. Restoring a checkpoint, including a checkpoint at zero, does not capture
+again, even when the checkpoint's live source differs from its held history.
+This does not persist callback identity or state: integrators with outer
+callbacks still cannot create checkpoints, and restore retains the existing
+composed-runtime compatibility requirements.
+
+Typed symbolic history variables preserve structured samples. For a vector,
+declare the symbolic shape before constructing indexed feedback:
+
+```julia
+@variables position[1:2] position_history[1:2] response[1:2]
+ModelState(position; initial=SVector(1.0, 2.0))
+HistoryState(position_history; of=position, depth=3)
+ModelState(response; initial=SVector(0.0, 0.0))
+Synchronous(:respond,
+    Assign(response, SVector(lag(position_history, 0)[2],
+                             -lag(position_history, 0)[1])))
+```
+
+For a named product, whole-value assignment and selected-field arithmetic share
+one sampled owner:
+
+```julia
+@variables payload::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
+@variables memory::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
+@variables copied::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
+@variables total
+ModelState(payload; initial=(amount=6.0u"m", enabled=true))
+history = HistoryState(memory; of=payload, depth=257, cadence=Every(2))
+ModelState(copied; initial=(amount=0.0u"m", enabled=false))
+ModelState(total; initial=0.0u"m")
+Synchronous(:respond,
+    Assign(copied, lag(memory, 0)),
+    Assign(total, lag(history.amount, 0) + lag(history.amount, 1)))
+```
+
+These snippets use `StaticArrays`, `Symbolics`, and, for quantities,
+`DynamicQuantities`. Include the declarations in the model's `StatementSet`.
+The product-field spelling is `lag(history.amount, n)`, where `history` is the
+declaration, not `lag(memory, n).amount`. The whole-product result remains one
+symbolic value. Component namespacing preserves the exact `of` owner and its
+units; for example, completing the enclosing model with
+`ReferenceUnits(length=2.0u"m")` represents the sampled `6.0u"m"` amount as `3.0`.
 
 ## Explicit imports and structural replacement
 

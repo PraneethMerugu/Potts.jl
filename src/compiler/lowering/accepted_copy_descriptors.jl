@@ -11,6 +11,7 @@ function _stage_descriptor(
         stage::CorePotts.CompilerSPI.AbstractCompiledStage,
         slot::Integer,
         effect_index::Integer = 1,
+        ; history_descriptors,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     arguments = first(record.normalized_payload)
@@ -64,6 +65,7 @@ function _stage_descriptor(
         state_handles,
         draw_handles,
         binding,
+        ; state_layout, history_descriptors,
     )
     value = _stage_evaluator(
         ir,
@@ -75,13 +77,14 @@ function _stage_descriptor(
         state_handles,
         draw_handles,
         binding,
+        ; state_layout, history_descriptors,
     )
     target = _stage_state_handle(ir, record, effect.target, state_handles)
-    reads = _record_state_handles(ir, record, state_handles)
+    reads = _record_state_handles(ir, record, state_handles; expressions = (condition.expression, value.expression))
     target in reads || (reads = (reads..., target))
     if is_model_assignment || is_cell_assignment
         entries = Tuple(
-            only(entry for entry in state_layout.entries if entry.handle == handle)
+            CorePotts.CompilerSPI.state_read_source(history_descriptors, state_layout, handle)
                 for handle in reads
         )
         domains = is_model_assignment ? (:model,) : (:cell, :model)

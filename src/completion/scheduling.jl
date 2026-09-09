@@ -135,10 +135,7 @@ function _scheduled_state_schema(data::CompletedPottsData)
             record.kind === :HistoryState ? :history : :stored
         extent = storage === :site ? lattice_shape :
             storage === :cell ? :cells :
-            storage === :history ? (
-                lattice_shape...,
-                _scheduled_option(record, :depth, 1),
-            ) : ()
+            storage === :history ? record.shape : ()
         push!(
             entries, (
                 key,

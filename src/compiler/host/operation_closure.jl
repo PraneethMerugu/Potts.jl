@@ -61,7 +61,7 @@ function _compiler_synthesized_operation_requirements(
 
     for node in nodes
         owner = _state_record_for_leaf(source, node)
-        owner !== nothing && owner.kind === :ModelState || continue
+        owner !== nothing && _state_sample_record(source, owner).kind === :ModelState || continue
         _push_operation_requirement!(requirements, _potts_model_bound_state_value, 1)
     end
 

@@ -537,13 +537,18 @@ operation_transfer(::typeof(occupancy), ::Int) =
     footprint_rule = InheritFootprintRule(),
 )
 
+operation_transfer(::typeof(lag), ::Int) = _transfer(
+    :lag, 2, :history_sample, :history_sample;
+    footprint_rule = InheritFootprintRule(),
+)
+
 for operation in (
         distance, field_value, field_gradient, laplacian, history_value,
-        edge_payload, lag,
+        edge_payload,
     )
     identity = nameof(operation)
     result_rule = :real
-    footprint_rule = if operation in (edge_payload, lag)
+    footprint_rule = if operation === edge_payload
         IncidentRelationshipFootprintRule()
     elseif operation === laplacian
         NeighborhoodFootprintRule(IterationNeighborhoodAnchor())
@@ -573,6 +578,6 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
         :lifecycle_partition,
         :lifecycle_state_transform,
     ),
-    allowed_phases = (:Proposal, :AcceptedCopy, :Lifecycle),
+    allowed_phases = (:Proposal, :AcceptedCopy, :AfterMCS, :Lifecycle),
     required_context = :any,
 )

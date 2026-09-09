@@ -3,6 +3,10 @@
 The compiler is ordered by ownership stage:
 
 ```text
+../completion/statement_contracts.jl and ../completion/qualification.jl
+    resolve a history declaration's exact qualified source owner and sample domain,
+    type, dimensions, and shape; symbolic arrays remain atomic through qualification
+
 host/source_graph.jl
     freeze qualified source into indexed, host-only compiler data
 
@@ -43,7 +47,7 @@ host/unit_analysis.jl
 host/term_analysis.jl
     propagate semantic facts and construct the analyzed compiler authority
 
-completion/scheduling.jl
+../completion/scheduling.jl
     project analyzed completion data into the public structural schedule
 
 execution/executable.jl
@@ -105,7 +109,14 @@ lowering/stage_grouping.jl
     group stage descriptors by compiler-owned concrete type
 
 lowering/after_mcs_descriptors.jl
-    lower field and history work at the after-MCS boundary
+    lower field work at the after-MCS boundary
+
+lowering/history_descriptors.jl
+    lower one dense retained-sample descriptor per declared history; reuse those
+    exact descriptors for read-only lag projections and the final stage plan
+
+lowering/completed_mcs_cadence.jl
+    lower completed-boundary cadence into the shared CorePotts cadence contract
 
 lowering/stage_plan.jl
     orchestrate the closed accepted-copy and after-MCS stage plan

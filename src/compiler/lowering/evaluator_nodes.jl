@@ -1,5 +1,31 @@
 # Recursive lowering from analyzed term nodes to concrete CorePotts expressions.
 
+function _bound_state_expression(graph, ir, node, handle, owner, state_binding)
+    expression = CorePotts.CompilerSPI.StateExpression(handle)
+    sample = owner === nothing ? nothing : _state_sample_record(ir.source, owner)
+    operation = if sample !== nothing && sample.kind === :ModelState
+        _potts_model_bound_state_value
+    elseif state_binding === nothing
+        return expression
+    elseif state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite
+        _potts_proposal_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.IterationStageSite
+        _potts_iteration_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.ModelStageSite
+        _potts_model_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation
+        _potts_cell_bound_state_value
+    elseif state_binding isa Symbol && startswith(String(state_binding), "lifecycle_")
+        _potts_lifecycle_bound_state_value
+    else
+        throw(ArgumentError("unsupported compiled state binding"))
+    end
+    record = ir.source.records[node.record]
+    return _compiler_synthesized_operation_expression(graph, operation, (expression,), record;
+        semantic_role = state_binding isa Symbol ? state_binding : _record_operation_role(record),
+        semantic_phase = state_binding isa Symbol ? :Lifecycle : _record_operation_phase(record))
+end
+
 function _lower_static_node(
         graph::NormalizedTermGraph,
         ir::AnalyzedTermIR,
@@ -11,6 +37,7 @@ function _lower_static_node(
         cache::Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression},
         state_binding = nothing,
         workspace_slices = nothing,
+        ; state_layout = nothing, history_descriptors = (),
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
@@ -33,40 +60,8 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        state_expression = CorePotts.CompilerSPI.StateExpression(handle)
         owner = _state_record_for_leaf(ir.source, node)
-        if owner !== nothing && owner.kind === :ModelState
-            _compiler_synthesized_operation_expression(
-                graph, _potts_model_bound_state_value, (state_expression,),
-                ir.source.records[node.record],
-            )
-        elseif state_binding === nothing
-            state_expression
-        else
-            operation = state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
-                _potts_proposal_bound_state_value :
-            state_binding isa CorePotts.CompilerSPI.IterationStageSite ?
-                _potts_iteration_bound_state_value :
-            state_binding isa CorePotts.CompilerSPI.ModelStageSite ?
-                _potts_model_bound_state_value :
-                state_binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation ?
-                _potts_cell_bound_state_value :
-                state_binding isa Symbol && startswith(
-                    String(state_binding), "lifecycle_"
-                ) ?
-                _potts_lifecycle_bound_state_value :
-                throw(ArgumentError("unsupported compiled state binding"))
-            _compiler_synthesized_operation_expression(
-                graph,
-                operation,
-                (state_expression,),
-                ir.source.records[node.record],
-                semantic_role = state_binding isa Symbol ? state_binding :
-                    _record_operation_role(ir.source.records[node.record]),
-                semantic_phase = state_binding isa Symbol ? :Lifecycle :
-                    _record_operation_phase(ir.source.records[node.record]),
-            )
-        end
+        _bound_state_expression(graph, ir, node, handle, owner, state_binding)
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
@@ -151,6 +146,11 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         )) : CorePotts.CompilerSPI.LiteralExpression(draw_handle)
+    elseif _is_history_sample_projection(node)
+        owner, amount = _history_sample_operand(ir.source, graph, node)
+        state_layout === nothing && throw(ArgumentError("history sample lowering requires the canonical state layout"))
+        handle = CorePotts.CompilerSPI.history_sample_handle(history_descriptors, state_layout, state_handles[owner.identity], amount)
+        _bound_state_expression(graph, ir, node, handle, owner, state_binding)
     else
         operation = _static_operation_callable(node)
         if workspace_slices !== nothing && haskey(workspace_slices, node_index)
@@ -222,6 +222,7 @@ function _lower_static_node(
                     cache,
                     state_binding,
                     workspace_slices,
+                    ; state_layout, history_descriptors,
                 )
             end)
         else
@@ -265,6 +266,7 @@ function _lower_static_node(
                     cache,
                     state_binding,
                     workspace_slices,
+                    ; state_layout, history_descriptors,
                 )
             end)
         end
