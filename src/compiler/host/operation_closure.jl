@@ -59,6 +59,16 @@ function _compiler_synthesized_operation_requirements(
     )
     requirements = Pair{Any, Int}[]
 
+    # Runtime reference scales are selected after structural analysis. These
+    # dimensional operations may need a scalar conversion at materialization.
+    for node in nodes
+        node.transfer === nothing && continue
+        if node.transfer.unit_rule === :square_root ||
+                node.transfer.unit_rule === :arithmetic && node.operation in (:multiply, :divide, :power)
+            _push_operation_requirement!(requirements, (*), 2)
+        end
+    end
+
     for node in nodes
         owner = _state_record_for_leaf(source, node)
         owner !== nothing && _state_sample_record(source, owner).kind === :ModelState || continue

@@ -63,6 +63,12 @@ function _reference_descriptor(name::Symbol, anchor)
             "reference unit `$name` must have a finite nonzero scale"
         )
     )
+    dimension = DynamicQuantities.dimension(anchor)
+    dimension == one(dimension) && scale != 1 && throw(
+        ArgumentError(
+            "dimensionless reference unit `$name` must have scale one; plain numbers and indices are unscaled"
+        )
+    )
     return ReferenceUnitDescriptor(
         name, string(DynamicQuantities.dimension(anchor)), scale
     )
@@ -118,6 +124,17 @@ function _reference_for(reference_units, value)
         )
     )
     return reference_units[index]
+end
+
+# An intermediate dimension need not have a stored state or declared parameter.
+# Such expressions use SI scale one without adding a second reference inventory.
+function _expression_reference_scale(unit, manifest::ParameterManifest)
+    unit in (:dimensionless, :polymorphic_zero) && return 1.0
+    dimension = _is_native_dimension(unit) ? string(unit) :
+        unit isa Tuple && first(unit) === :declared_dimension ? last(unit) : nothing
+    dimension === nothing && return 1.0
+    index = findfirst(reference -> reference.dimension == dimension, manifest.reference_units)
+    return index === nothing ? 1.0 : manifest.reference_units[index].scale
 end
 
 function _parameter_default(parameter)
