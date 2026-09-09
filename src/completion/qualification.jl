@@ -278,7 +278,10 @@ function _qualify_records!(
                     for operation in registered.contract.rng
             )
         end
-        units = _record_units(history_source === nothing ? statement : history_source.declaration, context_inventory)
+        units = _record_units(
+            history_source === nothing ? statement : history_source.declaration,
+            context_inventory, history_source === nothing ? identity : history_source.identity,
+        )
         reference_conversion = _record_reference_conversion(
             units, reference_anchors
         )
