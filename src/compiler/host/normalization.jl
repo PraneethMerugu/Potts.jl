@@ -373,6 +373,9 @@ function _record_expression_roots(record::QualifiedStatement)
     arguments = first(record.normalized_payload)
     roots = Pair{Symbol, Any}[]
     arguments isa NamedTuple || return roots
+    if record.kind === :FieldState && haskey(_record_options(record), :rhs)
+        push!(roots, :field_rhs => _record_options(record).rhs)
+    end
     lifecycle_effects = _cell_lifecycle_effects(record)
     if haskey(arguments, :expression) && arguments.expression !== nothing
         role = isempty(lifecycle_effects) ? :expression : :lifecycle_trigger

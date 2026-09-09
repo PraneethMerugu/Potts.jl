@@ -30,7 +30,7 @@ function _builtin_operation_declarations()
         (_potts_draw, 4),
         (_potts_merks_local_connectivity, 3),
         (_potts_act_energy, 5),
-        (_potts_discrete_field_euler, 7),
+        (_potts_discrete_field_stencil_rate, 6),
         (_potts_relationship_endpoint_kinds, 4),
     )
 end

@@ -200,7 +200,8 @@ end
 function _field_evolution_rejection(statement, statements, system)
     options = _statement_options(statement)
     evolution = get(options, :evolution, nothing)
-    evolution === nothing && return nothing
+    evolution === nothing && return haskey(options, :rhs) ?
+        "an explicit field rhs requires a declared evolution policy" : nothing
     return numerical_field_rejection(evolution, statement, statements, system)
 end
 
