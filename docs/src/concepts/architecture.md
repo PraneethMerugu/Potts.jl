@@ -211,9 +211,12 @@ vector, tensor, product, dimensional-reference, and checkpoint oracle to the
 ordinary CPU test and the Metal runner; invalid symbolic projections remain
 in the ordinary compiler test.
 
-Public `SymbolicIndexingInterface.setu` belongs to
-`runtime/symbolic_indexing.jl`: it resolves canonical state targets and stages
-the complete batch. Initialization and mutation share
+Public `SymbolicIndexingInterface.setu` and `setp` belong to
+`runtime/symbolic_indexing.jl`: one tagged setter resolves canonical state and
+parameter targets and stages the complete batch. Its commit owner also serves
+the parameter finalization hook, records parameter history once, and restores
+published values, pending parameters and the detached current value after an
+ordinary host refresh failure. Initialization and mutation share
 `runtime/initial_state.jl`'s supplied-value normalization and descriptor packing,
 which delegate logical type/unit conversion to the manifest owner above.
 CorePotts' public `update_program_descriptor_state!` validates and publishes the
@@ -222,7 +225,14 @@ the detached current saved value, without mutating earlier snapshots.
 `runtime/integrator.jl` owns rollback of state and parameters across an ordinary
 callback boundary. `test/test_logical_state_mutation.jl` defends conversion
 atomicity, canonical slot/history shapes, snapshots and continuation;
+`test/test_mixed_symbolic_mutation.jl` covers mixed batches and provider-independent
+pending-parameter policy, while `test/test_state_mutation_observation_failure.jl`
+exercises the shared refresh rollback boundary;
 `test/test_history_initialization.jl` covers callback-before-capture ordering.
+The mixed-publication and host-observation fault fixtures are shared with
+`benchmark/backends/metal/mixed_symbolic_mutation.jl`. The latter exercises host
+refresh errors after device publication; it does not simulate or promise
+recovery from failed device copies or execution.
 
 Named products use the same conversion owner recursively: declared field names,
 types, and fixed-array shapes determine the stored value, including omitted

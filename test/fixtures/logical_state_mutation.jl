@@ -88,7 +88,7 @@ function _logical_state_mutation_contract(algorithms, backend)
             @test_throws ArgumentError setu(integrator, cell_value)(integrator, cells[1:2])
             @test_throws ArgumentError whole(integrator, (99.0, SVector(0, 1), (enabled = true, amount = 2.0), zeros(2, 2), cells, 3))
             @test integrator.u[:amount] === 13.0f0
-            for forbidden in (:ownership, :amount_snapshot, amount + 1, polarity[1], product_state.amount, (amount, increment), (amount, amount), true)
+            for forbidden in (:ownership, :amount_snapshot, amount + 1, polarity[1], product_state.amount, (amount, amount), true)
                 @test_throws ArgumentError setu(integrator, forbidden)
             end
             @test_throws ArgumentError SymbolicIndexingInterface.set_state!(problem, 1.0, index)

@@ -15,6 +15,7 @@ const METAL_SEMANTIC_WITNESSES = (
     "product_fields.jl",
     "cell_processes.jl",
     "logical_state_mutation.jl",
+    "mixed_symbolic_mutation.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",
     "native_component_execution.jl",

@@ -14,8 +14,8 @@ transaction, for example `setu(integrator, (amount, polarity))(integrator,
 values, including a subset of the selected names.
 An empty named subset is a no-op after settlement. A setter may also be built
 from the scheduled `PottsSystem` or `PottsProblem` and reused with its
-integrators. Cached setters contain state indices: reuse requires the same
-scheduled system and state schema, not an unrelated model. Rebuild setters after
+integrators. Cached setters contain state and parameter indices: reuse requires the same
+scheduled system and schema, not an unrelated model. Rebuild setters after
 changing or replacing the model.
 
 Site values use the complete lattice-shaped buffer; cell values use every
@@ -29,16 +29,26 @@ compatible quantities for dimensional states; saved normalized numbers do not
 implicitly acquire physical units when passed back to a setter.
 
 Mutation first settles pending work, validates and converts every replacement,
-then publishes through CorePotts' state transaction. Invalid values leave the
-published state unchanged. The current `integrator.u` is refreshed, while
+then publishes through CorePotts' parameter and state owners, with no observer
+between the two publications. Invalid values leave published values unchanged;
+an ordinary host observation-refresh error restores the earlier values. The current `integrator.u` is refreshed, while
 previously saved snapshots remain detached. A late failing ordinary callback
 restores earlier state and parameter edits at that callback boundary. A failed
 integrator cannot be repaired with a setter. Backend execution or copy failures
 do not carry a general rollback guarantee.
 
 Setters target stored states, not ownership, observations, derived expressions,
-individual vector elements or product fields. Pure parameter setters retain the
-usual `setp` behavior; mixed parameter/state target batches are not supported.
+individual vector elements or product fields. `setu` also accepts parameters and
+mixed batches, for example `setu(integrator, (amount, rate))(integrator, (2.0, 0.5))`.
+`setp` selects only parameters. Both use one conversion/publication boundary.
+Ordinary parameter-containing batches start from the published parameter values
+and discard any pending parameter batch only after success, independently of
+whether the setter was built from a system, problem or integrator.
+`setp(provider, parameters; run_hook=false)` instead stages an atomic edit to a
+copy of the existing pending batch. `SymbolicIndexingInterface.finalize_parameters_hook!`
+publishes that batch. Failed staging or publication preserves the previous pending
+values; pure-state edits leave them alone. Finalize pending edits before a
+checkpoint if they should participate in continuation.
 To change a field, construct and replace its whole logical value. Initial callback
 edits occur before an explicit `AtMCS(0)` history capture; checkpoint restoration
 preserves the stored history and does not repeat that capture.
