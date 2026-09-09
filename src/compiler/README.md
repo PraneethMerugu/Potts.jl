@@ -36,6 +36,12 @@ host/normalization.jl
 host/energy_domains.jl
     prove conservative energy domains and finite affected-anchor plans
 
+host/quantity_scopes.jl
+    qualify quantity/anchor resources against the completion context inventory;
+    derive process domains and bounds from declared targets before fingerprinting;
+    validate lexical anchor capture and population-compatible reads on the same
+    qualified records and normalized graph
+
 host/footprints.jl
     derive and combine bounded resource footprints from analyzed operations
 

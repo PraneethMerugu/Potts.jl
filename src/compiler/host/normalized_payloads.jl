@@ -102,6 +102,8 @@ function _compiler_leaf_kind(value, source::FrozenSourceGraph)
         return SymbolicIndexingInterface.symbolic_type(DynamicQuantities.ustrip(value)) isa
             SymbolicIndexingInterface.NotSymbolic ? :literal : :symbolic_leaf
     end
+    scoped = _resolved_scoped_anchor(source, value)
+    scoped === nothing || return scoped.kind
     any(source.references) do reference
         reference.kind === :parameter &&
             isequal(_qualified_source_reference(reference), value)
@@ -163,7 +165,10 @@ function _resolved_state_payload(
         source::FrozenSourceGraph,
         value,
     )
-    for record in source.records
+    return _resolved_state_payload(source.records, value)
+end
+function _resolved_state_payload(records::AbstractVector, value)
+    for record in records
         variable = _state_record_variable(record)
         variable === nothing && continue
         isequal(variable, value) || continue
@@ -219,8 +224,10 @@ function _resolved_relationship_payload(
         )
     end
     resource_ids = filter(
-        identity -> any(candidate -> candidate.kind === :RelationshipState &&
-            candidate.identity == identity, source.records),
+        identity -> any(
+            candidate -> candidate.kind === :RelationshipState &&
+                candidate.identity == identity, source.records
+        ),
         record.resources,
     )
     length(resource_ids) == 1 || return nothing
@@ -265,10 +272,12 @@ function _resolve_normalized_payload(
         name = _normalized_token_suffix(value, "__potts_proposal__")
         return name === nothing ? nothing : ContextBindingPayload(:proposal, name)
     elseif kind in (:site_anchor, :cell_anchor, :contact_anchor, :relationship_context)
+        scoped = _resolved_scoped_anchor(source, value)
+        scoped === nothing || return scoped
         prefix = kind === :site_anchor ? "__potts_energy_site__" :
-                 kind === :cell_anchor ? "__potts_energy_cell__" :
-                 kind === :contact_anchor ? "__potts_energy_contact__" :
-                 "__potts_relationship__"
+            kind === :cell_anchor ? "__potts_energy_cell__" :
+            kind === :contact_anchor ? "__potts_energy_contact__" :
+            "__potts_relationship__"
         name = _normalized_token_suffix(value, prefix)
         name === nothing && return nothing
         return AnchorBindingPayload(
@@ -279,13 +288,13 @@ function _resolve_normalized_payload(
     elseif kind === :relationship_set
         requested = _normalized_token_suffix(value, "__potts_relationship_set__")
         return requested === nothing ? nothing : _resolved_resource_payload(
-            source, record, :RelationshipState, requested
-        )
+                source, record, :RelationshipState, requested
+            )
     elseif kind === :spatial_relation
         requested = _normalized_token_suffix(value, "__potts_spatial_relation__")
         return requested === nothing ? nothing : _resolved_resource_payload(
-            source, record, :SpatialRelation, requested
-        )
+                source, record, :SpatialRelation, requested
+            )
     elseif kind === :kind
         requested = _normalized_token_suffix(value, "__potts_kind__")
         requested === nothing && return nothing
@@ -352,10 +361,10 @@ _normalized_payload_kind(::DrawBindingPayload) = :draw
 
 function _normalized_leaf_callable(kind::Symbol, version::VersionNumber)
     identity = kind === :site_anchor ? :energy_anchor_site :
-               kind === :cell_anchor ? :energy_anchor_cell :
-               kind === :contact_anchor ? :energy_anchor_contact :
-               kind === :relationship_context ? :energy_anchor_relationship :
-               nothing
+        kind === :cell_anchor ? :energy_anchor_cell :
+        kind === :contact_anchor ? :energy_anchor_contact :
+        kind === :relationship_context ? :energy_anchor_relationship :
+        nothing
     identity === nothing && return nothing
     return CorePotts.CompilerSPI.operation_callable(Val(identity), version)
 end

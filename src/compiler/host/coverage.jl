@@ -72,18 +72,6 @@ function _compiled_relationship_declaration(statements, requested)
     return length(matches) == 1 ? only(matches) : nothing
 end
 
-function _declared_assignment_state(target, statements)
-    matches = filter(statements) do statement
-        statement isa Union{
-            SiteState, CellState, MediumState, ModelState, FieldState,
-            HistoryState,
-        } || return false
-        arguments = _statement_arguments(statement)
-        haskey(arguments, :variable) && isequal(arguments.variable, target)
-    end
-    return length(matches) == 1 ? only(matches) : nothing
-end
-
 _same_statement_resource(left, right) =
     left isa AbstractPottsStatement &&
     right isa AbstractPottsStatement &&
@@ -131,7 +119,16 @@ function _accepted_copy_effect_rejection(effect, condition, statements)
     return "accepted-copy lowering does not support $(nameof(typeof(effect)))"
 end
 
-function _synchronous_rejection(statement, statements)
+function _declared_assignment_state(target, statements)
+    matches = filter(statements) do statement
+        statement isa Union{SiteState, CellState, MediumState, ModelState, FieldState, HistoryState} || return false
+        arguments = _statement_arguments(statement)
+        haskey(arguments, :variable) && isequal(arguments.variable, target)
+    end
+    return length(matches) == 1 ? only(matches) : nothing
+end
+
+function _synchronous_rejection(statement, statements, source, record)
     arguments = _statement_arguments(statement)
     effects = arguments.effects
     isempty(effects) && return "synchronous process requires at least one assignment"
@@ -145,12 +142,14 @@ function _synchronous_rejection(statement, statements)
     all(==(first(domains)), domains) ||
         return "synchronous effects must share one iteration domain; use separate processes for model, cell, and site assignments"
     if first(domains) === :cell
+        scoped = all(effects) do effect
+            scope = _declaration_scope(_declared_assignment_state(effect.target, statements))
+            scope isa CellBinding && _scoped_anchor(scope)
+        end
+        scoped && return nothing # Qualified declaration/population checks ran during completion.
         arguments.domain isa Cells ||
             return "synchronous CellState assignments require an explicit cells(kind) domain"
-        any(
-            candidate -> candidate isa CellKind &&
-                _same_statement_resource(arguments.domain.kind, candidate), statements
-        ) ||
+        _resource_record(source, record, :CellKind, arguments.domain.kind) !== nothing ||
             return "synchronous cells(kind) domain must resolve to a declared CellKind"
     elseif arguments.domain isa Cells
         return "synchronous cells(kind) domain requires CellState targets"
@@ -205,9 +204,9 @@ function _field_evolution_rejection(statement, statements, system)
     return numerical_field_rejection(evolution, statement, statements, system)
 end
 
-function _statement_lowering_rejection(statement, statements, system)
+function _statement_lowering_rejection(statement, statements, system, record)
     if statement isa SynchronousProcess
-        return _synchronous_rejection(statement, statements)
+        return _synchronous_rejection(statement, statements, _completion_data(system).source_graph, record)
     elseif statement isa AcceptedCopyProcess
         return _accepted_copy_rejection(statement, statements)
     elseif statement isa LifecycleProcess
@@ -244,7 +243,7 @@ function _validate_compilation_coverage!(
     for record in records
         statement = record.normalized_statement
         reason = _statement_lowering_rejection(
-            statement, all_statements, system
+            statement, all_statements, system, record
         )
         reason === nothing && continue
         push!(

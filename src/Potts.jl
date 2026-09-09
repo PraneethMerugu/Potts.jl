@@ -27,6 +27,7 @@ include("symbolics/bindings.jl")
 include("symbolics/operations.jl")
 include("symbolics/distributions.jl")
 include("statements/semantics.jl")
+include("statements/scopes.jl")
 include("statements/lifecycle.jl")
 
 # Completion turns authored hierarchy into qualified, validated scientific
@@ -67,6 +68,7 @@ include("compiler/host/operation_validation.jl")
 include("compiler/host/operation_closure.jl")
 include("compiler/host/normalization.jl")
 include("compiler/host/energy_domains.jl")
+include("compiler/host/quantity_scopes.jl")
 include("compiler/host/footprints.jl")
 include("compiler/host/lifecycle_analysis.jl")
 include("compiler/host/operation_analysis.jl")
@@ -161,6 +163,7 @@ export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
 export Proposal, AcceptedCopy, AfterMCS, RelationshipCommit, Lifecycle
 export Before, After, EveryMCS, AtMCS, Every
 export sites, cells, model, contacts, edges, incident_edges
+export scoped
 export Assign, Create, Remove, Retune
 export CreateCell, RemoveCell, Transition, Divide, Retire
 export SeedAt, SeedStencil, CellCentroid

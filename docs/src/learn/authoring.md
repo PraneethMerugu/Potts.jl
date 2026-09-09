@@ -146,7 +146,7 @@ assignments execute once per eligible finite cell. Use
 separate processes for different domains. This does not make source order an
 implicit sequential update policy.
 
-Cell assignments name their finite-kind domain explicitly:
+Cell assignments can name their finite-kind domain explicitly:
 
 ```julia
 @variables store
@@ -154,6 +154,32 @@ cell = CellKind(:cell; extinction=RetireAtZero())
 CellState(store; initial=1.0, retirement=RetireTo(0.0))
 Synchronous(:accumulate, Assign(store, store + 1); domain=cells(cell))
 ```
+
+For reusable factories, declare the quantity's population once:
+
+```julia
+declarations = scoped(cells(cell), :population) do c
+    @statements begin
+        CellState(store; initial=1.0, retirement=RetireTo(0.0))
+        Synchronous(:accumulate, Assign(store, store + 1))
+    end
+end
+```
+
+The callback returns an ordinary `StatementSet`. Its `CellState` declarations
+own the population; processes derive that domain from their targets. An explicit
+`domain=` is checked against those declarations. `scoped(sites(lattice), :sites)`
+does the same for site quantities. Nested scopes retain their own declarations.
+
+The callback binding is a lexical context, not a population identifier copied
+onto every process. Equivalent explicit construction uses
+`CellBinding(:population, cells(cell))`, `CellState(...; scope=binding)`, and
+`Synchronous(...; anchor=binding)`. Different scopes within the same population
+may exchange quantities or participate in one compound assignment; an expression
+cannot capture a different lexical anchor. Use distinct explicit names for
+distinct nested scopes. Component qualification distinguishes same-local-name
+factories deterministically. Imported symbolic quantities retain their declaring
+scope and storage; a matching local spelling does not enroll another quantity.
 
 Cell size does not multiply the update. Inactive slots, medium, and cells of
 other kinds are not selected. Cell processes can read cell state, model state,

@@ -115,6 +115,24 @@ CorePotts' existing iterated-site effect owns substep entry state and addressed
 draw execution. No separate numerical scheduler or random generator is added.
 `test/test_cell_process_authoring.jl` checks per-cell frequency, kind selection,
 inactive slots, simultaneous scalar/vector writes, and domain rejection.
+The construction-only `scoped` callback in `statements/scopes.jl` attaches the
+existing bound `CellBinding`/`SiteBinding` to ordinary declarations and processes.
+`compiler/host/quantity_scopes.jl` resolves enclosing resource references against
+the existing source context inventory during qualification, then derives process
+bounds from the complete record vector before scheduling or fingerprinting.
+Population and lexical-anchor validation consumes those same qualified records;
+it retains no scope registry. Scoped tokens reversibly encode lexical names so
+Unicode and namespace separators remain part of the user name; classification
+matches the retained declaration binding, not a reserved substring. This is
+construction-time symbolic identity, not a runtime state or dispatch scheme.
+Resolved domains and anchors are checked in every completed subtree; unresolved
+scoped reads are checked at the existing enclosing-root completion boundary,
+where parent state and parameter references are available. Native coupling
+expressions keep their native owner and are not treated as scheduled reads.
+Normalization reuses `StateBindingPayload` and `AnchorBindingPayload`, and the
+same assignment lowering derives the selected kind from its target declaration.
+`test/test_quantity_scopes.jl` owns deterministic qualification, imported logical
+values, lexical capture rejection, and two-population/site behavior.
 State-policy literals reuse the compiled state manifest's logical type and
 reference units. `compiler/lowering/lifecycle_plan.jl` resolves the target's
 existing handle; `_static_literal` delegates numerical conversion to the same

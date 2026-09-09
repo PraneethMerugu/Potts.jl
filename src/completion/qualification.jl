@@ -10,8 +10,13 @@ function _namespace_symbolic_value(value, names)
             nothing
         end
         # These are globally scoped compiler tokens, not model variables.
-        name !== nothing && startswith(String(name), "__potts_") &&
-            return variable
+        if name !== nothing && startswith(String(name), "__potts_")
+            # Bound lexical anchors belong to the declaring component. Other
+            # compiler tokens intentionally retain contextual/global meaning.
+            scoped_anchor = startswith(String(name), "__potts_scoped_cell__") ||
+                startswith(String(name), "__potts_scoped_site__")
+            scoped_anchor || return variable
+        end
         return foldr(
             (scope, current) ->
             ModelingToolkitBase.renamespace(scope, current),
@@ -66,6 +71,12 @@ function _namespace_reference_payload(value, names)
                 _namespace_reference_payload(item, names)
                 for (key, item) in value
         )
+    elseif value isa Union{SiteBinding, CellBinding}
+        # The symbolic pass already qualified the token. This pass qualifies
+        # declaration references only, without applying the namespace twice.
+        domain = _namespace_reference_payload(value.domain, names)
+        return value isa SiteBinding ? SiteBinding(domain, _binding_token(value)) :
+            CellBinding(domain, _binding_token(value))
     elseif value isa Union{
             AbstractPottsEffect, AbstractIterationDomain, AbstractBoundaryPolicy,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
@@ -147,6 +158,7 @@ function _qualify_records!(
         end
         seen[id] = originating_statement
         statement = _namespace_statement(originating_statement, current_path)
+        statement = _qualify_quantity_scopes(statement, current_path, context_inventory)
         identity = QualifiedStatementID(current_path, id)
         history_source = if statement isa HistoryState
             try
@@ -418,7 +430,7 @@ function _validate_synchronous_writers!(diagnostics, records)
     return nothing
 end
 
-function _with_ordering_dependencies(record, dependencies)
+function _with_statement_contracts(record; dependencies = record.ordering_dependencies, bound = record.bound)
     return QualifiedStatement(
         record.identity,
         record.kind,
@@ -437,7 +449,7 @@ function _with_ordering_dependencies(record, dependencies)
         record.persistence,
         record.resources,
         record.effect,
-        record.bound,
+        bound,
         record.transaction_identity,
         record.lifecycle,
         record.random_operations,

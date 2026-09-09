@@ -18,6 +18,7 @@ const METAL_SEMANTIC_WITNESSES = (
     "logical_state_mutation.jl",
     "mixed_symbolic_mutation.jl",
     "vector_parameters.jl",
+    "scoped_quantities.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",
     "native_component_execution.jl",

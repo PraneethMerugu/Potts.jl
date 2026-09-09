@@ -212,6 +212,10 @@ function _leaf_footprint(source, node, record, dimensions)
             return OwnerFootprintFact(:owner)
         end
     elseif kind === :site_anchor
+        if record.kind === :SynchronousProcess &&
+                _resolved_scoped_anchor(source, node.payload) !== nothing
+            return _spatial_anchor_fact(IterationSiteAnchor(), dimensions)
+        end
         name = node.payload.name
         return SpatialFootprintFact(
             BoundSiteAnchor(name), _zero_offsets(dimensions)
