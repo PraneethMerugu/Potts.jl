@@ -88,8 +88,8 @@ values are never silently deduplicated. Ordinary factory helpers can return a
 or discover declarations hidden in helper bodies. Plain `@statements begin ...
 end` continues to return only a `StatementSet`.
 
-`examples/compartment_exchange.jl` is a complete factory using `@statements`
-and this positional constructor, with no separate state or parameter tuple. Its
+`examples/compartment_exchange.jl` is a complete factory using this
+explicit-constructor `@statements` form, with no separate state or parameter tuple. Its
 two simultaneous assignments conserve the total reservoir amount:
 
 ```@example assembled-exchange

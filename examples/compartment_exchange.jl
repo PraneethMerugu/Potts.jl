@@ -11,9 +11,9 @@ Amounts are dimensionless here; this is a discrete exchange law, not an ODE.
 """
 function exchange_problem(; fraction_value = 0.25, seed = 17)
     0 <= fraction_value <= 1 || throw(ArgumentError("exchange fraction must lie in [0, 1]"))
-    @variables stored released
-    @parameters fraction = fraction_value
-    declarations = @statements begin
+    source = @statements PottsSystem(; name = :compartment_exchange) begin
+        @variables stored released
+        @parameters fraction = fraction_value
         Lattice((2, 2); boundary = Closed())
         carrier = CellKind(:carrier; extinction = ForbidExtinction())
         medium = MediumKind(:medium)
@@ -27,7 +27,6 @@ function exchange_problem(; fraction_value = 0.25, seed = 17)
         ProposalConstraint(:fixed_ownership, false)
         Protocol(Sweep(; temperature = 0.0); name = :main)
     end
-    source = PottsSystem(declarations; name = :compartment_exchange)
     initial = PottsInitialState(
         ownership = LabelledCells(ones(Int, 2, 2); cells = [carrier], medium),
     )
