@@ -615,6 +615,15 @@ carry compatible units on every component; an unlabelled numerical vector does
 not silently acquire the declaration's units. Reference conversion is the same
 one used for scalar state values.
 
+Every dimensional scalar expression is represented as physical value divided
+by the selected reference scale for its result dimension. Multiplication,
+division, integer powers, and square roots convert between those scales; the
+references need not be coherent products of the length and time references.
+An intermediate dimension without an explicit reference uses SI scale one.
+Addition, comparisons, and `min`/`max` use the common scale of their compatible
+operands. Dimensionless references must have scale one: they cannot redefine
+plain numeric literals or indices.
+
 Array initializers participate in the same reference inference as scalar
 initializers. All inferred anchors for a dimension must have the same finite,
 nonzero magnitude. If components suggest different scales, provide

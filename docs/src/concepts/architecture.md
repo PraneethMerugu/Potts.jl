@@ -91,6 +91,14 @@ existing handle; `_static_literal` delegates numerical conversion to the same
 recursive owner in `compiler/execution/manifests.jl` used by initialization.
 No additional lifecycle state schema is retained. The actual retirement and
 invalid literal tests live in `test/test_structured_lifecycle_literals.jl`.
+`compiler/lowering/evaluator_nodes.jl` normalizes dimensional arithmetic using
+the analyzed node units and the existing reference manifest in
+`compiler/lowering/parameters.jl`. It inserts ordinary scalar multiplication
+only when operand and result reference scales require conversion. The same
+lowering applies to process and lifecycle expressions; no runtime unit table
+or second reference inventory exists. `test/test_expression_reference_scales.jl`
+checks independent reference scales, SI intermediate dimensions, and lifecycle
+creation numerically.
 `test/test_compound_effects.jl` exercises this path through public models.
 `completion/inference.jl` retains actual effect RHS reads even when the same
 process writes those states. `compiler/host/footprints.jl` gives direct site-state
