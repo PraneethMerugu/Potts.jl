@@ -232,10 +232,12 @@ function numerical_field_stage_descriptor(
         )
         # The authored rate and duration use independent reference dimensions;
         # their product must enter the field's normalized state coordinates.
-        conversion = BigFloat(_expression_reference_scale(rate_unit, manifest)) *
-            BigFloat(_expression_reference_scale(duration_unit, manifest)) /
-            BigFloat(_expression_reference_scale(state_unit, manifest))
-        coefficient = T(BigFloat(duration) * conversion / substeps)
+        coefficient = setprecision(BigFloat, 256) do
+            conversion = BigFloat(_expression_reference_scale(rate_unit, manifest)) *
+                BigFloat(_expression_reference_scale(duration_unit, manifest)) /
+                BigFloat(_expression_reference_scale(state_unit, manifest))
+            T(BigFloat(duration) * conversion / substeps)
+        end
         isfinite(coefficient) && coefficient > zero(T) ||
             throw(ArgumentError("field rate × duration reference conversion must be finite and positive at $T precision"))
         (rhs.expression, C.FootprintUnion((site_footprint, _record_read_footprint(ir, record_index))), coefficient)
