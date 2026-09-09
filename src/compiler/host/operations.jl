@@ -332,6 +332,11 @@ operation_transfer(::typeof(ifelse), ::Int) =
     operand_rule = :ifelse
 )
 
+for (operation, identity) in ((sin, :sine), (cos, :cosine))
+    @eval operation_transfer(::typeof($operation), ::Int) =
+        _transfer($(QuoteNode(identity)), 1, :real, :dimensionless; operand_rule = :real)
+end
+
 for operation in (abs, exp, log, sqrt)
     identity = if operation === abs
         :absolute

@@ -94,6 +94,7 @@ end
 function _operation_operand_admitted(rule::Symbol, types::Tuple)
     rule === :any && return true
     rule === :numeric && return all(type -> type <: Number, types)
+    rule === :real && return all(type -> type <: Real, types)
     rule === :boolean && return all(type -> type <: Bool, types)
     rule === :integer && return all(type -> type <: Integer, types)
     rule === :fixed_index && return length(types) == 2 &&

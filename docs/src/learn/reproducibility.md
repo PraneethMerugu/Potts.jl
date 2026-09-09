@@ -76,13 +76,24 @@ its draw identity.
 
 Scheduled samples use the absolute completed MCS and their scientific
 before/after-lifecycle boundary. Reordering unrelated declarations does not
-consume or shift their draws. Iterated field updates receive fresh noise at
-each declared substep; to hold noise, sample a separate state and read it from
-the iterated update. Checkpoint continuation preserves the addressing identity.
+consume or shift their draws. CorePotts's iterated-site compiler interface
+receives fresh noise at each declared substep; this does not add an arbitrary
+stochastic right-hand side to the public `DiscreteFieldEuler` configuration.
+To hold noise, sample a separate state and read it from another process.
+Checkpoint continuation preserves the addressing identity.
 A failed transaction does not consume samples or advance the logical MCS;
 `repeat` remains an explicit trajectory choice, not a failed-transaction count.
 Normal samples can differ in floating-point rounding across CPU and GPU even
 when their addressed uniforms agree.
+
+The runnable `examples/cell_polarity_dynamics.jl` applies this held-state pattern
+to a whole two-component cell polarity. At a boundary, the angular sampler
+writes the next turn while the rotation reads the entry turn. The initial zero
+turn therefore holds orientation at the first boundary. Subsequent boundaries
+rotate once per selected cell, regardless of area. This is polarity dynamics
+with fixed ownership, not a demonstrated migration or energy-coupled model.
+The ordinary scalar `sin` and `cos` operations accept dimensionless real
+arguments; these operations do not imply complex or array-broadcast support.
 
 Stable random addresses are not a promise of unchanged trajectories after
 changing a model: proposals, state, acceptance, and competing initialization

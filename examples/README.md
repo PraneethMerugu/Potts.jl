@@ -2,6 +2,11 @@
 
 These examples are executable against the current public package interfaces:
 
+- `cell_polarity_dynamics.jl` samples one held angular increment per selected
+  cell and rotates a whole fixed-size polarity vector. It demonstrates unequal
+  cell areas, explicitly lagged synchronous reads, and fixed ownership; it does
+  not claim migration or energy coupling. Its ordinary CPU/Metal tests check an
+  independent rotation oracle, norm, declaration reordering, and checkpoints.
 - `wortel_2021_serial.jl` is the bounded Wortel integration witness used by the
   manual.
 - `merks_2006_serial.jl` is the bounded Merks integration witness used by the
@@ -14,6 +19,7 @@ Run them from this environment after instantiation, for example:
 
 ```sh
 julia --project=examples examples/wortel_2021_serial.jl
+julia --project=examples examples/cell_polarity_dynamics.jl
 ```
 
 The former research notebooks mixed those scientific purposes with retired
