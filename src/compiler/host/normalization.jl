@@ -60,6 +60,16 @@ function _normalize_term!(
         source::QualifiedStatementID,
     )
     classified = _compiler_leaf_kind(value, source_graph)
+    if classified === :symbolic_quantity
+        push!(
+            builder.diagnostics, PottsDiagnostic(
+                :unsupported_symbolic_quantity, source, repr(value), source.path,
+                "a concrete quantity; declare symbolic units through parameter defaults or state initial values",
+                "a quantity containing a symbolic value", (), source_graph.records[Int(record)].source,
+            )
+        )
+        return Int32(0)
+    end
     if classified in (
             :parameter,
             :variable,

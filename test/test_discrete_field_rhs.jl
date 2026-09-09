@@ -1,5 +1,23 @@
 include("fixtures/discrete_field_rhs.jl")
 
+@testset "explicit field rates reject ambiguous formulas and incompatible units" begin
+    @test_throws r"complete rate" init(discrete_field_rhs_problem(; field_options = (diffusion = 0.1,)), SequentialCPM())
+    @test_throws r"field_rhs_units" init(discrete_field_rhs_problem(; rhs_override = 1.0u"m"), SequentialCPM())
+    @test_throws r"positive integer, not Bool" init(discrete_field_rhs_problem(; substeps = true), SequentialCPM())
+    @parameters wrapped_symbol
+    wrapped = DynamicQuantities.Quantity(wrapped_symbol; length = 1, time = -1)
+    @test_throws r"unsupported_symbolic_quantity" init(discrete_field_rhs_problem(; rhs_override = wrapped), SequentialCPM())
+end
+
+@testset "concrete dimensional rate literals reach ordinary lowering" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        integrator = init(discrete_field_rhs_problem(; rhs_override = 1.0u"m/s"), algorithm; scalar_type = Float32)
+        step!(integrator)
+        @test Array(integrator.u[:concentration]) ≈ fill(0.5f0, 3, 2)
+        @test failure_report(integrator) === nothing
+    end
+end
+
 @testset "field clipping and late multi-site substep failure are transactional" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         test_discrete_field_clipping_and_rollback(algorithm, CPUBackend())
@@ -10,12 +28,6 @@ end
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         test_discrete_field_rhs(algorithm, CPUBackend())
     end
-end
-
-@testset "explicit field rates reject ambiguous formulas and incompatible units" begin
-    @test_throws r"complete rate" init(discrete_field_rhs_problem(; field_options = (diffusion = 0.1,)), SequentialCPM())
-    @test_throws r"field_rhs_units" init(discrete_field_rhs_problem(; rhs_override = 1.0u"m"), SequentialCPM())
-    @test_throws r"positive integer, not Bool" init(discrete_field_rhs_problem(; substeps = true), SequentialCPM())
 end
 
 @testset "stochastic field substeps preserve site identity and checkpoint continuation" begin
