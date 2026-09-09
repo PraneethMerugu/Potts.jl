@@ -573,6 +573,6 @@ operation_transfer(::typeof(_potts_draw), ::Int) =
         :lifecycle_partition,
         :lifecycle_state_transform,
     ),
-    allowed_phases = (:Proposal, :AcceptedCopy, :Lifecycle),
+    allowed_phases = (:Proposal, :AcceptedCopy, :AfterMCS, :Lifecycle),
     required_context = :any,
 )

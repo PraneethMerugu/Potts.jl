@@ -64,6 +64,26 @@ requires unique draw labels, including division geometry, random side selection,
 and daughter-state redraws. Initialization uses the declared
 `RandomSitePlacement` name, not its position in the placement list.
 
+Scheduled assignments use the same `draw(distribution, DrawKey(:label))`
+surface as proposal rules. For example, a cell-owned sampled signal can be
+updated with `Synchronous(:sample_signal, Assign(signal,
+draw(Normal(0.0, 1.0), DrawKey(:signal_noise))); domain=cells(tissue))`.
+Each selected active cell gets one sample per update, regardless of area;
+other kinds and inactive slots do not evaluate the draw. Model-owned samples
+use a singleton model identity, and site-owned samples use logical lattice
+indices. Retiring and reusing a cell slot changes its generation and therefore
+its draw identity.
+
+Scheduled samples use the absolute completed MCS and their scientific
+before/after-lifecycle boundary. Reordering unrelated declarations does not
+consume or shift their draws. Iterated field updates receive fresh noise at
+each declared substep; to hold noise, sample a separate state and read it from
+the iterated update. Checkpoint continuation preserves the addressing identity.
+A failed transaction does not consume samples or advance the logical MCS;
+`repeat` remains an explicit trajectory choice, not a failed-transaction count.
+Normal samples can differ in floating-point rounding across CPU and GPU even
+when their addressed uniforms agree.
+
 Stable random addresses are not a promise of unchanged trajectories after
 changing a model: proposals, state, acceptance, and competing initialization
 placements can change. CorePotts owns the versioned generator/address protocol;
