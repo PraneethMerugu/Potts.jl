@@ -13,6 +13,7 @@ const _RESULT_TRANSFER_RULES = Set(
         :fixed_index,
         :product_field,
         :history_sample,
+        :site_sum,
     )
 )
 const _UNIT_TRANSFER_RULES = Set(
@@ -30,6 +31,7 @@ const _UNIT_TRANSFER_RULES = Set(
         :fixed_index,
         :product_field,
         :history_sample,
+        :site_sum,
     )
 )
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))

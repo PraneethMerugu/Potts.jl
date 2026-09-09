@@ -38,7 +38,7 @@
         :contact_owner_b, :contact_kind_a, :contact_kind_b,
         :field_value, :field_gradient, :laplacian,
         :occupancy, :linked, :degree, :endpoint_a, :endpoint_b, :edge_payload,
-        :lag, :history_value, :gather,
+        :lag, :history_value, :gather, :aggregate,
 
         :AbstractPottsDistribution, :Bernoulli, :Uniform, :Normal,
         :UnitVector, :DrawKey, :draw, :PureRead, :SynchronousAssign,
