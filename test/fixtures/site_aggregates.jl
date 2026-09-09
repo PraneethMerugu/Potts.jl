@@ -3,10 +3,18 @@ import LocalMath
 
 function _site_aggregate_problem(;
         structured = false, atol = 0, rtol = 0, contribution = identity,
-        unit = 1.0, reference_units = nothing, distinct = false, evolve = false
+        unit = 1.0, reference_units = nothing, distinct = false, evolve = false,
+        logical_shape = structured ? (2,) : (),
     )
     @parameters gain = 1.0
-    if structured
+    logical_shape in ((), (2,), (2, 2)) || throw(ArgumentError("unsupported aggregate fixture shape"))
+    tensor = logical_shape == (2, 2)
+    vector = logical_shape == (2,)
+    if tensor
+        @variables signal[1:2, 1:2] amount[1:2, 1:2] repeated[1:2, 1:2]
+        initial_value = map(value -> value * unit, zero(SMatrix{2, 2, Float64}))
+        local_value = gain * signal
+    elseif vector
         @variables signal[1:2] amount[1:2] repeated[1:2]
         initial_value = SVector(0.0 * unit, 0.0 * unit)
         local_value = SVector(gain * signal[1], gain * signal[2])
@@ -34,7 +42,7 @@ function _site_aggregate_problem(;
         update = !evolve ? () : (
                 Synchronous(
                     :source_update,
-                    Assign(signal, structured ? SVector(signal[1] + unit, signal[2] + 2unit) : signal + unit)
+                    Assign(signal, vector ? SVector(signal[1] + unit, signal[2] + 2unit) : tensor ? 2signal : signal + unit)
                 ),
             )
         StatementSet((FieldState(signal; initial = initial_value), update..., cell_declarations...))
@@ -50,9 +58,13 @@ function _site_aggregate_problem(;
         unknowns = (signal, amount, repeated), parameters = (gain,)
     )
     labels = Int32[1 2; 1 0]
-    values = structured ? reshape([SVector(Float32(i), Float32(2i)) for i in 1:4], 2, 2) :
+    values = tensor ? reshape([SMatrix{2, 2}(Float32(i), Float32(-i), Float32(2i), Float32(3i)) for i in 1:4], 2, 2) :
+        vector ? reshape([SVector(Float32(i), Float32(2i)) for i in 1:4], 2, 2) :
         reshape(Float32[1, 2, 3, 4], 2, 2)
-    values = map(value -> value * unit, values)
+    values = map(
+        value -> value isa StaticArrays.StaticArray ?
+            map(leaf -> leaf * unit, value) : value * unit, values
+    )
     initial = PottsInitialState(ownership = LabelledCells(labels; cells = [kind, kind], medium), values = (signal => values,))
     completed = reference_units === nothing ? system : complete(system; reference_units)
     return (; problem = PottsProblem(completed, initial, (0, 4); seed = 17), signal, amount, repeated, gain, labels)
@@ -63,16 +75,16 @@ function _independent_owner_sum(values, labels, gain)
     return [sum((gain * values[i] for i in eachindex(labels) if labels[i] == owner); init = z) for owner in 1:3]
 end
 
-function _site_aggregate_maintenance_contract(; structured)
+function _site_aggregate_maintenance_contract(; structured = false, logical_shape = structured ? (2,) : ())
     return @testset "site aggregates share maintenance across two quantity consumers" begin
         for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
-            model = _site_aggregate_problem(; structured)
+            model = _site_aggregate_problem(; structured, logical_shape)
             integrator = init(model.problem, algorithm; scalar_type = Float32)
             SPI = CorePotts.CompilerSPI
             trackers = filter(item -> item isa SPI.SiteSumTracker, SPI.tracker_instances(integrator.plan.core_program.tracker_plan))
             @test length(trackers) == 1
             key = SPI.tracker_quantity(only(trackers))
-            if !structured && algorithm isa SequentialCPM
+            if isempty(logical_shape) && algorithm isa SequentialCPM
                 # Owning compiler boundary: only the aggregate's source is deferred.
                 # A separate compiled direct read of that identical handle survives.
                 ir = Potts._analyze_completed_system(model.problem.system)
@@ -94,7 +106,8 @@ function _site_aggregate_maintenance_contract(; structured)
             step!(integrator)
             @test Array(integrator.u[:amount]) == expected
             @test Array(integrator.u[:repeated]) == expected
-            changed = structured ? fill(SVector(2.0f0, -1.0f0), 2, 2) : fill(2.0f0, 2, 2)
+            changed = logical_shape == (2, 2) ? fill(SMatrix{2, 2}(2.0f0, -1.0f0, 3.0f0, 5.0f0), 2, 2) :
+                logical_shape == (2,) ? fill(SVector(2.0f0, -1.0f0), 2, 2) : fill(2.0f0, 2, 2)
             setu(integrator, model.signal)(integrator, changed)
             expected = _independent_owner_sum(changed, model.labels, 1.0f0)
             @test Array(SPI.program_tracker_values(integrator.runtime, key)) == expected[eachindex(integrator.u.cell_kinds)]
