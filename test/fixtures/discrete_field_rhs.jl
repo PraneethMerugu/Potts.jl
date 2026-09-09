@@ -70,3 +70,52 @@ function test_discrete_field_rhs(algorithm, backend; stochastic = false, reorder
     end
     return outputs
 end
+
+function test_discrete_field_clipping_and_rollback(algorithm, backend)
+    @variables clipped unstable peer
+    medium = MediumKind(:medium)
+    initial_ownership = LabelledCells(zeros(Int, 3, 2); cells = CellKind[], medium)
+    clipping = PottsSystem(
+        name = :field_clipping, statements = StatementSet(
+            (
+                Lattice((3, 2); boundary = Closed()), medium,
+                FieldState(clipped; initial = 1.0, evolution = DiscreteFieldEuler(), rhs = -4.0, substeps = 2),
+                ProposalConstraint(:held, false), Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ), unknowns = (clipped,)
+    )
+    clipped_integrator = init(PottsProblem(clipping, PottsInitialState(ownership = initial_ownership), (0, 1); seed = 17), algorithm; backend, scalar_type = Float32)
+    step!(clipped_integrator)
+    @test Array(clipped_integrator.u[:clipped]) == zeros(Float32, 3, 2)
+    @test failure_report(clipped_integrator) === nothing
+
+    source = PottsSystem(
+        name = :field_rollback, statements = StatementSet(
+            (
+                Lattice((3, 2); boundary = Closed()), medium,
+                FieldState(peer; initial = 3.0, evolution = DiscreteFieldEuler(), rhs = 1.0, substeps = 2),
+                FieldState(unstable; initial = 1.0, evolution = DiscreteFieldEuler(), rhs = 2 * unstable, substeps = 2),
+                ProposalConstraint(:held, false), Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ), unknowns = (unstable, peer)
+    )
+    before = ones(Float32, 3, 2)
+    before[end] = 1.0f38
+    # Every site completes the first substep finitely. The last site's rate
+    # overflows only on substep two, after candidate values already changed.
+    initial = PottsInitialState(ownership = initial_ownership, values = (unstable => before,))
+    integrator = init(PottsProblem(source, initial, (0, 1); seed = 17), algorithm; backend, scalar_type = Float32)
+    if algorithm isa SequentialCPM
+        @test_throws DomainError solve!(integrator)
+    else
+        solution = solve!(integrator)
+        @test solution.retcode == SciMLBase.ReturnCode.Failure
+        @test failure_report(solution) !== nothing
+    end
+    # Inspect the live settled owner, not the pre-step public cache.
+    current = Potts._current_saved_state(integrator)
+    @test Array(current[:unstable]) == before
+    @test Array(current[:peer]) == fill(3.0f0, 3, 2)
+    @test Array(current.ownership) == zeros(Int, 3, 2)
+    return @test integrator.t == 0
+end

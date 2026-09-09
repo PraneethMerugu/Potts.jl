@@ -240,7 +240,9 @@ function numerical_field_stage_descriptor(
         end
         isfinite(coefficient) && coefficient > zero(T) ||
             throw(ArgumentError("field rate × duration reference conversion must be finite and positive at $T precision"))
-        (rhs.expression, C.FootprintUnion((site_footprint, _record_read_footprint(ir, record_index))), coefficient)
+        center_read = _spatial_anchor_fact(IterationSiteAnchor(), length(_lattice_shape(ir)))
+        footprint = _record_read_footprint(ir, record_index; additional_reads = center_read)
+        (rhs.expression, footprint, coefficient)
     else
         stencil = _discrete_field_stencil_expression(ir, record, manifest, T, target)
         (stencil.expression, stencil.footprint, duration / T(substeps))

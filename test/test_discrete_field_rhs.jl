@@ -1,5 +1,11 @@
 include("fixtures/discrete_field_rhs.jl")
 
+@testset "field clipping and late multi-site substep failure are transactional" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        test_discrete_field_clipping_and_rollback(algorithm, CPUBackend())
+    end
+end
+
 @testset "explicit field rates execute custom Julia expressions with physical units" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         test_discrete_field_rhs(algorithm, CPUBackend())
