@@ -71,6 +71,7 @@ const POTTS_TESTS = (
 # Keeping that inventory explicit prevents detached fixture artifacts without
 # turning helpers into a second test suite.
 const POTTS_TEST_FIXTURES = (
+    "history_structured_samples.jl",
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
     "LifecycleOperationFixtures.jl",
