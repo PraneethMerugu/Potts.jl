@@ -31,6 +31,12 @@ by `_assemble_declared_system` in `systems.jl`, which calls the same positional
 constructor. No builder survives in the source model. Macro binding identity,
 single evaluation, whole-array inventories, imported ownership and explicit-entry
 duplicate rejection are defended by `test_lexical_enrollment.jl`.
+Both macro forms use `_capture_statement_block` for executed declaration leaves
+inside Julia blocks, branches and loops. It preserves ordinary control flow and
+captures each leaf's source, without retaining a control-flow representation in
+the model. `test_declaration_control_flow.jl` defends evaluation order, helper
+splicing, empty/terminated loops, conditional symbolic inventories and numerical
+execution on both CPU engines.
 
 The positional `PottsSystem(::StatementSet; ...)` constructor in `systems.jl`
 normalizes declaration-derived symbolic inventories into the ordinary keyword

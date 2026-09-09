@@ -5,6 +5,7 @@ const POTTS_TESTS = (
     "test_public_api.jl", "test_system_contract.jl",
     "test_declaration_assembly.jl",
     "test_lexical_enrollment.jl",
+    "test_declaration_control_flow.jl",
     "test_lexical_model.jl",
     "test_assembled_model.jl",
     "test_component_replacement.jl",

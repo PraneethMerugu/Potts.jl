@@ -78,6 +78,41 @@ function _statement_declaration_kind(caller, expression)
     return nothing
 end
 
+function _capture_statement_block(block, location, caller, captured, variables, parameters; line = location.line)
+    expressions = block isa Expr && block.head === :block ? block.args : Any[block]
+    body = Any[]
+    for expression in expressions
+        if expression isa LineNumberNode
+            line = expression.line
+            push!(body, expression)
+            continue
+        end
+        if expression isa Expr && expression.head === :block
+            push!(body, _capture_statement_block(expression, location, caller, captured, variables, parameters; line))
+        elseif expression isa Expr && expression.head in (:if, :elseif)
+            branches = map(expression.args[2:end]) do branch
+                _capture_statement_block(branch, location, caller, captured, variables, parameters; line)
+            end
+            push!(body, Expr(:if, esc(first(expression.args)), branches...))
+        elseif expression isa Expr && expression.head in (:for, :while)
+            loop_body = _capture_statement_block(last(expression.args), location, caller, captured, variables, parameters; line)
+            push!(body, Expr(expression.head, esc(first(expression.args)), loop_body))
+        elseif expression isa Expr && expression.head in (:break, :continue)
+            push!(body, esc(expression))
+        else
+            kind = variables === nothing ? nothing : _statement_declaration_kind(caller, expression)
+            if kind !== nothing
+                inventory = kind === :parameters ? parameters : variables
+                push!(body, :(append!($inventory, $(esc(expression)))))
+            else
+                source = _statement_capture_source(expression, location, line, caller)
+                push!(body, :(push!($captured, $(GlobalRef(@__MODULE__, :_capture_statement))($(esc(expression)), $source))))
+            end
+        end
+    end
+    return Expr(:block, body...)
+end
+
 function _capture_system_expression(constructor, block, location, caller)
     constructor isa Expr && constructor.head === :call ||
         throw(ArgumentError("@statements constructor form requires PottsSystem(; keywords...)"))
@@ -93,22 +128,7 @@ function _capture_system_expression(constructor, block, location, caller)
     end
     captured, variables, parameters = gensym.((:statements, :unknowns, :parameters))
     body = Any[:($captured = Any[]), :($variables = Any[]), :($parameters = Any[])]
-    expressions = block isa Expr && block.head === :block ? block.args : Any[block]
-    line = location.line
-    for expression in expressions
-        if expression isa LineNumberNode
-            line = expression.line
-            continue
-        end
-        kind = _statement_declaration_kind(caller, expression)
-        if kind !== nothing
-            inventory = kind === :parameters ? parameters : variables
-            push!(body, :(append!($inventory, $(esc(expression)))))
-        else
-            source = _statement_capture_source(expression, location, line, caller)
-            push!(body, :(push!($captured, $(GlobalRef(@__MODULE__, :_capture_statement))($(esc(expression)), $source))))
-        end
-    end
+    push!(body, _capture_statement_block(block, location, caller, captured, variables, parameters))
     keyword_values = Expr(:tuple, Expr(:parameters, map(esc, keywords)...))
     push!(
         body, :(
@@ -125,26 +145,22 @@ end
 Construct a `StatementSet` while retaining source provenance.
 
 `@statements PottsSystem(; name, keywords...) begin ... end` also enrolls
-top-level `@variables` and `@parameters` declarations in the ordinary system's
+`@variables` and `@parameters` declarations in the ordinary system's
 symbolic inventories. The block runs first, then constructor keywords, each
 exactly once. Declaring a symbolic variable does not declare physical state.
+Nested blocks, `if` branches and ordinary Julia `for`/`while` loops enroll only
+the entries actually executed. Loop bindings, conditions, `break` and `continue`
+retain Julia semantics; the macro does not inspect helper-function bodies.
 """
 macro statements(arguments...)
     length(arguments) == 2 && return _capture_system_expression(arguments..., __source__, __module__)
     length(arguments) == 1 || throw(ArgumentError("@statements expects a block or a constructor and block"))
     block = only(arguments)
-    expressions = block isa Expr && block.head === :block ? block.args : Any[block]
-    captured = Any[]
-    line = __source__.line
-    capture_statement = GlobalRef(@__MODULE__, :_capture_statement)
-    statement_set = GlobalRef(@__MODULE__, :StatementSet)
-    for expression in expressions
-        if expression isa LineNumberNode
-            line = expression.line
-            continue
-        end
-        source = _statement_capture_source(expression, __source__, line, __module__)
-        push!(captured, :($capture_statement($(esc(expression)), $source)))
+    captured = gensym(:statements)
+    body = _capture_statement_block(block, __source__, __module__, captured, nothing, nothing)
+    return quote
+        $captured = Any[]
+        $body
+        $(GlobalRef(@__MODULE__, :StatementSet))($captured)
     end
-    return :($statement_set(($(captured...),)))
 end
