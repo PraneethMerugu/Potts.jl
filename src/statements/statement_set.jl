@@ -47,9 +47,11 @@ function _capture_statement(statement, source::SourceLocation)
 end
 
 function _statement_capture_source(expression, location, line, caller)
-    return :($(GlobalRef(@__MODULE__, :SourceLocation))(
-        $(String(location.file)), $line, $(QuoteNode(nameof(caller))), $(string(expression)),
-    ))
+    return :(
+        $(GlobalRef(@__MODULE__, :SourceLocation))(
+            $(String(location.file)), $line, $(QuoteNode(nameof(caller))), $(string(expression)),
+        )
+    )
 end
 
 # Resolve only the binding explicitly named by a macro call. Never evaluate
@@ -108,10 +110,14 @@ function _capture_system_expression(constructor, block, location, caller)
         end
     end
     keyword_values = Expr(:tuple, Expr(:parameters, map(esc, keywords)...))
-    push!(body, :($(GlobalRef(@__MODULE__, :_assemble_declared_system))(
-        $(esc(first(constructor.args))), $keyword_values,
-        $(GlobalRef(@__MODULE__, :StatementSet))($captured), $variables, $parameters,
-    )))
+    push!(
+        body, :(
+            $(GlobalRef(@__MODULE__, :_assemble_declared_system))(
+                $(esc(first(constructor.args))), $keyword_values,
+                $(GlobalRef(@__MODULE__, :StatementSet))($captured), $variables, $parameters,
+            )
+        )
+    )
     return Expr(:block, body...)
 end
 

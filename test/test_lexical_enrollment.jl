@@ -19,8 +19,12 @@ end
     @test isequal(unknowns(source), [amount, unused_state])
     explicit = PottsSystem(
         name = :lexical, parameters = (gain, base, unused), unknowns = (amount, unused_state),
-        statements = StatementSet((ModelState(amount; initial = base), ModelState(unused_state; initial = 0.0),
-            Synchronous(:advance, Assign(amount, amount + gain)))),
+        statements = StatementSet(
+            (
+                ModelState(amount; initial = base), ModelState(unused_state; initial = 0.0),
+                Synchronous(:advance, Assign(amount, amount + gain)),
+            )
+        ),
     )
     @test isequal(parameters(complete(source)), parameters(complete(explicit)))
     @test isequal(unknowns(complete(source)), unknowns(complete(explicit)))
