@@ -14,7 +14,7 @@ No execution path borrows another runtime's storage or clones an imported owner.
 
 Runtime parameter ownership follows `PottsProblem`/SymbolicIndexingInterface →
 the scheduled `ParameterManifest` → parameter normalization and static lowering →
-Core's public scalar parameter publisher → detached logical getters/history.
+Core's public combined input publisher → detached logical getters/history.
 `compiler/host/parameter_manifest.jl` owns canonical parameter identities, fixed
 logical shapes, and contiguous scalar-slot spans. Structural scheduling builds
 this manifest once; late lowering reuses it when choosing numerical precision.
@@ -38,6 +38,26 @@ own these facts, while unnormalized static literals reuse `unit_analysis.jl`'s
 literal-unit semantics. `test_fixed_array_scaling.jl` owns the public
 scalar, vector and tensor shape/unit regression; execution uses Core's existing
 multiply operation, not a tensor-specific evaluator.
+
+Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
+scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
+existing normalized contribution, unit, shape and dependency facts →
+`compiler/lowering/trackers.jl` → Core's `SiteSumTracker` and qualified cell
+read. Canonical contributions include their numerical comparison policy and
+share one tracker independently of consuming statements or anchors. The
+temporary tracker handle map is discarded after Core program assembly, like
+the other lowering maps. Completion retains source dependencies; physical stage
+reads use the tracker, while any additional direct state operand retains its
+own compiled state handle. The literal integer-one case reuses Core's existing
+ownership count. `test_scalar_site_aggregates.jl` defends sharing, separate
+contributions, source/parameter refresh, mixed publication, units and continuation.
+The same model builder, independent owner-sum oracle and maintenance contract in
+`test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
+`test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
+All three are ordinary registered test units.
+The scalar CPU owner is qualified; the vector and scheduled-maintenance units
+retain required behavior awaiting its implementation. Public aggregate device
+qualification is also pending.
 
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
@@ -237,6 +257,13 @@ and does not execute an external numerical solver.
 
 CorePotts publishes settled coupling arrays and lifecycle receipts. Potts uses those public
 boundaries to coordinate native component integrators.
+`runtime/integrator.jl` stages a native descriptor-state replacement only when
+native output updates exist. Input-only islands leave maintained Core values
+untouched; held outputs still publish on non-due boundaries through the same
+output-update path.
+`integration/test_native_functional_cpu.jl` checks this with an actual accepted
+copy, a maintained sum distinguishable from canonical recomputation, and native
+ODE evolution for both input-only and no-input islands.
 
 ## LocalMath
 
@@ -290,8 +317,9 @@ published values, pending parameters and the detached current value after an
 ordinary host refresh failure. Initialization and mutation share
 `runtime/initial_state.jl`'s supplied-value normalization and descriptor packing,
 which delegate logical type/unit conversion to the manifest owner above.
-CorePotts' public `update_program_descriptor_state!` validates and publishes the
-candidate through its existing host/device storage boundary. Potts then refreshes
+CorePotts' public `update_program_inputs!` validates the complete combined parameter
+and descriptor-state candidate before publishing either input through its existing
+host/device storage boundary. Potts then refreshes
 the detached current saved value, without mutating earlier snapshots.
 `runtime/integrator.jl` owns rollback of state and parameters across an ordinary
 callback boundary. `test/test_logical_state_mutation.jl` defends conversion

@@ -256,8 +256,13 @@ function _run_callbacks!(integrator::PottsIntegrator)
         # boundary.  In particular, a later failing callback cannot leave an
         # earlier state, parameter or save_positions effect half-published.
         integrator.runtime = runtime_before
-        CorePotts.update_program_parameters!(integrator.runtime, parameters_before)
-        CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_before)
+        try
+            CorePotts.update_program_inputs!(
+                integrator.runtime; parameters = parameters_before, descriptor_state = descriptor_before,
+            )
+        catch restore_error
+            throw(CompositeException(Any[error, restore_error]))
+        end
         resize!(integrator.parameter_history, history_length)
         integrator.pending_parameters = pending_before
         resize!(integrator.saved_times, saved_length)
@@ -460,7 +465,8 @@ function _step_coupled!(integrator::PottsIntegrator)
             snapshot,
         )
         _publish_native_outputs!(integrator.plan, descriptor_state, updates)
-        has_ports && CorePotts.BackendSPI.stage_program_descriptor_state!(
+        # Reading native inputs does not author a replacement Core state.
+        !isempty(updates) && CorePotts.BackendSPI.stage_program_descriptor_state!(
             transaction, descriptor_state
         )
         CorePotts.BackendSPI.prevalidate_component_state_transactions(

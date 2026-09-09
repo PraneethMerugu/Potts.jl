@@ -209,6 +209,17 @@ function _operation_unit_result(
         source::FrozenSourceGraph,
     )
     rule = transfer.unit_rule
+    if rule === :site_sum
+        source_unit, site_unit, cell_unit, absolute_unit, relative_unit = operand_units
+        all(unit -> _unit_compatible(unit, :dimensionless), (site_unit, cell_unit, relative_unit)) ||
+            return (nothing, "aggregate bindings and relative tolerance must be dimensionless")
+        absolute_payload = graph.nodes[node.operands[4]].payload
+        literal_zero = absolute_payload isa LiteralPayload && absolute_payload.value isa Real &&
+            iszero(absolute_payload.value)
+        (literal_zero || _unit_compatible(source_unit, absolute_unit)) ||
+            return (nothing, "aggregate absolute tolerance must have the contribution's units")
+        return (source_unit, nothing)
+    end
     if rule === :product_field
         product_units = first(operand_units)
         ordinal = graph.nodes[last(node.operands)].payload.value

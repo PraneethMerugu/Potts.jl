@@ -1,5 +1,70 @@
 # Compiler-owned resolution and admission of public tracker requirements.
 
+function _site_sum_tolerances(ir, node, manifest, ::Type{T}) where {T}
+    absolute = ir.graph.nodes[node.operands[4]].payload.value
+    relative = ir.graph.nodes[node.operands[5]].payload.value
+    return (;
+        absolute_tolerance = T(_numeric_value(absolute, _reference_for(manifest.reference_units, absolute))),
+        relative_tolerance = T(_numeric_value(relative, _reference_for(manifest.reference_units, relative))),
+    )
+end
+
+function _site_sum_identity(ir, node, manifest, ::Type{T}) where {T}
+    source = _site_sum_source(ir.source, ir.graph, node)
+    return _canonical_value(
+        (
+            :site_sum, ir.graph.nodes[source.contribution].structural_key,
+            source.site.resource, ir.facts.shape[source.contribution],
+            ir.facts.units[source.contribution], T,
+            _site_sum_tolerances(ir, node, manifest, T),
+        )
+    )
+end
+
+function _site_sum_descriptor(
+        ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
+        state_layout, history_descriptors
+    ) where {T <: AbstractFloat}
+    source = _site_sum_source(ir.source, ir.graph, node)
+    result_type = ir.facts.result_type[source.contribution]
+    element_type = result_type <: AbstractArray ? eltype(result_type) : result_type
+    (element_type === Real || element_type <: AbstractFloat) ||
+        throw(
+        PottsValidationError(
+            :descriptor_lowering, (
+                PottsDiagnostic(
+                    :aggregate_value_type, node.source, String(node.operation), node.source.path,
+                    "a floating contribution, or literal integer one for exact unit-site count",
+                    repr(result_type), (), ir.source.records[node.record].source
+                ),
+            )
+        )
+    )
+    expression = _lower_static_node(
+        ir.graph, ir, source.contribution, manifest, T, state_handles, draw_handles,
+        Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
+        CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+    )
+    shape = ir.facts.shape[source.contribution]
+    shape isa Tuple && all(size -> size isa Integer && !(size isa Bool) && size > 0, shape) ||
+        throw(
+        PottsValidationError(
+            :descriptor_lowering, (
+                PottsDiagnostic(
+                    :aggregate_value_shape, node.source, String(node.operation), node.source.path,
+                    "a scalar or a nonempty fixed logical array shape", repr(shape), (),
+                    ir.source.records[node.record].source
+                ),
+            )
+        )
+    )
+    value_type = isempty(shape) ? T : StaticArrays.SArray{Tuple{shape...}, T, length(shape), prod(shape)}
+    return CorePotts.CompilerSPI.SiteSumTracker(
+        value_type, key, expression;
+        _site_sum_tolerances(ir, node, manifest, T)...,
+    )
+end
+
 function _operation_tracker_context(
         ir::AnalyzedTermIR,
         node::NormalizedTermNode,
@@ -98,6 +163,9 @@ function _operation_tracker_descriptors(
     ) where {T <: AbstractFloat}
     tracker_source = _tracker_projection_operand(node, ir.graph)
     tracker_node = tracker_source === nothing ? node : tracker_source
+    # Site expressions need the canonical layout and parameter manifest. They
+    # are constructed once by the same tracker-plan owner below.
+    _is_site_sum(tracker_node) && return ()
     transfer = tracker_node.transfer
     transfer === nothing && return ()
     isempty(transfer.tracker_requirements) && return ()
@@ -204,12 +272,31 @@ function _lower_tracker_plan(
         ir::AnalyzedTermIR,
         engine::AbstractPottsAlgorithm,
         ::Type{T},
+        manifest, state_handles, draw_handles;
+        state_layout, history_descriptors,
     ) where {T <: AbstractFloat}
     shape = _lattice_shape(ir)
     descriptors = CorePotts.CompilerSPI.AbstractTrackerDescriptor[]
     _append_tracker_requirement!(
         descriptors, CorePotts.CompilerSPI.OwnershipCountTracker()
     )
+
+    # This is a temporary compiler handle map, like state_handles. Only actual
+    # tracker descriptors and their keys survive assembly of the Core program.
+    contributions = Dict{String, NormalizedTermNode}()
+    for node in ir.graph.nodes
+        _is_site_sum(node) || continue
+        _is_unit_count(ir.graph, node) && continue
+        get!(contributions, _site_sum_identity(ir, node, manifest, T), node)
+    end
+    tracker_handles = Dict{String, CorePotts.CompilerSPI.QualifiedTrackerKey}()
+    for (index, identity) in enumerate(sort!(collect(keys(contributions))))
+        key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(:site_sum), index)
+        tracker_handles[identity] = key
+        descriptor = _site_sum_descriptor(ir, contributions[identity], key,
+            manifest, T, state_handles, draw_handles; state_layout, history_descriptors)
+        _append_tracker_requirement!(descriptors, descriptor)
+    end
 
     if any(ir.graph.nodes) do node
             transfer = node.transfer
@@ -270,7 +357,6 @@ function _lower_tracker_plan(
         map(CorePotts.CompilerSPI.tracker_inspection, ordered),
         map(CorePotts.CompilerSPI.tracker_contract, ordered),
     )
-    return CorePotts.CompilerSPI.TrackerExecutionPlan(
-        _group_tracker_instances(ordered), fingerprint
-    )
+    plan = CorePotts.CompilerSPI.TrackerExecutionPlan(_group_tracker_instances(ordered), fingerprint)
+    return (; plan, handles = tracker_handles)
 end

@@ -113,6 +113,7 @@ function _potts_model_bound_state_value end
 function _potts_cell_bound_state_value end
 function _potts_lifecycle_bound_state_value end
 function _potts_bounded_fold end
+function _potts_cell_site_sum end
 """Test whether two endpoints are linked by a relationship state."""
 function linked end
 
@@ -137,6 +138,50 @@ function lag(state, amount)
 end
 SymbolicUtils.promote_symtype(::typeof(lag), ::Type{T}, ::Type) where {T} = T
 SymbolicUtils.promote_shape(::typeof(lag), state::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = state
+
+"""
+    aggregate(expression; over::SiteBinding, by::CellBinding, combine=+, atol=0, rtol=0)
+
+Sum a site-local expression over the lattice sites owned by the bound cell.
+`over` and `by` are declared lexical site and cell bindings, including those
+supplied by `scoped`. The expression may use declared site values and runtime
+parameters. Floating scalar contributions preserve their units; literal integer
+one reuses the exact owner count. Empty owners have
+the corresponding typed additive zero. Identical contributions share maintained
+storage even when read by different consumers.
+
+`atol` and `rtol` declare elementwise acceptance tolerances when cached sums are
+compared with an independent canonical rebuild. Both default to exact zero;
+they are not promised accumulation-error bounds and never trigger silent repair.
+Nonzero `atol` has the contribution's physical units; `rtol` is dimensionless.
+
+This is a live owner-grouped quantity, not a bounded neighborhood fold or an
+independently writable state. Currently `combine=+` is the supported maintenance
+law; other reductions require their own explicit maintenance/rebuild contract.
+Scalar CPU execution is qualified. Fixed-array contributions and scheduled
+source-update maintenance remain required implementation work; device execution
+is not yet qualified for this public aggregate path.
+"""
+function aggregate(expression; over, by, combine = +, atol = 0, rtol = 0)
+    over isa SiteBinding && _scoped_anchor(over) ||
+        throw(ArgumentError("aggregate over requires a declared SiteBinding from sites(lattice)"))
+    by isa CellBinding && _scoped_anchor(by) ||
+        throw(ArgumentError("aggregate by requires a declared CellBinding from cells(kind)"))
+    combine === (+) || throw(
+        ArgumentError(
+            "aggregate currently supports combine=+; a non-additive quantity requires an explicit maintenance/rebuild law"
+        )
+    )
+    return Symbolics.wrap(
+        Symbolics.term(
+            _potts_cell_site_sum, Symbolics.unwrap(expression),
+            Symbolics.unwrap(_binding_token(over)), Symbolics.unwrap(_binding_token(by)),
+            Symbolics.unwrap(atol), Symbolics.unwrap(rtol),
+        )
+    )
+end
+SymbolicUtils.promote_symtype(::typeof(_potts_cell_site_sum), ::Type{T}, ::Type, ::Type, ::Type, ::Type) where {T} = T
+SymbolicUtils.promote_shape(::typeof(_potts_cell_site_sum), source::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = source
 Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 Symbolics.@register_symbolic _potts_merks_local_connectivity(
     kind, foreground, background
