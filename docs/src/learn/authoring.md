@@ -57,6 +57,37 @@ explicit `unknowns` and `parameters` inventories. Neither form inspects arbitrar
 Julia local variables: unreferenced parameter bindings must still be supplied
 explicitly. This convenience does not introduce an ambient model builder.
 
+To enroll declarations made inside the block, use the explicit constructor form:
+
+```@example lexical-enrollment
+using Potts, ModelingToolkitBase
+source = @statements PottsSystem(; name=:reservoir) begin
+    @parameters rate=0.25 unused_parameter=2.0
+    @variables amount
+    ModelState(amount; initial=8.0)
+    Synchronous(:deplete, Assign(amount, amount * (1 - rate)))
+end
+length(parameters(source)) # retains unused_parameter as well as rate
+```
+
+Top-level `@parameters` and `@variables` calls, including their qualified
+ModelingToolkitBase/Symbolics forms, evaluate normally and contribute their whole
+symbolic results. A symbolic declaration does not allocate physical state: that
+still requires `ModelState`, `CellState`, `SiteState`, or another state declaration.
+The block runs before constructor keywords, so keywords can refer to its bindings;
+each declaration/default and keyword expression is evaluated once. Explicit
+inventories come first, followed by captured declarations. Automatically captured
+import aliases and independent variables are excluded from owned inventories.
+
+Every other top-level entry explicitly enrolls a statement or `StatementSet`.
+An assignment such as `state = ModelState(amount)` both binds and enrolls it;
+using `state` inside a later expression is a reference, but writing `state` again
+as a top-level entry attempts a second enrollment and is rejected. Equal statement
+values are never silently deduplicated. Ordinary factory helpers can return a
+`StatementSet` to splice; the macro does not reinterpret arbitrary control flow
+or discover declarations hidden in helper bodies. Plain `@statements begin ...
+end` continues to return only a `StatementSet`.
+
 `examples/compartment_exchange.jl` is a complete factory using `@statements`
 and this positional constructor, with no separate state or parameter tuple. Its
 two simultaneous assignments conserve the total reservoir amount:

@@ -24,6 +24,14 @@ KernelAbstractions
 
 ## Potts
 
+The explicit-constructor form of `@statements` in
+`statements/statement_set.jl` captures source locations and results of the actual
+symbolic declaration macros. Its temporary collections are immediately consumed
+by `_assemble_declared_system` in `systems.jl`, which calls the same positional
+constructor. No builder survives in the source model. Macro binding identity,
+single evaluation, whole-array inventories, imported ownership and explicit-entry
+duplicate rejection are defended by `test_lexical_enrollment.jl`.
+
 The positional `PottsSystem(::StatementSet; ...)` constructor in `systems.jl`
 normalizes declaration-derived symbolic inventories into the ordinary keyword
 constructor. State enrollment and expression discovery reuse

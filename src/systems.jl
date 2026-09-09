@@ -288,6 +288,19 @@ function PottsSystem(
     )
 end
 
+function _assemble_declared_system(constructor, keywords::NamedTuple, declarations, variables, declared_parameters)
+    constructor === PottsSystem || throw(ArgumentError("@statements constructor must be PottsSystem"))
+    bindings = _component_imports(get(keywords, :imports, ()))
+    independent = get(keywords, :independent_variables, ())
+    owned(value) = !any(binding -> isequal(first(binding), value), bindings) &&
+        !any(isequal(value), independent)
+    inventories = (
+        unknowns = _stable_union(get(keywords, :unknowns, ()), filter(owned, variables)),
+        parameters = _stable_union(get(keywords, :parameters, ()), filter(owned, declared_parameters)),
+    )
+    return constructor(declarations; merge(keywords, inventories)...)
+end
+
 function _rebuild(
         system::PottsSystem;
         name = getfield(system, :name),
