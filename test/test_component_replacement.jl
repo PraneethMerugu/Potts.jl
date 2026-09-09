@@ -135,7 +135,7 @@ function component_test_problem(source; p = ())
     return PottsProblem(source, initial, (0, 2); p, seed = 17)
 end
 
-@testset "explicit component imports share an owner, not state instances" begin
+@testset "explicit component imports share an owner, not state instances ($algorithm)" for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
     example = ComponentReplacementExample.shared_input_model()
     completed = complete(example.source)
     @test complete(completed) === completed
@@ -144,16 +144,16 @@ end
     @test isequal(only(parameters(completed)), example.forcing)
     @test length(inspect(mtkcompile(completed), StateSchema()).states) == 2
 
-    solution = solve(component_test_problem(example.source), SequentialCPM(); saveat = 0:2)
+    solution = solve(component_test_problem(example.source), algorithm; saveat = 0:2)
     @test solution.u[end][:left₊amount] == 4.0
     @test solution.u[end][:right₊amount] == 12.0
     changed = solve(
         component_test_problem(example.source; p = (example.forcing => 3.0,)),
-        SequentialCPM(); saveat = 0:2
+        algorithm; saveat = 0:2
     )
     @test changed.u[end][:left₊amount] == 6.0
     @test changed.u[end][:right₊amount] == 18.0
-    flattened = solve(component_test_problem(flatten(example.source)), SequentialCPM(); saveat = 0:2)
+    flattened = solve(component_test_problem(flatten(example.source)), algorithm; saveat = 0:2)
     @test flattened.u[end][:left₊amount] == solution.u[end][:left₊amount]
     @test flattened.u[end][:right₊amount] == solution.u[end][:right₊amount]
     @test_throws ArgumentError Symbolics.substitute(example.source, Dict(example.forcing => 3.0))
@@ -165,7 +165,7 @@ end
     first_reader = ComponentReplacementExample.accumulator(:first_reader, total, output)
     second_reader = ComponentReplacementExample.accumulator(:second_reader, total, output)
     readers = compose(example.source, [first_reader.source, second_reader.source])
-    observed = solve(component_test_problem(readers), SequentialCPM(); saveat = 0:2)
+    observed = solve(component_test_problem(readers), algorithm; saveat = 0:2)
     @test observed.u[end][:first_reader₊total] == 2.0
     @test observed.u[end][:second_reader₊total] == 2.0
     @test length(inspect(mtkcompile(readers), StateSchema()).states) == 4
@@ -178,15 +178,15 @@ end
             ),
         ]
     )
-    nested_solution = solve(component_test_problem(nested), SequentialCPM(); saveat = 0:2)
+    nested_solution = solve(component_test_problem(nested), algorithm; saveat = 0:2)
     @test nested_solution.u[end][:nested₊reader₊total] == 2.0
     @test length(parameters(mtkcompile(nested))) == 1
 end
 
-@testset "replacement reconnects output identity and retains external inputs" begin
+@testset "replacement reconnects output identity and retains external inputs ($algorithm)" for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
     example = ComponentReplacementExample.replaced_input_model()
-    original = solve(component_test_problem(example.source), SequentialCPM(); saveat = 0:2)
-    replaced = solve(component_test_problem(example.replaced), SequentialCPM(); saveat = 0:2)
+    original = solve(component_test_problem(example.source), algorithm; saveat = 0:2)
+    replaced = solve(component_test_problem(example.replaced), algorithm; saveat = 0:2)
     @test original.u[end][:left₊amount] == 4.0
     @test original.u[end][:reader₊total] == 2.0
     @test replaced.u[end][:left₊response] == 20.0
