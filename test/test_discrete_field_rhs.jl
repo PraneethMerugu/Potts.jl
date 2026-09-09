@@ -7,6 +7,37 @@ include("fixtures/discrete_field_rhs.jl")
     @parameters wrapped_symbol
     wrapped = DynamicQuantities.Quantity(wrapped_symbol; length = 1, time = -1)
     @test_throws r"unsupported_symbolic_quantity" init(discrete_field_rhs_problem(; rhs_override = wrapped), SequentialCPM())
+    @variables frozen_field
+    for evolution in (nothing, :unsupported_evolution)
+        frozen_source = PottsSystem(
+            name = :unprocessed_field,
+            statements = StatementSet(
+                (
+                    Lattice((1, 1); boundary = Closed()), MediumKind(:medium),
+                    FieldState(frozen_field; initial = 0.0, evolution, rhs = draw(Uniform(), DrawKey(:unused))),
+                    Protocol(Sweep(; temperature = 0.0); name = :main),
+                )
+            ), unknowns = (frozen_field,),
+        )
+        @test_throws r"illegal_random_operation_context" complete(frozen_source)
+    end
+    for placement in (:initial, :duration_per_mcs, :substeps, :diffusion)
+        options = merge(
+            (initial = 0.0, evolution = DiscreteFieldEuler(), rhs = draw(Uniform(), DrawKey(:rate))),
+            NamedTuple{(placement,)}((draw(Uniform(), DrawKey(:misplaced)),)),
+        )
+        misplaced_source = PottsSystem(
+            name = :misplaced_field_draw,
+            statements = StatementSet(
+                (
+                    Lattice((1, 1); boundary = Closed()), MediumKind(:medium),
+                    FieldState(frozen_field; options...),
+                    Protocol(Sweep(; temperature = 0.0); name = :main),
+                )
+            ), unknowns = (frozen_field,),
+        )
+        @test_throws r"illegal_random_operation_context" complete(misplaced_source)
+    end
 end
 
 @testset "concrete dimensional rate literals reach ordinary lowering" begin
