@@ -732,6 +732,27 @@ function _validate_initial_relationship_endpoints!(
     return entries
 end
 
+function _descriptor_state_value(layout_entry, value)
+    if layout_entry.schema.domain in (:model, :medium)
+        return fill(value, Tuple(layout_entry.schema.shape))
+    elseif value isa Tuple && all(item -> item isa AbstractArray, value)
+        shape = Tuple(layout_entry.schema.shape)
+        length(shape) > 1 && length(value) == last(shape) || throw(
+            ArgumentError(
+                "history state `$(layout_entry.schema.identity)` is incompatible with its descriptor layout"
+            )
+        )
+        packed = Array{layout_entry.schema.element_type}(undef, shape)
+        for index in eachindex(value)
+            copyto!(selectdim(packed, length(shape), index), value[index])
+        end
+        return packed
+    elseif value isa AbstractArray
+        return value
+    end
+    return fill(value, Tuple(layout_entry.schema.shape))
+end
+
 function _core_initial_state(
         executable::_PottsExecutionPlan,
         initial::PottsInitialState,
@@ -788,27 +809,7 @@ function _core_initial_state(
     descriptor_initial_values = map(descriptor_layout.entries) do layout_entry
         identity = layout_entry.schema.identity
         if haskey(normalized_states, identity)
-            value = normalized_states[identity]
-            if layout_entry.schema.domain in (:model, :medium)
-                fill(value, Tuple(layout_entry.schema.shape))
-            elseif value isa Tuple && all(item -> item isa AbstractArray, value)
-                shape = Tuple(layout_entry.schema.shape)
-                length(shape) > 1 && length(value) == last(shape) ||
-                    throw(
-                    ArgumentError(
-                        "history state `$identity` is incompatible with its descriptor layout"
-                    )
-                )
-                packed = Array{layout_entry.schema.element_type}(undef, shape)
-                for index in eachindex(value)
-                    copyto!(selectdim(packed, length(shape), index), value[index])
-                end
-                packed
-            elseif value isa AbstractArray
-                value
-            else
-                fill(value, Tuple(layout_entry.schema.shape))
-            end
+            _descriptor_state_value(layout_entry, normalized_states[identity])
         else
             nothing
         end

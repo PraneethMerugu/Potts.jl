@@ -5,6 +5,44 @@ requested observations. SymbolicIndexingInterface getters work on problems,
 integrators, saved states, and solutions. A declared-but-unsaved observation
 raises a different error from an unknown identity.
 
+Use `SymbolicIndexingInterface.setu(integrator, state)` to build a setter for
+one whole canonical state, then call it as `setter(integrator, value)`.
+An array-valued symbolic variable accepts its whole fixed-array value, and a
+product accepts its complete named tuple. A tuple of targets builds one
+transaction, for example `setu(integrator, (amount, polarity))(integrator,
+(2.0, SVector(1.0, 0.0)))`. Named target tuples also accept named replacement
+values, including a subset of the selected names.
+An empty named subset is a no-op after settlement. A setter may also be built
+from the scheduled `PottsSystem` or `PottsProblem` and reused with its
+integrators. Cached setters contain state indices: reuse requires the same
+scheduled system and state schema, not an unrelated model. Rebuild setters after
+changing or replacing the model.
+
+Site values use the complete lattice-shaped buffer; cell values use every
+compiled cell slot, including inactive slots. History values are chronological
+tuples of source-shaped samples, oldest first, just as in initial conditions.
+Replacement values and buffers are supplied on the host, including when the
+integrator publishes into device storage; arbitrary device-array inputs are not
+established by this workflow.
+Values use the declaration's logical type, shape and unit references. Supply
+compatible quantities for dimensional states; saved normalized numbers do not
+implicitly acquire physical units when passed back to a setter.
+
+Mutation first settles pending work, validates and converts every replacement,
+then publishes through CorePotts' state transaction. Invalid values leave the
+published state unchanged. The current `integrator.u` is refreshed, while
+previously saved snapshots remain detached. A late failing ordinary callback
+restores earlier state and parameter edits at that callback boundary. A failed
+integrator cannot be repaired with a setter. Backend execution or copy failures
+do not carry a general rollback guarantee.
+
+Setters target stored states, not ownership, observations, derived expressions,
+individual vector elements or product fields. Pure parameter setters retain the
+usual `setp` behavior; mixed parameter/state target batches are not supported.
+To change a field, construct and replace its whole logical value. Initial callback
+edits occur before an explicit `AtMCS(0)` history capture; checkpoint restoration
+preserves the stored history and does not repeat that capture.
+
 `checkpoint(integrator)` captures the logical continuation state at a settled
 boundary. Restore uses `init(...; checkpoint=...)` with the same problem and
 execution identity. Native state, lifecycle generations,

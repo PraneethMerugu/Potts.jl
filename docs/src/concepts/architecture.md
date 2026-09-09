@@ -183,6 +183,19 @@ from model, site, and cell storage shape; saved values and checkpoints consume
 the resulting Core-owned storage. The owning behavioral tests are in
 `test/test_structured_state_authoring.jl`.
 
+Public `SymbolicIndexingInterface.setu` belongs to
+`runtime/symbolic_indexing.jl`: it resolves canonical state targets and stages
+the complete batch. Initialization and mutation share
+`runtime/initial_state.jl`'s supplied-value normalization and descriptor packing,
+which delegate logical type/unit conversion to the manifest owner above.
+CorePotts' public `update_program_descriptor_state!` validates and publishes the
+candidate through its existing host/device storage boundary. Potts then refreshes
+the detached current saved value, without mutating earlier snapshots.
+`runtime/integrator.jl` owns rollback of state and parameters across an ordinary
+callback boundary. `test/test_logical_state_mutation.jl` defends conversion
+atomicity, canonical slot/history shapes, snapshots and continuation;
+`test/test_history_initialization.jl` covers callback-before-capture ordering.
+
 Named products use the same conversion owner recursively: declared field names,
 types, and fixed-array shapes determine the stored value, including omitted
 defaults. Completion's reference-anchor traversal visits nested quantity leaves;
