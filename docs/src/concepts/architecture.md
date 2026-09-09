@@ -3,6 +3,9 @@
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
 ```text
+PottsModels scientific factories + initializers + tutorials
+          │ ordinary public declarations (no executor)
+          v
 Potts
   PottsSystem + native MTK component islands
           │ complete / structural mtkcompile
@@ -96,6 +99,22 @@ the low-level `get_*` accessors still expose local source fields.
 An external ModelingToolkit system remains native through structural compilation. Potts
 does not recreate that system by copying equations, unknowns, parameters, defaults, events, or
 hierarchy into a parallel Potts representation.
+
+## PottsModels
+
+PottsModels owns complete scientific model construction, initializers, analysis
+of explicit saved observations, executable modeling tutorials and model-level
+tests. Its plain factories return the authored system, initial conditions and
+symbolic references; the caller owns numerical execution choices. The library
+does not wrap private engine storage or duplicate lowering and execution.
+
+The behavioral chain is factory → public Potts declarations → Potts validation
+and lowering → CorePotts/LocalMath execution → public saved observations →
+Models scientific tests. Minimal operation and engine-contract fixtures stay in
+their owning upstream package; complete model implementations do not.
+
+See the [model library](@ref model-library) for the initial bounded tutorials
+and their explicitly limited scientific scope.
 
 ## CorePotts
 

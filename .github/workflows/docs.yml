@@ -6,6 +6,15 @@ on:
     tags: ['*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      localmath_ref:
+        description: Full LocalMath candidate commit SHA
+        type: string
+        default: b699002a05f84e240e34162d509d6b952bf7d437
+      corepotts_ref:
+        description: Full CorePotts candidate commit SHA
+        type: string
+        default: 7183bcec81afc34028153f8674d1992b625fd2bc
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -13,8 +22,8 @@ concurrency:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: 'b699002a05f84e240e34162d509d6b952bf7d437'
-  COREPOTTS_REF: '3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4'
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'b699002a05f84e240e34162d509d6b952bf7d437' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '7183bcec81afc34028153f8674d1992b625fd2bc' }}
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
@@ -26,11 +35,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with:
           version: ${{ env.JULIA_VERSION }}

@@ -7,8 +7,9 @@ built-in prescribed lattice stencil. Its
 boundary, neighborhood, substeps, duration per MCS, secretion source, and
 ownership semantics are explicit. It is not presented as a generic PDE
 solver and does not copy a symbolic equation into a Potts process surrogate.
-The complete public form is exercised by the
-[Merks program](@ref merks-2006-integration).
+The complete field-coupled vasculogenesis example lives in the
+[model library](@ref model-library); Potts retains the field's independent
+boundary, moving-occupancy and continuation tests.
 
 `MethodOfLinesComponent` is the checked CPU PDE adapter. It calls
 `symbolic_discretize`, retains the upstream compiled system, constructs a
