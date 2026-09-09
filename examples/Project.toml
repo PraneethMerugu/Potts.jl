@@ -2,6 +2,7 @@
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]

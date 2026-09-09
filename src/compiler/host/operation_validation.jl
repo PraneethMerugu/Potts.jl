@@ -41,7 +41,7 @@ const _TOTALITY_TRANSFER_RULES = Set(
 )
 const _OPERAND_TRANSFER_RULES = Set(
     (
-        :any, :numeric, :boolean, :integer, :same_type, :ifelse, :fixed_index, :product_field,
+        :any, :numeric, :real, :boolean, :integer, :same_type, :ifelse, :fixed_index, :product_field,
     )
 )
 const _OPERATION_CONTEXT_RULES = Set(

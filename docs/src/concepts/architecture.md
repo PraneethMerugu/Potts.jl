@@ -210,6 +210,13 @@ analysis contracts live in `test/test_fixed_vector_operations.jl`; the shared
 `test/fixtures/vector_rotation.jl` supplies the ordinary and Metal execution
 witness without adding another evaluator.
 
+Scalar `sin` and `cos` use canonical `:sine` and `:cosine` entries in the same
+catalog. Operation admission requires real scalar inputs, unit analysis requires
+dimensionless arguments, and CorePotts supplies the ordinary Julia callables.
+`test/test_trigonometric_operations.jl` defends shape and unit rejection;
+`examples/cell_polarity_dynamics.jl` is the real held-turn consumer, reused by
+ordinary CPU and Metal tests through `test/fixtures/cell_polarity_dynamics.jl`.
+
 Named-product field syntax belongs to the existing state declaration in
 `statements/semantics.jl`. Its owned symbolic callable uses SymbolicUtils' public
 type and shape promotion hooks, so same-declared-type substitution retains the
