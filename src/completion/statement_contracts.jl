@@ -119,6 +119,15 @@ function _history_source_contract(statement::HistoryState, inventory::_PottsSour
     return only(matches)
 end
 
+function _history_declaration_diagnostic(statement, path, exception)
+    return PottsDiagnostic(
+        :invalid_history_declaration, QualifiedStatementID(path, statement_id(statement)),
+        _statement_expression(statement), path,
+        "a unique owned source, positive retention, and explicit completed-MCS cadence",
+        sprint(showerror, exception), (), statement_source(statement),
+    )
+end
+
 function _record_shape(statement, root_shape, history_source = nothing)
     statement isa LatticeDomain &&
         return _statement_option(statement, :shape, root_shape)

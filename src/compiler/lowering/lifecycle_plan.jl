@@ -4,6 +4,8 @@ mutable struct _LifecycleRootCursor
     roots::Dict{Symbol, Vector{Int32}}
     positions::Dict{Symbol, Int}
     operation_abis::Tuple
+    state_layout::CorePotts.CompilerSPI.StateLayout
+    history_descriptors::Tuple
 end
 
 mutable struct _LifecycleEvaluatorAccumulator
@@ -14,7 +16,8 @@ end
 _LifecycleEvaluatorAccumulator() = _LifecycleEvaluatorAccumulator(Any[], Symbol[])
 
 function _LifecycleRootCursor(
-        ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple
+        ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple,
+        state_layout, history_descriptors,
     )
     roots = Dict{Symbol, Vector{Int32}}()
     for root in ir.graph.roots
@@ -22,7 +25,7 @@ function _LifecycleRootCursor(
         root.role in _LIFECYCLE_ROOT_ROLES || continue
         push!(get!(roots, root.role, Int32[]), root.node)
     end
-    return _LifecycleRootCursor(roots, Dict{Symbol, Int}(), operation_abis)
+    return _LifecycleRootCursor(roots, Dict{Symbol, Int}(), operation_abis, state_layout, history_descriptors)
 end
 
 function _next_lifecycle_root!(cursor::_LifecycleRootCursor, role::Symbol)
@@ -116,6 +119,7 @@ function _lifecycle_evaluator!(
             Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
             role,
             workspace_slices,
+            ; state_layout = cursor.state_layout, history_descriptors = cursor.history_descriptors,
         )
     else
         _static_literal(value, manifest, T; state)
@@ -256,9 +260,13 @@ function _lifecycle_state_rule!(
     handle = _stage_state_handle(ir, record, target, state_handles)
     state = only(entry for entry in states if entry.handle == handle)
     state_record = _resource_record(ir.source, record, :CellState, target)
+    state_record === nothing &&
+        (state_record = _resource_record(ir.source, record, :HistoryState, target))
     state_record === nothing && throw(ArgumentError(
-        "lifecycle state rule does not resolve to a CellState"
+        "lifecycle state rule does not resolve to cell-owned state or history"
     ))
+    source = _state_sample_record(ir.source, state_record)
+    source.kind === :CellState || throw(ArgumentError("cell lifecycle policies require a CellState sample owner"))
     action = CorePotts.CompilerSPI.UnsupportedLifecycleState
     evaluator_a = Int32(0)
     evaluator_b = Int32(0)
@@ -423,7 +431,7 @@ function _lifecycle_effect_code(effect)
     throw(ArgumentError("unsupported lifecycle effect $(typeof(effect))"))
 end
 
-function _lifecycle_ownership_rules(layout, required::Bool)
+function _lifecycle_ownership_rules(layout, history_descriptors, required::Bool)
     required || return ()
     return Tuple(
         CorePotts.CompilerSPI.LifecycleOwnershipRule(
@@ -441,7 +449,11 @@ function _lifecycle_ownership_rules(layout, required::Bool)
                     ))
             end,
         )
-        for entry in layout.entries if entry.schema.domain === :site
+        for entry in layout.entries if (
+            entry.schema.domain === :history ?
+                CorePotts.CompilerSPI.history_source(history_descriptors, layout, entry.handle).schema.domain :
+                entry.schema.domain
+        ) === :site
     )
 end
 
@@ -454,6 +466,7 @@ function _lower_lifecycle_plan(
         state_layout,
         relationship_endpoint_policies,
         states,
+        history_descriptors,
     ) where {T <: AbstractFloat}
     shape = _lattice_shape(ir)
     N = length(shape)
@@ -477,7 +490,7 @@ function _lower_lifecycle_plan(
         effect = only(arguments.effects)
         _cell_lifecycle_effect(effect) || continue
         fact = facts_by_source[record.identity]
-        cursor = _LifecycleRootCursor(ir, record_index, fact.operation_abis)
+        cursor = _LifecycleRootCursor(ir, record_index, fact.operation_abis, state_layout, history_descriptors)
         trigger = _lifecycle_evaluator!(
             evaluators,
             ir,
@@ -765,6 +778,7 @@ function _lower_lifecycle_plan(
         relationship_rules,
         _lifecycle_ownership_rules(
             state_layout,
+            history_descriptors,
             any(
                 descriptor -> descriptor.effect in (
                     CorePotts.CompilerSPI.CreateCellLifecycleEffect,

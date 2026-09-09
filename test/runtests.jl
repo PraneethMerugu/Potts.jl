@@ -30,6 +30,7 @@ const POTTS_TESTS = (
     "test_history_feedback.jl",
     "test_history_structured_samples.jl",
     "test_history_initialization.jl",
+    "test_history_lifecycle.jl",
     "test_state_reference_inference.jl",
     "test_fixed_vector_operations.jl",
     "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",

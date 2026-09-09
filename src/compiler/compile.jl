@@ -62,6 +62,7 @@ function _lower_scheduled_execution_plan(
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
         states,
+        history_descriptors,
     )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
