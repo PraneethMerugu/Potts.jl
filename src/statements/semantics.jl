@@ -244,14 +244,14 @@ for state_type in (
     @eval function Base.getproperty(statement::$state_type, name::Symbol)
         arguments = _statement_arguments(statement)
         variable = arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing
-        declared_type = variable === nothing ? Nothing : Symbolics.symtype(Symbolics.unwrap(variable))
+        declared_type = variable === nothing ? Nothing : SymbolicUtils.symtype(Symbolics.unwrap(variable))
         declared_type <: NamedTuple && return _product_field_reference(variable, declared_type, name)
         return getfield(statement, name)
     end
     @eval function Base.propertynames(statement::$state_type, private::Bool = false)
         arguments = _statement_arguments(statement)
         variable = arguments isa NamedTuple ? get(arguments, :variable, nothing) : nothing
-        declared_type = variable === nothing ? Nothing : Symbolics.symtype(Symbolics.unwrap(variable))
+        declared_type = variable === nothing ? Nothing : SymbolicUtils.symtype(Symbolics.unwrap(variable))
         return declared_type <: NamedTuple ? fieldnames(declared_type) : fieldnames(typeof(statement))
     end
     @eval function (::Type{$state_type})(

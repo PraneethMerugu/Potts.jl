@@ -22,7 +22,7 @@ using ExplicitImports
             Set(
                 (
                     "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-                    "StaticArrays", "Unitful",
+                    "Unitful",
                 )
             ),
         )
@@ -30,7 +30,7 @@ using ExplicitImports
     @test Set(
         (
             "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-            "StaticArrays", "Unitful",
+            "Unitful",
         )
     ) ⊆ weak_dependencies
 
