@@ -48,11 +48,8 @@ SymbolicIndexingInterface.is_parameter(
 ) = is_scheduled(system) ? SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing :
     invoke(SymbolicIndexingInterface.is_parameter, Tuple{ModelingToolkitBase.AbstractSystem, Symbol}, system, symbol)
 
-SymbolicIndexingInterface.is_parameter(
-    system::PottsSystem, symbol::Union{Symbolics.Num, Symbolics.Arr, Symbolics.CallAndWrap}
-) = is_scheduled(system) ? SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing :
-    invoke(SymbolicIndexingInterface.is_parameter, Tuple{ModelingToolkitBase.AbstractSystem, typeof(symbol)}, system, symbol)
-
+# ModelingToolkitBase's public indexing interface unwraps symbolic wrappers
+# before redispatching here; the scheduled manifest owns their identities.
 SymbolicIndexingInterface.is_parameter(
     system::PottsSystem, symbol::SymbolicUtils.BasicSymbolic
 ) = is_scheduled(system) ? SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing :

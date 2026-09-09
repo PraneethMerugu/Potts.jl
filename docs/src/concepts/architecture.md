@@ -19,6 +19,10 @@ Core's public scalar parameter publisher → detached logical getters/history.
 logical shapes, and contiguous scalar-slot spans. Structural scheduling builds
 this manifest once; late lowering reuses it when choosing numerical precision.
 There is no separate scheduled parameter schema or live logical parameter store.
+ModelingToolkitBase's public symbolic indexing methods unwrap symbolic wrappers;
+Potts resolves the resulting scalar, vector, and indexed identities through this
+same manifest. `test_parameter_contracts.jl` and the shared vector-parameter
+fixture cover wrapper-independent membership and indexing.
 `compiler/lowering/parameters.jl` shares physical-value validation across problem
 construction, remakes and setters, and reconstructs immutable logical snapshots
 from Core's flat scalar buffer. Fixed-vector loads use the existing synthesized

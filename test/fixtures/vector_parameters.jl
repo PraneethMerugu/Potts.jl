@@ -32,6 +32,12 @@ include(joinpath(@__DIR__, "..", "..", "examples", "vector_coefficients.jl"))
 function _fixed_vector_parameters_contract(algorithms, backend)
     return @testset "fixed-vector parameters use logical identities and component slots" begin
         problem, weights, temperature, direction, amount = _vector_parameter_problem()
+        for parameter in (temperature, weights, weights[2])
+            @test SymbolicIndexingInterface.is_parameter(problem.system, parameter)
+            @test SymbolicIndexingInterface.is_parameter(problem.system, Symbolics.unwrap(parameter))
+        end
+        @test !SymbolicIndexingInterface.is_parameter(problem.system, direction)
+        @test !SymbolicIndexingInterface.is_parameter(problem.system, direction[2])
         @test_throws ArgumentError Potts._assert_concrete_core_boundary(CorePotts.CompilerSPI.LiteralExpression(weights))
         @test getp(problem, weights)(problem) == SVector(2.0, 3.0)
         @test getp(problem, weights[2])(problem) == 3.0
