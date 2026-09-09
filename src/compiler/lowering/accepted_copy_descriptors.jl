@@ -84,17 +84,17 @@ function _stage_descriptor(
             only(entry for entry in state_layout.entries if entry.handle == handle)
                 for handle in reads
         )
-        domain = is_model_assignment ? :model : :cell
-        all(entry -> entry.schema.domain === domain, entries) || throw(
+        domains = is_model_assignment ? (:model,) : (:cell, :model)
+        all(entry -> entry.schema.domain in domains, entries) || throw(
             ArgumentError(
                 is_model_assignment ?
                     "a synchronous ModelState assignment may read only ModelState values and parameters" :
-                    "a synchronous CellState assignment currently requires CellState reads and parameters"
+                    "a synchronous CellState assignment requires CellState or ModelState reads and parameters"
             )
         )
-        is_cell_assignment || all(entry -> prod(entry.schema.shape; init = 1) == 1, entries) || throw(
+        all(entry -> entry.schema.domain !== :model || prod(entry.schema.shape; init = 1) == 1, entries) || throw(
             ArgumentError(
-                "a synchronous ModelState assignment requires one logical value per model state"
+                "a synchronous assignment requires one logical value per model state"
             )
         )
     end

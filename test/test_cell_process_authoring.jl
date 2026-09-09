@@ -46,9 +46,11 @@ end
         end
         mixed = declaration((Assign(amount, amount + 1), Assign(foreign_value, 3.0)))
         @test_throws r"share one iteration domain" mtkcompile(mixed)
-        invalid_read = declaration((Assign(amount, foreign_value),))
-        initial = PottsInitialState(ownership = LabelledCells(ones(Int, 2, 2); cells = [cell], medium))
-        @test_throws r"CellState reads" init(PottsProblem(invalid_read, initial, (0, 1); seed = 17))
+        if foreign_state === SiteState
+            invalid_read = declaration((Assign(amount, foreign_value),))
+            initial = PottsInitialState(ownership = LabelledCells(ones(Int, 2, 2); cells = [cell], medium))
+            @test_throws r"CellState or ModelState reads" init(PottsProblem(invalid_read, initial, (0, 1); seed = 17))
+        end
     end
 end
 

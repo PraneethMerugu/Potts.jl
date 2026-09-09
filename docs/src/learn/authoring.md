@@ -72,10 +72,11 @@ Synchronous(:accumulate, Assign(store, store + 1); domain=cells(cell))
 ```
 
 Cell size does not multiply the update. Inactive slots, medium, and cells of
-other kinds are not selected. The current cell-stage binding supports reads of
-cell state and parameters; combining model-scoped state reads with cell updates
-requires an explicit model-state binding and is not yet supported. This limit
-does not restrict separate model and cell processes from appearing in one model.
+other kinds are not selected. Cell processes can read cell state, model state,
+and parameters. Each model operand uses its model-owned value rather than a cell
+index; model and cell updates in the same boundary read the same entry snapshot.
+Site-state reads require an explicit spatial binding and are not supported in a
+cell process. Effects within one process must still share a target domain.
 
 Lifecycle state policies such as `RetireTo` and `ResetTo` also accept immutable
 fixed-array and named-product literals. They must match the target state's

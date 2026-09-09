@@ -44,10 +44,14 @@ boundary-entry evaluation and publication; Potts does not execute assignments.
 Read scope is independent of writer scope: `compiler/host/normalized_payloads.jl`
 resolves each state leaf to its qualified declaration. Operation closure and
 `compiler/lowering/evaluator_nodes.jl` reuse that owner to select a model-bound
-read for `ModelState`, including inside a site assignment. Core validates the
+read for `ModelState`, including inside site and cell assignments. Core validates the
 declared storage domain and supplies the execution gather; Potts does not
 broadcast or duplicate model storage. `test_model_state_proposal_reads.jl`
 contains the public proposal and mixed model/site numerical witnesses.
+`test/test_model_cell_transactions.jl` checks changing model values read by
+unequal-area selected cells, fixed-vector updates, inactive slots, and checkpoint
+continuation. Its shared numerical fixture also belongs to the ordinary Metal
+cell-process witness; backend support is established by running that witness.
 
 For `Synchronous(...; domain=cells(kind))`, the same lowering resolves the
 qualified kind through `evaluator_resources.jl` and emits CorePotts'
