@@ -44,6 +44,31 @@ function _stage_descriptor(
             ),
         )
     )
+    target_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_target))
+    target_unit = target_root === nothing ? :unknown : ir.facts.units[target_root]
+    value_unit = if value_root !== nothing
+        ir.facts.units[value_root]
+    elseif _compiler_leaf_kind(effect.value, ir.source) === :literal &&
+            effect.value isa Union{Number, Symbol}
+        _literal_unit(effect.value)
+    else
+        :unknown
+    end
+    (
+        !_is_unknown_unit(target_unit) && !_is_unknown_unit(value_unit) &&
+            _unit_compatible(target_unit, value_unit)
+    ) || throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :assignment_value_units, record.identity, repr(effect.value),
+                    record.identity.path, "units compatible with target $target_unit",
+                    "assignment value units $value_unit", (), record.source,
+                ),
+            ),
+        )
+    )
     is_model_assignment =
         stage isa CorePotts.CompilerSPI.AfterMCSStage &&
         target_record.kind === :ModelState
