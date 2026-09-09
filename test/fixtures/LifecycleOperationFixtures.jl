@@ -134,17 +134,17 @@ function _transfer(
     )
     TRANSFER_LOOKUPS[] += 1
     return Potts.OperationTransfer(
-        identity,
-        VERSION,
-        "lifecycle-operation-fixture:" * String(identity) * ":v1",
-        1:1,
-        result_rule,
-        :dimensionless,
-        :pure,
-        :total,
-        Potts.InheritFootprintRule(),
-        true,
-        true;
+        identity;
+        schema_version = VERSION,
+        serialization_identity = "lifecycle-operation-fixture:" * String(identity) * ":v1",
+        arity = 1:1,
+        result_rule = result_rule,
+        unit_rule = :dimensionless,
+        purity = :pure,
+        totality = :total,
+        footprint_rule = Potts.InheritFootprintRule(),
+        cpu = true,
+        gpu = true,
         allowed_roles = (Symbol(:lifecycle_, role === :binary_partition ?
             :partition : role),),
         allowed_phases = (:Lifecycle,),
@@ -207,17 +207,17 @@ operation_transfer(::typeof(external_lifecycle_transform), ::Int) = _transfer(
 function _unqualified_transfer(identity, role, context, result_rule)
     TRANSFER_LOOKUPS[] += 1
     return Potts.OperationTransfer(
-        identity,
-        VERSION,
-        "lifecycle-operation-fixture:" * String(identity) * ":v1",
-        1:1,
-        result_rule,
-        :dimensionless,
-        :pure,
-        :total,
-        Potts.InheritFootprintRule(),
-        true,
-        true;
+        identity;
+        schema_version = VERSION,
+        serialization_identity = "lifecycle-operation-fixture:" * String(identity) * ":v1",
+        arity = 1:1,
+        result_rule = result_rule,
+        unit_rule = :dimensionless,
+        purity = :pure,
+        totality = :total,
+        footprint_rule = Potts.InheritFootprintRule(),
+        cpu = true,
+        gpu = true,
         allowed_roles = (role,),
         allowed_phases = (:Lifecycle,),
         required_context = context,

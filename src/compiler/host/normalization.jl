@@ -181,8 +181,12 @@ function _normalize_term!(
                 source.path,
                 "a versioned operation transfer rule",
                 repr(operation),
-                (),
-                UnknownSource(),
+                (
+                    "Express this function using supported Julia operations.",
+                    "For an opaque operation, define its public Potts.operation_transfer " *
+                        "and CorePotts.CompilerSPI.operation_callable bindings.",
+                ),
+                source_graph.records[Int(record)].source,
             ),
         )
         return Int32(0)
@@ -197,7 +201,7 @@ function _normalize_term!(
                 string(transfer.arity),
                 string(length(arguments)),
                 (),
-                UnknownSource(),
+                source_graph.records[Int(record)].source,
             ),
         )
         return Int32(0)

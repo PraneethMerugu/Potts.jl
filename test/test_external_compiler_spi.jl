@@ -2,6 +2,24 @@ include("fixtures/ExternalCompilerSPIFixture.jl")
 include("fixtures/ExternalSurfaceOperationFixture.jl")
 using .ExternalCompilerSPIFixture
 
+@testset "ordinary helpers and opaque public operations execute equivalently" begin
+    include(joinpath(dirname(@__DIR__), "examples", "custom_operation.jl"))
+    @parameters response_value
+    @test isequal(
+        CustomOperation.response(response_value),
+        response_value / (1 + abs(response_value)),
+    )
+    @test CustomOperation.response(1.0) == 0.5
+    @test CustomOperation.response(-1.0) == -0.5
+    ordinary = CustomOperation.run_custom_operation(operation = CustomOperation.response)
+    opaque = CustomOperation.run_custom_operation()
+    @test ordinary.solution.retcode == SciMLBase.ReturnCode.Success
+    @test opaque.solution.retcode == SciMLBase.ReturnCode.Success
+    @test ordinary.solution.stats.constraint_rejections == 4
+    @test opaque.solution.stats.constraint_rejections == 4
+    @test last(ordinary.solution).ownership == last(opaque.solution).ownership
+end
+
 @inline _external_tracker_lane_digits(accumulator, value) =
     accumulator * Int32(100) + value
 @inline _external_tracker_lane_digits_finish(accumulator, count) = accumulator
@@ -27,9 +45,11 @@ end
     cell = CellKind(:external_surface_cell; extinction = RetireAtZero())
     medium = MediumKind(:external_surface_medium)
     gate = FieldState(
-        external_tracker_gate; name = :external_tracker_gate, initial = 0.0)
+        external_tracker_gate; name = :external_tracker_gate, initial = 0.0
+    )
     proposal = ProposalContext(:external_surface_copy)
-    surface_digits(values) = LocalMath.fold(values;
+    surface_digits(values) = LocalMath.fold(
+        values;
         map = identity,
         combine = _external_tracker_lane_digits,
         init = Int32(0),
@@ -41,42 +61,56 @@ end
     )
     source = PottsSystem(
         name = :external_surface_relations,
-        statements = StatementSet((
-            Lattice(
-                (3, 3);
-                boundary = Closed(),
-                relations = (
-                    proposal = VonNeumann(),
-                    surface = VonNeumann(),
-                    surface_alt = Moore(),
+        statements = StatementSet(
+            (
+                Lattice(
+                    (3, 3);
+                    boundary = Closed(),
+                    relations = (
+                        proposal = VonNeumann(),
+                        surface = VonNeumann(),
+                        surface_alt = Moore(),
+                    ),
                 ),
-            ),
-            cell,
-            medium,
-            gate,
-            ProposalConstraint(
-                :external_neighbor_surface,
-                proposal.is_extension &
-                (field_value(gate, proposal.source_site) == 1) &
-                (field_value(gate, proposal.target_site) == 2) &
-                (sum(gather(
-                    ExternalSurfaceOperationFixture.external_cell_surface,
-                    :surface_alt;
-                    at = proposal.target_site,
-                )) == 16) &
-                (surface_digits(gather(
-                    ExternalSurfaceOperationFixture.external_cell_surface,
-                    :surface_alt;
-                    at = proposal.target_site,
-                )) == 808) &
-                (surface_digits(gather(
-                    ExternalSurfaceOperationFixture.external_cell_surface_alt,
-                    :surface;
-                    at = proposal.target_site,
-                )) >= 0),
-            ),
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+                cell,
+                medium,
+                gate,
+                ProposalConstraint(
+                    :external_neighbor_surface,
+                    proposal.is_extension &
+                        (field_value(gate, proposal.source_site) == 1) &
+                        (field_value(gate, proposal.target_site) == 2) &
+                        (
+                        sum(
+                            gather(
+                                ExternalSurfaceOperationFixture.external_cell_surface,
+                                :surface_alt;
+                                at = proposal.target_site,
+                            )
+                        ) == 16
+                    ) &
+                        (
+                        surface_digits(
+                            gather(
+                                ExternalSurfaceOperationFixture.external_cell_surface,
+                                :surface_alt;
+                                at = proposal.target_site,
+                            )
+                        ) == 808
+                    ) &
+                        (
+                        surface_digits(
+                            gather(
+                                ExternalSurfaceOperationFixture.external_cell_surface_alt,
+                                :surface;
+                                at = proposal.target_site,
+                            )
+                        ) >= 0
+                    ),
+                ),
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
         unknowns = [external_tracker_gate],
     )
     scheduled = mtkcompile(source)
@@ -100,21 +134,23 @@ end
         scalar_type = Float64,
         save_start = false,
     )
-    # This is package-owned qualification of the private late-materialization
-    # artifact, not an author-facing access path. The report itself is the
-    # immutable Potts/CorePotts boundary authority.
-    reports = getfield(getfield(integrator, :plan), :reports)
+    # Potts owns this materialization test; execution inspection derives from
+    # the Core program, not a retained copy in the Potts runtime plan.
+    program = getfield(getfield(integrator, :plan), :core_program)
+    execution = CorePotts.program_execution_report(program)
     inspections = filter(
         report -> report.quantity === :cell_surface,
-        reports.execution.trackers.descriptors,
+        execution.trackers.descriptors,
     )
     @test length(inspections) == 2
     @test allunique(getproperty.(inspections, :source_handle))
-    @test Set(getproperty.(inspections, :proposal_cost)) == Set((
-        (class = :bounded_neighborhood, maximum_neighbors = Int16(4)),
-        (class = :bounded_neighborhood, maximum_neighbors = Int16(8)),
-    ))
-    @test reports.execution.trackers.groups == 2
+    @test Set(getproperty.(inspections, :proposal_cost)) == Set(
+        (
+            (class = :bounded_neighborhood, maximum_neighbors = Int16(4)),
+            (class = :bounded_neighborhood, maximum_neighbors = Int16(8)),
+        )
+    )
+    @test execution.trackers.groups == 2
 
     # The VN surface tracker reports eight exposed faces for the two
     # diagonally separated owner sites. Moore traversal reaches that owner
@@ -137,29 +173,34 @@ end
 
     mixed = PottsSystem(
         name = :mixed_tracker_projection_use,
-        statements = StatementSet((
-            Lattice(
-                (3, 3); boundary = Closed(),
-                relations = (
-                    proposal = VonNeumann(), surface = VonNeumann(),
-                    surface_alt = Moore(),
+        statements = StatementSet(
+            (
+                Lattice(
+                    (3, 3); boundary = Closed(),
+                    relations = (
+                        proposal = VonNeumann(), surface = VonNeumann(),
+                        surface_alt = Moore(),
+                    ),
                 ),
-            ),
-            cell,
-            medium,
-            HamiltonianTerm(
-                :mixed_tracker_projection,
-                domain = sites(:lattice),
-                anchor = SiteBinding(:mixed_tracker_projection_site),
-                expression = ExternalSurfaceOperationFixture.external_cell_surface(
-                    proposal.target_site) +
-                    surface_digits(gather(
-                        ExternalSurfaceOperationFixture.external_cell_surface,
-                        :surface_alt; at = proposal.target_site,
-                    )),
-            ),
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+                cell,
+                medium,
+                HamiltonianTerm(
+                    :mixed_tracker_projection,
+                    domain = sites(:lattice),
+                    anchor = SiteBinding(:mixed_tracker_projection_site),
+                    expression = ExternalSurfaceOperationFixture.external_cell_surface(
+                        proposal.target_site
+                    ) +
+                        surface_digits(
+                        gather(
+                            ExternalSurfaceOperationFixture.external_cell_surface,
+                            :surface_alt; at = proposal.target_site,
+                        )
+                    ),
+                ),
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
     )
     @test_throws Potts.PottsValidationError mtkcompile(mixed)
 end
@@ -172,7 +213,7 @@ end
         payload, encoded
     ) === payload
     @test CorePotts.CompilerSPI.descriptor_payload_adapt(identity, payload) ===
-          payload
+        payload
     @test CorePotts.CompilerSPI.descriptor_payload_inspection(payload) == (
         family = :ExternalDescriptorPayload,
         schema = UInt16(1),
@@ -184,19 +225,21 @@ end
         registry = ExternalCompilerSPIFixture.registry(),
     )
     @test completed_system_fingerprint(materialized.completed) ==
-          completed_system_fingerprint(completed_again)
+        completed_system_fingerprint(completed_again)
 
-    record = only(filter(
-        candidate -> candidate.identity.local_id ==
-                     StatementID(:external_energy_1),
-        inspect(materialized.completed, Statements()),
-    ))
+    record = only(
+        filter(
+            candidate -> candidate.identity.local_id ==
+                StatementID(:external_energy_1),
+            inspect(materialized.completed, Statements()),
+        )
+    )
     @test record.kind === :HamiltonianTerm
     @test record.provenance.schema === ExternalCompilerSPIFixture.SCHEMA
     @test record.provenance.registered_lowering_identity ===
-          :lower_external_site_energy
+        :lower_external_site_energy
     @test record.provenance.registered_descriptor_payload_type ===
-          ExternalCompilerSPIFixture.ExternalDescriptorPayload
+        ExternalCompilerSPIFixture.ExternalDescriptorPayload
 
     integrator = init(
         materialized.problem,
@@ -205,15 +248,20 @@ end
         scalar_type = Float64,
         save_everystep = true,
     )
-    reports = getfield(getfield(integrator, :plan), :reports)
-    inspections = collect(Iterators.flatten(
-        reports.descriptors.descriptor_inspections
-    ))
-    external_inspection = only(filter(
-        item -> item.qualified_source.local_id ==
+    program = getfield(getfield(integrator, :plan), :core_program)
+    descriptors = CorePotts.CompilerSPI.descriptor_plan_report(program.descriptor_plan)
+    inspections = collect(
+        Iterators.flatten(
+            descriptors.descriptor_inspections
+        )
+    )
+    external_inspection = only(
+        filter(
+            item -> item.qualified_source.local_id ==
                 StatementID(:external_energy_1),
-        inspections,
-    ))
+            inspections,
+        )
+    )
     @test external_inspection.payload == (
         family = :ExternalDescriptorPayload,
         schema = UInt16(1),
@@ -235,7 +283,7 @@ end
     )
     capability = inspect(unqualified_replay, Capabilities())
     @test capability.key.core.mechanisms.support_family ===
-          :external_execution_protocol_v1
+        :external_execution_protocol_v1
     @test capability.status === CorePotts.BackendSPI.Supported
     @test !capability.exact_replay
     @test capability.evidence.core.key === capability.key.core
@@ -283,8 +331,10 @@ end
         scalar_type = Float32,
         save_start = false,
     )
-    one_report = getfield(getfield(one_integrator, :plan), :reports).descriptors
-    many_report = getfield(getfield(many_integrator, :plan), :reports).descriptors
+    one_program = getfield(getfield(one_integrator, :plan), :core_program)
+    many_program = getfield(getfield(many_integrator, :plan), :core_program)
+    one_report = CorePotts.CompilerSPI.descriptor_plan_report(one_program.descriptor_plan)
+    many_report = CorePotts.CompilerSPI.descriptor_plan_report(many_program.descriptor_plan)
     # The registered Hamiltonian family grows by data; the one fixed proposal
     # constraint remains a second, count-invariant descriptor group.
     @test one_report.occurrences == 2

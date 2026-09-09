@@ -12,25 +12,25 @@ end
 
 function _host_relationship_slot(plan::_PottsExecutionPlan, value)
     name = _host_relationship_name(value)
-    reports = plan.reports.relationship_states
-    exact = findall(entry -> entry.name === name, reports)
+    entries = plan.relationship_manifest
+    exact = findall(entry -> entry.name === name, entries)
     matches = isempty(exact) ?
-              findall(entry -> entry.local_name === name, reports) : exact
+        findall(entry -> entry.local_name === name, entries) : exact
     isempty(matches) && throw(ArgumentError(
         "unknown compiled relationship $(repr(name))"
     ))
     length(matches) == 1 || throw(ArgumentError(
         "relationship name $(repr(name)) is ambiguous; use its qualified compiled name"
     ))
-    report = reports[only(matches)]
+    entry = entries[only(matches)]
     policies = filter(
-        policy -> policy.identity == report.identity,
+        policy -> policy.identity == entry.identity,
         plan.relationship_endpoint_policies,
     )
     length(policies) == 1 || error(
-        "compiled relationship report and endpoint policy are misaligned"
+        "compiled relationship manifest and endpoint policy are misaligned"
     )
-    return Int(only(policies).slot), report
+    return Int(only(policies).slot), entry
 end
 
 function _host_cell_identity(snapshot, value)

@@ -204,9 +204,9 @@ end
 
 function _kind_indices(executable::_PottsExecutionPlan)
     result = Dict(
-        kind => index for (index, kind) in enumerate(executable.reports.kinds)
+        entry.name => index for (index, entry) in enumerate(executable.kind_manifest)
     )
-    identities = executable.reports.kind_identities
+    identities = executable.kind_manifest
     local_counts = Dict{Symbol, Int}()
     for entry in identities
         local_counts[entry.local_name] = get(
@@ -418,8 +418,8 @@ end
 function _initial_value_map(executable::_PottsExecutionPlan, initial::PottsInitialState)
     result = Dict{Symbol, Any}()
     entries = (
-        executable.reports.states...,
-        executable.reports.relationship_states...,
+        executable.state_manifest...,
+        executable.relationship_manifest...,
     )
     for (key, value) in initial.values
         key_name = _state_name(key)
@@ -653,8 +653,8 @@ function _core_initial_state(
         _materialize_layout(executable, initial.ownership, seed, replica, repeat)
     values = _initial_value_map(executable, initial)
     known = Set{Symbol}()
-    union!(known, entry.name for entry in executable.reports.states)
-    union!(known, entry.name for entry in executable.reports.relationship_states)
+    union!(known, entry.name for entry in executable.state_manifest)
+    union!(known, entry.name for entry in executable.relationship_manifest)
     unknown = setdiff(Set(keys(values)), known)
     isempty(unknown) ||
         throw(ArgumentError("unknown initial state value$(length(unknown) == 1 ? "" : "s"): " *
@@ -667,7 +667,7 @@ function _core_initial_state(
         "initial finite-cell count exceeds compiled max_cells=$cell_capacity"
     ))
     normalized_states = Dict{CorePotts.CompilerSPI.QualifiedResourceIdentity, Any}()
-    for entry in executable.reports.states
+    for entry in executable.state_manifest
         normalized_states[entry.identity] = _normalize_initial_state_entry(
             entry,
             values,
@@ -719,7 +719,7 @@ function _core_initial_state(
                 cell_kinds,
             )
         end
-        for relationship in executable.reports.relationship_states
+            for relationship in executable.relationship_manifest
     )
     return CorePotts.ProgramInitialState(
         ownership,

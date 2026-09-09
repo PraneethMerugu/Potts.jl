@@ -32,10 +32,12 @@ struct MetalBackend <: AbstractPottsBackend end
 
 _validate_backend_available(::CPUBackend) = nothing
 function _validate_backend_available(backend::AbstractPottsBackend)
-    throw(ArgumentError(
-        "$(nameof(typeof(backend))) requires its optional backend package and " *
-        "Potts extension"
-    ))
+    throw(
+        ArgumentError(
+            "$(nameof(typeof(backend))) requires its optional backend package and " *
+                "Potts extension"
+        )
+    )
 end
 
 _core_program_backend(::CPUBackend) = CorePotts.BackendSPI.CPUProgramBackend()
@@ -46,10 +48,12 @@ _adapt_runtime_backend(::CorePotts.BackendSPI.CPUProgramBackend, runtime) = runt
 function _adapt_runtime_backend(
         backend::CorePotts.BackendSPI.AdaptedProgramBackend, runtime
     )
-    throw(ArgumentError(
-        "$(CorePotts.BackendSPI.program_backend_name(backend)) runtime adaptation " *
-        "requires its optional Potts backend extension"
-    ))
+    throw(
+        ArgumentError(
+            "$(CorePotts.BackendSPI.program_backend_name(backend)) runtime adaptation " *
+                "requires its optional Potts backend extension"
+        )
+    )
 end
 
 struct ReferenceUnitDescriptor
@@ -114,8 +118,8 @@ function _parameter_buffer(values::Tuple, ::Type{T}) where {
 end
 
 _parameter_buffer(parameters::PottsParameters, ::Type{T}) where {
-        T <: AbstractFloat,
-    } = _parameter_buffer(parameters.values, T)
+    T <: AbstractFloat,
+} = _parameter_buffer(parameters.values, T)
 _parameter_buffer(parameters::PottsParameters{T}) where {T <: AbstractFloat} =
     _parameter_buffer(parameters.values, T)
 _parameter_buffer(parameters::PottsParameters) = collect(parameters.values)
@@ -130,18 +134,20 @@ struct CompiledRelationshipEndpointPolicy
     kind_b_name::Symbol
 end
 
-struct _PottsExecutionPlan{P, M, R, O}
+struct _PottsExecutionPlan{P, M, S, R, K, O}
     core_program::P
     parameter_manifest::M
     relationship_endpoint_policies::Vector{CompiledRelationshipEndpointPolicy}
-    reports::R
+    state_manifest::S
+    relationship_manifest::R
+    kind_manifest::K
     observations::O
     fingerprint::ExecutableFingerprint
 end
 
 function Base.show(io::IO, plan::_PottsExecutionPlan)
-    report = plan.reports.execution
-    print(
+    report = CorePotts.program_execution_report(plan.core_program)
+    return print(
         io,
         "PottsExecutionPlan(",
         report.engine,
@@ -156,3 +162,9 @@ function Base.show(io::IO, plan::_PottsExecutionPlan)
 end
 
 _execution_plan_fingerprint(plan::_PottsExecutionPlan) = plan.fingerprint
+
+_execution_replay_contract() = (
+    class = :exact_same_executable,
+    cross_engine = false,
+    addressed_rng = true,
+)

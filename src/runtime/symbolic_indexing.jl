@@ -278,7 +278,7 @@ function _state_values_for(
         saved::PottsSavedState;
         require_observations::Bool = true,
     )
-    states = Tuple(saved[entry.name] for entry in plan.reports.states)
+    states = Tuple(saved[entry.name] for entry in plan.state_manifest)
     observations = Tuple(
         require_observations ? saved[entry.name] :
         get(saved.observations, entry.name, missing)

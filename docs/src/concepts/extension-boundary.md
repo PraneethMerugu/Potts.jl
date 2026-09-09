@@ -51,6 +51,64 @@ contextual lowering instead. This is an extension-owned semantic attestation:
 Potts can validate the scalar storage contract, but the extension must qualify
 the declared projection against an independent numerical oracle.
 
+Operation contracts use named construction. For example, a pure scalar
+operation consuming two dimensionless operands can declare its rules as follows:
+
+```@example operation_contract
+using Potts
+contract = Potts.OperationTransfer(:scaled_value;
+    schema_version = v"1.0.0",
+    serialization_identity = "example-scaled-value:v1",
+    arity = 2,
+    result_rule = :promote_numeric,
+    unit_rule = :dimensionless,
+    operand_rule = :numeric,
+    footprint_rule = Potts.InheritFootprintRule(),
+    allowed_roles = (:hamiltonian, :drive),
+    allowed_phases = (:Proposal,),
+    owner = :ExampleOperations,
+    callable_identity = "ExampleOperations.ScaledValue",
+)
+(contract.arity, contract.cpu, contract.gpu)
+```
+
+This constructs a contract, not an executable operation. The extension also
+provides symbolic registration, `Potts.operation_transfer` dispatch, and the
+corresponding `CorePotts.CompilerSPI.operation_callable` implementation. Ordinary
+supported Julia arithmetic already has those bindings; model authors do not
+register each use. Invalid schema fields fail at construction. Compatibility
+with actual operands, roles, resources, and contexts is checked during model
+completion. A source requirement naming an operand must be valid for every
+arity admitted by the contract. CPU semantics are required; `gpu=true` is an
+explicit declaration and does not itself establish device or whole-model support.
+
+The following complete example executes both authoring choices. Its generic
+`response` function expands through ordinary Julia/Symbolics dispatch. The
+deliberately opaque `opaque_response` keeps one symbolic call, declares a named
+transfer, and binds its public execution callable to that same `response`
+function. A context-free operation therefore needs neither a contextual wrapper
+type nor a descriptor registry. The example declares CPU support only.
+
+```@example custom_operation
+using Potts
+include(joinpath(dirname(dirname(dirname(@__DIR__))), "examples", "custom_operation.jl"))
+ordinary = CustomOperation.run_custom_operation(operation=CustomOperation.response)
+opaque = CustomOperation.run_custom_operation()
+(
+    CustomOperation.response(1.0),
+    ordinary.solution.stats.constraint_rejections,
+    opaque.solution.stats.constraint_rejections,
+    last(ordinary.solution).ownership == last(opaque.solution).ownership,
+)
+```
+
+Each model evaluates four proposals and rejects them through its actual
+constraint evaluator. Symbolic registration alone is insufficient for an opaque
+operation: completion reports the missing transfer or callable, including the
+captured statement location and available remedies. A contextual operation that
+reads evaluator resources must instead declare support for each required public
+context; the context-free example does not grant access to hidden runtime state.
+
 The public extension-oriented names are distinguishable from the exported
 authoring API:
 

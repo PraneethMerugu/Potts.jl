@@ -73,8 +73,8 @@ function _normalize_observables(plan::_PottsExecutionPlan, observables)
     declared = Set{Symbol}((
         :ownership, :cell_kinds, :cell_generations, :volumes,
     ))
-    union!(declared, entry.name for entry in plan.reports.states)
-    union!(declared, entry.name for entry in plan.reports.relationship_states)
+    union!(declared, entry.name for entry in plan.state_manifest)
+    union!(declared, entry.name for entry in plan.relationship_manifest)
     union!(declared, value.name for value in plan.observations)
     unknown = setdiff(Set(requested), declared)
     isempty(unknown) || throw(ArgumentError(
@@ -294,7 +294,7 @@ function _materialize_integrator(
     plan = _lower_scheduled_execution_plan(
         problem.system, algorithm, backend, scalar_type
     )
-    capability = plan.reports.capability
+    capability = CorePotts.program_capability_report(plan.core_program)
     CorePotts.BackendSPI.capability_authorizes_execution(capability) ||
         throw(CorePotts.BackendSPI.ProgramCapabilityError(:init, capability))
     profiles = _normalize_native_profiles(problem.system, native_profiles)

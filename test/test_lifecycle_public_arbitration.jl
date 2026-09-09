@@ -11,18 +11,19 @@
             scalar_type = Float32,
             save_everystep = true,
         )
-        lifecycle_fingerprint = getfield(
-            getfield(integrator, :plan), :reports
-        ).lifecycle.fingerprint
+        program = getfield(getfield(integrator, :plan), :core_program)
+        lifecycle_fingerprint = CorePotts.CompilerSPI.lifecycle_plan_report(
+            program.lifecycle_plan
+        ).fingerprint
         solution = solve!(integrator)
         (; lifecycle_fingerprint, solution)
     end
     @test successful[1].lifecycle_fingerprint ==
-          successful[2].lifecycle_fingerprint
+        successful[2].lifecycle_fingerprint
     @test last(successful[1].solution).ownership ==
-          last(successful[2].solution).ownership
+        last(successful[2].solution).ownership
     @test last(successful[1].solution).cell_generations ==
-          last(successful[2].solution).cell_generations
+        last(successful[2].solution).cell_generations
 
     conflicts = map((false, true)) do reversed
         fixture = permutation_lifecycle_fixture(reversed; conflicting = true)
@@ -37,32 +38,37 @@
             save_start = false,
         )
         before = deepcopy(integrator.u)
-        lifecycle_fingerprint = getfield(
-            getfield(integrator, :plan), :reports
-        ).lifecycle.fingerprint
+        program = getfield(getfield(integrator, :plan), :core_program)
+        lifecycle_fingerprint = CorePotts.CompilerSPI.lifecycle_plan_report(
+            program.lifecycle_plan
+        ).fingerprint
         step!(integrator)
         (; lifecycle_fingerprint, integrator, before)
     end
     @test conflicts[1].lifecycle_fingerprint ==
-          conflicts[2].lifecycle_fingerprint
+        conflicts[2].lifecycle_fingerprint
     @test all(
         candidate -> candidate.integrator.retcode ==
-                     SciMLBase.ReturnCode.Failure,
+            SciMLBase.ReturnCode.Failure,
         conflicts,
     )
     first_report = conflicts[1].integrator.failure_report
     second_report = conflicts[2].integrator.failure_report
     @test first_report isa CorePotts.ProgramFailureReport
     @test second_report isa CorePotts.ProgramFailureReport
-    @test (first_report.source, first_report.secondary_source,
-           first_report.anchor, first_report.detail) ==
-          (second_report.source, second_report.secondary_source,
-           second_report.anchor, second_report.detail)
+    @test (
+        first_report.source, first_report.secondary_source,
+        first_report.anchor, first_report.detail,
+    ) ==
+        (
+        second_report.source, second_report.secondary_source,
+        second_report.anchor, second_report.detail,
+    )
     for candidate in conflicts
         @test candidate.integrator.u.ownership == candidate.before.ownership
         @test candidate.integrator.u.cell_kinds == candidate.before.cell_kinds
         @test candidate.integrator.u.cell_generations ==
-              candidate.before.cell_generations
+            candidate.before.cell_generations
     end
 end
 
@@ -79,26 +85,30 @@ end
             :priority_low;
             domain = model(),
             expression = true,
-            effects = (CreateCell(
-                cell;
-                placement = SeedAt(1),
-                state = (state => InitializeFrom(1.0),),
-                priority = 1,
-                on_inadmissible = ErrorOnInadmissible(),
-            ),),
+            effects = (
+                CreateCell(
+                    cell;
+                    placement = SeedAt(1),
+                    state = (state => InitializeFrom(1.0),),
+                    priority = 1,
+                    on_inadmissible = ErrorOnInadmissible(),
+                ),
+            ),
             cadence = AtMCS(1),
         ),
         LifecycleProcess(
             :priority_high;
             domain = model(),
             expression = true,
-            effects = (CreateCell(
-                cell;
-                placement = SeedAt(1),
-                state = (state => InitializeFrom(10.0),),
-                priority = 10,
-                on_inadmissible = ErrorOnInadmissible(),
-            ),),
+            effects = (
+                CreateCell(
+                    cell;
+                    placement = SeedAt(1),
+                    state = (state => InitializeFrom(10.0),),
+                    priority = 10,
+                    on_inadmissible = ErrorOnInadmissible(),
+                ),
+            ),
             cadence = AtMCS(1),
         ),
     )

@@ -28,6 +28,19 @@ the declared contact relation at the proposal target. One reads a lattice
 preserves relation-lane order and repeated endpoints; missing boundary lanes
 and medium endpoints do not participate.
 
+Not every helper needs a macro. A generic Julia function such as
+`response(value) = value / (1 + abs(value))` runs on symbolic arguments during
+authoring and expands into its supported scalar operations. It needs no
+`@register_symbolic` or operation-transfer declaration. `LocalMath.@localmath`
+serves the typed traced-function case used above; it is not a registration
+requirement for ordinary scalar helpers. An argument annotation such as
+`::Float64`, or ordinary `if` control flow requiring a symbolic condition to be
+a `Bool`, does not automatically become symbolic code. Use a generic helper
+with supported operations, the supported LocalMath tracing surface, or an
+explicit opaque operation as described in [Extension boundary](@ref extension-boundary).
+Neither ordinary helpers nor traced functions confer GPU or exact-replay
+support automatically.
+
 The intentionally false proposal constraint keeps stochastic copy dynamics
 fixed in this compact tutorial. That isolates the authored gather from the
 lifecycle and continuation behavior shown below; the independent gathered-fold

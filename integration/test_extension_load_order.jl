@@ -1,5 +1,7 @@
 @testset "fresh-process weak-extension load orders" begin
-    project = @__DIR__
+    # Fresh processes must test the parent's resolved candidate dependencies,
+    # including when the integration project is developed in an isolated copy.
+    project = dirname(Base.active_project())
     orders = (
         raw"""
         using Potts

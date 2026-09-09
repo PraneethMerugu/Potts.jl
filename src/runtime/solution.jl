@@ -49,7 +49,7 @@ function PottsSolution(integrator::PottsIntegrator)
         algorithm = nameof(typeof(integrator.alg)),
         backend = nameof(typeof(integrator.backend)),
         scalar_type = integrator.scalar_type,
-        replay = isempty(integrator.native_profiles) ? plan.reports.replay : (
+        replay = isempty(integrator.native_profiles) ? _execution_replay_contract() : (
             class = :exact_pinned_native_profiles,
             cross_engine = false,
             addressed_rng = true,

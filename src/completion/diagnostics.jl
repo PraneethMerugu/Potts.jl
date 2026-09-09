@@ -23,6 +23,19 @@ function Base.show(io::IO, diagnostic::PottsDiagnostic)
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", diagnostic::PottsDiagnostic)
+    show(io, diagnostic)
+    expression = diagnostic.expression
+    if isempty(expression) && diagnostic.source isa SourceLocation
+        expression = diagnostic.source.expression
+    end
+    isempty(expression) || print(io, "\n  expression: ", expression)
+    for alternative in diagnostic.alternatives
+        print(io, "\n  try: ", alternative)
+    end
+    return
+end
+
 """Ordered collection of diagnostics raised by one validation stage."""
 struct PottsValidationError <: Exception
     stage::Symbol
@@ -35,7 +48,7 @@ function Base.showerror(io::IO, error::PottsValidationError)
     count == 1 || print(io, "s")
     for diagnostic in error.diagnostics
         print(io, "\n- ")
-        show(io, diagnostic)
+        show(io, MIME"text/plain"(), diagnostic)
     end
 end
 
