@@ -42,6 +42,32 @@ Use `@named` when a parent expression should supply the component name. Use
 `flatten` only when a downstream operation genuinely needs a flat namespace.
 Namespacing is structural identity, not display metadata.
 
+For a factory that already returns a `StatementSet`, pass that set positionally:
+`PottsSystem(declarations; name=:model)`. This collects variables from owned
+state declarations and parameters carrying MTK parameter metadata from statement
+payloads, initial conditions, equations, events and parameter defaults. It then
+constructs the same ordinary `PottsSystem` as the keyword-only constructor.
+Supply `unknowns` or `parameters` to retain additional unused declarations;
+explicit entries come first. Imported aliases are not newly owned parameters,
+and an assignment target does not implicitly declare state. Child components
+and native systems retain their own inventories.
+
+The keyword-only `PottsSystem(; statements=declarations, ...)` form uses the
+explicit `unknowns` and `parameters` inventories. Neither form inspects arbitrary
+Julia local variables: unreferenced parameter bindings must still be supplied
+explicitly. This convenience does not introduce an ambient model builder.
+
+`examples/compartment_exchange.jl` is a complete factory using `@statements`
+and this positional constructor, with no separate state or parameter tuple. Its
+two simultaneous assignments conserve the total reservoir amount:
+
+```@example assembled-exchange
+using Potts
+include(joinpath(pkgdir(Potts), "examples", "compartment_exchange.jl"))
+solution = solve(CompartmentExchangeExample.exchange_problem(), SequentialCPM(); scalar_type=Float32)
+(last(solution)[:stored], last(solution)[:released])
+```
+
 ## Simultaneous assignments
 
 Pass multiple effects to `Synchronous` to read one boundary-entry snapshot:
