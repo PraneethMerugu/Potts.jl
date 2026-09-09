@@ -47,8 +47,10 @@ const POTTS_TEST_FIXTURES = (
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
     "LifecycleOperationFixtures.jl",
+    "cell_processes.jl",
     "lifecycle_public.jl",
     "sciml_lifecycle.jl",
+    "vector_rotation.jl",
 )
 
 const POTTS_TEST_SUITE = Dict(

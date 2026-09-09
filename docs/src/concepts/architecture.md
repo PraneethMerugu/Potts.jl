@@ -145,6 +145,12 @@ analysis contracts live in `test/test_fixed_vector_operations.jl`; the shared
 `test/fixtures/vector_rotation.jl` supplies the ordinary and Metal execution
 witness without adding another evaluator.
 
+The shared `test/fixtures/cell_processes.jl` checks selected-cell updates and
+structured retirement values through the public workflow. Ordinary CPU tests
+and `benchmark/backends/metal/cell_processes.jl` use these same independent
+numerical expectations; malformed declaration and literal checks remain in the
+ordinary owning tests.
+
 ## Time
 
 The completed integer Monte Carlo step is the master CPM clock and lifecycle boundary. Each native
