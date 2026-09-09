@@ -60,6 +60,16 @@ function _compiler_synthesized_operation_requirements(
     requirements = NamedTuple[]
 
     for node in nodes
+        _is_site_sum(node) || continue
+        record = source.records[node.record]
+        if _is_unit_count(nodes, node)
+            _push_operation_requirement!(requirements, cell_volume, 1, record)
+        elseif _node_subgraph_has_state_binding(nodes, first(node.operands))
+            _push_operation_requirement!(requirements, _potts_iteration_bound_state_value, 1, record)
+        end
+    end
+
+    for node in nodes
         node.payload isa ParameterBindingPayload || continue
         shape = _parameter_shape(node.payload.value)
         isempty(shape) || _push_operation_requirement!(requirements, StaticArrays.SVector, only(shape), source.records[node.record])

@@ -70,6 +70,7 @@ function _analyze_term_graph(
             shape[index] = _parameter_shape(node.payload.value)
         end
         if transfer !== nothing
+            _is_site_sum(node) && _site_sum_source(source, graph, node)
             for role in operation_roles[index]
                 _validate_operation_use!(
                     node,
@@ -163,9 +164,9 @@ function _analyze_term_graph(
             }
         elseif transfer.result_rule === :fixed_index
             eltype(result_type[first(operand_indices)])
-        elseif transfer.result_rule === :history_sample
+        elseif transfer.result_rule in (:history_sample, :site_sum)
             shape[index] = shape[first(operand_indices)]
-            result_type[first(operand_indices)]
+            _is_unit_count(graph, node) ? Int32 : result_type[first(operand_indices)]
         elseif transfer.result_rule === :product_field
             ordinal = graph.nodes[last(operand_indices)].payload.value
             field_type = fieldtype(result_type[first(operand_indices)], ordinal)

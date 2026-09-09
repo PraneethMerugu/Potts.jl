@@ -394,6 +394,9 @@ function _analyzed_footprint(
     )
     node.transfer === nothing &&
         return _leaf_footprint(source, node, record, dimensions)
+    # Maintained source reads execute in the tracker law. The consuming process
+    # reads one owner value, never an implicit gather of the source lattice.
+    _is_site_sum(node) && return OwnerFootprintFact(:owner)
     rule = node.transfer.footprint_rule
     rule isa AbstractFootprintTransferRule || throw(
         ArgumentError(
