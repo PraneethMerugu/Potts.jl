@@ -2,6 +2,7 @@ using ParallelTestRunner
 import Potts
 
 const POTTS_TESTS = (
+    "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",
     "test_declaration_assembly.jl",
@@ -72,6 +73,7 @@ const POTTS_TESTS = (
 # turning helpers into a second test suite.
 const POTTS_TEST_FIXTURES = (
     "history_structured_samples.jl",
+    "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
     "LifecycleOperationFixtures.jl",

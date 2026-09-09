@@ -79,7 +79,7 @@ function _compiler_synthesized_operation_requirements(
         if record.kind === :FieldState
             evolution = get(_record_options(record), :evolution, nothing)
             if evolution !== nothing
-                for (operation, arity) in numerical_operation_requirements(evolution)
+                for (operation, arity) in numerical_operation_requirements(evolution, record)
                     _push_operation_requirement!(requirements, operation, arity)
                 end
             end

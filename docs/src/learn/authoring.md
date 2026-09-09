@@ -168,6 +168,35 @@ logical shape, field names, and reference dimensions. Floating leaves use the
 selected execution precision; declared Boolean and integer leaves retain their
 types. Mutable arrays and nonfinite literal values are rejected before execution.
 
+## Explicit local field rates
+
+`DiscreteFieldEuler` can evolve a scalar `FieldState` from a complete authored
+rate instead of its diffusion/decay/secretion shorthand:
+
+```julia
+FieldState(concentration; initial=0.0u"m", evolution=DiscreteFieldEuler(),
+    rhs=forcing - loss * concentration + amplitude * draw(Uniform(0.5, 1.5), DrawKey(:forcing)),
+    duration_per_mcs=1.0u"s", substeps=2)
+```
+
+The RHS has units of state per duration. Each positive integer substep applies
+`max(0, value + dt * rhs)` using that substep's entry state, where `dt` is the
+declared duration divided by `substeps`. Draws use the existing qualified process
+identity, completed MCS, site, and substep address. This is an explicitly sampled
+random rate in a clipped Euler update, not an SDE integrator or an automatic
+mass-conservation guarantee. Choose the timestep and noise model scientifically.
+Concrete dimensional literals such as `rhs=1.0u"m/s"` are supported. For symbolic
+quantities, attach units through parameter defaults or state initial values;
+wrapping a symbolic expression inside a `Quantity` is rejected explicitly.
+
+`rhs` is mutually exclusive with `diffusion`, `decay`, `secretion`, and
+`source_kind`. The shorthand keeps its existing finite-stencil CPU coverage;
+an explicit local RHS is admitted according to its actual reads and operations,
+including supported device operations. This does not establish arbitrary custom
+neighbor gathers. Ordinary Julia helpers may inline symbolically in the RHS.
+The public numerical and checkpoint fixture is
+`test/fixtures/discrete_field_rhs.jl`, shared by ordinary CPU and Metal tests.
+
 ## Retained samples and feedback
 
 `HistoryState(memory; of=signal, depth=3, cadence=Every(2))` retains samples of

@@ -34,7 +34,7 @@ function _record_resources!(result, value, path)
     return result
 end
 
-function _record_units(statement, inventory::_PottsSourceInventory)
+function _record_units(statement, inventory::_PottsSourceInventory, identity::QualifiedStatementID)
     quantities = Any[]
     _collect_quantities!(quantities, _statement_arguments(statement))
     _collect_quantities!(quantities, _statement_options(statement))
@@ -55,11 +55,21 @@ function _record_units(statement, inventory::_PottsSourceInventory)
         )
     end
     descriptors = unique(
-        (
-                dimension = string(DynamicQuantities.dimension(value)),
-                scale = Float64(DynamicQuantities.ustrip(value)),
+        map(quantities) do value
+            payload = DynamicQuantities.ustrip(value)
+            SymbolicIndexingInterface.symbolic_type(payload) isa SymbolicIndexingInterface.NotSymbolic || throw(
+                PottsValidationError(
+                    :completion, (
+                        PottsDiagnostic(
+                            :unsupported_symbolic_quantity, identity, repr(value), identity.path,
+                            "a concrete quantity; declare symbolic units through parameter defaults or state initial values",
+                            "a quantity containing a symbolic value", (), statement_source(statement),
+                        ),
+                    )
+                )
             )
-            for value in quantities
+            return (dimension = string(DynamicQuantities.dimension(value)), scale = Float64(payload))
+        end
     )
     return Tuple(sort!(collect(descriptors); by = item -> item.dimension))
 end

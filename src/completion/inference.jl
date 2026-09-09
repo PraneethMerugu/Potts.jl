@@ -143,6 +143,7 @@ function _statement_phase(statement)
     } && return Proposal()
     statement isa AcceptedCopyProcess && return AcceptedCopy()
     statement isa SynchronousProcess && return AfterMCS()
+    statement isa FieldState && get(options, :evolution, nothing) !== nothing && return AfterMCS()
     statement isa RelationshipProcess && return RelationshipCommit()
     statement isa LifecycleProcess && return Lifecycle()
     # Observations are settled-boundary save metadata. They do not introduce

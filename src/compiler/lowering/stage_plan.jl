@@ -117,7 +117,10 @@ function _lower_stage_plan(
                 manifest,
                 T,
                 state_handles,
+                draw_handles,
+                state_layout,
                 after_mcs_site_slot + 1,
+                ; history_descriptors,
             )
             if descriptor !== nothing
                 after_mcs_site_slot += 1

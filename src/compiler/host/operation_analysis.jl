@@ -56,6 +56,7 @@ function _record_operation_role(record::QualifiedStatement)
     record.kind === :ProposalConstraint && return :constraint
     record.kind === :ProposalModifier && return :modifier
     record.kind === :Observation && return :observation
+    record.kind === :FieldState && get(_record_options(record), :evolution, nothing) !== nothing && return :process
     if record.kind === :LifecycleProcess
         arguments = first(record.normalized_payload)
         any(_cell_lifecycle_effect, arguments.effects) && return :lifecycle

@@ -83,6 +83,12 @@ qualified kind through `evaluator_resources.jl` and emits CorePotts'
 `CellAssignmentEffect`. The existing operation closure supplies the cell-bound
 state read, and CorePotts owns finite-cell eligibility and the cell-domain
 execution. Cell processes do not borrow a lattice traversal.
+`operation_library/numerics.jl` owns `DiscreteFieldEuler`: either its existing
+finite-stencil rate or a normalized explicit `FieldState(rhs=...)` expression
+feeds one clipped Euler update. Completion records the RHS as a process root;
+ordinary unit analysis, operation admission, and state-read lowering apply.
+CorePotts' existing iterated-site effect owns substep entry state and addressed
+draw execution. No separate numerical scheduler or random generator is added.
 `test/test_cell_process_authoring.jl` checks per-cell frequency, kind selection,
 inactive slots, simultaneous scalar/vector writes, and domain rejection.
 State-policy literals reuse the compiled state manifest's logical type and

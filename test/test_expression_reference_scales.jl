@@ -1,3 +1,26 @@
+@testset "concrete quantity assignments use the declared reference scale once" begin
+    @variables distance
+    medium = MediumKind(:medium)
+    source = PottsSystem(
+        name = :constant_distance,
+        statements = StatementSet(
+            (
+                Lattice((1, 1); boundary = Closed()), medium,
+                ModelState(distance; initial = 0.0u"m"),
+                Synchronous(:set_distance, Assign(distance, 6.0u"m")),
+                ProposalConstraint(:held, false), Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ), unknowns = (distance,),
+    )
+    completed = complete(source; reference_units = ReferenceUnits(length = 2.0u"m"))
+    initial = PottsInitialState(ownership = LabelledCells(zeros(Int, 1, 1); cells = CellKind[], medium))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        integrator = init(PottsProblem(completed, initial, (0, 1); seed = 17), algorithm; scalar_type = Float32)
+        step!(integrator)
+        @test integrator.u[:distance] == 3.0f0
+    end
+end
+
 function expression_reference_problem()
     @parameters length_input = 6.0u"m" time_input = 2.0u"s" area_input = 25.0u"m^2" threshold = 4.0u"m/s"
     @variables multiplied divided powered rooted added smallest largest ratio reciprocal

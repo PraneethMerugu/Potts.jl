@@ -98,6 +98,10 @@ function _qualified_source_reference(reference::FrozenSourceReference)
 end
 
 function _compiler_leaf_kind(value, source::FrozenSourceGraph)
+    if value isa DynamicQuantities.UnionAbstractQuantity
+        return SymbolicIndexingInterface.symbolic_type(DynamicQuantities.ustrip(value)) isa
+            SymbolicIndexingInterface.NotSymbolic ? :literal : :symbolic_leaf
+    end
     any(source.references) do reference
         reference.kind === :parameter &&
             isequal(_qualified_source_reference(reference), value)
