@@ -102,8 +102,10 @@ function _stage_descriptor(
         )
     end
     cell_kind = if is_cell_assignment
-        arguments.domain isa Cells || throw(ArgumentError("cell assignment requires cells(kind)"))
-        kind = _compiled_kind_index(ir, record, arguments.domain.kind)
+        scope = _quantity_scope(ir.source.records, target_record)
+        domain = scope === nothing ? arguments.domain : scope.binding.domain
+        domain isa Cells || throw(ArgumentError("cell assignment requires cells(kind) or a scoped target"))
+        kind = _compiled_kind_index(ir, scope === nothing ? record : target_record, domain.kind)
         kind === nothing && throw(ArgumentError("cell assignment kind does not resolve"))
         kind
     else

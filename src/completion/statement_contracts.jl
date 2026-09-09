@@ -5,7 +5,9 @@ function _statement_expression(statement)
 end
 
 function _record_resources!(result, value, path)
-    if value isa AbstractPottsStatement
+    if value isa QualifiedStatementID
+        value in result || push!(result, value)
+    elseif value isa AbstractPottsStatement
         identity = QualifiedStatementID(path, statement_id(value))
         identity in result || push!(result, identity)
     elseif value isa NamedTuple
@@ -25,6 +27,7 @@ function _record_resources!(result, value, path)
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,
+            SiteBinding, CellBinding,
         }
         foreach(
             field -> _record_resources!(result, getfield(value, field), path),

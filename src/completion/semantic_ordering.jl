@@ -10,17 +10,17 @@ function _semantic_phase_schedule(records)
         rank = _phase_rank(record.phase)
         lower = filter(
             previous -> previous.phase !== nothing &&
-                        _phase_rank(previous.phase) < rank,
+                _phase_rank(previous.phase) < rank,
             scheduled,
         )
         dependency_rank = isempty(lower) ? nothing :
-                          maximum(_phase_rank(previous.phase) for previous in lower)
+            maximum(_phase_rank(previous.phase) for previous in lower)
         dependencies = dependency_rank === nothing ? () : Tuple(
-            previous.identity
-            for previous in lower
-            if _phase_rank(previous.phase) == dependency_rank
-        )
-        push!(scheduled, _with_ordering_dependencies(record, dependencies))
+                previous.identity
+                for previous in lower
+                if _phase_rank(previous.phase) == dependency_rank
+            )
+        push!(scheduled, _with_statement_contracts(record; dependencies))
     end
     return scheduled
 end
@@ -32,17 +32,19 @@ function _validate_random_key_uniqueness!(diagnostics, records)
             operation.reserved && continue
             key = (record.identity.path, operation.identity)
             if haskey(seen, key)
-                push!(diagnostics, PottsDiagnostic(
-                    :duplicate_draw_key,
-                    record.identity,
-                    record.source isa SourceLocation ?
-                    record.source.expression : string(record.identity),
-                    record.identity.path,
-                    "a namespace-local unique DrawKey",
-                    "duplicates $(seen[key])",
-                    (),
-                    record.source,
-                ))
+                push!(
+                    diagnostics, PottsDiagnostic(
+                        :duplicate_draw_key,
+                        record.identity,
+                        record.source isa SourceLocation ?
+                            record.source.expression : string(record.identity),
+                        record.identity.path,
+                        "a namespace-local unique DrawKey",
+                        "duplicates $(seen[key])",
+                        (),
+                        record.source,
+                    )
+                )
             else
                 seen[key] = record.identity
             end
@@ -56,17 +58,17 @@ function _completion_capabilities(records)
         admission -> admission.admitted,
         (
             only(filter(item -> item.engine === :sequential, record.engine_admission))
-            for record in records
+                for record in records
         ),
     )
     checkerboard_rejections = [
         (
-            record.identity,
-            admission.reason,
-        )
-        for record in records
-        for admission in record.engine_admission
-        if admission.engine === :checkerboard && !admission.admitted
+                record.identity,
+                admission.reason,
+            )
+            for record in records
+            for admission in record.engine_admission
+            if admission.engine === :checkerboard && !admission.admitted
     ]
     return (
         sequential = sequential,
@@ -75,4 +77,3 @@ function _completion_capabilities(records)
         cpu = true,
     )
 end
-
