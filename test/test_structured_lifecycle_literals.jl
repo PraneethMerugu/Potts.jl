@@ -8,7 +8,7 @@ end
 
 @testset "state-policy literals reject invalid structure and dimensions" begin
     reference = Potts._reference_descriptor(:length, 2.0u"m")
-    manifest = Potts.ParameterManifest((), (), (reference,))
+    manifest = Potts.ParameterManifest(Potts.RuntimeParameter[], NamedTuple[], (reference,))
     state = (initial = SVector(0.0f0, 0.0f0), unit = reference)
     for value in (
             SVector(1.0u"m", 2.0u"m", 3.0u"m"),
