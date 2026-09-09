@@ -303,9 +303,26 @@ function _static_literal(value, manifest::ParameterManifest, ::Type{T}; state = 
     ))
 end
 
-function _static_parameter(value, manifest::ParameterManifest, ::Type{T}) where {
+function _static_parameter(value, manifest::ParameterManifest, ::Type{T}; graph = nothing, record = nothing) where {
         T <: AbstractFloat,
     }
+    index = _parameter_index(manifest, value)
+    if index !== nothing && !isempty(manifest[index].shape)
+        selected = _parameter_selection(manifest, value)
+        if selected isa Integer
+            graph === nothing && throw(ArgumentError("this scalar policy does not accept a whole vector parameter"))
+            entry = manifest[index]
+            defaults = entry.required ? nothing : _convert_parameter_value(entry, entry.default, T; finite = false)
+            components = Tuple(
+                CorePotts.CompilerSPI.ParameterExpression(
+                        entry.required ? zero(T) : defaults[component], slot,
+                    ) for (component, slot) in enumerate(_parameter_slots(entry))
+            )
+            return _compiler_synthesized_operation_expression(
+                graph, StaticArrays.SVector, components, record,
+            )
+        end
+    end
     scalar = _compiled_scalar(value, manifest, T)
     return CorePotts.CompilerSPI.ParameterExpression(
         scalar.value, scalar.parameter_index
@@ -354,7 +371,7 @@ function _compiler_synthesized_operation_expression(
     )
     schema_index = findfirst(
         schema -> schema.surface_operation === operation &&
-            schema.arity == length(arguments),
+            length(arguments) in schema.transfer.arity,
         graph.operation_snapshot,
     )
     schema_index === nothing && throw(PottsValidationError(

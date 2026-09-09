@@ -37,8 +37,8 @@ restores earlier state and parameter edits at that callback boundary. A failed
 integrator cannot be repaired with a setter. Backend execution or copy failures
 do not carry a general rollback guarantee.
 
-Setters target stored states, not ownership, observations, derived expressions,
-individual vector elements or product fields. `setu` also accepts parameters and
+State setters target stored states, not ownership, observations, derived expressions,
+individual state-vector elements or product fields. `setu` also accepts parameters and
 mixed batches, for example `setu(integrator, (amount, rate))(integrator, (2.0, 0.5))`.
 `setp` selects only parameters. Both use one conversion/publication boundary.
 Ordinary parameter-containing batches start from the published parameter values
@@ -52,6 +52,31 @@ checkpoint if they should participate in continuation.
 To change a field, construct and replace its whole logical value. Initial callback
 edits occur before an explicit `AtMCS(0)` history capture; checkpoint restoration
 preserves the stored history and does not repeat that capture.
+
+Runtime parameters may be scalars or declared nonempty fixed vectors, for example
+`@parameters coefficients[1:2] = [2.0, 3.0]`. The whole `coefficients` is one
+logical parameter: `getp(integrator, coefficients)(integrator)` returns an immutable
+`SVector`, while `getp(integrator, coefficients[2])(integrator)` reads one component.
+Use `setp(integrator, coefficients)(integrator, [4.0, 5.0])` for a whole-vector
+replacement or select literal components in the same transaction API. Selecting
+both a whole parameter and one of its components, or selecting a component twice,
+is rejected as an overlapping update. The same rule applies to initial parameter
+pairs and `remake_buffer` overlays. `remake(problem; p=...)` overlays the source
+problem's values: unspecified parameters and vector components are preserved,
+and the original immutable problem is unchanged.
+
+In this pre-1.0 API, `parameter_values(integrator)` returns a detached immutable
+tuple of logical values, in the order of `parameter_symbols`; it is not a writable
+view of Core's scalar buffer. Numeric public parameter indices use that logical
+order. Setters, initial values and remakes validate each vector's exact declared
+shape and homogeneous units before publication. Supply physical quantities for
+dimensional coefficients, including when changing values previously read in
+normalized simulation units. Saved histories and checkpoint restoration preserve
+the logical grouping without creating a second live parameter store.
+
+Whole-vector expressions and literal vector-component indexing use the ordinary
+operation catalog. Tensor-valued runtime parameters, dynamic indexing and
+heterogeneous product parameters are not established by this fixed-vector surface.
 
 `checkpoint(integrator)` captures the logical continuation state at a settled
 boundary. Restore uses `init(...; checkpoint=...)` with the same problem and

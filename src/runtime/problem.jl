@@ -59,81 +59,8 @@ function _normalize_tspan(tspan)
     return (first_time, last_time)
 end
 
-function _problem_parameter_name(key)
-    key isa Symbol && return key
-    name = _try_symbolic_name(key)
-    name === nothing && throw(ArgumentError(
-        "runtime parameter keys must be symbols or symbolic parameters"
-    ))
-    return name
-end
-
-function _validate_problem_parameter_value(entry, value, reference_units)
-    if entry.required
-        _is_quantity(value) && throw(ArgumentError(
-            "required parameter `$(entry.name)` has no declared dimensional default"
-        ))
-        numeric = _numeric_value(value)
-    elseif _is_quantity(entry.default)
-        _is_quantity(value) || throw(ArgumentError(
-            "parameter `$(entry.name)` requires units compatible with its default"
-        ))
-        numeric = _numeric_value(
-            value, _reference_for(reference_units, entry.default)
-        )
-    else
-        _is_quantity(value) && throw(ArgumentError(
-            "parameter `$(entry.name)` is dimensionless"
-        ))
-        numeric = _numeric_value(value)
-    end
-    numeric isa Real && isfinite(numeric) || throw(ArgumentError(
-        "parameter `$(entry.name)` must be finite and real"
-    ))
-    return _defensive_copy(value)
-end
-
 function _normalize_problem_parameters(system::PottsSystem, supplied)
-    schema = _scheduled_data(system).parameters
-    runtime = schema.runtime
-    names = Tuple(entry.name for entry in runtime)
-    length(unique(names)) == length(names) || error(
-        "scheduled parameter schema contains duplicate names"
-    )
-    structural_names = Set(entry.name for entry in schema.structural)
-    values = Any[
-        entry.required ? nothing : _defensive_copy(entry.default)
-        for entry in runtime
-    ]
-    assigned = falses(length(runtime))
-    reference_units = _build_reference_descriptors(system)
-    for (key, value) in _normalize_parameter_pairs(supplied)
-        name = _problem_parameter_name(key)
-        name in structural_names && throw(ArgumentError(
-            "parameter `$name` is structural; substitute it before mtkcompile"
-        ))
-        index = findfirst(==(name), names)
-        index === nothing && throw(ArgumentError(
-            "unknown runtime parameter $(repr(key))"
-        ))
-        assigned[index] && throw(ArgumentError(
-            "duplicate runtime parameter $(repr(key))"
-        ))
-        values[index] = _validate_problem_parameter_value(
-            runtime[index], value, reference_units
-        )
-        assigned[index] = true
-    end
-    missing = Symbol[
-        runtime[index].name for index in eachindex(runtime)
-        if runtime[index].required && !assigned[index]
-    ]
-    isempty(missing) || throw(ArgumentError(
-        "missing required runtime parameter$(length(missing) == 1 ? "" : "s"): " *
-        join(string.(missing), ", ")
-    ))
-    frozen = Tuple(values)
-    return PottsParameters(frozen, NamedTuple{names}(frozen))
+    return _normalize_parameter_values(_scheduled_data(system).parameters, supplied)
 end
 
 function _scheduled_domain_shape(system::PottsSystem)
@@ -251,7 +178,11 @@ function PottsProblem(
         repeat::Integer = 1,
         policies::NamedTuple = NamedTuple(),
     )
+    if ModelingToolkitBase.iscomplete(system)
+        _validate_runtime_ownership(_completion_data(system).source_graph)
+    end
     scheduled = is_scheduled(system) ? system : mtkcompile(system)
+    _validate_runtime_ownership(_completion_data(scheduled).source_graph)
     normalized_u0 = _defensive_copy(u0)
     _validate_problem_initial(scheduled, normalized_u0)
     normalized_p = _normalize_problem_parameters(scheduled, p)
@@ -330,7 +261,9 @@ function remake(
             native = stored_initial.native,
         )
     end
-    parameter_values = ismissing(p) ? problem.p.named : p
+    parameter_values = ismissing(p) ? problem.p : _normalize_parameter_values(
+            _scheduled_data(problem.system).parameters, p; base = problem.p,
+        )
     return PottsProblem(
         problem.system,
         initial,

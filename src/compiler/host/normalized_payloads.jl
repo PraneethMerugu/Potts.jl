@@ -90,7 +90,7 @@ mutable struct _TermGraphBuilder
     diagnostics::Vector{PottsDiagnostic}
 end
 
-function _qualified_source_reference(reference::FrozenSourceReference)
+function _qualified_source_reference(reference::Union{FrozenSourceReference, _SourceReferenceOccurrence})
     return _map_symbolic_payload(
         value -> _namespace_symbolic_value(value, reference.path[2:end]),
         reference.value,

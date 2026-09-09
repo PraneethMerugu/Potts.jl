@@ -56,37 +56,6 @@ function _adapt_runtime_backend(
     )
 end
 
-struct ReferenceUnitDescriptor
-    name::Symbol
-    dimension::String
-    scale::Float64
-end
-
-struct RuntimeParameter{D, U}
-    name::Symbol
-    default::D
-    required::Bool
-    unit::U
-    index::Int
-end
-
-struct StructuralParameter{V}
-    name::Symbol
-    value::V
-end
-
-struct ParameterManifest{T <: Tuple, S <: Tuple, R <: Tuple}
-    entries::T
-    structural::S
-    reference_units::R
-end
-
-Base.length(manifest::ParameterManifest) = length(manifest.entries)
-Base.iterate(manifest::ParameterManifest, state...) =
-    iterate(manifest.entries, state...)
-Base.getindex(manifest::ParameterManifest, index::Integer) =
-    manifest.entries[index]
-
 """
     PottsParameters
 
@@ -110,9 +79,13 @@ Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named
 function _parameter_buffer(values::Tuple, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    buffer = Vector{T}(undef, length(values))
-    for index in eachindex(values)
-        buffer[index] = values[index]
+    buffer = T[]
+    for value in values
+        if value isa StaticArrays.StaticVector
+            append!(buffer, value)
+        else
+            push!(buffer, value)
+        end
     end
     return buffer
 end

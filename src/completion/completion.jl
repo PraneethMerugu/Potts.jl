@@ -1,12 +1,9 @@
-# Complete one source-inventory subtree into immutable semantic data.
-function _complete_inventory_subtree(
-        system::PottsSystem,
+# Qualify the enclosing inventory once, before projecting owned subtree records.
+function _qualified_inventory_records(
         inventory::_PottsSourceInventory,
         normalized_statements,
         reference_units,
         registry::StatementRegistry,
-        parameter_roles,
-        context_inventory,
     )
     records = QualifiedStatement[]
     diagnostics = PottsDiagnostic[]
@@ -26,13 +23,27 @@ function _complete_inventory_subtree(
         reference_anchors,
         root_shape,
         registry,
-        context_inventory,
+        inventory,
     )
     _validate_random_key_uniqueness!(diagnostics, records)
     _validate_synchronous_writers!(diagnostics, records)
     _throw_diagnostics(:completion, diagnostics)
 
-    qualified_records = _semantic_phase_schedule(records)
+    return _semantic_phase_schedule(records)
+end
+
+# External read dependencies are analysis context, not child declarations.
+function _complete_inventory_subtree(
+        system::PottsSystem,
+        inventory::_PottsSourceInventory,
+        reference_units,
+        registry::StatementRegistry,
+        parameter_roles,
+        context_inventory,
+        context_records,
+    )
+    prefix = inventory.systems[1].path
+    qualified_records = filter(record -> _inventory_path_iswithin(record.identity.path, prefix), context_records)
     schedule = qualified_records
     native_components = _resolve_native_components(
         inventory, qualified_records; context_inventory
@@ -51,7 +62,7 @@ function _complete_inventory_subtree(
     )
     fingerprints = (semantic = semantic, completed = completed)
     source_graph = _freeze_source_graph(
-        inventory, qualified_records, registry
+        inventory, qualified_records, registry; context_inventory, context_records,
     )
     # Completion freezes the complete versioned operation schema, including
     # transfer semantics, serialization identity, and the concrete device tag.
@@ -95,26 +106,25 @@ function _complete_inventory_hierarchy(
     inventory.systems[1].system === system || error(
         "source inventory root is not the completion candidate"
     )
+    normalized = _inventory_statements(inventory)
+    _validate_lifecycle_conflicts!(normalized)
+    _validate_completion_reference_units(inventory, reference_units, normalized)
+    context_records = _qualified_inventory_records(inventory, normalized, reference_units, registry)
     children = _inventory_child_indices(inventory)
     completed = Vector{PottsSystem}(undef, length(inventory.systems))
     for index in length(inventory.systems):-1:1
         subtree = _source_subinventory(inventory, index)
         source = subtree.systems[1].system
-        normalized_statements = _inventory_statements(subtree)
-        _validate_lifecycle_conflicts!(normalized_statements)
-        _validate_completion_reference_units(
-            subtree, reference_units, normalized_statements
-        )
         parameter_roles = index == 1 ?
             (structural = structural_parameters,) : (structural = (),)
         completion_data = _complete_inventory_subtree(
             source,
             subtree,
-            normalized_statements,
             reference_units,
             registry,
             parameter_roles,
             inventory,
+            context_records,
         )
         completed_children = PottsSystem[
             completed[Int(child)] for child in children[index]

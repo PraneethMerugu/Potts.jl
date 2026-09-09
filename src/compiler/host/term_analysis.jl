@@ -66,6 +66,8 @@ function _analyze_term_graph(
             if variable isa Symbolics.Arr || variable isa StaticArrays.StaticArray
                 shape[index] = Tuple(size(variable))
             end
+        elseif node.payload isa ParameterBindingPayload
+            shape[index] = _parameter_shape(node.payload.value)
         end
         if transfer !== nothing
             for role in operation_roles[index]

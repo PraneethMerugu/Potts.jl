@@ -68,7 +68,7 @@ function _effective_state_initial(source::FrozenSourceGraph, record::QualifiedSt
     arguments = _record_arguments(record)
     declared = get(arguments, :initial, nothing)
     for reference in source.references
-        reference.source == 0 && reference.kind === :initial_condition || continue
+        reference.kind === :initial_condition || continue
         pair = _qualified_source_reference(reference)
         isequal(first(pair), arguments.variable) || continue
         value = last(pair)

@@ -52,6 +52,11 @@ function _declared_parameter_unit(value)
         _canonical_dimension(DynamicQuantities.dimension(default))
     )
     default isa Number && return :dimensionless
+    if default isa AbstractArray
+        units = Tuple(_is_quantity(leaf) ? _canonical_dimension(DynamicQuantities.dimension(leaf)) : :dimensionless for leaf in default)
+        common = _common_unit(units)
+        return common === nothing ? :unknown : common
+    end
     # Required parameters use ordinary dimensionless runtime numbers.
     return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
 end

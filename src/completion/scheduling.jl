@@ -16,7 +16,7 @@ struct ScheduledPottsData
     schema_version::VersionNumber
     schedule::Vector{QualifiedStatement}
     provenance::NamedTuple
-    parameters::NamedTuple
+    parameters::ParameterManifest
     states::Vector{NamedTuple}
     relationships::Vector{NamedTuple}
     observations::Vector{NamedTuple}
@@ -52,7 +52,7 @@ function _scheduled_option(record::QualifiedStatement, name::Symbol, default = n
     return get(options, name, default)
 end
 
-function _scheduled_parameter_schema(data::CompletedPottsData)
+function _build_parameter_manifest(data::CompletedPottsData)
     references = data.source_graph.references
     input_names = Set(
         _scheduled_reference_name(reference.path, reference.value)
@@ -62,10 +62,12 @@ function _scheduled_parameter_schema(data::CompletedPottsData)
         _scheduled_reference_name(reference.path, reference.value)
             for reference in references if reference.kind === :output
     )
-    runtime = NamedTuple[]
+    runtime = RuntimeParameter[]
+    reference_units = _build_reference_descriptors(data)
+    first_slot = 1
     seen = Set{Symbol}()
     for reference in references
-        reference.kind === :parameter || continue
+        reference.kind === :parameter && reference.source == 0 || continue
         name = _scheduled_reference_name(reference.path, reference.value)
         name in seen && throw(
             ArgumentError(
@@ -73,25 +75,28 @@ function _scheduled_parameter_schema(data::CompletedPottsData)
             )
         )
         push!(seen, name)
-        has_default = ModelingToolkitBase.hasdefault(reference.value)
+        symbolic = _qualified_source_reference(reference)
+        shape = _parameter_shape(symbolic)
+        has_default = ModelingToolkitBase.hasdefault(symbolic)
         default = has_default ?
-            _defensive_copy(ModelingToolkitBase.getdefault(reference.value)) :
+            _defensive_copy(ModelingToolkitBase.getdefault(symbolic)) :
             nothing
-        push!(
-            runtime, (
-                name,
-                identity = (
-                    path = reference.path,
-                    local_name = _scheduled_symbolic_name(reference.value),
-                ),
-                symbolic = reference.value,
-                role = :runtime,
-                required = !has_default,
-                default,
-                input = name in input_names,
-                output = name in output_names,
-            )
+        has_default && _validate_parameter_shape(name, shape, default)
+        unit = has_default ? _parameter_reference(reference_units, default) : nothing
+        entry = RuntimeParameter(
+            name,
+            (path = reference.path, local_name = _scheduled_symbolic_name(reference.value)),
+            symbolic, default, !has_default, unit, shape, first_slot,
+            name in input_names, name in output_names,
         )
+        if has_default
+            default = _validate_parameter_value(entry, default; finite = false)
+            entry = RuntimeParameter(name, entry.identity, symbolic, default, false, unit, shape, first_slot, entry.input, entry.output)
+        end
+        push!(
+            runtime, entry
+        )
+        first_slot += _parameter_width(entry)
     end
     structural = NamedTuple[]
     for entry in data.parameter_roles.structural
@@ -108,7 +113,7 @@ function _scheduled_parameter_schema(data::CompletedPottsData)
             )
         )
     end
-    return (runtime = runtime, structural = structural)
+    return ParameterManifest(runtime, structural, reference_units)
 end
 
 function _scheduled_state_schema(data::CompletedPottsData)
@@ -376,8 +381,15 @@ function _fingerprint_scheduled_provenance(provenance::NamedTuple)
     )
 end
 
-_fingerprint_scheduled_parameters(parameters::NamedTuple) = (
-    runtime = Tuple(parameters.runtime),
+_fingerprint_scheduled_parameters(parameters::ParameterManifest) = (
+    runtime = Tuple(
+        (
+                name = entry.name, identity = entry.identity, symbolic = entry.symbolic,
+                role = :runtime, required = entry.required, default = entry.default,
+                input = entry.input, output = entry.output, shape = entry.shape,
+                first_slot = entry.first_slot, unit = entry.unit,
+            ) for entry in parameters
+    ),
     structural = Tuple(parameters.structural),
 )
 
@@ -415,7 +427,7 @@ function _stable_scheduled_fingerprint(
         completed::CompletedSystemFingerprint,
         schedule::Vector{QualifiedStatement},
         provenance::NamedTuple,
-        parameters::NamedTuple,
+        parameters::ParameterManifest,
         states::Vector{NamedTuple},
         relationships::Vector{NamedTuple},
         observations::Vector{NamedTuple},
@@ -455,7 +467,7 @@ function _build_scheduled_data(data::CompletedPottsData, analysis)
     native_components = _schedule_native_components(data.native_components)
     native_provenance = _scheduled_native_provenance(native_components)
     provenance = _scheduled_provenance(data, analysis, native_components)
-    parameters = _scheduled_parameter_schema(data)
+    parameters = _build_parameter_manifest(data)
     states = _scheduled_state_schema(data)
     relationships = _scheduled_relationship_schema(data)
     observations = _scheduled_observation_schema(data)
