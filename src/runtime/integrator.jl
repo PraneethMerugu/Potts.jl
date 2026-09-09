@@ -612,16 +612,3 @@ function native_value(
         component, native_cell_state(state, identity), symbolic
     )
 end
-
-function _set_runtime_parameters!(integrator::PottsIntegrator, values)
-    _request_integrator_settlement!(
-        integrator, CorePotts.BackendSPI.IndexMutationSettlement
-    )
-    parameters = _normalize_parameters(integrator.plan, values)
-    CorePotts.update_program_parameters!(
-        integrator.runtime, _parameter_buffer(parameters)
-    )
-    push!(integrator.parameter_history, integrator.t => parameters)
-    integrator.u = _current_saved_state(integrator)
-    return parameters
-end
