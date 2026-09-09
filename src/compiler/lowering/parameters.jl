@@ -71,7 +71,6 @@ function _reference_descriptor(name::Symbol, anchor)
     )
 end
 
-_build_reference_descriptors(system::PottsSystem) = _build_reference_descriptors(_completion_data(system))
 function _build_reference_descriptors(data::CompletedPottsData)
     # Retain type-erased traversal while sharing completion's reference owner.
     anchors = _completion_reference_anchors(
