@@ -1,23 +1,18 @@
 # Current examples
 
-These examples are executable against the current public package interfaces:
-
-- `wortel_2021_serial.jl` is the bounded Wortel integration witness used by the
-  manual.
-- `merks_2006_serial.jl` is the bounded Merks integration witness used by the
-  manual.
-- `openvt_monolayer_serial.jl` replaces the monolayer/OpenVT notebooks with a
-  bounded 11-cell relaxation calibration, zero-adhesion monolayer, explicit
-  free-surface contact-inhibition classification, and public lifecycle division.
-
-Run them from this environment after instantiation, for example:
+`custom_model.jl` is the complete Potts authoring/continuation tutorial. Run it
+after preparing the examples environment with the selected ecosystem checkouts:
 
 ```sh
-julia --project=examples examples/wortel_2021_serial.jl
+julia --project=examples examples/custom_model.jl
 ```
 
-The former research notebooks mixed those scientific purposes with retired
-CorePotts interfaces, package-installation cells, and unsupported accelerator
-selectors. The OpenVT example above is their current executable scientific
-mapping; historical development records belong under `design/`, not in the
-current examples inventory.
+Complete activity-migration, field-coupled vasculogenesis and monolayer-division
+factories, tutorials and scientific tests now belong to the sibling
+`PottsModels.jl` package. Its `docs/src/index.md` introduces the library and its
+`tutorials/` directory contains the executable callers. Potts does not retain
+duplicate implementations or forwarding execution functions.
+
+The initial library models are bounded CPU examples, not calibrated paper
+reproductions. Historical notebooks and design records are not current model
+implementations.

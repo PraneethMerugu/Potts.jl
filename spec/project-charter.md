@@ -7,11 +7,16 @@ Status: Accepted
 This repository develops a scientifically trustworthy, high-performance, and approachable
 Cellular Potts modeling ecosystem for Julia.
 
-The active package family has three responsibilities:
+The active package family separates these responsibilities:
 
 1. Potts is the primary biological and symbolic authoring interface.
 2. CorePotts is the independently usable scientific execution engine and extension boundary.
 3. MakiePotts converts explicit host-owned observations into visualization recipes.
+4. LocalMath owns reusable spatial and publication mathematics and its shared
+   KernelAbstractions execution path, not CPM scientific meaning.
+5. PottsModels owns complete scientific model factories, initializers, tutorials
+   and model-level tests using public upstream interfaces. It is not a runtime
+   dependency of Potts or CorePotts and does not provide another model executor.
 
 The ecosystem must remain architecturally hardware agnostic. Stable scientific features target
 CPU execution and explicitly qualified accelerator backends. Backend availability must never

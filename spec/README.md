@@ -24,6 +24,18 @@ scientific requirements. The charter, accepted decision records, and the
 current LocalMath contract take precedence for package identity, execution
 architecture, and contributor workflow.
 
+## Proposed authoring design
+
+- [Ideal authoring API vision](ideal_api_vision.md)
+- [Authoring and model ecosystem feature plan](../design/authoring-and-model-ecosystem-plan.md)
+- [Consolidated PR dependency map](../design/consolidated-pr-dependency-map.md)
+- [End-to-end API overview](../design/authoring-api-overview.md)
+- [Design research and decisions](../design/authoring-design-research.md)
+
+These describe proposed interfaces and delivery scope, not already implemented
+runtime guarantees. The declaration examples in `design/examples/` are future
+API sketches; current executable scientific tutorials live in PottsModels.
+
 ## Historical records
 
 Development roadmaps, milestone specifications, audits, qualification reports,

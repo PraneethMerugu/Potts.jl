@@ -1,260 +1,138 @@
-@testset "scheduled Wortel activity witness" begin
-    @variables wortel_activity wortel_history
-    @parameters begin
-        wortel_target = 6.0
-        wortel_volume_strength = 1.0
-        wortel_maximum = 5.0
-        wortel_activity_strength = 4.0
-        wortel_temperature = 8.0
-    end
-    endothelial = CellKind(:wortel_endothelial; extinction = RetireAtZero())
-    extracellular = MediumKind(:wortel_extracellular)
+@testset "activity ownership, retained history and saved observations" begin
+    @variables activity_value activity_history
+    @parameters maximum_activity = 5.0 activity_strength = 4.0 temperature = 8.0
+    cell = CellKind(:active_cell; extinction = RetireAtZero())
+    medium = MediumKind(:medium)
     activity = SiteState(
-        wortel_activity;
-        name = :wortel_activity,
-        owner = endothelial,
-        initial = 0.0,
-        lifecycle = ClearOnOwnershipChange(),
+        activity_value; name = :activity_value, owner = cell,
+        initial = 0.0, lifecycle = ClearOnOwnershipChange()
     )
     memory = HistoryState(
-        wortel_history;
-        name = :wortel_history,
-        initial = 0.0,
-        of = wortel_activity,
-        depth = 2,
-        cadence = EveryMCS(),
+        activity_history; name = :activity_history, initial = 0.0,
+        of = activity_value, depth = 2, cadence = EveryMCS()
     )
-    copy = ProposalContext(:wortel_copy)
-    surface_anchor = CellBinding(:wortel_surface_anchor)
+    copy = ProposalContext(:copy)
     source = PottsSystem(
-        name = :wortel_black_box,
-        statements = (@statements begin
-            Lattice(
-                (8, 8);
-                boundary = Periodic(),
-                relations = (
-                    proposal = Moore(),
-                    contact = Moore(),
-                    surface = Moore(),
-                    activity_neighborhood = Moore(),
-                    connectivity = Moore(),
-                    connectivity_background = VonNeumann(),
+        name = :activity_history_observation,
+        statements = StatementSet(
+            (
+                Lattice(
+                    (8, 8); boundary = Periodic(),
+                    relations = (proposal = Moore(), activity_neighborhood = Moore())
                 ),
+                cell, medium, activity, memory,
+                ActEnergy(
+                    cell, activity_value; maximum = maximum_activity,
+                    strength = activity_strength, reduction = :activity_neighborhood
+                ),
+                AcceptedCopy(
+                    :activate, Assign(activity_value, maximum_activity);
+                    when = copy.is_extension
+                ),
+                Synchronous(
+                    :decay, Assign(activity_value, max(activity_value - 1, 0));
+                    phase = AfterMCS()
+                ),
+                Protocol(Sweep(; temperature); name = :main),
+                Observation(:occupied_sites, occupancy(cell, :lattice)),
             )
-            endothelial
-            extracellular
-            Volume(
-                endothelial;
-                target = wortel_target,
-                strength = wortel_volume_strength,
-            )
-            ContactEnergy([
-                (extracellular ↔ endothelial) => 6.0,
-                (endothelial ↔ endothelial) => 2.0,
-            ])
-            HamiltonianTerm(
-                :wortel_surface_energy;
-                domain = cells(endothelial),
-                anchor = surface_anchor,
-                expression = 0.05 * (
-                    cell_surface(surface_anchor) - 8.0
-                )^2,
-            )
-            activity
-            memory
-            ActEnergy(
-                endothelial,
-                wortel_activity;
-                maximum = wortel_maximum,
-                strength = wortel_activity_strength,
-                reduction = :activity_neighborhood,
-            )
-            AcceptedCopy(
-                :wortel_activate,
-                Assign(wortel_activity, wortel_maximum);
-                when = copy.is_extension,
-            )
-            Synchronous(
-                :wortel_decay,
-                Assign(wortel_activity, max(wortel_activity - 1, 0));
-                phase = AfterMCS(),
-            )
-            LocalConnectivity(endothelial)
-            Protocol(
-                Sweep(; temperature = wortel_temperature);
-                name = :wortel_protocol,
-            )
-            Observation(:wortel_occupied, occupancy(endothelial, :lattice))
-        end),
-        unknowns = [wortel_activity, wortel_history],
-        parameters = [
-            wortel_target,
-            wortel_volume_strength,
-            wortel_maximum,
-            wortel_activity_strength,
-            wortel_temperature,
-        ],
+        ),
+        unknowns = [activity_value, activity_history],
+        parameters = [maximum_activity, activity_strength, temperature],
     )
-    scheduled = mtkcompile(source)
     labels = zeros(Int32, 8, 8)
     labels[2:3, 2:3] .= 1
     labels[6:7, 6:7] .= 2
     initial = PottsInitialState(
-        ownership = LabelledCells(
-            labels;
-            cells = [endothelial, endothelial],
-            medium = extracellular,
-        ),
-        values = (wortel_activity => zeros(Float32, 8, 8),),
+        ownership = LabelledCells(labels; cells = [cell, cell], medium),
+        values = (activity_value => zeros(Float32, 8, 8),)
     )
-    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x3302)
+    problem = PottsProblem(mtkcompile(source), initial, (0, 2); seed = 0x3302)
     solution = solve(
-        problem,
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float32,
-        save_everystep = true,
-        observables = (:wortel_occupied,),
+        problem, SequentialCPM(); backend = CPUBackend(),
+        scalar_type = Float32, save_everystep = true, observables = (:occupied_sites,)
     )
     replay = solve(
-        problem,
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float32,
-        save_everystep = true,
+        problem, SequentialCPM(); backend = CPUBackend(),
+        scalar_type = Float32, save_everystep = true
     )
     independent = solve(
-        remake(problem; replica = 2),
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float32,
-        save_everystep = true,
+        remake(problem; replica = 2), SequentialCPM();
+        backend = CPUBackend(), scalar_type = Float32, save_everystep = true
     )
     @test solution.retcode == SciMLBase.ReturnCode.Success
     @test getfield.(solution.u, :ownership) == getfield.(replay.u, :ownership)
     @test any(
         left.ownership != right.ownership
-        for (left, right) in zip(solution.u, independent.u)
+            for (left, right) in zip(solution.u, independent.u)
     )
     final = last(solution)
-    @test all(isfinite, final[:wortel_activity])
-    @test minimum(final[:wortel_activity]) >= 0.0f0
-    @test maximum(final[:wortel_activity]) <= 5.0f0
-    @test length(final[:wortel_history]) == 2
-    @test last(final[:wortel_history]) == final[:wortel_activity]
-    @test final[:wortel_occupied] == count(!iszero, final.ownership)
-    @test_throws Potts.PottsKnownUnsavedError replay(2)[:wortel_occupied]
+    @test all(isfinite, final[:activity_value])
+    @test minimum(final[:activity_value]) >= 0.0f0
+    @test maximum(final[:activity_value]) <= 5.0f0
+    @test length(final[:activity_history]) == 2
+    @test last(final[:activity_history]) == final[:activity_value]
+    @test final[:occupied_sites] == count(!iszero, final.ownership)
+    @test_throws Potts.PottsKnownUnsavedError replay(2)[:occupied_sites]
     @test_throws Potts.PottsUnknownIdentityError replay(2)[:not_declared]
     activity_getter = SymbolicIndexingInterface.getsym(
-        solution, wortel_activity
+        solution, activity_value
     )
     @test length(activity_getter(solution)) == length(solution.t)
     occupied_getter = SymbolicIndexingInterface.getsym(
-        solution, :wortel_occupied
+        solution, :occupied_sites
     )
     @test occupied_getter(solution) ==
-          [state[:wortel_occupied] for state in solution]
+        [state[:occupied_sites] for state in solution]
     @test_throws Potts.PottsKnownUnsavedError begin
         SymbolicIndexingInterface.getsym(
-            replay, :wortel_occupied
+            replay, :occupied_sites
         )(replay)
     end
 end
 
-@testset "scheduled Merks discrete-field witness" begin
-    @variables merks_field
-    @parameters begin
-        merks_target = 6.0
-        merks_volume_strength = 1.0
-        merks_chemo_strength = 2.0
-        merks_diffusion = 0.08
-        merks_secretion = 0.02
-        merks_decay = 0.01
-        merks_temperature = 6.0
-    end
-    endothelial = CellKind(:merks_endothelial; extinction = RetireAtZero())
-    extracellular = MediumKind(:merks_extracellular)
+@testset "moving occupancy drives a saved discrete field" begin
+    @variables concentration
+    @parameters diffusion = 0.08 secretion = 0.02 decay = 0.01 temperature = 6.0
+    cell = CellKind(:secreting_cell; extinction = RetireAtZero())
+    medium = MediumKind(:medium)
     field = FieldState(
-        merks_field;
-        name = :merks_field,
-        initial = 0.0,
-        evolution = DiscreteFieldEuler(),
-        diffusion = merks_diffusion,
-        secretion = merks_secretion,
-        decay = merks_decay,
-        substeps = 2,
-        duration_per_mcs = 1.0,
-        source_kind = endothelial,
-        stencil = :field_stencil,
+        concentration; name = :concentration, initial = 0.0,
+        evolution = DiscreteFieldEuler(), diffusion, secretion, decay,
+        substeps = 2, duration_per_mcs = 1.0, source_kind = cell, stencil = :field_stencil
     )
     source = PottsSystem(
-        name = :merks_black_box,
-        statements = StatementSet((
-            Lattice(
-                (8, 8);
-                boundary = Closed(),
-                relations = (
-                    proposal = Moore(),
-                    connectivity = Moore(),
-                    connectivity_background = VonNeumann(),
-                    field_stencil = VonNeumann(),
+        name = :occupancy_field_observation,
+        statements = StatementSet(
+            (
+                Lattice(
+                    (8, 8); boundary = Closed(),
+                    relations = (proposal = Moore(), field_stencil = VonNeumann())
                 ),
-            ),
-            endothelial,
-            extracellular,
-            field,
-            Volume(
-                endothelial;
-                target = merks_target,
-                strength = merks_volume_strength,
-            ),
-            Chemotaxis(
-                endothelial,
-                field;
-                strength = merks_chemo_strength,
-                mode = ExtensionsOnly(),
-                sample = Nearest(),
-            ),
-            LocalConnectivity(endothelial),
-            Protocol(
-                Sweep(; temperature = merks_temperature);
-                name = :merks_protocol,
-            ),
-            Observation(:merks_field_snapshot, merks_field),
-        )),
-        unknowns = [merks_field],
-        parameters = [
-            merks_target,
-            merks_volume_strength,
-            merks_chemo_strength,
-            merks_diffusion,
-            merks_secretion,
-            merks_decay,
-            merks_temperature,
-        ],
+                cell, medium, field,
+                Chemotaxis(cell, field; strength = 2.0, mode = ExtensionsOnly(), sample = Nearest()),
+                Protocol(Sweep(; temperature); name = :main),
+                Observation(:field_snapshot, concentration),
+            )
+        ),
+        unknowns = [concentration], parameters = [diffusion, secretion, decay, temperature],
     )
-    scheduled = mtkcompile(source)
     labels = zeros(Int32, 8, 8)
     labels[3:5, 3:5] .= 1
     initial = PottsInitialState(
-        ownership = LabelledCells(
-            labels; cells = [endothelial], medium = extracellular
-        ),
-        values = (merks_field => zeros(Float64, 8, 8),),
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        values = (concentration => zeros(Float64, 8, 8),)
     )
     solution = solve(
-        PottsProblem(scheduled, initial, (0, 2); seed = 0x3303),
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float64,
-        save_everystep = true,
-        observables = (:merks_field_snapshot,),
+        PottsProblem(mtkcompile(source), initial, (0, 2); seed = 0x3303),
+        SequentialCPM(); backend = CPUBackend(), scalar_type = Float64,
+        save_everystep = true, observables = (:field_snapshot,)
     )
     final = last(solution)
     @test solution.retcode == SciMLBase.ReturnCode.Success
-    @test all(isfinite, final[:merks_field])
-    @test sum(final[:merks_field]) > 0
-    @test final[:merks_field_snapshot] == final[:merks_field]
+    @test all(isfinite, final[:concentration])
+    @test sum(final[:concentration]) > 0
+    @test final[:field_snapshot] == final[:concentration]
 end
 
 @testset "discrete-field Euler boundary oracle and restart" begin
@@ -280,18 +158,20 @@ end
         )
         source = PottsSystem(
             name = Symbol(:oracle_model_, suffix),
-            statements = StatementSet((
-                Lattice(
-                    (3, 3);
-                    boundary = boundary_policy,
-                    relations = (field_stencil = VonNeumann(),),
-                ),
-                cell,
-                medium,
-                field,
-                ProposalConstraint(Symbol(:freeze_oracle_, suffix), false),
-                Protocol(Sweep(; temperature = 0.0); name = :main),
-            )),
+            statements = StatementSet(
+                (
+                    Lattice(
+                        (3, 3);
+                        boundary = boundary_policy,
+                        relations = (field_stencil = VonNeumann(),),
+                    ),
+                    cell,
+                    medium,
+                    field,
+                    ProposalConstraint(Symbol(:freeze_oracle_, suffix), false),
+                    Protocol(Sweep(; temperature = 0.0); name = :main),
+                )
+            ),
             unknowns = [field_variable],
             parameters = [diffusion],
         )
@@ -379,60 +259,62 @@ end
     copy = ProposalContext(:focal_copy)
     source = PottsSystem(
         name = :focal_black_box,
-        statements = StatementSet((
-            Lattice(
-                (8, 6);
-                boundary = Closed(),
-                relations = (proposal = VonNeumann(),),
-            ),
-            endothelial,
-            extracellular,
-            links,
-            Volume(
-                endothelial;
-                target = focal_target,
-                strength = focal_volume_strength,
-            ),
-            RelationshipEnergy(
-                :focal_energy,
-                edge,
-                edge.strength * (
-                    distance(
-                        unwrapped_center(edge.a),
-                        unwrapped_center(edge.b),
-                    ) - edge.target
-                )^2,
-            ),
-            AcceptedCopy(
-                :focal_create_contact,
-                Create(
-                    links,
-                    copy.source_cell,
-                    copy.target_cell;
-                    payload = (
-                        strength = focal_strength,
-                        target = focal_length,
-                        maximum = focal_break,
-                    ),
-                );
-                when = new_contact(copy.source_cell, copy.target_cell) &
-                       !linked(links, copy.source_cell, copy.target_cell),
-            ),
-            LifecycleProcess(
-                :focal_remove_stretched;
-                domain = edges(links),
-                expression = distance(
-                    unwrapped_center(edge.a), unwrapped_center(edge.b)
-                ) > edge.maximum,
-                effects = (Remove(links, edge),),
-                phase = Lifecycle(),
-            ),
-            Protocol(
-                Sweep(; temperature = focal_temperature);
-                name = :focal_protocol,
-            ),
-            Observation(:focal_degree, degree(links, 1)),
-        )),
+        statements = StatementSet(
+            (
+                Lattice(
+                    (8, 6);
+                    boundary = Closed(),
+                    relations = (proposal = VonNeumann(),),
+                ),
+                endothelial,
+                extracellular,
+                links,
+                Volume(
+                    endothelial;
+                    target = focal_target,
+                    strength = focal_volume_strength,
+                ),
+                RelationshipEnergy(
+                    :focal_energy,
+                    edge,
+                    edge.strength * (
+                        distance(
+                            unwrapped_center(edge.a),
+                            unwrapped_center(edge.b),
+                        ) - edge.target
+                    )^2,
+                ),
+                AcceptedCopy(
+                    :focal_create_contact,
+                    Create(
+                        links,
+                        copy.source_cell,
+                        copy.target_cell;
+                        payload = (
+                            strength = focal_strength,
+                            target = focal_length,
+                            maximum = focal_break,
+                        ),
+                    );
+                    when = new_contact(copy.source_cell, copy.target_cell) &
+                        !linked(links, copy.source_cell, copy.target_cell),
+                ),
+                LifecycleProcess(
+                    :focal_remove_stretched;
+                    domain = edges(links),
+                    expression = distance(
+                        unwrapped_center(edge.a), unwrapped_center(edge.b)
+                    ) > edge.maximum,
+                    effects = (Remove(links, edge),),
+                    phase = Lifecycle(),
+                ),
+                Protocol(
+                    Sweep(; temperature = focal_temperature);
+                    name = :focal_protocol,
+                ),
+                Observation(:focal_degree, degree(links, 1)),
+            )
+        ),
         parameters = [
             focal_target,
             focal_volume_strength,
@@ -456,17 +338,21 @@ end
     )
     stale_initial = PottsInitialState(
         ownership = initial.ownership,
-        values = (links => [(
-            1,
-            2,
-            (
-                generation_a = 2,
-                generation_b = 1,
-                strength = 1.5,
-                target = 3.0,
-                maximum = 12.0,
-            ),
-        )],),
+        values = (
+            links => [
+                (
+                    1,
+                    2,
+                    (
+                        generation_a = 2,
+                        generation_b = 1,
+                        strength = 1.5,
+                        target = 3.0,
+                        maximum = 12.0,
+                    ),
+                ),
+            ],
+        ),
     )
     @test_throws ArgumentError PottsProblem(
         scheduled, stale_initial, (0, 1); seed = 1
@@ -474,11 +360,15 @@ end
 
     stretched_initial = PottsInitialState(
         ownership = initial.ownership,
-        values = (links => [(
-            1,
-            2,
-            (strength = 1.5, target = 3.0, maximum = 1.0),
-        )],),
+        values = (
+            links => [
+                (
+                    1,
+                    2,
+                    (strength = 1.5, target = 3.0, maximum = 1.0),
+                ),
+            ],
+        ),
     )
     stretched = solve(
         PottsProblem(scheduled, stretched_initial, (0, 1); seed = 0x3305),
@@ -547,17 +437,19 @@ end
     )
     step!(integrator)
     captured = checkpoint(integrator)
-    resumed = solve!(init(
-        problem,
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float64,
-        checkpoint = captured,
-        save_start = false,
-    ))
+    resumed = solve!(
+        init(
+            problem,
+            SequentialCPM();
+            backend = CPUBackend(),
+            scalar_type = Float64,
+            checkpoint = captured,
+            save_start = false,
+        )
+    )
     @test last(resumed).ownership == last(uninterrupted).ownership
     @test last(resumed)[:focal_links].active ==
-          last(uninterrupted)[:focal_links].active
+        last(uninterrupted)[:focal_links].active
     @test last(resumed)[:focal_links].endpoint_a ==
-          last(uninterrupted)[:focal_links].endpoint_a
+        last(uninterrupted)[:focal_links].endpoint_a
 end
