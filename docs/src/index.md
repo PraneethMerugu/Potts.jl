@@ -35,16 +35,12 @@ boundary; it does not select a device or create a public executable artifact.
   second representation.
 - [Capability status](@ref capability-status) is the exact support and
   limitations table.
-- [Wortel 2021](@ref wortel-2021-integration) and [Merks 2006](@ref
-  merks-2006-integration) execute complete final-interface integration
-  programs during this documentation build.
-- [OpenVT monolayer](@ref openvt-monolayer-integration) replaces the retired
-  research notebooks with a bounded 11-cell calibration, zero-adhesion
-  monolayer, free-surface inhibition classification, and lifecycle recipe.
+- [Model library](@ref model-library) explains the PottsModels ownership of
+  reusable scientific factories, initializers, tutorials and model-level tests.
 
-The published-model programs are API and integration witnesses. They do not
-claim paper-source scientific qualification reserved for future scientific
-review.
+PottsModels' initial activity, vasculogenesis and division tutorials are bounded
+API examples, not calibrated paper reproductions. Potts retains minimal
+authoring and execution examples and their defending tests.
 
 LocalMath, CorePotts, and MakiePotts publish their own package manuals; this
 manual covers the high-level Potts authoring and SciML surface.

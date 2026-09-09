@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      localmath_ref:
+        description: Full LocalMath candidate commit SHA
+        type: string
+        default: b699002a05f84e240e34162d509d6b952bf7d437
+      corepotts_ref:
+        description: Full CorePotts candidate commit SHA
+        type: string
+        default: 7183bcec81afc34028153f8674d1992b625fd2bc
   schedule:
     - cron: '23 5 * * 1'
 
@@ -17,21 +26,62 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: 'b699002a05f84e240e34162d509d6b952bf7d437'
-  COREPOTTS_REF: '3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4'
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'b699002a05f84e240e34162d509d6b952bf7d437' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '7183bcec81afc34028153f8674d1992b625fd2bc' }}
 
 jobs:
+  changes:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      execution: ${{ steps.diff.outputs.execution }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {fetch-depth: 0}
+      - name: Select execution checks from the whole PR diff
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          execution=true
+          if [[ "$EVENT" == pull_request ]] && git cat-file -e "$BASE^{commit}" && git cat-file -e "$HEAD^{commit}"; then
+            git diff --no-renames --name-only -z "$BASE...$HEAD" > "$RUNNER_TEMP/potts-changed-paths"
+            execution=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                AGENTS.md|CONTRIBUTING.md|README.md|LICENSE|CITATION.cff|spec/*.md|design/*.md) ;;
+                *) execution=true; break ;;
+              esac
+            done < "$RUNNER_TEMP/potts-changed-paths"
+          fi
+          printf 'execution=%s\n' "$execution" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD
+
   package:
     if: github.event_name != 'schedule'
     name: package (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
@@ -43,11 +93,22 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
@@ -59,11 +120,22 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     steps:
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
@@ -71,15 +143,30 @@ jobs:
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
 
   integration:
-    if: github.event_name != 'schedule'
+    needs: changes
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
+        run: exit 1
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
@@ -87,37 +174,37 @@ jobs:
         run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
 
   exact-replay:
-    if: github.event_name != 'schedule'
+    needs: changes
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
     # The closed replay row uses the repository Julia 1.12.6 runtime.
     runs-on: macos-15
     timeout-minutes: 60
     steps:
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
+        run: exit 1
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Test exact replay environment
-        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
+        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
   metal:
-    if: github.event_name != 'schedule'
+    needs: changes
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
     runs-on: macos-15
     timeout-minutes: 120
     steps:
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
+        run: exit 1
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Instantiate qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(; julia_version_strict=true)'
+        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
       - name: Test qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
 
@@ -131,6 +218,11 @@ jobs:
         with: {repository: PraneethMerugu/LocalMath.jl, ref: main, path: deps/LocalMath}
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {repository: PraneethMerugu/CorePotts.jl, ref: main, path: deps/CorePotts}
+      - name: Show tested source revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3

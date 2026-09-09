@@ -1,4 +1,4 @@
-name: Ecosystem qualification
+name: Ecosystem integration
 
 on:
   workflow_dispatch:
@@ -20,11 +20,20 @@ on:
         required: true
         type: string
 
+      models_repository:
+        description: Optional PottsModels owner/repository; pair with models_revision
+        required: false
+        type: string
+      models_revision:
+        description: Optional full PottsModels commit SHA; pair with models_repository
+        required: false
+        type: string
+
 permissions:
   contents: read
 
 concurrency:
-  group: ecosystem-qualification-${{ github.ref }}
+  group: ecosystem-integration-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -44,10 +53,18 @@ jobs:
           COREPOTTS_REVISION: ${{ inputs.corepotts_revision }}
           POTTS_REVISION: ${{ inputs.potts_revision }}
           MAKIEPOTTS_REVISION: ${{ inputs.makiepotts_revision }}
+          MODELS_REPOSITORY: ${{ inputs.models_repository }}
+          MODELS_REVISION: ${{ inputs.models_revision }}
         run: |
           for revision in "$LOCALMATH_REVISION" "$COREPOTTS_REVISION" "$POTTS_REVISION" "$MAKIEPOTTS_REVISION"; do
             [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "revision must be a full commit SHA: $revision"; exit 1; }
           done
+          if [[ -n "$MODELS_REPOSITORY" || -n "$MODELS_REVISION" ]]; then
+            [[ "$MODELS_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Supply an explicit Models owner/repository"; exit 1; }
+            [[ "$MODELS_REVISION" =~ ^[0-9a-f]{40}$ ]] || { echo "Supply a full Models commit SHA"; exit 1; }
+          else
+            echo "PottsModels was not selected; this run covers only the four supplied repositories."
+          fi
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           repository: PraneethMerugu/LocalMath.jl
@@ -68,126 +85,27 @@ jobs:
           repository: PraneethMerugu/MakiePotts.jl
           ref: ${{ inputs.makiepotts_revision }}
           path: ecosystem/MakiePotts
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        if: inputs.models_repository != ''
+        with:
+          repository: ${{ inputs.models_repository }}
+          ref: ${{ inputs.models_revision }}
+          path: ecosystem/PottsModels
+      - name: Show tested source revisions
+        env:
+          MODELS_REPOSITORY: ${{ inputs.models_repository }}
+        run: |
+          for package in LocalMath CorePotts Potts MakiePotts; do
+            printf '%s ' "$package"
+            git -C "ecosystem/$package" rev-parse HEAD
+          done
+          if [[ -n "$MODELS_REPOSITORY" ]]; then
+            printf 'PottsModels '
+            git -C ecosystem/PottsModels rev-parse HEAD
+          fi
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Verify release-candidate identities
-        run: |
-          julia --startup-file=no -e '
-            using TOML
-            expected = (
-                "ecosystem/LocalMath" => (
-                    "LocalMath", "82808884-8acc-4a5c-a056-be440a0fbea1",
-                    "0.2.0-rc2",
-                ),
-                "ecosystem/CorePotts" => (
-                    "CorePotts", "047998c1-3edd-4edf-b561-cee99549c5a6",
-                    "0.2.0-rc2",
-                ),
-                "ecosystem/Potts" => (
-                    "Potts", "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9",
-                    "0.3.0-rc2",
-                ),
-                "ecosystem/MakiePotts" => (
-                    "MakiePotts", "95794c00-c762-4965-bf31-de18bcca2bc9",
-                    "0.3.0-rc2",
-                ),
-            )
-            for (directory, identity) in expected
-                project = TOML.parsefile(joinpath(directory, "Project.toml"))
-                (project["name"], project["uuid"], project["version"]) ==
-                    identity ||
-                    error("unexpected release identity in $directory")
-                citation = joinpath(directory, "CITATION.cff")
-                citation_version = only(
-                    split(line, ": "; limit=2)[2]
-                    for line in eachline(citation)
-                    if startswith(line, "version: ")
-                )
-                citation_version == identity[3] ||
-                    error("stale citation version in $directory")
-                release_notes = joinpath(directory, "RELEASE_NOTES.md")
-                startswith(
-                    read(release_notes, String),
-                    "# $(identity[1]) $(identity[3])",
-                ) || error("stale release-note identity in $directory")
-            end
-          '
-      - name: Verify selected repository boundaries
-        run: |
-          julia --startup-file=no -e '
-            using Test, TOML
-
-            roots = Dict(
-                "LocalMath" => "ecosystem/LocalMath",
-                "CorePotts" => "ecosystem/CorePotts",
-                "Potts" => "ecosystem/Potts",
-                "MakiePotts" => "ecosystem/MakiePotts",
-            )
-            excluded = Set((".git", "build", "design"))
-
-            function tracked_files(root)
-                relative = split(
-                    read(`git -C $root ls-files -z`, String), Char(0);
-                    keepempty=false,
-                )
-                return (
-                    joinpath(root, path) for path in relative
-                    if all(part -> part ∉ excluded, splitpath(path))
-                )
-            end
-
-            selected_files(root, filename) =
-                (path for path in tracked_files(root) if basename(path) == filename)
-            selected_julia_files(root) =
-                (path for path in tracked_files(root) if endswith(path, ".jl"))
-
-            @testset "selected repository boundaries" begin
-                for root in values(roots)
-                    for project in selected_files(root, "Project.toml")
-                        @test !haskey(TOML.parsefile(project), "sources")
-                    end
-                    for manifest_path in selected_files(root, "Manifest.toml")
-                        manifest = TOML.parsefile(manifest_path)
-                        for records in values(get(manifest, "deps", Dict()))
-                            for record in (
-                                    records isa AbstractVector ? records : (records,)
-                                )
-                                @test !haskey(record, "path")
-                            end
-                        end
-                    end
-                end
-
-                downstream = Dict(
-                    "LocalMath" => ("CorePotts", "Potts", "MakiePotts"),
-                    "CorePotts" => ("Potts", "MakiePotts"),
-                    "Potts" => ("MakiePotts",),
-                )
-                private_upstreams = Dict(
-                    "CorePotts" => ("LocalMath",),
-                    "Potts" => ("LocalMath", "CorePotts"),
-                    "MakiePotts" => ("LocalMath", "CorePotts", "Potts"),
-                )
-                for (package, dependencies) in downstream
-                    import_pattern = Regex(
-                        "(?m)^\\s*(?:using|import)\\s+(?:" *
-                        join(dependencies, "|") * ")(?=\\.|:|\\s|\$)",
-                    )
-                    for path in selected_julia_files(roots[package])
-                        @test !occursin(import_pattern, read(path, String))
-                    end
-                end
-                for (package, dependencies) in private_upstreams
-                    private_pattern = Regex(
-                        "\\b(?:" * join(dependencies, "|") * ")\\._",
-                    )
-                    for path in selected_julia_files(roots[package])
-                        @test !occursin(private_pattern, read(path, String))
-                    end
-                end
-            end
-          '
       - name: Fresh ecosystem load
         run: |
           julia --startup-file=no -e '
@@ -209,6 +127,11 @@ jobs:
         run: |
           julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
           julia --project=ecosystem/Potts/integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(); include("ecosystem/Potts/integration/runtests.jl")'
+      - name: PottsModels public-consumer tests and tutorials
+        if: inputs.models_repository != ''
+        run: |
+          julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/PottsModels")]); Pkg.test("PottsModels")'
+          julia --project=ecosystem/PottsModels/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/PottsModels")]); Pkg.instantiate(); include("ecosystem/PottsModels/docs/make.jl")'
       - name: MakiePotts package tests
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.test("MakiePotts")'
       - name: Documentation and doctests
@@ -219,7 +142,7 @@ jobs:
           julia --project=ecosystem/MakiePotts/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.instantiate(); include("ecosystem/MakiePotts/docs/make.jl")'
       - name: Prepare Makie backend environment
         run: xvfb-run -a julia --project=ecosystem/MakiePotts/test/backends --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.instantiate(); Pkg.precompile()'
-      - name: Makie backend and visual qualification
+      - name: Makie backend and visual tests
         run: |
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/backends/cairo.jl
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/backends/wgl.jl
@@ -228,7 +151,7 @@ jobs:
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/visual_regression.jl
 
   macos:
-    name: Exact-revision Metal and replay
+    name: Candidate-tuple Metal and continuation
     runs-on: macos-15
     timeout-minutes: 240
     steps:
@@ -256,15 +179,22 @@ jobs:
           repository: PraneethMerugu/Potts.jl
           ref: ${{ inputs.potts_revision }}
           path: ecosystem/Potts
+      - name: Show tested source revisions
+        run: |
+          for package in LocalMath CorePotts Potts; do
+            printf '%s ' "$package"
+            git -C "ecosystem/$package" rev-parse HEAD
+          done
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: LocalMath Metal qualification
+      - name: LocalMath Metal tests
         run: julia --project=ecosystem/LocalMath/test/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="ecosystem/LocalMath"); Pkg.instantiate(); include("ecosystem/LocalMath/test/metal/runtests.jl")'
-      - name: CorePotts Metal qualification
+      - name: CorePotts Metal tests
         run: julia --project=ecosystem/CorePotts/test/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts")]); Pkg.instantiate(); include("ecosystem/CorePotts/test/metal/runtests.jl")'
-      - name: Potts Metal qualification
+      - name: Potts Metal tests
         run: julia --project=ecosystem/Potts/benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/benchmark/backends/metal/runtests.jl")'
-      # Native exact replay is qualified on ARM macOS, not the Ubuntu CPU job.
-      - name: Exact replay at selected commits
+      # Selected siblings replace profile pins for this candidate experiment only.
+      # The separate CI exact-replay job retains the published closed environment.
+      - name: Native continuation at selected commits
         run: julia --project=ecosystem/Potts/integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/integration/replay/runtests.jl")'

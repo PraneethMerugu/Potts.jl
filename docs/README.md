@@ -4,8 +4,9 @@ The active manual is the executable final-interface documentation product. It
 covers symbolic authoring, structural compilation, the SciML lifecycle,
 dynamic identity and relationships, native ModelingToolkit components,
 fields, batching, ensembles, replay, package boundaries, and the exact support
-matrix. The Wortel, Merks, and OpenVT integration pages execute their complete reusable
-programs during the strict build.
+matrix. Complete scientific factories and their executable modeling tutorials
+live in the sibling PottsModels package; this manual executes the owning API
+examples, including the custom-model authoring and continuation workflow.
 
 ## Build locally
 
