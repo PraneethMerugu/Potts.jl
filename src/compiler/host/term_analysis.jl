@@ -130,7 +130,8 @@ function _analyze_term_graph(
             end
         end
         result_type[index] = if node.payload_kind === :literal
-            typeof(node.payload.value)
+            value = node.payload.value
+            typeof(value isa DynamicQuantities.UnionAbstractQuantity ? DynamicQuantities.ustrip(value) : value)
         elseif node.payload isa ParameterBindingPayload
             _symbolic_result_type(node.payload.value)
         elseif binding_record !== nothing

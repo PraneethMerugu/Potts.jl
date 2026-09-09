@@ -10,6 +10,10 @@ include("fixtures/discrete_field_rhs.jl")
 end
 
 @testset "concrete dimensional rate literals reach ordinary lowering" begin
+    analysis = Potts._analyze_completed_system(discrete_field_rhs_problem(; rhs_override = 1.0u"m/s").system)
+    root = only(filter(root -> root.role === :field_rhs, analysis.graph.roots))
+    @test analysis.facts.result_type[root.node] === Float64
+    @test analysis.facts.units[root.node] == DynamicQuantities.dimension(1.0u"m/s")
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         integrator = init(discrete_field_rhs_problem(; rhs_override = 1.0u"m/s"), algorithm; scalar_type = Float32)
         step!(integrator)
