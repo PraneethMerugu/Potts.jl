@@ -44,6 +44,9 @@ function _analyze_term_graph(
     backend_admission = Any[() for _ in 1:count]
     source_chain = Any[() for _ in 1:count]
     source_bindings = Any[() for _ in 1:count]
+    site_aggregate = Union{Nothing, AnalyzedSiteAggregate}[
+        nothing for _ in 1:count
+    ]
     operation_roles = _node_operation_roles(source, graph)
 
     dimensions = _host_lattice_dimensions(source)
@@ -70,7 +73,8 @@ function _analyze_term_graph(
             shape[index] = _parameter_shape(node.payload.value)
         end
         if transfer !== nothing
-            _is_site_aggregate(node) && _site_aggregate_source(source, graph, node)
+            _is_site_aggregate(node) &&
+                (site_aggregate[index] = _analyze_site_aggregate(source, graph, node))
             for role in operation_roles[index]
                 _validate_operation_use!(
                     node,
@@ -324,6 +328,7 @@ function _analyze_term_graph(
         backend_admission,
         source_chain,
         source_bindings,
+        site_aggregate,
     )
     candidates = DescriptorCandidate[]
     roots_by_record = Dict{Int32, Vector{Int32}}()

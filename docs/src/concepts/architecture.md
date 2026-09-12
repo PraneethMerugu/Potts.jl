@@ -41,18 +41,23 @@ multiply operation, not a tensor-specific evaluator.
 
 Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
 scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
-existing normalized contribution, unit, shape and dependency facts →
-`compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
-`SiteMinimumTracker` and qualified cell read. Canonical sums include their
-numerical comparison policy; canonical minima include their empty-owner value
-and declared reconstruction bound. Both share one tracker independently
-of consuming statements or anchors. The
-temporary tracker handle map is discarded after Core program assembly, like
-the other lowering maps. Completion retains source dependencies; physical stage
+node-aligned `AnalyzedSiteAggregate` fact plus normalized unit, shape and result
+facts → `compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
+`SiteMinimumTracker` and qualified cell read. The analyzed fact resolves the
+law, contribution root, site/cell resources, policy operands and transitive
+contribution dependencies once. Tracker identity, descriptor construction,
+state retention and evaluator lowering consume that fact rather than traversing
+the authored aggregate again. Canonical sums include their numerical comparison
+policy; canonical minima include their empty-owner value and declared
+reconstruction bound. Both share one tracker independently of consuming
+statements or anchors. Lowering discards its canonical identity dictionary and
+retains only a node-aligned qualified-handle table until Core program assembly.
+Completion retains source dependencies; physical stage
 reads use the tracker, while any additional direct state operand retains its
 own compiled state handle. The literal integer-one case reuses Core's existing
 ownership count. `test_scalar_site_aggregates.jl` defends sharing, separate
-contributions, source/parameter refresh, mixed publication, units and continuation.
+contributions, resolved fact ownership, author-rename execution-type reuse,
+source/parameter refresh, mixed publication, units and continuation.
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.

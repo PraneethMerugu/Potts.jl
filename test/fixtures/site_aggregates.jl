@@ -5,7 +5,10 @@ function _site_aggregate_problem(;
         structured = false, atol = 0, rtol = 0, contribution = identity,
         unit = 1.0, reference_units = nothing, distinct = false, evolve = false,
         logical_shape = structured ? (2,) : (),
+        author_prefix = nothing,
     )
+    author_name(name) =
+        author_prefix === nothing ? name : Symbol(author_prefix, :_, name)
     @parameters gain = 1.0
     logical_shape in ((), (2,), (2, 2)) || throw(ArgumentError("unsupported aggregate fixture shape"))
     tensor = logical_shape == (2, 2)
@@ -23,36 +26,44 @@ function _site_aggregate_problem(;
         initial_value = 0.0 * unit
         local_value = gain * signal
     end
-    lattice = LatticeDomain(:space; shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3)
-    kind = CellKind(:cell; extinction = ForbidExtinction())
-    medium = MediumKind(:medium)
-    declarations = scoped(sites(lattice), :locations) do site
-        cell_declarations = scoped(cells(kind), :owners) do cell
-            quantity = aggregate(contribution(local_value); over = site, by = cell, atol, rtol)
-            second_quantity = distinct ? aggregate(local_value + gain; over = site, by = cell, atol, rtol) : quantity
+    lattice = LatticeDomain(
+        author_name(:space);
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3,
+    )
+    kind = CellKind(author_name(:cell); extinction = ForbidExtinction())
+    medium = MediumKind(author_name(:medium))
+    declarations = scoped(sites(lattice), author_name(:locations)) do site
+        cell_declarations = scoped(cells(kind), author_name(:owners)) do cell
+            quantity = aggregate(
+                contribution(local_value); over = site, by = cell, atol, rtol,
+            )
+            second_quantity = distinct ?
+                aggregate(local_value + gain; over = site, by = cell, atol, rtol) :
+                quantity
             StatementSet(
                 (
                     CellState(amount; initial = initial_value),
                     CellState(repeated; initial = initial_value),
-                    Synchronous(:measure, Assign(amount, quantity)),
-                    Synchronous(:measure_again, Assign(repeated, second_quantity)),
+                    Synchronous(author_name(:measure), Assign(amount, quantity)),
+                    Synchronous(author_name(:measure_again), Assign(repeated, second_quantity)),
                 )
             )
         end
         update = !evolve ? () : (
                 Synchronous(
-                    :source_update,
+                    author_name(:source_update),
                     Assign(signal, vector ? SVector(signal[1] + unit, signal[2] + 2unit) : tensor ? 2signal : signal + unit)
                 ),
             )
         StatementSet((FieldState(signal; initial = initial_value), update..., cell_declarations...))
     end
     system = PottsSystem(
-        name = :maintained_signal,
+        name = author_name(:maintained_signal),
         statements = StatementSet(
             (
                 lattice, kind, medium, declarations...,
-                ProposalConstraint(:fixed_ownership, false), Protocol(Sweep(; temperature = 0.0); name = :main),
+                ProposalConstraint(author_name(:fixed_ownership), false),
+                Protocol(Sweep(; temperature = 0.0); name = author_name(:main)),
             )
         ),
         unknowns = (signal, amount, repeated), parameters = (gain,)

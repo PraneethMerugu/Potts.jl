@@ -40,7 +40,8 @@ host/quantity_scopes.jl
     qualify quantity/anchor resources against the completion context inventory;
     derive process domains and bounds from declared targets before fingerprinting;
     validate lexical anchor capture and population-compatible reads on the same
-    qualified records and normalized graph
+    qualified records and normalized graph; construct the resolved aggregate
+    source/policy/dependency fact consumed by later lowering
 
 host/footprints.jl
     derive and combine bounded resource footprints from analyzed operations
@@ -137,7 +138,8 @@ lowering/constraints.jl
     lower prelaunch parameter-domain constraints and assemble the plan
 
 lowering/trackers.jl
-    infer, validate, canonicalize, and fingerprint typed derived-state trackers
+    consume resolved aggregate facts to canonicalize, validate, fingerprint, and
+    lower typed derived-state trackers plus node-aligned evaluator handles
 
 lowering/lifecycle_plan.jl
     lower qualified lifecycle processes into the CorePotts lifecycle plan

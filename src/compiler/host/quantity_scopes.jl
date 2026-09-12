@@ -14,6 +14,16 @@ end
 
 _is_site_aggregate(node) = _is_site_sum(node) || _is_site_minimum(node)
 
+"""Resolved site-aggregate source, policy, and transitive contribution nodes."""
+struct AnalyzedSiteAggregate
+    law::Symbol
+    contribution::Int32
+    site::QualifiedStatementID
+    cell::QualifiedStatementID
+    policy_indices::NTuple{2, Int32}
+    dependencies::Tuple{Vararg{Int32}}
+end
+
 _is_unit_count(graph, node) = _is_unit_count(graph.nodes, node)
 function _is_unit_count(nodes::AbstractVector, node)
     _is_site_sum(node) || return false
@@ -22,7 +32,7 @@ function _is_unit_count(nodes::AbstractVector, node)
         !(payload.value isa Bool) && isone(payload.value)
 end
 
-function _site_aggregate_source(source, graph, node)
+function _analyze_site_aggregate(source, graph, node)
     record = source.records[Int(node.record)]
     function reject(message)
         throw(
@@ -107,7 +117,14 @@ function _site_aggregate_source(source, graph, node)
         return nothing
     end
     visit(contribution)
-    return (; contribution, site, cell, policy_indices)
+    return AnalyzedSiteAggregate(
+        _is_site_sum(node) ? :sum : :minimum,
+        Int32(contribution),
+        site.resource,
+        cell.resource,
+        Tuple(Int32(index) for index in policy_indices),
+        Tuple(sort!(collect(visited))),
+    )
 end
 function _scope_resource(records, owner, binding)
     binding isa Union{CellBinding, SiteBinding} && _scoped_anchor(binding) ||
@@ -288,7 +305,6 @@ function _validate_quantity_scopes(source, graph; enclosing_root)
             push!(visited, node_index)
             node = graph.nodes[Int(node_index)]
             if _is_site_aggregate(node)
-                _site_aggregate_source(source, graph, node)
                 domain !== nothing && domain.kind === :cell ||
                     throw(ArgumentError("aggregate quantities currently require a cell-scoped process consumer"))
                 # The site contribution belongs to the tracker's source context,

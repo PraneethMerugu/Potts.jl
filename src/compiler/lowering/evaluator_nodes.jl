@@ -207,7 +207,9 @@ function _lower_static_node(
         if _is_unit_count(graph, node)
             _compiler_synthesized_operation_expression(graph, cell_volume, (cell,), ir.source.records[node.record])
         else
-            key = tracker_handles[_site_aggregate_identity(ir, node, manifest, T)]
+            key = tracker_handles[Int(node.identity)]
+            key isa CorePotts.CompilerSPI.QualifiedTrackerKey ||
+                throw(ArgumentError("aggregate read has no analyzed tracker handle"))
             operation = CorePotts.CompilerSPI.QualifiedTrackerOperation(node.callable, key.quantity, key.source_handle)
             CorePotts.CompilerSPI.OperationExpression(operation, (cell,))
         end

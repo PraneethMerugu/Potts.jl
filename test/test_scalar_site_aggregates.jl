@@ -2,6 +2,42 @@ isdefined(@__MODULE__, :_site_aggregate_problem) || include("fixtures/site_aggre
 
 _site_aggregate_maintenance_contract(; structured = false)
 
+@testset "aggregate analysis owns resolved source semantics" begin
+    baseline = _site_aggregate_problem()
+    renamed = _site_aggregate_problem(; author_prefix = :renamed)
+    baseline_ir = Potts._analyze_completed_system(baseline.problem.system)
+    renamed_ir = Potts._analyze_completed_system(renamed.problem.system)
+    baseline_facts = filter(!isnothing, baseline_ir.facts.site_aggregate)
+    renamed_facts = filter(!isnothing, renamed_ir.facts.site_aggregate)
+
+    @test length(baseline_facts) == length(renamed_facts) == 2
+    @test all(fact -> fact isa Potts.AnalyzedSiteAggregate, baseline_facts)
+    @test all(fact -> fact.law === :sum, baseline_facts)
+    @test all(fact -> fact.contribution in fact.dependencies, baseline_facts)
+    @test all(fact -> length(fact.policy_indices) == 2, baseline_facts)
+    @test map(typeof, baseline_facts) == map(typeof, renamed_facts)
+    @test map(
+        fact -> (fact.law, fact.contribution, fact.policy_indices, fact.dependencies),
+        baseline_facts,
+    ) == map(
+        fact -> (fact.law, fact.contribution, fact.policy_indices, fact.dependencies),
+        renamed_facts,
+    )
+    @test map(fact -> (fact.site, fact.cell), baseline_facts) !=
+        map(fact -> (fact.site, fact.cell), renamed_facts)
+
+    baseline_integrator = init(
+        baseline.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
+    renamed_integrator = init(
+        renamed.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
+    @test typeof(baseline_integrator.plan.core_program) ===
+        typeof(renamed_integrator.plan.core_program)
+    @test typeof(baseline_integrator.plan.core_program.tracker_plan) ===
+        typeof(renamed_integrator.plan.core_program.tracker_plan)
+end
+
 @testset "different contribution laws do not share one maintained value" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         model = _site_aggregate_problem(; distinct = true)
