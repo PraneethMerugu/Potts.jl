@@ -93,6 +93,7 @@ const POTTS_TEST_FIXTURES = (
     "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
+    "ExternalAggregateOperationFixture.jl",
     "LifecycleOperationFixtures.jl",
     "cell_processes.jl",
     "scoped_quantities.jl",

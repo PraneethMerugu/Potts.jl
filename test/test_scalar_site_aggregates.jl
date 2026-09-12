@@ -1,4 +1,5 @@
 isdefined(@__MODULE__, :_site_aggregate_problem) || include("fixtures/site_aggregates.jl")
+include("fixtures/ExternalAggregateOperationFixture.jl")
 
 _site_aggregate_maintenance_contract(; structured = false)
 
@@ -36,6 +37,34 @@ _site_aggregate_maintenance_contract(; structured = false)
         typeof(renamed_integrator.plan.core_program)
     @test typeof(baseline_integrator.plan.core_program.tracker_plan) ===
         typeof(renamed_integrator.plan.core_program.tracker_plan)
+end
+
+@testset "external operations compose into maintained contributions" begin
+    fixture = ExternalAggregateOperationFixture.model()
+    ir = Potts._analyze_completed_system(fixture.problem.system)
+    fact = only(filter(!isnothing, ir.facts.site_aggregate))
+    external_node = only(filter(
+        node -> node.operation === :fixture_external_response,
+        ir.graph.nodes,
+    ))
+    @test external_node.identity in fact.dependencies
+    @test fact.contribution in fact.dependencies
+
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = ExternalAggregateOperationFixture.model()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        step!(integrator)
+        @test Array(integrator.u[:response]) == Float32[8, 4, 0]
+        setu(integrator, model.signal)(integrator, fill(5.0f0, 2, 2))
+        step!(integrator)
+        @test Array(integrator.u[:response]) == Float32[20, 10, 0]
+    end
+
+    @test_throws r"device_illegal_operation_callable" begin
+        ExternalAggregateOperationFixture.model(
+            operation = ExternalAggregateOperationFixture.captured_response,
+        )
+    end
 end
 
 @testset "derived quantities compose maintained and direct cell reads" begin
