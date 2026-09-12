@@ -217,13 +217,13 @@ end
 
 function _overlay_initial_values(existing, replacements)
     result = Pair{Any, Any}[
-        _defensive_copy(first(pair)) => _defensive_copy(last(pair))
+        first(pair) => _defensive_copy(last(pair))
         for pair in existing
     ]
     for replacement in replacements
         key = first(replacement)
         index = findfirst(pair -> isequal(first(pair), key), result)
-        copied = _defensive_copy(key) => _defensive_copy(last(replacement))
+        copied = key => _defensive_copy(last(replacement))
         if index === nothing
             push!(result, copied)
         else

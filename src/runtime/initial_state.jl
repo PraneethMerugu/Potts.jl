@@ -134,11 +134,13 @@ end
 
 function _initial_value_pairs(values)
     values === nothing && return ()
+    # Symbolic array declarations are identities, not value containers; retain
+    # only their semantic name before defensively copying supplied values.
     values isa AbstractDict && return Tuple(
-        _defensive_copy(key) => _defensive_copy(value) for (key, value) in values
+        _state_name(key) => _defensive_copy(value) for (key, value) in values
     )
     values isa Pair && return (
-        _defensive_copy(first(values)) =>
+        _state_name(first(values)) =>
             _defensive_copy(last(values)),
     )
     values isa NamedTuple && return Tuple(
@@ -152,7 +154,7 @@ function _initial_value_pairs(values)
     all(value -> value isa Pair, values) ||
         throw(ArgumentError("initial `values` entries must be pairs"))
     return Tuple(
-        _defensive_copy(first(value)) => _defensive_copy(last(value))
+        _state_name(first(value)) => _defensive_copy(last(value))
             for value in values
     )
 end
