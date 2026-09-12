@@ -86,6 +86,58 @@ function _independent_owner_sum(values, labels, gain)
     return [sum((gain * values[i] for i in eachindex(labels) if labels[i] == owner); init = z) for owner in 1:3]
 end
 
+function _derived_site_quantity_problem()
+    @parameters gain = 1.0
+    @variables signal baseline response repeated
+    lattice = LatticeDomain(
+        :derived_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3,
+    )
+    kind = CellKind(:derived_cell; extinction = ForbidExtinction())
+    medium = MediumKind(:derived_medium)
+    declarations = scoped(sites(lattice), :derived_sites) do site
+        consumers = scoped(cells(kind), :derived_cells) do cell
+            mass = aggregate(gain * signal; over = site, by = cell)
+            count = aggregate(1; over = site, by = cell)
+            average = mass / count
+            StatementSet((
+                CellState(baseline; initial = 10.0),
+                CellState(response; initial = 0.0),
+                CellState(repeated; initial = 0.0),
+                Synchronous(
+                    :publish_average,
+                    Assign(response, average + baseline),
+                ),
+                Synchronous(
+                    :publish_average_again,
+                    Assign(repeated, average + baseline),
+                ),
+            ))
+        end
+        StatementSet((FieldState(signal; initial = 0.0), consumers...))
+    end
+    system = PottsSystem(
+        name = :derived_site_quantity,
+        statements = StatementSet((
+            lattice, kind, medium, declarations...,
+            ProposalConstraint(:fixed_derived_ownership, false),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = (signal, baseline, response, repeated),
+        parameters = (gain,),
+    )
+    labels = Int32[1 2; 1 0]
+    values = Float32[1 2; 3 4]
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [kind, kind], medium),
+        values = (signal => values,),
+    )
+    return (;
+        problem = PottsProblem(system, initial, (0, 4); seed = 29),
+        signal, baseline, response, repeated, gain, labels,
+    )
+end
+
 function _site_minimum_problem(; empty = 19.0, maximum_sites = 4)
     @variables signal amount repeated
     lattice = LatticeDomain(

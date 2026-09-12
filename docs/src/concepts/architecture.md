@@ -55,9 +55,15 @@ retains only a node-aligned qualified-handle table until Core program assembly.
 Completion retains source dependencies; physical stage
 reads use the tracker, while any additional direct state operand retains its
 own compiled state handle. The literal integer-one case reuses Core's existing
-ownership count. `test_scalar_site_aggregates.jl` defends sharing, separate
-contributions, resolved fact ownership, author-rename execution-type reuse,
-source/parameter refresh, mixed publication, units and continuation.
+ownership count. Ordinary symbolic composition then combines those maintained
+reads with each other and with direct cell state; it does not introduce an
+aggregate-specific execution path. The derived-quantity fixture computes a
+per-cell average from maintained mass and ownership count, adds a direct cell
+baseline, publishes the result to two consumers, changes both its field and
+parameter sources, and continues from a checkpoint under both CPU algorithms.
+`test_scalar_site_aggregates.jl` defends that workflow together with sharing,
+separate contributions, resolved fact ownership, author-rename execution-type
+reuse, source/parameter refresh, mixed publication, units and continuation.
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.

@@ -38,6 +38,38 @@ _site_aggregate_maintenance_contract(; structured = false)
         typeof(renamed_integrator.plan.core_program.tracker_plan)
 end
 
+@testset "derived quantities compose maintained and direct cell reads" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = _derived_site_quantity_problem()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        SPI = CorePotts.CompilerSPI
+        trackers = SPI.tracker_instances(integrator.plan.core_program.tracker_plan)
+        @test count(item -> item isa SPI.SiteSumTracker, trackers) == 1
+        @test count(item -> item isa SPI.OwnershipCountTracker, trackers) == 1
+
+        step!(integrator)
+        @test Array(integrator.u[:baseline]) == Float32[10, 10, 10]
+        @test Array(integrator.u[:response]) == Float32[12, 12, 0]
+        @test Array(integrator.u[:repeated]) == Float32[12, 12, 0]
+
+        setu(integrator, model.signal)(integrator, fill(4.0f0, 2, 2))
+        setp(integrator, model.gain)(integrator, 2.0f0)
+        restored = init(
+            model.problem,
+            algorithm;
+            scalar_type = Float32,
+            checkpoint = checkpoint(integrator),
+        )
+        step!(integrator)
+        step!(restored)
+        @test Array(integrator.u[:response]) ==
+            Array(restored.u[:response]) == Float32[18, 18, 0]
+        @test Array(integrator.u[:repeated]) ==
+            Array(restored.u[:repeated]) == Float32[18, 18, 0]
+        @test integrator.u.ownership == restored.u.ownership == model.labels
+    end
+end
+
 @testset "different contribution laws do not share one maintained value" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         model = _site_aggregate_problem(; distinct = true)
