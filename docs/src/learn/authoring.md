@@ -141,8 +141,8 @@ Include these declarations in the model's `StatementSet`. The exchange swaps
 the two values; the second assignment does not read the first assignment's
 new value. Each target must have one synchronous writer, including within a
 single process. All assignments in this process must share an iteration domain:
-model assignments execute once, site assignments execute per site, and cell
-assignments execute once per eligible finite cell. Use
+model assignments execute once, site and field assignments execute per site,
+and cell assignments execute once per eligible finite cell. Use
 separate processes for different domains. This does not make source order an
 implicit sequential update policy.
 

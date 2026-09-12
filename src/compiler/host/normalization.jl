@@ -83,6 +83,15 @@ function _insert_operation_schema!(snapshot, schema::FrozenOperationSchema, reco
     return snapshot
 end
 
+Base.@noinline function _fixed_vector_literal_arguments(operation, arguments::Tuple)
+    operation === SymbolicUtils.array_literal || return nothing
+    isempty(arguments) && return nothing
+    shape = SymbolicUtils.unwrap_const(first(arguments))
+    shape isa Tuple{<:Integer} || return nothing
+    only(shape) == length(arguments) - 1 || return nothing
+    return Base.tail(arguments)
+end
+
 function _normalize_term!(
         builder::_TermGraphBuilder,
         value,
@@ -150,7 +159,11 @@ function _normalize_term!(
     catch
         false
     end
-    fixed_vector = value isa StaticArrays.SVector
+    symbolic_operation = is_call ? Symbolics.operation(unwrapped) : nothing
+    symbolic_arguments = is_call ? Tuple(Symbolics.arguments(unwrapped)) : ()
+    array_literal_arguments =
+        _fixed_vector_literal_arguments(symbolic_operation, symbolic_arguments)
+    fixed_vector = value isa StaticArrays.SVector || array_literal_arguments !== nothing
     if !is_call && !fixed_vector
         kind = classified
         payload = _resolve_normalized_payload(
@@ -194,8 +207,9 @@ function _normalize_term!(
 
     # A materialized immutable vector is syntax for one logical construction,
     # not a literal containing unevaluated symbolic element expressions.
-    operation = fixed_vector ? StaticArrays.SVector : Symbolics.operation(unwrapped)
-    arguments = fixed_vector ? Tuple(value) : Tuple(Symbolics.arguments(unwrapped))
+    operation = fixed_vector ? StaticArrays.SVector : symbolic_operation
+    arguments = value isa StaticArrays.SVector ? Tuple(value) :
+        array_literal_arguments === nothing ? symbolic_arguments : array_literal_arguments
     if operation isa _ProductField
         # Field spelling is source syntax. The closed evaluator receives one
         # ordinary product-field operation and a declaration-derived ordinal.
