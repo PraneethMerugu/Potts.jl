@@ -84,7 +84,9 @@ function _insert_operation_schema!(snapshot, schema::FrozenOperationSchema, reco
 end
 
 Base.@noinline function _fixed_vector_literal_arguments(operation, arguments::Tuple)
-    operation === SymbolicUtils.array_literal || return nothing
+    operation isa Function || return nothing
+    nameof(operation) === :array_literal || return nothing
+    parentmodule(operation) === SymbolicUtils || return nothing
     isempty(arguments) && return nothing
     shape = SymbolicUtils.unwrap_const(first(arguments))
     shape isa Tuple{<:Integer} || return nothing
