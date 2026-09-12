@@ -17,22 +17,33 @@ function _lower_scheduled_execution_plan(
             "late lowering requires a scheduled PottsSystem; call mtkcompile first"
         )
     )
+    _validate_runtime_ownership(_completion_data(scheduled).source_graph)
     _validate_compilation_choices(scheduled, engine, backend, scalar_type)
     analyzed_ir = _analyze_completed_system(scheduled)
     diagnostics = PottsDiagnostic[]
     _validate_compilation_coverage!(diagnostics, scheduled)
     _validate_equation_and_event_coverage!(diagnostics, scheduled)
     _throw_diagnostics(:compilation, diagnostics)
-    manifest = _build_parameter_manifest(scheduled, scalar_type)
+    manifest = _scheduled_data(scheduled).parameters
     relationship_endpoint_policies =
         _compile_relationship_endpoint_policies(analyzed_ir)
+    state_layout, state_handles = _state_layout(analyzed_ir, scheduled, manifest, scalar_type)
+    draw_handles = _draw_operation_handles(analyzed_ir)
+    history_descriptors = _lower_history_descriptors(analyzed_ir, scalar_type, state_handles, state_layout)
     lowered_descriptors = _lower_descriptor_plan(
         analyzed_ir,
+        scheduled,
         manifest,
         scalar_type,
         relationship_endpoint_policies,
+        state_layout, state_handles, draw_handles, history_descriptors,
     )
     descriptor_plan = lowered_descriptors.plan
+    records = analyzed_ir.source.records
+    states = _compiled_state_manifest(
+        scheduled, records, manifest, descriptor_plan.state_layout,
+        _lattice_shape(analyzed_ir), scalar_type,
+    )
     stage_plan = _lower_stage_plan(
         analyzed_ir,
         manifest,
@@ -41,6 +52,7 @@ function _lower_scheduled_execution_plan(
         lowered_descriptors.draw_handles,
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
+        history_descriptors,
     )
     lifecycle_plan = _lower_lifecycle_plan(
         analyzed_ir,
@@ -50,6 +62,8 @@ function _lower_scheduled_execution_plan(
         lowered_descriptors.draw_handles,
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
+        states,
+        history_descriptors,
     )
     _assert_concrete_core_boundary(
         descriptor_plan; path = "descriptor_plan"
@@ -94,15 +108,6 @@ function _lower_scheduled_execution_plan(
             )
             for record in inspect(scheduled, Schedule())
     ]
-    records = analyzed_ir.source.records
-    states = _compiled_state_manifest(
-        scheduled,
-        records,
-        manifest,
-        descriptor_plan.state_layout,
-        core_program.shape,
-        scalar_type,
-    )
     relationship_states = Tuple(
         let
                 statement = _relationship_policy_record(
@@ -207,6 +212,7 @@ function _lower_scheduled_execution_plan(
         observations,
         fingerprint,
     )
-    _assert_concrete_core_boundary(plan; path = "execution_plan")
+    # The plan also retains host-owned canonical symbols in its scheduled
+    # manifest. The complete Core payload was checked above before this join.
     return plan
 end

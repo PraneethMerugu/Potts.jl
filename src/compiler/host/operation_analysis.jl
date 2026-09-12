@@ -56,6 +56,7 @@ function _record_operation_role(record::QualifiedStatement)
     record.kind === :ProposalConstraint && return :constraint
     record.kind === :ProposalModifier && return :modifier
     record.kind === :Observation && return :observation
+    record.kind === :FieldState && get(_record_options(record), :evolution, nothing) !== nothing && return :process
     if record.kind === :LifecycleProcess
         arguments = first(record.normalized_payload)
         any(_cell_lifecycle_effect, arguments.effects) && return :lifecycle
@@ -91,11 +92,31 @@ function _operation_context_admitted(
     return false
 end
 
-function _operation_operand_admitted(rule::Symbol, types::Tuple)
+function _scalar_array_product_operand(node, types::Tuple)
+    length(types) == 2 && node.operation === :multiply || return nothing
+    expected = operation_transfer(*, 2)
+    all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer)) || return nothing
+    node.callable === CorePotts.CompilerSPI.operation_callable(Val(:multiply), expected.schema_version) || return nothing
+    for index in (1, 2)
+        types[index] <: AbstractArray && eltype(types[index]) <: Number &&
+            types[3 - index] <: Number && return index
+    end
+    return nothing
+end
+
+function _operation_operand_admitted(rule::Symbol, types::Tuple, node)
     rule === :any && return true
-    rule === :numeric && return all(type -> type <: Number, types)
+    if rule === :numeric
+        return all(type -> type <: Number, types) ||
+            _scalar_array_product_operand(node, types) !== nothing
+    end
+    rule === :real && return all(type -> type <: Real, types)
     rule === :boolean && return all(type -> type <: Bool, types)
     rule === :integer && return all(type -> type <: Integer, types)
+    rule === :fixed_index && return length(types) == 2 &&
+        types[1] <: AbstractVector && types[2] <: Integer
+    rule === :product_field && return length(types) == 2 &&
+        types[1] <: NamedTuple && isconcretetype(types[1]) && types[2] <: Integer
     rule === :same_type && return isempty(types) || all(==(first(types)), types)
     rule === :ifelse && return length(types) == 3 && types[1] <: Bool &&
         promote_type(types[2], types[3]) !== Any
@@ -150,7 +171,7 @@ function _node_operation_roles(
     for root in graph.roots
         record = source.records[Int(root.record)]
         role = root.role in _LIFECYCLE_ROOT_ROLES ? root.role :
-               _record_operation_role(record)
+            _record_operation_role(record)
         visit(root.node, role)
     end
     return Tuple(Tuple(sort!(bucket; by = String)) for bucket in roles)
@@ -165,14 +186,14 @@ function _source_requirement_problem(
     for requirement in transfer.source_requirements
         if requirement isa LatticeRankRequirement
             actual = length(_host_lattice_shape(source))
-            actual == requirement.rank || return(
+            actual == requirement.rank || return (
                 "requires lattice rank $(requirement.rank), got $actual"
             )
         elseif requirement isa SpatialRelationRequirement
             operand_node = graph.nodes[Int(node.operands[requirement.operand])]
             payload = operand_node.payload
             payload isa ResourceBindingPayload &&
-                payload.kind === :SpatialRelation || return(
+                payload.kind === :SpatialRelation || return (
                 "operand $(requirement.operand) must resolve to a SpatialRelation"
             )
             relation_index = findfirst(
@@ -180,7 +201,7 @@ function _source_requirement_problem(
                     record.kind === :SpatialRelation,
                 source.records,
             )
-            relation_index === nothing && return(
+            relation_index === nothing && return (
                 "operand $(requirement.operand) has no qualified SpatialRelation"
             )
             neighborhood = get(
@@ -189,13 +210,13 @@ function _source_requirement_problem(
                 nothing,
             )
             actual_kind = neighborhood isa Moore ? :moore :
-                          neighborhood isa VonNeumann ? :von_neumann : :unknown
+                neighborhood isa VonNeumann ? :von_neumann : :unknown
             actual_radius = hasproperty(neighborhood, :radius) ?
-                            neighborhood.radius : nothing
+                neighborhood.radius : nothing
             actual_kind === requirement.neighborhood &&
-                actual_radius == requirement.radius || return(
+                actual_radius == requirement.radius || return (
                 "operand $(requirement.operand) requires " *
-                "$(requirement.neighborhood) radius $(requirement.radius), got " *
+                    "$(requirement.neighborhood) radius $(requirement.radius), got " *
                     "$(actual_kind) radius $(repr(actual_radius))"
             )
         elseif requirement isa NamedSpatialRelationRequirement
@@ -205,16 +226,16 @@ function _source_requirement_problem(
                 :SpatialRelation,
                 requirement.name,
             )
-            relation === nothing && return(
+            relation === nothing && return (
                 "requires a lexically visible SpatialRelation named " *
-                repr(requirement.name)
+                    repr(requirement.name)
             )
             neighborhood = get(
                 _record_options(relation), :neighborhood, nothing
             )
-            neighborhood isa Union{VonNeumann, Moore} || return(
+            neighborhood isa Union{VonNeumann, Moore} || return (
                 "relation $(repr(requirement.name)) must use a finite " *
-                "VonNeumann or Moore neighborhood"
+                    "VonNeumann or Moore neighborhood"
             )
         else
             return "unknown source requirement $(nameof(typeof(requirement)))"
@@ -230,8 +251,10 @@ function _tracker_projection_operand(node, graph)
     operand = graph.nodes[Int(node.operands[2])]
     transfer = operand.transfer
     transfer === nothing && return nothing
-    (!isempty(transfer.tracker_requirements) ||
-        transfer.identity === :cell_volume) || return nothing
+    (
+        !isempty(transfer.tracker_requirements) ||
+            transfer.identity === :cell_volume
+    ) || return nothing
     return operand
 end
 
@@ -255,10 +278,10 @@ function _resolved_operation_source_bindings(
     )
     bindings = OperationSourceBinding[]
     for (requirement_index, requirement) in
-            enumerate(transfer.source_requirements)
+        enumerate(transfer.source_requirements)
         identity = if requirement isa SpatialRelationRequirement
             payload = graph.nodes[
-                Int(node.operands[requirement.operand])
+                Int(node.operands[requirement.operand]),
             ].payload
             payload isa ResourceBindingPayload ? payload.identity : nothing
         elseif requirement isa NamedSpatialRelationRequirement
@@ -273,11 +296,20 @@ function _resolved_operation_source_bindings(
             nothing
         end
         identity === nothing && continue
-        push!(bindings, OperationSourceBinding(
-            Int16(requirement_index), :SpatialRelation, identity
-        ))
+        push!(
+            bindings, OperationSourceBinding(
+                Int16(requirement_index), :SpatialRelation, identity
+            )
+        )
     end
     return Tuple(bindings)
+end
+
+function _is_history_sample_projection(node)
+    node.operation === :lag && node.transfer !== nothing || return false
+    expected = operation_transfer(lag, 2)
+    all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer)) || return false
+    return node.callable === CorePotts.CompilerSPI.operation_callable(Val(:lag), expected.schema_version)
 end
 
 function _validate_operation_use!(
@@ -292,6 +324,8 @@ function _validate_operation_use!(
     transfer === nothing && return nothing
     phase = _record_operation_phase(record)
     tracker_projection = _is_tracker_projection_operand(node, graph)
+    history_projection = _is_history_sample_projection(node)
+    history_projection && _history_sample_operand(source, graph, node)
     tracker_fold = transfer.identity === :bounded_fold &&
         _tracker_projection_operand(node, graph) !== nothing
     abi_role = transfer.lifecycle_abi === nothing ? nothing :
@@ -300,7 +334,7 @@ function _validate_operation_use!(
         Symbol(:lifecycle_, transfer.lifecycle_abi.role)
     problem = if tracker_fold && role === :hamiltonian
         "folds over tracker gathers are proposal-snapshot inputs; use a proposal " *
-        "drive, constraint, or modifier"
+            "drive, constraint, or modifier"
     elseif tracker_projection && phase !== :Proposal
         "tracker gathers are proposal-snapshot inputs"
     elseif abi_role !== nothing && role !== abi_role
@@ -312,36 +346,42 @@ function _validate_operation_use!(
     elseif !tracker_projection &&
             !_operation_context_admitted(transfer.required_context, role, phase)
         "required context $(repr(transfer.required_context)) is unavailable " *
-        "for role $(repr(role)) in phase $(repr(phase))"
-    elseif !_operation_operand_admitted(transfer.operand_rule, operand_types)
+            "for role $(repr(role)) in phase $(repr(phase))"
+    elseif !_operation_operand_admitted(transfer.operand_rule, operand_types, node)
         "operand types $(repr(operand_types)) violate rule " *
-        "$(repr(transfer.operand_rule))"
-    elseif (source_problem = _source_requirement_problem(
+            "$(repr(transfer.operand_rule))"
+    elseif (
+            source_problem = _source_requirement_problem(
                 transfer, node, graph, source
-            )) !== nothing
+            )
+        ) !== nothing
         source_problem
-    elseif !tracker_projection &&
+    elseif !tracker_projection && !history_projection &&
             (context = _operation_evaluation_context(role, phase)) !== nothing &&
             !CorePotts.CompilerSPI.operation_context_supported(node.callable, context)
         "frozen callable $(typeof(node.callable)) has no implementation for " *
-        "$(nameof(context))"
+            "$(nameof(context))"
     else
         nothing
     end
     problem === nothing && return nothing
-    throw(PottsValidationError(
-        :analysis,
-        (PottsDiagnostic(
-            :illegal_operation_use,
-            record.identity,
-            String(transfer.identity),
-            record.identity.path,
-            "the frozen role, phase, context, and operand contract",
-            problem,
-            (),
-            record.source,
-        ),),
-    ))
+    throw(
+        PottsValidationError(
+            :analysis,
+            (
+                PottsDiagnostic(
+                    :illegal_operation_use,
+                    record.identity,
+                    String(transfer.identity),
+                    record.identity.path,
+                    "the frozen role, phase, context, and operand contract",
+                    problem,
+                    (),
+                    record.source,
+                ),
+            ),
+        )
+    )
 end
 
 _is_unknown_unit(unit) = unit === :unknown

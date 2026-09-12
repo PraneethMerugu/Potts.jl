@@ -208,6 +208,29 @@ workflow does not merge repositories or make a multi-repository change atomic.
 It does not impose release-version inventories, spelling scans, or additional
 qualification paperwork.
 
+## Investigating compound-model compilation
+
+Run `benchmark/compound_compilation.jl` in an environment that develops the
+checkout being measured. Run each combination in a fresh Julia process:
+
+```sh
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model checkerboard
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site checkerboard
+```
+
+Replace `ENV` with the actual package environment. The diagnostic separates
+authoring, structural compilation, scheduled problem construction,
+initialization, first and subsequent steps, and repeated initialization. Julia's
+`@time` reports compilation time and cumulative allocations; allocations are
+not peak memory. Package loading occurs before the measured sections. Numerical
+swap, ownership, and clock checks run outside the timed sections.
+
+Record Julia/package versions and machine load with the output. Use an idle
+machine and repeated fresh processes for comparisons; concurrent test runs can
+distort timings. These measurements guide profiling, not pass/fail thresholds.
+
 Current specifications and decisions live under `spec/`. Historical interviews
 and evidence under `design/audits/`, and retired scripts under
 `scripts/archive/`, describe earlier states, not active development gates.

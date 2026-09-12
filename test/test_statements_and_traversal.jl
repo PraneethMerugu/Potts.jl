@@ -220,3 +220,34 @@
         merge(contract, (descriptor_payload_type = Vector{Int},)),
     )
 end
+using StaticArrays
+
+@testset "symbolic array references remain atomic through component qualification" begin
+    @variables pair[1:2] matrix[1:2, 1:2] pair_copy[1:2] matrix_copy[1:2, 1:2]
+    process = Synchronous(:copy, Assign(pair_copy, pair), Assign(matrix_copy, matrix))
+    scoped_pair = ModelingToolkitBase.renamespace(:component, pair)
+    scoped_matrix = ModelingToolkitBase.renamespace(:component, matrix)
+    mapped = Potts.map_symbolics(
+        value -> Symbolics.substitute(value, Dict(pair => scoped_pair, matrix => scoped_matrix)), process
+    )
+    effects = Potts._statement_arguments(mapped).effects
+    @test isequal(Symbolics.unwrap(effects[1].value), Symbolics.unwrap(scoped_pair))
+    @test isequal(Symbolics.unwrap(effects[2].value), Symbolics.unwrap(scoped_matrix))
+    @test size(effects[2].value) == (2, 2)
+    @test Potts._map_symbolic_payload(value -> Symbolics.substitute(value, Dict(pair[1] => 7)), [pair[1], 2]) == [7, 2]
+    child = PottsSystem(
+        name = :component, statements = StatementSet(
+            (
+                ModelState(pair; initial = SVector(1.0, 2.0)),
+                ModelState(pair_copy; initial = zero(SVector{2, Float64})),
+                ModelState(matrix; initial = SMatrix{2, 2}(1.0, 2.0, 3.0, 4.0)),
+                ModelState(matrix_copy; initial = zero(SMatrix{2, 2, Float64})), process,
+            )
+        ),
+        unknowns = (pair, pair_copy, matrix, matrix_copy),
+    )
+    completed = mtkcompile(complete(PottsSystem(name = :root, systems = (child,))))
+    @test is_scheduled(completed)
+    @test any(variable -> isequal(Symbolics.unwrap(variable), Symbolics.unwrap(scoped_pair)), ModelingToolkitBase.unknowns(completed))
+    @test any(variable -> isequal(Symbolics.unwrap(variable), Symbolics.unwrap(scoped_matrix)), ModelingToolkitBase.unknowns(completed))
+end

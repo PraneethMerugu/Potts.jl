@@ -223,10 +223,13 @@ function _run_callbacks!(integrator::PottsIntegrator)
         integrator, CorePotts.BackendSPI.HostCallbackSettlement
     )
     runtime_before = integrator.runtime
+    descriptor_before = CorePotts.BackendSPI.program_snapshot_descriptor_state(
+        CorePotts.program_snapshot(integrator.runtime)
+    )
     parameters_before = copy(integrator.runtime.parameters)
     history_length = length(integrator.parameter_history)
     pending_before = integrator.pending_parameters === nothing ? nothing :
-                     copy(integrator.pending_parameters)
+        copy(integrator.pending_parameters)
     saved_length = length(integrator.saved_times)
     terminated_before = integrator.terminated
     try
@@ -234,9 +237,11 @@ function _run_callbacks!(integrator::PottsIntegrator)
             condition = callback.condition(
                 integrator.u, integrator.t, integrator
             )
-            condition isa Bool || throw(ArgumentError(
-                "a Potts discrete callback condition must return Bool"
-            ))
+            condition isa Bool || throw(
+                ArgumentError(
+                    "a Potts discrete callback condition must return Bool"
+                )
+            )
             condition || continue
             callback.save_positions[1] &&
                 _save_current!(integrator; allow_duplicate = true)
@@ -249,9 +254,10 @@ function _run_callbacks!(integrator::PottsIntegrator)
     catch error
         # Public callback mutations are transactional at one settled MCS
         # boundary.  In particular, a later failing callback cannot leave an
-        # earlier setp! or save_positions effect half-published.
+        # earlier state, parameter or save_positions effect half-published.
         integrator.runtime = runtime_before
         CorePotts.update_program_parameters!(integrator.runtime, parameters_before)
+        CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_before)
         resize!(integrator.parameter_history, history_length)
         integrator.pending_parameters = pending_before
         resize!(integrator.saved_times, saved_length)
@@ -355,6 +361,7 @@ function _materialize_integrator(
             problem.replica;
             repeat = problem.repeat,
             initial_mcs = problem.tspan[1],
+            capture_initial_history = false,
         )
         runtime,
         Pair{Int, Any}[problem.tspan[1] => parameters],
@@ -403,6 +410,10 @@ function _materialize_integrator(
         capability_report,
     )
     _initialize_callbacks!(integrator)
+    if checkpoint === nothing && runtime.mcs == 0
+        CorePotts.initialize_history!(runtime)
+        integrator.u = _current_saved_state(integrator)
+    end
     policy.save_start && _save_current!(integrator)
     return integrator
 end
@@ -600,17 +611,4 @@ function native_value(
     return native_component_value(
         component, native_cell_state(state, identity), symbolic
     )
-end
-
-function _set_runtime_parameters!(integrator::PottsIntegrator, values)
-    _request_integrator_settlement!(
-        integrator, CorePotts.BackendSPI.IndexMutationSettlement
-    )
-    parameters = _normalize_parameters(integrator.plan, values)
-    CorePotts.update_program_parameters!(
-        integrator.runtime, _parameter_buffer(parameters)
-    )
-    push!(integrator.parameter_history, integrator.t => parameters)
-    integrator.u = _current_saved_state(integrator)
-    return parameters
 end

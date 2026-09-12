@@ -18,35 +18,44 @@ struct ProposalContext
     ProposalContext(name::Symbol, token::Symbolics.Num) = new(name, token)
 end
 
-"""A symbolic anchor bound while evaluating one site in an energy domain."""
-struct SiteBinding
-    name::Symbol
+"""A symbolic site anchor for contextual energy or scoped quantity evaluation."""
+struct SiteBinding{D}
+    domain::D
     token::Symbolics.Num
-    function SiteBinding(name::Symbol)
-        isempty(String(name)) &&
-            throw(ArgumentError("a site binding name cannot be empty"))
-        return new(
-            name,
-            _potts_token(Symbol("__potts_energy_site__", name); T = Int),
-        )
-    end
-    SiteBinding(name::Symbol, token::Symbolics.Num) = new(name, token)
+end
+function SiteBinding(name::Symbol)
+    isempty(String(name)) && throw(ArgumentError("a site binding name cannot be empty"))
+    return SiteBinding(nothing, _potts_token(Symbol("__potts_energy_site__", name); T = Int))
 end
 
-"""A symbolic anchor bound while evaluating one cell in an energy domain."""
-struct CellBinding
-    name::Symbol
+"""A symbolic cell anchor for contextual energy or scoped quantity evaluation."""
+struct CellBinding{D}
+    domain::D
     token::Symbolics.Num
-    function CellBinding(name::Symbol)
-        isempty(String(name)) &&
-            throw(ArgumentError("a cell binding name cannot be empty"))
-        return new(
-            name,
-            _potts_token(Symbol("__potts_energy_cell__", name); T = Int),
-        )
-    end
-    CellBinding(name::Symbol, token::Symbolics.Num) = new(name, token)
 end
+function CellBinding(name::Symbol)
+    isempty(String(name)) && throw(ArgumentError("a cell binding name cannot be empty"))
+    return CellBinding(nothing, _potts_token(Symbol("__potts_energy_cell__", name); T = Int))
+end
+
+_scoped_anchor(binding::Union{SiteBinding, CellBinding}) = getfield(binding, :domain) !== nothing
+_anchor_token_name(binding::Union{SiteBinding, CellBinding}) =
+    Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(_binding_token(binding))))
+
+function Base.getproperty(binding::Union{SiteBinding, CellBinding}, name::Symbol)
+    name === :name || return getfield(binding, name)
+    scoped = _scoped_anchor(binding)
+    text = String(_anchor_token_name(binding))
+    local_name = scoped ? last(split(text, '₊')) : text
+    prefix = binding isa SiteBinding ?
+        (_scoped_anchor(binding) ? "__potts_scoped_site__" : "__potts_energy_site__") :
+        (_scoped_anchor(binding) ? "__potts_scoped_cell__" : "__potts_energy_cell__")
+    suffix = chopprefix(local_name, prefix)
+    # Scoped suffixes encode the lexical name so namespace separators inside a
+    # user name cannot be confused with component qualification.
+    return scoped ? Symbol(String(hex2bytes(suffix))) : Symbol(suffix)
+end
+Base.propertynames(::Union{SiteBinding, CellBinding}, private::Bool = false) = (:name, :domain, :token)
 
 """A symbolic anchor bound to one canonical contact in an energy domain."""
 struct ContactBinding{R}
@@ -90,8 +99,10 @@ Base.show(io::IO, binding::CellBinding) =
 Base.show(io::IO, binding::ContactBinding) =
     print(io, "ContactBinding(", repr(binding.name), ")")
 Base.show(io::IO, binding::RelationshipBinding) =
-    print(io, "RelationshipBinding(", repr(binding.name), ", ",
-        repr(Symbol(statement_id(binding.relationship))), ")")
+    print(
+    io, "RelationshipBinding(", repr(binding.name), ", ",
+    repr(Symbol(statement_id(binding.relationship))), ")"
+)
 
 _binding_token(binding::ProposalContext) = getfield(binding, :token)
 _binding_token(binding::SiteBinding) = getfield(binding, :token)
@@ -99,24 +110,32 @@ _binding_token(binding::CellBinding) = getfield(binding, :token)
 _binding_token(binding::ContactBinding) = getfield(binding, :token)
 _binding_token(binding::RelationshipBinding) = getfield(binding, :token)
 
-"""Return the symbolic value bound by an energy or relationship anchor."""
-anchor_value(binding::Union{
-    SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
-}) = _binding_token(binding)
+"""Return the symbolic identity selected by a site, cell, contact, or relationship anchor."""
+anchor_value(
+    binding::Union{
+        SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
+    }
+) = _binding_token(binding)
 
-_gather_anchor(binding::Union{
-    SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
-}) = _binding_token(binding)
-_gather_anchor(::ProposalContext) = throw(ArgumentError(
-    "gather requires a concrete proposal property such as " *
-    "`proposal.target_site`, not a bare ProposalContext",
-))
+_gather_anchor(
+    binding::Union{
+        SiteBinding, CellBinding, ContactBinding, RelationshipBinding,
+    }
+) = _binding_token(binding)
+_gather_anchor(::ProposalContext) = throw(
+    ArgumentError(
+        "gather requires a concrete proposal property such as " *
+            "`proposal.target_site`, not a bare ProposalContext",
+    )
+)
 _gather_anchor(value::Symbolics.Num) = value
-_gather_anchor(value) = throw(ArgumentError(
-    "gather anchor must be a SiteBinding, CellBinding, ContactBinding, " *
-    "RelationshipBinding, or a concrete symbolic proposal property; got " *
-    string(typeof(value)),
-))
+_gather_anchor(value) = throw(
+    ArgumentError(
+        "gather anchor must be a SiteBinding, CellBinding, ContactBinding, " *
+            "RelationshipBinding, or a concrete symbolic proposal property; got " *
+            string(typeof(value)),
+    )
+)
 
 struct _RelationGather{S, R, A}
     source::S
@@ -136,9 +155,11 @@ the Potts compiler resolves both resources and removes the declaration before
 execution planning.
 """
 function gather(field::FieldState, relation; at)
-    relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
-        "gather relation must be a declared SpatialRelation or its local name"
-    ))
+    relation isa Union{Symbol, SpatialRelation} || throw(
+        ArgumentError(
+            "gather relation must be a declared SpatialRelation or its local name"
+        )
+    )
     return _RelationGather(field, relation, _gather_anchor(at))
 end
 
@@ -154,34 +175,52 @@ repeated, while absent boundary lanes and medium endpoints do not participate
 in the consuming `LocalMath.BoundedFold`.
 """
 function gather(operation, relation; at)
-    relation isa Union{Symbol, SpatialRelation} || throw(ArgumentError(
-        "gather relation must be a declared SpatialRelation or its local name"
-    ))
+    relation isa Union{Symbol, SpatialRelation} || throw(
+        ArgumentError(
+            "gather relation must be a declared SpatialRelation or its local name"
+        )
+    )
     transfer = try
         operation_transfer(operation, 1)
     catch error
         error isa MethodError && error.f === operation_transfer || rethrow(error)
-        throw(ArgumentError(
-            "gather tracker sources must be registered unary Potts operations"
-        ))
+        throw(
+            ArgumentError(
+                "gather tracker sources must be registered unary Potts operations"
+            )
+        )
     end
-    transfer.result_rule === :real || throw(ArgumentError(
-        "gather tracker operations must return one scalar real value"
-    ))
-    :Proposal in transfer.allowed_phases || throw(ArgumentError(
-        "gather tracker operations must support proposal evaluation"
-    ))
-    (!isempty(transfer.tracker_requirements) ||
-        transfer.identity === :cell_volume) || throw(ArgumentError(
-        "gather accepts only operations backed by a declared tracker"
-    ))
-    is_direct_scalar_tracker_projection(operation) || throw(ArgumentError(
-        "gather requires a declared direct scalar tracker projection"
-    ))
-    all(requirement -> requirement isa NamedSpatialRelationRequirement,
-        transfer.source_requirements) || throw(ArgumentError(
-        "gathered tracker projections currently require only named spatial resources"
-    ))
+    transfer.result_rule === :real || throw(
+        ArgumentError(
+            "gather tracker operations must return one scalar real value"
+        )
+    )
+    :Proposal in transfer.allowed_phases || throw(
+        ArgumentError(
+            "gather tracker operations must support proposal evaluation"
+        )
+    )
+    (
+        !isempty(transfer.tracker_requirements) ||
+            transfer.identity === :cell_volume
+    ) || throw(
+        ArgumentError(
+            "gather accepts only operations backed by a declared tracker"
+        )
+    )
+    is_direct_scalar_tracker_projection(operation) || throw(
+        ArgumentError(
+            "gather requires a declared direct scalar tracker projection"
+        )
+    )
+    all(
+        requirement -> requirement isa NamedSpatialRelationRequirement,
+        transfer.source_requirements
+    ) || throw(
+        ArgumentError(
+            "gathered tracker projections currently require only named spatial resources"
+        )
+    )
     return _RelationGather(operation, relation, _gather_anchor(at))
 end
 
@@ -207,7 +246,7 @@ Base.isless(::Type{_GatherReduction}, ::Type{_GatherReduction}) = false
 
 function _symbolic_gather_fold(fold, values::_RelationGather)
     source = values.source isa FieldState ?
-             _field_token(values.source) : values.source(values.anchor)
+        _field_token(values.source) : values.source(values.anchor)
     return _potts_bounded_fold(
         fold,
         source,
@@ -276,9 +315,9 @@ function map_symbolics(f, binding::ProposalContext)
 end
 
 map_symbolics(f, binding::SiteBinding) =
-    SiteBinding(binding.name, f(_binding_token(binding)))
+    SiteBinding(_map_symbolic_payload(f, binding.domain), f(_binding_token(binding)))
 map_symbolics(f, binding::CellBinding) =
-    CellBinding(binding.name, f(_binding_token(binding)))
+    CellBinding(_map_symbolic_payload(f, binding.domain), f(_binding_token(binding)))
 map_symbolics(f, binding::ContactBinding) =
     ContactBinding(binding.name, binding.relation, f(_binding_token(binding)))
 

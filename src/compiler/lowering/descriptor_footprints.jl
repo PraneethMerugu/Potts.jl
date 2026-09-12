@@ -80,17 +80,20 @@ function _descriptor_footprint(ir::AnalyzedTermIR, root::Int32)
     return _lower_footprint_fact(_materialize_footprint(fact), bound_slot)
 end
 
-function _record_read_footprint(ir::AnalyzedTermIR, record_index::Integer)
+function _record_read_footprint(ir::AnalyzedTermIR, record_index::Integer; additional_reads::AbstractAnalyzedFootprint = EmptyAnalyzedFootprint())
     roots = Int32[
         root.node for root in ir.graph.roots if root.record == record_index
     ]
-    isempty(roots) && return CorePotts.CompilerSPI.EmptyFootprint()
-    fact = _footprint_union(Tuple(
-        ir.facts.footprint[Int(root)] for root in roots
-    ))
-    _footprint_has_unresolved_reference(fact) && throw(ArgumentError(
-        "record footprint retains an unresolved compiler reference"
-    ))
+    fact = _footprint_union(
+        additional_reads, Tuple(
+            ir.facts.footprint[Int(root)] for root in roots
+        )...
+    )
+    _footprint_has_unresolved_reference(fact) && throw(
+        ArgumentError(
+            "record footprint retains an unresolved compiler reference"
+        )
+    )
     return _lower_footprint_fact(
         _materialize_footprint(fact), Int32(record_index)
     )

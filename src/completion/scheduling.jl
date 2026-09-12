@@ -16,7 +16,7 @@ struct ScheduledPottsData
     schema_version::VersionNumber
     schedule::Vector{QualifiedStatement}
     provenance::NamedTuple
-    parameters::NamedTuple
+    parameters::ParameterManifest
     states::Vector{NamedTuple}
     relationships::Vector{NamedTuple}
     observations::Vector{NamedTuple}
@@ -34,17 +34,16 @@ function _scheduled_symbolic_name(value)
 end
 
 function _scheduled_reference_name(path::Tuple, value)
-    local_name = _scheduled_symbolic_name(value)
-    relative_path = length(path) <= 1 ? () : path[2:end]
-    isempty(relative_path) && return local_name
-    return Symbol(join(String.((relative_path..., local_name)), "₊"))
+    return _scheduled_symbolic_name(_namespace_symbolic_value(value, path[2:end]))
 end
 
 function _scheduled_public_name(identity::QualifiedStatementID)
     relative_path = length(identity.path) <= 1 ? () : identity.path[2:end]
-    return Symbol(join(
-        String.((relative_path..., Symbol(identity.local_id))), "₊"
-    ))
+    return Symbol(
+        join(
+            String.((relative_path..., Symbol(identity.local_id))), "₊"
+        )
+    )
 end
 
 function _scheduled_option(record::QualifiedStatement, name::Symbol, default = nothing)
@@ -53,78 +52,74 @@ function _scheduled_option(record::QualifiedStatement, name::Symbol, default = n
     return get(options, name, default)
 end
 
-function _scheduled_parameter_schema(data::CompletedPottsData)
+function _build_parameter_manifest(data::CompletedPottsData)
     references = data.source_graph.references
     input_names = Set(
         _scheduled_reference_name(reference.path, reference.value)
-        for reference in references if reference.kind === :input
+            for reference in references if reference.kind === :input
     )
     output_names = Set(
         _scheduled_reference_name(reference.path, reference.value)
-        for reference in references if reference.kind === :output
+            for reference in references if reference.kind === :output
     )
-    runtime = NamedTuple[]
+    runtime = RuntimeParameter[]
+    reference_units = _build_reference_descriptors(data)
+    first_slot = 1
     seen = Set{Symbol}()
     for reference in references
-        reference.kind === :parameter || continue
+        reference.kind === :parameter && reference.source == 0 || continue
         name = _scheduled_reference_name(reference.path, reference.value)
-        name in seen && throw(ArgumentError(
-            "scheduled parameter identity `$name` is ambiguous"
-        ))
+        name in seen && throw(
+            ArgumentError(
+                "scheduled parameter identity `$name` is ambiguous"
+            )
+        )
         push!(seen, name)
-        has_default = ModelingToolkitBase.hasdefault(reference.value)
+        symbolic = _qualified_source_reference(reference)
+        shape = _parameter_shape(symbolic)
+        has_default = ModelingToolkitBase.hasdefault(symbolic)
         default = has_default ?
-                  _defensive_copy(ModelingToolkitBase.getdefault(reference.value)) :
-                  nothing
-        push!(runtime, (
+            _defensive_copy(ModelingToolkitBase.getdefault(symbolic)) :
+            nothing
+        has_default && _validate_parameter_shape(name, shape, default)
+        unit = has_default ? _parameter_reference(reference_units, default) : nothing
+        entry = RuntimeParameter(
             name,
-            identity = (
-                path = reference.path,
-                local_name = _scheduled_symbolic_name(reference.value),
-            ),
-            symbolic = reference.value,
-            role = :runtime,
-            required = !has_default,
-            default,
-            input = name in input_names,
-            output = name in output_names,
-        ))
+            (path = reference.path, local_name = _scheduled_symbolic_name(reference.value)),
+            symbolic, default, !has_default, unit, shape, first_slot,
+            name in input_names, name in output_names,
+        )
+        if has_default
+            default = _validate_parameter_value(entry, default; finite = false)
+            entry = RuntimeParameter(name, entry.identity, symbolic, default, false, unit, shape, first_slot, entry.input, entry.output)
+        end
+        push!(
+            runtime, entry
+        )
+        first_slot += _parameter_width(entry)
     end
     structural = NamedTuple[]
     for entry in data.parameter_roles.structural
-        push!(structural, (
-            name = entry.name,
-            identity = (path = (), local_name = entry.name),
-            symbolic = nothing,
-            role = :structural,
-            required = false,
-            default = _defensive_copy(entry.value),
-            input = false,
-            output = false,
-        ))
+        push!(
+            structural, (
+                name = entry.name,
+                identity = (path = (), local_name = entry.name),
+                symbolic = nothing,
+                role = :structural,
+                required = false,
+                default = _defensive_copy(entry.value),
+                input = false,
+                output = false,
+            )
+        )
     end
-    return (runtime = runtime, structural = structural)
-end
-
-function _scheduled_initial_values(data::CompletedPottsData)
-    result = Dict{Symbol, Any}()
-    for reference in data.source_graph.references
-        reference.kind === :initial_condition || continue
-        pair = reference.value
-        name = _scheduled_reference_name(reference.path, first(pair))
-        haskey(result, name) && throw(ArgumentError(
-            "scheduled initial-condition identity `$name` is ambiguous"
-        ))
-        result[name] = _defensive_copy(last(pair))
-    end
-    return result
+    return ParameterManifest(runtime, structural, reference_units)
 end
 
 function _scheduled_state_schema(data::CompletedPottsData)
-    initial_conditions = _scheduled_initial_values(data)
     domains = filter(record -> record.kind === :LatticeDomain, data.records)
     lattice_shape = length(domains) == 1 ?
-                    _scheduled_option(only(domains), :shape, ()) : ()
+        _scheduled_option(only(domains), :shape, ()) : ()
     entries = NamedTuple[]
     for record in data.records
         record.kind in (
@@ -134,39 +129,37 @@ function _scheduled_state_schema(data::CompletedPottsData)
         arguments = first(record.normalized_payload)
         haskey(arguments, :variable) || continue
         key = _scheduled_symbolic_name(arguments.variable)
-        declared_initial = get(arguments, :initial, nothing)
-        initial_source = haskey(initial_conditions, key) ? :system : :statement
-        initial = haskey(initial_conditions, key) ?
-                  initial_conditions[key] : _defensive_copy(declared_initial)
+        selected = _effective_state_initial(data.source_graph, record)
+        initial_source = selected.origin
+        initial = _defensive_copy(selected.value)
         storage = record.kind in (:SiteState, :FieldState) ? :site :
-                  record.kind === :CellState ? :cell :
-                  record.kind === :MediumState ? :medium :
-                  record.kind === :ModelState ? :model : :history
+            record.kind === :CellState ? :cell :
+            record.kind === :MediumState ? :medium :
+            record.kind === :ModelState ? :model : :history
         role = record.kind === :FieldState ? :field :
-               record.kind === :HistoryState ? :history : :stored
+            record.kind === :HistoryState ? :history : :stored
         extent = storage === :site ? lattice_shape :
-                 storage === :cell ? :cells :
-                 storage === :history ? (
-                     lattice_shape...,
-                     _scheduled_option(record, :depth, 1),
-                 ) : ()
-        push!(entries, (
-            key,
-            name = _scheduled_public_name(record.identity),
-            identity = record.identity,
-            variable = arguments.variable,
-            kind = record.kind,
-            role,
-            storage,
-            extent,
-            declared_shape = record.shape,
-            initial,
-            initial_source,
-            units = record.units,
-            reference_conversion = record.reference_conversion,
-            ownership = record.ownership,
-            persistence = record.persistence,
-        ))
+            storage === :cell ? :cells :
+            storage === :history ? record.shape : ()
+        push!(
+            entries, (
+                key,
+                name = _scheduled_public_name(record.identity),
+                identity = record.identity,
+                variable = arguments.variable,
+                kind = record.kind,
+                role,
+                storage,
+                extent,
+                declared_shape = record.shape,
+                initial,
+                initial_source,
+                units = record.units,
+                reference_conversion = record.reference_conversion,
+                ownership = record.ownership,
+                persistence = record.persistence,
+            )
+        )
     end
     return entries
 end
@@ -176,18 +169,20 @@ function _scheduled_relationship_schema(data::CompletedPottsData)
     for record in data.records
         record.kind === :RelationshipState || continue
         arguments, options = record.normalized_payload
-        push!(entries, (
-            name = _scheduled_public_name(record.identity),
-            identity = record.identity,
-            capacity = get(options, :capacity, nothing),
-            maximum_degree = get(options, :maximum_degree, nothing),
-            endpoints = get(options, :endpoints, nothing),
-            payload = get(options, :payload, NamedTuple()),
-            initial = get(arguments, :initial, nothing),
-            lifecycle = record.lifecycle,
-            units = record.units,
-            persistence = record.persistence,
-        ))
+        push!(
+            entries, (
+                name = _scheduled_public_name(record.identity),
+                identity = record.identity,
+                capacity = get(options, :capacity, nothing),
+                maximum_degree = get(options, :maximum_degree, nothing),
+                endpoints = get(options, :endpoints, nothing),
+                payload = get(options, :payload, NamedTuple()),
+                initial = get(arguments, :initial, nothing),
+                lifecycle = record.lifecycle,
+                units = record.units,
+                persistence = record.persistence,
+            )
+        )
     end
     return entries
 end
@@ -196,17 +191,19 @@ function _scheduled_observation_schema(data::CompletedPottsData)
     entries = NamedTuple[]
     for record in data.records
         record.kind === :Observation || continue
-        push!(entries, (
-            name = _scheduled_public_name(record.identity),
-            identity = record.identity,
-            expression = get(first(record.normalized_payload), :expression, nothing),
-            reads = record.reads,
-            result_type = record.result_type,
-            shape = record.shape,
-            units = record.units,
-            persistence = record.persistence,
-            source = record.source,
-        ))
+        push!(
+            entries, (
+                name = _scheduled_public_name(record.identity),
+                identity = record.identity,
+                expression = get(first(record.normalized_payload), :expression, nothing),
+                reads = record.reads,
+                result_type = record.result_type,
+                shape = record.shape,
+                units = record.units,
+                persistence = record.persistence,
+                source = record.source,
+            )
+        )
     end
     return entries
 end
@@ -215,15 +212,17 @@ function _schedule_native_components(components)
     isempty(components) && return ScheduledNativeComponent[]
     scheduled = ScheduledNativeComponent[]
     for component in components
-        applicable(mtkcompile_native, component) || throw(ArgumentError(
-            "scheduling NativeComponent $(repr(nameof(component.declaration))) " *
-            "requires loading full ModelingToolkit so the " *
-            "PottsModelingToolkitExt extension can call upstream mtkcompile"
-        ))
+        applicable(mtkcompile_native, component) || throw(
+            ArgumentError(
+                "scheduling NativeComponent $(repr(nameof(component.declaration))) " *
+                    "requires loading full ModelingToolkit so the " *
+                    "PottsModelingToolkitExt extension can call upstream mtkcompile"
+            )
+        )
         result = mtkcompile_native(component)
         result isa ScheduledNativeComponent || error(
             "mtkcompile_native must return ScheduledNativeComponent, got " *
-            string(typeof(result))
+                string(typeof(result))
         )
         result.path == component.path || error(
             "mtkcompile_native changed the native component path"
@@ -237,8 +236,10 @@ function _schedule_native_components(components)
 end
 
 function _scheduled_native_provenance(components)
-    summaries = [_scheduled_native_fingerprint_payload(component)
-                 for component in components]
+    summaries = [
+        _scheduled_native_fingerprint_payload(component)
+            for component in components
+    ]
     sort!(summaries; by = summary -> join(String.(summary.path), "\0"))
     return NamedTuple[summary for summary in summaries]
 end
@@ -249,44 +250,52 @@ function _scheduled_capability_requirements(
     domains = filter(record -> record.kind === :LatticeDomain, data.records)
     domain_requirements = NamedTuple[]
     for record in domains
-        push!(domain_requirements, (
-            identity = record.identity,
-            shape = _scheduled_option(record, :shape, ()),
-            dimension = length(_scheduled_option(record, :shape, ())),
-            boundary = nameof(typeof(_scheduled_option(record, :boundary, Periodic()))),
-            max_cells = _scheduled_option(record, :max_cells, nothing),
-        ))
+        push!(
+            domain_requirements, (
+                identity = record.identity,
+                shape = _scheduled_option(record, :shape, ()),
+                dimension = length(_scheduled_option(record, :shape, ())),
+                boundary = nameof(typeof(_scheduled_option(record, :boundary, Periodic()))),
+                max_cells = _scheduled_option(record, :max_cells, nothing),
+            )
+        )
     end
     engine_admission = NamedTuple[]
     for record in data.records
         requirements = NamedTuple[]
         for admission in record.engine_admission
-            push!(requirements, (
-                engine = admission.engine,
-                admitted = admission.admitted,
-                reason = admission.reason,
-            ))
+            push!(
+                requirements, (
+                    engine = admission.engine,
+                    admitted = admission.admitted,
+                    reason = admission.reason,
+                )
+            )
         end
-        push!(engine_admission, (
-            identity = record.identity,
-            requirements,
-        ))
+        push!(
+            engine_admission, (
+                identity = record.identity,
+                requirements,
+            )
+        )
     end
     kinds = sort!(unique(record.kind for record in data.records); by = String)
     native_requirements = NamedTuple[]
     for component in native_components
-        push!(native_requirements, (
-            path = component.path,
-            family = nameof(typeof(native_family(component.declaration))),
-            scope = getfield(component.declaration, :scope),
-            split = nameof(typeof(getfield(component.declaration, :split))),
-            cadence = native_cadence_stride(component.declaration),
-            initialization = nameof(typeof(getfield(component.declaration, :initialization))),
-            events = nameof(typeof(getfield(component.declaration, :events))),
-            lifecycle = getfield(component.declaration, :lifecycle),
-            algorithm = nameof(typeof(getfield(component.declaration, :algorithm))),
-            capability_policy = nameof(typeof(getfield(component.declaration, :capabilities))),
-        ))
+        push!(
+            native_requirements, (
+                path = component.path,
+                family = nameof(typeof(native_family(component.declaration))),
+                scope = getfield(component.declaration, :scope),
+                split = nameof(typeof(getfield(component.declaration, :split))),
+                cadence = native_cadence_stride(component.declaration),
+                initialization = nameof(typeof(getfield(component.declaration, :initialization))),
+                events = nameof(typeof(getfield(component.declaration, :events))),
+                lifecycle = getfield(component.declaration, :lifecycle),
+                algorithm = nameof(typeof(getfield(component.declaration, :algorithm))),
+                capability_policy = nameof(typeof(getfield(component.declaration, :capabilities))),
+            )
+        )
     end
     return (
         domains = domain_requirements,
@@ -311,21 +320,25 @@ function _scheduled_provenance(
     )
     systems = NamedTuple[]
     for node in data.source_graph.systems
-        push!(systems, (
-            name = node.name,
-            path = node.path,
-            parent = node.parent,
-        ))
+        push!(
+            systems, (
+                name = node.name,
+                path = node.path,
+                parent = node.parent,
+            )
+        )
     end
     records = NamedTuple[]
     for record in data.records
-        push!(records, (
-            identity = record.identity,
-            schema_version = record.schema_version,
-            lowering_identity = record.lowering_identity,
-            source = record.source,
-            provenance = record.provenance,
-        ))
+        push!(
+            records, (
+                identity = record.identity,
+                schema_version = record.schema_version,
+                lowering_identity = record.lowering_identity,
+                source = record.source,
+                provenance = record.provenance,
+            )
+        )
     end
     return (
         schema = v"1.0.0",
@@ -368,16 +381,25 @@ function _fingerprint_scheduled_provenance(provenance::NamedTuple)
     )
 end
 
-_fingerprint_scheduled_parameters(parameters::NamedTuple) = (
-    runtime = Tuple(parameters.runtime),
+_fingerprint_scheduled_parameters(parameters::ParameterManifest) = (
+    runtime = Tuple(
+        (
+                name = entry.name, identity = entry.identity, symbolic = entry.symbolic,
+                role = :runtime, required = entry.required, default = entry.default,
+                input = entry.input, output = entry.output, shape = entry.shape,
+                first_slot = entry.first_slot, unit = entry.unit,
+            ) for entry in parameters
+    ),
     structural = Tuple(parameters.structural),
 )
 
 function _fingerprint_scheduled_capabilities(requirements::NamedTuple)
-    engine_admission = Tuple((
-        identity = entry.identity,
-        requirements = Tuple(entry.requirements),
-    ) for entry in requirements.engine_admission)
+    engine_admission = Tuple(
+        (
+                identity = entry.identity,
+                requirements = Tuple(entry.requirements),
+            ) for entry in requirements.engine_admission
+    )
     return (
         domains = Tuple(requirements.domains),
         statement_kinds = Tuple(requirements.statement_kinds),
@@ -405,7 +427,7 @@ function _stable_scheduled_fingerprint(
         completed::CompletedSystemFingerprint,
         schedule::Vector{QualifiedStatement},
         provenance::NamedTuple,
-        parameters::NamedTuple,
+        parameters::ParameterManifest,
         states::Vector{NamedTuple},
         relationships::Vector{NamedTuple},
         observations::Vector{NamedTuple},
@@ -427,12 +449,25 @@ function _stable_scheduled_fingerprint(
     return ScheduledSystemFingerprint(_erased_canonical_digest(parts))
 end
 
+function _validate_native_endpoint_owners(data::CompletedPottsData)
+    for component in data.native_components, endpoint in native_coupling_endpoints(component)
+        identity = potts_endpoint(endpoint)
+        any(record -> isequal(record.identity, identity), data.records) || throw(
+            ArgumentError(
+                "native coupling endpoint $identity belongs to an external declaration owner; " *
+                    "compile the containing PottsSystem with that owner, not this child alone"
+            )
+        )
+    end
+    return nothing
+end
+
 function _build_scheduled_data(data::CompletedPottsData, analysis)
     schedule = data.schedule
     native_components = _schedule_native_components(data.native_components)
     native_provenance = _scheduled_native_provenance(native_components)
     provenance = _scheduled_provenance(data, analysis, native_components)
-    parameters = _scheduled_parameter_schema(data)
+    parameters = _build_parameter_manifest(data)
     states = _scheduled_state_schema(data)
     relationships = _scheduled_relationship_schema(data)
     observations = _scheduled_observation_schema(data)
@@ -467,9 +502,11 @@ end
 
 """Return scheduled native components in deterministic qualified-path order."""
 function scheduled_native_components(system::PottsSystem)
-    is_scheduled(system) || throw(ArgumentError(
-        "scheduled_native_components requires a structurally scheduled PottsSystem"
-    ))
+    is_scheduled(system) || throw(
+        ArgumentError(
+            "scheduled_native_components requires a structurally scheduled PottsSystem"
+        )
+    )
     completion = getfield(system, :completion)
     completion isa CompletedPottsData || error(
         "scheduled PottsSystem is missing completed structural data"
@@ -500,39 +537,51 @@ function _with_scheduled_data(data::CompletedPottsData, scheduled::ScheduledPott
     )
 end
 
-const _MTKCOMPILE_RUNTIME_CHOICES = Set((
-    :alg, :algorithm, :engine, :backend, :device, :scalar_type, :seed,
-    :replica, :repeat,
-))
-const _MTKCOMPILE_IO_OVERRIDES = Set((
-    :inputs, :outputs, :disturbance_inputs,
-))
+const _MTKCOMPILE_RUNTIME_CHOICES = Set(
+    (
+        :alg, :algorithm, :engine, :backend, :device, :scalar_type, :seed,
+        :replica, :repeat,
+    )
+)
+const _MTKCOMPILE_IO_OVERRIDES = Set(
+    (
+        :inputs, :outputs, :disturbance_inputs,
+    )
+)
 
 function _validate_mtkcompile_kwargs(kwargs)
     isempty(kwargs) && return nothing
     names = Tuple(keys(kwargs))
     runtime = sort!(collect(intersect(Set(names), _MTKCOMPILE_RUNTIME_CHOICES)); by = String)
-    isempty(runtime) || throw(ArgumentError(
-        "structural mtkcompile does not accept runtime choice" *
-        (length(runtime) == 1 ? " " : "s ") *
-        join(("`$(name)`" for name in runtime), ", ") *
-        "; pass runtime choices to init or solve"
-    ))
-    :additional_passes in names && throw(ArgumentError(
-        "pure-Potts structural mtkcompile does not support `additional_passes`"
-    ))
+    isempty(runtime) || throw(
+        ArgumentError(
+            "structural mtkcompile does not accept runtime choice" *
+                (length(runtime) == 1 ? " " : "s ") *
+                join(("`$(name)`" for name in runtime), ", ") *
+                "; pass runtime choices to init or solve"
+        )
+    )
+    :additional_passes in names && throw(
+        ArgumentError(
+            "pure-Potts structural mtkcompile does not support `additional_passes`"
+        )
+    )
     io = sort!(collect(intersect(Set(names), _MTKCOMPILE_IO_OVERRIDES)); by = String)
-    isempty(io) || throw(ArgumentError(
-        "pure-Potts structural mtkcompile does not accept input/output override" *
-        (length(io) == 1 ? " " : "s ") *
-        join(("`$(name)`" for name in io), ", ") *
-        "; declare inputs and outputs on PottsSystem"
-    ))
-    throw(ArgumentError(
-        "unsupported pure-Potts mtkcompile option" *
-        (length(names) == 1 ? " " : "s ") *
-        join(("`$(name)`" for name in sort!(collect(names); by = String)), ", ")
-    ))
+    isempty(io) || throw(
+        ArgumentError(
+            "pure-Potts structural mtkcompile does not accept input/output override" *
+                (length(io) == 1 ? " " : "s ") *
+                join(("`$(name)`" for name in io), ", ") *
+                "; declare inputs and outputs on PottsSystem"
+        )
+    )
+    throw(
+        ArgumentError(
+            "unsupported pure-Potts mtkcompile option" *
+                (length(names) == 1 ? " " : "s ") *
+                join(("`$(name)`" for name in sort!(collect(names); by = String)), ", ")
+        )
+    )
 end
 
 """
@@ -546,7 +595,9 @@ function ModelingToolkitBase.mtkcompile(system::PottsSystem; kwargs...)
     _validate_mtkcompile_kwargs(kwargs)
     is_scheduled(system) && return system
     completed = ModelingToolkitBase.iscomplete(system) ?
-                system : ModelingToolkitBase.complete(system)
+        system : ModelingToolkitBase.complete(system)
+    completion = getfield(completed, :completion)::CompletedPottsData
+    _validate_native_endpoint_owners(completion)
 
     # Coverage and analysis project the one completion record/source-graph
     # authority.  Neither pass reconstructs the authored hierarchy.
@@ -556,7 +607,6 @@ function ModelingToolkitBase.mtkcompile(system::PottsSystem; kwargs...)
     _throw_diagnostics(:scheduling, diagnostics)
     analysis = _analyze_completed_system(completed)
 
-    completion = getfield(completed, :completion)::CompletedPottsData
     scheduled = _build_scheduled_data(completion, analysis)
     return _rebuild(
         completed;

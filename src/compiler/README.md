@@ -3,8 +3,16 @@
 The compiler is ordered by ownership stage:
 
 ```text
+../completion/statement_contracts.jl and ../completion/qualification.jl
+    resolve a history declaration's exact qualified source owner and sample domain,
+    type, dimensions, and shape; symbolic arrays remain atomic through qualification
+
 host/source_graph.jl
     freeze qualified source into indexed, host-only compiler data
+
+host/parameter_manifest.jl
+    own logical runtime parameter identity, fixed shape, unit references and
+    contiguous Core scalar slots in the one scheduled manifest
 
 host/footprint_types.jl
     define finite source, target, owner, and relationship footprint values
@@ -28,6 +36,12 @@ host/normalization.jl
 host/energy_domains.jl
     prove conservative energy domains and finite affected-anchor plans
 
+host/quantity_scopes.jl
+    qualify quantity/anchor resources against the completion context inventory;
+    derive process domains and bounds from declared targets before fingerprinting;
+    validate lexical anchor capture and population-compatible reads on the same
+    qualified records and normalized graph
+
 host/footprints.jl
     derive and combine bounded resource footprints from analyzed operations
 
@@ -43,8 +57,9 @@ host/unit_analysis.jl
 host/term_analysis.jl
     propagate semantic facts and construct the analyzed compiler authority
 
-completion/scheduling.jl
-    project analyzed completion data into the public structural schedule
+../completion/scheduling.jl
+    project analyzed completion data into the public structural schedule and
+    construct its precision-independent parameter manifest
 
 execution/executable.jl
     define public engine/backend selections and the executable wrapper
@@ -59,7 +74,8 @@ host/coverage.jl
     validate compiler choices and complete statement/equation lowering coverage
 
 lowering/parameters.jl
-    lower units, defaults, and runtime parameter indices
+    validate effective physical parameter inputs and convert into the existing
+    manifest's scalar slots; reconstruct immutable logical parameter snapshots
 
 execution/manifests.jl
     construct compiled statement/state/I/O manifests and time contracts
@@ -105,7 +121,14 @@ lowering/stage_grouping.jl
     group stage descriptors by compiler-owned concrete type
 
 lowering/after_mcs_descriptors.jl
-    lower field and history work at the after-MCS boundary
+    lower field work at the after-MCS boundary
+
+lowering/history_descriptors.jl
+    lower one dense retained-sample descriptor per declared history; reuse those
+    exact descriptors for read-only lag projections and the final stage plan
+
+lowering/completed_mcs_cadence.jl
+    lower completed-boundary cadence into the shared CorePotts cadence contract
 
 lowering/stage_plan.jl
     orchestrate the closed accepted-copy and after-MCS stage plan
