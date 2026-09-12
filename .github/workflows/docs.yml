@@ -14,7 +14,7 @@ on:
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: 5900248fb070f1ac7d1390c48e7059eba1eeecb3
+        default: 418197ba9503e2af7d1a4e2fc89d499f27a05ac2
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -23,7 +23,7 @@ concurrency:
 env:
   JULIA_VERSION: '1.12.6'
   LOCALMATH_REF: ${{ inputs.localmath_ref || 'f41a37da99c31781d4d2b23678a8e729845306a1' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || '5900248fb070f1ac7d1390c48e7059eba1eeecb3' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '418197ba9503e2af7d1a4e2fc89d499f27a05ac2' }}
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
