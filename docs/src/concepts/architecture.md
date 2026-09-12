@@ -42,9 +42,11 @@ multiply operation, not a tensor-specific evaluator.
 Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
 scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
 existing normalized contribution, unit, shape and dependency facts →
-`compiler/lowering/trackers.jl` → Core's `SiteSumTracker` and qualified cell
-read. Canonical contributions include their numerical comparison policy and
-share one tracker independently of consuming statements or anchors. The
+`compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
+`SiteMinimumTracker` and qualified cell read. Canonical sums include their
+numerical comparison policy; canonical minima include their empty-owner value
+and declared reconstruction bound. Both share one tracker independently
+of consuming statements or anchors. The
 temporary tracker handle map is discarded after Core program assembly, like
 the other lowering maps. Completion retains source dependencies; physical stage
 reads use the tracker, while any additional direct state operand retains its
@@ -56,6 +58,11 @@ The same model builder, independent owner-sum oracle and maintenance contract in
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
 `test_tensor_site_aggregates.jl` uses the same owner and oracle for matrix-valued
 contributions, physical units, shape rejection, updates and continuation.
+`test_scalar_site_minimum_authoring.jl` defends the single explicit operation
+vocabulary and preserves additive authoring. `test_scalar_site_minimum.jl`
+defines an independent owner-scan witness that changes the site holding the
+current minimum under both CPU algorithms, checks the declared finite empty
+policy, and distinguishes live owners from unused cell-capacity slots.
 These are ordinary registered test units.
 The scalar CPU owner is qualified; the vector, tensor and scheduled-maintenance units
 retain required behavior awaiting its implementation. Public aggregate device

@@ -6,6 +6,14 @@ function _is_site_sum(node)
     return all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer))
 end
 
+function _is_site_minimum(node)
+    node.operation === :cell_site_minimum && node.transfer !== nothing || return false
+    expected = operation_transfer(_potts_cell_site_minimum, 5)
+    return all(name -> isequal(getfield(node.transfer, name), getfield(expected, name)), fieldnames(OperationTransfer))
+end
+
+_is_site_aggregate(node) = _is_site_sum(node) || _is_site_minimum(node)
+
 _is_unit_count(graph, node) = _is_unit_count(graph.nodes, node)
 function _is_unit_count(nodes::AbstractVector, node)
     _is_site_sum(node) || return false
@@ -14,7 +22,7 @@ function _is_unit_count(nodes::AbstractVector, node)
         !(payload.value isa Bool) && isone(payload.value)
 end
 
-function _site_sum_source(source, graph, node)
+function _site_aggregate_source(source, graph, node)
     record = source.records[Int(node.record)]
     function reject(message)
         throw(
@@ -29,21 +37,46 @@ function _site_sum_source(source, graph, node)
             )
         )
     end
-    length(node.operands) == 5 || reject("aggregate requires contribution, site, cell and comparison tolerance operands")
-    contribution, site_index, cell_index, absolute_index, relative_index = node.operands
+    expected_arity = _is_site_aggregate(node) ? 5 : 0
+    length(node.operands) == expected_arity || reject(
+        "aggregate requires contribution, site, cell and law-specific policy operands"
+    )
+    contribution, site_index, cell_index = node.operands[1:3]
     site = graph.nodes[site_index].payload
     cell = graph.nodes[cell_index].payload
     site isa AnchorBindingPayload && site.kind === :site_anchor && site.resource !== nothing &&
         _resolved_scoped_anchor(source, site) !== nothing || reject("aggregate site binding is not declared in this component context")
     cell isa AnchorBindingPayload && cell.kind === :cell_anchor && cell.resource !== nothing &&
         _resolved_scoped_anchor(source, cell) !== nothing || reject("aggregate cell binding is not declared in this component context")
-    for index in (absolute_index, relative_index)
-        payload = graph.nodes[index].payload
-        payload isa LiteralPayload || reject("aggregate tolerances must be concrete scalar literals")
-        value = payload.value
-        value = value isa DynamicQuantities.UnionAbstractQuantity ? DynamicQuantities.ustrip(value) : value
-        value isa Real && !(value isa Bool) && isfinite(value) && value >= zero(value) ||
-            reject("aggregate tolerances must be finite nonnegative scalar literals")
+    policy_indices = node.operands[4:end]
+    if _is_site_sum(node)
+        for index in policy_indices
+            payload = graph.nodes[index].payload
+            payload isa LiteralPayload ||
+                reject("aggregate tolerances must be concrete scalar literals")
+            value = payload.value
+            value = value isa DynamicQuantities.UnionAbstractQuantity ?
+                DynamicQuantities.ustrip(value) : value
+            value isa Real && !(value isa Bool) && isfinite(value) &&
+                value >= zero(value) ||
+                reject("aggregate tolerances must be finite nonnegative scalar literals")
+        end
+    else
+        empty_payload = graph.nodes[first(policy_indices)].payload
+        empty_payload isa LiteralPayload ||
+            reject("minimum empty-owner value must be a concrete scalar literal")
+        empty = empty_payload.value
+        empty = empty isa DynamicQuantities.UnionAbstractQuantity ?
+            DynamicQuantities.ustrip(empty) : empty
+        empty isa Real && !(empty isa Bool) && isfinite(empty) ||
+            reject("minimum empty-owner value must be a finite scalar literal")
+        maximum_payload = graph.nodes[last(policy_indices)].payload
+        maximum_payload isa LiteralPayload ||
+            reject("minimum maximum_sites must be a concrete integer literal")
+        maximum_sites = maximum_payload.value
+        maximum_sites isa Integer && !(maximum_sites isa Bool) &&
+            0 <= maximum_sites <= typemax(Int32) ||
+            reject("minimum maximum_sites must be a nonnegative Int32 bound")
     end
     visited = Set{Int32}()
     function visit(index)
@@ -74,9 +107,8 @@ function _site_sum_source(source, graph, node)
         return nothing
     end
     visit(contribution)
-    return (; contribution, site, cell)
+    return (; contribution, site, cell, policy_indices)
 end
-
 function _scope_resource(records, owner, binding)
     binding isa Union{CellBinding, SiteBinding} && _scoped_anchor(binding) ||
         throw(ArgumentError("a quantity scope requires a bound cell or site anchor"))
@@ -255,8 +287,8 @@ function _validate_quantity_scopes(source, graph; enclosing_root)
             node_index in visited && return
             push!(visited, node_index)
             node = graph.nodes[Int(node_index)]
-            if _is_site_sum(node)
-                _site_sum_source(source, graph, node)
+            if _is_site_aggregate(node)
+                _site_aggregate_source(source, graph, node)
                 domain !== nothing && domain.kind === :cell ||
                     throw(ArgumentError("aggregate quantities currently require a cell-scoped process consumer"))
                 # The site contribution belongs to the tracker's source context,

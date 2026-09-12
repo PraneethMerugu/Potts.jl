@@ -479,6 +479,15 @@ operation_transfer(::typeof(_potts_cell_site_sum), ::Int) = _transfer(
     required_context = :iteration,
 )
 
+operation_transfer(::typeof(_potts_cell_site_minimum), ::Int) = _transfer(
+    :cell_site_minimum, 5, :site_minimum, :site_minimum;
+    footprint_rule = OwnerFootprintRule(),
+    tracker_requirements = (:site_minimum,),
+    allowed_roles = (:process,),
+    allowed_phases = (:AfterMCS,),
+    required_context = :iteration,
+)
+
 for operation in (
         cell_elongation, cell_center, unwrapped_center, endpoint_a,
         endpoint_b,

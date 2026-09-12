@@ -10,7 +10,7 @@ function _site_sum_tolerances(ir, node, manifest, ::Type{T}) where {T}
 end
 
 function _site_sum_identity(ir, node, manifest, ::Type{T}) where {T}
-    source = _site_sum_source(ir.source, ir.graph, node)
+    source = _site_aggregate_source(ir.source, ir.graph, node)
     return _canonical_value(
         (
             :site_sum, ir.graph.nodes[source.contribution].structural_key,
@@ -25,7 +25,7 @@ function _site_sum_descriptor(
         ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
         state_layout, history_descriptors
     ) where {T <: AbstractFloat}
-    source = _site_sum_source(ir.source, ir.graph, node)
+    source = _site_aggregate_source(ir.source, ir.graph, node)
     result_type = ir.facts.result_type[source.contribution]
     element_type = result_type <: AbstractArray ? eltype(result_type) : result_type
     (element_type === Real || element_type <: AbstractFloat) ||
@@ -64,6 +64,86 @@ function _site_sum_descriptor(
         _site_sum_tolerances(ir, node, manifest, T)...,
     )
 end
+
+function _site_minimum_identity(ir, node, manifest, ::Type{T}) where {T}
+    source = _site_aggregate_source(ir.source, ir.graph, node)
+    empty = ir.graph.nodes[first(source.policy_indices)].payload.value
+    maximum_sites = ir.graph.nodes[last(source.policy_indices)].payload.value
+    return _canonical_value(
+        (
+            :site_minimum, ir.graph.nodes[source.contribution].structural_key,
+            source.site.resource, ir.facts.shape[source.contribution],
+            ir.facts.units[source.contribution], T,
+            T(_numeric_value(empty, _reference_for(manifest.reference_units, empty))),
+            maximum_sites,
+        )
+    )
+end
+
+_site_aggregate_identity(ir, node, manifest, ::Type{T}) where {T} =
+    _is_site_sum(node) ? _site_sum_identity(ir, node, manifest, T) :
+    _site_minimum_identity(ir, node, manifest, T)
+
+function _site_minimum_descriptor(
+        ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
+        state_layout, history_descriptors
+    ) where {T <: AbstractFloat}
+    T === Float32 || throw(PottsValidationError(
+        :descriptor_lowering, (
+            PottsDiagnostic(
+                :aggregate_value_type, node.source, String(node.operation), node.source.path,
+                "a scalar Float32 contribution", repr(T), (),
+                ir.source.records[node.record].source
+            ),
+        )
+    ))
+    source = _site_aggregate_source(ir.source, ir.graph, node)
+    isempty(ir.facts.shape[source.contribution]) || throw(PottsValidationError(
+        :descriptor_lowering, (
+            PottsDiagnostic(
+                :aggregate_value_shape, node.source, String(node.operation), node.source.path,
+                "a scalar contribution", repr(ir.facts.shape[source.contribution]), (),
+                ir.source.records[node.record].source
+            ),
+        )
+    ))
+    expression = _lower_static_node(
+        ir.graph, ir, source.contribution, manifest, T, state_handles, draw_handles,
+        Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
+        CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+    )
+    empty = ir.graph.nodes[first(source.policy_indices)].payload.value
+    maximum_sites = ir.graph.nodes[last(source.policy_indices)].payload.value
+    required_sites = prod(_lattice_shape(ir))
+    maximum_sites >= required_sites || throw(PottsValidationError(
+        :descriptor_lowering, (
+            PottsDiagnostic(
+                :aggregate_reconstruction_bound, node.source,
+                String(node.operation), node.source.path,
+                "maximum_sites of at least $required_sites for the declared lattice",
+                repr(maximum_sites), (), ir.source.records[node.record].source,
+            ),
+        )
+    ))
+    empty_value = T(_numeric_value(empty, _reference_for(manifest.reference_units, empty)))
+    return CorePotts.CompilerSPI.SiteMinimumTracker(
+        Float32, key, expression;
+        maximum_sites, empty = empty_value,
+    )
+end
+
+_site_aggregate_descriptor(
+    ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
+    state_layout, history_descriptors,
+) where {T <: AbstractFloat} = _is_site_sum(node) ?
+    _site_sum_descriptor(
+        ir, node, key, manifest, T, state_handles, draw_handles;
+        state_layout, history_descriptors,
+    ) :
+    _site_minimum_descriptor(
+        ir, node, key, manifest, T, state_handles, draw_handles;
+        state_layout, history_descriptors,
+    )
 
 function _operation_tracker_context(
         ir::AnalyzedTermIR,
@@ -165,7 +245,7 @@ function _operation_tracker_descriptors(
     tracker_node = tracker_source === nothing ? node : tracker_source
     # Site expressions need the canonical layout and parameter manifest. They
     # are constructed once by the same tracker-plan owner below.
-    _is_site_sum(tracker_node) && return ()
+    _is_site_aggregate(tracker_node) && return ()
     transfer = tracker_node.transfer
     transfer === nothing && return ()
     isempty(transfer.tracker_requirements) && return ()
@@ -285,15 +365,17 @@ function _lower_tracker_plan(
     # tracker descriptors and their keys survive assembly of the Core program.
     contributions = Dict{String, NormalizedTermNode}()
     for node in ir.graph.nodes
-        _is_site_sum(node) || continue
+        _is_site_aggregate(node) || continue
         _is_unit_count(ir.graph, node) && continue
-        get!(contributions, _site_sum_identity(ir, node, manifest, T), node)
+        get!(contributions, _site_aggregate_identity(ir, node, manifest, T), node)
     end
     tracker_handles = Dict{String, CorePotts.CompilerSPI.QualifiedTrackerKey}()
     for (index, identity) in enumerate(sort!(collect(keys(contributions))))
-        key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(:site_sum), index)
+        node = contributions[identity]
+        law = _is_site_sum(node) ? :site_sum : :site_minimum
+        key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(law), index)
         tracker_handles[identity] = key
-        descriptor = _site_sum_descriptor(ir, contributions[identity], key,
+        descriptor = _site_aggregate_descriptor(ir, node, key,
             manifest, T, state_handles, draw_handles; state_layout, history_descriptors)
         _append_tracker_requirement!(descriptors, descriptor)
     end

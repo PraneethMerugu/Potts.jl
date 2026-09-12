@@ -14,6 +14,7 @@ const _RESULT_TRANSFER_RULES = Set(
         :product_field,
         :history_sample,
         :site_sum,
+        :site_minimum,
     )
 )
 const _UNIT_TRANSFER_RULES = Set(
@@ -32,6 +33,7 @@ const _UNIT_TRANSFER_RULES = Set(
         :product_field,
         :history_sample,
         :site_sum,
+        :site_minimum,
     )
 )
 const _PURITY_TRANSFER_RULES = Set((:pure, :semantic_rng))
