@@ -164,9 +164,9 @@ Both are required. Minimum is restricted to scalar `Float32` execution.
 This is a live owner-grouped quantity, not a bounded neighborhood fold or an
 independently writable state. Other reductions require their own explicit
 maintenance/rebuild contract. Scalar CPU sum execution is qualified. Fixed-array
-sum contributions and scheduled source-update maintenance remain required
-implementation work; device execution is not yet qualified for this public
-aggregate path.
+sum contributions and scheduled source updates use the same maintained-quantity
+path. Backend support is established by the selected execution profile's
+behavioral tests.
 """
 function aggregate(
         expression; over, by, combine = +, empty = nothing,
