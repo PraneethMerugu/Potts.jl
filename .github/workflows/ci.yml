@@ -9,11 +9,11 @@ on:
       localmath_ref:
         description: Full LocalMath candidate commit SHA
         type: string
-        default: b699002a05f84e240e34162d509d6b952bf7d437
+        default: 22e7b42905522e53e04b4c0febadb96e30189a80
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: 7183bcec81afc34028153f8674d1992b625fd2bc
+        default: 9b13005716fa372d0d6430cb4f23522e9faf708d
   schedule:
     - cron: '23 5 * * 1'
 
@@ -26,8 +26,8 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: ${{ inputs.localmath_ref || 'b699002a05f84e240e34162d509d6b952bf7d437' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || '7183bcec81afc34028153f8674d1992b625fd2bc' }}
+  LOCALMATH_REF: ${{ inputs.localmath_ref || '22e7b42905522e53e04b4c0febadb96e30189a80' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '9b13005716fa372d0d6430cb4f23522e9faf708d' }}
 
 jobs:
   changes:
@@ -64,7 +64,7 @@ jobs:
     if: github.event_name != 'schedule'
     name: package (ubuntu-latest)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -118,7 +118,7 @@ jobs:
   macos-package:
     if: github.event_name != 'pull_request' && github.event_name != 'schedule'
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -194,7 +194,7 @@ jobs:
     needs: changes
     if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Require a valid change selection
         if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
