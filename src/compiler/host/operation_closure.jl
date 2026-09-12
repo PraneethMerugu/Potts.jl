@@ -60,7 +60,7 @@ function _compiler_synthesized_operation_requirements(
     requirements = NamedTuple[]
 
     for node in nodes
-        _is_site_sum(node) || continue
+        _is_site_aggregate(node) || continue
         record = source.records[node.record]
         if _is_unit_count(nodes, node)
             _push_operation_requirement!(requirements, cell_volume, 1, record)

@@ -332,7 +332,7 @@ function _validate_operation_use!(
         transfer.lifecycle_abi.role === :binary_partition ?
         :lifecycle_partition :
         Symbol(:lifecycle_, transfer.lifecycle_abi.role)
-    context = _is_site_sum(node) ? CorePotts.CompilerSPI.AbstractCellStageEvaluationContext :
+    context = _is_site_aggregate(node) ? CorePotts.CompilerSPI.AbstractCellStageEvaluationContext :
         _operation_evaluation_context(role, phase)
     problem = if tracker_fold && role === :hamiltonian
         "folds over tracker gathers are proposal-snapshot inputs; use a proposal " *

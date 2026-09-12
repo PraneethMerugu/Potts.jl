@@ -20,6 +20,7 @@ function _builtin_operation_declarations()
         (_potts_lifecycle_bound_state_value, 1),
         (_potts_bounded_fold, 4),
         (_potts_cell_site_sum, 5),
+        (_potts_cell_site_minimum, 5),
         (cell_volume, 1), (cell_surface, 1), (cell_elongation, 1),
         (cell_center, 1), (unwrapped_center, 1),
         (endpoint_a, 1), (endpoint_b, 1), (degree, 2),
