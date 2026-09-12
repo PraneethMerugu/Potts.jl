@@ -75,6 +75,57 @@ function _independent_owner_sum(values, labels, gain)
     return [sum((gain * values[i] for i in eachindex(labels) if labels[i] == owner); init = z) for owner in 1:3]
 end
 
+function _site_minimum_problem(; empty = 19.0, maximum_sites = 4)
+    @variables signal amount repeated
+    lattice = LatticeDomain(
+        :space; shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(),
+        max_cells = 3,
+    )
+    kind = CellKind(:cell; extinction = ForbidExtinction())
+    medium = MediumKind(:medium)
+    declarations = scoped(sites(lattice), :locations) do site
+        consumers = scoped(cells(kind), :owners) do cell
+            quantity = aggregate(
+                signal; over = site, by = cell, combine = min, empty,
+                maximum_sites,
+            )
+            StatementSet((
+                CellState(amount; initial = 0.0),
+                CellState(repeated; initial = 0.0),
+                Synchronous(:measure, Assign(amount, quantity)),
+                Synchronous(:measure_again, Assign(repeated, quantity)),
+            ))
+        end
+        StatementSet((FieldState(signal; initial = 0.0), consumers...))
+    end
+    system = PottsSystem(
+        name = :minimum_signal,
+        statements = StatementSet((
+            lattice, kind, medium, declarations...,
+            ProposalConstraint(:fixed_ownership, false),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = (signal, amount, repeated),
+    )
+    labels = Int32[1 2; 1 0]
+    values = Float32[1 5; 3 4]
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [kind, kind], medium),
+        values = (signal => values,),
+    )
+    return (;
+        problem = PottsProblem(system, initial, (0, 3); seed = 17),
+        signal, amount, repeated, labels, empty = Float32(empty), maximum_sites,
+    )
+end
+
+function _independent_owner_minimum(values, labels, empty, owners)
+    return Float32[
+        minimum((values[index] for index in eachindex(labels) if labels[index] == owner); init = empty)
+        for owner in 1:owners
+    ]
+end
+
 function _site_aggregate_maintenance_contract(; structured = false, logical_shape = structured ? (2,) : ())
     return @testset "site aggregates share maintenance across two quantity consumers" begin
         for algorithm in (SequentialCPM(), CheckerboardSweepCPM())

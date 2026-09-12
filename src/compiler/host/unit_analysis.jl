@@ -220,6 +220,19 @@ function _operation_unit_result(
             return (nothing, "aggregate absolute tolerance must have the contribution's units")
         return (source_unit, nothing)
     end
+    if rule === :site_minimum
+        source_unit, site_unit, cell_unit, empty_unit, maximum_unit = operand_units
+        all(
+            unit -> _unit_compatible(unit, :dimensionless),
+            (site_unit, cell_unit, maximum_unit),
+        ) || return (nothing, "aggregate bindings and maximum_sites must be dimensionless")
+        empty_payload = graph.nodes[node.operands[4]].payload
+        literal_zero = empty_payload isa LiteralPayload && empty_payload.value isa Real &&
+            iszero(empty_payload.value)
+        (literal_zero || _unit_compatible(source_unit, empty_unit)) ||
+            return (nothing, "minimum empty-owner value must have the contribution's units")
+        return (source_unit, nothing)
+    end
     if rule === :product_field
         product_units = first(operand_units)
         ordinal = graph.nodes[last(node.operands)].payload.value

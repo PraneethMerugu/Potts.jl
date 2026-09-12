@@ -264,7 +264,7 @@ function _record_state_handles(
             return nothing
         end
         for node in ir.graph.nodes
-            node.source == record.identity && _is_site_sum(node) || continue
+            node.source == record.identity && _is_site_aggregate(node) || continue
             source_reads(first(node.operands))
         end
     end

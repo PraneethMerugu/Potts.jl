@@ -114,6 +114,7 @@ function _potts_cell_bound_state_value end
 function _potts_lifecycle_bound_state_value end
 function _potts_bounded_fold end
 function _potts_cell_site_sum end
+function _potts_cell_site_minimum end
 """Test whether two endpoints are linked by a relationship state."""
 function linked end
 
@@ -140,7 +141,8 @@ SymbolicUtils.promote_symtype(::typeof(lag), ::Type{T}, ::Type) where {T} = T
 SymbolicUtils.promote_shape(::typeof(lag), state::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = state
 
 """
-    aggregate(expression; over::SiteBinding, by::CellBinding, combine=+, atol=0, rtol=0)
+    aggregate(expression; over::SiteBinding, by::CellBinding, combine=+, empty=nothing,
+              maximum_sites=nothing, atol=0, rtol=0)
 
 Sum a site-local expression over the lattice sites owned by the bound cell.
 `over` and `by` are declared lexical site and cell bindings, including those
@@ -155,33 +157,60 @@ compared with an independent canonical rebuild. Both default to exact zero;
 they are not promised accumulation-error bounds and never trigger silent repair.
 Nonzero `atol` has the contribution's physical units; `rtol` is dimensionless.
 
+With `combine=min`, `empty` declares the finite result for an owner with no
+sites and `maximum_sites` declares the finite full-lattice reconstruction bound.
+Both are required. Minimum is restricted to scalar `Float32` execution.
+
 This is a live owner-grouped quantity, not a bounded neighborhood fold or an
-independently writable state. Currently `combine=+` is the supported maintenance
-law; other reductions require their own explicit maintenance/rebuild contract.
-Scalar CPU execution is qualified. Fixed-array contributions and scheduled
-source-update maintenance remain required implementation work; device execution
-is not yet qualified for this public aggregate path.
+independently writable state. Other reductions require their own explicit
+maintenance/rebuild contract. Scalar CPU sum execution is qualified. Fixed-array
+sum contributions and scheduled source-update maintenance remain required
+implementation work; device execution is not yet qualified for this public
+aggregate path.
 """
-function aggregate(expression; over, by, combine = +, atol = 0, rtol = 0)
+function aggregate(
+        expression; over, by, combine = +, empty = nothing,
+        maximum_sites = nothing, atol = 0, rtol = 0,
+    )
     over isa SiteBinding && _scoped_anchor(over) ||
         throw(ArgumentError("aggregate over requires a declared SiteBinding from sites(lattice)"))
     by isa CellBinding && _scoped_anchor(by) ||
         throw(ArgumentError("aggregate by requires a declared CellBinding from cells(kind)"))
-    combine === (+) || throw(
-        ArgumentError(
-            "aggregate currently supports combine=+; a non-additive quantity requires an explicit maintenance/rebuild law"
+    operation = if combine === (+)
+        empty === nothing || throw(ArgumentError("additive aggregate does not accept an empty-owner override"))
+        maximum_sites === nothing || throw(ArgumentError("additive aggregate does not accept a reconstruction bound"))
+        _potts_cell_site_sum
+    elseif combine === min
+        empty === nothing && throw(ArgumentError("minimum aggregate requires a finite empty-owner value"))
+        maximum_sites === nothing && throw(ArgumentError("minimum aggregate requires a maximum_sites reconstruction bound"))
+        isequal(atol, 0) && isequal(rtol, 0) || throw(ArgumentError(
+            "minimum aggregate does not use additive comparison tolerances"
+        ))
+        _potts_cell_site_minimum
+    else
+        throw(ArgumentError(
+            "aggregate supports combine=+ and bounded scalar combine=min; other laws require an explicit maintenance/rebuild contract"
+        ))
+    end
+    operands = operation === _potts_cell_site_sum ?
+        (
+            Symbolics.unwrap(expression), Symbolics.unwrap(_binding_token(over)),
+            Symbolics.unwrap(_binding_token(by)), Symbolics.unwrap(atol),
+            Symbolics.unwrap(rtol),
+        ) :
+        (
+            Symbolics.unwrap(expression), Symbolics.unwrap(_binding_token(over)),
+            Symbolics.unwrap(_binding_token(by)), Symbolics.unwrap(empty),
+            Symbolics.unwrap(maximum_sites),
         )
-    )
     return Symbolics.wrap(
-        Symbolics.term(
-            _potts_cell_site_sum, Symbolics.unwrap(expression),
-            Symbolics.unwrap(_binding_token(over)), Symbolics.unwrap(_binding_token(by)),
-            Symbolics.unwrap(atol), Symbolics.unwrap(rtol),
-        )
+        Symbolics.term(operation, operands...)
     )
 end
 SymbolicUtils.promote_symtype(::typeof(_potts_cell_site_sum), ::Type{T}, ::Type, ::Type, ::Type, ::Type) where {T} = T
 SymbolicUtils.promote_shape(::typeof(_potts_cell_site_sum), source::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = source
+SymbolicUtils.promote_symtype(::typeof(_potts_cell_site_minimum), ::Type{T}, ::Type, ::Type, ::Type, ::Type) where {T} = T
+SymbolicUtils.promote_shape(::typeof(_potts_cell_site_minimum), source::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = source
 Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 Symbolics.@register_symbolic _potts_merks_local_connectivity(
     kind, foreground, background

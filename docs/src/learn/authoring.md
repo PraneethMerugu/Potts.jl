@@ -224,7 +224,24 @@ checks. `aggregate(1; over=site, by=owner)` uses the existing exact integer
 ownership count: this is a dimensionless number of lattice sites, not physical
 volume or a coordinate-based centroid.
 
-The current qualified path covers scalar CPU quantities, including accepted
+A scalar minimum uses the same `aggregate` owner with an explicit finite value
+for cells that own no sites:
+
+```julia
+lowest = aggregate(
+    signal; over=site, by=owner, combine=min,
+    empty=19.0, maximum_sites=4096,
+)
+```
+
+Minimum lowering is currently restricted to `Float32` scalar contributions.
+`maximum_sites` is an explicit nonnegative `Int32`-sized bound and must cover
+the declared lattice. Potts lowers it to Core's full-reconstruction contract.
+The empty value has the contribution's units; literal zero may be used as a
+unit-polymorphic zero. This is a maintained owner quantity, not a neighborhood
+gather.
+
+The qualified additive path covers scalar CPU quantities, including accepted
 ownership changes and settled source/parameter updates. Fixed-array quantities
 and maintenance after scheduled source updates remain required implementation
 work; public aggregate device execution is not yet qualified.
@@ -235,9 +252,9 @@ roundoff from incremental updates can cause a reconstruction/checkpoint check
 to reject; this is not a guarantee that floating addition is exact. A nonzero
 `atol` has the source contribution's units (dimensionless for a dimensionless
 source), while `rtol` is dimensionless. The tolerances are declared acceptance
-criteria, not proven error bounds. Cached checkpoint values are retained, never
+criteria, not proven error bounds. Cached checkpoint sums are retained, never
 silently replaced by a reconstruction. Non-additive laws such as maintained
-minimum require an explicit maintenance/rebuild contract; bounded neighborhood
+maximum require an explicit maintenance/rebuild contract; bounded neighborhood
 `minimum(gather(...))` has different semantics.
 
 Lifecycle state policies such as `RetireTo` and `ResetTo` also accept immutable

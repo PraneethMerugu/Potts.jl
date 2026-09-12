@@ -95,7 +95,7 @@ end
     site = SiteBinding(:source, sites(lattice))
     cell = CellBinding(:owner, cells(kind))
     @variables signal
-    @test_throws r"maintenance/rebuild" aggregate(signal; over = site, by = cell, combine = min)
+    @test_throws r"maintenance/rebuild" aggregate(signal; over = site, by = cell, combine = max)
     @test_throws r"SiteBinding" aggregate(signal; over = sites(lattice), by = cell)
     @test_throws r"CellBinding" aggregate(signal; over = site, by = cells(kind))
     for tolerance in (-1.0, Inf, NaN, true)

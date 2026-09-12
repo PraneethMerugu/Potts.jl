@@ -200,14 +200,14 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         )) : CorePotts.CompilerSPI.LiteralExpression(draw_handle)
-    elseif _is_site_sum(node)
+    elseif _is_site_aggregate(node)
         tracker_handles === nothing && throw(ArgumentError("aggregate reads require the canonical tracker lowering handles"))
         cell = _lower_static_node(graph, ir, node.operands[3], manifest, T, state_handles, draw_handles,
             cache, state_binding, workspace_slices; state_layout, history_descriptors, tracker_handles)
         if _is_unit_count(graph, node)
             _compiler_synthesized_operation_expression(graph, cell_volume, (cell,), ir.source.records[node.record])
         else
-            key = tracker_handles[_site_sum_identity(ir, node, manifest, T)]
+            key = tracker_handles[_site_aggregate_identity(ir, node, manifest, T)]
             operation = CorePotts.CompilerSPI.QualifiedTrackerOperation(node.callable, key.quantity, key.source_handle)
             CorePotts.CompilerSPI.OperationExpression(operation, (cell,))
         end
