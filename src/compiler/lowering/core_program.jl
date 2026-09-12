@@ -406,6 +406,7 @@ function _lower_core_program(
         descriptor_plan::CorePotts.CompilerSPI.DescriptorExecutionPlan,
         stage_plan::CorePotts.CompilerSPI.StageExecutionPlan,
         lifecycle_plan::CorePotts.CompilerSPI.AbstractLifecycleExecutionPlan,
+        tracker_plan::CorePotts.CompilerSPI.TrackerExecutionPlan,
         relationship_endpoint_policies,
         fingerprint_seed::String,
     ) where {T <: AbstractFloat}
@@ -470,7 +471,6 @@ function _lower_core_program(
                   CorePotts.BackendSPI.SequentialProgramEngine() :
                   CorePotts.BackendSPI.CheckerboardProgramEngine()
     core_backend = _core_program_backend(backend)
-    tracker_plan = _lower_tracker_plan(ir, engine, T)
     checkerboard_plan = if core_engine isa CorePotts.BackendSPI.CheckerboardProgramEngine
         conflicts = _checkerboard_conflict_displacements(
             descriptor_plan,

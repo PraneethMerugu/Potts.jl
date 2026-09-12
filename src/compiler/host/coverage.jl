@@ -162,9 +162,9 @@ function _synchronous_assignment_rejection(effect, statements)
         return "synchronous lowering currently requires Assign"
     state = _declared_assignment_state(effect.target, statements)
     state === nothing && return "Assign must target one declared state"
-    state isa Union{SiteState, CellState} && return nothing
+    state isa Union{SiteState, FieldState, CellState} && return nothing
     state isa ModelState ||
-        return "synchronous Assign requires a SiteState, CellState, or ModelState target"
+        return "synchronous Assign requires a SiteState, FieldState, CellState, or ModelState target"
     return nothing
 end
 

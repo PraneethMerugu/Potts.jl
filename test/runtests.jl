@@ -3,6 +3,13 @@ import Potts
 
 const POTTS_TESTS = (
     "test_fixed_array_scaling.jl",
+    "test_scalar_site_aggregates.jl",
+    "test_scalar_site_minimum_authoring.jl",
+    "test_scalar_site_minimum.jl",
+    "test_vector_site_aggregates.jl",
+    "test_tensor_site_aggregates.jl",
+    "test_fixed_array_scaling.jl",
+    "test_scheduled_site_aggregates.jl",
     "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",
@@ -81,6 +88,7 @@ const POTTS_TESTS = (
 # Keeping that inventory explicit prevents detached fixture artifacts without
 # turning helpers into a second test suite.
 const POTTS_TEST_FIXTURES = (
+    "site_aggregates.jl",
     "history_structured_samples.jl",
     "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",

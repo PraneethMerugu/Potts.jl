@@ -254,10 +254,25 @@ function _record_state_handles(
         ; expressions = (),
     )
     result = CorePotts.CompilerSPI.StateHandle[]
+    deferred = CorePotts.CompilerSPI.StateHandle[]
+    if !isempty(expressions)
+        function source_reads(index)
+            node = ir.graph.nodes[index]
+            handle = _state_handle_for_leaf(ir, node, handles)
+            handle === nothing || handle in deferred || push!(deferred, handle)
+            foreach(source_reads, node.operands)
+            return nothing
+        end
+        for node in ir.graph.nodes
+            node.source == record.identity && _is_site_aggregate(node) || continue
+            source_reads(first(node.operands))
+        end
+    end
     for identity in record.resources
         haskey(handles, identity) || continue
         !isempty(expressions) && any(candidate -> candidate.identity == identity && candidate.kind === :HistoryState, ir.source.records) && continue
         handle = handles[identity]
+        handle in deferred && continue
         handle in result || push!(result, handle)
     end
     for state_record in ir.source.records
@@ -276,8 +291,11 @@ function _record_state_handles(
         end
         references_variable || continue
         handle = handles[state_record.identity]
+        handle in deferred && continue
         handle in result || push!(result, handle)
     end
+    # A direct read outside an aggregate still appears in the actual compiled
+    # expression, so it is retained even if the tracker also reads this handle.
     for expression in expressions, handle in CorePotts.CompilerSPI.expression_state_handles(expression)
         handle in result || push!(result, handle)
     end

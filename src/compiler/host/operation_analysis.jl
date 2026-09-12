@@ -332,6 +332,8 @@ function _validate_operation_use!(
         transfer.lifecycle_abi.role === :binary_partition ?
         :lifecycle_partition :
         Symbol(:lifecycle_, transfer.lifecycle_abi.role)
+    context = _is_site_aggregate(node) ? CorePotts.CompilerSPI.AbstractCellStageEvaluationContext :
+        _operation_evaluation_context(role, phase)
     problem = if tracker_fold && role === :hamiltonian
         "folds over tracker gathers are proposal-snapshot inputs; use a proposal " *
             "drive, constraint, or modifier"
@@ -357,7 +359,7 @@ function _validate_operation_use!(
         ) !== nothing
         source_problem
     elseif !tracker_projection && !history_projection &&
-            (context = _operation_evaluation_context(role, phase)) !== nothing &&
+            context !== nothing &&
             !CorePotts.CompilerSPI.operation_context_supported(node.callable, context)
         "frozen callable $(typeof(node.callable)) has no implementation for " *
             "$(nameof(context))"

@@ -232,23 +232,9 @@ function _commit_symbolic_update!(
     previous_u = integrator.u
     history_length = length(integrator.parameter_history)
 
-    # Core owns full acceptance and storage validation. No callback or other
-    # scientific observer runs between these settled-boundary publications.
-    parameters === nothing || CorePotts.update_program_parameters!(integrator.runtime, parameters)
-    if descriptor_state !== nothing
-        try
-            CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_state)
-        catch error
-            if parameters !== nothing && !CorePotts.program_failed(integrator.runtime)
-                try
-                    CorePotts.update_program_parameters!(integrator.runtime, previous_parameters)
-                catch restore_error
-                    throw(CompositeException(Any[error, restore_error]))
-                end
-            end
-            rethrow()
-        end
-    end
+    # Core validates the combined candidate before publishing either input;
+    # maintained quantities must never observe an intermediate mixed update.
+    CorePotts.update_program_inputs!(integrator.runtime; parameters, descriptor_state)
     try
         if parameters !== nothing
             saved_parameters = _saved_parameters(integrator.plan.parameter_manifest, parameters)
@@ -262,8 +248,10 @@ function _commit_symbolic_update!(
         # rollback guarantee; preserve both errors if restoration itself fails.
         CorePotts.program_failed(integrator.runtime) && rethrow()
         try
-            parameters === nothing || CorePotts.update_program_parameters!(integrator.runtime, previous_parameters)
-            descriptor_state === nothing || CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_before)
+            CorePotts.update_program_inputs!(
+                integrator.runtime; parameters = previous_parameters,
+                descriptor_state = descriptor_state === nothing ? nothing : descriptor_before,
+            )
         catch restore_error
             throw(CompositeException(Any[error, restore_error]))
         end

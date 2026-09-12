@@ -163,7 +163,7 @@ export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
 export Proposal, AcceptedCopy, AfterMCS, RelationshipCommit, Lifecycle
 export Before, After, EveryMCS, AtMCS, Every
 export sites, cells, model, contacts, edges, incident_edges
-export scoped
+export scoped, aggregate
 export Assign, Create, Remove, Retune
 export CreateCell, RemoveCell, Transition, Divide, Retire
 export SeedAt, SeedStencil, CellCentroid

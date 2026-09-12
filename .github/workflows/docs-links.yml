@@ -6,19 +6,19 @@ on:
       localmath_ref:
         description: Full LocalMath candidate commit SHA
         type: string
-        default: 22e7b42905522e53e04b4c0febadb96e30189a80
+        default: f41a37da99c31781d4d2b23678a8e729845306a1
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: 9b13005716fa372d0d6430cb4f23522e9faf708d
+        default: a4fb6c882a7cbdc7fde3709198530e39c6f4f21c
 
 permissions:
   contents: read
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: ${{ inputs.localmath_ref || '22e7b42905522e53e04b4c0febadb96e30189a80' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || '9b13005716fa372d0d6430cb4f23522e9faf708d' }}
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'f41a37da99c31781d4d2b23678a8e729845306a1' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || 'a4fb6c882a7cbdc7fde3709198530e39c6f4f21c' }}
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
