@@ -6,6 +6,7 @@ _site_aggregate_maintenance_contract(; structured = false)
 @testset "aggregate analysis owns resolved source semantics" begin
     baseline = _site_aggregate_problem()
     renamed = _site_aggregate_problem(; author_prefix = :renamed)
+    remade = _site_aggregate_problem(; gain_default = 2.0)
     baseline_ir = Potts._analyze_completed_system(baseline.problem.system)
     renamed_ir = Potts._analyze_completed_system(renamed.problem.system)
     baseline_facts = filter(!isnothing, baseline_ir.facts.site_aggregate)
@@ -33,10 +34,27 @@ _site_aggregate_maintenance_contract(; structured = false)
     renamed_integrator = init(
         renamed.problem, CheckerboardSweepCPM(); scalar_type = Float32,
     )
+    remade_integrator = init(
+        remade.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
     @test typeof(baseline_integrator.plan.core_program) ===
-        typeof(renamed_integrator.plan.core_program)
+        typeof(renamed_integrator.plan.core_program) ===
+        typeof(remade_integrator.plan.core_program)
     @test typeof(baseline_integrator.plan.core_program.tracker_plan) ===
-        typeof(renamed_integrator.plan.core_program.tracker_plan)
+        typeof(renamed_integrator.plan.core_program.tracker_plan) ===
+        typeof(remade_integrator.plan.core_program.tracker_plan)
+    @test map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        baseline_integrator.plan.core_program.tracker_plan,
+    )) == map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        renamed_integrator.plan.core_program.tracker_plan,
+    )) == map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        remade_integrator.plan.core_program.tracker_plan,
+    ))
+    @test getp(remade_integrator, remade.gain)(remade_integrator) == 2.0f0
+    step!(baseline_integrator)
+    step!(remade_integrator)
+    @test Array(baseline_integrator.u[:amount]) == Float32[3, 3, 0]
+    @test Array(remade_integrator.u[:amount]) == Float32[6, 6, 0]
 end
 
 @testset "external operations compose into maintained contributions" begin

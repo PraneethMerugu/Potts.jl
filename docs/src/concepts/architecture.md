@@ -62,8 +62,11 @@ per-cell average from maintained mass and ownership count, adds a direct cell
 baseline, publishes the result to two consumers, changes both its field and
 parameter sources, and continues from a checkpoint under both CPU algorithms.
 `test_scalar_site_aggregates.jl` defends that workflow together with sharing,
-separate contributions, resolved fact ownership, author-rename execution-type
-reuse, source/parameter refresh, mixed publication, units and continuation.
+separate contributions, resolved fact ownership, execution-type reuse across
+author renaming and numerical parameter defaults, source/parameter refresh,
+mixed publication, units and continuation. Numerical defaults remain runtime
+values: changing one changes the result without creating another Core program,
+tracker plan or tracker-instance specialization family.
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.

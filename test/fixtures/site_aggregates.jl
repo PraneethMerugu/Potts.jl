@@ -6,10 +6,11 @@ function _site_aggregate_problem(;
         unit = 1.0, reference_units = nothing, distinct = false, evolve = false,
         logical_shape = structured ? (2,) : (),
         author_prefix = nothing,
+        gain_default = 1.0,
     )
     author_name(name) =
         author_prefix === nothing ? name : Symbol(author_prefix, :_, name)
-    @parameters gain = 1.0
+    @parameters gain = gain_default
     logical_shape in ((), (2,), (2, 2)) || throw(ArgumentError("unsupported aggregate fixture shape"))
     tensor = logical_shape == (2, 2)
     vector = logical_shape == (2,)
