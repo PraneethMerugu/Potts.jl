@@ -67,6 +67,11 @@ author renaming and numerical parameter defaults, source/parameter refresh,
 mixed publication, units and continuation. Numerical defaults remain runtime
 values: changing one changes the result without creating another Core program,
 tracker plan or tracker-instance specialization family.
+`benchmark/resolved_aggregate_contract.jl` separates public authoring, problem
+construction, Core preparation, first execution and warmed execution. It also
+reports the warmed public step beside the already-lowered Core step. Neither
+whole-MCS boundary has a zero-allocation guarantee; the fixed-capacity prepared
+update and contribution leaves defended by Core own that narrower contract.
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
