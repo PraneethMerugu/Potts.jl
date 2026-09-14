@@ -36,7 +36,7 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C05 Backend-owned array transfer** | LocalMath | G05 | C04 | R10 Core structured-sum storage | Merged | [LocalMath PR16](https://github.com/PraneethMerugu/LocalMath.jl/pull/16) |
 | **C06 Identity-seeded reduction control** | LocalMath | G05 | C05 | R10 Core maintained minimum lifecycle | Merged | [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17) |
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
-| **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Active; not yet published | — |
+| **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Draft; local CPU/Metal/docs and independent review clean, hosted checks pending | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 
 The companion scopes are:
 

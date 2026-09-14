@@ -40,6 +40,7 @@ in dependency order. Releases remain unauthorized.
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `0994c492` | Potts PR54 | draft; current-tip hosted checks active, blocked by R11 and downstream canary |
+| C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `ee8729b` | main after LocalMath PR18 | draft; local CPU/real-Metal/docs and independent review clean, hosted checks pending |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | this change | main | draft; independent re-review clean, hosted checks pending |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
@@ -77,15 +78,17 @@ destination and cannot exactly intern sparse generation-aware owner pairs with
 O(E) storage. This demonstrates the eighth companion: an exact fixed-capacity
 keyed collection reduction after LocalMath PR18 and before R10/R11 completion.
 
-The LocalMath candidate must remain inside the sole StageProgram and shared
+LocalMath PR19 remains inside the sole StageProgram and shared
 KernelAbstractions executor, with canonical lexicographic keys, prior-then-
 source/lane left-fold order, private bounded workspace, identity-key deletion,
-and failure-atomic records/count publication. Independent review blocked its
-first uncommitted draft for a zero-domain out-of-bounds write, a no-choice public
-specialization axis, incomplete API docs/tests, misleading Collect ownership
-comments, and unqualified compiler/allocation evidence. It is being restacked
-from merged PR18 (`9d3e1a24`) and requalified; the stale PR17-parent draft will
-not be published.
+and failure-atomic records/count publication. Review corrections removed the
+zero-domain write, no-choice public axes, broad phase payloads, unsafe explicit
+record constructor and incomplete device atomicity cases. Kaimon-backed typed
+probes now show that operation/retention specialize only the fold boundary;
+focused CPU 40/40, real Metal 24/24 with scalar indexing disabled, the complete
+LocalMath suite 1,853/1,853, documentation and independent review are clean.
+Hosted current-tip validation remains authoritative before merge. The stale
+PR17-parent draft was not published.
 
 After that companion freezes, Core R10 owns generation-aware O(E) pair
 multiplicity and maintained results behind the existing `ResourceOperation`
