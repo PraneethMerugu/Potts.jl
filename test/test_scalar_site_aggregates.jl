@@ -117,6 +117,47 @@ end
     end
 end
 
+@testset "retained samples consume published aggregate values at stage entry" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = _site_aggregate_history_problem()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        prehistory = Float32[-1, -1]
+        first_value = Float32[4, 5]
+        changed = Float32[2 6; 4 8]
+        changed_value = Float32[6, 6]
+
+        @test Array(integrator.u[:current]) == Float32[0, 0]
+        @test Array(integrator.u[:retained]) == Float32[0, 0]
+        @test integrator.u[:memory] == (prehistory, prehistory)
+
+        step!(integrator)
+        @test Array(integrator.u[:current]) == first_value
+        @test Array(integrator.u[:retained]) == prehistory
+        @test integrator.u[:memory] == (prehistory, first_value)
+
+        setu(integrator, model.signal)(integrator, changed)
+        step!(integrator)
+        @test Array(integrator.u[:current]) == changed_value
+        @test Array(integrator.u[:retained]) == first_value
+        @test integrator.u[:memory] == (first_value, changed_value)
+
+        restored = init(
+            model.problem,
+            algorithm;
+            scalar_type = Float32,
+            checkpoint = checkpoint(integrator),
+        )
+        step!(integrator)
+        step!(restored)
+        for current in (integrator, restored)
+            @test Array(current.u[:current]) == changed_value
+            @test Array(current.u[:retained]) == changed_value
+            @test current.u[:memory] == (changed_value, changed_value)
+            @test failure_report(current) === nothing
+        end
+    end
+end
+
 @testset "different contribution laws do not share one maintained value" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         model = _site_aggregate_problem(; distinct = true)

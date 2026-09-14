@@ -64,7 +64,10 @@ parameter sources, and continues from a checkpoint under both CPU algorithms.
 `test_scalar_site_aggregates.jl` defends that workflow together with sharing,
 separate contributions, resolved fact ownership, execution-type reuse across
 author renaming and numerical parameter defaults, source/parameter refresh,
-mixed publication, units and continuation. Numerical defaults remain runtime
+mixed publication, units and continuation. It also publishes a maintained sum
+into ordinary cell state, samples that state through `HistoryState`, and proves
+that a retained consumer observes the stage-entry sample while a source edit
+changes the current maintained value. Numerical defaults remain runtime
 values: changing one changes the result without creating another Core program,
 tracker plan or tracker-instance specialization family.
 `benchmark/resolved_aggregate_contract.jl` separates public authoring, problem
@@ -81,7 +84,10 @@ contributions, physical units, shape rejection, updates and continuation.
 vocabulary and preserves additive authoring. `test_scalar_site_minimum.jl`
 defines an independent owner-scan witness that changes the site holding the
 current minimum under both CPU algorithms, checks the declared finite empty
-policy, and distinguishes live owners from unused cell-capacity slots.
+policy, and distinguishes live owners from unused cell-capacity slots. Its
+accepted-copy witness additionally transfers a negative minimum, retires the
+emptied owner, checks explicit empty finalization in the maintained tracker,
+and continues that settled state from a checkpoint.
 These are ordinary registered test units.
 The scalar CPU owner is qualified; the vector, tensor and scheduled-maintenance units
 retain required behavior awaiting its implementation. Public aggregate device
