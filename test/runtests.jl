@@ -150,6 +150,9 @@ const POTTS_TEST_SHARDS = (
         "test_component_dependency_ownership.jl",
         "test_addressed_randomness.jl",
         "test_scheduled_process_draws.jl",
+        "test_resolved_aggregate_compiler_report.jl",
+        "test_operational_operand_canonicalization.jl",
+        "test_aggregate_operational_ordering.jl",
     ),
     execution_and_integration = (
         "test_mtkcompile.jl",
