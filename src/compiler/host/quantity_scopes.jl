@@ -19,9 +19,7 @@ struct AnalyzedSiteAggregate
     law::Symbol
     contribution::Int32
     site::QualifiedStatementID
-    cell::QualifiedStatementID
     policy_indices::NTuple{2, Int32}
-    dependencies::Tuple{Vararg{Int32}}
 end
 
 _is_unit_count(graph, node) = _is_unit_count(graph.nodes, node)
@@ -121,9 +119,7 @@ function _analyze_site_aggregate(source, graph, node)
         _is_site_sum(node) ? :sum : :minimum,
         Int32(contribution),
         site.resource,
-        cell.resource,
         Tuple(Int32(index) for index in policy_indices),
-        Tuple(sort!(collect(visited))),
     )
 end
 function _scope_resource(records, owner, binding)

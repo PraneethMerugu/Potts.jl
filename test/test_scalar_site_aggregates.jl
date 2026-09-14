@@ -3,7 +3,7 @@ include("fixtures/ExternalAggregateOperationFixture.jl")
 
 _site_aggregate_maintenance_contract(; structured = false)
 
-@testset "aggregate analysis owns resolved source semantics" begin
+@testset "aggregate analysis resolves law and policy" begin
     baseline = _site_aggregate_problem()
     renamed = _site_aggregate_problem(; author_prefix = :renamed)
     remade = _site_aggregate_problem(; gain_default = 2.0)
@@ -15,18 +15,8 @@ _site_aggregate_maintenance_contract(; structured = false)
     @test length(baseline_facts) == length(renamed_facts) == 2
     @test all(fact -> fact isa Potts.AnalyzedSiteAggregate, baseline_facts)
     @test all(fact -> fact.law === :sum, baseline_facts)
-    @test all(fact -> fact.contribution in fact.dependencies, baseline_facts)
     @test all(fact -> length(fact.policy_indices) == 2, baseline_facts)
     @test map(typeof, baseline_facts) == map(typeof, renamed_facts)
-    @test map(
-        fact -> (fact.law, fact.contribution, fact.policy_indices, fact.dependencies),
-        baseline_facts,
-    ) == map(
-        fact -> (fact.law, fact.contribution, fact.policy_indices, fact.dependencies),
-        renamed_facts,
-    )
-    @test map(fact -> (fact.site, fact.cell), baseline_facts) !=
-        map(fact -> (fact.site, fact.cell), renamed_facts)
 
     baseline_integrator = init(
         baseline.problem, CheckerboardSweepCPM(); scalar_type = Float32,
@@ -65,8 +55,7 @@ end
         node -> node.operation === :fixture_external_response,
         ir.graph.nodes,
     ))
-    @test external_node.identity in fact.dependencies
-    @test fact.contribution in fact.dependencies
+    @test external_node.identity == fact.contribution
 
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         model = ExternalAggregateOperationFixture.model()

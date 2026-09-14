@@ -52,10 +52,9 @@ policy; canonical minima include their empty-owner value and declared
 reconstruction bound. Both share one tracker independently of consuming
 statements or anchors. Lowering discards its canonical identity dictionary and
 retains only a node-aligned qualified-handle table until Core program assembly.
-Completion retains source dependencies; physical stage
-reads use the tracker, while any additional direct state operand retains its
-own compiled state handle. The literal integer-one case reuses Core's existing
-ownership count. Ordinary symbolic composition then combines those maintained
+Physical stage reads use the tracker, while any additional direct state operand
+retains its own compiled state handle. The literal integer-one case reuses
+Core's existing ownership count. Ordinary symbolic composition then combines those maintained
 reads with each other and with direct cell state; it does not introduce an
 aggregate-specific execution path. The derived-quantity fixture computes a
 per-cell average from maintained mass and ownership count, adds a direct cell
@@ -88,10 +87,11 @@ policy, and distinguishes live owners from unused cell-capacity slots. Its
 accepted-copy witness additionally transfers a negative minimum, retires the
 emptied owner, checks explicit empty finalization in the maintained tracker,
 and continues that settled state from a checkpoint.
-These are ordinary registered test units.
-The scalar CPU owner is qualified; the vector, tensor and scheduled-maintenance units
-retain required behavior awaiting its implementation. Public aggregate device
-qualification is also pending.
+These are ordinary registered test units. Scalar, fixed-vector, fixed-tensor and
+scheduled-source sums use the same CPU implementation and are defended by those
+units. The real-Metal profile runs scalar, vector and tensor sums with evolving
+sources, and runs the bounded scalar minimum, through the same public authoring
+and KernelAbstractions execution path with scalar indexing disabled.
 
 Scalar multiplication of declared fixed arrays uses the existing arithmetic
 operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
