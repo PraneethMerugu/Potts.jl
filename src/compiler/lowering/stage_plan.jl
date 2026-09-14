@@ -9,6 +9,7 @@ function _lower_stage_plan(
         state_layout::CorePotts.CompilerSPI.StateLayout,
         relationship_endpoint_policies,
         history_descriptors,
+        ; tracker_handles = nothing,
     ) where {T <: AbstractFloat}
     accepted = Any[]
     after_mcs_assignments = Any[]
@@ -35,7 +36,7 @@ function _lower_stage_plan(
                         CorePotts.CompilerSPI.AcceptedCopyStage(),
                         length(accepted) + 1,
                         effect_index,
-                        ; history_descriptors,
+                        ; history_descriptors, tracker_handles,
                     )
                 elseif effect isa Create
                     _relationship_create_stage_descriptor(
@@ -84,7 +85,7 @@ function _lower_stage_plan(
                             after_mcs_model_slot : is_cell_assignment ?
                             after_mcs_cell_slot : after_mcs_site_slot,
                         effect_index,
-                        ; history_descriptors,
+                        ; history_descriptors, tracker_handles,
                     )
                 )
             end

@@ -30,6 +30,8 @@ function _lower_scheduled_execution_plan(
     state_layout, state_handles = _state_layout(analyzed_ir, scheduled, manifest, scalar_type)
     draw_handles = _draw_operation_handles(analyzed_ir)
     history_descriptors = _lower_history_descriptors(analyzed_ir, scalar_type, state_handles, state_layout)
+    trackers = _lower_tracker_plan(analyzed_ir, engine, scalar_type, manifest, state_handles, draw_handles;
+        state_layout, history_descriptors)
     lowered_descriptors = _lower_descriptor_plan(
         analyzed_ir,
         scheduled,
@@ -53,6 +55,7 @@ function _lower_scheduled_execution_plan(
         descriptor_plan.state_layout,
         relationship_endpoint_policies,
         history_descriptors,
+        ; tracker_handles = trackers.handles,
     )
     lifecycle_plan = _lower_lifecycle_plan(
         analyzed_ir,
@@ -91,6 +94,7 @@ function _lower_scheduled_execution_plan(
         descriptor_plan,
         stage_plan,
         lifecycle_plan,
+        trackers.plan,
         relationship_endpoint_policies,
         seed,
     )

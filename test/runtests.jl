@@ -3,6 +3,12 @@ import Potts
 
 const POTTS_TESTS = (
     "test_fixed_array_scaling.jl",
+    "test_scalar_site_aggregates.jl",
+    "test_scalar_site_minimum_authoring.jl",
+    "test_scalar_site_minimum.jl",
+    "test_vector_site_aggregates.jl",
+    "test_tensor_site_aggregates.jl",
+    "test_scheduled_site_aggregates.jl",
     "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",
@@ -77,10 +83,109 @@ const POTTS_TESTS = (
     "test_package_quality.jl",
 )
 
+# CI may select these durable responsibility groups independently. The ordinary
+# no-argument runner still executes POTTS_TESTS as one complete package suite.
+const POTTS_TEST_SHARDS = (
+    declaration_and_structure = (
+        "test_public_api.jl",
+        "test_system_contract.jl",
+        "test_declaration_assembly.jl",
+        "test_lexical_enrollment.jl",
+        "test_declaration_control_flow.jl",
+        "test_lexical_model.jl",
+        "test_assembled_model.jl",
+        "test_component_replacement.jl",
+        "test_compound_effects.jl",
+        "test_structured_state_authoring.jl",
+        "test_state_initial_value_types.jl",
+        "test_product_state_authoring.jl",
+        "test_product_field_authoring.jl",
+        "test_product_field_substitution.jl",
+        "test_product_proposal_reads.jl",
+        "test_state_initial_selection.jl",
+        "test_component_initial_units.jl",
+        "test_product_state_defaults.jl",
+        "test_model_state_proposal_reads.jl",
+        "test_model_state_energy.jl",
+        "test_structured_assignments.jl",
+        "test_quantity_scopes.jl",
+        "test_scope_names.jl",
+        "test_scope_inputs.jl",
+        "test_dimensional_state_values.jl",
+        "test_state_reference_inference.jl",
+        "test_statements_and_traversal.jl",
+        "test_completion_and_diagnostics.jl",
+        "test_units_and_parameters.jl",
+    ),
+    quantities_and_publication = (
+        "test_fixed_array_scaling.jl",
+        "test_scalar_site_aggregates.jl",
+        "test_scalar_site_minimum_authoring.jl",
+        "test_scalar_site_minimum.jl",
+        "test_vector_site_aggregates.jl",
+        "test_tensor_site_aggregates.jl",
+        "test_scheduled_site_aggregates.jl",
+        "test_discrete_field_rhs.jl",
+        "test_expression_reference_scales.jl",
+        "test_model_site_transactions.jl",
+        "test_cell_process_authoring.jl",
+        "test_scope_anchor_execution.jl",
+        "test_model_cell_transactions.jl",
+        "test_history_source_storage.jl",
+        "test_history_feedback.jl",
+        "test_history_structured_samples.jl",
+        "test_history_initialization.jl",
+        "test_history_lifecycle.jl",
+        "test_history_ownership_change.jl",
+        "test_logical_state_mutation.jl",
+        "test_mixed_symbolic_mutation.jl",
+        "test_state_mutation_observation_failure.jl",
+        "test_fixed_vector_operations.jl",
+        "test_fixed_vector_parameters.jl",
+        "test_vector_parameter_units_and_imports.jl",
+        "test_parameter_contracts.jl",
+        "test_component_dependency_ownership.jl",
+        "test_addressed_randomness.jl",
+        "test_scheduled_process_draws.jl",
+    ),
+    execution_and_integration = (
+        "test_mtkcompile.jl",
+        "test_initial_problem_remake.jl",
+        "test_runtime_solution_sii.jl",
+        "test_trigonometric_operations.jl",
+        "test_cell_polarity_dynamics.jl",
+        "test_source_traversal_authority.jl",
+        "test_native_authoring.jl",
+        "test_native_component_pools.jl",
+        "test_sciml_problem_and_indexing.jl",
+        "test_sciml_callbacks_and_replay.jl",
+        "test_sciml_ensemble_and_failures.jl",
+        "test_structured_lifecycle_literals.jl",
+        "test_lifecycle_public_contracts.jl",
+        "test_lifecycle_public_arbitration.jl",
+        "test_lifecycle_public_trajectories.jl",
+        "test_lifecycle_public_policies.jl",
+        "test_relationship_host_transactions.jl",
+        "test_external_compiler_spi.jl",
+        "test_scientific_operation_spi.jl",
+        "test_external_operation_energy.jl",
+        "test_gather_reductions.jl",
+        "test_scientific_reference_witnesses.jl",
+        "test_scientific_relationship_witnesses.jl",
+        "test_scientific_activity_field_witnesses.jl",
+        "test_custom_model.jl",
+        "test_platform_smoke.jl",
+        "test_fresh_process.jl",
+        "test_core_spi_boundary.jl",
+        "test_package_quality.jl",
+    ),
+)
+
 # Each helper is owned either by the worker-wide setup or by one test unit.
 # Keeping that inventory explicit prevents detached fixture artifacts without
 # turning helpers into a second test suite.
 const POTTS_TEST_FIXTURES = (
+    "site_aggregates.jl",
     "history_structured_samples.jl",
     "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",
@@ -114,6 +219,12 @@ POTTS_TEST_SUITE["inventory"] = quote
     )
     @test discovered == Set($(POTTS_TESTS))
 
+    shards = $(POTTS_TEST_SHARDS)
+    shard_files = collect(Iterators.flatten(values(shards)))
+    @test all(files -> length(files) == length(Set(files)), values(shards))
+    @test length(shard_files) == length($(POTTS_TESTS))
+    @test Set(shard_files) == Set($(POTTS_TESTS))
+
     fixture_directory = joinpath(@__DIR__, "fixtures")
     discovered_fixtures = Set(
         filter(
@@ -124,6 +235,27 @@ POTTS_TEST_SUITE["inventory"] = quote
     @test discovered_fixtures == Set($(POTTS_TEST_FIXTURES))
 end
 
+function potts_test_args(args)
+    shard_options = filter(arg -> startswith(arg, "--shard="), args)
+    length(shard_options) <= 1 || error("at most one --shard option is allowed")
+    isempty(shard_options) && return args
+
+    shard_value = split(only(shard_options), "="; limit = 2)[2]
+    isempty(shard_value) && error("--shard requires a shard name")
+    shard_name = Symbol(shard_value)
+    hasproperty(POTTS_TEST_SHARDS, shard_name) || error(
+        "unknown Potts test shard $(repr(shard_name)); expected one of " *
+        join(string.(propertynames(POTTS_TEST_SHARDS)), ", "),
+    )
+    runner_options = filter(arg -> !startswith(arg, "--shard="), args)
+    any(arg -> !startswith(arg, "-"), runner_options) && error(
+        "--shard cannot be combined with explicit test selectors",
+    )
+    selected_tests = collect(first.(splitext.(getproperty(POTTS_TEST_SHARDS, shard_name))))
+    shard_name === :declaration_and_structure && push!(selected_tests, "inventory")
+    return vcat(runner_options, selected_tests)
+end
+
 const POTTS_TEST_INIT = quote
     include($(joinpath(@__DIR__, "setup.jl")))
     include($(joinpath(@__DIR__, "fixtures", "lifecycle_public.jl")))
@@ -132,7 +264,7 @@ end
 
 ParallelTestRunner.runtests(
     Potts,
-    ARGS;
+    potts_test_args(ARGS);
     testsuite = POTTS_TEST_SUITE,
     init_code = POTTS_TEST_INIT,
     serial = ["inventory", "test_package_quality"],

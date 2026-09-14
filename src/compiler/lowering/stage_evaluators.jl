@@ -67,7 +67,7 @@ function _stage_evaluator(
             Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector,
             CorePotts.CompilerSPI.BoundCellStateValueOperation,
         },
-        ; state_layout = nothing, history_descriptors = (),
+        ; state_layout = nothing, history_descriptors = (), tracker_handles = nothing,
     ) where {T <: AbstractFloat}
     root = _stage_root(ir, record_index, role)
     expression = if root === nothing
@@ -83,7 +83,7 @@ function _stage_evaluator(
             draw_handles,
             Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
             binding,
-            ; state_layout, history_descriptors,
+            ; state_layout, history_descriptors, tracker_handles,
         )
     end
     execution_context = binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
