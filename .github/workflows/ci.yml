@@ -231,11 +231,18 @@ jobs:
             resolved-aggregate-compiler.toml
             benchmark/Manifest.toml
 
-  metal:
+  metal_shards:
     needs: changes
     if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
+    name: metal shard (${{ matrix.semantic_shard }})
     runs-on: macos-15
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        semantic_shard:
+          - authoring_and_state
+          - quantities_and_components
     steps:
       - name: Require a valid change selection
         if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
@@ -247,7 +254,18 @@ jobs:
       - name: Instantiate qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
       - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl ${{ matrix.semantic_shard }}
+
+  metal:
+    needs: [changes, metal_shards]
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every Metal semantic shard
+        env:
+          SHARDS_RESULT: ${{ needs.metal_shards.result }}
+        run: test "$SHARDS_RESULT" = success
 
   sibling-main:
     if: github.event_name == 'schedule'
