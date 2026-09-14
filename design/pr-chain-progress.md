@@ -24,13 +24,26 @@ after testing, review, and dependency checks. Releases remain unauthorized.
   before Core R10/Potts R11 completion. LocalMath owns a fixed-capacity exact
   keyed collection reduction with unique prior keys, canonical lexicographic
   key and source/lane order, identity-key removal, bounded private workspace,
-  late `FoldStep` validation and one atomic records/count/directory publication.
+  exact preparation/runtime validation and one atomic records/count publication.
   Capacity is runtime data and CPU/Metal share one KernelAbstractions stage
   sequence. Core will use it for generation-aware O(E) pair multiplicity behind
   the existing `ResourceOperation` identities; Potts will lower analyzed
   filters/property facts through public compiler SPI. No detached query API,
   hash semantics, O(C²) authority or GPU-only path is accepted. Implementation,
   allocation/compiler evidence and real-Metal qualification remain in progress.
+
+- **R50 pinned array-import correction published (2026-09-14):** hosted Metal
+  isolated a shared CPU/Metal scoped-quantity failure under Symbolics 7.37:
+  whole-array component imports did not retain one stable alias identity and
+  indexed/reordered leaves remained unresolved. Potts commit `0994c492` keeps
+  the validated authored array-symbolic key and installs whole plus scalar rules
+  at the sole import-resolution owner. Independent review found that a whole
+  alias plus one separately imported component could otherwise resolve to two
+  owners, so completion now rejects overlapping generated keys in either
+  binding order. Exact pinned CPU passes 6/6, the shared CPU plus real-Metal
+  witness passes 28/28 with scalar indexing disabled, and the complete focused
+  component-replacement suite passes 139/139. The committed Metal environment
+  is unchanged. PR #55 hosted qualification restarted at this tip.
 
 - **G07 LocalMath prerequisite merged (2026-09-14):** the counted
   ordered-fold step-validation companion was committed as `2be4be7` and
@@ -69,7 +82,8 @@ after testing, review, and dependency checks. Releases remain unauthorized.
   180-minute limit, so the ordinary 90-file suite is being partitioned into
   durable semantic shards with exact inventory checks and a stable aggregate
   `package (ubuntu-latest)` status. No coverage removal or timeout-as-success is
-  permitted. R50 tip `53d9d47c` records the repaired and package-sharded R11 base; its
+  permitted. R50 tip `0994c492` records the repaired and package-sharded R11
+  base plus the pinned Symbolics array-import correction; its
   superseded workflows were cancelled and current-base qualification was
   restarted.
 
@@ -104,7 +118,7 @@ after testing, review, and dependency checks. Releases remain unauthorized.
 
 - **R49/R50 hosted-Metal correction (2026-09-14):** the current published
   Core R49 tip is `b4e5bda` and the current published Potts R50 tip is
-  `53d9d47c`; both supersede the execution-identical compiler-contract tips
+  `0994c492`; both supersede the execution-identical compiler-contract tips
   recorded below. Core's current hosted run is now fully green: compiler
   evidence, docs, macOS smoke, all three real-Metal shards, the stable aggregate
   Metal status and the complete package job; the package job took 2h08m58s.
@@ -246,7 +260,7 @@ after testing, review, and dependency checks. Releases remain unauthorized.
   requires the published Core commit and atomic repin described above.
 
 - **Current compiler-chain pointers (2026-09-14):** Core R49 is published at
-  `b4e5bda`; Potts R50 is published and clean at `53d9d47c`. Both remain draft
+  `b4e5bda`; Potts R50 is published and clean at `0994c492`. Both remain draft
   dependencies under hosted qualification and review. These pointers supersede
   historical “published and clean” wording in dated checkpoints below.
 
