@@ -60,11 +60,18 @@ jobs:
           printf 'execution=%s\n' "$execution" >> "$GITHUB_OUTPUT"
           git rev-parse HEAD
 
-  package:
+  package-shard:
     if: github.event_name != 'schedule'
-    name: package (ubuntu-latest)
+    name: package / ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - declaration_and_structure
+          - quantities_and_publication
+          - execution_and_integration
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -85,8 +92,21 @@ jobs:
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Test Potts
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
+      - name: Test Potts shard
+        env:
+          POTTS_TEST_SHARD: ${{ matrix.shard }}
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose", "--shard=$(ENV["POTTS_TEST_SHARD"])"])'
+
+  package:
+    if: always() && github.event_name != 'schedule'
+    needs: package-shard
+    name: package (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package shard
+        env:
+          PACKAGE_SHARDS_RESULT: ${{ needs.package-shard.result }}
+        run: test "$PACKAGE_SHARDS_RESULT" = success
 
   macos-smoke:
     if: github.event_name == 'pull_request'
