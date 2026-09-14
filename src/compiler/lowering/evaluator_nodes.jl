@@ -1,5 +1,79 @@
 # Recursive lowering from analyzed term nodes to concrete CorePotts expressions.
 
+function _operand_order_is_observable(graph, node_index::Int32)
+    node = graph.nodes[Int(node_index)]
+    node.payload isa DrawBindingPayload && return true
+    transfer = node.transfer
+    transfer === nothing || (
+        transfer.purity === :pure && transfer.totality === :total
+    ) || return true
+    return any(
+        operand -> _operand_order_is_observable(graph, operand),
+        node.operands,
+    )
+end
+
+function _scalar_product_is_commutatively_canonicalizable(
+        graph,
+        ir,
+        node::NormalizedTermNode,
+    )
+    transfer = node.transfer
+    return transfer !== nothing &&
+        transfer.identity === :multiply &&
+        transfer.owner === :Potts &&
+        transfer.serialization_identity == "potts-operation:multiply:v1" &&
+        length(node.operands) == 2 &&
+        all(operand -> ir.facts.shape[Int(operand)] == (), node.operands) &&
+        all(
+            operand -> !_operand_order_is_observable(graph, operand),
+            node.operands,
+        )
+end
+
+function _operational_expression_shape_key(graph, ir, node_index::Int32)
+    node = graph.nodes[Int(node_index)]
+    operand_keys = String[
+        _operational_expression_shape_key(graph, ir, operand)
+        for operand in node.operands
+    ]
+    _scalar_product_is_commutatively_canonicalizable(graph, ir, node) &&
+        sort!(operand_keys)
+    # Runtime expression topology depends on semantic roles and shapes, not on
+    # declaration spelling. Values and qualified identities stay in payloads.
+    payload_role = if node.payload isa StateBindingPayload
+        owner = _state_record_for_leaf(ir.source, node)
+        owner === nothing ? (:state, :unresolved) :
+            (:state, _state_sample_record(ir.source, owner).kind)
+    elseif node.payload isa VariableBindingPayload
+        (:variable,)
+    elseif node.payload isa ParameterBindingPayload
+        (:parameter,)
+    elseif node.payload isa LiteralPayload
+        (:literal, ir.facts.result_type[Int(node_index)])
+    else
+        (node.payload_kind,)
+    end
+    return _sha256_hex(
+        "potts-operational-expression-shape-v1",
+        node.operation,
+        node.schema_version,
+        payload_role,
+        ir.facts.shape[Int(node_index)],
+        ir.facts.result_type[Int(node_index)],
+        Tuple(operand_keys),
+    )
+end
+
+function _operational_operand_order(graph, ir, node::NormalizedTermNode)
+    _scalar_product_is_commutatively_canonicalizable(graph, ir, node) ||
+        return node.operands
+    return sort(
+        node.operands;
+        by = operand -> _operational_expression_shape_key(graph, ir, operand),
+    )
+end
+
 function _bound_state_expression(graph, ir, node, handle, owner, state_binding)
     expression = CorePotts.CompilerSPI.StateExpression(handle)
     sample = owner === nothing ? nothing : _state_sample_record(ir.source, owner)
@@ -263,8 +337,9 @@ function _lower_static_node(
                 key.source_handle,
             )
         end
+        ordered_operands = _operational_operand_order(graph, ir, node)
         arguments = if tracker_source === nothing
-            Tuple(map(enumerate(node.operands)) do indexed
+            Tuple(map(enumerate(ordered_operands)) do indexed
                 index, operand = indexed
                 if node.transfer.identity === :bounded_fold && index == 1
                     operand_node = graph.nodes[operand]
@@ -306,7 +381,7 @@ function _lower_static_node(
                     ir.source.records[Int(node.record)].source,
                 ),),
             ))
-            Tuple(map(enumerate(node.operands)) do indexed
+            Tuple(map(enumerate(ordered_operands)) do indexed
                 index, operand = indexed
                 index == 2 && return CorePotts.CompilerSPI.LiteralExpression(
                     only(tracker_keys))
