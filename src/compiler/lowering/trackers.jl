@@ -22,7 +22,7 @@ end
 
 function _site_sum_descriptor(
         ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
-        state_layout, history_descriptors
+        state_layout, history_descriptors, canonicalization_cache,
     ) where {T <: AbstractFloat}
     result_type = ir.facts.result_type[Int(fact.contribution)]
     element_type = result_type <: AbstractArray ? eltype(result_type) : result_type
@@ -42,6 +42,7 @@ function _site_sum_descriptor(
         ir.graph, ir, fact.contribution, manifest, T, state_handles, draw_handles,
         Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
         CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+        canonicalization_cache,
     )
     shape = ir.facts.shape[Int(fact.contribution)]
     shape isa Tuple && all(size -> size isa Integer && !(size isa Bool) && size > 0, shape) ||
@@ -81,9 +82,28 @@ _site_aggregate_identity(ir, fact, manifest, ::Type{T}) where {T} =
     fact.law === :sum ? _site_sum_identity(ir, fact, manifest, T) :
     _site_minimum_identity(ir, fact, manifest, T)
 
+function _site_aggregate_layout_identity(
+        ir,
+        fact,
+        ::Type{T},
+        canonicalization_cache::_OperationalCanonicalizationCache,
+    ) where {T}
+    contribution = Int(fact.contribution)
+    return _sha256_hex(
+        "potts-site-aggregate-layout-v1",
+        fact.law,
+        ir.facts.shape[contribution],
+        ir.facts.result_type[contribution],
+        T,
+        _operational_expression_shape_key(
+            ir.graph, ir, fact.contribution, canonicalization_cache,
+        ),
+    )
+end
+
 function _site_minimum_descriptor(
         ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
-        state_layout, history_descriptors
+        state_layout, history_descriptors, canonicalization_cache,
     ) where {T <: AbstractFloat}
     T === Float32 || throw(PottsValidationError(
         :descriptor_lowering, (
@@ -107,6 +127,7 @@ function _site_minimum_descriptor(
         ir.graph, ir, fact.contribution, manifest, T, state_handles, draw_handles,
         Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
         CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+        canonicalization_cache,
     )
     empty = ir.graph.nodes[Int(first(fact.policy_indices))].payload.value
     maximum_sites = ir.graph.nodes[Int(last(fact.policy_indices))].payload.value
@@ -130,15 +151,15 @@ end
 
 _site_aggregate_descriptor(
     ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
-    state_layout, history_descriptors,
+    state_layout, history_descriptors, canonicalization_cache,
 ) where {T <: AbstractFloat} = fact.law === :sum ?
     _site_sum_descriptor(
         ir, node, fact, key, manifest, T, state_handles, draw_handles;
-        state_layout, history_descriptors,
+        state_layout, history_descriptors, canonicalization_cache,
     ) :
     _site_minimum_descriptor(
         ir, node, fact, key, manifest, T, state_handles, draw_handles;
-        state_layout, history_descriptors,
+        state_layout, history_descriptors, canonicalization_cache,
     )
 
 function _operation_tracker_context(
@@ -357,6 +378,9 @@ function _lower_site_aggregate_trackers(
     # consumers use the analyzed node-aligned handle table and never repeat
     # aggregate source interpretation.
     contributions = Dict{String, Tuple{NormalizedTermNode, AnalyzedSiteAggregate}}()
+    canonicalization_cache = _OperationalCanonicalizationCache(
+        length(ir.graph.nodes),
+    )
     identity_by_node = Union{Nothing, String}[nothing for _ in ir.graph.nodes]
     for node in ir.graph.nodes
         fact = ir.facts.site_aggregate[Int(node.identity)]
@@ -367,18 +391,36 @@ function _lower_site_aggregate_trackers(
         get!(contributions, identity, (node, fact))
     end
 
+    ordered = Tuple{
+        String,
+        String,
+        NormalizedTermNode,
+        AnalyzedSiteAggregate,
+    }[]
+    for (identity, (node, fact)) in contributions
+        layout_identity = _site_aggregate_layout_identity(
+            ir, fact, T, canonicalization_cache,
+        )
+        push!(ordered, (layout_identity, identity, node, fact))
+    end
+    # Qualified scientific identity remains a host value for deduplication,
+    # diagnostics, and checkpoint fingerprints. Physical tuple order is grouped
+    # first by the explicit operational law, value shape/type, scalar type, and
+    # expression topology. Author-sensitive identity only orders descriptors
+    # that share that execution layout.
+    sort!(ordered; by = item -> (item[1], item[2]))
+
     descriptors = CorePotts.CompilerSPI.AbstractTrackerDescriptor[]
     tracker_handles_by_identity = Dict{
         String, CorePotts.CompilerSPI.QualifiedTrackerKey,
     }()
-    for (index, identity) in enumerate(sort!(collect(keys(contributions))))
-        node, fact = contributions[identity]
+    for (index, (_, identity, node, fact)) in enumerate(ordered)
         law = fact.law === :sum ? :site_sum : :site_minimum
         key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(law), index)
         tracker_handles_by_identity[identity] = key
         descriptor = _site_aggregate_descriptor(
             ir, node, fact, key, manifest, T, state_handles, draw_handles;
-            state_layout, history_descriptors,
+            state_layout, history_descriptors, canonicalization_cache,
         )
         _append_tracker_requirement!(descriptors, descriptor)
     end

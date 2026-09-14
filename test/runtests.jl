@@ -83,6 +83,7 @@ const POTTS_TESTS = (
     "test_fresh_process.jl", "test_core_spi_boundary.jl",
     "test_resolved_aggregate_compiler_report.jl",
     "test_operational_operand_canonicalization.jl",
+    "test_aggregate_operational_ordering.jl",
     "test_package_quality.jl",
 )
 
