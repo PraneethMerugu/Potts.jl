@@ -1,22 +1,42 @@
 # Recursive lowering from analyzed term nodes to concrete CorePotts expressions.
 
-function _operand_order_is_observable(graph, node_index::Int32)
-    node = graph.nodes[Int(node_index)]
-    node.payload isa DrawBindingPayload && return true
-    transfer = node.transfer
-    transfer === nothing || (
-        transfer.purity === :pure && transfer.totality === :total
-    ) || return true
-    return any(
-        operand -> _operand_order_is_observable(graph, operand),
-        node.operands,
+struct _OperationalCanonicalizationCache
+    order_observable::Vector{Union{Nothing, Bool}}
+    expression_shape::Vector{Union{Nothing, String}}
+end
+
+_OperationalCanonicalizationCache(count::Integer) =
+    _OperationalCanonicalizationCache(
+        Union{Nothing, Bool}[nothing for _ in 1:count],
+        Union{Nothing, String}[nothing for _ in 1:count],
     )
+
+function _operand_order_is_observable(
+        graph,
+        node_index::Int32,
+        cache::_OperationalCanonicalizationCache,
+    )
+    cached = cache.order_observable[Int(node_index)]
+    cached === nothing || return cached
+    node = graph.nodes[Int(node_index)]
+    observable = node.payload isa DrawBindingPayload
+    transfer = node.transfer
+    observable |= !(transfer === nothing || (
+        transfer.purity === :pure && transfer.totality === :total
+    ))
+    observable || (observable = any(
+        operand -> _operand_order_is_observable(graph, operand, cache),
+        node.operands,
+    ))
+    cache.order_observable[Int(node_index)] = observable
+    return observable
 end
 
 function _scalar_product_is_commutatively_canonicalizable(
         graph,
         ir,
         node::NormalizedTermNode,
+        cache::_OperationalCanonicalizationCache,
     )
     transfer = node.transfer
     return transfer !== nothing &&
@@ -26,18 +46,29 @@ function _scalar_product_is_commutatively_canonicalizable(
         length(node.operands) == 2 &&
         all(operand -> ir.facts.shape[Int(operand)] == (), node.operands) &&
         all(
-            operand -> !_operand_order_is_observable(graph, operand),
+            operand -> !_operand_order_is_observable(
+                graph, operand, cache,
+            ),
             node.operands,
         )
 end
 
-function _operational_expression_shape_key(graph, ir, node_index::Int32)
+function _operational_expression_shape_key(
+        graph,
+        ir,
+        node_index::Int32,
+        cache::_OperationalCanonicalizationCache,
+    )
+    cached = cache.expression_shape[Int(node_index)]
+    cached === nothing || return cached
     node = graph.nodes[Int(node_index)]
     operand_keys = String[
-        _operational_expression_shape_key(graph, ir, operand)
+        _operational_expression_shape_key(graph, ir, operand, cache)
         for operand in node.operands
     ]
-    _scalar_product_is_commutatively_canonicalizable(graph, ir, node) &&
+    _scalar_product_is_commutatively_canonicalizable(
+        graph, ir, node, cache,
+    ) &&
         sort!(operand_keys)
     # Runtime expression topology depends on semantic roles and shapes, not on
     # declaration spelling. Values and qualified identities stay in payloads.
@@ -54,7 +85,7 @@ function _operational_expression_shape_key(graph, ir, node_index::Int32)
     else
         (node.payload_kind,)
     end
-    return _sha256_hex(
+    key = _sha256_hex(
         "potts-operational-expression-shape-v1",
         node.operation,
         node.schema_version,
@@ -63,14 +94,25 @@ function _operational_expression_shape_key(graph, ir, node_index::Int32)
         ir.facts.result_type[Int(node_index)],
         Tuple(operand_keys),
     )
+    cache.expression_shape[Int(node_index)] = key
+    return key
 end
 
-function _operational_operand_order(graph, ir, node::NormalizedTermNode)
-    _scalar_product_is_commutatively_canonicalizable(graph, ir, node) ||
+function _operational_operand_order(
+        graph,
+        ir,
+        node::NormalizedTermNode,
+        cache::_OperationalCanonicalizationCache,
+    )
+    _scalar_product_is_commutatively_canonicalizable(
+        graph, ir, node, cache,
+    ) ||
         return node.operands
     return sort(
         node.operands;
-        by = operand -> _operational_expression_shape_key(graph, ir, operand),
+        by = operand -> _operational_expression_shape_key(
+            graph, ir, operand, cache,
+        ),
     )
 end
 
@@ -166,6 +208,9 @@ function _lower_static_node(
         state_binding = nothing,
         workspace_slices = nothing,
         ; state_layout = nothing, history_descriptors = (), tracker_handles = nothing,
+        canonicalization_cache = _OperationalCanonicalizationCache(
+            length(graph.nodes),
+        ),
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
@@ -277,7 +322,8 @@ function _lower_static_node(
     elseif _is_site_aggregate(node)
         tracker_handles === nothing && throw(ArgumentError("aggregate reads require the canonical tracker lowering handles"))
         cell = _lower_static_node(graph, ir, node.operands[3], manifest, T, state_handles, draw_handles,
-            cache, state_binding, workspace_slices; state_layout, history_descriptors, tracker_handles)
+            cache, state_binding, workspace_slices; state_layout, history_descriptors, tracker_handles,
+            canonicalization_cache)
         if _is_unit_count(graph, node)
             _compiler_synthesized_operation_expression(graph, cell_volume, (cell,), ir.source.records[node.record])
         else
@@ -337,7 +383,9 @@ function _lower_static_node(
                 key.source_handle,
             )
         end
-        ordered_operands = _operational_operand_order(graph, ir, node)
+        ordered_operands = _operational_operand_order(
+            graph, ir, node, canonicalization_cache,
+        )
         arguments = if tracker_source === nothing
             Tuple(map(enumerate(ordered_operands)) do indexed
                 index, operand = indexed
@@ -365,6 +413,7 @@ function _lower_static_node(
                     state_binding,
                     workspace_slices,
                     ; state_layout, history_descriptors, tracker_handles,
+                    canonicalization_cache,
                 )
             end)
         else
@@ -409,6 +458,7 @@ function _lower_static_node(
                     state_binding,
                     workspace_slices,
                     ; state_layout, history_descriptors, tracker_handles,
+                    canonicalization_cache,
                 )
             end)
         end

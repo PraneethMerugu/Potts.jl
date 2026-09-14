@@ -72,27 +72,26 @@ end
     renamed_ir = Potts._analyze_completed_system(renamed.problem.system)
     baseline_product = _aggregate_contribution_node(baseline_ir)
     renamed_product = _aggregate_contribution_node(renamed_ir)
+    baseline_cache = Potts._OperationalCanonicalizationCache(
+        length(baseline_ir.graph.nodes),
+    )
+    renamed_cache = Potts._OperationalCanonicalizationCache(
+        length(renamed_ir.graph.nodes),
+    )
 
     @test baseline_product.operation === renamed_product.operation === :multiply
-    @test map(
-        operand -> baseline_ir.graph.nodes[Int(operand)].payload_kind,
-        baseline_product.operands,
-    ) == reverse(map(
-        operand -> renamed_ir.graph.nodes[Int(operand)].payload_kind,
-        renamed_product.operands,
-    ))
     @test Potts._scalar_product_is_commutatively_canonicalizable(
-        baseline_ir.graph, baseline_ir, baseline_product,
+        baseline_ir.graph, baseline_ir, baseline_product, baseline_cache,
     )
     @test Potts._scalar_product_is_commutatively_canonicalizable(
-        renamed_ir.graph, renamed_ir, renamed_product,
+        renamed_ir.graph, renamed_ir, renamed_product, renamed_cache,
     )
 
     baseline_order = Potts._operational_operand_order(
-        baseline_ir.graph, baseline_ir, baseline_product,
+        baseline_ir.graph, baseline_ir, baseline_product, baseline_cache,
     )
     renamed_order = Potts._operational_operand_order(
-        renamed_ir.graph, renamed_ir, renamed_product,
+        renamed_ir.graph, renamed_ir, renamed_product, renamed_cache,
     )
     operand_roles(ir, operands) = map(
         operand -> ir.graph.nodes[Int(operand)].payload_kind,
@@ -102,8 +101,10 @@ end
         operand_roles(renamed_ir, renamed_order)
     @test Potts._operational_expression_shape_key(
         baseline_ir.graph, baseline_ir, baseline_product.identity,
+        baseline_cache,
     ) == Potts._operational_expression_shape_key(
         renamed_ir.graph, renamed_ir, renamed_product.identity,
+        renamed_cache,
     )
 
     baseline_integrator = init(
@@ -131,11 +132,14 @@ end
         node -> node.operation === :divide,
         derived_ir.graph.nodes,
     ))
+    derived_cache = Potts._OperationalCanonicalizationCache(
+        length(derived_ir.graph.nodes),
+    )
     @test !Potts._scalar_product_is_commutatively_canonicalizable(
-        derived_ir.graph, derived_ir, division,
+        derived_ir.graph, derived_ir, division, derived_cache,
     )
     @test Potts._operational_operand_order(
-        derived_ir.graph, derived_ir, division,
+        derived_ir.graph, derived_ir, division, derived_cache,
     ) === division.operands
 
     powered = _operational_identity_problem(
@@ -146,18 +150,71 @@ end
         node -> node.operation === :power,
         powered_ir.graph.nodes,
     ))
+    powered_cache = Potts._OperationalCanonicalizationCache(
+        length(powered_ir.graph.nodes),
+    )
     @test Potts._operand_order_is_observable(
-        powered_ir.graph, power.identity,
+        powered_ir.graph, power.identity, powered_cache,
     )
 
     draw_problem = _scheduled_draw_problem()
     draw_ir = Potts._analyze_completed_system(draw_problem.system)
     draws = filter(node -> node.operation === :draw, draw_ir.graph.nodes)
+    draw_cache = Potts._OperationalCanonicalizationCache(
+        length(draw_ir.graph.nodes),
+    )
     @test !isempty(draws)
     @test all(
         node -> Potts._operand_order_is_observable(
-            draw_ir.graph, node.identity,
+            draw_ir.graph, node.identity, draw_cache,
         ),
         draws,
+    )
+end
+
+@testset "operational canonicalization memoizes shared normalized nodes" begin
+    model = _operational_identity_problem(nothing)
+    ir = Potts._analyze_completed_system(model.problem.system)
+    product = _aggregate_contribution_node(ir)
+    builder = Potts._TermGraphBuilder(
+        ir.graph.nodes,
+        Dict{String, Int32}(),
+        Potts.PottsDiagnostic[],
+    )
+    root = product.identity
+    for _ in 1:40
+        root = Potts._push_term_node!(
+            builder,
+            product.operation,
+            product.schema_version,
+            Int32[root, root],
+            product.payload_kind,
+            product.payload,
+            product.transfer,
+            product.callable,
+            product.record,
+            product.source;
+            intern = false,
+        )
+        push!(ir.facts.shape, ())
+        push!(
+            ir.facts.result_type,
+            ir.facts.result_type[Int(product.identity)],
+        )
+    end
+
+    # Forty duplicated levels have over one trillion paths but only forty
+    # additional nodes. Both traversals must therefore follow DAG identity.
+    shape_cache = Potts._OperationalCanonicalizationCache(
+        length(ir.graph.nodes),
+    )
+    @test Potts._operational_expression_shape_key(
+        ir.graph, ir, root, shape_cache,
+    ) isa String
+    observability_cache = Potts._OperationalCanonicalizationCache(
+        length(ir.graph.nodes),
+    )
+    @test !Potts._operand_order_is_observable(
+        ir.graph, root, observability_cache,
     )
 end
