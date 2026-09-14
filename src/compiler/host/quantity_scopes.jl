@@ -14,7 +14,7 @@ end
 
 _is_site_aggregate(node) = _is_site_sum(node) || _is_site_minimum(node)
 
-"""Resolved site-aggregate source, policy, and transitive contribution nodes."""
+"""Minimal resolved site-aggregate source and policy used by lowering."""
 struct AnalyzedSiteAggregate
     law::Symbol
     contribution::Int32
@@ -301,6 +301,9 @@ function _validate_quantity_scopes(source, graph; enclosing_root)
             push!(visited, node_index)
             node = graph.nodes[Int(node_index)]
             if _is_site_aggregate(node)
+                # Reusable children need aggregate validation at completion even
+                # when lattice-dependent analysis is deferred until composition.
+                _analyze_site_aggregate(source, graph, node)
                 domain !== nothing && domain.kind === :cell ||
                     throw(ArgumentError("aggregate quantities currently require a cell-scoped process consumer"))
                 # The site contribution belongs to the tracker's source context,

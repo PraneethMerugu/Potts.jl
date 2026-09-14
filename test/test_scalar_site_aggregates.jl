@@ -182,12 +182,12 @@ end
     site = SiteBinding(:source, sites(lattice))
     cell = CellBinding(:first, cells(kind))
     second = CellBinding(:second, cells(kind))
-    function source(expression)
+    function source(expression; additional_domains = ())
         PottsSystem(
             name = :scope_aggregate,
             statements = StatementSet(
                 (
-                    lattice, kind,
+                    lattice, additional_domains..., kind,
                     FieldState(signal; initial = 1.0, scope = site),
                     CellState(amount; initial = 0.0, scope = cell),
                     CellState(other; initial = 0.0, scope = second),
@@ -202,6 +202,14 @@ end
     orphan = SiteBinding(:orphan, sites(lattice))
     @test_throws r"unresolved_symbolic_leaf|not declared" complete(source(aggregate(signal; over = orphan, by = cell)))
     @test_throws r"site or field" complete(source(aggregate(other; over = site, by = cell)))
+    other_lattice = LatticeDomain(
+        :other_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(),
+    )
+    @test_throws r"site or field" complete(source(
+        aggregate(other; over = site, by = cell);
+        additional_domains = (other_lattice,),
+    ))
     # The legal maintained read does not authorize a separate direct site read
     # in the same cell expression, even when both read the identical source.
     @test_throws r"CellState or ModelState reads" complete(source(aggregate(signal; over = site, by = cell) + signal))
