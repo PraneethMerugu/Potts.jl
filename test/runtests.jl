@@ -111,6 +111,7 @@ const POTTS_TEST_FIXTURES = (
     "vector_rotation.jl",
     "vector_parameters.jl",
     "product_fields.jl",
+    "transition_relation_energy.jl",
 )
 
 const POTTS_TEST_SUITE = Dict(
