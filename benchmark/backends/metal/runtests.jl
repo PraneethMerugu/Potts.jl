@@ -38,7 +38,11 @@ const METAL_PERFORMANCE_PROGRAMS = ("native_component_performance.jl",)
             readdir(@__DIR__)
         )
     )
-    semantic_witnesses = reduce(vcat, values(METAL_SEMANTIC_SHARDS))
+    semantic_witnesses = Tuple(
+        witness
+        for shard in values(METAL_SEMANTIC_SHARDS)
+        for witness in shard
+    )
     @test length(semantic_witnesses) == length(Set(semantic_witnesses))
     @test discovered == union(
         Set(semantic_witnesses),
@@ -50,7 +54,11 @@ length(ARGS) <= 1 || error(
     "select at most one Metal semantic shard: " * join(string.(keys(METAL_SEMANTIC_SHARDS)), ", ")
 )
 witnesses = if isempty(ARGS)
-    reduce(vcat, values(METAL_SEMANTIC_SHARDS))
+    Tuple(
+        witness
+        for shard in values(METAL_SEMANTIC_SHARDS)
+        for witness in shard
+    )
 else
     shard = Symbol(only(ARGS))
     haskey(METAL_SEMANTIC_SHARDS, shard) || error(
