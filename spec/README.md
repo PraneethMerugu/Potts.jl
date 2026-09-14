@@ -29,8 +29,12 @@ architecture, and contributor workflow.
 - [Ideal authoring API vision](ideal_api_vision.md)
 - [Authoring and model ecosystem feature plan](../design/authoring-and-model-ecosystem-plan.md)
 - [Consolidated PR dependency map](../design/consolidated-pr-dependency-map.md)
+- [Compiler-contract chain amendment](../design/compiler-contract-chain-amendment.md)
+- [Composition-first model roadmap](../design/composition-first-model-roadmap.md)
 - [End-to-end API overview](../design/authoring-api-overview.md)
 - [Design research and decisions](../design/authoring-design-research.md)
+- [Model-class API atlas](../design/model-class-api-atlas.md)
+- [PR-chain progress](../design/pr-chain-progress.md)
 
 These describe proposed interfaces and delivery scope, not already implemented
 runtime guarantees. The declaration examples in `design/examples/` are future

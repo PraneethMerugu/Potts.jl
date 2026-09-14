@@ -75,6 +75,64 @@ These instructions apply to the complete repository.
   do CPU and GPU still share the same semantic KernelAbstractions path; and is
   every claimed guarantee directly exercised? Resolve any yes before handoff.
 
+## Ecosystem PR-chain planning
+
+For PR-chain work, read the current shared
+`design/consolidated-pr-dependency-map.md`,
+`design/compiler-contract-chain-amendment.md`,
+`design/composition-first-model-roadmap.md`, and `design/pr-chain-progress.md`
+before selecting work or changing shared compiler contracts. The canonical
+planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
+existing package worktrees may contain older snapshots. The user-approved
+allocation is 62 identified PRs (R01–R54 plus eight companions), including G05C
+(R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
+The seventh companion is the demonstrated G07 LocalMath ordered-fold
+step-validation prerequisite before R14 exchange settlement.
+The eighth companion is the demonstrated G05 LocalMath exact keyed-reduction
+prerequisite before Core R10/Potts R11 maintained spatial-query completion.
+R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
+and tumor corpora. E07 completion additionally depends on E04 for model 14.
+Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and
+removal of privileged model-specific machinery are accepted scope. Preserve
+scientific behavior and active candidates; unresolved law checks remain real.
+These are planning labels,
+not live APIs. Share actual candidate interfaces with affected workers, preserve
+their active changes, and do not treat design approval as implementation or
+qualification. The map owns dependencies/counts; progress notes own status.
+
+## Contributor navigability
+
+Every changed behavior must remain traceable through one clear chain:
+
+```text
+public entrypoint
+→ semantic owner
+→ validation and lowering
+→ execution
+→ inspection and diagnostics
+→ ordinary behavioral tests
+```
+
+- Identify the single production owner of the behavior.
+- Keep declarations, validation, lowering, and execution in files whose names
+  reflect their durable responsibility.
+- Place tests in the owning package and name them after observable behavior.
+- Add brief comments only where a scientific invariant, ordering rule,
+  transaction boundary, or compiler constraint is not evident from the code.
+- Update the nearest user documentation and contributor architecture guide when
+  a public workflow or responsibility boundary changes.
+- Delete obsolete helpers, duplicate explanations, forwarding files, and tests
+  of displaced implementations in the same change.
+- Do not require Git history, milestone specifications, or private
+  implementation knowledge to understand current behavior.
+- A contributor should be able to locate a behavior's owner, purpose, and
+  defending test through repository search and current documentation alone.
+
+Large mixed-responsibility files are not automatically defects. Split a file
+only when the resulting files correspond to durable concepts and make the
+complete behavioral chain easier to locate. Do not reorganize files solely to
+reduce line counts.
+
 The normative project authority is `spec/project-charter.md`; human workflow
 guidance is in `CONTRIBUTING.md`. Historical milestone terminology may remain
 in specifications, design records, audits, and archived development evidence.
