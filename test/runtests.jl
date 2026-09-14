@@ -81,6 +81,7 @@ const POTTS_TESTS = (
     "test_custom_model.jl",
     "test_platform_smoke.jl",
     "test_fresh_process.jl", "test_core_spi_boundary.jl",
+    "test_resolved_aggregate_compiler_report.jl",
     "test_package_quality.jl",
 )
 
