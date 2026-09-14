@@ -43,19 +43,20 @@ Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
 scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
 node-aligned `AnalyzedSiteAggregate` fact plus normalized unit, shape and result
 facts → `compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
-`SiteMinimumTracker` and qualified cell read. The analyzed fact resolves the
-law, contribution root, site/cell resources, policy operands and transitive
-contribution dependencies once. Tracker identity, descriptor construction,
-state retention and evaluator lowering consume that fact rather than traversing
-the authored aggregate again. Canonical sums include their numerical comparison
+`SiteMinimumTracker` and qualified cell read. Analysis validates the scoped cell
+anchor and the complete contribution closure, then retains only the law,
+contribution root, site resource and policy operands needed by lowering.
+Tracker identity, descriptor construction, state retention and evaluator
+lowering consume that fact rather than traversing the authored aggregate again.
+Canonical sums include their numerical comparison
 policy; canonical minima include their empty-owner value and declared
 reconstruction bound. Both share one tracker independently of consuming
 statements or anchors. Lowering discards its canonical identity dictionary and
 retains only a node-aligned qualified-handle table until Core program assembly.
 Physical stage reads use the tracker, while any additional direct state operand
 retains its own compiled state handle. The literal integer-one case reuses
-Core's existing ownership count. Ordinary symbolic composition then combines those maintained
-reads with each other and with direct cell state; it does not introduce an
+Core's existing ownership count. Ordinary symbolic composition then combines
+those maintained reads with each other and with direct cell state; it does not introduce an
 aggregate-specific execution path. The derived-quantity fixture computes a
 per-cell average from maintained mass and ownership count, adds a direct cell
 baseline, publishes the result to two consumers, changes both its field and

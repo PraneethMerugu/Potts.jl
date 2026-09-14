@@ -40,8 +40,8 @@ host/quantity_scopes.jl
     qualify quantity/anchor resources against the completion context inventory;
     derive process domains and bounds from declared targets before fingerprinting;
     validate lexical anchor capture and population-compatible reads on the same
-    qualified records and normalized graph; construct the resolved aggregate
-    source/policy/dependency fact consumed by later lowering
+    qualified records and normalized graph; validate aggregate contribution
+    closure and retain the minimal resolved source/policy fact used by lowering
 
 host/footprints.jl
     derive and combine bounded resource footprints from analyzed operations
