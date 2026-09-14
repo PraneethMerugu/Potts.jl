@@ -14,12 +14,12 @@ COBREXA/model deliveries, not another compiler-contract PR. R01–R48 retain
 their identities. The **G05C** group
 contains **R49 Core** and **R50 Potts**, depends on a correct G05 baseline, and
 precedes G06/G07 completion. R49 integrates before its R50 consumer.
-The seventh companion is the G07 LocalMath ordered-fold step-validation owner
+The seventh companion, **C07**, is the G07 LocalMath ordered-fold step-validation owner
 identified by the real finite-resource exchange design. It merged as LocalMath
 PR18 with local and hosted CPU/Metal evidence and adds a generic late-validation
 channel to the existing executor rather than a transfer framework or another
 compiler layer.
-The eighth is a G05 LocalMath exact keyed-reduction owner, demonstrated by the
+The eighth, **C08**, is a G05 LocalMath exact keyed-reduction owner, demonstrated by the
 maintained spatial-query design after PR18. Existing destination grouping
 requires a pre-existing dense destination and cannot exactly intern sparse,
 generation-aware owner pairs with O(E) storage. Its bounded `KeyedReduce`
@@ -27,11 +27,11 @@ contract precedes Core R10 pair multiplicity and Potts R11 lowering; it extends
 the sole collection executor with canonical ordering and atomic publication,
 not with Potts scientific semantics or a second query authority.
 
-Agents assigned chain work must read the current shared map and this note
-before selecting work or designing a shared interface. Existing worktrees may
-contain older copies. The shared planning location is:
-
-`/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`
+Agents assigned chain work must read the current
+[shared map](consolidated-pr-dependency-map.md) and this note before selecting
+work or designing a shared interface. Existing worktrees may contain older
+copies; repository-relative documents in this `design/` directory are the
+portable planning authority.
 
 Use [progress notes](pr-chain-progress.md) for implementation status, not the
 existence of a design document. Communicate the actual selected public
@@ -517,7 +517,7 @@ completed PR. Before R49/R50 freeze their baseline, run one bounded comparison:
 | R03-R05 and the Models timeout companion | None; CI/workflow only | No Kaimon debt sweep. |
 | R06 Potts operation contracts | Device/compiler-sensitive | Compare operation/executable lowering and one unrelated device control before/after the merge. |
 | R07 Core scientific contexts | Device-reachable | Compare proposal/context and scientific-geometry boundaries plus an unchanged control. |
-| LocalMath PR12, PR13, PR14, PR16 and PR17 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. |
+| LocalMath PR12, PR13, PR14, PR16, PR17 and PR18 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. C08 remains prospective and must supply its own feature-local comparison before merge. |
 
 The remaining chain applies the ladder prospectively rather than accumulating a
 second retrospective tail:
@@ -575,18 +575,17 @@ race freedom, or benchmark performance. Preserve ordinary scientific oracles,
 full relevant package/integration/docs checks and applicable actual hardware
 evidence in the implementing PRs.
 
-The reasoning and test script are preserved in the isolated investigation:
-`/Users/praneethmerugu/Documents/Codex/2026-09-09/referenced-chatgpt-conversation-this-is-an-2/work/isolated/Potts.jl/`
-at commit `bebad6d5`, under `design/compiler-contract-pressure-test.md` and
-`prototypes/compiler_contracts/compiler_contract_pressure_tests.jl`.
-This note is the shared implementation scope; transient research paths are not
-runtime dependencies. Transplant a qualified prototype result into the sole
+The retained pressure-test findings and counterexamples are summarized in this
+amendment. A developer-local investigation checkout is not active provenance or
+a prerequisite for understanding the plan. Transient research paths are not
+runtime dependencies; transplant a qualified prototype result into the sole
 production path and delete the displaced prototype when appropriate.
 
 No extra framework, cosmetic cleanup, or placeholder vendor PR is allocated.
 A demonstrated missing event-settlement or reusable transfer/publication
 primitive earns a companion in its actual owner and updates the count.
-Existing LocalMath companions are already counted. Sixty is not a ceiling.
+Existing LocalMath companions are already counted in the **62 currently
+identified PRs**. That identified count is not a ceiling.
 
 A world-class completion means promised public science actually works, laws are
 independently tested, extensions are documented, errors are actionable, source

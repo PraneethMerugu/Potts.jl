@@ -23,17 +23,32 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified eight required additional PRs:
+Implementation has identified eight required additional PRs. `C01`–`C08` are
+stable planning-only companion identities; like `R01`–`R54`, they are not live
+API names, GitHub PR numbers or a prescribed merge sequence.
 
-- A **G04 LocalMath companion for immutable named-product and nested-record
+| Companion | Repository | Group | Depends on | First required consumer | Status | Published PR |
+| --- | --- | --- | --- | --- | --- | --- |
+| **C01 Structured immutable values** | LocalMath | G04 | G01 | R08 Core structured state/publication | Merged | [LocalMath PR12](https://github.com/PraneethMerugu/LocalMath.jl/pull/12) |
+| **C02 Tutorial CI duration** | PottsModels | G01 | R01 Models | R01 merged-main tutorials and every later Models delivery | Merged | [Models PR2](https://github.com/PraneethMerugu/PottsModels.jl/pull/2) |
+| **C03 Typed stage execution** | LocalMath | G04 | C01 | R08 Core structured lifecycle and R09 Potts polarity | Merged | [LocalMath PR13](https://github.com/PraneethMerugu/LocalMath.jl/pull/13) |
+| **C04 Immutable fixed-value effects** | LocalMath | G05 | C03, G04 | R10 Core vector/tensor maintained sums | Merged | [LocalMath PR14](https://github.com/PraneethMerugu/LocalMath.jl/pull/14) |
+| **C05 Backend-owned array transfer** | LocalMath | G05 | C04 | R10 Core structured-sum storage | Merged | [LocalMath PR16](https://github.com/PraneethMerugu/LocalMath.jl/pull/16) |
+| **C06 Identity-seeded reduction control** | LocalMath | G05 | C05 | R10 Core maintained minimum lifecycle | Merged | [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17) |
+| **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
+| **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Active; not yet published | — |
+
+The companion scopes are:
+
+- **C01 — a G04 LocalMath companion for immutable named-product and nested-record
   storage/publication**. It supplies the actual R08 structured-state consumer;
   it is not a second executor or a new feature outside the existing scope.
-- A **G01 PottsModels CI companion**, [Models PR2](https://github.com/PraneethMerugu/PottsModels.jl/pull/2),
+- **C02 — a G01 PottsModels CI companion**, [Models PR2](https://github.com/PraneethMerugu/PottsModels.jl/pull/2),
   allowing cold dependency setup and strict executable tutorials to complete.
   The original merged-main job passed its model tests but reached its one-hour
   timeout during tutorial dependency compilation. This companion changes only
   the job timeout, preserving the original tests and documentation requirements.
-- A **G04 LocalMath execution-prerequisite companion**,
+- **C03 — a G04 LocalMath execution-prerequisite companion**,
   [LocalMath PR13](https://github.com/PraneethMerugu/LocalMath.jl/pull/13), for the demonstrated
   floating-point sine admission gap and canonical Collect preparation bounds
   failure on Metal. These unblock real polarity and structured lifecycle
@@ -41,13 +56,13 @@ Implementation has identified eight required additional PRs:
   separate ordinary owner tests, full local CPU/Metal validation, scientific
   witnesses and strict documentation. It merged after hosted checks passed;
   this is not a new executor or permission to relax device safety checks.
-- A **G05 LocalMath fixed-value effect-analysis companion**,
+- **C04 — a G05 LocalMath fixed-value effect-analysis companion**,
   [LocalMath PR14](https://github.com/PraneethMerugu/LocalMath.jl/pull/14),
   preserving immutable `StaticArrays.SArray` payloads during exact typed-effect
   analysis while retaining host surrogates for physical arrays. This is the
   demonstrated reusable prerequisite for vector/tensor maintained sums; it
   keeps the canonical Reduce executor and exact result-type contract.
-- A **G05 LocalMath backend-owned array-allocation companion**,
+- **C05 — a G05 LocalMath backend-owned array-allocation companion**,
   [LocalMath PR16](https://github.com/PraneethMerugu/LocalMath.jl/pull/16),
   because the real Core structured-sum
   consumer demonstrated that generic `copyto!` from an ordinary host view into
@@ -55,7 +70,7 @@ Implementation has identified eight required additional PRs:
   CPU copies on Base, uses KernelAbstractions' backend transfer for supported
   physical arrays, and stages unsupported host views through independent dense
   host storage. It does not claim untested CUDA, ROCm, or custom-array support.
-- A **G05 LocalMath identity-seeded reduction-control companion**,
+- **C06 — a G05 LocalMath identity-seeded reduction-control companion**,
   [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17). The real
   lifecycle maintained-minimum consumer demonstrated that a field produced by
   `Reduce(...; seed = IdentitySeed(...))` cannot currently serve as the total
@@ -69,7 +84,7 @@ Implementation has identified eight required additional PRs:
   gate path. Full local CPU, Metal, documentation, and independent review
   evidence passed before merge; every applicable hosted package, docs,
   scientific, macOS-smoke, and Metal check also passed post-merge.
-- A **G07 LocalMath ordered-fold step-validation companion**,
+- **C07 — a G07 LocalMath ordered-fold step-validation companion**,
   [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18),
   merged after local CPU, real-Metal and independent-review qualification; its
   complete post-merge hosted package, scientific, docs, macOS-smoke and Metal
@@ -84,7 +99,7 @@ Implementation has identified eight required additional PRs:
   conversion, conservation, lifecycle accounting and user-facing status. This
   implementation does not introduce a LocalMath transfer API, allocator
   framework, native concept or second executor.
-- A **G05 LocalMath exact keyed-reduction companion**, ordered after LocalMath
+- **C08 — a G05 LocalMath exact keyed-reduction companion**, ordered after LocalMath
   PR18 and before Core R10/Potts R11 completion. The real maintained spatial-
   query design demonstrated that existing destination grouping can combine
   contributions only after Core already owns a dense `Int32` destination. It
@@ -113,14 +128,14 @@ map and count. P01–P16 and B1–B8 remain coverage labels, not additional PRs 
 on top of this map. R01–R54 are planning identifiers, not existing GitHub numbers
 or prescribed branch names; their numbering is not a chronological merge order.
 
-| Repository | Main spine | Breadth | Planned total |
-| --- | ---: | ---: | ---: |
-| Potts.jl | 8 | 13 | 21 |
-| CorePotts.jl | 7 | 9 | 16 |
-| LocalMath.jl | 1 | 2 | 3 |
-| MakiePotts.jl | 2 | 0 | 2 |
-| PottsModels.jl | 4 | 8 | 12 |
-| **Total** | **22** | **32** | **54** |
+| Repository | Main spine | Breadth | Base planned | Companions | Identified total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Potts.jl | 8 | 13 | 21 | 0 | **21** |
+| CorePotts.jl | 7 | 9 | 16 | 0 | **16** |
+| LocalMath.jl | 1 | 2 | 3 | 7 | **10** |
+| MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
+| PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
+| **Total** | **22** | **32** | **54** | **8** | **62** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -186,7 +201,7 @@ The compiler amendment owns the detailed acceptance template.
 | R52–R54 | Exercise FBCA, vascular and tumor corpora as realistic package-declared and interactive-equivalent compiler workloads. |
 
 This is absorbed into the existing dense allocation. It does not add a compiler
-framework PR. The demonstrated G07 ordered-fold validation and G05 exact
+framework PR. The demonstrated C07 ordered-fold validation and C08 exact
 keyed-reduction companions raise the current total to 62 identified PRs.
 
 The compiler amendment itself does not add a PR. Every PR
@@ -499,7 +514,7 @@ corpus; it does not replace feature-local Kaimon and device evidence.
 | **E11 Conservative swap transitions** | R45 Core; R46 Potts | G07, E02 | B8 swap/multisite move law |
 | **E12 Static weighted-graph CPM domains** | R47 Core; R48 Potts | G05, G06, G07, E11 | B8 non-Cartesian domain + graph swap |
 | **E13 Metabolic optimization coupling** | R51 Potts | G07 | COBREXA native boundary |
-| **E14 FBCA crypt and metabolic models** | R52 Models | E13, E07 | Model 8 |
+| **E14 FBCA crypt and metabolic models** | R52 Models | E13, E07, G08, G09 | Model 8 plus executable benchmark-corpus integration |
 | **E15 Vascular growth paper corpus** | R53 Models | G08, E07 | Models 1, 5, 7 |
 | **E16 Multiscale tumor paper corpus** | R54 Models | E07, E15 | Models 6, 11 |
 
@@ -622,10 +637,12 @@ invalidate metabolic balance or growth. No general optimizer framework, private
 Core buffers, automatic GPU LP support or portable warm-start replay claim.
 
 **E14 — FBCA crypt (R52).** Models composes R51 and R35 public interfaces into
-model 8. Own the actual metabolic assets, spatial/phenotype/environmental rules,
-initialization, crypt experiments, tutorial, scientific tests and benchmarks.
-Resolve full-paper coupling before claiming reproduction. A standalone FBA
-solver demonstration does not complete this scientific model.
+model 8 after G08 supplies the public composition/inspection surface and G09
+supplies the shared benchmark workflow. Own the actual metabolic assets,
+spatial/phenotype/environmental rules, initialization, crypt experiments,
+tutorial, scientific tests and benchmarks. Resolve full-paper coupling before
+claiming reproduction. A standalone FBA solver demonstration does not complete
+this scientific model.
 
 **E15 — Vascular corpus (R53).** Models delivers Merks 2008 and Bauer 2007/2009
 (models 1, 5, 7) using existing public mechanical and field components. Preserve
@@ -675,6 +692,14 @@ flowchart TD
   G07["G07: Native transport and lifecycle composition"]
   G08["G08: Model corpus, observation and scientific inspection"]
   G09["G09: Reproducible authoring and runtime benchmarks"]
+  C01["C01: LocalMath structured immutable values"]
+  C02["C02: PottsModels tutorial CI duration"]
+  C03["C03: LocalMath typed stage execution"]
+  C04["C04: LocalMath immutable fixed-value effects"]
+  C05["C05: LocalMath backend-owned array transfer"]
+  C06["C06: LocalMath identity-seeded reduction control"]
+  C07["C07: LocalMath ordered-fold step validation"]
+  C08["C08: LocalMath exact keyed reduction"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -691,9 +716,19 @@ flowchart TD
   E14["E14: FBCA crypt and metabolic models"]
   E15["E15: Vascular growth paper corpus"]
   E16["E16: Multiscale tumor paper corpus"]
+  G01 --> C01
+  C01 --> C03
+  C03 --> G04
+  G01 --> C02
+  C02 --> G07
   G02 --> G04
   G03 --> G04
-  G04 --> G05
+  G04 --> C04
+  C04 --> C05
+  C05 --> C06
+  C06 --> C07
+  C07 --> C08
+  C08 --> G05
   G05 --> G05C
   G05C --> G06
   G01 --> G07
@@ -736,6 +771,8 @@ flowchart TD
   G07 --> E13
   E13 --> E14
   E07 --> E14
+  G08 --> E14
+  G09 --> E14
   G08 --> E15
   E07 --> E15
   E07 --> E16
@@ -919,11 +956,15 @@ topological guarantees are not automatically delivered by one representative.
 
 ## 6. Count risks and explicitly unpriced work
 
-### Conditional owner PRs, not silently omitted features
+### Future conditional owner PRs, not silently omitted features
+
+C01–C08 are already identified and counted above; they are not conditional
+entries in this table. The following actions apply only to new demonstrated
+gaps beyond those eight companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
-| Structured storage/gather/publication needs a missing reusable LocalMath law | Add a LocalMath companion to G04/G05 at its first real consumer |
+| Later structured storage/gather/publication needs a reusable LocalMath law not supplied by C01–C08 | Add and count a LocalMath companion at its first real consumer |
 | G08 needs failure information not already exposed by G06/G07 | Add a Core companion, or include the fact in its still-open owning PR |
 | Profiling identifies a material Potts/Core defect | Fix in a coherent open owner PR or count a measured optimization PR; G09 measurement alone is insufficient |
 | 3D or graph results need a new public rendering protocol | Add Makie; existing 3D support is inspected first, graph rendering is not presumed |
@@ -940,15 +981,18 @@ topological guarantees are not automatically delivered by one representative.
 | Required invasion morphology exceeds the selected E08 algorithm | Supply sampled analysis in its scientific owner where sufficient; count a missing engine/math contract only when demonstrated |
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
-upper bound. The planned **54** counts the identified work including R49–R54; discoveries
-can increase it. Absorb a required change only where it belongs coherently and
-before that PR closes. Do not expand another PR solely to preserve the headline
-count, omit needed work, or move an engine fact into Models.
+upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
+The **62 currently identified PRs** add the eight demonstrated C01–C08
+companions; future demonstrated discoveries can increase that identified total.
+Absorb a required change only where it belongs coherently and before that PR
+closes. Do not expand another PR solely to preserve the headline count, omit
+needed work, or move an engine fact into Models.
 
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by these 54 planned PRs**:
+**not claimed complete by the 54-PR base allocation or the 62 currently
+identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |
 | --- | --- | --- |

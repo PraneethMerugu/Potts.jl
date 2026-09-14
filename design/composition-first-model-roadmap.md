@@ -11,7 +11,9 @@ contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
 The canonical allocation is **62 identified PRs: 54 planned + eight companions**.
-It is not a verified ceiling; R01–R50 retain their identities.
+The all-in repository totals are Potts 21, CorePotts 16, LocalMath 10,
+MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
+their identities.
 
 Only the metabolic pair represents clearly additional integration functionality.
 The two paper-corpus PRs separate substantial scientific implementation/review
@@ -23,9 +25,10 @@ The [canonical map](consolidated-pr-dependency-map.md) owns the current
 62-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
 At review time R01–R07 and seven of the eight currently identified companions
-are recorded merged; the G07 ordered-fold validation companion is LocalMath PR18
-and its complete hosted suite passed after merge. The G05 exact keyed-reduction
-companion is active and precedes Core R10/Potts R11 relation-query completion.
+are recorded merged; the G07 ordered-fold validation companion C07 is LocalMath
+PR18 and its complete hosted suite passed after merge. The G05 exact
+keyed-reduction companion C08 is active and precedes Core R10/Potts R11
+relation-query completion.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the
@@ -196,7 +199,7 @@ not GitHub PR numbers or live API names.
 | New repository PR | Scope and dependency | Why separate |
 |---|---|---|
 | **R51 / E13 — Potts: COBREXA optimization coupling** | After G07's stable publication/lifecycle boundary. Bind environmental snapshots to a selected upstream FBA model, execute its public solver API, validate result status and publish metabolic outputs. Exercise bound updates, workspace ownership, sampling cadence, division/retirement and failure. Environmental withdrawals reuse G07/E07 accounting. | Optimization has result status, feasibility and alternative optima; pretending it is an ODE misses its real contract. No generic optimizer framework is needed. |
-| **R52 / E14 — Models: FBCA crypt model and metabolic compositions** | After the metabolic bridge and its selected environmental coupling (R35 for the accepted field-integrated delivery). Own #8's scientific formulas, assets, parameters, experiments, tutorial and benchmark. | A solver adapter is not the scientific model. This is a real downstream delivery, not a free compatibility tail. |
+| **R52 / E14 — Models: FBCA crypt model and metabolic compositions** | After the metabolic bridge, its selected environmental coupling (R35 for the accepted field-integrated delivery), G08's public composition/inspection surface and G09's benchmark workflow. Own #8's scientific formulas, assets, parameters, experiments, tutorial and benchmark. | A solver adapter is not the scientific model. This is a real downstream delivery, not a free compatibility tail. |
 | **R53 / E15 — Models: vascular growth paper corpus** | After R17 and R35. Deliver #1, #5 and #7 with shared mechanical/field building blocks, distinct source laws, scientific tests and experiments. | Keeps three related paper implementations and their validation out of the already broad field-binding PR. Early bounded components may still ship in R17. |
 | **R54 / E16 — Models: multiscale tumor paper corpus** | After R35 and the vascular corpus where its public components are reused. Deliver #6 and #11, Boolean rules, coupled environments, phenotype/lifecycle and treatment experiments. | Separates model transcription/calibration from native infrastructure. No new tumor runtime or signaling framework. |
 
@@ -267,7 +270,7 @@ unresolved scientific checks in section 1.
 | 5 | R35 field/matrix components | R53 vascular corpus | R17, R35 |
 | 6 | R16 regulation/coupling; R35 fields | R54 tumor corpus | E01, R35; paper network/lifecycle transcription |
 | 7 | R35 fields; shared vascular components | R53 vascular corpus | R17, R35 |
-| 8 | R51 COBREXA integration | R52 FBCA corpus | G07, metabolic bridge, R35; paper model assets |
+| 8 | R51 COBREXA integration | R52 FBCA corpus | G07, metabolic bridge, R35, G08, G09; paper model assets |
 | 9 | Existing extracted sorting fixtures | R17 | G06, explicit reference conventions |
 | 10 | R17 mechanical invasion composition | R38 | G06/G08 and selected E08 measurements; final-paper verification |
 | 11 | R16 coupling; R33 reusable intracellular library | R54 tumor corpus | R35, shared vascular components; Boolean and treatment semantics |
@@ -280,7 +283,9 @@ Accepted graph changes are small and explicit (the canonical map owns them):
 - Add **E04 → E07 completion** for R35's #14 integration. R34 field-engine work
   can start under its existing prerequisites. This is an integration join, not
   a claim that all field mathematics requires compartments.
-- Add **G07 → E13/R51**, and **E13 + E07 → E14/R52**.
+- Add **G07 → E13/R51**, and **E13 + E07 + G08 + G09 → E14/R52**.
+  G08 is also transitively upstream of G09, but remains explicit because E14
+  consumes both the authoring/inspection surface and the benchmark workflow.
 - Add **G08 + E07 → E15/R53** and **E07 + E15 → E16/R54**.
 - Conditional law companions precede their named consumer. Preserve all other
   existing edges, including correct G05 → G05C → G06/G07.
