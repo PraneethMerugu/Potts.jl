@@ -75,6 +75,56 @@ Before handing off a change, check:
 
 Resolve any affirmative answer as part of the same change.
 
+## Compiler tractability
+
+Every pull request declares its compiler impact as `none`, `host-only`, or
+`device-reachable`. Classify the reachable execution changed by the pull
+request, not merely the repository or source file: a model composition can be
+device-reachable even when it does not edit compiler source.
+
+- `none` means the change cannot alter executable construction,
+  specialization, or a device-compiled path. State the reason briefly.
+- `host-only` means changed execution ends at a named host boundary. Primary
+  Kaimon before/after evidence is required when the change affects lowering,
+  generated execution types, specialization-heavy generic code, or compiler
+  preparation.
+- `device-reachable` means a changed method, value, payload, lowering, or
+  authored composition can participate in device specialization. Primary Kaimon
+  before/after evidence and the applicable real-device execution are required,
+  subject to the exact-candidate fallback below.
+
+Kaimon is the primary probe. When it cannot attach to the exact candidate
+worktree, optimized `code_typed` or KernelAbstractions typed-code output is an
+accepted fallback only when the reason, exact tuple, unchanged control, common
+metric schema and checked-in reproducible runner are recorded.
+
+Compiler evidence records the exact source and dependency revisions, a
+representative changed boundary, and a representative unchanged control. Report
+typed-statement and call counts, inference/result concreteness, specialization
+or generated-code growth, root versus propagated type erasure, boundary payload
+size and field provenance, and relevant compilation allocation/time where
+practical. State which semantic decision moved into normalization/preparation,
+which recipe family and narrow state view execute it, and which broad authority
+or path was deleted. Record the observable scientific, allocation,
+rollback/continuation and declared bitwise/replay guarantees preserved. Separate
+construction/preparation, first compilation or launch, and warm execution.
+Kaimon and exact-typed inspection are diagnostic evidence; actual Metal
+execution remains authoritative for the supported Metal path.
+
+An unrelated control that grows materially is a specialization-coupling signal.
+Explain and localize the growth, then remove it or document why the changed
+scientific/execution contract necessarily reaches that control. Do not impose a
+fixed percentage or IR-reduction quota: lost inference, newly reachable host
+work or allocation, a changed specialization class, unexplained cross-kernel
+growth, or compiler resource failure can block a change independently of a raw
+count. Conversely, proportional, localized growth may be justified by a real
+feature.
+
+Use the small canonical compiler probes owned by the current compiler-contract
+plan when they cover the changed boundary. Add a new probe only for a genuinely
+new compiler family or supported conjunction; do not create a parallel test
+inventory, optimizer framework, or policy-gate script.
+
 ## Test
 
 During development, start with the smallest self-contained test file that owns

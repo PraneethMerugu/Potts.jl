@@ -14,6 +14,13 @@ single-file examples. Those examples expose semantic decisions for review and
 are not the final ergonomic syntax. [Research notes](../design/authoring-design-research.md)
 record the primary-source considerations behind this refinement.
 
+The [composition-first model amendment](../design/composition-first-model-roadmap.md)
+was accepted on 2026-09-10, including selected SBMLToolkit integration, confirmed
+COBREXA.jl coupling and all fourteen model deliveries. It requires biological
+compositions instead of privileged model-specific compiler machinery. The
+[canonical map](../design/consolidated-pr-dependency-map.md) owns allocation and
+dependencies; acceptance does not make the illustrative syntax here executable.
+
 ## Goal
 
 Potts should make novel Cellular Potts models read primarily as scientific
@@ -679,6 +686,93 @@ handles or duplicated initial native values. The detailed example currently
 spells some of these out to expose requirements; that is not the ergonomic
 acceptance target. Include both a small built-in model and a substantial novel
 mechanism example in the executable tutorial suite.
+
+### Compilation latency is part of authoring quality
+
+The ordinary author should not pay a new deep CorePotts and backend compilation
+cost merely because a model, component or quantity was renamed, a numerical
+parameter changed, or equivalent declarations came from an interactive session
+rather than PottsModels. Rich identity, lexical scope and source provenance stay
+available for inspection and diagnostics, while preparation lowers them into a
+small semantic execution payload. The internal target is explicit:
+
+```text
+expressive authoring
+→ rich semantic IR
+→ validated and normalized IR
+→ compact operational recipes
+→ narrow typed state views
+→ small concrete runtime kernels
+```
+
+The compiler may be sophisticated and heterogeneous; the compiled program should
+be boring. Potts resolves identity, scope, dependencies, source provenance,
+maintenance law, ordering and transaction meaning before execution. CorePotts
+receives a compact recipe plus only the ownership, tracker, cell, lifecycle,
+relationship or publication storage that recipe needs. A recipe is private sole
+lowering derived from the authoritative semantics, not a second scientific IR,
+registry or executor.
+
+The hot boundary specializes only on durable, measured execution facts such as
+backend, scalar realization, dimensionality, algorithm and genuinely bounded
+mathematical value shape. Author names, source locations, numerical values and
+unbounded declaration counts remain values unless a demonstrated execution ABI
+requires otherwise. Stable operation families and storage contracts may
+specialize; the complete authored model should not become one giant Julia type.
+
+Repeatedly executed kernels should have concrete arguments and returns,
+concrete or deliberately narrow-union intermediates, no accidental dynamic
+dispatch, zero or explicitly justified allocations, locally proportional typed
+IR and bounded specialization families. Unavoidable dynamic boundaries are
+named and kept host-side. This is not a global zero-`Any` requirement: rich,
+heterogeneous compiler orchestration is acceptable before preparation.
+
+Every new capability must identify its semantic record, operational recipe and
+minimal state view. This applies equally to maintained aggregates, structured
+state, compound transactions, conservative exchange, lifecycle/division,
+relationships, native coupling, synchronous multi-output processes, dimensions
+and hardware backends. A feature is not complete merely because a large generic
+runtime coordinator can interpret it.
+
+The canonical compiler-health model spans changing field → maintained per-cell
+aggregate → intracellular dynamics → conservative exchange/motion consumer →
+division → observation → checkpoint continuation, with multiple consumers and
+finite-resource contention. It is one end-to-end stress workflow, not a special
+executor or an exhaustive Cartesian-product promise.
+
+The intended workflow separates public construction, completion and validation,
+lowering, workspace preparation, first host execution, first device compilation/
+link and warm execution. A numerical `remake` should reuse executable identity;
+a structural edit may rebuild and must say so. PottsModels supplies a small
+representative public workload corpus for precompilation and longitudinal
+measurement, not a generated matrix of every model combination. That corpus
+records operational recipe shape/count, prepared payload size, staged cold
+latency, typed IR/calls, specialization and generated-code growth, allocations
+and warm throughput for representative compositions. Developer
+sysimages and backend disk caches may accelerate a chosen environment but are
+optional conveniences, never scientific state or proof of backend support.
+
+The authoring design explicitly rejects these latency shortcuts:
+
+- arbitrary names, symbols, model identities or unbounded component counts in
+  `Val` or type parameters;
+- large tuple/StaticArray unrolling used to disguise dynamic model collections;
+- exhaustive precompile workloads whose cache size grows combinatorially;
+- public specialization modes introduced before one strong default is shown
+  insufficient by real author workflows;
+- runtime-generated or giant generated device evaluators that conceal a broad
+  semantic boundary;
+- GPU-only scientific paths or alternate executors created for compilation
+  convenience;
+- treating sysimages, compiler caches or longer CI caches as architectural fixes;
+  and
+- checkpoints containing live device modules, compiler handles or backend caches.
+
+If canonical lowering still leaves a large generated evaluator, divide it only
+at a scientific/execution ownership boundary with identical behavior and measured
+compiler benefit. Static representation remains appropriate for genuinely small
+fixed mathematical objects. It is not the representation of an arbitrary model
+graph.
 
 ### Numerical policy, units and resources
 
