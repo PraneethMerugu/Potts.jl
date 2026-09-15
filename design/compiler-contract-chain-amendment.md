@@ -7,7 +7,7 @@ opened PRs, or new merge/release authority.
 ## Start here
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-allocation and dependency graph: **62 identified PRs = 54 planned + eight
+allocation and dependency graph: **63 identified PRs = 54 planned + nine
 demonstrated companions**, following the accepted 2026-09-10
 [composition-first amendment](composition-first-model-roadmap.md). R51–R54 add
 COBREXA/model deliveries, not another compiler-contract PR. R01–R48 retain
@@ -26,6 +26,13 @@ generation-aware owner pairs with O(E) storage. Its bounded `KeyedReduce`
 contract precedes Core R10 pair multiplicity and Potts R11 lowering; it extends
 the sole collection executor with canonical ordering and atomic publication,
 not with Potts scientific semantics or a second query authority.
+The ninth, **C09**, is the demonstrated G05 LocalMath atomic keyed-rebuild owner.
+R10's maintained relationship consumer proved that C08's incremental law must
+include prior records, while a complete rebuild must ignore them and replace the
+bounded collection atomically. Collection clearing/aliasing is not a valid
+consumer workaround. C09 adds only that reusable seed/update policy to the same
+prepared stages and KernelAbstractions executor, with inclusion carried as
+runtime data and no specialization on a completed model claim graph.
 
 Agents assigned chain work must read the current
 [shared map](consolidated-pr-dependency-map.md) and this note before selecting
@@ -601,8 +608,10 @@ respectively, 3D periodic/shared-owner, opposite relationship endpoint, global
 predicate, compound swap and weighted-graph pressure cases. A failing later
 case first returns to R12/R13's Core/Potts owner unless it demonstrates a
 genuinely reusable LocalMath mathematical law. Only that narrow demonstrated
-gap may add a LocalMath companion; the current allocation remains 62 and no C09
-is presumed.
+gap may add a LocalMath companion. R10 has now demonstrated exactly one such
+gap: C09 atomic keyed rebuild, raising the allocation to 63. This does not
+authorize additional companions without another real consumer and reusable
+owner-law gap.
 
 The owning G06 suite includes exact shared-owner conflicts and positive
 independence controls. Periodic moment cases whose image labels differ only by
@@ -624,7 +633,7 @@ completed PR. Before R49/R50 freeze their baseline, run one bounded comparison:
 | R03-R05 and the Models timeout companion | None; CI/workflow only | No Kaimon debt sweep. |
 | R06 Potts operation contracts | Device/compiler-sensitive | Compare operation/executable lowering and one unrelated device control before/after the merge. |
 | R07 Core scientific contexts | Device-reachable | Compare proposal/context and scientific-geometry boundaries plus an unchanged control. |
-| LocalMath PR12, PR13, PR14, PR16, PR17, PR18 and PR19/C08 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. PR19 supplied its feature-local Kaimon, allocation, CPU and real-Metal comparison before merge. |
+| LocalMath PR12, PR13, PR14, PR16, PR17, PR18, PR19/C08 and C09 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. PR19 supplied its feature-local Kaimon, allocation, CPU and real-Metal comparison before merge; C09 must do the same for incremental versus rebuild policy. |
 
 The remaining chain applies the ladder prospectively rather than accumulating a
 second retrospective tail:
@@ -691,7 +700,7 @@ production path and delete the displaced prototype when appropriate.
 No extra framework, cosmetic cleanup, or placeholder vendor PR is allocated.
 A demonstrated missing event-settlement or reusable transfer/publication
 primitive earns a companion in its actual owner and updates the count.
-Existing LocalMath companions are already counted in the **62 currently
+Existing LocalMath companions are already counted in the **63 currently
 identified PRs**. That identified count is not a ceiling.
 
 A world-class completion means promised public science actually works, laws are

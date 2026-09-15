@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified eight required additional PRs. `C01`–`C08` are
+Implementation has identified nine required additional PRs. `C01`–`C09` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -37,6 +37,7 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C06 Identity-seeded reduction control** | LocalMath | G05 | C05 | R10 Core maintained minimum lifecycle | Merged | [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17) |
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
+| **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Merged as `cca004b9`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
 
 The companion scopes are:
 
@@ -117,9 +118,24 @@ The companion scopes are:
   registry or second collection executor. Core R10 consumes this primitive for
   exact O(E) pair multiplicity; Potts R11 lowers the existing
   `ResourceOperation` surface to that Core authority.
+- **C09 — a G05 LocalMath atomic keyed-rebuild companion**, ordered after C08
+  and before R10/R11 completion. The real maintained relationship consumer
+  demonstrated that C08's incremental law correctly treats prior published
+  records as input, while a complete relationship rebuild must ignore them and
+  replace the bounded keyed collection atomically. `Collect` cannot fold
+  duplicate runtime keys, and externally clearing or aliasing collection count
+  violates storage ownership and failure atomicity. Add the smallest reusable
+  rebuild seed policy to the same `KeyedReduce` preparation and
+  KernelAbstractions execution path: start from the exact identity, ignore
+  stage-entry keys, preserve canonical contribution ordering, replace count and
+  records only on success, and leave the prior publication unchanged on invalid
+  input or overflow. Keep capacity and stage-entry inclusion as runtime data;
+  do not add a Core/Potts vocabulary, scheduler, collection executor or
+  per-model specialization. Defend repeated, changed, empty and overflowing
+  rebuilds on CPU and real Metal, plus inspection and compiler-shape stability.
 
-The current identified allocation is therefore **62 repository PRs: the 54 planned
-PRs below plus these eight companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **63 repository PRs: the 54 planned
+PRs below plus these nine companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -134,10 +150,10 @@ or prescribed branch names; their numbering is not a chronological merge order.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Potts.jl | 8 | 13 | 21 | 0 | **21** |
 | CorePotts.jl | 7 | 9 | 16 | 0 | **16** |
-| LocalMath.jl | 1 | 2 | 3 | 7 | **10** |
+| LocalMath.jl | 1 | 2 | 3 | 8 | **11** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **8** | **62** |
+| **Total** | **22** | **32** | **54** | **9** | **63** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -195,7 +211,7 @@ The compiler amendment owns the detailed acceptance template.
 | G02/R06 | Normalize authored operations and source diagnostics into the sole executable ownership boundary; runtime does not interpret report objects. | Retrospectively compare operation lowering and an unrelated device control; author names and locations remain host values. |
 | G03/R07 | Bind verified geometry/context facts into concrete read views rather than passing broad context stores. | Retrospectively compare proposal/context and geometry entrypoints plus an unchanged control. |
 | G04/R08–R09 | Normalize scoped component identity, structured state/history and compound effects into typed storage and publication recipes. | Prove constructor-equivalent names/compositions reuse execution families; record the structural lifecycle baseline and actual device witness. |
-| G05/C08/R10–R11 | Lower relation lanes and maintained statistics into contribution, keyed grouping, update, bounded reconstruction and publication recipes over handles/scalars/deltas. | Keep capacity/count/value changes as data where admitted; measure sum/minimum, relation and lifecycle boundaries, with C08 operation/retention confined to its fold boundary. |
+| G05/C08–C09/R10–R11 | Lower relation lanes and maintained statistics into contribution, keyed grouping, incremental update, atomic rebuild and publication recipes over handles/scalars/deltas. | Keep capacity/count/value changes and incremental-versus-rebuild inclusion as data where admitted; measure sum/minimum, relation and lifecycle boundaries, with C08/C09 operation/retention policy confined to its fold boundary. |
 | G05C/R49–R50 | Replace broad accepted-update interpretation with canonical recipes and state views, while Potts erases author identity and irregular analyzed structure before Core preparation. | Own the root-`Any`, boundary-size, allocation and entry-count/name/value identity probes, exact measured entrypoints and unchanged controls. |
 | G06/R12–R13 | Normalize energy, drive and transitive dependency meaning into bounded evaluation/arbitration recipes with explicit transition/context inputs. | Reuse established state views; add a family only for distinct semantics and extend the transition/relational canary on CPU and claimed devices. |
 | G07/R14–R16 | Bind cadence, snapshots, settlement, lifecycle and publication into narrow views; external numerical systems stay at their native host boundary. | Distinguish CPM-device from solver-host compilation and extend the held/native-snapshot canary plus full public workflow. |
@@ -219,8 +235,9 @@ The compiler amendment owns the detailed acceptance template.
 | E16/R54 | Compose tumor Boolean, field, phenotype and lifecycle rules through established public families. | Record realistic payload/count/latency growth; paper and pathway names never become hot execution identity. |
 
 This is absorbed into the existing dense allocation. It does not add a compiler
-framework PR. The demonstrated C07 ordered-fold validation and C08 exact
-keyed-reduction companions raise the current total to 62 identified PRs.
+framework PR. The demonstrated C07 ordered-fold validation, C08 exact
+keyed-reduction and C09 atomic keyed-rebuild companions raise the current total
+to 63 identified PRs.
 
 The compiler amendment itself does not add a PR. Every PR
 declares compiler impact as `none`, `host-only`, or `device-reachable` under the
@@ -810,6 +827,7 @@ flowchart TD
   C06["C06: LocalMath identity-seeded reduction control"]
   C07["C07: LocalMath ordered-fold step validation"]
   C08["C08: LocalMath exact keyed reduction"]
+  C09["C09: LocalMath atomic keyed rebuild publication"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -838,7 +856,8 @@ flowchart TD
   C05 --> C06
   C06 --> C07
   C07 --> C08
-  C08 --> G05
+  C08 --> C09
+  C09 --> G05
   G05 --> G05C
   G05C --> G06
   G01 --> G07
@@ -1068,13 +1087,13 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C08 are already identified and counted above; they are not conditional
+C01–C09 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those eight companions.
+gaps beyond those nine companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
-| Later structured storage/gather/publication needs a reusable LocalMath law not supplied by C01–C08 | Add and count a LocalMath companion at its first real consumer |
+| Later structured storage/gather/publication needs a reusable LocalMath law not supplied by C01–C09 | Add and count a LocalMath companion at its first real consumer |
 | G08 needs failure information not already exposed by G06/G07 | Add a Core companion, or include the fact in its still-open owning PR |
 | Profiling identifies a material Potts/Core defect | Fix in a coherent open owner PR or count a measured optimization PR; G09 measurement alone is insufficient |
 | 3D or graph results need a new public rendering protocol | Add Makie; existing 3D support is inspected first, graph rendering is not presumed |
@@ -1092,7 +1111,7 @@ gaps beyond those eight companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **62 currently identified PRs** add the eight demonstrated C01–C08
+The **63 currently identified PRs** add the nine demonstrated C01–C09
 companions; future demonstrated discoveries can increase that identified total.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
@@ -1101,7 +1120,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 62 currently
+**not claimed complete by the 54-PR base allocation or the 63 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |
