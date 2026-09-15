@@ -190,31 +190,40 @@ The core API uses names that reveal the aggregation:
 - `global_interface_measure`
 
 The ambiguous names `ContactArea` and unqualified `neighbor_count` are removed from the primary API.
-Compatibility aliases, if temporarily retained, emit migration guidance and preserve one documented
-legacy meaning.
+The cutover removes their displaced declarations and lowering paths atomically;
+there are no compatibility aliases or parallel legacy meanings.
 
 ### Edge and Site Queries
 
-For queried owner `a` and owner filter `F`:
+For queried owner `a`, owner filter `F`, and explicitly selected relation `R`:
 
-- `contact_edge_count(a, F)` counts outward realized incidences from `a` whose other owner matches
+- `contact_edge_count(a, F; over=R)` counts outward realized incidences from `a` whose other owner matches
   `F`.
-- `contact_measure(a, F, metric)` sums the selected metric weight over those incidences.
-- `boundary_site_count(a, F)` counts sites owned by `a` that have at least one matching outgoing
+- `contact_measure(a, F, metric; over=R)` sums the selected metric weight over those incidences.
+- `boundary_site_count(a, F; over=R)` counts sites owned by `a` that have at least one matching outgoing
   incidence, once per owned site.
-- `global_interface_measure(F1, F2, metric)` counts canonical undirected matching interfaces once.
+- `global_interface_measure(F1, F2, metric; over=R)` counts canonical undirected matching interfaces once.
+
+`over` is mandatory semantic input. It is not hidden inside `F`, inferred from a
+relation named `:contact` or `:surface`, or selected by declaration order. A
+public keyword may normalize to a positional relation operand in the symbolic
+node; the normalized node records the relation independently from the filter.
 
 The word area appears only when the returned metric is a physical area.
 
 ### Distinct-Owner Queries
 
-`neighbor_cells(a, F)` denotes the set of distinct neighboring finite-cell identities reached by the
+`neighbor_cells(a, F; over=R)` denotes the set of distinct neighboring finite-cell identities reached by the
 query relation. Contact multiplicity does not duplicate an identity. Its ordinary query form makes
 no semantic ordering promise. An explicitly ordered host query MAY return canonical stable-identity
 order; device reductions need not materialize a set if they produce the same scientific result.
 
-`neighbor_cell_count` is the cardinality of that set. `neighbor_property_sum` reads each matching
-finite cell once and sums its property once. `neighbor_property_mean` uses the same distinct set.
+`neighbor_cell_count(a, F; over=R)` is the cardinality of that set.
+`neighbor_property_sum(a, F, property; over=R)` reads each matching finite
+cell once and sums its property once.
+`neighbor_property_mean(a, F, property, empty; over=R)` uses the same distinct
+set and requires either an explicit typed empty value or the explicit semantic
+error policy.
 
 Medium and wall domains are excluded from `neighbor_cells` unless an owner-domain query is explicitly
 requested. A property query including a domain owner requires that property to exist at the domain
@@ -225,6 +234,13 @@ type level.
 Every query declares whether its filter matches cell identity, cell type, medium domain, wall domain,
 owner category, or a compiled predicate. A type filter and identity filter are never inferred from
 the same integer.
+
+These are disjoint typed filter families. Compilation may evaluate an admitted
+predicate into a maintained owner-match mask, but the generic query executor
+MUST NOT retain or interpret the authored predicate graph. Relation, filter,
+metric, property and result handles, owner identities, capacities and active
+counts are runtime data; the executor specializes only on stable operation and
+storage families.
 
 ### Empty and Snapshot Behavior
 

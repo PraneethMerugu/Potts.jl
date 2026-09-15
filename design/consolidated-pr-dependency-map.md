@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified nine required additional PRs. `C01`–`C09` are
+Implementation has identified eleven required additional PRs. `C01`–`C11` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -38,6 +38,8 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 | **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Merged as `cca004b9`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
+| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Identified; implementation not started | — |
+| **C11 Cartesian domain authoring** | Potts | G05 | C10, R09 | R11 complete spatial-query authoring and lowering | Identified; implementation not started | — |
 
 The companion scopes are:
 
@@ -133,9 +135,43 @@ The companion scopes are:
   do not add a Core/Potts vocabulary, scheduler, collection executor or
   per-model specialization. Defend repeated, changed, empty and overflowing
   rebuilds on CPU and real Metal, plus inspection and compiler-shape stability.
+- **C10 — a G05 CorePotts Cartesian-domain ownership companion**. The accepted
+  Cartesian specification requires immutable fixed-exterior and obstacle owners,
+  but the current runtime has only finite-cell and medium-domain ownership. A
+  correct implementation crosses proposal sampling, contact/energy relation
+  realization, lifecycle mutation admission, checkerboard planning, checkpoint
+  identity and inspection; it is not coherently part of R10's derived-query
+  maintenance law. Atomically extend or replace the existing finite/medium
+  owner classification with one durable owner-at-site and owner-metadata
+  authority, per-face exterior realization and authoritative `mutable_sites`
+  set; delete displaced flags, decoders and competing obstacle/exterior maps.
+  Sequential and checkerboard attempts use the same mutable
+  set and the reference MCS budget is its cardinality; fixed owners may be read
+  by admitted contact/query/field relations but never selected or mutated.
+  Preserve one execution path and carry face kinds/owner handles, owner
+  identities/categories, masks, capacities and site counts as runtime data;
+  dimension and proven storage families may specialize. Defend
+  closed/fixed/obstacle/immobilized cases,
+  corner validation, uniform recipient sampling, immutable-write rejection,
+  checkpoint/inspection and CPU/real-Metal behavior. Compare typed IR,
+  specialization and compilation behavior across face configurations and
+  obstacle masks with Kaimon/`code_typed`; real backend behavior remains the
+  authority.
+- **C11 — the matching G05 Potts Cartesian-domain authoring companion**, ordered
+  after C10 and R09 and before R11. Delete the current `FrozenBorder` ambiguity
+  and migrate every existing behavior-preserving consumer to `Closed`; do not
+  reinterpret it as an exterior owner. Add explicit typed axis-face boundary
+  values, `FixedExterior(domain_owner)`,
+  typed medium/wall domain owners and `Obstacle(mask; owner=...)`. Lower the
+  complete immutable-owner and mutable-site contract through C10's public Core
+  interface; include it in semantic/program identity, initialization validation,
+  inspection, diagnostics and documentation. Delete the displaced spelling and
+  lowering path atomically rather than treating a negative medium encoding as a
+  wall or adding a compatibility path; `Closed` preserves existing no-flux
+  behavior.
 
-The current identified allocation is therefore **63 repository PRs: the 54 planned
-PRs below plus these nine companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **65 repository PRs: the 54 planned
+PRs below plus these eleven companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -148,12 +184,12 @@ or prescribed branch names; their numbering is not a chronological merge order.
 
 | Repository | Main spine | Breadth | Base planned | Companions | Identified total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Potts.jl | 8 | 13 | 21 | 0 | **21** |
-| CorePotts.jl | 7 | 9 | 16 | 0 | **16** |
+| Potts.jl | 8 | 13 | 21 | 1 | **22** |
+| CorePotts.jl | 7 | 9 | 16 | 1 | **17** |
 | LocalMath.jl | 1 | 2 | 3 | 8 | **11** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **9** | **63** |
+| **Total** | **22** | **32** | **54** | **11** | **65** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -211,7 +247,7 @@ The compiler amendment owns the detailed acceptance template.
 | G02/R06 | Normalize authored operations and source diagnostics into the sole executable ownership boundary; runtime does not interpret report objects. | Retrospectively compare operation lowering and an unrelated device control; author names and locations remain host values. |
 | G03/R07 | Bind verified geometry/context facts into concrete read views rather than passing broad context stores. | Retrospectively compare proposal/context and geometry entrypoints plus an unchanged control. |
 | G04/R08–R09 | Normalize scoped component identity, structured state/history and compound effects into typed storage and publication recipes. | Prove constructor-equivalent names/compositions reuse execution families; record the structural lifecycle baseline and actual device witness. |
-| G05/C08–C09/R10–R11 | Lower relation lanes and maintained statistics into contribution, keyed grouping, incremental update, atomic rebuild and publication recipes over handles/scalars/deltas. | Keep capacity/count/value changes and incremental-versus-rebuild inclusion as data where admitted; measure sum/minimum, relation and lifecycle boundaries, with C08/C09 operation/retention policy confined to its fold boundary. |
+| G05/C08–C11/R10–R11 | Lower Cartesian owner domains, relation lanes and maintained statistics into compact domain views, contribution, keyed grouping, incremental update, atomic rebuild and publication recipes over handles/scalars/deltas. | Keep owner identities/categories, mutable-site masks, capacity/count/value changes and incremental-versus-rebuild inclusion as data where admitted; measure sampling, sum/minimum, relation/query and lifecycle boundaries, with C08/C09 operation/retention policy confined to its fold boundary and C10/C11 eliminating the missing domain representation rather than adding an executor. |
 | G05C/R49–R50 | Replace broad accepted-update interpretation with canonical recipes and state views, while Potts erases author identity and irregular analyzed structure before Core preparation. | Own the root-`Any`, boundary-size, allocation and entry-count/name/value identity probes, exact measured entrypoints and unchanged controls. |
 | G06/R12–R13 | Normalize energy, drive and transitive dependency meaning into bounded evaluation/arbitration recipes with explicit transition/context inputs. | Reuse established state views; add a family only for distinct semantics and extend the transition/relational canary on CPU and claimed devices. |
 | G07/R14–R16 | Bind cadence, snapshots, settlement, lifecycle and publication into narrow views; external numerical systems stay at their native host boundary. | Distinguish CPM-device from solver-host compilation and extend the held/native-snapshot canary plus full public workflow. |
@@ -236,8 +272,8 @@ The compiler amendment owns the detailed acceptance template.
 
 This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation, C08 exact
-keyed-reduction and C09 atomic keyed-rebuild companions raise the current total
-to 63 identified PRs.
+keyed-reduction, C09 atomic keyed-rebuild and C10/C11 Cartesian-domain
+companions raise the current total to 65 identified PRs.
 
 The compiler amendment itself does not add a PR. Every PR
 declares compiler impact as `none`, `host-only`, or `device-reachable` under the
@@ -388,8 +424,10 @@ late failure, two independent component instances sharing a parameter/input,
 and rejected scope/shape/unknown-name/writer errors. Do not add a retained builder
 graph or make numerical remake silently alter structural arguments.
 
-**G05 — Maintained quantities.** R10 owns source-aware maintenance and relation
-contracts; R11 owns ordinary quantity/gather/reduction authoring and lowering.
+**G05 — Maintained quantities.** C10/C11 first establish the accepted Cartesian
+domain-owner and mutable-site contract. R10 owns source-aware maintenance and
+relation/query contracts; R11 owns ordinary quantity/gather/reduction authoring
+and lowering.
 Deliver additive scalar/vector/tensor statistics, scientific geometry over
 shared sufficient statistics, distinct-cell versus contact-weighted sensing,
 multiple quantity consumers, and invalidation for every admitted source
@@ -401,6 +439,27 @@ removes the current minimum. A bounded gathered minimum alone does not satisfy
 this requirement, nor do additive happy paths.
 Test periodic/degenerate geometry, empty reductions, full-field updates without
 copies, floating accumulation/rebuild policy, division and restore.
+Complete the settled-snapshot spatial-query vocabulary rather than freezing an
+exact-cell-only subset: `contact_edge_count`, `contact_measure`,
+`boundary_site_count`, `neighbor_cells`, `neighbor_cell_count`,
+`neighbor_property_sum`, `neighbor_property_mean` and
+`global_interface_measure`. Relation selection is a separate mandatory
+`over=...` semantic argument, never hidden in an owner filter or inferred from
+a privileged relation name. Filters distinguish stable finite identity, kind,
+medium domain, wall domain, owner category and admitted compiled predicates;
+metrics, property sources and empty behavior are explicit. Lower compiled
+predicates through existing evaluator/source maintenance into runtime owner
+match masks. The reusable query executor consumes compact relation/filter/
+metric/property handles and the sufficient exact maintained incidence,
+generation-aware distinct-pair and boundary-site-union facts selected by
+implementation evidence; it does not interpret the author graph or specialize
+on completed model structure. Pair totals alone do not prove boundary-site
+union semantics, but this plan does not prescribe a particular record layout.
+Defend all seven scalar queries plus
+the distinct-owner gather against independent scans on CPU and real Metal,
+including medium/wall/exterior/obstacle, same-kind distinct cells, multiple
+metrics, empty results, source changes, lifecycle, checkpoint continuation and
+failure-atomic overflow.
 Classify R10/R11 as device-reachable. Compare the exact G04 tuple with G04+G05
 for built-ins-only structural lifecycle, lifecycle with source-expression
 trackers, maintained sum/minimum contribution and settlement, and one unrelated
@@ -828,6 +887,8 @@ flowchart TD
   C07["C07: LocalMath ordered-fold step validation"]
   C08["C08: LocalMath exact keyed reduction"]
   C09["C09: LocalMath atomic keyed rebuild publication"]
+  C10["C10: Core Cartesian domain ownership"]
+  C11["C11: Potts Cartesian domain authoring"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -857,6 +918,9 @@ flowchart TD
   C06 --> C07
   C07 --> C08
   C08 --> C09
+  G04 --> C10
+  C10 --> C11
+  C11 --> G05
   C09 --> G05
   G05 --> G05C
   G05C --> G06
@@ -1087,9 +1151,9 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C09 are already identified and counted above; they are not conditional
+C01–C11 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those nine companions.
+gaps beyond those eleven companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
@@ -1111,7 +1175,7 @@ gaps beyond those nine companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **63 currently identified PRs** add the nine demonstrated C01–C09
+The **65 currently identified PRs** add the eleven demonstrated C01–C11
 companions; future demonstrated discoveries can increase that identified total.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
@@ -1120,7 +1184,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 63 currently
+**not claimed complete by the 54-PR base allocation or the 65 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |

@@ -10,8 +10,8 @@ Keep the existing spine and breadth commitments, strengthen their composition
 contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
-The canonical allocation is **63 identified PRs: 54 planned + nine companions**.
-The all-in repository totals are Potts 21, CorePotts 16, LocalMath 11,
+The canonical allocation is **65 identified PRs: 54 planned + eleven companions**.
+The all-in repository totals are Potts 22, CorePotts 17, LocalMath 11,
 MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
 their identities.
 
@@ -22,16 +22,23 @@ the earlier 58-PR bundling alternative is not the selected allocation. Do not ma
 PR count an acceptance criterion.
 
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
-63-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
+65-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
-At review time R01–R07 and all nine currently identified companions are
-recorded merged; the G07 ordered-fold validation companion C07 is LocalMath
+At review time R01–R07 and the nine completed companions are recorded merged;
+the G07 ordered-fold validation companion C07 is LocalMath
 PR18 and its complete hosted suite passed after merge. The G05 exact
 keyed-reduction companion C08 is LocalMath PR19, merged as `7082ed84`, and
 precedes Core R10/Potts R11 relation-query completion.
 The R10 consumer additionally demonstrated C09, a narrow LocalMath atomic
 keyed-rebuild publication law, merged as LocalMath PR20; it also precedes
 R10/R11 completion.
+The maintained-query audit additionally demonstrated C10/C11: CorePotts and
+Potts must establish durable fixed-exterior/obstacle domain ownership and
+mutable-site semantics before R10/R11 can claim the accepted wall/domain query
+surface. C10 replaces/extends the existing owner authority rather than adding a
+second decoder; C11 migrates current `FrozenBorder` no-flux consumers to
+`Closed` before deleting that ambiguous spelling, never reinterpreting it as a
+fixed owner. These two companions are identified but not implemented.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the
@@ -147,7 +154,7 @@ Share concrete candidate interfaces with active owners before incorporating it.
 |---|---|
 | G01–G03 / R01–R07 | Preserve merged extraction and ownership preparation. Inspect actual active Models consumers before removing remaining special operations. No repeat extraction PR. |
 | G04 / R08–R09 | Make MTK-like composition an executable authoring requirement. Exercise nested repeated instances, parameter sharing, lexical scope, typed state/units, history, compound effects and addressed process randomness. Boolean regulation uses ordinary state/process expressions with an explicit update law, not a Boolean compiler subsystem. |
-| G05 / R10–R11 | Defend neighborhood geometric means/zero behavior for activity, geometry-dependent adhesion, substrate-restricted moments and sensing, source-aware matrix updates, and multiple consumers of shared quantities. Keep existing maintained-minimum and numerical obligations. Preserve explicit checkerboard rejection for unsupported moment, shared-owner, relationship and derived-dependency conjunctions until G06 proves complete closure; do not partially admit or add a temporary path. Only add missing reusable mathematics in its true owner. |
+| G05 / C10–C11 / R10–R11 | Establish durable fixed-exterior/obstacle owners and the authoritative mutable-site attempt set before completing the explicit `over=...` spatial-query surface. Defend neighborhood geometric means/zero behavior for activity, geometry-dependent adhesion, substrate-restricted moments and sensing, source-aware matrix updates, and multiple consumers of shared quantities. Keep existing maintained-minimum and numerical obligations. Preserve explicit checkerboard rejection for unsupported moment, shared-owner, relationship and derived-dependency conjunctions until G06 proves complete closure; do not partially admit or add a temporary path. Only add missing reusable mathematics in its true owner. |
 | G05C / R49–R50 | Keep the accepted pair and strengthen its downstream canaries. Add actual model-derived cases to the existing criteria: geometry-dependent contact energy and field/history consumption. The G06 canary must carry an immutable batch snapshot plus enough normalized transitive dependency/effect identity to reject an apparently site-disjoint periodic/shared-owner/relation conflict while preserving shared-read and owner-proven commutative/associative compatibility, without retaining or interpreting the author graph. R49 establishes canonical Core executor identity across author-only renames, numerical value changes and bounded entry-count ladders; R50 removes author identity/irregular graph structure before that boundary and proves package-declared and interactive compositions share it. No third compiler rewrite, model tag, retained builder graph or parallel dependency authority. |
 | G06 / R12–R13 | Primary owner of complete checkerboard conflict closure. Demonstrate ordinary activity and chemotaxis drives, anisotropic contact energy and coupled mechanical deltas. Evaluate each batch from one immutable entry snapshot and derive complete transitive footprints including periodic aliases and shared logical owners. Read/read overlap is compatible; incompatible read/write, write/write and noncommuting effects arbitrate; owner-proven commutative/associative effects may share. Choose deterministic backend-independent winners, admit independent proposals, and atomically commit/roll back each winner. Distinguish scheduled attempts, non-no-op proposals, losers and winners: no no-op/loser/reject mutates state or receives a compensating attempt. Preserve declared semantic RNG addressing and unrelated-stream invariance without asserting unused draws; use realized color-fraction time. Include shared-read and commutative positive controls, exact shared-owner conflicts, and periodic-moment gauge cases with identical physical observables/energies/closure/winners and gauge-equivalent state; require raw identity only for a unique G05 gauge. Core R12 owns evaluation/arbitration/commit on the single CPU/GPU KernelAbstractions path; Potts R13 owns conservative analysis, admission and source-linked diagnostics. Sequential/full-state evaluation is only an isolated-winner oracle, not a checkerboard trajectory or kinetics oracle. Atomically delete G05 rejection only for qualified conjunctions. These are semantic outcomes, not a prescribed graph, coloring or data structure. |
 | G07 / R14–R16 | Complete native expression/structured IO, reciprocal field feedback, native unknown/observed initialization, explicit physical-time mapping, solver/lifecycle ownership and failure semantics. Keep upstream MTK systems native. Include a maintained MethodOfLines path and selected SBML-imported native systems. Add held/native batch state to the G06 conflict-closure pressure fixture and verify snapshot isolation, loser accounting and atomic failure on each claimed checkerboard/backend conjunction. R16 remains a small reusable coupling witness, not a substitute for #6 or #11. |
