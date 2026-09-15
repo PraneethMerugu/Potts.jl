@@ -44,7 +44,7 @@ in dependency order. Releases remain unauthorized.
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft; exact Symbolics 7.37 CPU/Metal correction green locally, current-tip hosted checks active, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
-| C09 LocalMath atomic keyed rebuild publication | Not yet published | uncommitted candidate | LocalMath main after PR19 | demonstrated by the R10 consumer; independent review found a duplicate-emission segmentation blocker, correction active |
+| C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `9d5b383` | LocalMath main after PR19 | local CPU/Metal/docs/compiler evidence and independent re-review clean; exact-tip hosted checks active |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
@@ -109,20 +109,21 @@ atomicity. C09 therefore adds only an exact rebuild seed policy to the same
 `KeyedReduce` prepared stages and KernelAbstractions executor: ignore prior
 records, fold the complete candidate canonically, and replace count plus records
 only on success. The Core consumer confirmed this removes its otherwise
-necessary fresh-allocation/copy workaround. Current candidate evidence includes
-focused CPU 32/32, existing-owner 16/16, real-Metal 32/32 with scalar indexing
-disabled, strict docs, and one prepared/execution specialization across both
-incremental and rebuild policies. The probe still needs actual C08-base versus
-C09-candidate Kaimon/`code_typed` statement, call, stability and MethodInstance
-comparison rather than a launch-provenance assertion. The isolated Core
+necessary fresh-allocation/copy workaround. Corrected candidate evidence includes
+the complete CPU suite at 1,869/1,869, focused real Metal at 37/37 with scalar
+indexing disabled, strict docs, and exact C08-base versus C09-candidate
+`code_typed`/MethodInstance comparison. The isolated Core
 checkerboard consumer now publishes `(1, 1.0)`, exactly matching its independent
 pair oracle where the incremental policy had incorrectly produced `(3, 3.0)`;
-extended Core checkpoint and Metal witnesses remain. Independent review then found that a
-rebuild whose destination capacity exceeds its emitted candidates passes the
+its capacity-greater-than-emission duplicate-pair case also passes on CPU and
+real Metal. Independent review initially found that a
+rebuild whose destination capacity exceeded its emitted candidates passed the
 destination capacity, rather than the actual zero prior-record count, into
 duplicate-key classification. That can reject ordinary duplicate contributions
-instead of folding them. The candidate must correct this boundary and add
-CPU/Metal duplicate-emission coverage before publication.
+instead of folding them. The candidate now passes the actual prior capacity,
+adds noncommutative CPU/Metal regression coverage, and is independently
+re-review clean. Exact-tip hosted checks and extended Core lifecycle
+qualification remain.
 
 ### R50 pinned array imports
 
@@ -148,7 +149,7 @@ qualify a later joined package tuple.
 
 | Qualification item | Current evidence | Remaining work and owner |
 | --- | --- | --- |
-| C08/C09 keyed reduction and rebuild | C08 is complete at merged LocalMath PR19. R10 demonstrated C09's missing atomic rebuild policy, and the first exact Core checkerboard consumer matches its independent oracle. Independent review found a rebuild duplicate-emission segmentation blocker masked by capacity-one tests and missing base-versus-candidate typed metrics. | Correct the prior-count boundary; add CPU/Metal capacity-greater-than-emission duplicate-key coverage; record actual Kaimon/`code_typed` statement, call, stability and MethodInstance deltas; rerun full/docs and the extended Core repeated/checkpoint/Metal witness. |
+| C08/C09 keyed reduction and rebuild | C08 is complete at merged LocalMath PR19. C09 at LocalMath PR20 corrected its review blocker, is full-CPU/focused-Metal/docs/compiler green locally and independently re-review clean. Its exact Core checkerboard consumer matches independent pair oracles including capacity-greater-than-emission duplicate-key folding on real Metal. | Require exact-tip hosted C09 checks, then rerun the extended Core lifecycle/checkpoint/permanent Metal and affected full-suite witnesses before R10 publication. |
 | G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
 | G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08/C09 tuple. |
 | R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |

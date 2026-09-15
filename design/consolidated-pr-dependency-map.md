@@ -37,7 +37,7 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C06 Identity-seeded reduction control** | LocalMath | G05 | C05 | R10 Core maintained minimum lifecycle | Merged | [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17) |
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
-| **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Demonstrated by the R10 consumer; independent review blocked publication on duplicate-emission correctness and typed-evidence gaps | Not yet published |
+| **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Published at `9d5b383`; local CPU/Metal/docs/compiler evidence and independent re-review clean; exact-tip hosted checks active | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
 
 The companion scopes are:
 
