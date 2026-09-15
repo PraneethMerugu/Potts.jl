@@ -20,16 +20,16 @@ in dependency order. Releases remain unauthorized.
 - R01–R07 are merged across PottsModels, Potts, CorePotts, LocalMath, and
   MakiePotts. Core R08 is also merged as CorePotts PR32 (`7b46e4eb`); its Potts
   consumer R09 remains open.
-- Eight demonstrated companions are merged: the PottsModels CI correction and
+- Nine demonstrated companions are merged: the PottsModels CI correction and
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
-  ordered-fold step validation, plus exact keyed reduction.
-- A ninth demonstrated companion, C09 LocalMath atomic keyed rebuild
-  publication, is in candidate qualification. It is not yet published or
-  merged.
+  ordered-fold step validation, plus exact keyed reduction and atomic keyed
+  rebuild publication.
 - The seventh identified companion is LocalMath PR18, merged as `9d3e1a24`.
   The eighth is LocalMath PR19, merged as `7082ed84`; both passed their complete
   hosted package, scientific, documentation, macOS, and real-Metal checks.
+- The ninth is LocalMath PR20, merged as `cca004b9`; its complete hosted suite
+  also passed.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -44,7 +44,7 @@ in dependency order. Releases remain unauthorized.
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft; exact Symbolics 7.37 CPU/Metal correction green locally, current-tip hosted checks active, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
-| C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `9d5b383` | LocalMath main after PR19 | local CPU/Metal/docs/compiler evidence and independent re-review clean; exact-tip hosted checks active |
+| C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `cca004b9` | LocalMath main after PR19 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
@@ -122,8 +122,8 @@ destination capacity, rather than the actual zero prior-record count, into
 duplicate-key classification. That can reject ordinary duplicate contributions
 instead of folding them. The candidate now passes the actual prior capacity,
 adds noncommutative CPU/Metal regression coverage, and is independently
-re-review clean. Exact-tip hosted checks and extended Core lifecycle
-qualification remain.
+re-review clean. Its complete exact-tip hosted suite passed before merge;
+extended Core lifecycle qualification remains.
 
 ### R50 pinned array imports
 
@@ -149,7 +149,7 @@ qualify a later joined package tuple.
 
 | Qualification item | Current evidence | Remaining work and owner |
 | --- | --- | --- |
-| C08/C09 keyed reduction and rebuild | C08 is complete at merged LocalMath PR19. C09 at LocalMath PR20 corrected its review blocker, is full-CPU/focused-Metal/docs/compiler green locally and independently re-review clean. Its exact Core checkerboard consumer matches independent pair oracles including capacity-greater-than-emission duplicate-key folding on real Metal. | Require exact-tip hosted C09 checks, then rerun the extended Core lifecycle/checkpoint/permanent Metal and affected full-suite witnesses before R10 publication. |
+| C08/C09 keyed reduction and rebuild | C08 and C09 are complete at merged LocalMath PR19/PR20 with full hosted qualification. C09 corrected its review blocker and its exact Core checkerboard consumer matches independent pair oracles, including capacity-greater-than-emission duplicate-key folding on real Metal. | Consume merged C09, then rerun the extended Core lifecycle/checkpoint/permanent Metal and affected full-suite witnesses before R10 publication. |
 | G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
 | G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08/C09 tuple. |
 | R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |
