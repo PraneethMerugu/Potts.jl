@@ -110,6 +110,7 @@ function _potts_act_energy end
 function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
 function _potts_model_bound_state_value end
+function _potts_cell_bound_state_value end
 function _potts_lifecycle_bound_state_value end
 function _potts_bounded_fold end
 """Test whether two endpoints are linked by a relationship state."""
@@ -119,7 +120,23 @@ Symbolics.@register_symbolic new_contact(x, y)::Bool
 Symbolics.@register_symbolic lost_contact(x, y)::Bool
 Symbolics.@register_symbolic linked(relationship, a, b)::Bool
 Symbolics.@register_symbolic edge_payload(edge, payload)::Real
-Symbolics.@register_symbolic lag(state, amount)::Real
+function lag(state, amount)
+    SymbolicIndexingInterface.symbolic_type(state) isa Union{
+        SymbolicIndexingInterface.ScalarSymbolic,
+        SymbolicIndexingInterface.ArraySymbolic,
+    } || throw(ArgumentError("lag requires a symbolic history reference"))
+    value = Symbolics.unwrap(state)
+    if SymbolicUtils.iscall(value) && SymbolicUtils.operation(value) isa _ProductField
+        # Field selection commutes with a read-only sample selection. Keep the
+        # whole history variable as the sole sampled storage owner.
+        field = SymbolicUtils.operation(value)
+        sampled = lag(only(SymbolicUtils.arguments(value)), amount)
+        return Symbolics.wrap(Symbolics.term(field, Symbolics.unwrap(sampled)))
+    end
+    return Symbolics.wrap(Symbolics.term(lag, value, Symbolics.unwrap(amount)))
+end
+SymbolicUtils.promote_symtype(::typeof(lag), ::Type{T}, ::Type) where {T} = T
+SymbolicUtils.promote_shape(::typeof(lag), state::SymbolicUtils.ShapeT, ::SymbolicUtils.ShapeT) = state
 Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 Symbolics.@register_symbolic _potts_merks_local_connectivity(
     kind, foreground, background

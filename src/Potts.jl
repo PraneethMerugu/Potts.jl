@@ -13,8 +13,10 @@ import PrecompileTools
 import SciMLBase
 import SHA
 import Statistics
+import StaticArrays
 import SymbolicIndexingInterface
 import Symbolics
+import SymbolicUtils
 import SciMLBase: init, solve, solve!, step!, remake, terminate!
 
 # Public symbolic vocabulary and source-level model construction.
@@ -25,6 +27,7 @@ include("symbolics/bindings.jl")
 include("symbolics/operations.jl")
 include("symbolics/distributions.jl")
 include("statements/semantics.jl")
+include("statements/scopes.jl")
 include("statements/lifecycle.jl")
 
 # Completion turns authored hierarchy into qualified, validated scientific
@@ -37,6 +40,8 @@ include("native/scheduled_components.jl")
 include("completion/diagnostics.jl")
 include("systems.jl")
 include("completion/source_inventory.jl")
+include("completion/component_imports.jl")
+include("component_replacement.jl")
 include("completion/inference.jl")
 include("completion/fingerprints.jl")
 include("completion/lifecycle.jl")
@@ -52,15 +57,18 @@ include("completion/completion.jl")
 # Host compiler analysis freezes symbolic meaning and proves bounded resource
 # requirements. The compiler README documents the required pass order.
 include("compiler/host/source_graph.jl")
+include("compiler/host/parameter_manifest.jl")
 include("compiler/host/footprint_types.jl")
 include("compiler/host/operations.jl")
 include("operation_library/scientific.jl")
 include("operation_library/numerics.jl")
 include("compiler/host/normalized_payloads.jl")
+include("completion/symbolic_interface.jl")
 include("compiler/host/operation_validation.jl")
 include("compiler/host/operation_closure.jl")
 include("compiler/host/normalization.jl")
 include("compiler/host/energy_domains.jl")
+include("compiler/host/quantity_scopes.jl")
 include("compiler/host/footprints.jl")
 include("compiler/host/lifecycle_analysis.jl")
 include("compiler/host/operation_analysis.jl")
@@ -85,10 +93,12 @@ include("compiler/lowering/storage_layouts.jl")
 include("compiler/lowering/domain_resources.jl")
 include("compiler/lowering/proposal_descriptors.jl")
 include("compiler/lowering/stage_evaluators.jl")
+include("compiler/lowering/completed_mcs_cadence.jl")
 include("compiler/lowering/accepted_copy_descriptors.jl")
 include("compiler/lowering/relationship_stage_descriptors.jl")
 include("compiler/lowering/stage_grouping.jl")
 include("compiler/lowering/after_mcs_descriptors.jl")
+include("compiler/lowering/history_descriptors.jl")
 include("compiler/lowering/stage_plan.jl")
 include("compiler/lowering/constraints.jl")
 include("compiler/lowering/trackers.jl")
@@ -117,6 +127,7 @@ include("runtime/symbolic_indexing.jl")
 include("inspection.jl")
 
 export PottsSystem, StatementSet, StatementID, SourceLocation, UnknownSource
+export ComponentReference, replace_component
 export AbstractPottsStatement, AbstractPottsEffect, AbstractPottsPhase
 export CellKind, MediumKind, LatticeDomain, SpatialRelation
 export SiteState, CellState, MediumState, ModelState, FieldState, HistoryState
@@ -152,6 +163,7 @@ export PureRead, SynchronousAssign, AcceptedCopyEffect, OrderedBatchEffect
 export Proposal, AcceptedCopy, AfterMCS, RelationshipCommit, Lifecycle
 export Before, After, EveryMCS, AtMCS, Every
 export sites, cells, model, contacts, edges, incident_edges
+export scoped
 export Assign, Create, Remove, Retune
 export CreateCell, RemoveCell, Transition, Divide, Retire
 export SeedAt, SeedStencil, CellCentroid
