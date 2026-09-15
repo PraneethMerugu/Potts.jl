@@ -3,7 +3,7 @@
 Status: current implementation snapshot. Updated 2026-09-14.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-identified work and dependencies: **62 repository PRs = R01–R54 plus eight
+identified work and dependencies: **63 repository PRs = R01–R54 plus nine
 demonstrated companions**. The [compiler amendment](compiler-contract-chain-amendment.md)
 owns compiler-tractability expectations, and the
 [composition-first roadmap](composition-first-model-roadmap.md) owns the
@@ -24,9 +24,12 @@ in dependency order. Releases remain unauthorized.
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
   ordered-fold step validation, plus exact keyed reduction.
-- The seventh LocalMath companion is PR18, merged as `9d3e1a24`. The eighth is
-  PR19, merged as `7082ed84`; both passed their complete hosted package,
-  scientific, documentation, macOS, and real-Metal checks.
+- A ninth demonstrated companion, C09 LocalMath atomic keyed rebuild
+  publication, is in candidate qualification. It is not yet published or
+  merged.
+- The seventh identified companion is LocalMath PR18, merged as `9d3e1a24`.
+  The eighth is LocalMath PR19, merged as `7082ed84`; both passed their complete
+  hosted package, scientific, documentation, macOS, and real-Metal checks.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -39,9 +42,10 @@ in dependency order. Releases remain unauthorized.
 | R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `a4fb6c88` | main | draft; G05 science gaps remain |
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
-| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `0994c492` | Potts PR54 | draft; current-tip hosted checks active, blocked by R11 and downstream canary |
+| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft; exact Symbolics 7.37 CPU/Metal correction green locally, current-tip hosted checks active, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
-| Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | this change | main | draft; independent re-review clean, hosted checks pending |
+| C09 LocalMath atomic keyed rebuild publication | Not yet published | uncommitted candidate | LocalMath main after PR19 | demonstrated by the R10 consumer; independent review found a duplicate-emission segmentation blocker, correction active |
+| Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
 an incomplete parent ready.
@@ -96,16 +100,41 @@ identities. Potts R11 lowers analyzed filter/property facts through public
 compiler SPI. No detached query vocabulary, O(C²) directory, collision-unsafe
 hashing, or GPU-only executor is accepted.
 
+Repeated maintained relationship publication then demonstrated one additional
+LocalMath gap. C08 intentionally folds stage-entry records before new
+contributions, so replaying a complete pair rebuild accumulates stale totals.
+`Collect` cannot fold duplicate runtime keys, and a consumer cannot clear or
+alias `CompactedStorage.count` without violating storage ownership and failure
+atomicity. C09 therefore adds only an exact rebuild seed policy to the same
+`KeyedReduce` prepared stages and KernelAbstractions executor: ignore prior
+records, fold the complete candidate canonically, and replace count plus records
+only on success. The Core consumer confirmed this removes its otherwise
+necessary fresh-allocation/copy workaround. Current candidate evidence includes
+focused CPU 32/32, existing-owner 16/16, real-Metal 32/32 with scalar indexing
+disabled, strict docs, and one prepared/execution specialization across both
+incremental and rebuild policies. The probe still needs actual C08-base versus
+C09-candidate Kaimon/`code_typed` statement, call, stability and MethodInstance
+comparison rather than a launch-provenance assertion. The isolated Core
+checkerboard consumer now publishes `(1, 1.0)`, exactly matching its independent
+pair oracle where the incremental policy had incorrectly produced `(3, 3.0)`;
+extended Core checkpoint and Metal witnesses remain. Independent review then found that a
+rebuild whose destination capacity exceeds its emitted candidates passes the
+destination capacity, rather than the actual zero prior-record count, into
+duplicate-key classification. That can reject ordinary duplicate contributions
+instead of folding them. The candidate must correct this boundary and add
+CPU/Metal duplicate-emission coverage before publication.
+
 ### R50 pinned array imports
 
 Hosted Metal isolated a Symbolics 7.37 failure for whole-array component imports
-and indexed/reordered leaves. Potts commit `0994c492` preserves the validated
-authored array-symbolic identity, installs whole plus scalar substitution rules
+and indexed/reordered leaves. Potts commits `0994c492` and `6c5344d6` preserve
+the validated authored array-symbolic identity, install whole plus scalar substitution rules
 at the sole import-resolution owner, and rejects overlapping whole/scalar aliases
 in either binding order.
 
 - exact pinned focused CPU contract: 6/6;
-- shared CPU plus real-Metal witness with scalar indexing disabled: 28/28;
+- exact hosted dependency tuple, CPU plus real-Metal vector-parameter witness
+  with scalar indexing disabled: 132/132;
 - complete focused component-replacement owner suite: 139/139; and
 - committed Metal Project/Manifest unchanged.
 
@@ -119,12 +148,12 @@ qualify a later joined package tuple.
 
 | Qualification item | Current evidence | Remaining work and owner |
 | --- | --- | --- |
-| C08 exact keyed reduction | Complete at merged LocalMath PR19: feature-local Kaimon typed probes, narrow phase payloads, focused allocation comparison, CPU and real-Metal behavior, full package and docs. | Include the merged revision in the bounded LocalMath retrospective comparison; no C09. |
+| C08/C09 keyed reduction and rebuild | C08 is complete at merged LocalMath PR19. R10 demonstrated C09's missing atomic rebuild policy, and the first exact Core checkerboard consumer matches its independent oracle. Independent review found a rebuild duplicate-emission segmentation blocker masked by capacity-one tests and missing base-versus-candidate typed metrics. | Correct the prior-count boundary; add CPU/Metal capacity-greater-than-emission duplicate-key coverage; record actual Kaimon/`code_typed` statement, call, stability and MethodInstance deltas; rerun full/docs and the extended Core repeated/checkpoint/Metal witness. |
 | G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
-| G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08 tuple. |
+| G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08/C09 tuple. |
 | R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |
 | R50 public lowering identity | The draft candidate has pinned-array CPU/Metal evidence; its parent R11 and downstream interface canary remain open. | Prove package-declared and interactive equivalence, author-name erasure, source diagnostics and the complete public workflow on the exact joined stack. |
-| Retrospective compiler-debt sweep | PR19 supplied its own feature-local comparison; no completed cross-merge sweep is recorded for R06, R07 or the LocalMath PR12–PR19 sequence. | Run the bounded before/current comparisons before R49/R50 freeze; correct a measured defect in its open owner or count a targeted companion only if required. |
+| Retrospective compiler-debt sweep | PR19 supplied its own feature-local comparison; C09 has a policy-specialization probe; no completed cross-merge sweep is recorded for R06, R07 or the LocalMath companion sequence. | Run the bounded before/current comparisons before R49/R50 freeze; correct a measured defect in its open owner or count a targeted companion only if required. |
 | G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Preserve G05's explicit rejection while proving the normalized boundary distinguishes a periodic/shared-owner/relation conflict from shared read-only and owner-proven commutative/associative compatibility; also exercise one held/native-snapshot case before interface freeze. |
 | Canonical public benchmark runner | The design and corpus are specified; G09 is not implemented. | R49/R50 leave the focused reproducible runner; R20 later owns longitudinal fresh/warm, specialization, allocation, transfer and cache records. |
 
@@ -172,9 +201,10 @@ payloads retain enough dependency/effect meaning for R12/R13 without carrying
 the authored graph into device execution. G07 adds held/native snapshot
 pressure; G09 retains compiler/allocation evidence; E01, E03, E08, E11 and E12
 add 3D periodic/shared-owner, opposite-endpoint relationship, exact-global-
-predicate, compound-swap and weighted-graph cases. The identified count remains
-62. There is no C09 unless implementation demonstrates one narrowly owned,
-reusable LocalMath mathematical law that cannot coherently fit R12/R13.
+predicate, compound-swap and weighted-graph cases. The identified count is now
+63. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
+keyed-rebuild law that cannot coherently live in Core or Potts. No further
+companion is presumed.
 R12/R13 atomically delete a G05 rejection only when that exact conjunction is
 qualified; unsupported conjunctions continue to reject explicitly.
 
@@ -193,7 +223,8 @@ repository or link before any reopen action.
 ## Immediate dependency order
 
 1. Correct, re-review, and qualify the periodic geometry/connectivity candidate;
-   consume merged LocalMath PR19 as the exact keyed-reduction prerequisite.
+   consume merged LocalMath PR19 plus qualified C09 as the exact keyed-reduction
+   and atomic-rebuild prerequisites.
 2. Integrate the joined Core R10 maintained spatial-query/geometry contracts and
    the matching Potts R11 lowering; finish the remaining native-output,
    full-field invalidation, lifecycle/division, and restore obligations.
@@ -222,4 +253,4 @@ The next milestone is a scientifically correct and joined G05 baseline: R10,
 R11, the exact keyed-reduction companion, and their R49/R50 compiler-contract
 children must all be current-tip green and independently review-clean. It does
 not complete G06–G09 or any breadth group. Full project completion requires all
-62 identified PRs and any later demonstrated owner companions.
+63 identified PRs and any later demonstrated owner companions.

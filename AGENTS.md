@@ -84,12 +84,16 @@ For PR-chain work, read the current shared
 before selecting work or changing shared compiler contracts. The canonical
 planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
 existing package worktrees may contain older snapshots. The user-approved
-allocation is 62 identified PRs (R01–R54 plus eight companions), including G05C
+allocation is 63 identified PRs (R01–R54 plus nine companions), including G05C
 (R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
 The seventh companion is the demonstrated G07 LocalMath ordered-fold
 step-validation prerequisite before R14 exchange settlement.
 The eighth companion is the demonstrated G05 LocalMath exact keyed-reduction
 prerequisite before Core R10/Potts R11 maintained spatial-query completion.
+The ninth is the demonstrated G05 LocalMath atomic keyed-rebuild publication
+prerequisite for repeated maintained relationship reconstruction on that same
+path; its implementation must ignore prior records as runtime policy and remain
+failure-atomic without adding a second executor.
 R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
 and tumor corpora. E07 completion additionally depends on E04 for model 14.
 Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and

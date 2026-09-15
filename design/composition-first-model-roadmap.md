@@ -10,8 +10,8 @@ Keep the existing spine and breadth commitments, strengthen their composition
 contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
-The canonical allocation is **62 identified PRs: 54 planned + eight companions**.
-The all-in repository totals are Potts 21, CorePotts 16, LocalMath 10,
+The canonical allocation is **63 identified PRs: 54 planned + nine companions**.
+The all-in repository totals are Potts 21, CorePotts 16, LocalMath 11,
 MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
 their identities.
 
@@ -22,13 +22,16 @@ the earlier 58-PR bundling alternative is not the selected allocation. Do not ma
 PR count an acceptance criterion.
 
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
-62-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
+63-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
-At review time R01–R07 and all eight currently identified companions
+At review time R01–R07 and eight of the nine currently identified companions
 are recorded merged; the G07 ordered-fold validation companion C07 is LocalMath
 PR18 and its complete hosted suite passed after merge. The G05 exact
 keyed-reduction companion C08 is LocalMath PR19, merged as `7082ed84`, and
 precedes Core R10/Potts R11 relation-query completion.
+The R10 consumer has additionally demonstrated C09, a narrow LocalMath atomic
+keyed-rebuild publication law; its candidate qualification is tracked in the
+progress notes and it also precedes R10/R11 completion.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the
