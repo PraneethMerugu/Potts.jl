@@ -419,6 +419,10 @@ specialization/code growth, construction/preparation, fan-out, relevant
 allocations/transfers and warm execution without brittle timing gates. Before
 freezing their interface, validate a bounded G06 transition/relational-dependency
 canary and a G07 held/native-snapshot canary against the actual candidate tuple.
+The G06 canary must preserve the distinction between a real transitive conflict,
+shared read-only compatibility and owner-proven commutative/associative effect
+sharing; it preserves G05's execution rejection while proving that R49/R50 do
+not erase the facts R12/R13 will need.
 These are interface tests, not early delivery of G06/G07. Declare extension
 sources, reject detectable hostile captured mutable state, and do not claim
 arbitrary callable purity. Require updated source maps/docs, source-linked
@@ -457,6 +461,58 @@ Keep this proof-heavy work separate from G05 maintenance.
 R12/R13 are device-reachable and extend the canonical probes with the bounded
 transition/relational-dependency canary already required before G05C interface
 freeze.
+
+R12/R13 are also the primary owners of complete checkerboard conflict closure.
+For every checkerboard batch, evaluation reads one immutable batch-entry
+snapshot. Admission derives the complete transitive read, write and effect
+footprint of each proposed transition, including dependencies reached through
+maintained values, incident relationships, periodic aliases and different
+physical sites that share one logical owner. Read/read overlap is compatible;
+only an incompatible read/write or write/write overlap, or noncommuting effects,
+requires arbitration. Shared effects may remain compatible only when their owner
+proves a commutative, associative composition under the declared numerical,
+ordering and publication contract. Arbitration chooses a deterministic backend-
+independent winner set. Winners publish one atomic compound transition; a failed
+winner exposes none of its ownership,
+tracker, relationship, lifecycle or maintained-state effects, and the batch
+remains coherent. Diagnostics distinguish an unsupported static
+conjunction from a realized conflict and identify the relevant authored
+operation/dependency without making inspection a second conflict authority.
+Closure must also admit proposals whose complete footprints are independent;
+marking every proposal pair as conflicting is not a correct implementation.
+Defending controls include shared read-only state and an admitted owner-proven
+commutative/associative effect, as well as incompatible cases that must arbitrate.
+
+For an admitted batch, account separately for scheduled attempts, attempts that
+produce non-no-op proposals, conflict losers and winners. A no-op, a conflict
+loser or a semantically rejected proposal leaves state unchanged, and none
+receives a compensating attempt. A statically rejected conjunction never
+launches. Preserve the declared semantic RNG addresses and prove that unrelated
+streams are invariant under proposal filtering, arbitration and permitted launch
+permutations; require only draws declared for the realized semantic category,
+never fictitious consumption of unused draws. Checkerboard subround time follows
+the realized color-fraction law rather than winner count.
+
+These are outcome and semantic requirements, not a required graph algorithm,
+coloring scheme, footprint representation or arbitration data structure. Core
+R12 owns the sole evaluation/arbitration/commit execution path; Potts R13 owns
+conservative dependency/effect derivation, admission and source-linked public
+explanation. CPU and every claimed GPU use the same KernelAbstractions semantic
+path and winner law. Sequential CPU supplies only an isolated-winner/full-state
+scientific oracle for evaluating a transition and its compound effects; it does
+not establish checkerboard trajectory, ordering or kinetic equivalence.
+Real backend compilation and behavior are authoritative for backend claims.
+Until R12/R13 prove this complete contract, G05 preserves its current explicit
+checkerboard rejection for unsupported moment, shared-owner, relationship and
+derived-dependency combinations. G05 must not partially admit them, weaken the
+scientific expression, or install a temporary second executor. R12/R13 directly
+delete the corresponding G05 rejection only for each conjunction they newly
+qualify; every unqualified conjunction continues to reject explicitly.
+Periodic-moment tests vary physically equivalent image-label gauges and require
+identical canonical physical observables and energies, closure and winner
+identities, and gauge-equivalent committed moment state. Raw image-label or
+moment-state identity is required only if G05 establishes one unique canonical
+gauge.
 
 **G07 — Native transport with lifecycle.** R14 supplies the necessary public
 settlement/exchange/lifecycle contracts. R15 supplies expression/structured
@@ -514,6 +570,12 @@ appropriate open PRs or counted as new owner PRs when warranted. No brittle
 machine-time acceptance threshold or claim that measurements alone optimize code.
 R20 retains the longitudinal compiler records and representative public-model
 corpus; it does not replace feature-local Kaimon and device evidence.
+It includes the G06 conflict-closure corpus: independent proposals, a direct
+site overlap, periodic aliases, shared logical owners, a transitive maintained-
+quantity dependency and opposite endpoints of one relationship. Record
+preparation, arbitration and commit compilation separately; compare statement/
+call counts, type stability, specialization growth, warmed allocation and actual
+backend compilation without turning raw counts or timings into fixed gates.
 
 ## 3. Breadth PRs
 
@@ -555,6 +617,9 @@ initialization, field/native/observation binding and admission. Use ordinary
 public 3D examples and unchanged dimension-generic model factories where
 applicable. Exercise selected CPU and actual Metal 3D field/native/division
 combinations. This does not qualify every global topology algorithm in 3D.
+Add a 3D checkerboard pressure case in which geometrically separated sites
+alias through periodic boundaries or share a cell-wide dependency; the claimed
+CPU/device profiles must produce the same winner identities and committed state.
 Makie already has public 3D frames/slicing/volume rendering; do not add a Makie
 PR unless its actual protocol needs to change.
 
@@ -573,6 +638,9 @@ identity/lifecycle and conflict meaning for directed cell links and fixed
 anchors. Public owning-package examples cover directed exchange and anchored
 springs, including removal, division and parallel conflicts. Do not create a
 new Models PR solely to repeat these fixtures.
+The parallel fixture changes opposite endpoints of the same relationship and
+includes an inverse/transitive dependency, proving that endpoint-disjoint site
+claims alone do not admit both proposals.
 
 **E04 — Compartments and their model library (R28–R30).** Core/Potts add explicit
 containment and coordinated compartment lifecycle. Models adds the related
@@ -617,6 +685,10 @@ sampled measurement is not a substitute for exact acceptance. Do not assume
 G07 scheduled publication provides arbitrary global algorithms or host
 callbacks; R36/R37 contain the missing real algorithm. 3D/parallel topology
 needs separately demonstrated scientific scope.
+Where an exact predicate is admitted in checkerboard execution, add a batch in
+which locally disjoint proposals share its global or component-wide dependency;
+otherwise require a precise static rejection. A sampled observation is never a
+conflict footprint or an acceptance oracle.
 
 **E09/E10 — CUDA/ROCm (R39–R44).** For each vendor, LocalMath owns mathematical
 real-device environments/conformance; Core owns adaptation, lifetime,
@@ -636,6 +708,9 @@ dependency maintenance. Reuse E02 probability-accounting machinery where its
 meaning agrees. Test reverse probabilities, conserved occupancy, failure and
 conflicts with public fixtures. A two-site move is not a claim that arbitrary
 multisite programs are supported.
+Exercise copy-versus-swap and swap-versus-swap closure, including one shared
+logical owner and one periodic alias. The compound winner commits or rolls back
+both ownership changes and every dependent effect atomically.
 
 **E12 — Domains (R47–R48).** Core/Potts add a concrete static finite undirected
 weighted-graph domain: site measures, interface weights, proposal law, boundaries,
@@ -643,6 +718,10 @@ initialization and supported geometry with explicit embedding where needed.
 Include the actual swap-on-graph interaction now that E11 exists. This is not
 arbitrary evolving meshes or automatic graph-native PDE/GPU support. A missing
 reusable LocalMath graph law or new rendering protocol gets a real companion.
+Graph checkerboard admission must derive conflicts from weighted adjacency and
+logical dependencies rather than Cartesian distance or a presumed coloring.
+Include disjoint vertices coupled by a shared owner or relationship and verify
+the same deterministic arbitration on every claimed backend.
 
 **E13 — COBREXA coupling (R51).** Potts integrates the confirmed upstream
 COBREXA.jl public model/solver stack through G07's publication/lifecycle boundary.

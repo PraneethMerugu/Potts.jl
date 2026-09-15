@@ -125,8 +125,63 @@ qualify a later joined package tuple.
 | R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |
 | R50 public lowering identity | The draft candidate has pinned-array CPU/Metal evidence; its parent R11 and downstream interface canary remain open. | Prove package-declared and interactive equivalence, author-name erasure, source diagnostics and the complete public workflow on the exact joined stack. |
 | Retrospective compiler-debt sweep | PR19 supplied its own feature-local comparison; no completed cross-merge sweep is recorded for R06, R07 or the LocalMath PR12–PR19 sequence. | Run the bounded before/current comparisons before R49/R50 freeze; correct a measured defect in its open owner or count a targeted companion only if required. |
-| G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Exercise one transition/relational-dependency case and one held/native-snapshot case against the actual candidate tuple before interface freeze. |
+| G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Preserve G05's explicit rejection while proving the normalized boundary distinguishes a periodic/shared-owner/relation conflict from shared read-only and owner-proven commutative/associative compatibility; also exercise one held/native-snapshot case before interface freeze. |
 | Canonical public benchmark runner | The design and corpus are specified; G09 is not implemented. | R49/R50 leave the focused reproducible runner; R20 later owns longitudinal fresh/warm, specialization, allocation, transfer and cache records. |
+
+### Accepted checkerboard conflict-closure scope
+
+G06 R12/R13 now owns the complete outcome contract: immutable batch-entry
+evaluation; transitive read/write/effect closure through maintained quantities,
+relationships, periodic aliases and shared logical owners; deterministic
+backend-independent winners; read/read compatibility with arbitration only for
+incompatible read/write, write/write or noncommuting effects; admitted owner-
+proven commutative/associative effect sharing; and
+atomic winner commit/rollback on the one CPU/GPU KernelAbstractions semantic
+path. Diagnostics derive from the same dependency authority. This does not
+freeze a graph, coloring, footprint representation, arbitration data structure
+or kernel layout.
+
+Qualification must include truly independent proposals admitted together,
+shared read-only and admitted commutative/associative positive controls, and
+exact shared-owner conflicts. Periodic-moment/image-label gauge variants require
+identical canonical physical observables and energies, closure and winners, and
+gauge-equivalent moment state; raw identity is required only if G05 establishes
+one unique canonical gauge. Sequential/full-state evaluation is only an
+isolated-winner scientific oracle; checkerboard trajectory, ordering and kinetics
+remain distinct.
+
+For an admitted batch, scheduled attempts, non-no-op proposals, conflict losers
+and winners are distinct counts. No-op, loser and semantically rejected proposals
+leave state unchanged and receive no compensating attempts; a statically rejected
+conjunction does not launch. Preserve declared semantic RNG addressing and
+unrelated-stream invariance under filtering, arbitration and permitted launch
+permutations without asserting unused draws. Subround time follows realized
+checkerboard color fractions, not winner count.
+
+G05 continues to reject unsupported checkerboard moment, shared-owner,
+relationship and derived-dependency combinations explicitly. Before G05C
+R49/R50 freezes, its downstream canary must prove that normalized operational
+payloads retain enough dependency/effect meaning for R12/R13 without carrying
+the authored graph into device execution. G07 adds held/native snapshot
+pressure; G09 retains compiler/allocation evidence; E01, E03, E08, E11 and E12
+add 3D periodic/shared-owner, opposite-endpoint relationship, exact-global-
+predicate, compound-swap and weighted-graph cases. The identified count remains
+62. There is no C09 unless implementation demonstrates one narrowly owned,
+reusable LocalMath mathematical law that cannot coherently fit R12/R13.
+R12/R13 atomically delete a G05 rejection only when that exact conjunction is
+qualified; unsupported conjunctions continue to reject explicitly.
+
+### Checkerboard issue audit
+
+As of 2026-09-14, GitHub reports zero open and zero closed issues in each current
+repository: Potts.jl, CorePotts.jl, LocalMath.jl, PottsModels.jl and
+MakiePotts.jl. The likely legacy Potts repositories CPMV2, PureArrayCPM.jl and
+GPUPottsv1.jl also report zero open and zero closed issues. `SEM-ALG-001`
+(checkerboard equilibrium guarantee) is a relevant unresolved specification
+identifier, not a GitHub issue number. No issue was reopened; merged pull
+requests, historical hardening records and PR-chain labels were not
+misrepresented as issues. A different tracker would require its exact
+repository or link before any reopen action.
 
 ## Immediate dependency order
 

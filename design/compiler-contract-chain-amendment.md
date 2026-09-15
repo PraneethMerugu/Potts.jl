@@ -237,7 +237,8 @@ Use one small canonical probe family rather than ad hoc experiments per PR:
 1. an unchanged built-in proposal/structural control;
 2. structural lifecycle with retained history and compound effects;
 3. source-aware maintained sum/minimum contribution and settlement;
-4. the existing G06 transition/relational-dependency canary; and
+4. the G06 checkerboard transition/relational-dependency canary, including
+   transitive effects, periodic aliases and shared logical ownership; and
 5. the existing G07 held/native-snapshot canary.
 
 G04 records the first exact structural baseline; G05 records the next delta;
@@ -497,10 +498,20 @@ The following work belongs inside their implementation and completion criteria:
 - Before freezing the R49→R50 interface, run two bounded downstream canaries
   against the actual candidate package tuple: one G06-oriented transition/
   relational-dependency case and one G07-oriented held/native-snapshot case.
-  Select a real existing admitted operation/context and an explicit rejection
-  where appropriate. Exercise dependency/snapshot meaning, not just construction.
-  These test the interface; they do not implement G06/G07 early or establish
-  their full scientific qualification.
+  The G06 canary uses one immutable batch snapshot and includes two proposals
+  whose site claims appear disjoint but whose transitive read/write/effect
+  footprints meet through a maintained value, incident relation, periodic alias
+  or shared logical owner. Positive controls share only read state or an effect
+  whose owner proves commutative, associative composition, so the boundary must
+  retain compatibility as well as conflict facts. The canary must preserve
+  G05's explicit rejection because R12/R13 do not exist yet, while proving
+  R49/R50 retain enough normalized
+  transition, dependency and source identity for the later owner to make the
+  decision without recovering an author graph at runtime. Select a real existing
+  admitted operation/context and an explicit rejection where appropriate.
+  Exercise dependency/snapshot meaning, not just construction. These test the
+  interface; they do not implement G06/G07 early or establish their full
+  scientific qualification.
 - Make the external-operation trust boundary explicit: contextual sources are
   declared, hostile captured mutable-state cases reject where detectable, and
   the public extension example uses no private execution API. Do not claim
@@ -516,6 +527,78 @@ closure, audit actual cross-family usage and measurements: a concrete remaining
 correctness, readability or measured cost problem triggers a targeted owner
 follow-up and an explicit count update if needed. The audit does not presume a
 third compiler PR, a cosmetic cleanup train or a framework rewrite.
+
+### Checkerboard conflict-closure evidence
+
+G06 R12/R13 must demonstrate the semantic outcome without freezing a conflict
+graph, coloring, footprint encoding, winner-selection data structure or kernel
+decomposition. Evidence covers:
+
+- one immutable entry snapshot for every evaluation in a batch;
+- complete transitive read/write/effect closure across direct site state,
+  maintained quantities, relationships, lifecycle effects, periodic aliases
+  and shared logical owners;
+- explicit compatibility classification: read/read overlap is compatible;
+  incompatible read/write and write/write overlap and noncommuting effects
+  arbitrate; shared effects are compatible only when their owner proves
+  commutative, associative composition under the declared numerical, ordering
+  and publication contract;
+- a deterministic backend-independent winner set, with specified accounting for
+  scheduled attempts, non-no-op proposals, conflict losers and winners;
+- joint admission of proposals whose complete footprints are independent, so a
+  conflict-everything implementation cannot satisfy the contract;
+- failure-atomic compound commit/rollback for every winning transition; and
+- actionable admission/runtime diagnostics derived from the production
+  dependency authority rather than a reporting copy.
+
+At each device-reachable boundary, normalize author structure on the host and
+pass only the bounded semantic payload needed for snapshot evaluation,
+dependency closure, arbitration or commit. Do not pass a broad program/runtime
+object, reconstruct the authored dependency graph, reflect over dynamic tuples
+or iterators, or duplicate conflict facts for diagnostics. Narrowing may split
+semantic phases, but it must not create another executor or a GPU-only scientific
+shortcut.
+
+Use exhaustive tiny batches and an independent full-state oracle for isolated
+winners and their compound effects. Sequential application is not a checkerboard
+trajectory, ordering or kinetics oracle. Add randomized small-batch differential
+tests, permutation/metamorphic cases and exact CPU-versus-
+claimed-device winner/commit comparisons. Exercise the sole KernelAbstractions
+semantic path on real hardware. Kaimon or matched `code_typed` evidence compares
+dependency preparation, arbitration and commit statement/call counts, type
+stability and specialization growth against the G05C canary and an unchanged
+control; inspect LLVM/GPU IR when it locates remaining hostile constructs.
+Warmed allocation and payload-size checks apply at the declared fixed-capacity
+hot boundaries. Raw compiler counts and timings are trend evidence, while real
+backend compile and behavioral results are authoritative.
+
+Include positive shared-read-only and owner-proven commutative/associative-effect
+controls alongside every conflict class. For an admitted batch, a no-op,
+conflict loser or semantically rejected proposal leaves state unchanged and
+does not receive a compensating attempt; a statically rejected conjunction does
+not launch. Preserve declared semantic RNG addressing and prove unrelated-stream
+invariance under filtering, arbitration and permitted launch permutations.
+Assert only draws required by the realized semantic categories, not consumption
+of unused draws. Advance subround time by the realized checkerboard color
+fraction, independent of winner count.
+
+G07 adds held/native snapshot state to the same batch-pressure fixture. G09
+retains it in the public compiler-health corpus. E01, E03, E08, E11 and E12 add,
+respectively, 3D periodic/shared-owner, opposite relationship endpoint, global
+predicate, compound swap and weighted-graph pressure cases. A failing later
+case first returns to R12/R13's Core/Potts owner unless it demonstrates a
+genuinely reusable LocalMath mathematical law. Only that narrow demonstrated
+gap may add a LocalMath companion; the current allocation remains 62 and no C09
+is presumed.
+
+The owning G06 suite includes exact shared-owner conflicts and positive
+independence controls. Periodic moment cases whose image labels differ only by
+gauge must yield identical canonical physical observables and energies, closure
+and winner identities, and gauge-equivalent committed moment state. Require raw
+image-label or moment-state identity only if G05 establishes a unique canonical
+gauge. R12/R13 atomically remove the corresponding G05 rejection only for newly
+qualified conjunctions; unchanged unsupported conjunctions continue to reject
+rather than fall back or enter a compatibility path.
 
 ## Retrospective compiler-debt sweep
 
