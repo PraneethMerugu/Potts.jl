@@ -559,6 +559,19 @@ or iterators, or duplicate conflict facts for diagnostics. Narrowing may split
 semantic phases, but it must not create another executor or a GPU-only scientific
 shortcut.
 
+The completed model's claim graph is runtime data, not executor identity.
+Lower its normalized vertices, edges, compatibility classes and source handles
+into compact bounded arrays/tables consumed by reusable operation-family laws.
+Author names, concrete graph contents, owner identities, adjacency and ordinary
+entry counts must not appear in hot type parameters, nested tuple types, `Val`
+axes, generated functions or emitted model-specific kernels. Specialization is
+limited to measured durable facts such as backend, scalar representation,
+dimension, operation family and genuinely small bounded value shape. Compare
+MethodInstance/code-shape identity across author-only renames, isomorphic graph
+renumberings, distinct graph contents and bounded entry-count ladders; a new
+specialization requires evidence that its runtime value exceeds compile/cache
+fragmentation cost.
+
 Use exhaustive tiny batches and an independent full-state oracle for isolated
 winners and their compound effects. Sequential application is not a checkerboard
 trajectory, ordering or kinetics oracle. Add randomized small-batch differential

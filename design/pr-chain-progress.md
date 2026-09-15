@@ -141,6 +141,13 @@ path. Diagnostics derive from the same dependency authority. This does not
 freeze a graph, coloring, footprint representation, arbitration data structure
 or kernel layout.
 
+The completed claim graph remains runtime data. R13 lowers rich analyzed facts
+to compact bounded tables/recipes and narrow state views; graph content, author
+names, owner identities, adjacency and ordinary counts do not specialize the R12
+executor or generate per-model kernels. Qualification compares execution
+identity across renames, isomorphic renumberings, distinct graph contents and
+bounded count ladders while reusing LocalMath laws whose semantics already fit.
+
 Qualification must include truly independent proposals admitted together,
 shared read-only and admitted commutative/associative positive controls, and
 exact shared-owner conflicts. Periodic-moment/image-label gauge variants require

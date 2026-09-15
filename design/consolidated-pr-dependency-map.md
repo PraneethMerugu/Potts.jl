@@ -502,6 +502,19 @@ path and winner law. Sequential CPU supplies only an isolated-winner/full-state
 scientific oracle for evaluating a transition and its compound effects; it does
 not establish checkerboard trajectory, ordering or kinetic equivalence.
 Real backend compilation and behavior are authoritative for backend claims.
+
+Generality comes primarily from runtime data and reusable execution laws, not
+specializing the executor on the completed model's claim graph. R13 may analyze
+a rich authored dependency graph, but preparation lowers it to compact bounded
+tables/recipes and narrow state views. Graph vertices, edges, component/source
+names, owner identities, ordinary claim counts and adjacency contents remain
+values. R12 may specialize only on durable execution facts such as backend,
+scalar representation, dimension, an established operation family and a
+demonstrated small bounded value shape. It must not encode the graph as a nested
+tuple/type, `Val`, generated function or model-specific kernel. Reuse existing
+LocalMath execution laws for grouping, ordering, arbitration and publication
+where their semantics agree.
+
 Until R12/R13 prove this complete contract, G05 preserves its current explicit
 checkerboard rejection for unsupported moment, shared-owner, relationship and
 derived-dependency combinations. G05 must not partially admit them, weaken the

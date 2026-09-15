@@ -161,6 +161,14 @@ Share concrete candidate interfaces with active owners before incorporating it.
 | E09–E10 / R39–R44 | Reuse unchanged Models factories for actual CUDA/ROCm tests. State CPM-device and native-solver-device support separately. No automatic GPU FBA, stochastic native integration or exact replay claim. |
 | E11–E12 / R45–R48 | Preserve swap and static weighted-graph commitments. Test copy-versus-swap and swap-versus-swap atomic closure, then graph conflicts induced by weighted adjacency, shared logical ownership or relationships rather than Cartesian proximity. Require deterministic winner/commit parity on claimed backends. None of these fourteen papers automatically witnesses them: add explicitly labeled feature combinations, not altered paper reproductions. |
 
+Across these rows, checkerboard generality comes from compact runtime graph data
+and reusable operation-family laws. R13 may analyze a rich model, but names,
+owners, graph contents, adjacency and ordinary counts remain values in the R12
+executor; they are not nested tuple/type structure, `Val` axes, generated
+functions or per-model kernels. Qualification compares renamed, isomorphically
+renumbered, structurally different and bounded count-ladder graphs for shared
+execution identity.
+
 ### Concrete special-machinery cutovers
 
 These names are found in this planning checkout; inspect their current owning
