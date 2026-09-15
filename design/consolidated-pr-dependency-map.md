@@ -36,7 +36,7 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C05 Backend-owned array transfer** | LocalMath | G05 | C04 | R10 Core structured-sum storage | Merged | [LocalMath PR16](https://github.com/PraneethMerugu/LocalMath.jl/pull/16) |
 | **C06 Identity-seeded reduction control** | LocalMath | G05 | C05 | R10 Core maintained minimum lifecycle | Merged | [LocalMath PR17](https://github.com/PraneethMerugu/LocalMath.jl/pull/17) |
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
-| **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Draft; local CPU/Metal/docs and independent review clean, hosted checks pending | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
+| **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 
 The companion scopes are:
 
@@ -109,9 +109,11 @@ The companion scopes are:
   `CompactedStorage` authority: unique stage-entry keys, exact canonical key
   order, canonical left-fold contribution order, private O(M+C) workspace,
   identity-key removal, capacity validation and one failure-atomic publication
-  gate on the shared KernelAbstractions path. Capacity remains runtime data;
-  kernels specialize only on bounded key/value/operation/emission and retention
-  families. Do not add a Potts query vocabulary, hash semantics, relaxed fold,
+  gate on the shared KernelAbstractions path. Capacity remains runtime data.
+  Reset, emission, ordering, segmentation, finalization and publication receive
+  only their narrow layout/key/value state and do not specialize on the fold
+  operation or retention law; those facts specialize only the fold boundary.
+  Do not add a Potts query vocabulary, hash semantics, relaxed fold,
   registry or second collection executor. Core R10 consumes this primitive for
   exact O(E) pair multiplicity; Potts R11 lowers the existing
   `ResourceOperation` surface to that Core authority.
@@ -188,17 +190,33 @@ IR or authority. Rich names, provenance and irregular composition remain
 inspectable on the host; kernels receive only durable semantic operation data.
 The compiler amendment owns the detailed acceptance template.
 
-| PR owners | Cross-chain responsibility |
-| --- | --- |
-| R06/R07 | Define operation/context ownership and the semantic-to-operational boundary; broad program/runtime objects do not become the default device ABI. |
-| R08–R09 | Preserve rich structured authoring while normalizing identity, scope and provenance before preparation. |
-| R10–R11 | Lower maintained quantities into contribution/update/reconstruction/publication recipe families. |
-| R49/R50 | Implement and measure canonical accepted-update recipes, narrow staged-state views, specialization policy, root-`Any` audit and boundary-size/reuse probes. |
-| R12–R13 | Reuse the boundary for conservative energy, drives and transitive dependencies. |
-| R14–R16 | Reuse or extend it for native, lifecycle and coupling operations with explicit state/snapshot/publication views. |
-| R17–R20 | Turn public models into compiler-health workloads and retain fresh/warm latency, specialization, allocation and generated-code evidence. |
-| R21–R48/R51 | Every breadth feature reuses an existing family or justifies and tests a distinct semantic family in its owning PR. |
-| R52–R54 | Exercise FBCA, vascular and tumor corpora as realistic package-declared and interactive-equivalent compiler workloads. |
+| Delivery owners | Normalization, recipe and narrow runtime view | Specialization and evidence responsibility |
+| --- | --- | --- |
+| G02/R06 | Normalize authored operations and source diagnostics into the sole executable ownership boundary; runtime does not interpret report objects. | Retrospectively compare operation lowering and an unrelated device control; author names and locations remain host values. |
+| G03/R07 | Bind verified geometry/context facts into concrete read views rather than passing broad context stores. | Retrospectively compare proposal/context and geometry entrypoints plus an unchanged control. |
+| G04/R08–R09 | Normalize scoped component identity, structured state/history and compound effects into typed storage and publication recipes. | Prove constructor-equivalent names/compositions reuse execution families; record the structural lifecycle baseline and actual device witness. |
+| G05/C08/R10–R11 | Lower relation lanes and maintained statistics into contribution, keyed grouping, update, bounded reconstruction and publication recipes over handles/scalars/deltas. | Keep capacity/count/value changes as data where admitted; measure sum/minimum, relation and lifecycle boundaries, with C08 operation/retention confined to its fold boundary. |
+| G05C/R49–R50 | Replace broad accepted-update interpretation with canonical recipes and state views, while Potts erases author identity and irregular analyzed structure before Core preparation. | Own the root-`Any`, boundary-size, allocation and entry-count/name/value identity probes, exact measured entrypoints and unchanged controls. |
+| G06/R12–R13 | Normalize energy, drive and transitive dependency meaning into bounded evaluation/arbitration recipes with explicit transition/context inputs. | Reuse established state views; add a family only for distinct semantics and extend the transition/relational canary on CPU and claimed devices. |
+| G07/R14–R16 | Bind cadence, snapshots, settlement, lifecycle and publication into narrow views; external numerical systems stay at their native host boundary. | Distinguish CPM-device from solver-host compilation and extend the held/native-snapshot canary plus full public workflow. |
+| G08/R17–R19 | Reuse public recipe families for the model corpus, observations and inspection; reporting derives from committed state. | Package and interactive equivalents share preparation identity; new device families receive feature-local evidence rather than paper-specific kernels. |
+| G09/R20 | Preserve the canonical public compiler-health corpus and fresh-process stage decomposition; it creates no execution authority. | Record longitudinal latency, specialization, generated code, allocation, transfer and throughput trends without brittle timing gates. |
+| E01/R21–R22 | Reuse dimension-generic ownership, geometry, lifecycle and field/native families for regular 3D; add only demonstrated dimension semantics. | Dimensionality may specialize as a durable physical fact; compare unchanged 2D and real supported-device 3D witnesses. |
+| E02/R23–R25 | Normalize equilibrium sampling and OU process laws separately into existing proposal/process/state families. | Law/algorithm may distinguish families; paper identity and parameter values do not. Measure the actual foam/proposal path if it is new. |
+| E03/R26–R27 | Lower directed/anchored endpoint, payload and inverse-dependency changes into relationship and transaction recipes with endpoint-focused views. | Test ordered traversal, lifecycle and conflict boundaries; do not specialize on relationship names or pass a relation registry. |
+| E04/R28–R30 | Lower containment and parent-preserving compartment conversion into bounded ownership/lifecycle/publication operations. | Measure conversion, activation and rollback entrypoints; biological grouping and model identity remain outside the device ABI. |
+| E05/R31 | Keep root localization and native solver state on the host; lower timestamped requests into G07 settlement at declared CPM boundaries. | Measure changed host lowering and any device-reachable settlement entrypoint separately; event names and root expressions do not specialize CPM kernels. |
+| E06/R32–R33 | Reuse native IO, pool, RNG and settlement views while SDE and jump solvers retain distinct numerical ownership. | Record separate host compile families and continuation limits; no GPU claim follows from the CPM path. |
+| E07/R34–R35 | Normalize fixed cross-grid sampling/deposition, scale, availability and conservation into prepared transfer/publication recipes. | Grid/precision/backend may specialize when justified; species and component names remain values. Exercise selected 3D/device conjunctions. |
+| E08/R36–R38 | Lower the selected global invariant into its one mathematical owner, with distinct sampled-observation and exact-proposal timing views. | Measure traversal/publication and exact-predicate boundaries independently; model morphology labels do not select kernels. |
+| E09/R39–R41 | Reuse the established mathematical recipes on CUDA; LocalMath owns conformance, Core binding/lifetime and Potts public admission. | Backend is a durable specialization fact. Use actual CUDA compilation/behavior and unchanged CPU/Metal controls where relevant. |
+| E10/R42–R44 | Reuse the same recipes on ROCm with the same LocalMath/Core/Potts ownership split. | Use actual ROCm compilation/behavior; do not infer support or replay from CUDA/Metal evidence. |
+| E11/R45–R46 | Normalize a conservative swap as one compound transition with bounded ownership effects and dependency maintenance. | The move law may define a family; measure joint-delta/conflict/rollback boundaries against unchanged copy transitions. |
+| E12/R47–R48 | Bind static weighted-graph measures, adjacency, proposals and swaps into graph-domain geometry/transition views. | Domain representation is a durable fact only where measured; graph names, vertex counts within capacity and weights remain data when admitted. |
+| E13/R51 | Keep COBREXA model/solver workspaces and statuses on the host; lower bounded withdrawals/publications through G07 settlement. | Measure host solve/re-solve and CPM settlement separately; no model-name specialization, GPU LP or portable warm-start claim. |
+| E14/R52 | Compose FBCA through R51/R35/G09 public paths with no metabolic executor in Models. | Extend the shared public corpus with finite-resource contention and compare package-declared/interactively equivalent models. |
+| E15/R53 | Compose vascular models from existing mechanical/field families; paper laws remain Models-owned data and equations. | Add evidence only for genuinely new operation conjunctions and retain unchanged corpus controls. |
+| E16/R54 | Compose tumor Boolean, field, phenotype and lifecycle rules through established public families. | Record realistic payload/count/latency growth; paper and pathway names never become hot execution identity. |
 
 This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation and C08 exact
@@ -933,7 +951,7 @@ Retain their existing ordinary feature witnesses without changing the papers.
 | F13 observations/experiments/persistence | G04/G07/G08; retained refs, ordinary SciML ensembles, low-memory statistics and recorder IO failure/noninterference |
 | Mask/image/data initialization | G01/G04/G08; tiny local label/mask input with coordinate/scale/overlap validation, no hidden downloads |
 | F14 useful diagnostics/edit loop | G02 onward; source-local failure/repair and ordinary remake versus source rebuild |
-| F15 readability/compilation | G02/G03 plus owner source maps in each change; G09 measured costs, no incidental-layout tests |
+| F15 readability/compilation | G02/G03 ownership; G04/G05 baselines; G05C canonical recipe/state-view boundary; feature-local evidence and source maps in every device owner; G09 longitudinal costs; no incidental-layout tests |
 | F16 hardware/profile conjunctions | Every changed execution owner; E09/E10 add vendors, not blanket compatibility guarantees |
 
 Existing supported science is preservation input: activity, connectivity,

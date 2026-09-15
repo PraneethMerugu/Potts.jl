@@ -161,6 +161,14 @@ Separate construction/preparation,
 first compilation or launch, warm execution, allocations and transfers. Actual
 Metal execution remains authoritative; Kaimon does not qualify a backend.
 
+Inspect LLVM or backend GPU IR when typed-code evidence or a failed device
+compile leaves a compiler-hostile construct unresolved. Record the exact
+device-reachable entrypoint inspected and the surviving dynamic call, iterator,
+reflection, tuple construction or broad payload that motivated the inspection.
+Cleaner LLVM/GPU IR is localization evidence, not the end goal: the scientific
+contract, one CPU/GPU semantic path and actual Metal compile and behavior remain
+authoritative.
+
 Use AllocCheck as a focused static diagnostic and regression check for exact
 concrete hot-boundary signatures, including allocation sites, allocating runtime
 calls and dynamic dispatch. Pair it with warmed observed-allocation tests; a
@@ -193,7 +201,10 @@ there rather than layering speculative micro-optimizations.
 
 ### Device-reachable PR acceptance template
 
-Every PR that creates or changes a device-reachable operation family records:
+Every PR that creates or changes a device-reachable operation family records
+the exact preparation entrypoint and every changed device-reachable entrypoint
+it measures; a broad host orchestration wrapper is not a substitute for the
+kernel boundary that actually changed. It also records:
 
 1. the public authoring example and sole scientific owner;
 2. the semantic decision moved from runtime to normalization/preparation, the
@@ -203,8 +214,8 @@ Every PR that creates or changes a device-reachable operation family records:
 3. the durable facts permitted to specialize and the author/model facts required
    to remain values;
 4. exact before/after Kaimon, or the documented exact-typed fallback above,
-   statement, call, inference and
-   specialization evidence at the changed boundary plus an unchanged control;
+   statement, call, inference and specialization evidence at the changed
+   preparation and device boundaries plus an unchanged control;
 5. runtime-boundary summary size and provenance for every field crossing it;
 6. preparation, first CPU execution, first backend compile/link, warm execution,
    allocations and transfer measurements as applicable;
@@ -517,7 +528,7 @@ completed PR. Before R49/R50 freeze their baseline, run one bounded comparison:
 | R03-R05 and the Models timeout companion | None; CI/workflow only | No Kaimon debt sweep. |
 | R06 Potts operation contracts | Device/compiler-sensitive | Compare operation/executable lowering and one unrelated device control before/after the merge. |
 | R07 Core scientific contexts | Device-reachable | Compare proposal/context and scientific-geometry boundaries plus an unchanged control. |
-| LocalMath PR12, PR13, PR14, PR16, PR17 and PR18 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. C08 remains prospective and must supply its own feature-local comparison before merge. |
+| LocalMath PR12, PR13, PR14, PR16, PR17, PR18 and PR19/C08 | Device/compiler-sensitive | Compare the pre-companion and current merged tuples; bisect the linear companion sequence only if growth or a failure appears. PR19 supplied its feature-local Kaimon, allocation, CPU and real-Metal comparison before merge. |
 
 The remaining chain applies the ladder prospectively rather than accumulating a
 second retrospective tail:

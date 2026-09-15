@@ -24,11 +24,11 @@ PR count an acceptance criterion.
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
 62-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
-At review time R01–R07 and seven of the eight currently identified companions
+At review time R01–R07 and all eight currently identified companions
 are recorded merged; the G07 ordered-fold validation companion C07 is LocalMath
 PR18 and its complete hosted suite passed after merge. The G05 exact
-keyed-reduction companion C08 is active and precedes Core R10/Potts R11
-relation-query completion.
+keyed-reduction companion C08 is LocalMath PR19, merged as `7082ed84`, and
+precedes Core R10/Potts R11 relation-query completion.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the

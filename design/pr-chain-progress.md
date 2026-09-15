@@ -20,13 +20,13 @@ in dependency order. Releases remain unauthorized.
 - R01–R07 are merged across PottsModels, Potts, CorePotts, LocalMath, and
   MakiePotts. Core R08 is also merged as CorePotts PR32 (`7b46e4eb`); its Potts
   consumer R09 remains open.
-- Seven demonstrated companions are merged: the PottsModels CI correction and
+- Eight demonstrated companions are merged: the PottsModels CI correction and
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
-  ordered-fold step validation.
-- The seventh LocalMath companion is PR18, merged as `9d3e1a24`; its local and
-  complete hosted package, scientific, documentation, macOS, and real-Metal
-  checks passed.
+  ordered-fold step validation, plus exact keyed reduction.
+- The seventh LocalMath companion is PR18, merged as `9d3e1a24`. The eighth is
+  PR19, merged as `7082ed84`; both passed their complete hosted package,
+  scientific, documentation, macOS, and real-Metal checks.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -40,7 +40,7 @@ in dependency order. Releases remain unauthorized.
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `0994c492` | Potts PR54 | draft; current-tip hosted checks active, blocked by R11 and downstream canary |
-| C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `ee8729b` | main after LocalMath PR18 | draft; local CPU/real-Metal/docs and independent review clean, hosted checks pending |
+| C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | this change | main | draft; independent re-review clean, hosted checks pending |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
@@ -87,10 +87,10 @@ record constructor and incomplete device atomicity cases. Kaimon-backed typed
 probes now show that operation/retention specialize only the fold boundary;
 focused CPU 40/40, real Metal 24/24 with scalar indexing disabled, the complete
 LocalMath suite 1,853/1,853, documentation and independent review are clean.
-Hosted current-tip validation remains authoritative before merge. The stale
-PR17-parent draft was not published.
+Its complete exact-tip hosted suite passed, and PR19 merged as `7082ed84`. The
+stale PR17-parent draft was not published.
 
-After that companion freezes, Core R10 owns generation-aware O(E) pair
+With that companion frozen, Core R10 owns generation-aware O(E) pair
 multiplicity and maintained results behind the existing `ResourceOperation`
 identities. Potts R11 lowers analyzed filter/property facts through public
 compiler SPI. No detached query vocabulary, O(C²) directory, collision-unsafe
@@ -111,10 +111,27 @@ in either binding order.
 
 Current-tip PR55 hosted validation is the remaining authority.
 
+## Compiler qualification status
+
+The [compiler amendment](compiler-contract-chain-amendment.md) owns the contract;
+this table records only the current evidence state. A green component does not
+qualify a later joined package tuple.
+
+| Qualification item | Current evidence | Remaining work and owner |
+| --- | --- | --- |
+| C08 exact keyed reduction | Complete at merged LocalMath PR19: feature-local Kaimon typed probes, narrow phase payloads, focused allocation comparison, CPU and real-Metal behavior, full package and docs. | Include the merged revision in the bounded LocalMath retrospective comparison; no C09. |
+| G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
+| G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08 tuple. |
+| R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |
+| R50 public lowering identity | The draft candidate has pinned-array CPU/Metal evidence; its parent R11 and downstream interface canary remain open. | Prove package-declared and interactive equivalence, author-name erasure, source diagnostics and the complete public workflow on the exact joined stack. |
+| Retrospective compiler-debt sweep | PR19 supplied its own feature-local comparison; no completed cross-merge sweep is recorded for R06, R07 or the LocalMath PR12–PR19 sequence. | Run the bounded before/current comparisons before R49/R50 freeze; correct a measured defect in its open owner or count a targeted companion only if required. |
+| G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Exercise one transition/relational-dependency case and one held/native-snapshot case against the actual candidate tuple before interface freeze. |
+| Canonical public benchmark runner | The design and corpus are specified; G09 is not implemented. | R49/R50 leave the focused reproducible runner; R20 later owns longitudinal fresh/warm, specialization, allocation, transfer and cache records. |
+
 ## Immediate dependency order
 
-1. Correct, re-review, and qualify the periodic geometry/connectivity and exact
-   keyed-reduction candidates.
+1. Correct, re-review, and qualify the periodic geometry/connectivity candidate;
+   consume merged LocalMath PR19 as the exact keyed-reduction prerequisite.
 2. Integrate the joined Core R10 maintained spatial-query/geometry contracts and
    the matching Potts R11 lowering; finish the remaining native-output,
    full-field invalidation, lifecycle/division, and restore obligations.
