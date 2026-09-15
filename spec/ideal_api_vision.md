@@ -223,26 +223,44 @@ named quantity or reconstruct unsaved history.
 Illustrative examples:
 
 ```julia
+# User-declared typed relation and filter values.
+contact_relation = ...
+cell_contact_relation = ...
+focal_link_relation = ...
+extracellular_filter = ...
+epithelial_filter = ...
+
 contact_signal =
-    mean(gather(signal, :contact; at=proposal.target_site))
+    mean(gather(signal, contact_relation; at=proposal.target_site))
 
 neighbor_polarity =
-    mean(gather(polarity, :contact_cells; at=proposal.new_owner))
+    mean(gather(polarity, cell_contact_relation; at=proposal.new_owner))
 
 linked_tension =
-    sum(gather(tension, :focal_links; at=proposal.new_owner))
+    sum(gather(tension, focal_link_relation; at=proposal.new_owner))
+
+medium_edges = contact_edge_count(c, extracellular_filter;
+    over=contact_relation)
+neighbor_signal = neighbor_property_mean(
+    c, epithelial_filter, signal, 0.0; over=cell_contact_relation)
 ```
 
 `gather` names the mathematical or topological operation. Boundedness,
 canonical lane order, repeated endpoints, absent lanes, boundary behavior, and
 medium participation remain validated properties of the declared relation.
+Scalar spatial queries likewise require a separate `over=...` relation; relation
+identity is never hidden in the owner filter or inferred from a privileged name.
+Identity, kind, medium-domain, wall-domain, category and admitted predicate
+filters are distinct typed meanings. Rich predicate expressions may compile to
+maintained owner-match masks, while the query executor receives only compact
+runtime handles, masks, owner records and relation statistics.
 
 ## Familiar bounded reductions
 
 Ordinary reductions over bounded gathers should use familiar Julia vocabulary:
 
 ```julia
-neighbors = gather(signal, :contact; at=proposal.target_site)
+neighbors = gather(signal, contact_relation; at=proposal.target_site)
 
 sum(neighbors)
 mean(neighbors)

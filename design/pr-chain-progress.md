@@ -1,9 +1,9 @@
 # PR-chain progress
 
-Status: current implementation snapshot. Updated 2026-09-14.
+Status: current implementation snapshot. Updated 2026-09-15.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-identified work and dependencies: **63 repository PRs = R01–R54 plus nine
+identified work and dependencies: **65 repository PRs = R01–R54 plus eleven
 demonstrated companions**. The [compiler amendment](compiler-contract-chain-amendment.md)
 owns compiler-tractability expectations, and the
 [composition-first roadmap](composition-first-model-roadmap.md) owns the
@@ -42,10 +42,13 @@ in dependency order. Releases remain unauthorized.
 | R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `a4fb6c88` | main | draft; G05 science gaps remain |
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
-| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft; exact Symbolics 7.37 CPU/Metal correction green locally, current-tip hosted checks active, blocked by R11 and downstream canary |
+| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft/CLEAN; exact Symbolics 7.37 CPU/Metal correction and complete hosted suite green, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `cca004b9` | LocalMath main after PR19 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
+| C10 Core Cartesian domain ownership | — | — | Core R08 | identified; required before complete R10/R11 domain-query claims |
+| C11 Potts Cartesian domain authoring | — | — | C10 and Potts R09 | identified; required before R11 can admit wall/exterior/obstacle filters |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
+| Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
 
 Planning labels are not GitHub PR numbers. A green stacked child does not make
 an incomplete parent ready.
@@ -81,6 +84,27 @@ Existing LocalMath destination grouping requires a pre-existing dense
 destination and cannot exactly intern sparse generation-aware owner pairs with
 O(E) storage. This demonstrates the eighth companion: an exact fixed-capacity
 keyed collection reduction after LocalMath PR18 and before R10/R11 completion.
+
+The complete R11 audit also found a separate accepted Cartesian-domain
+regression. Current Core represents finite cells and medium domains only;
+Potts exposes `FrozenBorder`, but lowers it identically to a closed CPM
+boundary. There is no durable wall/exterior/obstacle owner, no virtual exterior
+or obstacle incidence, and no authoritative mutable-site set excluding
+obstacles. A wall filter therefore cannot truthfully be lowered as an empty
+medium filter, and backing-array site count cannot stand in for the reference
+attempt budget. The retired pre-refactor `e8706bcd` Cartesian implementation
+and its relation/sequential/checkerboard/query tests are an independent semantic
+oracle, not a parallel executor to restore.
+
+C10 Core atomically replaces/extends the existing owner classification and
+owner-at-site authority with compact domain-owner records, face/obstacle
+realization, mutable-site scheduling, immutable-write rejection,
+checkpoint/inspection and CPU/real-Metal behavior. C11 Potts owns typed
+domain/axis/obstacle authoring and initialization/lowering. It first migrates
+every current no-flux `FrozenBorder` consumer to `Closed`, then deletes the
+ambiguous spelling; it never reinterprets it as `FixedExterior`. R10/R11 then
+consume those facts for the complete explicit spatial-query surface. This
+demonstrated pair raises the identified count to 65.
 
 LocalMath PR19 remains inside the sole StageProgram and shared
 KernelAbstractions executor, with canonical lexicographic keys, prior-then-
@@ -130,7 +154,7 @@ extended Core lifecycle qualification remains.
 Hosted Metal isolated a Symbolics 7.37 failure for whole-array component imports
 and indexed/reordered leaves. Potts commits `0994c492` and `6c5344d6` preserve
 the validated authored array-symbolic identity, install whole plus scalar substitution rules
-at the sole import-resolution owner, and rejects overlapping whole/scalar aliases
+at the sole import-resolution owner, and reject overlapping whole/scalar aliases
 in either binding order.
 
 - exact pinned focused CPU contract: 6/6;
@@ -139,7 +163,9 @@ in either binding order.
 - complete focused component-replacement owner suite: 139/139; and
 - committed Metal Project/Manifest unchanged.
 
-Current-tip PR55 hosted validation is the remaining authority.
+PR55's exact-tip hosted package, integration, replay, compiler, documentation,
+macOS and both real-Metal shards all passed. It remains draft because R11 and
+the required downstream canaries are incomplete.
 
 ## Compiler qualification status
 
@@ -203,9 +229,10 @@ the authored graph into device execution. G07 adds held/native snapshot
 pressure; G09 retains compiler/allocation evidence; E01, E03, E08, E11 and E12
 add 3D periodic/shared-owner, opposite-endpoint relationship, exact-global-
 predicate, compound-swap and weighted-graph cases. The identified count is now
-63. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
+65. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
 keyed-rebuild law that cannot coherently live in Core or Potts. No further
-companion is presumed.
+checkerboard companion is presumed. C10/C11 are separately demonstrated
+Cartesian-domain owners, not checkerboard work.
 R12/R13 atomically delete a G05 rejection only when that exact conjunction is
 qualified; unsupported conjunctions continue to reject explicitly.
 
@@ -254,4 +281,4 @@ The next milestone is a scientifically correct and joined G05 baseline: R10,
 R11, the exact keyed-reduction companion, and their R49/R50 compiler-contract
 children must all be current-tip green and independently review-clean. It does
 not complete G06–G09 or any breadth group. Full project completion requires all
-63 identified PRs and any later demonstrated owner companions.
+65 identified PRs and any later demonstrated owner companions.
