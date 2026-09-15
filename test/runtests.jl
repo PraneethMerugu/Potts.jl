@@ -80,6 +80,9 @@ const POTTS_TESTS = (
     "test_custom_model.jl",
     "test_platform_smoke.jl",
     "test_fresh_process.jl", "test_core_spi_boundary.jl",
+    "test_resolved_aggregate_compiler_report.jl",
+    "test_operational_operand_canonicalization.jl",
+    "test_aggregate_operational_ordering.jl",
     "test_package_quality.jl",
 )
 
@@ -147,6 +150,9 @@ const POTTS_TEST_SHARDS = (
         "test_component_dependency_ownership.jl",
         "test_addressed_randomness.jl",
         "test_scheduled_process_draws.jl",
+        "test_resolved_aggregate_compiler_report.jl",
+        "test_operational_operand_canonicalization.jl",
+        "test_aggregate_operational_ordering.jl",
     ),
     execution_and_integration = (
         "test_mtkcompile.jl",
@@ -190,6 +196,7 @@ const POTTS_TEST_FIXTURES = (
     "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
+    "ExternalAggregateOperationFixture.jl",
     "LifecycleOperationFixtures.jl",
     "cell_processes.jl",
     "scoped_quantities.jl",
@@ -204,6 +211,7 @@ const POTTS_TEST_FIXTURES = (
     "vector_rotation.jl",
     "vector_parameters.jl",
     "product_fields.jl",
+    "transition_relation_energy.jl",
 )
 
 const POTTS_TEST_SUITE = Dict(

@@ -44,6 +44,49 @@ isdefined(@__MODULE__, :_site_minimum_problem) || include("fixtures/site_aggrega
     end
 end
 
+@testset "negative minima settle accepted ownership transfers and empty owners" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = _site_minimum_transfer_problem()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        SPI = CorePotts.CompilerSPI
+        descriptor = only(filter(
+            item -> item isa SPI.SiteMinimumTracker,
+            SPI.tracker_instances(integrator.plan.core_program.tracker_plan),
+        ))
+        key = SPI.tracker_quantity(descriptor)
+
+        @test Array(SPI.program_tracker_values(integrator.runtime, key)) ==
+            Float32[-8, -5]
+        for _ in 1:4
+            step!(integrator)
+            all(!=(1), integrator.u.ownership) && break
+        end
+
+        @test integrator.u.ownership == fill(Int32(2), 2, 2)
+        @test integrator.u.cell_kinds == Int16[0, 2]
+        @test Array(SPI.program_tracker_values(integrator.runtime, key)) ==
+            Float32[model.empty, -8]
+        @test Array(integrator.u[:amount]) == Float32[-7, -8]
+        @test Potts.runtime_statistics(integrator).accepted > 0
+
+        restored = init(
+            model.problem,
+            algorithm;
+            scalar_type = Float32,
+            checkpoint = checkpoint(integrator),
+        )
+        step!(integrator)
+        step!(restored)
+        for current in (integrator, restored)
+            @test current.u.ownership == fill(Int32(2), 2, 2)
+            @test Array(SPI.program_tracker_values(current.runtime, key)) ==
+                Float32[model.empty, -8]
+            @test Array(current.u[:amount]) == Float32[-7, -8]
+            @test failure_report(current) === nothing
+        end
+    end
+end
+
 @testset "minimum aggregate executable lowering is bounded" begin
     for empty in (Inf, -Inf, NaN, true)
         @test_throws r"finite scalar literal" init(

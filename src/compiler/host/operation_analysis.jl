@@ -26,6 +26,7 @@ struct AnalyzedFactTable
     backend_admission::Vector{Any}
     source_chain::Vector{Any}
     source_bindings::Vector{Any}
+    site_aggregate::Vector{Union{Nothing, AnalyzedSiteAggregate}}
 end
 
 struct DescriptorCandidate
