@@ -5,6 +5,11 @@ requested observations. SymbolicIndexingInterface getters work on problems,
 integrators, saved states, and solutions. A declared-but-unsaved observation
 raises a different error from an unknown identity.
 
+The `states`, `topology`, and `observations` properties are read-only named
+views. Use `keys`, iteration or `pairs` to inspect them, and use either symbol
+indexing or property access to retrieve a value. Call `NamedTuple(view)` when
+an ordinary named tuple is required by another host API.
+
 Use `SymbolicIndexingInterface.setu(integrator, state)` to build a setter for
 one whole canonical state, then call it as `setter(integrator, value)`.
 An array-valued symbolic variable accepts its whole fixed-array value, and a

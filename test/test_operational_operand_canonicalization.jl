@@ -119,6 +119,11 @@ end
         typeof(renamed_integrator.plan.core_program.tracker_plan)
     @test typeof(baseline.problem.p) === typeof(renamed.problem.p)
     @test typeof(baseline.problem) === typeof(renamed.problem)
+    @test typeof(baseline_integrator.u) === typeof(renamed_integrator.u)
+    @test typeof(baseline_integrator) === typeof(renamed_integrator)
+    @test keys(baseline_integrator.u.states) == (:amount, :signal)
+    @test keys(renamed_integrator.u.states) ==
+        (:renamed_amount, :renamed_signal)
     @test baseline.problem.p[:gain] == renamed.problem.p[:renamed_gain] == 1.0
     @test baseline.problem.p.named == (gain = 1.0,)
     @test renamed.problem.p.named == (renamed_gain = 1.0,)
@@ -149,6 +154,8 @@ end
     step!(renamed_integrator)
     @test Array(baseline_integrator.u[:amount]) == Float32[3, 3, 0]
     @test Array(renamed_integrator.u[:renamed_amount]) == Float32[3, 3, 0]
+    @test typeof(PottsSolution(baseline_integrator)) ===
+        typeof(PottsSolution(renamed_integrator))
     saved = checkpoint(baseline_integrator)
     restored = init(
         remake(baseline.problem; p = (gain = 9.0,)),

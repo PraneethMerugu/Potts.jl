@@ -466,7 +466,7 @@ function _state_values_for(
     states = Tuple(saved[entry.name] for entry in plan.state_manifest)
     observations = Tuple(
         require_observations ? saved[entry.name] :
-        get(saved.observations, entry.name, missing)
+        _saved_value(getfield(saved, :observations), entry.name, missing)
         for entry in plan.observations
     )
     return (states..., observations...)

@@ -34,6 +34,7 @@ ModelingToolkitBase = "1.51"
 MethodOfLines = "0.11.12"
 PrecompileTools = "1"
 SciMLBase = "3"
+Serialization = "1"
 StaticArrays = "1.9"
 StructArrays = "0.7"
 Statistics = "1.11"
@@ -68,10 +69,11 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LocalMath = "82808884-8acc-4a5c-a056-be440a0fbea1"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "ParallelTestRunner", "StructArrays", "Test", "TOML", "Unitful"]
+test = ["Aqua", "ExplicitImports", "KernelAbstractions", "LinearAlgebra", "LocalMath", "ModelingToolkit", "ParallelTestRunner", "Serialization", "StructArrays", "Test", "TOML", "Unitful"]

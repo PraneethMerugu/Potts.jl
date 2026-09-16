@@ -1,3 +1,5 @@
+import Serialization
+
 @testset "scheduled stored-state schemas persist logically" begin
     @variables begin
         stored_site_marker
@@ -100,4 +102,77 @@
     restored_solution = solve!(restored)
     @test restored_solution.retcode == SciMLBase.ReturnCode.Success
     @test failure_report(restored_solution) === nothing
+end
+
+@testset "saved-state public named projections use one normalized store" begin
+    @test_throws ArgumentError Potts.PottsSavedValues((:amount,), (1, 2))
+    @test_throws ArgumentError Potts.PottsSavedValues((:amount, :amount), (1, 2))
+
+    amount = Float32[1, 2]
+    links = ((Int32(1), Int32(2)),)
+    saved = PottsSavedState(
+        3,
+        reshape(Int32[1, 0], 2, 1),
+        Int16[1],
+        UInt32[1],
+        Int32[1],
+        (amount = amount,),
+        (links = links,),
+        (sample = 4.0f0,),
+        (:sample, :unsaved_sample),
+        (),
+    )
+
+    states_oracle = (amount = amount,)
+    topology_oracle = (links = links,)
+    observations_oracle = (sample = 4.0f0,)
+    @test keys(saved.states) == (:amount,)
+    @test keys(saved.topology) == (:links,)
+    @test keys(saved.observations) == (:sample,)
+    @test values(saved.states) == values(states_oracle)
+    @test Tuple(saved.states) == Tuple(states_oracle)
+    @test NamedTuple(saved.states) === states_oracle
+    @test collect(saved.states) == collect(states_oracle)
+    @test saved.states[1] === amount
+    @test saved.states[:amount] === amount
+    @test get(saved.states, :amount, nothing) === amount
+    @test get(saved.states, :missing, nothing) === nothing
+    @test haskey(saved.states, :amount)
+    @test !haskey(saved.states, :missing)
+    @test_throws FieldError saved.states[:missing]
+    @test_throws FieldError saved.states.missing
+    @test propertynames(saved.states) == (:amount,)
+    @test collect(pairs(saved.states)) == collect(pairs(states_oracle))
+    @test saved.states == states_oracle
+    @test states_oracle == saved.states
+    @test isequal(saved.states, states_oracle)
+    @test hash(saved.states) == hash(states_oracle)
+    @test sprint(show, saved.states) == sprint(show, states_oracle)
+    @test saved.topology == topology_oracle
+    @test saved.observations == observations_oracle
+    @test saved.states.amount === amount
+    @test saved.topology.links === links
+    @test saved.observations.sample === 4.0f0
+    @test saved[:amount] === saved.amount === amount
+    @test saved[:links] === saved.links === links
+    @test saved[:sample] === saved.sample === 4.0f0
+    @test propertynames(saved) == (
+        :mcs, :ownership, :cell_kinds, :cell_generations, :volumes,
+        :native, :amount, :links, :sample,
+    )
+    @test_throws Potts.PottsKnownUnsavedError saved[:unsaved_sample]
+    @test_throws Potts.PottsUnknownIdentityError saved[:unknown]
+
+    amount[1] = 9.0f0
+    @test saved[:amount][1] == 9.0f0
+
+    stream = IOBuffer()
+    Serialization.serialize(stream, saved)
+    seekstart(stream)
+    restored = Serialization.deserialize(stream)
+    @test restored.states == saved.states
+    @test restored.topology == saved.topology
+    @test restored.observations == saved.observations
+    @test restored[:amount] == saved[:amount]
+    @test propertynames(restored) == propertynames(saved)
 end

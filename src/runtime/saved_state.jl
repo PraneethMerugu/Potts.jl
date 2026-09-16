@@ -30,6 +30,87 @@ Base.showerror(io::IO, error::PottsKnownUnsavedError) =
 Base.showerror(io::IO, error::PottsUnsavedTimeError) =
     print(io, "MCS ", error.mcs, " is within the trajectory but was not saved")
 
+# Snapshot names support public lookup and diagnostics, but runtime author
+# names do not parameterize the surrounding saved-state representation.
+"""Read-only named values exposed by a saved state."""
+struct PottsSavedValues{V <: Tuple}
+    named::NamedTuple{N, V} where {N}
+
+    PottsSavedValues(values::NamedTuple{N, V}) where {N, V <: Tuple} =
+        new{V}(values)
+
+    function PottsSavedValues(names, values::V) where {V <: Tuple}
+        normalized = names isa Tuple{Vararg{Symbol}} ?
+            names : Tuple(Symbol(name) for name in names)
+        length(normalized) == length(values) || throw(ArgumentError(
+            "saved-value names and values must have equal length"
+        ))
+        for left in eachindex(normalized), right in (left + 1):lastindex(normalized)
+            normalized[left] === normalized[right] && throw(ArgumentError(
+                "saved-value names must be unique"
+            ))
+        end
+        return new{V}(NamedTuple{normalized}(values))
+    end
+end
+
+_saved_value_buffer(values::PottsSavedValues) = values
+_saved_value_buffer(values::NamedTuple) = PottsSavedValues(values)
+
+_saved_value_names(buffer::PottsSavedValues) = keys(getfield(buffer, :named))
+Base.keys(buffer::PottsSavedValues) = _saved_value_names(buffer)
+Base.values(buffer::PottsSavedValues{V}) where {V} =
+    Tuple(getfield(buffer, :named))::V
+Base.Tuple(buffer::PottsSavedValues) = values(buffer)
+Base.NamedTuple(buffer::PottsSavedValues) = getfield(buffer, :named)
+Base.length(buffer::PottsSavedValues) = length(values(buffer))
+Base.isempty(buffer::PottsSavedValues) = isempty(values(buffer))
+Base.iterate(buffer::PottsSavedValues, state...) = iterate(values(buffer), state...)
+Base.getindex(buffer::PottsSavedValues, index::Integer) = values(buffer)[index]
+Base.propertynames(buffer::PottsSavedValues) = keys(buffer)
+Base.pairs(buffer::PottsSavedValues) = pairs(getfield(buffer, :named))
+Base.:(==)(left::PottsSavedValues, right::PottsSavedValues) =
+    getfield(left, :named) == getfield(right, :named)
+Base.:(==)(left::PottsSavedValues, right::NamedTuple) =
+    getfield(left, :named) == right
+Base.:(==)(left::NamedTuple, right::PottsSavedValues) = right == left
+Base.isequal(left::PottsSavedValues, right::PottsSavedValues) =
+    isequal(getfield(left, :named), getfield(right, :named))
+Base.isequal(left::PottsSavedValues, right::NamedTuple) =
+    isequal(getfield(left, :named), right)
+Base.isequal(left::NamedTuple, right::PottsSavedValues) = isequal(right, left)
+Base.hash(buffer::PottsSavedValues, seed::UInt) =
+    hash(getfield(buffer, :named), seed)
+Base.show(io::IO, buffer::PottsSavedValues) = show(io, getfield(buffer, :named))
+
+function _saved_value_index(buffer::PottsSavedValues, name::Symbol)
+    names = keys(buffer)
+    for index in eachindex(names)
+        @inbounds names[index] === name && return index
+    end
+    return nothing
+end
+_saved_value_haskey(buffer::PottsSavedValues, name::Symbol) =
+    _saved_value_index(buffer, name) !== nothing
+Base.haskey(buffer::PottsSavedValues, name::Symbol) =
+    _saved_value_haskey(buffer, name)
+function _saved_value(buffer::PottsSavedValues, name::Symbol)
+    index = _saved_value_index(buffer, name)
+    named = getfield(buffer, :named)
+    index === nothing && throw(FieldError(typeof(named), name))
+    return values(buffer)[index]
+end
+Base.getindex(buffer::PottsSavedValues, name::Symbol) = _saved_value(buffer, name)
+function _saved_value(buffer::PottsSavedValues, name::Symbol, default)
+    index = _saved_value_index(buffer, name)
+    return index === nothing ? default : values(buffer)[index]
+end
+Base.get(buffer::PottsSavedValues, name::Symbol, default) =
+    _saved_value(buffer, name, default)
+function Base.getproperty(buffer::PottsSavedValues, name::Symbol)
+    return _saved_value(buffer, name)
+end
+
 """Immutable scientific snapshot saved at one Monte Carlo step."""
 struct PottsSavedState{O, K, G, V, S, R, Q, D, N}
     mcs::Int
@@ -42,6 +123,45 @@ struct PottsSavedState{O, K, G, V, S, R, Q, D, N}
     observations::Q
     declared_observations::D
     native::N
+
+    function PottsSavedState(
+            mcs::Int,
+            ownership,
+            cell_kinds,
+            cell_generations,
+            volumes,
+            states,
+            topology,
+            observations,
+            declared_observations,
+            native,
+        )
+        state_buffer = _saved_value_buffer(states)
+        topology_buffer = _saved_value_buffer(topology)
+        observation_buffer = _saved_value_buffer(observations)
+        return new{
+            typeof(ownership),
+            typeof(cell_kinds),
+            typeof(cell_generations),
+            typeof(volumes),
+            typeof(state_buffer),
+            typeof(topology_buffer),
+            typeof(observation_buffer),
+            typeof(declared_observations),
+            typeof(native),
+        }(
+            mcs,
+            ownership,
+            cell_kinds,
+            cell_generations,
+            volumes,
+            state_buffer,
+            topology_buffer,
+            observation_buffer,
+            declared_observations,
+            native,
+        )
+    end
 end
 
 _copy_saved_value(value::AbstractArray) = copy(value)
@@ -73,18 +193,18 @@ function _descriptor_saved_states(executable, snapshot)
         entry -> _descriptor_saved_value(snapshot.descriptor_state, entry, executable.core_program),
         entries,
     )
-    return NamedTuple{Tuple(entry.name for entry in entries)}(values)
+    return PottsSavedValues(Tuple(entry.name for entry in entries), values)
 end
 
 function _descriptor_saved_topology(executable, snapshot)
     entries = executable.relationship_manifest
-    isempty(entries) && return NamedTuple()
+    isempty(entries) && return PottsSavedValues((), ())
     length(entries) == length(snapshot.relationships) || throw(ArgumentError(
         "compiled topology declarations and runtime stores are misaligned"
     ))
     names = Tuple(entry.name for entry in entries)
     values = Tuple(copy(state) for state in snapshot.relationships)
-    return NamedTuple{names}(values)
+    return PottsSavedValues(names, values)
 end
 
 function _saved_state(
@@ -96,6 +216,8 @@ function _saved_state(
 )
     states = _descriptor_saved_states(executable, snapshot)
     topology = _descriptor_saved_topology(executable, snapshot)
+    observation_buffer = observations isa PottsSavedValues ?
+        observations : PottsSavedValues(observations)
     return PottsSavedState(
         snapshot.mcs,
         copy(snapshot.ownership),
@@ -108,7 +230,7 @@ function _saved_state(
         )),
         states,
         topology,
-        observations,
+        observation_buffer,
         Tuple(declared_observations),
         Tuple(_copy_native_logical_state(state) for state in native),
     )
@@ -119,15 +241,24 @@ function Base.getindex(state::PottsSavedState, name::Symbol)
     name === :cell_kinds && return state.cell_kinds
     name === :cell_generations && return state.cell_generations
     name === :volumes && return state.volumes
-    haskey(state.states, name) && return getproperty(state.states, name)
-    haskey(state.topology, name) && return getproperty(state.topology, name)
-    haskey(state.observations, name) && return state.observations[name]
+    states = getfield(state, :states)
+    topology = getfield(state, :topology)
+    observations = getfield(state, :observations)
+    index = _saved_value_index(states, name)
+    index === nothing || return values(states)[index]
+    index = _saved_value_index(topology, name)
+    index === nothing || return values(topology)[index]
+    index = _saved_value_index(observations, name)
+    index === nothing || return values(observations)[index]
     name in state.declared_observations &&
         throw(PottsKnownUnsavedError(name, state.mcs))
     throw(PottsUnknownIdentityError(name))
 end
 
 function Base.getproperty(state::PottsSavedState, name::Symbol)
+    name === :states && return getfield(state, :states)
+    name === :topology && return getfield(state, :topology)
+    name === :observations && return getfield(state, :observations)
     name in fieldnames(typeof(state)) && return getfield(state, name)
     return getindex(state, name)
 end
@@ -135,9 +266,9 @@ end
 Base.propertynames(state::PottsSavedState) = (
     :mcs, :ownership, :cell_kinds, :cell_generations, :volumes,
     :native,
-    keys(getfield(state, :states))...,
-    keys(getfield(state, :topology))...,
-    keys(state.observations)...,
+    _saved_value_names(getfield(state, :states))...,
+    _saved_value_names(getfield(state, :topology))...,
+    _saved_value_names(getfield(state, :observations))...,
 )
 
 """Return a copied native logical state from a saved state or solution."""

@@ -136,7 +136,7 @@ function _named_runtime_observations(runtime, plan, requested_names)
         push!(pairs, entry.name => _evaluate_observation(entry.evaluator, runtime))
     end
     names = Tuple(first(pair) for pair in pairs)
-    return NamedTuple{names}(Tuple(last(pair) for pair in pairs))
+    return PottsSavedValues(names, Tuple(last(pair) for pair in pairs))
 end
 
 function _current_saved_state(integrator::PottsIntegrator)
