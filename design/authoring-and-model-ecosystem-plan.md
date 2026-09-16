@@ -20,6 +20,14 @@ For the current delivery grouping and enumerated PR allocation, use the
 P01–P16/B1–B8 labels remain feature-scope references, not extra PRs to open in
 addition to that map.
 
+The user accepted the [composition-first model amendment](composition-first-model-roadmap.md)
+on 2026-09-10: selected SBMLToolkit integration, confirmed COBREXA.jl coupling,
+removal of privileged model-specific machinery, and fourteen scientific model
+deliveries are now explicit scope. R51–R54 add the metabolic bridge and FBCA,
+vascular and tumor corpora; the map owns the current 62-PR allocation and updated graph.
+This accepted scope supersedes earlier deferral language for those workflows,
+not the charter or the distinction between design and executable public APIs.
+
 ## 1. Objective and limits
 
 The aspiration is that a scientist can define a mechanism once, combine it with
@@ -914,7 +922,10 @@ The branch row is not an instruction to combine those into one mega-PR.
 | B7 Additional hardware | LocalMath/CorePotts device extensions -> Potts -> model witnesses; stable main-spine contracts and available hardware | CUDA or ROCm storage/admission/integration through existing KA semantics, profile-specific support and real-device tests | Same representative combinations on the actual backend; numerical, ownership, failure and lifetime checks; measured performance |
 | B8 New move algorithms and non-Cartesian domains | CorePotts -> Potts -> PottsModels; actual scientific demand | Swap/multisite/conserved moves, other proposal distributions, specialized meshes or geometry; each scientifically distinct algorithm separately named | Reverse probability/acceptance or kinetic normalization, independent reference calculation, write conflicts and boundary behavior |
 
-Broader fitting/inference, SBML or other model interchange, dynamic remeshing,
+Selected SBMLToolkit kinetic import is accepted G07 work, with supported later
+event/stochastic cases in their actual owners. COBREXA coupling and the fourteen
+model deliveries follow the accepted amendment and canonical map.
+Broader fitting/inference, other interchange or additional SBML packages/export, dynamic remeshing,
 hybrid off-lattice mechanics, and multi-device domain decomposition remain
 explicit application/extension projects. Provide clean scientific quantities,
 observables, native boundaries, and experiment factories now so those projects
