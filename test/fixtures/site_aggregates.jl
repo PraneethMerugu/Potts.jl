@@ -5,8 +5,12 @@ function _site_aggregate_problem(;
         structured = false, atol = 0, rtol = 0, contribution = identity,
         unit = 1.0, reference_units = nothing, distinct = false, evolve = false,
         logical_shape = structured ? (2,) : (),
+        author_prefix = nothing,
+        gain_default = 1.0,
     )
-    @parameters gain = 1.0
+    author_name(name) =
+        author_prefix === nothing ? name : Symbol(author_prefix, :_, name)
+    @parameters gain = gain_default
     logical_shape in ((), (2,), (2, 2)) || throw(ArgumentError("unsupported aggregate fixture shape"))
     tensor = logical_shape == (2, 2)
     vector = logical_shape == (2,)
@@ -23,36 +27,44 @@ function _site_aggregate_problem(;
         initial_value = 0.0 * unit
         local_value = gain * signal
     end
-    lattice = LatticeDomain(:space; shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3)
-    kind = CellKind(:cell; extinction = ForbidExtinction())
-    medium = MediumKind(:medium)
-    declarations = scoped(sites(lattice), :locations) do site
-        cell_declarations = scoped(cells(kind), :owners) do cell
-            quantity = aggregate(contribution(local_value); over = site, by = cell, atol, rtol)
-            second_quantity = distinct ? aggregate(local_value + gain; over = site, by = cell, atol, rtol) : quantity
+    lattice = LatticeDomain(
+        author_name(:space);
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3,
+    )
+    kind = CellKind(author_name(:cell); extinction = ForbidExtinction())
+    medium = MediumKind(author_name(:medium))
+    declarations = scoped(sites(lattice), author_name(:locations)) do site
+        cell_declarations = scoped(cells(kind), author_name(:owners)) do cell
+            quantity = aggregate(
+                contribution(local_value); over = site, by = cell, atol, rtol,
+            )
+            second_quantity = distinct ?
+                aggregate(local_value + gain; over = site, by = cell, atol, rtol) :
+                quantity
             StatementSet(
                 (
                     CellState(amount; initial = initial_value),
                     CellState(repeated; initial = initial_value),
-                    Synchronous(:measure, Assign(amount, quantity)),
-                    Synchronous(:measure_again, Assign(repeated, second_quantity)),
+                    Synchronous(author_name(:measure), Assign(amount, quantity)),
+                    Synchronous(author_name(:measure_again), Assign(repeated, second_quantity)),
                 )
             )
         end
         update = !evolve ? () : (
                 Synchronous(
-                    :source_update,
+                    author_name(:source_update),
                     Assign(signal, vector ? SVector(signal[1] + unit, signal[2] + 2unit) : tensor ? 2signal : signal + unit)
                 ),
             )
         StatementSet((FieldState(signal; initial = initial_value), update..., cell_declarations...))
     end
     system = PottsSystem(
-        name = :maintained_signal,
+        name = author_name(:maintained_signal),
         statements = StatementSet(
             (
                 lattice, kind, medium, declarations...,
-                ProposalConstraint(:fixed_ownership, false), Protocol(Sweep(; temperature = 0.0); name = :main),
+                ProposalConstraint(author_name(:fixed_ownership), false),
+                Protocol(Sweep(; temperature = 0.0); name = author_name(:main)),
             )
         ),
         unknowns = (signal, amount, repeated), parameters = (gain,)
@@ -73,6 +85,58 @@ end
 function _independent_owner_sum(values, labels, gain)
     z = zero(first(values))
     return [sum((gain * values[i] for i in eachindex(labels) if labels[i] == owner); init = z) for owner in 1:3]
+end
+
+function _derived_site_quantity_problem()
+    @parameters gain = 1.0
+    @variables signal baseline response repeated
+    lattice = LatticeDomain(
+        :derived_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(), max_cells = 3,
+    )
+    kind = CellKind(:derived_cell; extinction = ForbidExtinction())
+    medium = MediumKind(:derived_medium)
+    declarations = scoped(sites(lattice), :derived_sites) do site
+        consumers = scoped(cells(kind), :derived_cells) do cell
+            mass = aggregate(gain * signal; over = site, by = cell)
+            count = aggregate(1; over = site, by = cell)
+            average = mass / count
+            StatementSet((
+                CellState(baseline; initial = 10.0),
+                CellState(response; initial = 0.0),
+                CellState(repeated; initial = 0.0),
+                Synchronous(
+                    :publish_average,
+                    Assign(response, average + baseline),
+                ),
+                Synchronous(
+                    :publish_average_again,
+                    Assign(repeated, average + baseline),
+                ),
+            ))
+        end
+        StatementSet((FieldState(signal; initial = 0.0), consumers...))
+    end
+    system = PottsSystem(
+        name = :derived_site_quantity,
+        statements = StatementSet((
+            lattice, kind, medium, declarations...,
+            ProposalConstraint(:fixed_derived_ownership, false),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = (signal, baseline, response, repeated),
+        parameters = (gain,),
+    )
+    labels = Int32[1 2; 1 0]
+    values = Float32[1 2; 3 4]
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [kind, kind], medium),
+        values = (signal => values,),
+    )
+    return (;
+        problem = PottsProblem(system, initial, (0, 4); seed = 29),
+        signal, baseline, response, repeated, gain, labels,
+    )
 end
 
 function _site_minimum_problem(; empty = 19.0, maximum_sites = 4)
@@ -124,6 +188,102 @@ function _independent_owner_minimum(values, labels, empty, owners)
         minimum((values[index] for index in eachindex(labels) if labels[index] == owner); init = empty)
         for owner in 1:owners
     ]
+end
+
+function _site_aggregate_history_problem()
+    @variables signal current retained memory
+    lattice = LatticeDomain(
+        :history_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(),
+        max_cells = 2,
+    )
+    kind = CellKind(:history_cell; extinction = ForbidExtinction())
+    medium = MediumKind(:history_medium)
+    declarations = scoped(sites(lattice), :history_sites) do site
+        consumers = scoped(cells(kind), :history_owners) do owner
+            quantity = aggregate(signal; over = site, by = owner)
+            StatementSet((
+                CellState(current; initial = 0.0),
+                CellState(retained; initial = 0.0),
+                HistoryState(
+                    memory; of = current, depth = 2, initial = -1.0,
+                    cadence = Every(1),
+                ),
+                Synchronous(
+                    :publish_and_read_retained,
+                    Assign(current, quantity),
+                    Assign(retained, lag(memory, 0)),
+                ),
+            ))
+        end
+        StatementSet((FieldState(signal; initial = 0.0), consumers...))
+    end
+    system = PottsSystem(
+        name = :aggregate_history,
+        statements = StatementSet((
+            lattice, kind, medium, declarations...,
+            ProposalConstraint(:fixed_history_ownership, false),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = (signal, current, retained, memory),
+    )
+    labels = Int32[1 2; 1 0]
+    values = Float32[1 5; 3 4]
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [kind, kind], medium),
+        values = (signal => values,),
+    )
+    return (;
+        problem = PottsProblem(system, initial, (0, 3); seed = 17),
+        signal, current, retained, memory,
+    )
+end
+
+function _site_minimum_transfer_problem()
+    @variables signal amount
+    lattice = LatticeDomain(
+        :transfer_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(),
+        max_cells = 2,
+    )
+    kind = CellKind(:transfer_cell; extinction = RetireAtZero())
+    medium = MediumKind(:transfer_medium)
+    proposal = ProposalContext(:minimum_transfer)
+    declarations = scoped(sites(lattice), :transfer_sites) do site
+        consumers = scoped(cells(kind), :transfer_owners) do owner
+            quantity = aggregate(
+                signal; over = site, by = owner, combine = min,
+                empty = -99.0, maximum_sites = 4,
+            )
+            StatementSet((
+                CellState(amount; initial = 0.0, retirement = RetireTo(-7.0)),
+                Synchronous(:publish_minimum, Assign(amount, quantity)),
+            ))
+        end
+        StatementSet((FieldState(signal; initial = 0.0), consumers...))
+    end
+    system = PottsSystem(
+        name = :negative_minimum_transfer,
+        statements = StatementSet((
+            lattice, kind, medium, declarations...,
+            ProposalConstraint(
+                :select_retiring_copy,
+                (proposal.source_cell == 2) & (proposal.target_cell == 1),
+            ),
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        unknowns = (signal, amount),
+    )
+    labels = Int32[1 2; 2 2]
+    values = Float32[-8 -3; -5 -1]
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [kind, kind], medium),
+        values = (signal => values,),
+    )
+    return (;
+        problem = PottsProblem(system, initial, (0, 8); seed = 0x3826),
+        signal, amount, labels, empty = -99.0f0,
+    )
 end
 
 function _site_aggregate_maintenance_contract(; structured = false, logical_shape = structured ? (2,) : ())

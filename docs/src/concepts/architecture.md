@@ -41,18 +41,40 @@ multiply operation, not a tensor-specific evaluator.
 
 Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
 scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
-existing normalized contribution, unit, shape and dependency facts →
-`compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
-`SiteMinimumTracker` and qualified cell read. Canonical sums include their
-numerical comparison policy; canonical minima include their empty-owner value
-and declared reconstruction bound. Both share one tracker independently
-of consuming statements or anchors. The
-temporary tracker handle map is discarded after Core program assembly, like
-the other lowering maps. Completion retains source dependencies; physical stage
-reads use the tracker, while any additional direct state operand retains its
-own compiled state handle. The literal integer-one case reuses Core's existing
-ownership count. `test_scalar_site_aggregates.jl` defends sharing, separate
-contributions, source/parameter refresh, mixed publication, units and continuation.
+node-aligned `AnalyzedSiteAggregate` fact plus normalized unit, shape and result
+facts → `compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
+`SiteMinimumTracker` and qualified cell read. Analysis validates the scoped cell
+anchor and the complete contribution closure, then retains only the law,
+contribution root, site resource and policy operands needed by lowering.
+Tracker identity, descriptor construction, state retention and evaluator
+lowering consume that fact rather than traversing the authored aggregate again.
+Canonical sums include their numerical comparison
+policy; canonical minima include their empty-owner value and declared
+reconstruction bound. Both share one tracker independently of consuming
+statements or anchors. Lowering discards its canonical identity dictionary and
+retains only a node-aligned qualified-handle table until Core program assembly.
+Physical stage reads use the tracker, while any additional direct state operand
+retains its own compiled state handle. The literal integer-one case reuses
+Core's existing ownership count. Ordinary symbolic composition then combines
+those maintained reads with each other and with direct cell state; it does not introduce an
+aggregate-specific execution path. The derived-quantity fixture computes a
+per-cell average from maintained mass and ownership count, adds a direct cell
+baseline, publishes the result to two consumers, changes both its field and
+parameter sources, and continues from a checkpoint under both CPU algorithms.
+`test_scalar_site_aggregates.jl` defends that workflow together with sharing,
+separate contributions, resolved fact ownership, execution-type reuse across
+author renaming and numerical parameter defaults, source/parameter refresh,
+mixed publication, units and continuation. It also publishes a maintained sum
+into ordinary cell state, samples that state through `HistoryState`, and proves
+that a retained consumer observes the stage-entry sample while a source edit
+changes the current maintained value. Numerical defaults remain runtime
+values: changing one changes the result without creating another Core program,
+tracker plan or tracker-instance specialization family.
+`benchmark/resolved_aggregate_contract.jl` separates public authoring, problem
+construction, Core preparation, first execution and warmed execution. It also
+reports the warmed public step beside the already-lowered Core step. Neither
+whole-MCS boundary has a zero-allocation guarantee; the fixed-capacity prepared
+update and contribution leaves defended by Core own that narrower contract.
 The same model builder, independent owner-sum oracle and maintenance contract in
 `test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
 `test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
@@ -62,11 +84,15 @@ contributions, physical units, shape rejection, updates and continuation.
 vocabulary and preserves additive authoring. `test_scalar_site_minimum.jl`
 defines an independent owner-scan witness that changes the site holding the
 current minimum under both CPU algorithms, checks the declared finite empty
-policy, and distinguishes live owners from unused cell-capacity slots.
-These are ordinary registered test units.
-The scalar CPU owner is qualified; the vector, tensor and scheduled-maintenance units
-retain required behavior awaiting its implementation. Public aggregate device
-qualification is also pending.
+policy, and distinguishes live owners from unused cell-capacity slots. Its
+accepted-copy witness additionally transfers a negative minimum, retires the
+emptied owner, checks explicit empty finalization in the maintained tracker,
+and continues that settled state from a checkpoint.
+These are ordinary registered test units. Scalar, fixed-vector, fixed-tensor and
+scheduled-source sums use the same CPU implementation and are defended by those
+units. The real-Metal profile runs scalar, vector and tensor sums with evolving
+sources, and runs the bounded scalar minimum, through the same public authoring
+and KernelAbstractions execution path with scalar indexing disabled.
 
 Scalar multiplication of declared fixed arrays uses the existing arithmetic
 operation owner in `compiler/host/operation_analysis.jl` and result/shape facts

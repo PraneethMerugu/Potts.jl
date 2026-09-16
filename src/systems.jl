@@ -64,7 +64,10 @@ function _component_imports(values)
                 "a component import alias may be bound only once"
             )
         )
-        push!(result, _defensive_copy(alias) => last(binding))
+        # Array-symbolic identity is the whole import key. Generic array copying
+        # is not a stable identity-preserving operation for Symbolics arrays
+        # across the supported Symbolics 7 range.
+        push!(result, alias => last(binding))
     end
     return Tuple(result)
 end

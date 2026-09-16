@@ -56,25 +56,51 @@ function _adapt_runtime_backend(
     )
 end
 
+# Runtime parameter names stay value-level: they support diagnostics and public
+# indexing without parameterizing the normalized runtime-parameter buffer.
+struct _RuntimeParameterSchema
+    names::Tuple
+
+    function _RuntimeParameterSchema(names)
+        normalized = Tuple(Symbol(name) for name in names)
+        length(unique(normalized)) == length(normalized) ||
+            throw(ArgumentError("runtime parameter names must be unique"))
+        return new(normalized)
+    end
+end
+
 """
     PottsParameters
 
 An immutable, normalized runtime-parameter buffer. Construct it through
 `PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
 """
-struct PottsParameters{T, V <: Tuple, N <: NamedTuple}
+struct PottsParameters{T, V <: Tuple}
     values::V
-    named::N
+    schema::_RuntimeParameterSchema
 end
 
 PottsParameters(values::AbstractVector{T}, named::N) where {T, N <: NamedTuple} =
-    PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
+    PottsParameters{T, typeof(Tuple(values))}(
+        Tuple(values), _RuntimeParameterSchema(keys(named)),
+    )
 PottsParameters(values::Tuple, named::N) where {N <: NamedTuple} =
-    PottsParameters{Any, typeof(values), N}(values, named)
+    PottsParameters{Any, typeof(values)}(
+        values, _RuntimeParameterSchema(keys(named)),
+    )
+
+function Base.getproperty(parameters::PottsParameters, name::Symbol)
+    name === :named || return getfield(parameters, name)
+    schema = getfield(parameters, :schema)
+    return NamedTuple{schema.names}(getfield(parameters, :values))
+end
 
 Base.getindex(parameters::PottsParameters, name::Symbol) =
-    getproperty(parameters.named, name)
-Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
+    let index = findfirst(==(name), parameters.schema.names)
+        index === nothing && return getproperty(parameters.named, name)
+        parameters.values[index]
+    end
+Base.propertynames(parameters::PottsParameters) = parameters.schema.names
 
 function _parameter_buffer(values::Tuple, ::Type{T}) where {
         T <: AbstractFloat,

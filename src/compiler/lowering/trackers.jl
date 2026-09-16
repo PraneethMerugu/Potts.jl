@@ -1,32 +1,30 @@
 # Compiler-owned resolution and admission of public tracker requirements.
 
-function _site_sum_tolerances(ir, node, manifest, ::Type{T}) where {T}
-    absolute = ir.graph.nodes[node.operands[4]].payload.value
-    relative = ir.graph.nodes[node.operands[5]].payload.value
+function _site_sum_tolerances(ir, fact, manifest, ::Type{T}) where {T}
+    absolute = ir.graph.nodes[Int(first(fact.policy_indices))].payload.value
+    relative = ir.graph.nodes[Int(last(fact.policy_indices))].payload.value
     return (;
         absolute_tolerance = T(_numeric_value(absolute, _reference_for(manifest.reference_units, absolute))),
         relative_tolerance = T(_numeric_value(relative, _reference_for(manifest.reference_units, relative))),
     )
 end
 
-function _site_sum_identity(ir, node, manifest, ::Type{T}) where {T}
-    source = _site_aggregate_source(ir.source, ir.graph, node)
+function _site_sum_identity(ir, fact, manifest, ::Type{T}) where {T}
     return _canonical_value(
         (
-            :site_sum, ir.graph.nodes[source.contribution].structural_key,
-            source.site.resource, ir.facts.shape[source.contribution],
-            ir.facts.units[source.contribution], T,
-            _site_sum_tolerances(ir, node, manifest, T),
+            :site_sum, ir.graph.nodes[Int(fact.contribution)].structural_key,
+            fact.site, ir.facts.shape[Int(fact.contribution)],
+            ir.facts.units[Int(fact.contribution)], T,
+            _site_sum_tolerances(ir, fact, manifest, T),
         )
     )
 end
 
 function _site_sum_descriptor(
-        ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
-        state_layout, history_descriptors
+        ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
+        state_layout, history_descriptors, canonicalization_cache,
     ) where {T <: AbstractFloat}
-    source = _site_aggregate_source(ir.source, ir.graph, node)
-    result_type = ir.facts.result_type[source.contribution]
+    result_type = ir.facts.result_type[Int(fact.contribution)]
     element_type = result_type <: AbstractArray ? eltype(result_type) : result_type
     (element_type === Real || element_type <: AbstractFloat) ||
         throw(
@@ -41,11 +39,12 @@ function _site_sum_descriptor(
         )
     )
     expression = _lower_static_node(
-        ir.graph, ir, source.contribution, manifest, T, state_handles, draw_handles,
+        ir.graph, ir, fact.contribution, manifest, T, state_handles, draw_handles,
         Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
         CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+        canonicalization_cache,
     )
-    shape = ir.facts.shape[source.contribution]
+    shape = ir.facts.shape[Int(fact.contribution)]
     shape isa Tuple && all(size -> size isa Integer && !(size isa Bool) && size > 0, shape) ||
         throw(
         PottsValidationError(
@@ -61,32 +60,50 @@ function _site_sum_descriptor(
     value_type = isempty(shape) ? T : StaticArrays.SArray{Tuple{shape...}, T, length(shape), prod(shape)}
     return CorePotts.CompilerSPI.SiteSumTracker(
         value_type, key, expression;
-        _site_sum_tolerances(ir, node, manifest, T)...,
+        _site_sum_tolerances(ir, fact, manifest, T)...,
     )
 end
 
-function _site_minimum_identity(ir, node, manifest, ::Type{T}) where {T}
-    source = _site_aggregate_source(ir.source, ir.graph, node)
-    empty = ir.graph.nodes[first(source.policy_indices)].payload.value
-    maximum_sites = ir.graph.nodes[last(source.policy_indices)].payload.value
+function _site_minimum_identity(ir, fact, manifest, ::Type{T}) where {T}
+    empty = ir.graph.nodes[Int(first(fact.policy_indices))].payload.value
+    maximum_sites = ir.graph.nodes[Int(last(fact.policy_indices))].payload.value
     return _canonical_value(
         (
-            :site_minimum, ir.graph.nodes[source.contribution].structural_key,
-            source.site.resource, ir.facts.shape[source.contribution],
-            ir.facts.units[source.contribution], T,
+            :site_minimum, ir.graph.nodes[Int(fact.contribution)].structural_key,
+            fact.site, ir.facts.shape[Int(fact.contribution)],
+            ir.facts.units[Int(fact.contribution)], T,
             T(_numeric_value(empty, _reference_for(manifest.reference_units, empty))),
             maximum_sites,
         )
     )
 end
 
-_site_aggregate_identity(ir, node, manifest, ::Type{T}) where {T} =
-    _is_site_sum(node) ? _site_sum_identity(ir, node, manifest, T) :
-    _site_minimum_identity(ir, node, manifest, T)
+_site_aggregate_identity(ir, fact, manifest, ::Type{T}) where {T} =
+    fact.law === :sum ? _site_sum_identity(ir, fact, manifest, T) :
+    _site_minimum_identity(ir, fact, manifest, T)
+
+function _site_aggregate_layout_identity(
+        ir,
+        fact,
+        ::Type{T},
+        canonicalization_cache::_OperationalCanonicalizationCache,
+    ) where {T}
+    contribution = Int(fact.contribution)
+    return _sha256_hex(
+        "potts-site-aggregate-layout-v1",
+        fact.law,
+        ir.facts.shape[contribution],
+        ir.facts.result_type[contribution],
+        T,
+        _operational_expression_shape_key(
+            ir.graph, ir, fact.contribution, canonicalization_cache,
+        ),
+    )
+end
 
 function _site_minimum_descriptor(
-        ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
-        state_layout, history_descriptors
+        ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
+        state_layout, history_descriptors, canonicalization_cache,
     ) where {T <: AbstractFloat}
     T === Float32 || throw(PottsValidationError(
         :descriptor_lowering, (
@@ -97,23 +114,23 @@ function _site_minimum_descriptor(
             ),
         )
     ))
-    source = _site_aggregate_source(ir.source, ir.graph, node)
-    isempty(ir.facts.shape[source.contribution]) || throw(PottsValidationError(
+    isempty(ir.facts.shape[Int(fact.contribution)]) || throw(PottsValidationError(
         :descriptor_lowering, (
             PottsDiagnostic(
                 :aggregate_value_shape, node.source, String(node.operation), node.source.path,
-                "a scalar contribution", repr(ir.facts.shape[source.contribution]), (),
+                "a scalar contribution", repr(ir.facts.shape[Int(fact.contribution)]), (),
                 ir.source.records[node.record].source
             ),
         )
     ))
     expression = _lower_static_node(
-        ir.graph, ir, source.contribution, manifest, T, state_handles, draw_handles,
+        ir.graph, ir, fact.contribution, manifest, T, state_handles, draw_handles,
         Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
         CorePotts.CompilerSPI.IterationStageSite(); state_layout, history_descriptors,
+        canonicalization_cache,
     )
-    empty = ir.graph.nodes[first(source.policy_indices)].payload.value
-    maximum_sites = ir.graph.nodes[last(source.policy_indices)].payload.value
+    empty = ir.graph.nodes[Int(first(fact.policy_indices))].payload.value
+    maximum_sites = ir.graph.nodes[Int(last(fact.policy_indices))].payload.value
     required_sites = prod(_lattice_shape(ir))
     maximum_sites >= required_sites || throw(PottsValidationError(
         :descriptor_lowering, (
@@ -133,16 +150,16 @@ function _site_minimum_descriptor(
 end
 
 _site_aggregate_descriptor(
-    ir, node, key, manifest, ::Type{T}, state_handles, draw_handles;
-    state_layout, history_descriptors,
-) where {T <: AbstractFloat} = _is_site_sum(node) ?
+    ir, node, fact, key, manifest, ::Type{T}, state_handles, draw_handles;
+    state_layout, history_descriptors, canonicalization_cache,
+) where {T <: AbstractFloat} = fact.law === :sum ?
     _site_sum_descriptor(
-        ir, node, key, manifest, T, state_handles, draw_handles;
-        state_layout, history_descriptors,
+        ir, node, fact, key, manifest, T, state_handles, draw_handles;
+        state_layout, history_descriptors, canonicalization_cache,
     ) :
     _site_minimum_descriptor(
-        ir, node, key, manifest, T, state_handles, draw_handles;
-        state_layout, history_descriptors,
+        ir, node, fact, key, manifest, T, state_handles, draw_handles;
+        state_layout, history_descriptors, canonicalization_cache,
     )
 
 function _operation_tracker_context(
@@ -348,6 +365,76 @@ function _group_tracker_instances(ordered::Tuple)
     return Tuple(grouped)
 end
 
+function _lower_site_aggregate_trackers(
+        ir::AnalyzedTermIR,
+        manifest,
+        ::Type{T},
+        state_handles,
+        draw_handles;
+        state_layout,
+        history_descriptors,
+    ) where {T <: AbstractFloat}
+    # Canonical identities deduplicate equivalent quantities during lowering;
+    # consumers use the analyzed node-aligned handle table and never repeat
+    # aggregate source interpretation.
+    contributions = Dict{String, Tuple{NormalizedTermNode, AnalyzedSiteAggregate}}()
+    canonicalization_cache = _OperationalCanonicalizationCache(
+        length(ir.graph.nodes),
+    )
+    identity_by_node = Union{Nothing, String}[nothing for _ in ir.graph.nodes]
+    for node in ir.graph.nodes
+        fact = ir.facts.site_aggregate[Int(node.identity)]
+        fact isa AnalyzedSiteAggregate || continue
+        _is_unit_count(ir.graph, node) && continue
+        identity = _site_aggregate_identity(ir, fact, manifest, T)
+        identity_by_node[Int(node.identity)] = identity
+        get!(contributions, identity, (node, fact))
+    end
+
+    ordered = Tuple{
+        String,
+        String,
+        NormalizedTermNode,
+        AnalyzedSiteAggregate,
+    }[]
+    for (identity, (node, fact)) in contributions
+        layout_identity = _site_aggregate_layout_identity(
+            ir, fact, T, canonicalization_cache,
+        )
+        push!(ordered, (layout_identity, identity, node, fact))
+    end
+    # Qualified scientific identity remains a host value for deduplication,
+    # diagnostics, and checkpoint fingerprints. Physical tuple order is grouped
+    # first by the explicit operational law, value shape/type, scalar type, and
+    # expression topology. Author-sensitive identity only orders descriptors
+    # that share that execution layout.
+    sort!(ordered; by = item -> (item[1], item[2]))
+
+    descriptors = CorePotts.CompilerSPI.AbstractTrackerDescriptor[]
+    tracker_handles_by_identity = Dict{
+        String, CorePotts.CompilerSPI.QualifiedTrackerKey,
+    }()
+    for (index, (_, identity, node, fact)) in enumerate(ordered)
+        law = fact.law === :sum ? :site_sum : :site_minimum
+        key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(law), index)
+        tracker_handles_by_identity[identity] = key
+        descriptor = _site_aggregate_descriptor(
+            ir, node, fact, key, manifest, T, state_handles, draw_handles;
+            state_layout, history_descriptors, canonicalization_cache,
+        )
+        _append_tracker_requirement!(descriptors, descriptor)
+    end
+    tracker_handles = Union{
+        Nothing,
+        CorePotts.CompilerSPI.QualifiedTrackerKey{Val{:site_sum}},
+        CorePotts.CompilerSPI.QualifiedTrackerKey{Val{:site_minimum}},
+    }[
+        identity === nothing ? nothing : tracker_handles_by_identity[identity]
+        for identity in identity_by_node
+    ]
+    return (; descriptors, handles = tracker_handles)
+end
+
 function _lower_tracker_plan(
         ir::AnalyzedTermIR,
         engine::AbstractPottsAlgorithm,
@@ -361,24 +448,14 @@ function _lower_tracker_plan(
         descriptors, CorePotts.CompilerSPI.OwnershipCountTracker()
     )
 
-    # This is a temporary compiler handle map, like state_handles. Only actual
-    # tracker descriptors and their keys survive assembly of the Core program.
-    contributions = Dict{String, NormalizedTermNode}()
-    for node in ir.graph.nodes
-        _is_site_aggregate(node) || continue
-        _is_unit_count(ir.graph, node) && continue
-        get!(contributions, _site_aggregate_identity(ir, node, manifest, T), node)
-    end
-    tracker_handles = Dict{String, CorePotts.CompilerSPI.QualifiedTrackerKey}()
-    for (index, identity) in enumerate(sort!(collect(keys(contributions))))
-        node = contributions[identity]
-        law = _is_site_sum(node) ? :site_sum : :site_minimum
-        key = CorePotts.CompilerSPI.QualifiedTrackerKey(Val(law), index)
-        tracker_handles[identity] = key
-        descriptor = _site_aggregate_descriptor(ir, node, key,
-            manifest, T, state_handles, draw_handles; state_layout, history_descriptors)
-        _append_tracker_requirement!(descriptors, descriptor)
-    end
+    aggregates = _lower_site_aggregate_trackers(
+        ir, manifest, T, state_handles, draw_handles;
+        state_layout, history_descriptors,
+    )
+    foreach(
+        descriptor -> _append_tracker_requirement!(descriptors, descriptor),
+        aggregates.descriptors,
+    )
 
     if any(ir.graph.nodes) do node
             transfer = node.transfer
@@ -440,5 +517,5 @@ function _lower_tracker_plan(
         map(CorePotts.CompilerSPI.tracker_contract, ordered),
     )
     plan = CorePotts.CompilerSPI.TrackerExecutionPlan(_group_tracker_instances(ordered), fingerprint)
-    return (; plan, handles = tracker_handles)
+    return (; plan, handles = aggregates.handles)
 end

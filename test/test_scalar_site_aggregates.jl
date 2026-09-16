@@ -1,6 +1,151 @@
 isdefined(@__MODULE__, :_site_aggregate_problem) || include("fixtures/site_aggregates.jl")
+include("fixtures/ExternalAggregateOperationFixture.jl")
 
 _site_aggregate_maintenance_contract(; structured = false)
+
+@testset "aggregate analysis resolves law and policy" begin
+    baseline = _site_aggregate_problem()
+    renamed = _site_aggregate_problem(; author_prefix = :renamed)
+    remade = _site_aggregate_problem(; gain_default = 2.0)
+    baseline_ir = Potts._analyze_completed_system(baseline.problem.system)
+    renamed_ir = Potts._analyze_completed_system(renamed.problem.system)
+    baseline_facts = filter(!isnothing, baseline_ir.facts.site_aggregate)
+    renamed_facts = filter(!isnothing, renamed_ir.facts.site_aggregate)
+
+    @test length(baseline_facts) == length(renamed_facts) == 2
+    @test all(fact -> fact isa Potts.AnalyzedSiteAggregate, baseline_facts)
+    @test all(fact -> fact.law === :sum, baseline_facts)
+    @test all(fact -> length(fact.policy_indices) == 2, baseline_facts)
+    @test map(typeof, baseline_facts) == map(typeof, renamed_facts)
+
+    baseline_integrator = init(
+        baseline.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
+    renamed_integrator = init(
+        renamed.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
+    remade_integrator = init(
+        remade.problem, CheckerboardSweepCPM(); scalar_type = Float32,
+    )
+    @test typeof(baseline_integrator.plan.core_program) ===
+        typeof(renamed_integrator.plan.core_program) ===
+        typeof(remade_integrator.plan.core_program)
+    @test typeof(baseline_integrator.plan.core_program.tracker_plan) ===
+        typeof(renamed_integrator.plan.core_program.tracker_plan) ===
+        typeof(remade_integrator.plan.core_program.tracker_plan)
+    @test map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        baseline_integrator.plan.core_program.tracker_plan,
+    )) == map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        renamed_integrator.plan.core_program.tracker_plan,
+    )) == map(typeof, CorePotts.CompilerSPI.tracker_instances(
+        remade_integrator.plan.core_program.tracker_plan,
+    ))
+    @test getp(remade_integrator, remade.gain)(remade_integrator) == 2.0f0
+    step!(baseline_integrator)
+    step!(remade_integrator)
+    @test Array(baseline_integrator.u[:amount]) == Float32[3, 3, 0]
+    @test Array(remade_integrator.u[:amount]) == Float32[6, 6, 0]
+end
+
+@testset "external operations compose into maintained contributions" begin
+    fixture = ExternalAggregateOperationFixture.model()
+    ir = Potts._analyze_completed_system(fixture.problem.system)
+    fact = only(filter(!isnothing, ir.facts.site_aggregate))
+    external_node = only(filter(
+        node -> node.operation === :fixture_external_response,
+        ir.graph.nodes,
+    ))
+    @test external_node.identity == fact.contribution
+
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = ExternalAggregateOperationFixture.model()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        step!(integrator)
+        @test Array(integrator.u[:response]) == Float32[8, 4, 0]
+        setu(integrator, model.signal)(integrator, fill(5.0f0, 2, 2))
+        step!(integrator)
+        @test Array(integrator.u[:response]) == Float32[20, 10, 0]
+    end
+
+    @test_throws r"device_illegal_operation_callable" begin
+        ExternalAggregateOperationFixture.model(
+            operation = ExternalAggregateOperationFixture.captured_response,
+        )
+    end
+end
+
+@testset "derived quantities compose maintained and direct cell reads" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = _derived_site_quantity_problem()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        SPI = CorePotts.CompilerSPI
+        trackers = SPI.tracker_instances(integrator.plan.core_program.tracker_plan)
+        @test count(item -> item isa SPI.SiteSumTracker, trackers) == 1
+        @test count(item -> item isa SPI.OwnershipCountTracker, trackers) == 1
+
+        step!(integrator)
+        @test Array(integrator.u[:baseline]) == Float32[10, 10, 10]
+        @test Array(integrator.u[:response]) == Float32[12, 12, 0]
+        @test Array(integrator.u[:repeated]) == Float32[12, 12, 0]
+
+        setu(integrator, model.signal)(integrator, fill(4.0f0, 2, 2))
+        setp(integrator, model.gain)(integrator, 2.0f0)
+        restored = init(
+            model.problem,
+            algorithm;
+            scalar_type = Float32,
+            checkpoint = checkpoint(integrator),
+        )
+        step!(integrator)
+        step!(restored)
+        @test Array(integrator.u[:response]) ==
+            Array(restored.u[:response]) == Float32[18, 18, 0]
+        @test Array(integrator.u[:repeated]) ==
+            Array(restored.u[:repeated]) == Float32[18, 18, 0]
+        @test integrator.u.ownership == restored.u.ownership == model.labels
+    end
+end
+
+@testset "retained samples consume published aggregate values at stage entry" begin
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        model = _site_aggregate_history_problem()
+        integrator = init(model.problem, algorithm; scalar_type = Float32)
+        prehistory = Float32[-1, -1]
+        first_value = Float32[4, 5]
+        changed = Float32[2 6; 4 8]
+        changed_value = Float32[6, 6]
+
+        @test Array(integrator.u[:current]) == Float32[0, 0]
+        @test Array(integrator.u[:retained]) == Float32[0, 0]
+        @test integrator.u[:memory] == (prehistory, prehistory)
+
+        step!(integrator)
+        @test Array(integrator.u[:current]) == first_value
+        @test Array(integrator.u[:retained]) == prehistory
+        @test integrator.u[:memory] == (prehistory, first_value)
+
+        setu(integrator, model.signal)(integrator, changed)
+        step!(integrator)
+        @test Array(integrator.u[:current]) == changed_value
+        @test Array(integrator.u[:retained]) == first_value
+        @test integrator.u[:memory] == (first_value, changed_value)
+
+        restored = init(
+            model.problem,
+            algorithm;
+            scalar_type = Float32,
+            checkpoint = checkpoint(integrator),
+        )
+        step!(integrator)
+        step!(restored)
+        for current in (integrator, restored)
+            @test Array(current.u[:current]) == changed_value
+            @test Array(current.u[:retained]) == changed_value
+            @test current.u[:memory] == (changed_value, changed_value)
+            @test failure_report(current) === nothing
+        end
+    end
+end
 
 @testset "different contribution laws do not share one maintained value" begin
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
@@ -37,12 +182,12 @@ end
     site = SiteBinding(:source, sites(lattice))
     cell = CellBinding(:first, cells(kind))
     second = CellBinding(:second, cells(kind))
-    function source(expression)
+    function source(expression; additional_domains = ())
         PottsSystem(
             name = :scope_aggregate,
             statements = StatementSet(
                 (
-                    lattice, kind,
+                    lattice, additional_domains..., kind,
                     FieldState(signal; initial = 1.0, scope = site),
                     CellState(amount; initial = 0.0, scope = cell),
                     CellState(other; initial = 0.0, scope = second),
@@ -57,6 +202,14 @@ end
     orphan = SiteBinding(:orphan, sites(lattice))
     @test_throws r"unresolved_symbolic_leaf|not declared" complete(source(aggregate(signal; over = orphan, by = cell)))
     @test_throws r"site or field" complete(source(aggregate(other; over = site, by = cell)))
+    other_lattice = LatticeDomain(
+        :other_space;
+        shape = (2, 2), spacing = (1.0, 1.0), boundary = Closed(),
+    )
+    @test_throws r"site or field" complete(source(
+        aggregate(other; over = site, by = cell);
+        additional_domains = (other_lattice,),
+    ))
     # The legal maintained read does not authorize a separate direct site read
     # in the same cell expression, even when both read the identical source.
     @test_throws r"CellState or ModelState reads" complete(source(aggregate(signal; over = site, by = cell) + signal))

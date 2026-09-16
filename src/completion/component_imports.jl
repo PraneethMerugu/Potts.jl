@@ -42,6 +42,25 @@ function _component_scoped_value(owner, value, consumer_path)
     return scoped
 end
 
+function _component_import_substitutions(alias, target)
+    rules = Pair{Any, Any}[alias => target]
+    alias isa AbstractArray && target isa AbstractArray || return rules
+    size(alias) == size(target) || return rules
+
+    # Bind array components explicitly so expressions that retain only indexed
+    # leaves resolve to the same declared source as whole-array expressions.
+    alias_components = Symbolics.scalarize(alias)
+    target_components = Symbolics.scalarize(target)
+    append!(
+        rules, Pair{Any, Any}[
+            alias_component => target_component
+                for (alias_component, target_component) in
+                zip(alias_components, target_components)
+        ]
+    )
+    return rules
+end
+
 function _map_component_source(system::PottsSystem, rules)
     substitute_one = value -> _substitute_value(value, rules)
     return _rebuild(
@@ -117,7 +136,16 @@ function _resolve_component_imports(inventory::_PottsSourceInventory)
                     )
                 end
             end
-            rules[alias] = _component_scoped_value(owner, value, occurrence.path)
+            target = _component_scoped_value(owner, value, occurrence.path)
+            for rule in _component_import_substitutions(alias, target)
+                key = first(rule)
+                haskey(rules, key) && throw(
+                    ArgumentError(
+                        "component import aliases cannot overlap at scalar components"
+                    )
+                )
+                rules[key] = last(rule)
+            end
         end
         mapped = _map_component_source(system, rules)
         push!(local_systems, mapped)

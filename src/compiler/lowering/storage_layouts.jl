@@ -264,8 +264,9 @@ function _record_state_handles(
             return nothing
         end
         for node in ir.graph.nodes
-            node.source == record.identity && _is_site_aggregate(node) || continue
-            source_reads(first(node.operands))
+            fact = ir.facts.site_aggregate[Int(node.identity)]
+            node.source == record.identity && fact isa AnalyzedSiteAggregate || continue
+            source_reads(fact.contribution)
         end
     end
     for identity in record.resources

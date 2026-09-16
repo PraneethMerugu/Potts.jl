@@ -80,6 +80,6 @@ end
 
 function _saved_parameters(manifest::ParameterManifest, buffer::AbstractVector{T}) where {T}
     values = _parameter_values(manifest, buffer)
-    named = NamedTuple{Tuple(entry.name for entry in manifest)}(values)
-    return PottsParameters{T, typeof(values), typeof(named)}(values, named)
+    schema = _RuntimeParameterSchema(entry.name for entry in manifest)
+    return PottsParameters{T, typeof(values)}(values, schema)
 end
