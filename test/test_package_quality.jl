@@ -54,11 +54,11 @@ using ExplicitImports
         upstream_sources = Dict(
             "CorePotts" => (
                 "https://github.com/PraneethMerugu/CorePotts.jl",
-                "3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4",
+                "340077726169b9e96d5953596b99227b4398fc92",
             ),
             "LocalMath" => (
                 "https://github.com/PraneethMerugu/LocalMath.jl",
-                "b699002a05f84e240e34162d509d6b952bf7d437",
+                "cca004b9cedef54f9ac50bf89dd50a6894cef3aa",
             ),
             # Potts cannot pin the commit containing its own exact manifest.
             # Its immutable self revision is still syntax-checked below.
@@ -91,6 +91,16 @@ using ExplicitImports
                 end
             end
             @test isempty(path_dependencies)
+        end
+
+        # Every workflow that checks out sibling repositories must use the
+        # same qualified revisions as the committed replay environments.
+        for workflow in ("ci.yml", "docs.yml", "docs-links.yml")
+            source = read(joinpath(repository, ".github", "workflows", workflow), String)
+            for (_, (_, revision)) in upstream_sources
+                revision === nothing && continue
+                @test length(findall(revision, source)) == 2
+            end
         end
     end
 end

@@ -77,8 +77,17 @@ function _namespace_reference_payload(value, names)
         domain = _namespace_reference_payload(value.domain, names)
         return value isa SiteBinding ? SiteBinding(domain, _binding_token(value)) :
             CellBinding(domain, _binding_token(value))
+    elseif value isa Obstacle
+        owner = _namespace_reference_payload(value.owner, names)
+        return _obstacle_with_owner(value, owner)
+    elseif value isa AbstractDomainOwner
+        # A domain owner is identified by its declaring lattice and local owner
+        # id. Its interaction kind is declaration metadata, not a resource to
+        # reinterpret in each consuming component's lexical scope.
+        return value
     elseif value isa Union{
             AbstractPottsEffect, AbstractIterationDomain, AbstractBoundaryPolicy,
+            AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,
@@ -118,6 +127,28 @@ end
 
 _namespace_statement(statement::AbstractPottsStatement, current_path::Tuple) =
     _namespace_statement_names(statement, current_path[2:end])
+
+function _domain_owner_resource_resolver(
+        statement::AbstractPottsStatement,
+        inventory::_PottsSourceInventory,
+    )
+    domains = filter(
+        occurrence -> occurrence.statement isa LatticeDomain,
+        inventory.statements,
+    )
+    length(domains) == 1 || return _ -> nothing
+    domain = only(domains)
+    domain_identity = QualifiedStatementID(
+        domain.path, statement_id(domain.statement)
+    )
+    statement isa LatticeDomain || return _ -> domain_identity
+    return function (owner)
+        declaration = _resource_record(
+            inventory.statements, domain.path, :MediumKind, owner.kind
+        )
+        return declaration === nothing ? nothing : _resource_identity(declaration)
+    end
+end
 
 function _qualify_records!(
         records,
@@ -299,6 +330,7 @@ function _qualify_records!(
                 QualifiedStatementID[],
                 (_statement_arguments(statement), _statement_options(statement)),
                 current_path,
+                _domain_owner_resource_resolver(statement, context_inventory),
             )
         )
         if history_source !== nothing && !(history_source.identity in resources)

@@ -57,6 +57,9 @@ Creation, removal, retirement, transition, and division require explicit
 state and relationship policies. Per-cell native components additionally
 declare creation, transition, and daughter-state transfer; the pool capacity
 is fixed at compile time while live count and generations remain data.
+`RemoveCell(...; replacement=owner)` requires a declared `MediumDomainOwner`,
+so removal selects one stable non-finite identity rather than deriving an owner
+from a kind index. A `WallDomainOwner` is never a valid removal destination.
 
 A `HistoryState` whose `of` source is cell-owned requires its own lifecycle
 policies. It does not inherit policies from that source. Reset, initialization,

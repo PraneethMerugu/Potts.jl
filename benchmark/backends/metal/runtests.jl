@@ -7,6 +7,7 @@ import KernelAbstractions
 const METAL_SEMANTIC_WITNESSES = (
     "extension_load_order.jl",
     "problem_construction.jl",
+    "cartesian_domain_authoring.jl",
     "authored_randomness.jl",
     "scheduled_process_draws.jl",
     "cell_polarity_dynamics.jl",
