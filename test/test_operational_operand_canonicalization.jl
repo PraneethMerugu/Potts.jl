@@ -57,7 +57,7 @@ function _operational_identity_problem(
     problem = PottsProblem(
         system, initial, (0, 1); p = (gain => 1.0,), seed = 17,
     )
-    return (; problem, amount)
+    return (; problem, amount, gain)
 end
 
 function _aggregate_contribution_node(ir)
@@ -117,10 +117,51 @@ end
         typeof(renamed_integrator.plan.core_program)
     @test typeof(baseline_integrator.plan.core_program.tracker_plan) ===
         typeof(renamed_integrator.plan.core_program.tracker_plan)
+    @test typeof(baseline.problem.p) === typeof(renamed.problem.p)
+    @test typeof(baseline.problem) === typeof(renamed.problem)
+    @test baseline.problem.p[:gain] == renamed.problem.p[:renamed_gain] == 1.0
+    @test baseline.problem.p.named == (gain = 1.0,)
+    @test renamed.problem.p.named == (renamed_gain = 1.0,)
+    remade = remake(baseline.problem; p = (gain = 2.5,))
+    @test typeof(remade.p) === typeof(baseline.problem.p)
+    @test remade.p[:gain] == 2.5
+    remade_buffer = SymbolicIndexingInterface.remake_buffer(
+        baseline.problem.system,
+        baseline.problem.p,
+        (baseline.gain,),
+        (3.5,),
+    )
+    @test typeof(remade_buffer) === typeof(baseline.problem.p)
+    @test remade_buffer[:gain] == 3.5
+    parameter_error = try
+        remake(baseline.problem; p = (gain = Inf,))
+        nothing
+    catch caught
+        caught
+    end
+    @test parameter_error isa ArgumentError
+    @test occursin("gain", sprint(showerror, parameter_error))
+    @test scheduled_system_fingerprint(baseline.problem.system) !=
+        scheduled_system_fingerprint(renamed.problem.system)
+    @test Potts._execution_plan_fingerprint(baseline_integrator.plan) !=
+        Potts._execution_plan_fingerprint(renamed_integrator.plan)
     step!(baseline_integrator)
     step!(renamed_integrator)
     @test Array(baseline_integrator.u[:amount]) == Float32[3, 3, 0]
     @test Array(renamed_integrator.u[:renamed_amount]) == Float32[3, 3, 0]
+    saved = checkpoint(baseline_integrator)
+    restored = init(
+        remake(baseline.problem; p = (gain = 9.0,)),
+        CheckerboardSweepCPM(); scalar_type = Float32, checkpoint = saved,
+    )
+    restored_parameters = last(restored.parameter_history).second
+    @test propertynames(restored_parameters) == (:gain,)
+    @test restored_parameters.named == (gain = 1.0f0,)
+    @test restored_parameters[:gain] == 1.0f0
+    @test_throws ArgumentError init(
+        renamed.problem,
+        CheckerboardSweepCPM(); scalar_type = Float32, checkpoint = saved,
+    )
 end
 
 @testset "observable and positional expressions retain operand order" begin
