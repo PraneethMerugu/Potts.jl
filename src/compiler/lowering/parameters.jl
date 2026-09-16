@@ -201,7 +201,7 @@ end
 function _normalize_parameter_pairs(values)
     values === nothing && return Pair[]
     values isa PottsParameters && return Pair[
-        name => getproperty(values.named, name) for name in keys(values.named)
+        name => value for (name, value) in zip(values.schema.names, values.values)
     ]
     values isa NamedTuple && return Pair[
         key => getproperty(values, key) for key in keys(values)
