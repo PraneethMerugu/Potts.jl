@@ -7,7 +7,7 @@ opened PRs, or new merge/release authority.
 ## Start here
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-allocation and dependency graph: **66 identified PRs = 54 planned + twelve
+allocation and dependency graph: **68 identified PRs = 54 planned + fourteen
 demonstrated companions**, following the accepted 2026-09-10
 [composition-first amendment](composition-first-model-roadmap.md). R51–R54 add
 COBREXA/model deliveries, not another compiler-contract PR. R01–R48 retain
@@ -53,6 +53,23 @@ identities across compaction, collection, keyed reduction, ordered fold and
 destination grouping. C12 keeps `ndrange` runtime and admits only the existing
 256-lane operation-family workgroup. It is one direct cutover in the sole
 executor, not a launch cache, autotuner, policy hierarchy or backend path.
+The thirteenth, **C13 LocalMath**, is the direct source-order recurrence law
+demonstrated by the exact KA 0.9.42 audit. Source-ordered folds traverse sparse
+physical positions directly, while canonical folds retain their compacted
+prefix. Only those two mathematical traversal laws specialize recurrence;
+ordering callbacks and graph contents do not. It merged as LocalMath PR22 after
+fresh KCT, allocation, full CPU, full real-Metal and independent review, with
+the complete hosted suite green.
+The fourteenth, **C14 LocalMath**, is validation-copy settlement. One prepared
+program-level validation matrix replaces heterogeneous status-tuple
+reconstruction. A nonempty blocking host copy completes the provider prefix;
+empty or aliased representations synchronize explicitly. Receipt failure
+caching, deterministic grouped failure order, exact lease release and fixed-
+relation admission share this sole transfer owner. It is not an event wrapper,
+cache, alternate scheduler or backend-specific scientific path. The
+[LocalMath–KA audit](localmath-kernelabstractions-audit.md) owns the exact source
+contract, boundary atlas and accepted/rejected evidence. It merged as LocalMath
+PR23 (`a26cbfe4`) after local, hosted and exact downstream qualification.
 
 Agents assigned chain work must read the current
 [shared map](consolidated-pr-dependency-map.md) and this note before selecting
@@ -482,6 +499,53 @@ Research references: [ModelingToolkit precompilation-friendly components](https:
 [PrecompileTools](https://github.com/JuliaLang/PrecompileTools.jl), and the
 [JuliaGPU compiler stack](https://github.com/JuliaGPU/GPUCompiler.jl).
 
+### Next KCT investigation — compiled-artifact reuse atlas
+
+After C14 is fully delivered, the next KCT investigation measures whether
+semantically equivalent LocalMath/CorePotts/Potts programs create distinct
+MethodInstances, KernelAbstractions kernel identities, LLVM work or Metal
+compilations solely because of spelling or broad payload shape. It starts from
+fresh Kaimon sessions with KCT registered before package loading and presumes no
+code change or companion.
+
+Vary one axis at a time: authored names/source identities; anonymous versus
+named equivalent evaluators; captured values with unchanged value types;
+isomorphic declaration/graph renumbering; capacity, extent and active count;
+stage/tracker count; scalar versus structured values; sequential versus
+checkerboard consumers; Core-authored versus Potts-lowered equivalents; and CPU
+versus real-Metal preparation. Record inference events, MethodInstance identity
+and growth, typed-IR statement/call/`Any` counts, KA kernel/callable identity,
+observable GPUCompiler/Metal compilation identity, first-family and subsequent-
+model latency, and warmed allocation/execution controls.
+
+Classify every difference as either a legitimate backend, dimension,
+scalar/storage or mathematical-operation specialization, or an accidental leak
+of author identity, runtime capacity, graph content, captured runtime value,
+broad program/diagnostic payload or equivalent closure spelling. Pay particular
+attention to KA's callable `Fun` parameter: determine which evaluators require
+different executable identities and which belong to one durable operation
+family. The goal is not a universal evaluator; it is one compiled artifact per
+legitimate backend × dimension × scalar/storage × operation family, independent
+of model spelling and runtime graph data.
+
+Fix only a demonstrated leak, one semantic owner at a time. Prefer compact
+device payloads, durable named operation-family/evaluator types, runtime values
+for names/identities/counts/graph contents, host-only diagnostics/fingerprints,
+narrow lowering/execution barriers and existing LocalMath operation families.
+Do not add a universal interpreter kernel, dynamic GPU dispatch, broad `Any`
+storage, evaluator registry, compiled-kernel cache, model-specific kernel,
+backend-specific scientific shortcut or second executor.
+
+A candidate qualifies only if equivalent models reuse MethodInstances and
+kernel families; first-family compilation does not materially regress;
+subsequent-model inference/compilation strictly improves; typed IR and
+allocation do not worsen; warm CPU/Metal performance is stable; diagnostics and
+science are identical; full owner CPU/real-Metal suites pass; and downstream
+Core/Potts canaries use the same semantic path. Report the atlas, accepted and
+rejected hypotheses, unavoidable families, and expected first-model versus
+many-model improvement. Count a companion only when a reusable owner-level
+correction is demonstrated and cannot coherently fit its active owner PR.
+
 ### Rejected latency shortcuts
 
 The following are explicit design constraints, not unallocated future options:
@@ -795,7 +859,11 @@ gap: C09 atomic keyed rebuild, raising the allocation to 63. The later
 maintained-query audit demonstrated C10/C11 Cartesian domain ownership, raising
 the allocation to 65. The controlled launch investigation then demonstrated
 C12, raising it to 66. This does not authorize additional companions without
-another real consumer and a coherent owner-law gap.
+another real consumer and a coherent owner-law gap. The subsequent exact
+LocalMath–KA audit demonstrated two distinct reusable owner laws: C13 direct
+source-order recurrence raised the allocation to 67, and C14 validation-copy
+settlement raised it to 68. Their different mathematical and provider-
+settlement responsibilities prevent combining them merely to preserve a count.
 
 The owning G06 suite includes exact shared-owner conflicts and positive
 independence controls. Periodic moment cases whose image labels differ only by
@@ -884,7 +952,7 @@ production path and delete the displaced prototype when appropriate.
 No extra framework, cosmetic cleanup, or placeholder vendor PR is allocated.
 A demonstrated missing event-settlement or reusable transfer/publication
 primitive earns a companion in its actual owner and updates the count.
-Existing companions are already counted in the **66 currently
+Existing companions are already counted in the **68 currently
 identified PRs**. That identified count is not a ceiling.
 
 A world-class completion means promised public science actually works, laws are
