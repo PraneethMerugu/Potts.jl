@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified twelve required additional PRs. `C01`–`C12` are
+Implementation has identified fourteen required additional PRs. `C01`–`C14` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -38,9 +38,11 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 | **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Merged as `cca004b9`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
-| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Draft at `871c13c1`; local qualification and independent review green, hosted real-Metal pending | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) |
+| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Draft at `871c13c1`; local qualification and review green; hosted package and Metal failed and require follow-up | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) |
 | **C11 Cartesian domain authoring** | Potts | G05 | C10, R09 | R11 complete spatial-query authoring and lowering | Identified; implementation not started | — |
-| **C12 Bounded runtime collection launch** | LocalMath | G05C | C09 | R49/R50 qualified compiler boundary and every later collection consumer | Merged as `12b3fa98`; local CPU/real-Metal/performance evidence and independent review green; hosted post-merge suite running | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) |
+| **C12 Bounded runtime collection launch** | LocalMath | G05C | C09 | R49/R50 qualified compiler boundary and every later collection consumer | Merged as `12b3fa98`; local CPU/real-Metal/performance evidence, independent review and complete hosted suite green | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) |
+| **C13 Direct source-order recurrence** | LocalMath | G05C/G07 | C12 | R14 and every later source-ordered fold consumer | Merged as `dd5d2e0`; local KCT/allocation/full-CPU/full-real-Metal evidence, independent review and complete hosted suite green | [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22) |
+| **C14 Validation-copy settlement** | LocalMath | G05C | C13 | R49/R50 receipt canaries and every later asynchronous LocalMath consumer | Merged as `a26cbfe4`; fresh KCT, local/full CPU and real-Metal, review, hosted and downstream canaries green | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) |
 
 The companion scopes are:
 
@@ -184,9 +186,30 @@ The companion scopes are:
   Metal suites pass, and alternating warm samples show no material CPU/Metal
   regression. Later launch families reuse this owner or justify a genuinely
   different backend/operation/dimension family with evidence.
+- **C13 — the G05C/G07 LocalMath direct source-order recurrence companion**,
+  [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22),
+  demonstrated by the exact KA/LocalMath audit after C12. `SourceOrder` consumes
+  ascending physical source positions and needs neither canonical compaction nor
+  bitonic sorting. The direct cutover gives recurrence exactly two durable
+  traversal laws—direct sparse source traversal and compacted canonical prefix—
+  while keeping arbitrary key/identity callbacks at the canonical ordering
+  owner. Dense participating ordinals, halt, failure atomicity, empty input and
+  CPU/Metal scientific behavior remain identical. This is a mathematical
+  execution law, not a graph-content specialization or alternate executor.
+- **C14 — the G05C LocalMath validation-copy settlement companion**,
+  [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23),
+  demonstrated independently of C13 by receipt/payload attribution. The sole
+  prepared program owns one device/host validation matrix. A nonempty blocking
+  host copy completes the provider prefix; empty or aliased representations
+  explicitly synchronize. `wait` and `waitall` retain cumulative ordering,
+  deterministic failure order, exact failure caching and lease release. Fixed-
+  relation admission reuses the same transfer primitive. The implementation
+  adds no event wrapper, cache, backend-specific scientific path, second status
+  store or second scheduling authority. See the
+  [exact audit](localmath-kernelabstractions-audit.md).
 
-The current identified allocation is therefore **66 repository PRs: the 54 planned
-PRs below plus these twelve companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **68 repository PRs: the 54 planned
+PRs below plus these fourteen companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -201,10 +224,10 @@ or prescribed branch names; their numbering is not a chronological merge order.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Potts.jl | 8 | 13 | 21 | 1 | **22** |
 | CorePotts.jl | 7 | 9 | 16 | 1 | **17** |
-| LocalMath.jl | 1 | 2 | 3 | 9 | **12** |
+| LocalMath.jl | 1 | 2 | 3 | 11 | **14** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **12** | **66** |
+| **Total** | **22** | **32** | **54** | **14** | **68** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -288,11 +311,13 @@ The compiler amendment owns the detailed acceptance template.
 This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation, C08 exact
 keyed-reduction, C09 atomic keyed-rebuild and C10/C11 Cartesian-domain
-companions plus C12's bounded runtime launch cutover raise the current total to
-66 identified PRs.
+companions plus C12's bounded runtime launch, C13's direct source-order
+recurrence and C14's validation-copy settlement raise the current total to 68
+identified PRs.
 
-The completed attribution arc changed that count exactly once. Its dependency
-pressure is:
+The earlier three-phase attribution arc changed the count once through C12; the
+follow-on exact LocalMath–KA audit separately demonstrated C13 and C14. Their
+dependency pressure is:
 
 ```text
 C12 LocalMath bounded runtime launch prerequisite
@@ -934,6 +959,9 @@ flowchart TD
   C09["C09: LocalMath atomic keyed rebuild publication"]
   C10["C10: Core Cartesian domain ownership"]
   C11["C11: Potts Cartesian domain authoring"]
+  C12["C12: LocalMath bounded runtime collection launch"]
+  C13["C13: LocalMath direct source-order recurrence"]
+  C14["C14: LocalMath validation-copy settlement"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -963,14 +991,19 @@ flowchart TD
   C06 --> C07
   C07 --> C08
   C08 --> C09
+  C09 --> C12
+  C12 --> C13
+  C13 --> C14
   G04 --> C10
   C10 --> C11
   C11 --> G05
   C09 --> G05
   G05 --> G05C
+  C14 --> G05C
   G05C --> G06
   G01 --> G07
   G05C --> G07
+  C13 --> G07
   G01 --> G08
   G06 --> G08
   G07 --> G08
@@ -1196,9 +1229,9 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C12 are already identified and counted above; they are not conditional
+C01–C14 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those twelve companions.
+gaps beyond those fourteen companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
@@ -1220,7 +1253,7 @@ gaps beyond those twelve companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **66 currently identified PRs** add the twelve demonstrated C01–C12
+The **68 currently identified PRs** add the fourteen demonstrated C01–C14
 companions; future demonstrated discoveries can increase that identified total.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
@@ -1229,7 +1262,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 66 currently
+**not claimed complete by the 54-PR base allocation or the 68 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |
