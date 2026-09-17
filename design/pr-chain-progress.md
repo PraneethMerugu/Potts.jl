@@ -1,9 +1,9 @@
 # PR-chain progress
 
-Status: current implementation snapshot. Updated 2026-09-15.
+Status: current implementation snapshot. Updated 2026-09-16.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-identified work and dependencies: **65 repository PRs = R01–R54 plus eleven
+identified work and dependencies: **66 repository PRs = R01–R54 plus twelve
 demonstrated companions**. The [compiler amendment](compiler-contract-chain-amendment.md)
 owns compiler-tractability expectations, and the
 [composition-first roadmap](composition-first-model-roadmap.md) owns the
@@ -30,6 +30,9 @@ in dependency order. Releases remain unauthorized.
   hosted package, scientific, documentation, macOS, and real-Metal checks.
 - The ninth is LocalMath PR20, merged as `cca004b9`; its complete hosted suite
   also passed.
+- C12 is merged as LocalMath PR21 (`12b3fa98`), with exact local KCT,
+  allocation, full CPU, affected real-Metal, throughput and independent-review
+  evidence green. Its hosted post-merge suite is running.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -45,7 +48,8 @@ in dependency order. Releases remain unauthorized.
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft/CLEAN; exact Symbolics 7.37 CPU/Metal correction and complete hosted suite green, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `cca004b9` | LocalMath main after PR19 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
-| C10 Core Cartesian domain ownership | — | — | Core R08 | identified; required before complete R10/R11 domain-query claims |
+| C12 LocalMath bounded runtime collection launch | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) | `12b3fa98` | LocalMath main after PR20 | merged; local KCT/allocation/full-CPU/affected-real-Metal/performance/review green; hosted post-merge suite running |
+| C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `871c13c1` | Core R08 | draft; local science/compiler/docs/quality and independent review green; hosted package/docs/macOS/real-Metal running |
 | C11 Potts Cartesian domain authoring | — | — | C10 and Potts R09 | identified; required before R11 can admit wall/exterior/obstacle filters |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
@@ -104,7 +108,17 @@ domain/axis/obstacle authoring and initialization/lowering. It first migrates
 every current no-flux `FrozenBorder` consumer to `Closed`, then deletes the
 ambiguous spelling; it never reinterprets it as `FixedExterior`. R10/R11 then
 consume those facts for the complete explicit spatial-query surface. This
-demonstrated pair raises the identified count to 65.
+demonstrated pair raised the identified count to 65 before C12 raised it to 66.
+
+CorePotts PR35 now implements C10 on top of merged R08. It owns the complete
+Cartesian executable identity, uses one mutable-site attempt population for
+sequential and checkerboard execution, retains fixed-owner contact incidences,
+and excludes non-finite owners from lifecycle and relationship endpoints. The
+final local candidate passed 99 Cartesian-domain tests, 124 LocalMath compiler-
+boundary tests, 53 flagship compiler tests, 253 continuation/state tests, 63
+checkerboard transaction oracles, 20 package-quality checks and the strict docs
+build. Independent review is clean. Hosted real-Metal remains authoritative and
+is running; C10 is not complete until those checks pass.
 
 LocalMath PR19 remains inside the sole StageProgram and shared
 KernelAbstractions executor, with canonical lexicographic keys, prior-then-
@@ -184,6 +198,97 @@ qualify a later joined package tuple.
 | G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Preserve G05's explicit rejection while proving the normalized boundary distinguishes a periodic/shared-owner/relation conflict from shared read-only and owner-proven commutative/associative compatibility; also exercise one held/native-snapshot case before interface freeze. |
 | Canonical public benchmark runner | The design and corpus are specified; G09 is not implemented. | R49/R50 leave the focused reproducible runner; R20 later owns longitudinal fresh/warm, specialization, allocation, transfer and cache records. |
 
+### KCT optimization arc status
+
+The current qualification stack is LocalMath C09 `cca004b9`, CorePotts R49
+`b4e5bda5`, Potts R50 `2d317fc0`, plus accepted Potts saved-state change
+`40b2ddf3`. All observations below came from live registered Kaimon MCP tools in
+fresh sessions unless explicitly identified as ordinary behavioral evidence.
+They are diagnostic results, not implementation or backend qualification.
+
+Phase 1 attributed LocalMath stage lowering and made no production change.
+Fresh total inference for 1-, 4-, 8-stage and dependency-composed programs was
+6,802 / 13,622 / 15,447 / 14,316 events; planning was 5,077 / 8,567 / 9,733 /
+9,407, preparation 1,403 / 4,680 / 5,336 / 4,559, and warmed execution 338 /
+434 / 457 / 157. The 8-stage helper self-costs were 216 binding-slice, 211
+slot-projection, 2,331 draft-construction, 1,387 evaluator-admission and 251
+callable-admission events. Although the slice typed IR was large (470 statements,
+235 calls, 54 JET dispatch reports and 91 AllocCheck findings), MethodInstances
+for slice/projection plateaued and no causal scaling leak was established.
+Because no candidate reduced complete planning-through-execution inference
+without displacement or small-case regression, the result is a formal no-change
+and no companion.
+
+Phase 2 built the Potts late-lowering atlas and also made no production change.
+Author-only rename, literal change, equal-typed handle change and isomorphic
+declaration renumbering reused operational execution types. State, stage and
+maintained/tracker ladders localized expected host structural growth while Core
+runtime/workspace families plateaued in the controlled cases. The corrected
+capacity/extent controls found 331 fresh inference events for capacity 16→24 at
+fixed 6×6 extent and 31 for extent 6×6→8×8 at fixed capacity 16, with identical
+Potts/Core/runtime/integrator/workspace/LocalMath-plan types. The 331 events are
+LocalMath/KernelAbstractions CPU `StaticSize{24/25}` lifecycle-compaction launch
+specializations, so they are assigned to the LocalMath launch investigation,
+not misreported as a Potts lowering defect. Metal MCP probes timed out and are
+inconclusive; the prior exact-stack 11/11 real-Metal behavioral result remains
+the backend evidence for its exact revision.
+
+Phase 3's corrected warm-allocation protocol compiles the wrapper on a separate
+subject, creates a fresh identical integrator for every sample, warms step one,
+then measures only seeded step two with a typed sink and scientific/RNG equality
+checks. Seven feature-off sequential samples were exactly 49,088 bytes each.
+Core advance had a 37,712-byte median (one 40,000-byte sample); current-state
+refresh was exactly 11,216 bytes. Refresh is 22.85% of total, below the declared
+50% trigger, so the live `PottsCurrentState` prototype is rejected and was not
+started. The interrupted `step!` AllocCheck request produced no final result and
+is not evidence. Core advance is the next ranked owner; component measurements
+are not assumed additive.
+
+The three evidence-gated investigations are complete. Each used an isolated
+exact worktree, fresh live Kaimon sessions, one-axis reuse controls, independent
+review and real Metal for the qualifying candidate. The launch investigation
+demonstrated C12; preparation and Core payload attribution closed with no
+production change. Core/Potts fixes remain within R49/R50.
+
+The LocalMath preparation/device-payload investigation is now a formal
+no-change. On exact clean C09, fresh composed inference was 3,072 construction,
+1,370 binding, 9,489 planning and 4,559 preparation events. Workspace authority
+and collect preparation were the largest individual preparation timings, but
+their MethodInstance populations remained bounded. Exact prepared-value
+adaptation had no AllocCheck findings, one optimized statement, zero calls, a
+concrete result and zero bytes in five warm samples. Warm preparation's 179,552
+bytes combines required workspace/device construction with lease work; no
+isolated scaling boundary justified slot ordinals, schema erasure or a second
+binding representation. That workstream adds no code and no companion.
+
+The LocalMath launch investigation qualified and merged C12. For
+`_compacted_scan_add_kernel!`, the existing value-derived static
+workgroup plus static `ndrange` produced 64 fresh inference events for 16→24 and
+74 for 24→32. The final cutover uses the existing operation-family `Val{256}`
+workgroup and runtime `ndrange`; extent never chooses a workgroup family. Fresh
+KCT is 1 event for 16→24 and warmed 300→301, while the 24→32 delta is
+KernelAbstractions' one-time dynamic-check admission rather than an extent
+identity. Optimized IR fell from 40 statements/25 calls to 26/14. Warm allocation
+is unchanged at 256 bytes in seven samples. Focused CPU passed 261/261, full CPU
+1,880/1,880 and affected real Metal 254/254 with scalar indexing disabled.
+Independent review found no issues, including the zero-extent path, and
+alternating warm CPU/Metal samples found no material regression. LocalMath PR21
+merged as `12b3fa98`; hosted post-merge checks are running.
+
+The Core execution-payload investigation is a formal R49 no-change. Fresh
+step-two decomposition found the proposal/descriptor/tracker/accepted-copy path
+at 0 bytes, `_after_mcs!` at a 37,024-byte median, lifecycle site indexing at
+7,136, emission at 7,056, request indexing at 11,360 and selection at 14,752
+when measured independently; these figures are not additive. A direct LocalMath
+site-plan execute/wait control reproduced the site-index scale exactly. Concrete
+AllocCheck and JET findings cross immediately into LocalMath receipt/dependency
+handling and KernelAbstractions CPU scheduling, while the exact Core wrapper and
+LocalMath execute MethodInstances are concrete. No broad Core runtime-payload
+defect or qualifying R49 cut was demonstrated. G09 retains provider-owned
+receipt/task allocation pressure with an R49 consumer canary; it does not
+broaden the launch companion unless that launch change directly improves these
+bytes.
+
 ### Accepted checkerboard conflict-closure scope
 
 G06 R12/R13 now owns the complete outcome contract: immutable batch-entry
@@ -229,7 +334,7 @@ the authored graph into device execution. G07 adds held/native snapshot
 pressure; G09 retains compiler/allocation evidence; E01, E03, E08, E11 and E12
 add 3D periodic/shared-owner, opposite-endpoint relationship, exact-global-
 predicate, compound-swap and weighted-graph cases. The identified count is now
-65. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
+66. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
 keyed-rebuild law that cannot coherently live in Core or Potts. No further
 checkerboard companion is presumed. C10/C11 are separately demonstrated
 Cartesian-domain owners, not checkerboard work.
@@ -281,4 +386,4 @@ The next milestone is a scientifically correct and joined G05 baseline: R10,
 R11, the exact keyed-reduction companion, and their R49/R50 compiler-contract
 children must all be current-tip green and independently review-clean. It does
 not complete G06–G09 or any breadth group. Full project completion requires all
-65 identified PRs and any later demonstrated owner companions.
+66 identified PRs and any later demonstrated owner companions.

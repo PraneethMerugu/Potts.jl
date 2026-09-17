@@ -10,8 +10,8 @@ Keep the existing spine and breadth commitments, strengthen their composition
 contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
-The canonical allocation is **65 identified PRs: 54 planned + eleven companions**.
-The all-in repository totals are Potts 22, CorePotts 17, LocalMath 11,
+The canonical allocation is **66 identified PRs: 54 planned + twelve companions**.
+The all-in repository totals are Potts 22, CorePotts 17, LocalMath 12,
 MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
 their identities.
 
@@ -22,7 +22,7 @@ the earlier 58-PR bundling alternative is not the selected allocation. Do not ma
 PR count an acceptance criterion.
 
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
-65-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
+66-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
 At review time R01–R07 and the nine completed companions are recorded merged;
 the G07 ordered-fold validation companion C07 is LocalMath
@@ -39,6 +39,10 @@ surface. C10 replaces/extends the existing owner authority rather than adding a
 second decoder; C11 migrates current `FrozenBorder` no-flux consumers to
 `Closed` before deleting that ambiguous spelling, never reinterpreting it as a
 fixed owner. These two companions are identified but not implemented.
+C12 is the merged LocalMath bounded runtime collection-launch cutover at
+`12b3fa98`; it keeps extent/capacity as runtime `ndrange` data across the shared
+collection families and specializes only on their semantic workgroup. It adds no
+model/compiler path and changes none of the composition ownership below.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the

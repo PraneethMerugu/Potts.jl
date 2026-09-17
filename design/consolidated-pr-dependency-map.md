@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified eleven required additional PRs. `C01`–`C11` are
+Implementation has identified twelve required additional PRs. `C01`–`C12` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -38,8 +38,9 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 | **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Merged as `cca004b9`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
-| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Identified; implementation not started | — |
+| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Draft at `871c13c1`; local qualification and independent review green, hosted real-Metal pending | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) |
 | **C11 Cartesian domain authoring** | Potts | G05 | C10, R09 | R11 complete spatial-query authoring and lowering | Identified; implementation not started | — |
+| **C12 Bounded runtime collection launch** | LocalMath | G05C | C09 | R49/R50 qualified compiler boundary and every later collection consumer | Merged as `12b3fa98`; local CPU/real-Metal/performance evidence and independent review green; hosted post-merge suite running | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) |
 
 The companion scopes are:
 
@@ -169,9 +170,23 @@ The companion scopes are:
   lowering path atomically rather than treating a negative medium encoding as a
   wall or adding a compatibility path; `Closed` preserves existing no-flux
   behavior.
+- **C12 — the G05C LocalMath bounded runtime collection-launch companion**,
+  [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21),
+  demonstrated by the controlled R50 capacity atlas and direct LocalMath KCT
+  A/B. Collection, keyed-reduction, ordered-fold, compacted-scan and destination-
+  grouping kernels previously supplied runtime extents to the
+  KernelAbstractions constructor, producing capacity-specific `StaticSize`
+  identities. The direct cutover keeps `ndrange` as runtime data and admits only
+  each operation family's existing 256-lane workgroup. It adds one tiny launch
+  law to the sole executor, with no cache, policy hierarchy, backend shortcut or
+  capacity-selected workgroup. Warm allocations remain 256 bytes, live KCT
+  reuse is stable within the operation family, complete CPU and affected real-
+  Metal suites pass, and alternating warm samples show no material CPU/Metal
+  regression. Later launch families reuse this owner or justify a genuinely
+  different backend/operation/dimension family with evidence.
 
-The current identified allocation is therefore **65 repository PRs: the 54 planned
-PRs below plus these eleven companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **66 repository PRs: the 54 planned
+PRs below plus these twelve companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -186,10 +201,10 @@ or prescribed branch names; their numbering is not a chronological merge order.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Potts.jl | 8 | 13 | 21 | 1 | **22** |
 | CorePotts.jl | 7 | 9 | 16 | 1 | **17** |
-| LocalMath.jl | 1 | 2 | 3 | 8 | **11** |
+| LocalMath.jl | 1 | 2 | 3 | 9 | **12** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **11** | **65** |
+| **Total** | **22** | **32** | **54** | **12** | **66** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -273,7 +288,37 @@ The compiler amendment owns the detailed acceptance template.
 This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation, C08 exact
 keyed-reduction, C09 atomic keyed-rebuild and C10/C11 Cartesian-domain
-companions raise the current total to 65 identified PRs.
+companions plus C12's bounded runtime launch cutover raise the current total to
+66 identified PRs.
+
+The completed attribution arc changed that count exactly once. Its dependency
+pressure is:
+
+```text
+C12 LocalMath bounded runtime launch prerequisite
+→ R49 Core operational boundary
+→ R50 Potts lowering boundary
+→ G06/G07 execution consumers
+→ G09 longitudinal corpus
+```
+
+LocalMath owns generic KernelAbstractions launch selection, runtime `ndrange`,
+and reusable preparation/publication laws. Core owns scientific payloads,
+runtime extent and transaction/settlement meaning. Potts owns author structure,
+normalization and diagnostics above execution. R49 and R50 absorb demonstrated
+Core/Potts corrections. C12 is the one dense LocalMath execution-boundary
+companion justified by the launch investigation; the preparation and Core
+payload investigations closed with no production change. Failed experiments,
+benchmark harnesses and raw Kaimon evidence do not receive PR identities.
+
+Across those owners, only backend, scalar representation, dimension, genuine
+operation family, small bounded mathematical shape and a justified bounded
+workgroup family may specialize by default. Extent, capacity, logical counts,
+names, values, identities, relationship contents and completed model graphs are
+runtime data. Preparation owns host-to-device materialization, execution owns
+asynchronous ordering, settlement owns the final required wait, inspection owns
+device-to-host views, and checkpointing owns durable copies. The compiler
+amendment contains the complete evidence matrix and stop conditions.
 
 The compiler amendment itself does not add a PR. Every PR
 declares compiler impact as `none`, `host-only`, or `device-reachable` under the
@@ -1151,9 +1196,9 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C11 are already identified and counted above; they are not conditional
+C01–C12 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those eleven companions.
+gaps beyond those twelve companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
@@ -1175,7 +1220,7 @@ gaps beyond those eleven companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **65 currently identified PRs** add the eleven demonstrated C01–C11
+The **66 currently identified PRs** add the twelve demonstrated C01–C12
 companions; future demonstrated discoveries can increase that identified total.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
@@ -1184,7 +1229,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 65 currently
+**not claimed complete by the 54-PR base allocation or the 66 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |

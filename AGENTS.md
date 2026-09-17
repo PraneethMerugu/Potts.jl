@@ -84,7 +84,7 @@ For PR-chain work, read the current shared
 before selecting work or changing shared compiler contracts. The canonical
 planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
 existing package worktrees may contain older snapshots. The user-approved
-allocation is 65 identified PRs (R01–R54 plus eleven companions), including G05C
+allocation is 66 identified PRs (R01–R54 plus twelve companions), including G05C
 (R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
 The seventh companion is the demonstrated G07 LocalMath ordered-fold
 step-validation prerequisite before R14 exchange settlement.
@@ -104,6 +104,11 @@ walls. C10 replaces or extends the existing owner-classification authority
 atomically rather than adding a second table/decoder path. C11 deletes
 `FrozenBorder` only after migrating its behavior-preserving consumers to
 `Closed`; it never reinterprets that spelling as `FixedExterior`.
+The twelfth companion, C12 LocalMath, is the demonstrated bounded runtime
+collection-launch cutover: compaction, collection, keyed reduction, ordered fold
+and destination grouping keep extent/capacity as runtime `ndrange` data and
+specialize only on their existing semantic workgroup. It adds no launch cache,
+policy hierarchy or second executor.
 R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
 and tumor corpora. E07 completion additionally depends on E04 for model 14.
 Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and
