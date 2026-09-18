@@ -755,7 +755,7 @@ end
     @test only(report.key.native).evidence.profile_fingerprint ==
         only(report.evidence.native).profile_fingerprint
     @test only(report.key.native).native_stack.ModelingToolkit.version ==
-        v"11.37.1"
+        v"11.44.0"
     @test report.key.outer_events.mode === :none
     @test report.key.outer_events.checkpoint === :admitted
     @test report.key.observation_save.save_everystep

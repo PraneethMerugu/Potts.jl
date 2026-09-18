@@ -386,7 +386,7 @@ function _require_native_logical_value(component, value, label)
 end
 
 const _EXACT_TSIT5_PACKAGE_UUID = "b1df2697-797e-41e3-8120-5422d3b24e4a"
-const _EXACT_TSIT5_PACKAGE_VERSION = v"2.1.2"
+const _EXACT_TSIT5_PACKAGE_VERSION = v"2.1.4"
 const _FUNCTIONAL_IDA_PACKAGE_UUID = "c3572dad-4567-51f8-b174-8c6c989267f4"
 const _FUNCTIONAL_IDA_PACKAGE_VERSION = v"6.4.2"
 
@@ -403,27 +403,27 @@ const _TESTED_NATIVE_RUNTIME_STACK = (
     ModelingToolkit = (
         package = "ModelingToolkit",
         uuid = "961ee093-0014-501f-94e3-6117800e7a78",
-        version = v"11.37.1",
+        version = v"11.44.0",
     ),
     ModelingToolkitBase = (
         package = "ModelingToolkitBase",
         uuid = "7771a370-6774-4173-bd38-47e70ca0b839",
-        version = v"1.58.1",
+        version = v"1.74.0",
     ),
     SciMLBase = (
         package = "SciMLBase",
         uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462",
-        version = v"3.39.1",
+        version = v"3.55.0",
     ),
     SymbolicIndexingInterface = (
         package = "SymbolicIndexingInterface",
         uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5",
-        version = v"0.3.51",
+        version = v"0.3.55",
     ),
     Symbolics = (
         package = "Symbolics",
         uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7",
-        version = v"7.37.0",
+        version = v"7.40.0",
     ),
     Julia = (
         version = v"1.12.6",
