@@ -62,19 +62,24 @@ end
 An immutable, normalized runtime-parameter buffer. Construct it through
 `PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
 """
-struct PottsParameters{T, V <: Tuple, N <: NamedTuple}
+struct PottsParameters{T, V <: Tuple, N <: Tuple}
     values::V
-    named::N
+    names::N
 end
 
 PottsParameters(values::AbstractVector{T}, named::N) where {T, N <: NamedTuple} =
-    PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
+    PottsParameters{T, typeof(Tuple(values)), typeof(keys(named))}(
+        Tuple(values), keys(named))
 PottsParameters(values::Tuple, named::N) where {N <: NamedTuple} =
-    PottsParameters{Any, typeof(values), N}(values, named)
+    PottsParameters{Any, typeof(values), typeof(keys(named))}(
+        values, keys(named))
 
-Base.getindex(parameters::PottsParameters, name::Symbol) =
-    getproperty(parameters.named, name)
-Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
+function Base.getindex(parameters::PottsParameters, name::Symbol)
+    index = findfirst(isequal(name), parameters.names)
+    index === nothing && throw(KeyError(name))
+    return parameters.values[index]
+end
+Base.propertynames(parameters::PottsParameters) = parameters.names
 
 function _parameter_buffer(values::Tuple, ::Type{T}) where {
         T <: AbstractFloat,

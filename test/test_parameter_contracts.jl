@@ -1,5 +1,16 @@
 using StaticArrays
 
+@testset "runtime parameter names do not define execution types" begin
+    parameters = PottsParameters((2.0, 3.0), (gain = 2.0, temperature = 3.0))
+    renamed = PottsParameters((2.0, 3.0), (strength = 2.0, thermal = 3.0))
+
+    @test typeof(parameters) === typeof(renamed)
+    @test propertynames(parameters) == (:gain, :temperature)
+    @test parameters[:gain] == 2.0
+    @test parameters[:temperature] == 3.0
+    @test_throws KeyError parameters[:unknown]
+end
+
 @testset "operation family snapshots reject conflicting scientific contracts" begin
     source = complete(PottsSystem(name = :schema_owner, statements = StatementSet(Observation(:coefficient, 1.0))))
     record = only(Potts._completion_data(source).records)
