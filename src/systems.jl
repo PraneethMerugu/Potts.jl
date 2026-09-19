@@ -24,6 +24,50 @@ struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     complete::Bool
     namespacing::Bool
     completion::Any
+
+    function PottsSystem(
+            name::Symbol,
+            statements::StatementSet,
+            eqs::Vector{Any},
+            unknowns::Vector{Any},
+            ps::Vector{Any},
+            iv,
+            ivs::Vector{Any},
+            systems::Vector{PottsSystem},
+            inputs::Vector{Any},
+            outputs::Vector{Any},
+            initial_conditions::Dict{Any, Any},
+            observed::Vector{Any},
+            continuous_events::Vector{Any},
+            discrete_events::Vector{Any},
+            complete::Bool,
+            namespacing::Bool,
+            completion;
+            checks::Bool = true,
+        )
+        !checks && complete && throw(ArgumentError(
+            "a completed PottsSystem is immutable; rename or compose before `complete`"
+        ))
+        return new(
+            name,
+            statements,
+            eqs,
+            unknowns,
+            ps,
+            iv,
+            ivs,
+            systems,
+            inputs,
+            outputs,
+            initial_conditions,
+            observed,
+            continuous_events,
+            discrete_events,
+            complete,
+            namespacing,
+            completion,
+        )
+    end
 end
 
 function PottsSystem(;
@@ -128,19 +172,45 @@ end
 
 statements(system::PottsSystem) = statements(getfield(system, :statements))
 ModelingToolkitBase.has_iv(system::PottsSystem) = getfield(system, :iv) !== nothing
-ModelingToolkitBase.independent_variables(system::PottsSystem) =
-    copy(getfield(system, :ivs))
-
-function Symbolics.rename(system::PottsSystem, name::Symbol)
-    _ensure_incomplete(system, "rename")
-    return _rebuild(system; name)
+function ModelingToolkitBase.independent_variables(system::PottsSystem)
+    result = Any[_defensive_copy(value) for value in getfield(system, :ivs)]
+    for child in getfield(system, :systems)
+        result = _stable_union(
+            result, ModelingToolkitBase.independent_variables(child)
+        )
+    end
+    return result
 end
+
+function _recursive_namespaced_io(system::PottsSystem, accessor)
+    result = Any[_defensive_copy(value) for value in accessor(system, Val(:local))]
+    for child in getfield(system, :systems)
+        for value in accessor(child)
+            namespaced = ModelingToolkitBase.renamespace(child, value)
+            any(isequal(namespaced), result) || push!(result, namespaced)
+        end
+    end
+    return result
+end
+
+_potts_inputs(system::PottsSystem, ::Val{:local}) =
+    getfield(system, :inputs)
+_potts_inputs(system::PottsSystem) =
+    _recursive_namespaced_io(system, _potts_inputs)
+_potts_outputs(system::PottsSystem, ::Val{:local}) =
+    getfield(system, :outputs)
+_potts_outputs(system::PottsSystem) =
+    _recursive_namespaced_io(system, _potts_outputs)
+
+ModelingToolkitBase.inputs(system::PottsSystem) = _potts_inputs(system)
+ModelingToolkitBase.outputs(system::PottsSystem) = _potts_outputs(system)
 
 function _substitute_value(value, rules)
     return try
         Symbolics.substitute(value, rules)
     catch error
-        if Symbolics.symbolic_type(value) isa SymbolicIndexingInterface.NotSymbolic
+        if SymbolicIndexingInterface.symbolic_type(value) isa
+                SymbolicIndexingInterface.NotSymbolic
             value
         else
             rethrow(error)
@@ -250,6 +320,20 @@ function ModelingToolkitBase.extend(
         "extend encountered duplicate statement identities"
     ))
     _reject_duplicates(getfield(base, :eqs), getfield(system, :eqs), "equation")
+    _reject_duplicates(
+        getfield(base, :observed), getfield(system, :observed),
+        "observed equation",
+    )
+    _reject_duplicates(
+        getfield(base, :continuous_events),
+        getfield(system, :continuous_events),
+        "continuous event",
+    )
+    _reject_duplicates(
+        getfield(base, :discrete_events),
+        getfield(system, :discrete_events),
+        "discrete event",
+    )
 
     initial_conditions = copy(getfield(base, :initial_conditions))
     for (key, value) in getfield(system, :initial_conditions)
@@ -306,60 +390,40 @@ function ModelingToolkitBase.flatten(system::PottsSystem, args...)
     return _flatten(system, ())
 end
 
-function _flatten(system::PottsSystem, prefix::Tuple)
-    prefix_with_self = (prefix..., nameof(system))
-    flat_statements = AbstractPottsStatement[]
-    flat_equations = Any[]
-    flat_unknowns = Any[]
-    flat_parameters = Any[]
-    flat_inputs = Any[]
-    flat_outputs = Any[]
-    flat_observed = Any[]
-    flat_initial = Dict{Any, Any}()
-
+function _flatten_statements!(result, system::PottsSystem, namespace::Tuple)
     for statement in statements(system)
-        qualified = Symbol(join((String(part) for part in prefix_with_self), "₊") *
-                           "₊" * String(Symbol(statement_id(statement))))
-        core = getfield(statement, :core)
-        push!(flat_statements, typeof(statement)(
-            StatementCore(StatementID(qualified), core.arguments, core.options, core.source)
-        ))
+        push!(result, _namespace_statement_for_lowering(statement, namespace))
     end
-    append!(flat_equations, getfield(system, :eqs))
-    append!(flat_unknowns, getfield(system, :unknowns))
-    append!(flat_parameters, getfield(system, :ps))
-    append!(flat_inputs, getfield(system, :inputs))
-    append!(flat_outputs, getfield(system, :outputs))
-    append!(flat_observed, getfield(system, :observed))
-    merge!(flat_initial, getfield(system, :initial_conditions))
-
     for child in getfield(system, :systems)
-        flattened_child = _flatten(child, prefix_with_self)
-        append!(flat_statements, statements(flattened_child))
-        append!(flat_equations, getfield(flattened_child, :eqs))
-        append!(flat_unknowns, getfield(flattened_child, :unknowns))
-        append!(flat_parameters, getfield(flattened_child, :ps))
-        append!(flat_inputs, getfield(flattened_child, :inputs))
-        append!(flat_outputs, getfield(flattened_child, :outputs))
-        append!(flat_observed, getfield(flattened_child, :observed))
-        for (key, value) in getfield(flattened_child, :initial_conditions)
-            haskey(flat_initial, key) &&
-                throw(ArgumentError("flatten encountered conflicting initial conditions"))
-            flat_initial[key] = value
-        end
+        _flatten_statements!(
+            result, child, (namespace..., nameof(child))
+        )
     end
+    return result
+end
+
+function _flatten(system::PottsSystem, prefix::Tuple)
+    flat_statements = AbstractPottsStatement[]
+    _flatten_statements!(flat_statements, system, prefix)
 
     return _rebuild(
         system;
         statements = StatementSet(flat_statements),
-        equations = flat_equations,
-        unknowns = _stable_union(Any[], flat_unknowns),
-        parameters = _stable_union(Any[], flat_parameters),
+        equations = ModelingToolkitBase.equations(system),
+        unknowns = ModelingToolkitBase.unknowns(system),
+        parameters = ModelingToolkitBase.parameters(system),
+        independent_variables =
+            ModelingToolkitBase.independent_variables(system),
         systems = PottsSystem[],
-        inputs = _stable_union(Any[], flat_inputs),
-        outputs = _stable_union(Any[], flat_outputs),
-        initial_conditions = flat_initial,
-        observed = flat_observed,
+        inputs = ModelingToolkitBase.inputs(system),
+        outputs = ModelingToolkitBase.outputs(system),
+        initial_conditions =
+            ModelingToolkitBase.initial_conditions(system),
+        observed = ModelingToolkitBase.observed(system),
+        continuous_events =
+            ModelingToolkitBase.continuous_events(system),
+        discrete_events =
+            ModelingToolkitBase.discrete_events(system),
     )
 end
 
@@ -386,14 +450,27 @@ function ModelingToolkitBase.complete(
         throw(ArgumentError("a completed PottsSystem cannot be completed with new options"))
     end
 
-    completion_data = _complete_potts(system, reference_units, registry)
+    resolved_system, structural_parameters =
+        _resolve_structural_parameters(system)
+    diagnostics = PottsDiagnostic[]
+    expanded_system = _expand_registered_system(
+        resolved_system, registry, diagnostics
+    )
+    _throw_diagnostics(:completion, diagnostics)
+    _validate_completion_reference_units(expanded_system, reference_units)
+    completion_data = _complete_potts(
+        expanded_system,
+        reference_units,
+        registry,
+        (structural = structural_parameters,),
+    )
     completed_children = PottsSystem[
         ModelingToolkitBase.complete(
             child; reference_units, registry
-        ) for child in getfield(system, :systems)
+        ) for child in getfield(expanded_system, :systems)
     ]
     return _rebuild(
-        system;
+        expanded_system;
         systems = completed_children,
         complete = true,
         namespacing = false,

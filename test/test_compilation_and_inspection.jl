@@ -52,6 +52,10 @@
     @test inspect(executable, StoragePlan()).shape == (10, 8)
     @test inspect(executable, StoragePlan()).site_count == 80
     @test inspect(executable, Kernels()).live_state_allocated == false
+    compiled_records = inspect(executable, Statements())
+    @test all(record -> haskey(record, :provenance), compiled_records)
+    @test all(record -> haskey(record, :resources), compiled_records)
+    @test all(record -> haskey(record, :reference_conversion), compiled_records)
     @test inspect(executable, Capabilities()).sequential
     @test length(string(PottsToolkit.executable_fingerprint(executable))) == 64
     @test PottsToolkit.executable_fingerprint(executable) !=
@@ -63,7 +67,12 @@
 
     function forbidden(value, seen = IdSet())
         value === nothing && return false
+        value isa Union{
+            Number, Symbol, String, Bool, Type, VersionNumber,
+        } && return false
         value isa Function && return true
+        value isa AbstractPottsStatement && return true
+        value isa ModelingToolkitBase.AbstractSystem && return true
         value isa DynamicQuantities.UnionAbstractQuantity && return true
         !(Symbolics.symbolic_type(value) isa
           SymbolicIndexingInterface.NotSymbolic) && return true
@@ -80,6 +89,7 @@
         return false
     end
     @test !forbidden(getfield(executable, :core_program))
+    @test !forbidden(executable)
 
     links = RelationshipState(:links; capacity = 8)
     copy_context = ProposalContext(:copy)
@@ -100,4 +110,148 @@
         backend = CPUBackend(),
         scalar_type = Float64,
     )
+
+    proposal = ProposalContext(:copy)
+    explicit_noise = draw(Normal(0.0, 0.05), DrawKey(:explicit_bias))
+    @named symbolic_proposals = PottsSystem(statements = StatementSet((
+        Lattice((4, 4)),
+        cell,
+        medium,
+        Volume(cell; target = 4.0, strength = 1.0),
+        ProposalEnergy(
+            :directional_energy,
+            ifelse(proposal.is_extension, 0.0, 0.1),
+        ),
+        ProposalDrive(:custom_drive, explicit_noise),
+        ProposalConstraint(
+            :different_owners,
+            proposal.source_cell != proposal.target_cell,
+        ),
+        ProposalModifier(:custom_modifier, -0.1),
+        Protocol(Sweep(; temperature = 2.0); name = :main),
+    )))
+    symbolic_executable = compile(
+        complete(symbolic_proposals);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    symbolic_program = getfield(symbolic_executable, :core_program)
+    @test length(symbolic_program.proposal_energies) == 1
+    @test length(symbolic_program.proposal_drives) == 1
+    @test length(symbolic_program.proposal_constraints) == 1
+    @test length(symbolic_program.proposal_modifiers) == 1
+    @test !forbidden(symbolic_program)
+
+    proposal_labels = zeros(Int, 4, 4)
+    proposal_labels[2:3, 2:3] .= 1
+    proposal_initial = PottsInitialState(ownership = LabelledCells(
+        proposal_labels; cells = [cell], medium
+    ))
+    proposal_problem = PottsProblem(
+        symbolic_executable, proposal_initial, (0, 3); seed = 0x51
+    )
+    first_proposal_run = solve(proposal_problem; save_everystep = true)
+    replayed_proposal_run = solve(proposal_problem; save_everystep = true)
+    other_proposal_run = solve(
+        remake(proposal_problem; replica = 2); save_everystep = true
+    )
+    @test getfield.(first_proposal_run.u, :ownership) ==
+          getfield.(replayed_proposal_run.u, :ownership)
+    @test any(
+        left.ownership != right.ownership
+        for (left, right) in zip(first_proposal_run, other_proposal_run)
+    )
+
+    @named external_interface = PottsSystem(
+        statements = StatementSet((
+            Lattice((4, 4)),
+            cell,
+            medium,
+            Volume(cell; target, strength),
+            Protocol(Sweep(; temperature); name = :main),
+            Observation(:cell_occupancy, occupancy(cell, :lattice)),
+        )),
+        parameters = [target, strength, temperature],
+        inputs = [temperature],
+        outputs = [:ownership, :cell_occupancy],
+    )
+    external_executable = compile(
+        complete(external_interface);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    external_manifest = inspect(
+        external_executable, PottsToolkit.ExternalIO()
+    )
+    @test Set(entry.identity for entry in external_manifest) ==
+          Set((:temperature, :ownership, :cell_occupancy))
+    @test only(filter(
+        entry -> entry.identity === :ownership, external_manifest
+    )).element_type === Int32
+    @test only(filter(
+        entry -> entry.identity === :cell_occupancy, external_manifest
+    )).observation_index == 1
+
+    @named overlapping_interface = PottsSystem(
+        statements = statements(external_interface),
+        parameters = [target, strength, temperature],
+        inputs = [temperature],
+        outputs = [temperature],
+    )
+    @test_throws ArgumentError compile(
+        complete(overlapping_interface);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+
+    @variables t marker(t)
+    common_statements(initial_value) = StatementSet((
+        Lattice((4, 4)),
+        cell,
+        medium,
+        SiteState(
+            marker; name = :marker, initial = initial_value
+        ),
+        Volume(cell; target, strength),
+        Protocol(Sweep(; temperature); name = :main),
+    ))
+    first_initial_default = PottsSystem(
+        statements = common_statements(1.0),
+        unknowns = [marker],
+        parameters = [target, strength, temperature],
+        independent_variables = [t],
+        name = :initial_default_schema,
+    )
+    second_initial_default = PottsSystem(
+        statements = common_statements(9.0),
+        unknowns = [marker],
+        parameters = [target, strength, temperature],
+        independent_variables = [t],
+        name = :initial_default_schema,
+    )
+    first_completed = complete(first_initial_default)
+    second_completed = complete(second_initial_default)
+    @test semantic_fingerprint(first_completed) ==
+          semantic_fingerprint(second_completed)
+    first_executable = compile(
+        first_completed;
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    second_executable = compile(
+        second_completed;
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float64,
+    )
+    @test PottsToolkit.executable_fingerprint(first_executable) ==
+          PottsToolkit.executable_fingerprint(second_executable)
+    @test only(inspect(first_executable, PottsToolkit.StateSchema())).initial ==
+          1.0
+    @test only(inspect(second_executable, PottsToolkit.StateSchema())).initial ==
+          9.0
 end

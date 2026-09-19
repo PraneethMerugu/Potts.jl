@@ -21,8 +21,13 @@ abstract type AbstractPottsBackend end
 """The qualified V1 host backend."""
 struct CPUBackend <: AbstractPottsBackend end
 
-struct RuntimeParameter{V, D, U}
-    variable::V
+struct ReferenceUnitDescriptor
+    name::Symbol
+    dimension::String
+    scale::Float64
+end
+
+struct RuntimeParameter{D, U}
     name::Symbol
     default::D
     required::Bool
@@ -30,8 +35,15 @@ struct RuntimeParameter{V, D, U}
     index::Int
 end
 
-struct ParameterManifest{T <: Tuple}
+struct StructuralParameter{V}
+    name::Symbol
+    value::V
+end
+
+struct ParameterManifest{T <: Tuple, S <: Tuple, R <: Tuple}
     entries::T
+    structural::S
+    reference_units::R
 end
 
 Base.length(manifest::ParameterManifest) = length(manifest.entries)
@@ -46,17 +58,20 @@ Base.getindex(manifest::ParameterManifest, index::Integer) =
 An immutable, normalized runtime-parameter buffer. Construct it through
 `PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
 """
-struct PottsParameters{T <: AbstractFloat, N <: NamedTuple}
-    values::Vector{T}
+struct PottsParameters{T <: AbstractFloat, V <: Tuple, N <: NamedTuple}
+    values::V
     named::N
 end
+
+PottsParameters(values::AbstractVector{T}, named::N) where {
+        T <: AbstractFloat, N <: NamedTuple,
+    } = PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
 
 Base.getindex(parameters::PottsParameters, name::Symbol) =
     getproperty(parameters.named, name)
 Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
 
-struct PottsExecutable{S, P, M, R, O}
-    completed_system::S
+struct PottsExecutable{P, M, R, O}
     core_program::P
     parameter_manifest::M
     reports::R
@@ -81,4 +96,3 @@ function Base.show(io::IO, executable::PottsExecutable)
 end
 
 executable_fingerprint(executable::PottsExecutable) = executable.fingerprint
-

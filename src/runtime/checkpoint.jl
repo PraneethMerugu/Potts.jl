@@ -68,6 +68,8 @@ function _validate_checkpoint(
         throw(ArgumentError("checkpoint seed does not match the problem"))
     checkpoint_value.core.replica == problem.replica ||
         throw(ArgumentError("checkpoint replica does not match the problem"))
+    checkpoint_value.core.repeat == problem.ensemble_repeat ||
+        throw(ArgumentError("checkpoint ensemble repeat does not match the problem"))
     completed_mcs = checkpoint_value.core.snapshot.mcs
     problem.tspan[1] <= completed_mcs <= problem.tspan[2] ||
         throw(ArgumentError("checkpoint MCS lies outside the problem horizon"))
@@ -85,7 +87,10 @@ function _init_from_checkpoint(
     )
     state = _saved_state(
         CorePotts.program_snapshot(runtime),
-        _runtime_observations(runtime, policy.observables),
+        _named_runtime_observations(
+            runtime, problem.executable, policy.observables
+        ),
+        (entry.name for entry in problem.executable.observations),
     )
     history = Pair{Int, Any}[
         time => parameters
@@ -107,4 +112,3 @@ function _init_from_checkpoint(
     policy.save_start && _save_current!(integrator)
     return integrator
 end
-

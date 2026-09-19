@@ -5,12 +5,26 @@ function _storage_report(program::CorePotts.CompiledPottsProgram)
         site_count,
         ownership = (element = Int32, count = site_count),
         cell_kind = Int16,
+        cell_generation = UInt32,
         volume = Int,
         activity = program.activity === nothing ? nothing :
                    (element = eltype(program.parameter_defaults), count = site_count),
         field = program.field === nothing ? nothing :
                 (element = eltype(program.parameter_defaults), count = site_count),
-        relationships = nothing,
+        history = program.history === nothing ? nothing : (
+            element = eltype(program.parameter_defaults),
+            depth = Int(program.history.depth),
+            count = site_count * Int(program.history.depth),
+        ),
+        elongation = program.elongation === nothing ? nothing :
+                     (moments = :recomputed_reference, dimension = length(program.shape)),
+        relationships = program.relationships === nothing ? nothing : (
+            capacity = program.relationships.capacity,
+            maximum_degree = program.relationships.maximum_degree,
+            endpoint = Int32,
+            generation = UInt32,
+            payload = eltype(program.parameter_defaults),
+        ),
     )
 end
 
@@ -18,7 +32,8 @@ function _workspace_report(program::CorePotts.CompiledPottsProgram)
     return (
         field_scratch = program.field === nothing ? 0 : prod(program.shape),
         proposal_scratch = 0,
-        relationship_requests = 0,
+        relationship_requests = program.relationships === nothing ? 0 :
+                                program.relationships.capacity,
         live_state_allocated = false,
     )
 end
@@ -39,8 +54,8 @@ function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     _is_quantity(value) && throw(ArgumentError(
         "unit quantity crossed the CorePotts boundary at $path"
     ))
-    if !(Symbolics.symbolic_type(value) isa
-         SymbolicIndexingInterface.NotSymbolic)
+    if !(SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic)
         throw(ArgumentError("Symbolics value crossed the CorePotts boundary at $path"))
     end
     if value isa AbstractArray || value isa Tuple || value isa NamedTuple
@@ -58,4 +73,3 @@ function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     end
     return nothing
 end
-

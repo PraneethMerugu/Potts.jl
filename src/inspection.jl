@@ -23,20 +23,27 @@ completed_system_fingerprint(system::PottsSystem) =
     inspect(system, Fingerprints()).completed
 
 inspect(executable::PottsExecutable, ::Statements) =
-    inspect(executable.completed_system, Statements())
+    executable.reports.statements
 inspect(executable::PottsExecutable, ::Variables) =
-    inspect(executable.completed_system, Variables())
+    executable.reports.variables
 inspect(executable::PottsExecutable, ::Effects) =
-    inspect(executable.completed_system, Effects())
+    Tuple(
+        (record.identity, record.effect, record.bound)
+        for record in executable.reports.statements
+    )
 inspect(executable::PottsExecutable, ::RandomOperations) =
-    inspect(executable.completed_system, RandomOperations())
+    Tuple(
+        (record.identity, record.random_operations)
+        for record in executable.reports.statements
+        if !isempty(record.random_operations)
+    )
 inspect(executable::PottsExecutable, ::Schedule) =
     executable.reports.schedule
 inspect(executable::PottsExecutable, ::Capabilities) =
     executable.reports.capability
 inspect(executable::PottsExecutable, ::Fingerprints) = (
-    semantic = semantic_fingerprint(executable.completed_system),
-    completed = completed_system_fingerprint(executable.completed_system),
+    semantic = executable.reports.fingerprints.semantic,
+    completed = executable.reports.fingerprints.completed,
     executable = executable.fingerprint,
 )
 inspect(executable::PottsExecutable, ::StoragePlan) =
@@ -44,6 +51,20 @@ inspect(executable::PottsExecutable, ::StoragePlan) =
 inspect(executable::PottsExecutable, ::Kernels) = (
     engine = executable.reports.execution.engine,
     backend = executable.reports.execution.backend,
+    scalar_type = executable.reports.execution.scalar_type,
     phases = (:proposal, :commit, :after_mcs),
+    time = executable.reports.time,
     live_state_allocated = false,
+)
+inspect(executable::PottsExecutable, ::ParameterSchema) =
+    executable.parameter_manifest
+inspect(executable::PottsExecutable, ::StateSchema) =
+    executable.reports.states
+inspect(executable::PottsExecutable, ::Observations) =
+    executable.observations
+inspect(executable::PottsExecutable, ::ExternalIO) =
+    executable.reports.external_io
+inspect(executable::PottsExecutable, ::ReplayContract) = (
+    replay = executable.reports.replay,
+    checkpoint = executable.reports.checkpoint,
 )

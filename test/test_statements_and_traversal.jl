@@ -69,6 +69,23 @@
         ProposalEnergy(:mapped, k * x; coefficient = k),
     )
     @test occursin("4.0", sprint(show, mapped))
+    mapped_effect = PottsToolkit.map_symbolics(
+        value -> substitute(value, Dict(k => 4.0)),
+        AcceptedCopyProcess(
+            :mapped_effect;
+            expression = x > 0,
+            effects = (Assign(x, k),),
+            phase = AcceptedCopy(),
+        ),
+    )
+    @test only(PottsToolkit._statement_arguments(mapped_effect).effects).value == 4.0
+    mapped_protocol = PottsToolkit.map_symbolics(
+        value -> substitute(value, Dict(k => 4.0)),
+        Protocol(Sweep(; temperature = k); name = :mapped_protocol),
+    )
+    @test only(
+        PottsToolkit._statement_arguments(mapped_protocol).stages
+    ).options.temperature == 4.0
 
     copy = ProposalContext(:copy)
     @test occursin("source_cell", string(copy.source_cell))
@@ -79,13 +96,54 @@
     @test occursin("edge_payload", string(edge.strength))
     @test draw(Normal(0.0, k), DrawKey(:noise)) isa Num
 
+    contract = (
+        argument_types = (Num,),
+        result_type = Real,
+        unit_constraints = :dimensionless,
+        namespace_traversal = :map_symbolics,
+        access = (reads = (1,), writes = ()),
+        effect = :pure_read,
+        rng = (),
+        boundedness = (maximum = 0, basis = :read_only),
+        phase = nothing,
+        capabilities = (
+            sequential = true,
+            checkerboard = true,
+            reason = "",
+        ),
+        reference_semantics = :dimensionless,
+        serialization_identity = "example-schema-v1",
+        lowering_identity = :lower_example,
+    )
     registry = register_statement(
-        default_statement_registry(), :example, v"1.0.0", "example-lowering-v1"
+        default_statement_registry(), :example, v"1.0.0", contract
     )
     @test register_statement(
-        registry, :example, v"1.0.0", "example-lowering-v1"
+        registry, :example, v"1.0.0", contract
     ) === registry
     @test_throws ArgumentError register_statement(
-        registry, :example, v"1.0.0", "different-lowering"
+        registry,
+        :example,
+        v"1.0.0",
+        merge(contract, (serialization_identity = "different-schema",)),
+    )
+    @test_throws ArgumentError register_statement(
+        default_statement_registry(),
+        :invalid,
+        v"1.0.0",
+        merge(contract, (capabilities = (sequential = true,),)),
+    )
+    @test_throws ArgumentError RegisteredStatement(
+        :host_callback,
+        :example,
+        v"1.0.0",
+        x;
+        callback = identity,
+    )
+    @test_throws ArgumentError register_statement(
+        default_statement_registry(),
+        :host_contract,
+        v"1.0.0",
+        merge(contract, (unit_constraints = identity,)),
     )
 end

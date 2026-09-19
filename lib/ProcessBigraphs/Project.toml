@@ -5,7 +5,6 @@ authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
 ACSets = "227ef7b5-1206-438b-ac65-934d6da304b8"
-AlgebraicRewriting = "725a01d3-f174-5bbd-84e1-b9417bad95d9"
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
@@ -18,7 +17,6 @@ ProcessBigraphsSciMLExt = ["CommonSolve", "SciMLBase"]
 
 [compat]
 ACSets = "0.2.29"
-AlgebraicRewriting = "0.5"
 Aqua = "0.8"
 Catlab = "0.17.6"
 CommonSolve = "0.2.11"

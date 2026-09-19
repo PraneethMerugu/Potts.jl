@@ -4,13 +4,16 @@
 A symbolic handle for the proposal snapshot. Property access constructs registered
 Symbolics operations; it never reads mutable runtime state.
 """
+_potts_token(name::Symbol; T = Real) =
+    ModelingToolkitBase.GlobalScope(Symbolics.variable(name; T))
+
 struct ProposalContext
     name::Symbol
     token::Symbolics.Num
     function ProposalContext(name::Symbol)
         isempty(String(name)) &&
             throw(ArgumentError("a proposal binding name cannot be empty"))
-        return new(name, Symbolics.variable(Symbol("__potts_proposal__", name)))
+        return new(name, _potts_token(Symbol("__potts_proposal__", name)))
     end
     ProposalContext(name::Symbol, token::Symbolics.Num) = new(name, token)
 end
@@ -27,7 +30,7 @@ struct RelationshipBinding{R}
     function RelationshipBinding(name::Symbol, relationship)
         isempty(String(name)) &&
             throw(ArgumentError("a relationship binding name cannot be empty"))
-        token = Symbolics.variable(Symbol("__potts_relationship__", name))
+        token = _potts_token(Symbol("__potts_relationship__", name))
         return new{typeof(relationship)}(name, relationship, token)
     end
     RelationshipBinding(name::Symbol, relationship, token::Symbolics.Num) =

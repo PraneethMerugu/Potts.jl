@@ -34,19 +34,28 @@ struct EngineAdmission
     reason::String
 end
 
-struct QualifiedStatement{S, N, T, U, C, R, W, E, B, G, P, O, A}
+struct QualifiedStatement{
+        S, N, T, Y, H, U, C, R, W, Q, D, Z, E, B, X, L, G, P, O, A,
+    }
     identity::QualifiedStatementID
     kind::Symbol
     schema_version::VersionNumber
     source::S
     provenance::N
     normalized_payload::T
+    result_type::Y
+    shape::H
     units::U
     reference_conversion::C
     reads::R
     writes::W
+    ownership::Q
+    persistence::D
+    resources::Z
     effect::E
     bound::B
+    transaction_identity::X
+    lifecycle::L
     random_operations::G
     phase::P
     ordering_dependencies::O
@@ -87,3 +96,8 @@ struct Capabilities <: AbstractInspectionSelector end
 struct Fingerprints <: AbstractInspectionSelector end
 struct StoragePlan <: AbstractInspectionSelector end
 struct Kernels <: AbstractInspectionSelector end
+struct ParameterSchema <: AbstractInspectionSelector end
+struct StateSchema <: AbstractInspectionSelector end
+struct Observations <: AbstractInspectionSelector end
+struct ExternalIO <: AbstractInspectionSelector end
+struct ReplayContract <: AbstractInspectionSelector end

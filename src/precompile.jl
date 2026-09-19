@@ -1,24 +1,30 @@
-using PrecompileTools: @compile_workload
-import SciMLBase
-
-# This workload deliberately remains CPU-only. GPU packages and device initialization do not belong
-# in package precompilation; backend-native kernels are compiled on the selected device at first use.
-@compile_workload begin
-    model = ReferenceModels.differential_adhesion_model(target_volume = 8)
-    normalize(model)
-    lower(model; dimensions = 2)
-    problem = ReferenceModels.differential_adhesion_problem(
-        (16, 16); cells_per_population = 2, target_volume = 8, capacity = 8,
-        tspan = (0, 1), seed = 0x707265636f6d7001)
-    algorithms = (
-        SequentialCPM(temperature = 2.0f0),
-        SequentialEquilibrium(temperature = 2.0f0),
-        CheckerboardSweepCPM(temperature = 2.0f0),
-        LotteryCPM(temperature = 2.0f0),
+# This deliberately uses only the public V1 flow. Running the tiny workload
+# while the module is compiled seeds the construction, completion, lowering,
+# initialization, and one-MCS solve paths without adding a precompile-only
+# package dependency.
+let
+    cell = CellKind(:precompile_cell)
+    medium = MediumKind(:precompile_medium)
+    system = PottsSystem(
+        name = :PottsPrecompileWorkload,
+        statements = StatementSet((
+            Lattice((3, 3)),
+            cell,
+            medium,
+            Volume(cell; target = 1.0, strength = 1.0),
+            Protocol(Sweep(; temperature = 1.0); name = :main),
+        )),
     )
-    for algorithm in algorithms
-        integrator = SciMLBase.init(problem, algorithm;
-            verbose = false, save_start = false, save_end = false)
-        SciMLBase.step!(integrator, 1)
-    end
+    executable = compile(
+        complete(system);
+        engine = SequentialEngine(),
+        backend = CPUBackend(),
+        scalar_type = Float32,
+    )
+    labels = zeros(Int, 3, 3)
+    labels[2, 2] = 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+    )
+    solve(PottsProblem(executable, initial, (0, 1); seed = 1))
 end
