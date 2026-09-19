@@ -25,12 +25,13 @@ function _metal_profile(
     )
 end
 
-function _metal_global_fixture()
+function _metal_global_fixture(; rhs = nothing)
     @independent_variables metal_global_t
     @variables metal_global_x(metal_global_t) = 1.0f0
     differential = ModelingToolkitBase.Differential(metal_global_t)
     @named native = ModelingToolkit.System(
-        [differential(metal_global_x) ~ 2.0f0], metal_global_t
+        [differential(metal_global_x) ~
+            (rhs === nothing ? 2.0f0 : rhs(metal_global_x))], metal_global_t
     )
     @variables metal_global_output
     output = ModelState(
@@ -294,21 +295,22 @@ end
         native_profiles = (global_profile,),
     )
 
+    nonfinite_problem, nonfinite_path, nonfinite_x = _metal_global_fixture(
+        rhs = value -> value / (value - value),
+    )
     failed = init(
-        global_problem,
+        nonfinite_problem,
         CheckerboardSweepCPM();
         backend = Potts.MetalBackend(),
         scalar_type = Float32,
-        native_profiles = (_metal_profile(
-            global_path, 1; dt = 0.25f0
-        ),),
+        native_profiles = (_metal_profile(nonfinite_path, 1),),
     )
     before_ownership = copy(failed.u.ownership)
-    before_native = native_value(failed, global_path, global_x)
+    before_native = native_value(failed, nonfinite_path, nonfinite_x)
     @test_throws Potts.NativeCapabilityError step!(failed)
     @test failed.runtime.mcs == 0
     @test failed.runtime.ownership == before_ownership
-    @test native_value(failed, global_path, global_x) == before_native
+    @test native_value(failed, nonfinite_path, nonfinite_x) == before_native
 
     cell_problem, cell_path, cell_x = _metal_per_cell_fixture()
     cell_profile = _metal_profile(cell_path, 4)

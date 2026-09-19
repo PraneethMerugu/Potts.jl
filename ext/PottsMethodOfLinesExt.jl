@@ -96,9 +96,9 @@ function Potts._native_field_profile_evidence(
     algorithm = Potts._native_package_identity(parentmodule(algorithm_type))
     algorithm.name == "OrdinaryDiffEqTsit5" || return nothing
     algorithm.uuid == "b1df2697-797e-41e3-8120-5422d3b24e4a" || return nothing
-    algorithm.version == v"2.1.2" || return nothing
+    algorithm.version == v"2.1.4" || return nothing
     nameof(algorithm_type) === :Tsit5 || return nothing
-    Base.pkgversion(MethodOfLines) == v"0.11.19" || return nothing
+    Base.pkgversion(MethodOfLines) == v"1.5.1" || return nothing
     Potts._native_runtime_stack_identity(component) == getfield(
         modelingtoolkit_extension, :_TESTED_NATIVE_RUNTIME_STACK
     ) || return nothing
