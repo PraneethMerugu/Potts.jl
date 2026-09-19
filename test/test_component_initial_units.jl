@@ -39,7 +39,8 @@
     values = ModelingToolkitBase.initial_conditions(compatible)
     @test values[ModelingToolkitBase.renamespace(:producer, replacement_memory)] == (amount = 3.0u"m",)
     @test_throws r"incompatible declaration contracts" reconnect(3.0u"s")
-    @test_throws r"missing reference-unit anchor" reconnect(3.0u"m"; references = DeclaredReferenceUnits())
+    declared = complete(reconnect(3.0u"m"; references = DeclaredReferenceUnits()))
+    @test isequal(ModelingToolkitBase.initial_conditions(declared), values)
     @test_throws r"missing reference-unit anchor" reconnect(3.0u"m"; references = ReferenceUnits(time = 1.0u"s"))
     @test_throws r"missing reference-unit anchor" reconnect(3.0u"s"; references = ReferenceUnits(length = 1.0u"m"))
 end

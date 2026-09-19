@@ -2,10 +2,14 @@ using ParallelTestRunner
 import Potts
 
 const POTTS_TESTS = (
+    "test_fixed_array_scaling.jl",
+    "test_discrete_field_rhs.jl",
+    "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",
     "test_cartesian_domain_authoring.jl",
     "test_declaration_assembly.jl",
     "test_lexical_enrollment.jl",
+    "test_declaration_control_flow.jl",
     "test_lexical_model.jl",
     "test_assembled_model.jl",
     "test_component_replacement.jl",
@@ -36,8 +40,16 @@ const POTTS_TESTS = (
     "test_history_structured_samples.jl",
     "test_history_initialization.jl",
     "test_history_lifecycle.jl",
+    "test_history_ownership_change.jl",
+    "test_logical_state_mutation.jl",
+    "test_mixed_symbolic_mutation.jl",
+    "test_state_mutation_observation_failure.jl",
     "test_state_reference_inference.jl",
     "test_fixed_vector_operations.jl",
+    "test_fixed_vector_parameters.jl",
+    "test_vector_parameter_units_and_imports.jl",
+    "test_parameter_contracts.jl",
+    "test_component_dependency_ownership.jl",
     "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",
     "test_units_and_parameters.jl", "test_mtkcompile.jl",
     "test_initial_problem_remake.jl", "test_runtime_solution_sii.jl",
@@ -70,6 +82,8 @@ const POTTS_TESTS = (
 # Keeping that inventory explicit prevents detached fixture artifacts without
 # turning helpers into a second test suite.
 const POTTS_TEST_FIXTURES = (
+    "history_structured_samples.jl",
+    "discrete_field_rhs.jl",
     "ExternalCompilerSPIFixture.jl",
     "ExternalSurfaceOperationFixture.jl",
     "LifecycleOperationFixtures.jl",
@@ -79,8 +93,12 @@ const POTTS_TEST_FIXTURES = (
     "scheduled_process_draws.jl",
     "cell_polarity_dynamics.jl",
     "lifecycle_public.jl",
+    "logical_state_mutation.jl",
+    "mixed_symbolic_mutation.jl",
+    "symbolic_mutation_observation_failure.jl",
     "sciml_lifecycle.jl",
     "vector_rotation.jl",
+    "vector_parameters.jl",
     "product_fields.jl",
 )
 

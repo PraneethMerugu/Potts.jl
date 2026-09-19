@@ -1,5 +1,44 @@
 # [Architecture](@id architecture)
 
+Enclosing lifecycle/reference validation and source qualification run once through
+`completion/completion.jl` and `completion/qualification.jl`.
+Child completion projects its owned records from that canonical result;
+`compiler/host/source_graph.jl` retains only reached external state metadata and
+parameter/initial-value use references for analysis. Source nodes, rather than
+the analysis record table, identify owned declarations. Completed symbolic
+inspection excludes dependency uses, and runtime materialization verifies that
+the selected system owns the complete storage/parameter dependency closure.
+Reading an imported stored field does not enroll its producer's evolution
+coefficients; a history read additionally retains the history's source declaration.
+No execution path borrows another runtime's storage or clones an imported owner.
+
+Runtime parameter ownership follows `PottsProblem`/SymbolicIndexingInterface →
+the scheduled `ParameterManifest` → parameter normalization and static lowering →
+Core's public scalar parameter publisher → detached logical getters/history.
+`compiler/host/parameter_manifest.jl` owns canonical parameter identities, fixed
+logical shapes, and contiguous scalar-slot spans. Structural scheduling builds
+this manifest once; late lowering reuses it when choosing numerical precision.
+There is no separate scheduled parameter schema or live logical parameter store.
+ModelingToolkitBase's public symbolic indexing methods unwrap symbolic wrappers;
+Potts resolves the resulting scalar, vector, and indexed identities through this
+same manifest. `test_parameter_contracts.jl` and the shared vector-parameter
+fixture cover wrapper-independent membership and indexing.
+`compiler/lowering/parameters.jl` shares physical-value validation across problem
+construction, remakes and setters, and reconstructs immutable logical snapshots
+from Core's flat scalar buffer. Fixed-vector loads use the existing synthesized
+operation closure and fixed-vector constructor, not a parallel evaluator.
+
+Scalar multiplication of declared fixed arrays uses the existing arithmetic
+operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
+in `term_analysis.jl`. Only builtin scalar-times-array or array-times-scalar
+scaling preserves the array shape; matrix multiplication is not reinterpreted
+as componentwise multiplication. Assignment lowering in `accepted_copy_descriptors.jl`
+checks each target/RHS shape and dimension pair before execution; analyzed roots
+own these facts, while unnormalized static literals reuse `unit_analysis.jl`'s
+literal-unit semantics. `test_fixed_array_scaling.jl` owns the public
+scalar, vector and tensor shape/unit regression; execution uses Core's existing
+multiply operation, not a tensor-specific evaluator.
+
 Potts.jl separates symbolic model authority, numerical execution, and presentation:
 
 ```text
@@ -31,6 +70,12 @@ by `_assemble_declared_system` in `systems.jl`, which calls the same positional
 constructor. No builder survives in the source model. Macro binding identity,
 single evaluation, whole-array inventories, imported ownership and explicit-entry
 duplicate rejection are defended by `test_lexical_enrollment.jl`.
+Both macro forms use `_capture_statement_block` for executed declaration leaves
+inside Julia blocks, branches and loops. It preserves ordinary control flow and
+captures each leaf's source, without retaining a control-flow representation in
+the model. `test_declaration_control_flow.jl` defends evaluation order, helper
+splicing, empty/terminated loops, conditional symbolic inventories and numerical
+execution on both CPU engines.
 
 The positional `PottsSystem(::StatementSet; ...)` constructor in `systems.jl`
 normalizes declaration-derived symbolic inventories into the ordinary keyword
@@ -91,6 +136,12 @@ qualified kind through `evaluator_resources.jl` and emits CorePotts'
 `CellAssignmentEffect`. The existing operation closure supplies the cell-bound
 state read, and CorePotts owns finite-cell eligibility and the cell-domain
 execution. Cell processes do not borrow a lattice traversal.
+`operation_library/numerics.jl` owns `DiscreteFieldEuler`: either its existing
+finite-stencil rate or a normalized explicit `FieldState(rhs=...)` expression
+feeds one clipped Euler update. Completion records the RHS as a process root;
+ordinary unit analysis, operation admission, and state-read lowering apply.
+CorePotts' existing iterated-site effect owns substep entry state and addressed
+draw execution. No separate numerical scheduler or random generator is added.
 `test/test_cell_process_authoring.jl` checks per-cell frequency, kind selection,
 inactive slots, simultaneous scalar/vector writes, and domain rejection.
 The construction-only `scoped` callback in `statements/scopes.jl` attaches the
@@ -117,6 +168,14 @@ existing handle; `_static_literal` delegates numerical conversion to the same
 recursive owner in `compiler/execution/manifests.jl` used by initialization.
 No additional lifecycle state schema is retained. The actual retirement and
 invalid literal tests live in `test/test_structured_lifecycle_literals.jl`.
+`compiler/lowering/evaluator_nodes.jl` normalizes dimensional arithmetic using
+the analyzed node units and the existing reference manifest in
+`compiler/lowering/parameters.jl`. It inserts ordinary scalar multiplication
+only when operand and result reference scales require conversion. The same
+lowering applies to process and lifecycle expressions; no runtime unit table
+or second reference inventory exists. `test/test_expression_reference_scales.jl`
+checks independent reference scales, SI intermediate dimensions, and lifecycle
+creation numerically.
 `test/test_compound_effects.jl` exercises this path through public models.
 `completion/inference.jl` retains actual effect RHS reads even when the same
 process writes those states. `compiler/host/footprints.jl` gives direct site-state
@@ -222,6 +281,43 @@ CorePotts state layout. The runtime initializer separates logical value shape
 from model, site, and cell storage shape; saved values and checkpoints consume
 the resulting Core-owned storage. The owning behavioral tests are in
 `test/test_structured_state_authoring.jl`.
+
+History sampling follows the qualified `of` declaration, not an inferred
+storage-domain tag. `_state_sample_record` in `compiler/host/source_graph.jl`
+also supplies that source identity to lifecycle lowering: cell-owned histories
+need explicit cell-state policies, SiteState histories need ownership-change
+laws, and Eulerian FieldState histories preserve fixed-site meaning unless an
+ownership law is explicitly declared. No parallel classification is retained
+in runtime manifests. `test/test_history_lifecycle.jl` and
+`test/test_history_ownership_change.jl` exercise the corresponding public
+creation, retirement, sampling order, and site-lifetime behavior.
+`test/fixtures/history_structured_samples.jl` supplies the same numerical
+vector, tensor, product, dimensional-reference, and checkpoint oracle to the
+ordinary CPU test and the Metal runner; invalid symbolic projections remain
+in the ordinary compiler test.
+
+Public `SymbolicIndexingInterface.setu` and `setp` belong to
+`runtime/symbolic_indexing.jl`: one tagged setter resolves canonical state and
+parameter targets and stages the complete batch. Its commit owner also serves
+the parameter finalization hook, records parameter history once, and restores
+published values, pending parameters and the detached current value after an
+ordinary host refresh failure. Initialization and mutation share
+`runtime/initial_state.jl`'s supplied-value normalization and descriptor packing,
+which delegate logical type/unit conversion to the manifest owner above.
+CorePotts' public `update_program_descriptor_state!` validates and publishes the
+candidate through its existing host/device storage boundary. Potts then refreshes
+the detached current saved value, without mutating earlier snapshots.
+`runtime/integrator.jl` owns rollback of state and parameters across an ordinary
+callback boundary. `test/test_logical_state_mutation.jl` defends conversion
+atomicity, canonical slot/history shapes, snapshots and continuation;
+`test/test_mixed_symbolic_mutation.jl` covers mixed batches and provider-independent
+pending-parameter policy, while `test/test_state_mutation_observation_failure.jl`
+exercises the shared refresh rollback boundary;
+`test/test_history_initialization.jl` covers callback-before-capture ordering.
+The mixed-publication and host-observation fault fixtures are shared with
+`benchmark/backends/metal/mixed_symbolic_mutation.jl`. The latter exercises host
+refresh errors after device publication; it does not simulate or promise
+recovery from failed device copies or execution.
 
 Named products use the same conversion owner recursively: declared field names,
 types, and fixed-array shapes determine the stored value, including omitted

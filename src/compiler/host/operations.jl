@@ -248,7 +248,7 @@ _transfer(
 )
 
 function numerical_operation_requirements end
-numerical_operation_requirements(::Any) = ()
+numerical_operation_requirements(::Any, ::QualifiedStatement) = ()
 
 function numerical_field_rejection end
 numerical_field_rejection(::Any, statement, statements, system) =

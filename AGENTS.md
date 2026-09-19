@@ -84,7 +84,7 @@ For PR-chain work, read the current shared
 before selecting work or changing shared compiler contracts. The canonical
 planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
 existing package worktrees may contain older snapshots. The user-approved
-allocation is 65 identified PRs (R01–R54 plus eleven companions), including G05C
+allocation is 69 identified PRs (R01–R54 plus fifteen companions), including G05C
 (R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
 The seventh companion is the demonstrated G07 LocalMath ordered-fold
 step-validation prerequisite before R14 exchange settlement.
@@ -104,6 +104,27 @@ walls. C10 replaces or extends the existing owner-classification authority
 atomically rather than adding a second table/decoder path. C11 deletes
 `FrozenBorder` only after migrating its behavior-preserving consumers to
 `Closed`; it never reinterprets that spelling as `FixedExterior`.
+The twelfth companion, C12 LocalMath, is the demonstrated bounded runtime
+collection-launch cutover: compaction, collection, keyed reduction, ordered fold
+and destination grouping keep extent/capacity as runtime `ndrange` data and
+specialize only on their existing semantic workgroup. It adds no launch cache,
+policy hierarchy or second executor.
+The thirteenth companion, C13 LocalMath, is the direct source-order recurrence
+law: source-ordered folds traverse sparse physical positions directly, while
+canonical folds retain their compacted prefix. Only those two mathematical
+traversal laws specialize recurrence; callback identities and graph contents do
+not. The fourteenth companion, C14 LocalMath, is validation-copy settlement:
+one program-level validation matrix owns host transfer, nonempty blocking copy
+completes the provider prefix, and empty/aliased representations synchronize
+explicitly. Receipt failure caching, lease release and fixed-relation admission
+share this owner. C14 adds no event wrapper, cache, alternate scheduler or
+backend-specific scientific path.
+The fifteenth companion, C15 LocalMath, narrows pointwise segmentation at its
+existing owner: a small graph-aware wrapper extracts the runtime temporary-field
+identity set, while the reusable segmentation law receives only that set. It
+adds no cache, lookup table, second graph representation, alternate executor or
+model-specific kernel, and preserves the single KernelAbstractions CPU/Metal
+path.
 R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
 and tumor corpora. E07 completion additionally depends on E04 for model 14.
 Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and

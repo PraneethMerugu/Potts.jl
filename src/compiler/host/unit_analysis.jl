@@ -52,8 +52,19 @@ function _declared_parameter_unit(value)
         _canonical_dimension(DynamicQuantities.dimension(default))
     )
     default isa Number && return :dimensionless
+    if default isa AbstractArray
+        units = Tuple(_is_quantity(leaf) ? _canonical_dimension(DynamicQuantities.dimension(leaf)) : :dimensionless for leaf in default)
+        common = _common_unit(units)
+        return common === nothing ? :unknown : common
+    end
     # Required parameters use ordinary dimensionless runtime numbers.
     return ModelingToolkitBase.hasdefault(value) ? :unknown : :dimensionless
+end
+
+function _literal_unit(value)
+    value isa DynamicQuantities.UnionAbstractQuantity &&
+        return _canonical_dimension(DynamicQuantities.dimension(value))
+    return value isa Number && iszero(value) ? :polymorphic_zero : :dimensionless
 end
 
 function _normalized_leaf_unit(
@@ -64,7 +75,7 @@ function _normalized_leaf_unit(
     value = payload isa Union{LiteralPayload, ParameterBindingPayload} ?
         payload.value : nothing
     if value isa DynamicQuantities.UnionAbstractQuantity
-        return _canonical_dimension(DynamicQuantities.dimension(value))
+        return _literal_unit(value)
     elseif payload isa ParameterBindingPayload
         return _declared_parameter_unit(value)
     elseif payload isa Union{StateBindingPayload, VariableBindingPayload}
@@ -80,8 +91,7 @@ function _normalized_leaf_unit(
         return index === nothing ? (:binding_dimension, payload.identity) :
             _declared_record_unit(source.records[index], source)
     elseif payload isa LiteralPayload
-        return value isa Number && iszero(value) ?
-            :polymorphic_zero : :dimensionless
+        return _literal_unit(value)
     elseif node.payload_kind in (
             :proposal_context, :site_anchor, :cell_anchor, :contact_anchor,
             :relationship_context, :relationship_set, :spatial_relation,
@@ -113,6 +123,8 @@ function _unit_quotient(numerator, denominator)
     denominator === :dimensionless && return numerator
     (_is_unknown_unit(numerator) || _is_unknown_unit(denominator)) && return :unknown
     numerator == denominator && return :dimensionless
+    numerator === :dimensionless && _is_native_dimension(denominator) &&
+        return _canonical_dimension(inv(denominator))
     if _is_native_dimension(numerator) && _is_native_dimension(denominator)
         return _canonical_dimension(numerator / denominator)
     end

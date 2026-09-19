@@ -136,13 +136,37 @@ each declaration/default and keyword expression is evaluated once. Explicit
 inventories come first, followed by captured declarations. Automatically captured
 import aliases and independent variables are excluded from owned inventories.
 
-Every other top-level entry explicitly enrolls a statement or `StatementSet`.
+Nested `begin` blocks, `if`/`elseif` branches, and ordinary Julia `for` and
+`while` loops enroll the declarations they actually execute, in execution order.
+Conditions and iterators run normally, including `break` and `continue`; an
+unselected branch or empty loop contributes nothing. Constructor-form symbolic
+declarations inside those bodies also join the ordinary inventories. Use finite
+factory loops: these are Julia construction-time operations, not simulation
+schedulers. Loop bindings retain normal Julia scope.
+
+For example, one finite factory loop can declare a pair of reservoirs without
+maintaining a second symbolic inventory:
+
+```@example declaration-loops
+using Potts, Symbolics
+source = @statements PottsSystem(; name=:reservoir_pair) begin
+    @variables stored released
+    for variable in (stored, released)
+        ModelState(variable; initial=0.0)
+    end
+end
+@assert length(statements(source)) == 2
+nothing # hide
+```
+
+Every other entry explicitly enrolls a statement or `StatementSet`.
 An assignment such as `state = ModelState(amount)` both binds and enrolls it;
 using `state` inside a later expression is a reference, but writing `state` again
 as a top-level entry attempts a second enrollment and is rejected. Equal statement
 values are never silently deduplicated. Ordinary factory helpers can return a
-`StatementSet` to splice; the macro does not reinterpret arbitrary control flow
-or discover declarations hidden in helper bodies. Plain `@statements begin ...
+`StatementSet` to splice; the macro does not inspect function definitions,
+discover declarations hidden in helper bodies, or treat arbitrary numeric
+assignments as declarations. Plain `@statements begin ...
 end` continues to return only a `StatementSet`.
 
 `examples/compartment_exchange.jl` is a complete factory using this
@@ -178,6 +202,10 @@ model assignments execute once, site assignments execute per site, and cell
 assignments execute once per eligible finite cell. Use
 separate processes for different domains. This does not make source order an
 implicit sequential update policy.
+
+At `init`, assignment lowering proves that every assignment effect preserves its target's
+logical shape and physical dimensions. A plain literal zero is dimension-polymorphic;
+a quantity, including a zero quantity, retains its explicitly declared dimensions.
 
 Cell assignments can name their finite-kind domain explicitly:
 
@@ -226,6 +254,37 @@ fixed-array and named-product literals. They must match the target state's
 logical shape, field names, and reference dimensions. Floating leaves use the
 selected execution precision; declared Boolean and integer leaves retain their
 types. Mutable arrays and nonfinite literal values are rejected before execution.
+
+## Explicit local field rates
+
+`DiscreteFieldEuler` can evolve a scalar `FieldState` from a complete authored
+rate instead of its diffusion/decay/secretion shorthand:
+
+```julia
+FieldState(concentration; initial=0.0u"m", evolution=DiscreteFieldEuler(),
+    rhs=forcing - loss * concentration + amplitude * draw(Uniform(0.5, 1.5), DrawKey(:forcing)),
+    duration_per_mcs=1.0u"s", substeps=2)
+```
+
+The RHS has units of state per duration. Each positive integer substep applies
+`max(0, value + dt * rhs)` using that substep's entry state, where `dt` is the
+declared duration divided by `substeps`. Draws use the existing qualified process
+identity, completed MCS, site, and substep address. This is an explicitly sampled
+random rate in a clipped Euler update, not an SDE integrator or an automatic
+mass-conservation guarantee. Choose the timestep and noise model scientifically.
+For field evolution, `draw` is valid only in the explicit `DiscreteFieldEuler`
+`rhs`, not in initial values, duration, substeps, or shorthand options.
+Concrete dimensional literals such as `rhs=1.0u"m/s"` are supported. For symbolic
+quantities, attach units through parameter defaults or state initial values;
+wrapping a symbolic expression inside a `Quantity` is rejected explicitly.
+
+`rhs` is mutually exclusive with `diffusion`, `decay`, `secretion`, and
+`source_kind`. The shorthand keeps its existing finite-stencil CPU coverage;
+an explicit local RHS is admitted according to its actual reads and operations,
+including supported device operations. This does not establish arbitrary custom
+neighbor gathers. Ordinary Julia helpers may inline symbolically in the RHS.
+The public numerical and checkpoint fixture is
+`test/fixtures/discrete_field_rhs.jl`, shared by ordinary CPU and Metal tests.
 
 ## Retained samples and feedback
 
@@ -379,9 +438,17 @@ and `initial_conditions` queries use those same qualified symbols. Their parent
 queries do not add another namespace. Low-level MTK `get_*` accessors remain local
 source-field queries.
 
-This source-binding surface currently supports scalar symbolic parameters and states.
-Structured references and scoped declaration syntax require the structured-authoring
-extension. General native equation substitution is separate from port reconnection.
+Whole fixed-vector parameters can also be imported without introducing another
+owner. `examples/vector_coefficients.jl` composes a response component with one
+parent-owned coefficient vector; whole-vector assignments and literal component
+reads observe the same parameter updates. General native equation substitution
+is separate from port reconnection.
+An ordinary completed child may analyze reads of enclosing-owned state and
+parameters, including indexed vectors, without acquiring those declarations.
+Its state/parameter inspection lists only its own declarations. Materialize the
+enclosing model to execute such imports; an independently initialized child must
+own all state and parameter dependencies, or be explicitly recomposed with their
+owners. Ordinary declared inputs do not create a second runtime's storage.
 Generic symbolic substitution of a source with imports is also rejected until its
 binding updates have explicit semantics; use the supported replacement operation.
 Backend support is determined by the resulting complete model.
@@ -665,12 +732,27 @@ preserve the target's logical shape, and constructed components must have
 compatible units. Runtime-selected indices are rejected during analysis; this
 surface does not imply general tensor algebra or arbitrary Julia array calls.
 
+A whole declared fixed vector or tensor also supports scalar multiplication in
+either order, such as `gain * position` or `position * gain`, preserving its
+logical shape and checking the result's dimensions against the assignment target.
+This does not reinterpret array-times-array multiplication as componentwise
+scaling or add literal tensor RHS construction.
+
 Dimensional fixed arrays use one compatible dimension across their components.
 For example, `SVector(2.0u"m", 4.0u"m")` with an explicit two-metre reference
 length is stored numerically as `SVector(1.0, 2.0)`. Supplied initial values must
 carry compatible units on every component; an unlabelled numerical vector does
 not silently acquire the declaration's units. Reference conversion is the same
 one used for scalar state values.
+
+Every dimensional scalar expression is represented as physical value divided
+by the selected reference scale for its result dimension. Multiplication,
+division, integer powers, and square roots convert between those scales; the
+references need not be coherent products of the length and time references.
+An intermediate dimension without an explicit reference uses SI scale one.
+Addition, comparisons, and `min`/`max` use the common scale of their compatible
+operands. Dimensionless references must have scale one: they cannot redefine
+plain numeric literals or indices.
 
 Array initializers participate in the same reference inference as scalar
 initializers. All inferred anchors for a dimension must have the same finite,

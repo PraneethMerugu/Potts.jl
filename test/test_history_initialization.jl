@@ -23,17 +23,11 @@
     )
     problem = PottsProblem(source, initial, (0, 2); seed = 17)
     function publish_initial_value!(integrator, value; edit_prehistory = false)
-        # This owning-package oracle uses Core's existing public state
-        # transaction; it is not a claim of a Potts setu interface.
-        SPI = CorePotts.CompilerSPI
-        state = SPI.copy_auxiliary_state(CorePotts.BackendSPI.program_snapshot_descriptor_state(CorePotts.program_snapshot(integrator.runtime)))
-        entry = only(entry for entry in integrator.plan.state_manifest if entry.name === :signal)
-        fill!(SPI.state_block(state, entry.handle).values, Float32(value))
         if edit_prehistory
-            entry = only(entry for entry in integrator.plan.state_manifest if entry.name === :memory)
-            SPI.state_block(state, entry.handle).values[1] = 70.0f0
+            setu(integrator, (signal, memory))(integrator, (value, (70.0, 2.0, 3.0)))
+        else
+            setu(integrator, signal)(integrator, value)
         end
-        SPI.update_program_descriptor_state!(integrator.runtime, state)
     end
     initial_callback = SciMLBase.DiscreteCallback(
         (_, _, _) -> false, _ -> nothing;

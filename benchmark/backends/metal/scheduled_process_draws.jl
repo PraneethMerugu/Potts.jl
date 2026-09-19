@@ -6,7 +6,7 @@ Metal.functional() || error("scheduled process draws require actual Metal hardwa
 Metal.allowscalar(false)
 @testset "scheduled process draws and checkpoint on actual Metal" begin
     cpu = _scheduled_draw_contract(CheckerboardSweepCPM(), CPUBackend())
-    device = _scheduled_draw_contract(CheckerboardSweepCPM(), MetalBackend())
+    device = _scheduled_draw_contract(CheckerboardSweepCPM(), Potts.MetalBackend())
     for (host, gpu) in zip(cpu, device)
         @test host.model == gpu.model
         @test host.sites == gpu.sites

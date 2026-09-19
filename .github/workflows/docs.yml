@@ -10,11 +10,11 @@ on:
       localmath_ref:
         description: Full LocalMath candidate commit SHA
         type: string
-        default: cca004b9cedef54f9ac50bf89dd50a6894cef3aa
+        default: d3d2e5533585de3b16dafbb8ba7c0cb265209254
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: 340077726169b9e96d5953596b99227b4398fc92
+        default: 37d8d85c2ab1eedb08f9700c61835fb270d3f348
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -22,8 +22,8 @@ concurrency:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: ${{ inputs.localmath_ref || 'cca004b9cedef54f9ac50bf89dd50a6894cef3aa' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || '340077726169b9e96d5953596b99227b4398fc92' }}
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'd3d2e5533585de3b16dafbb8ba7c0cb265209254' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '37d8d85c2ab1eedb08f9700c61835fb270d3f348' }}
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 

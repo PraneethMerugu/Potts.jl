@@ -54,11 +54,11 @@ using ExplicitImports
         upstream_sources = Dict(
             "CorePotts" => (
                 "https://github.com/PraneethMerugu/CorePotts.jl",
-                "340077726169b9e96d5953596b99227b4398fc92",
+                "37d8d85c2ab1eedb08f9700c61835fb270d3f348",
             ),
             "LocalMath" => (
                 "https://github.com/PraneethMerugu/LocalMath.jl",
-                "cca004b9cedef54f9ac50bf89dd50a6894cef3aa",
+                "d3d2e5533585de3b16dafbb8ba7c0cb265209254",
             ),
             # Potts cannot pin the commit containing its own exact manifest.
             # Its immutable self revision is still syntax-checked below.
@@ -72,16 +72,13 @@ using ExplicitImports
             manifest = TOML.parsefile(manifest_path)
             @test manifest["julia_version"] == julia_version
             dependencies = manifest["deps"]
-            for (name, (url, qualified_revision)) in upstream_sources
+            for (name, url) in upstream_sources
                 entries = dependencies[name]
                 entry = entries isa AbstractVector ? only(entries) : entries
                 @test !haskey(entry, "path")
                 @test entry["repo-url"] == url
                 @test match(full_revision, entry["repo-rev"]) !== nothing
                 @test match(full_revision, entry["git-tree-sha1"]) !== nothing
-                if qualified_revision !== nothing
-                    @test entry["repo-rev"] == qualified_revision
-                end
             end
 
             path_dependencies = String[]

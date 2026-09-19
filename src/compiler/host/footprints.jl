@@ -198,7 +198,10 @@ end
 function _leaf_footprint(source, node, record, dimensions)
     kind = node.payload_kind
     if kind in (:state, :variable) &&
-            record.kind in (:SynchronousProcess, :AcceptedCopyProcess)
+            (
+            record.kind in (:SynchronousProcess, :AcceptedCopyProcess) ||
+                record.kind === :FieldState && record.phase isa AfterMCS
+        )
         state = findfirst(candidate -> candidate.identity == node.payload.identity, source.records)
         sample = state === nothing ? nothing : _state_sample_record(source, source.records[state])
         if sample !== nothing && sample.kind in (:SiteState, :FieldState)

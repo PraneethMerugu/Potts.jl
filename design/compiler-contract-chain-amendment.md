@@ -7,7 +7,7 @@ opened PRs, or new merge/release authority.
 ## Start here
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-allocation and dependency graph: **65 identified PRs = 54 planned + eleven
+allocation and dependency graph: **69 identified PRs = 54 planned + fifteen
 demonstrated companions**, following the accepted 2026-09-10
 [composition-first amendment](composition-first-model-roadmap.md). R51–R54 add
 COBREXA/model deliveries, not another compiler-contract PR. R01–R48 retain
@@ -46,6 +46,47 @@ runtime data. Different face configurations and obstacle masks receive
 before/after Kaimon/`code_typed` specialization and IR-shape evidence. Neither
 query execution nor checkerboard arbitration specializes on the completed
 model's owner graph.
+The twelfth companion, **C12 LocalMath**, is the demonstrated bounded runtime
+collection-launch owner. Live Kaimon attribution proved that constructor-provided
+runtime extents created capacity-specific KernelAbstractions `StaticSize`
+identities across compaction, collection, keyed reduction, ordered fold and
+destination grouping. C12 keeps `ndrange` runtime and admits only the existing
+256-lane operation-family workgroup. It is one direct cutover in the sole
+executor, not a launch cache, autotuner, policy hierarchy or backend path.
+The thirteenth, **C13 LocalMath**, is the direct source-order recurrence law
+demonstrated by the exact KA 0.9.42 audit. Source-ordered folds traverse sparse
+physical positions directly, while canonical folds retain their compacted
+prefix. Only those two mathematical traversal laws specialize recurrence;
+ordering callbacks and graph contents do not. It merged as LocalMath PR22 after
+fresh KCT, allocation, full CPU, full real-Metal and independent review, with
+the complete hosted suite green.
+The fourteenth, **C14 LocalMath**, is validation-copy settlement. One prepared
+program-level validation matrix replaces heterogeneous status-tuple
+reconstruction. A nonempty blocking host copy completes the provider prefix;
+empty or aliased representations synchronize explicitly. Receipt failure
+caching, deterministic grouped failure order, exact lease release and fixed-
+relation admission share this sole transfer owner. It is not an event wrapper,
+cache, alternate scheduler or backend-specific scientific path. The
+[LocalMath–KA audit](localmath-kernelabstractions-audit.md) owns the exact source
+contract, boundary atlas and accepted/rejected evidence. It merged as LocalMath
+PR23 at `a26cbfe`.
+The fifteenth, **C15 LocalMath**, is the demonstrated pointwise temporary-
+identity segmentation boundary. A small graph-aware wrapper remains responsible
+for extracting the temporary publications used by one candidate segment; the
+reusable semantic segmentation law receives only that runtime temporary-
+identity set. This removes completed-graph wrapper shape from the reusable
+boundary without changing pointwise mathematics, bounded segment formation or
+the one KernelAbstractions CPU/Metal path. It adds no cache, retained lookup
+table, second graph representation, alternate executor or model-specific
+kernel. C15 follows merged C14 and precedes final R49/R50 and downstream
+pointwise compiler qualification.
+
+The [portable GPU compiler architecture investigation](portable-gpu-compiler-architecture-investigation.md)
+owns the current top-down executable-identity ledger, specialization atlas,
+accepted and rejected compiler hypotheses, and upstream residual-cost record.
+Its demonstrated runtime-parameter-name correction fits R50; it does not add a
+companion or change the 69-PR allocation. Metal remains a hardware witness for
+portable KernelAbstractions code, never a separate scientific executor.
 
 Agents assigned chain work must read the current
 [shared map](consolidated-pr-dependency-map.md) and this note before selecting
@@ -109,6 +150,243 @@ IR, and a bounded specialization family. Any unavoidable dynamic boundary is
 named and kept on the host. Global zero-`Any` SSA is not a goal: intentional
 heterogeneous host orchestration may remain rich when it stops before the
 prepared execution boundary.
+
+### Execution-boundary specialization, launch and transfer law
+
+The specialization budget is semantic, not an accidental reflection of array
+sizes or authored structure. Backend, scalar representation, dimensionality, a
+genuinely different operation family, a small bounded mathematical value shape,
+and a measured bounded workgroup family may specialize. Lattice extent,
+workspace or cell capacity, logical entry count, author names, parameter values,
+identities, relationship contents and the completed model graph remain runtime
+data. Any exception requires a before/after reuse study showing that the added
+execution class is worth its inference, code-generation and cache cost.
+
+### Cardinality-independent execution identity
+
+For a fixed, already-warmed basis of legitimate backend, dimension,
+scalar/storage, mathematical operation, bounded value-shape, ordering/conflict,
+fusion and justified workgroup families, increasing repeated model cardinality
+must not create another device-reachable execution family. Lattice extent,
+capacity, active count, repeated component/tracker/stage/relationship count,
+authored spelling, identities, numerical values, isomorphic renumbering and
+runtime graph contents remain data. Each owner keeps a small hard witness that
+compares one established family at 1 versus 64 repeated instances after its
+basis is warm, plus rename/value controls. The dedicated required compiler job
+and merge/nightly corpus cover the full 1/4/16/64 ladder; 256 is benchmark-only.
+
+The hard contract is reuse of owner-defined stable prepared family/signature
+classes for runtime-only variants and the absence of runtime-cardinality facts
+from their public or owner-private types. Exact MethodInstance object identity,
+KernelAbstractions internals and GPUCompiler jobs are fresh-process review
+evidence, not stable APIs or CI contracts. This is not a promise of zero global
+Julia MethodInstances or zero cold compilation. Stable family reuse is also
+insufficient if one callable emits
+model-sized code: typed IR at each durable device family must remain bounded as
+repeated-instance cardinality grows. The intended cost is proportional to the
+bounded set of legitimate execution families, not sites, cells, declarations,
+graph nodes or repetitions of an existing law.
+
+An owner may replace graph-shaped tuples with compact runtime rows or an
+equivalent cardinality-independent value representation only at the existing
+semantic boundary and only by deleting the displaced representation in the
+same cutover. This does not authorize abstract device dispatch, broad `Any`
+storage, an opcode interpreter, evaluator registry, compiled-kernel cache,
+model-specific kernel or second executor. Host parsing, validation and table
+construction may remain proportional to model size; the device execution
+identity and per-family IR must plateau.
+
+Validation ownership is split deliberately:
+
+| Owner | Required direct evidence |
+| --- | --- |
+| R49/Core | Private narrow JET and AllocCheck fixtures at the tracker/update and maintained/state payloads consumed by its admitted contracts, plus the bounded G06 canary payload boundary. Family-warmed signature reuse must preserve RNG, order, rollback and checkpoint behavior. Later lifecycle, relationship and checkerboard owners define their own families while reusing this boundary law. |
+| R50/Potts | Package/interactive, rename, reorder/renumber and numerical-remake variants lower through public authoring to the same R49 families. JET/AllocCheck applies only at stable narrow lowering/materialization signatures, not whole initialization. |
+| R12/R13 | Whatever measurable execution boundaries implement snapshot evaluation, compatibility/conflict closure, deterministic selection and atomic publication retain bounded family identity and IR across proposal, claim and edge counts. These are semantic responsibilities, not a required phase or kernel layout. An independent CPU oracle and the same portable KernelAbstractions path on real hardware defend winners, RNG, ordering, atomic failure and periodic/shared-owner/relation closure. |
+| G09/R20 | A reusable fresh-process public harness invokes owner-supplied public compiler-health runners/artifacts and aggregates public observations with Chairmarks runtime samples. SnoopCompile/MethodAnalysis owner filters and focused JET/AllocCheck signatures remain inside their owning packages; R20 creates no private cross-package compiler contract. |
+| R52–R54/Models | Real public model combinations extend the shared corpus. Models neither inspects upstream private structs/MethodInstances nor owns compiler or executor machinery. |
+
+Ordinary hard CI may enforce concrete returns, no accidental `Any` argument
+slots at named hot boundaries, owner-defined runtime-variant family/signature
+reuse, narrow JET cleanliness, AllocCheck-clean device
+kernels and contracted inner paths, warmed allocation contracts, and scientific
+CPU/device parity including RNG, ordering, failure atomicity, checkpoint and
+continuation. Total inference events, global or aggregate MethodInstance counts,
+typed statement/call counts, invalidations, rendered type length, first/subsequent
+latency, LLVM/backend time, private GPUCompiler job or pipeline counts, cache or
+sysimage size, throughput and unconstrained allocation bytes remain benchmark
+trends. They must not become brittle CI thresholds or dependencies on private
+compiler APIs.
+
+Every device-reachable function receives the smallest semantic payload that
+explains its signature. Passing a broad runtime, program, analysis result,
+context, tracker store or prepared plan requires measured justification at that
+exact boundary. Dynamic tuple reconstruction, reflection, generic iterator
+machinery and authored graph traversal stop above execution. Authoring objects,
+Symbolics terms, dictionaries, source maps and diagnostic provenance remain on
+the host side of normalization; compact handles, arrays and scalar operation
+facts cross it. This rule improves both compiler tractability and CorePotts
+readability: the function signature states which update, tracker or settlement
+semantics the path actually needs.
+
+LocalMath owns the generic KernelAbstractions launch contract. Core supplies the
+scientific operation payload and runtime extent, but does not select kernels
+from model capacity or graph contents. The default shape is:
+
+```julia
+policy = launch_policy(backend, operation_family, dimensionality)
+kernel = operation_kernel(backend, policy.workgroupsize)
+kernel(payload...; ndrange = runtime_extent)
+```
+
+This is an ownership sketch, not a frozen API. `ndrange` is runtime data.
+Workgroup size comes from a small, measured family keyed only by backend,
+operation family and dimension when a backend contract benefits from it; it
+must not track lattice extent, logical count or capacity. Pointwise, reduction,
+collection, ordered-fold and checkerboard-related laws use this same policy
+owner. Do not add autotuning, a launch cache or a policy class hierarchy without
+a real consumer and evidence. `@inbounds` is permitted only where the function
+locally establishes, or explicitly receives, the indexing invariant. It is not
+a remedy for specialization leakage, oversized payloads or a poor launch
+contract.
+
+Transfer and synchronization ownership is equally explicit:
+
+| Boundary | Sole responsibility |
+| --- | --- |
+| Preparation/materialization | Required host-to-device construction or copy |
+| Execution | Asynchronous kernel ordering on the selected backend |
+| Settlement | The final wait needed before committed results are observed or published |
+| Inspection | Deliberate device-to-host materialization for the requested view |
+| Checkpoint | A durable scientific copy satisfying the declared continuation contract |
+
+No intermediate helper may hide a host round-trip or add an eager synchronization
+for convenience. Adaptation follows the same narrow-payload rule: adapt the
+owned execution view, not a broad program object whose unrelated fields happen
+to be reachable.
+
+The allocation contract follows these owners. Device kernels allocate nothing.
+Warmed fixed-capacity LocalMath/Core inner execution is zero-allocation where
+Julia and the backend permit it. Unsaved Potts orchestration removes accidental
+allocations and may not regress. Requested saved snapshots, histories,
+solutions, checkpoints, inspection copies and host/device transfers may allocate
+only in proportion to the scientific state explicitly requested. Construction,
+compilation and capacity growth are recorded separately.
+
+CPU and GPU retain one semantic KernelAbstractions execution path. A benchmark,
+GPU-only, compatibility or fast executor is forbidden unless a demonstrated
+backend contract requires a backend-specific implementation of the same law.
+Raw Kaimon comparisons diagnose ownership, inference and specialization; they
+are reviewed evidence rather than brittle CI thresholds. Actual Metal compile
+and behavioral tests remain the authority for Metal.
+
+### Current KCT optimization arc
+
+The qualified investigation tuple is LocalMath `cca004b9`, CorePotts
+`b4e5bda5`, Potts `2d317fc0`, plus the accepted Potts saved-state improvement
+`40b2ddf3`. Three workstreams run from fresh Kaimon MCP sessions and isolated
+worktrees:
+
+| Workstream | Boundary and hypothesis | Required controls and stop condition | Delivery owner |
+| --- | --- | --- | --- |
+| LocalMath launch identity | Attribute pointwise, reduction, collection, ordered-fold and checkerboard launch specialization; test whether runtime `ndrange` plus a bounded backend/operation/dimension workgroup family removes capacity/extent coupling. | Capacity 16/24/32 at fixed extent; extent 6/8/16 at fixed capacity; workgroups 32/64/128/256 where supported; CPU/Metal; stable operation with changed runtime graph contents. Stop without a change if kernel identity is already bounded or real Metal regresses. | One dense LocalMath execution-boundary companion only if demonstrated. |
+| LocalMath preparation payload | Rank binding slice, slot projection, draft/evaluator admission, Adapt, StructArray, relationship, reduce/collect/fold and publication boundaries; narrow only a dominant scaling owner. | Stage-count and heterogeneous-operation ladders, renamed identities, changed runtime capacities, preparation versus execution displacement, unchanged diagnostics. Stop if total planning-through-execution inference does not improve without shifting cost. | Same conditional LocalMath companion when coherent with launch work; otherwise no PR. |
+| Core execution payload | Decompose tracker, descriptor, maintained, checkerboard, lifecycle, relationship, snapshot, settlement and adaptation paths; replace broad runtime/context passage only at the first measured owner. | Rename/renumber, capacity/extent/count ladders, graph-content variants, sequential/checkerboard, CPU/Metal, RNG/failure/checkpoint equivalence and allocation decomposition. Stop on semantic, replay or backend regression. | R49; Potts-facing lowering consequences remain R50. |
+
+For each candidate, capture fresh-session inference events, owned and matching
+MethodInstances, optimized typed statements/calls and root instability,
+AllocCheck at stable signatures, repeated warmed observed allocation, execution
+type identity, invalidations, and LLVM/GPU IR only when it localizes a surviving
+hostile construct. Compare rename, isomorphic renumbering, capacity, extent,
+operation-family and CPU/Metal variants one axis at a time. An independent
+reviewer and real-Metal validator re-run the final candidate. A failed experiment
+or evidence harness creates no production PR.
+
+The starting corrected observation is 331 fresh inference events when capacity
+changes from 16 to 24 at fixed 6×6 extent, versus 31 when extent changes from
+6×6 to 8×8 at fixed capacity 16, while Potts/Core/runtime/workspace/LocalMath
+plan types remain identical. Attribution places the former events in
+LocalMath/KernelAbstractions CPU `StaticSize{24/25}` lifecycle-compaction launch
+specializations. This is evidence for the launch investigation, not yet proof
+of a defect or authorization for a companion. Earlier approximate counts must
+not be substituted for these controlled values.
+
+The follow-on compiled-artifact reuse investigation qualified C15 on merged C14
+`a26cbfe`; LocalMath PR24 merged as
+`a1d60d1a6137015763059851a878dea6dbec7991`. Fresh registered KCT
+comparisons isolated the pointwise segmentation boundary and supported the
+narrow wrapper/extracted-identity cut rather than a kernel cache or universal
+evaluator. The candidate preserves 1,942 passing
+LocalMath behavioral CPU assertions; the remaining Aqua failure is the same
+baseline environment failure while resolving KernelAbstractions' optional
+`EnzymeCore` weak dependency, not a behavioral regression. The exact real-Metal
+suite passes 592/592 with scalar indexing disabled, and the Core downstream
+suite passes 17,658/17,658. Potts canaries pass 99/99; downstream Metal Core
+checkerboard passes 83/83 and continuation passes 116/116. At observation after
+merge, hosted `changes`, `macos-smoke`, `docs` and `scientific` are green;
+`package` and `metal` remain pending, and `macos-package` is skipped by its PR
+condition. Pending results are not reported as qualification. LocalMath `main`
+now requires pull requests with zero approving reviews, enforces protection for
+administrators, and uses strict required checks `changes`, `package`,
+`scientific`, `macos-smoke`, `docs` and `metal`.
+
+### Upstream contract audit
+
+The 2026-09-16 upstream audit supports the owner split above and constrains the
+experiments:
+
+- [KernelAbstractions](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/)
+  represents kernel identity with backend, workgroup size, `ndrange` and
+  function, accepts runtime `ndrange`, launches asynchronously and exposes an
+  explicit backend `synchronize`. Its backend contract also owns allocation,
+  copying and argument conversion. This supports a bounded launch family and a
+  settlement-owned final wait; it does not prove which workgroup size is best.
+- [Atomix](https://juliaconcurrent.github.io/Atomix.jl/dev/) supplies portable
+  atomic array-element operations and explicit memory ordering. It can implement
+  an already selected update/arbitration law, but atomic availability is not a
+  proof that effects commute, that a winner law is deterministic or that bounds
+  checks may be removed.
+- [Adapt](https://github.com/JuliaGPU/Adapt.jl) distinguishes structural wrapper
+  reconstruction from innermost storage conversion. Adapt the narrow execution
+  view once at its owner; recursively adapting a broad runtime is not a neutral
+  convenience because every reachable field enters transfer and specialization
+  analysis.
+- [StructArrays](https://juliaarrays.github.io/StructArrays.jl/stable/) provides
+  structure-of-arrays storage and reconstructs element structs on demand;
+  `replace_storage` can move columns to backend storage. This is a useful layout
+  option, not permission to iterate dynamic rows or rebuild heterogeneous records
+  in a device boundary.
+- [StaticArrays](https://juliaarrays.github.io/StaticArrays.jl/stable/) encodes
+  size in the type and warns against rapidly changing or large shapes because
+  recompilation and unrolled code size can dominate. Reserve it for genuinely
+  small mathematical values, never runtime capacity or model graph shape.
+- [Metal](https://metal.juliagpu.org/stable/usage/overview/) supplies the real
+  Apple-GPU array/kernel backend. Successful KernelAbstractions typed code is not
+  a Metal qualification; compile and behavioral tests with scalar indexing
+  disabled remain authoritative.
+- [Symbolics `build_function`](https://docs.sciml.ai/Symbolics/stable/manual/build_function/)
+  is an explicit symbolic-to-numerical compilation boundary and can emit static
+  outputs. Potts keeps Symbolics terms and author structure above execution,
+  selects output representation deliberately and does not let generated author
+  expression shape become a model-specific kernel family.
+- [SymbolicIndexingInterface](https://docs.sciml.ai/SymbolicIndexingInterface/stable/)
+  separates symbolic lookup from storage indices and supports a cache owned by
+  the system. Use it at authoring/inspection and native-solver boundaries; do
+  not carry symbolic caches or lookup objects into CPM kernels.
+- [DynamicQuantities](https://ai.damtp.cam.ac.uk/dynamicquantities/stable/)
+  demonstrates the latency benefit of storing dimensions as values rather than
+  specializing on every unit exponent. Potts performs unit validation above
+  execution and lowers compatible numerical values; a deliberate small physical
+  representation type may specialize, authored unit spelling may not.
+- [PrecompileTools](https://julialang.github.io/PrecompileTools.jl/stable/)
+  can cache representative inferred and runtime-dispatched workloads and can
+  recompile invalidations, but upstream recommends fixing poor inference and
+  invalidations first. Use a small public corpus only after execution identities
+  stabilize; do not precompile a combinatorial model matrix or conceal a leaking
+  specialization surface.
+
+These are design inputs, not new runtime dependencies or blanket endorsements.
+Exact package-version behavior is rechecked in the candidate environment.
 
 The contributor workflow owns the general declaration: every PR is `none`,
 `host-only`, or `device-reachable`. For this chain, Kaimon is the primary evidence
@@ -624,8 +902,19 @@ genuinely reusable LocalMath mathematical law. Only that narrow demonstrated
 gap may add a LocalMath companion. R10 has now demonstrated exactly one such
 gap: C09 atomic keyed rebuild, raising the allocation to 63. The later
 maintained-query audit demonstrated C10/C11 Cartesian domain ownership, raising
-the allocation to 65. This does not authorize additional companions without
-another real consumer and a coherent owner-law gap.
+the allocation to 65. The controlled launch investigation then demonstrated
+C12, raising it to 66. This does not authorize additional companions without
+another real consumer and a coherent owner-law gap. The subsequent exact
+LocalMath–KA audit demonstrated two distinct reusable owner laws: C13 direct
+source-order recurrence raised the allocation to 67, and C14 validation-copy
+settlement raised it to 68. Their different mathematical and provider-
+settlement responsibilities prevent combining them merely to preserve a count.
+The subsequent compiled-artifact reuse investigation then demonstrated C15:
+graph-aware extraction and reusable pointwise segmentation were fused at a
+boundary that needed only the runtime temporary-identity set. This narrowly
+owned LocalMath correction raises the allocation to 69 without changing the
+specialization law: names, identities and graph contents remain values, and the
+bounded pointwise operation family remains the executable identity.
 
 The owning G06 suite includes exact shared-owner conflicts and positive
 independence controls. Periodic moment cases whose image labels differ only by
@@ -714,7 +1003,7 @@ production path and delete the displaced prototype when appropriate.
 No extra framework, cosmetic cleanup, or placeholder vendor PR is allocated.
 A demonstrated missing event-settlement or reusable transfer/publication
 primitive earns a companion in its actual owner and updates the count.
-Existing companions are already counted in the **65 currently
+Existing companions are already counted in the **69 currently
 identified PRs**. That identified count is not a ceiling.
 
 A world-class completion means promised public science actually works, laws are

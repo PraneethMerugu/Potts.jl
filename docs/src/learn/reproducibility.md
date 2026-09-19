@@ -5,6 +5,79 @@ requested observations. SymbolicIndexingInterface getters work on problems,
 integrators, saved states, and solutions. A declared-but-unsaved observation
 raises a different error from an unknown identity.
 
+Use `SymbolicIndexingInterface.setu(integrator, state)` to build a setter for
+one whole canonical state, then call it as `setter(integrator, value)`.
+An array-valued symbolic variable accepts its whole fixed-array value, and a
+product accepts its complete named tuple. A tuple of targets builds one
+transaction, for example `setu(integrator, (amount, polarity))(integrator,
+(2.0, SVector(1.0, 0.0)))`. Named target tuples also accept named replacement
+values, including a subset of the selected names.
+An empty named subset is a no-op after settlement. A setter may also be built
+from the scheduled `PottsSystem` or `PottsProblem` and reused with its
+integrators. Cached setters contain state and parameter indices: reuse requires the same
+scheduled system and schema, not an unrelated model. Rebuild setters after
+changing or replacing the model.
+
+Site values use the complete lattice-shaped buffer; cell values use every
+compiled cell slot, including inactive slots. History values are chronological
+tuples of source-shaped samples, oldest first, just as in initial conditions.
+Replacement values and buffers are supplied on the host, including when the
+integrator publishes into device storage; arbitrary device-array inputs are not
+established by this workflow.
+Values use the declaration's logical type, shape and unit references. Supply
+compatible quantities for dimensional states; saved normalized numbers do not
+implicitly acquire physical units when passed back to a setter.
+
+Mutation first settles pending work, validates and converts every replacement,
+then publishes through CorePotts' parameter and state owners, with no observer
+between the two publications. Invalid values leave published values unchanged;
+an ordinary host observation-refresh error restores the earlier values. The current `integrator.u` is refreshed, while
+previously saved snapshots remain detached. A late failing ordinary callback
+restores earlier state and parameter edits at that callback boundary. A failed
+integrator cannot be repaired with a setter. Backend execution or copy failures
+do not carry a general rollback guarantee.
+
+State setters target stored states, not ownership, observations, derived expressions,
+individual state-vector elements or product fields. `setu` also accepts parameters and
+mixed batches, for example `setu(integrator, (amount, rate))(integrator, (2.0, 0.5))`.
+`setp` selects only parameters. Both use one conversion/publication boundary.
+Ordinary parameter-containing batches start from the published parameter values
+and discard any pending parameter batch only after success, independently of
+whether the setter was built from a system, problem or integrator.
+`setp(provider, parameters; run_hook=false)` instead stages an atomic edit to a
+copy of the existing pending batch. `SymbolicIndexingInterface.finalize_parameters_hook!`
+publishes that batch. Failed staging or publication preserves the previous pending
+values; pure-state edits leave them alone. Finalize pending edits before a
+checkpoint if they should participate in continuation.
+To change a field, construct and replace its whole logical value. Initial callback
+edits occur before an explicit `AtMCS(0)` history capture; checkpoint restoration
+preserves the stored history and does not repeat that capture.
+
+Runtime parameters may be scalars or declared nonempty fixed vectors, for example
+`@parameters coefficients[1:2] = [2.0, 3.0]`. The whole `coefficients` is one
+logical parameter: `getp(integrator, coefficients)(integrator)` returns an immutable
+`SVector`, while `getp(integrator, coefficients[2])(integrator)` reads one component.
+Use `setp(integrator, coefficients)(integrator, [4.0, 5.0])` for a whole-vector
+replacement or select literal components in the same transaction API. Selecting
+both a whole parameter and one of its components, or selecting a component twice,
+is rejected as an overlapping update. The same rule applies to initial parameter
+pairs and `remake_buffer` overlays. `remake(problem; p=...)` overlays the source
+problem's values: unspecified parameters and vector components are preserved,
+and the original immutable problem is unchanged.
+
+In this pre-1.0 API, `parameter_values(integrator)` returns a detached immutable
+tuple of logical values, in the order of `parameter_symbols`; it is not a writable
+view of Core's scalar buffer. Numeric public parameter indices use that logical
+order. Setters, initial values and remakes validate each vector's exact declared
+shape and homogeneous units before publication. Supply physical quantities for
+dimensional coefficients, including when changing values previously read in
+normalized simulation units. Saved histories and checkpoint restoration preserve
+the logical grouping without creating a second live parameter store.
+
+Whole-vector expressions and literal vector-component indexing use the ordinary
+operation catalog. Tensor-valued runtime parameters, dynamic indexing and
+heterogeneous product parameters are not established by this fixed-vector surface.
+
 `checkpoint(integrator)` captures the logical continuation state at a settled
 boundary. Restore uses `init(...; checkpoint=...)` with the same problem and
 execution identity. Native state, lifecycle generations,

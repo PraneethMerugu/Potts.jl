@@ -19,26 +19,27 @@ scientific contract.
 - [Rule and model semantics](potts-rule-and-model-semantics.md)
 - [Decision records](decisions/README.md)
 
+## Design vision
+
+- [Ideal API vision](ideal_api_vision.md) — aspirational, non-normative direction
+  with concrete scoped-authoring, scientific ownership, native coupling,
+  lifecycle, numerical-policy and ordinary behavioral-test requirements.
+- [Authoring and model-ecosystem PR plan](../design/authoring-and-model-ecosystem-plan.md)
+  — feature ownership, dense coordinated changes, PottsModels tutorials and CI.
+- [Consolidated PR dependency map](../design/consolidated-pr-dependency-map.md)
+  — enumerated repository PRs, coordinated dependencies, coverage and count risks.
+- [Compiler-contract chain amendment](../design/compiler-contract-chain-amendment.md)
+  — user-approved G05C/R49/R50 scope and pressure-tested obligations across the
+  chain; planned work, not an implementation or qualification claim.
+- [End-state API overview and single-file examples](../design/authoring-api-overview.md)
+  — semantic walkthroughs, not final syntax or currently runnable APIs.
+- [Authoring design research](../design/authoring-design-research.md)
+  — primary-source rationale, pitfalls and implementation uncertainties.
+
 Some older interface documents contain superseded names alongside surviving
 scientific requirements. The charter, accepted decision records, and the
 current LocalMath contract take precedence for package identity, execution
 architecture, and contributor workflow.
-
-## Proposed authoring design
-
-- [Ideal authoring API vision](ideal_api_vision.md)
-- [Authoring and model ecosystem feature plan](../design/authoring-and-model-ecosystem-plan.md)
-- [Consolidated PR dependency map](../design/consolidated-pr-dependency-map.md)
-- [Compiler-contract chain amendment](../design/compiler-contract-chain-amendment.md)
-- [Composition-first model roadmap](../design/composition-first-model-roadmap.md)
-- [End-to-end API overview](../design/authoring-api-overview.md)
-- [Design research and decisions](../design/authoring-design-research.md)
-- [Model-class API atlas](../design/model-class-api-atlas.md)
-- [PR-chain progress](../design/pr-chain-progress.md)
-
-These describe proposed interfaces and delivery scope, not already implemented
-runtime guarantees. The declaration examples in `design/examples/` are future
-API sketches; current executable scientific tutorials live in PottsModels.
 
 ## Historical records
 

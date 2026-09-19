@@ -5,6 +5,7 @@ using Potts
 import KernelAbstractions
 
 const METAL_SEMANTIC_WITNESSES = (
+    "discrete_field_rhs.jl",
     "extension_load_order.jl",
     "problem_construction.jl",
     "cartesian_domain_authoring.jl",
@@ -12,8 +13,12 @@ const METAL_SEMANTIC_WITNESSES = (
     "scheduled_process_draws.jl",
     "cell_polarity_dynamics.jl",
     "fixed_vector_operations.jl",
+    "history_structured_samples.jl",
     "product_fields.jl",
     "cell_processes.jl",
+    "logical_state_mutation.jl",
+    "mixed_symbolic_mutation.jl",
+    "vector_parameters.jl",
     "scoped_quantities.jl",
     "corepotts_relationship_energy.jl",
     "corepotts_relationship_stages.jl",

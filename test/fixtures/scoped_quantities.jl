@@ -1,5 +1,7 @@
 using StaticArrays
-using Potts: anchor_value
+using Symbolics: @variables
+using Test: @test
+using Potts: anchor_value, @statements
 
 function _scope_population(name, increment; explicit = false)
     @variables polarity[1:2]

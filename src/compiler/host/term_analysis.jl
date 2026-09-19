@@ -66,6 +66,8 @@ function _analyze_term_graph(
             if variable isa Symbolics.Arr || variable isa StaticArrays.StaticArray
                 shape[index] = Tuple(size(variable))
             end
+        elseif node.payload isa ParameterBindingPayload
+            shape[index] = _parameter_shape(node.payload.value)
         end
         if transfer !== nothing
             for role in operation_roles[index]
@@ -130,7 +132,8 @@ function _analyze_term_graph(
             end
         end
         result_type[index] = if node.payload_kind === :literal
-            typeof(node.payload.value)
+            value = node.payload.value
+            typeof(value isa DynamicQuantities.UnionAbstractQuantity ? DynamicQuantities.ustrip(value) : value)
         elseif node.payload isa ParameterBindingPayload
             _symbolic_result_type(node.payload.value)
         elseif binding_record !== nothing
@@ -175,6 +178,31 @@ function _analyze_term_graph(
                 result_type[operand_indices[2]],
                 result_type[operand_indices[3]],
             )
+        elseif (
+                array_operand = _scalar_array_product_operand(
+                    node,
+                    Tuple(result_type[item] for item in operand_indices)
+                )
+            ) !== nothing
+            source_index = operand_indices[array_operand]
+            scalar_index = operand_indices[3 - array_operand]
+            source_shape = shape[source_index]
+            source_shape isa Tuple && !isempty(source_shape) &&
+                all(size -> size isa Integer && !(size isa Bool) && size > 0, source_shape) ||
+                throw(
+                PottsValidationError(
+                    :analysis, (
+                        PottsDiagnostic(
+                            :invalid_scaled_array_shape, record.identity, String(node.operation),
+                            record.identity.path, "a declared nonempty fixed array shape",
+                            repr(source_shape), (), record.source
+                        ),
+                    )
+                )
+            )
+            shape[index] = source_shape
+            leaf_type = promote_type(eltype(result_type[source_index]), result_type[scalar_index])
+            StaticArrays.SArray{Tuple{source_shape...}, leaf_type, length(source_shape), prod(source_shape)}
         elseif transfer.result_rule in (:preserve_numeric, :promote_numeric) &&
                 !isempty(operand_indices)
             promote_type((result_type[item] for item in operand_indices)...)

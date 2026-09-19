@@ -41,7 +41,7 @@ end
         save_everystep = true,
     )
     cpu = run(problem, CPUBackend())
-    device = run(problem, MetalBackend())
+    device = run(problem, Potts.MetalBackend())
     @test cpu.retcode == device.retcode == SciMLBase.ReturnCode.Success
     @test device.stats.accepted > 0
     @test map(state -> Array(state.ownership), device.u) == getfield.(cpu.u, :ownership)
@@ -50,15 +50,15 @@ end
     @test any(!iszero, samples)
     @test all(value -> iszero(value) || 0.25f0 <= value <= 0.75f0, samples)
 
-    renamed = run(_authored_randomness_problem(:renamed_noise), MetalBackend())
+    renamed = run(_authored_randomness_problem(:renamed_noise), Potts.MetalBackend())
     @test renamed.retcode == SciMLBase.ReturnCode.Success
     @test Array(last(renamed).ownership) == Array(last(device).ownership)
     @test Array(last(renamed)[:sample]) != samples
 
-    integrator = init(problem, CheckerboardSweepCPM(); backend = MetalBackend(), scalar_type = Float32)
+    integrator = init(problem, CheckerboardSweepCPM(); backend = Potts.MetalBackend(), scalar_type = Float32)
     step!(integrator)
     resumed = init(
-        problem, CheckerboardSweepCPM(); backend = MetalBackend(), scalar_type = Float32,
+        problem, CheckerboardSweepCPM(); backend = Potts.MetalBackend(), scalar_type = Float32,
         checkpoint = checkpoint(integrator),
     )
     step!(integrator)

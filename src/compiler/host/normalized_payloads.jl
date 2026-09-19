@@ -90,7 +90,7 @@ mutable struct _TermGraphBuilder
     diagnostics::Vector{PottsDiagnostic}
 end
 
-function _qualified_source_reference(reference::FrozenSourceReference)
+function _qualified_source_reference(reference::Union{FrozenSourceReference, _SourceReferenceOccurrence})
     return _map_symbolic_payload(
         value -> _namespace_symbolic_value(value, reference.path[2:end]),
         reference.value,
@@ -98,6 +98,10 @@ function _qualified_source_reference(reference::FrozenSourceReference)
 end
 
 function _compiler_leaf_kind(value, source::FrozenSourceGraph)
+    if value isa DynamicQuantities.UnionAbstractQuantity
+        return SymbolicIndexingInterface.symbolic_type(DynamicQuantities.ustrip(value)) isa
+            SymbolicIndexingInterface.NotSymbolic ? :literal : :symbolic_leaf
+    end
     scoped = _resolved_scoped_anchor(source, value)
     scoped === nothing || return scoped.kind
     any(source.references) do reference

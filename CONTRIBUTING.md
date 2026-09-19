@@ -163,10 +163,8 @@ julia --project=integration integration/runtests.jl
 
 The normal integration environment exercises functional behavior across its
 declared compatibility ranges. Exact native checkpoint replay is tested
-separately in `integration/replay`; its pinned Julia, dependency graph, and
-ARM macOS platform are part of that stronger replay claim and do not restrict
-ordinary functional execution. Use the qualified platform documented in
-`integration/replay/README.md` for that suite.
+separately in `integration/replay`; its pinned Julia and dependency graph are
+part of that stronger replay claim and do not restrict ordinary execution.
 
 The package suites include Aqua checks. Published stochastic models test both
 exact fixed-seed replay and seed-sensitive, bounded behavior. A random seed is
@@ -199,45 +197,32 @@ julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
 ```
 
-The manual executes bounded authoring and integration examples, including the
-custom-model workflow. PottsModels owns complete scientific model factories and
-tutorials; MakiePotts and backend suites own rendering and device behavior.
+The manual executes bounded serial Wortel, Merks, and OpenVT integration programs. The
+separate Makie package and backend suites exercise rendering; the published-
+model documentation does not claim to render figures or reproduce the papers.
 
 ## Continuous integration
 
-Every PR runs the complete Potts CPU package suite, a macOS public-trajectory
-smoke, and the strict documentation build. Integration, closed-profile replay,
-and Metal tests also run unless the **whole PR diff** changes only top-level
-prose/metadata or Markdown under `spec/` and `design/`. Renames are considered
-as deletion plus addition. Executable documentation, examples, tests, dependency
-files, workflows, and unknown paths select those execution jobs. An unavailable
-diff selects all jobs; a failed or malformed selector fails the selected jobs
-instead of allowing a silent skip. Main and manual runs select all execution
-jobs and the complete macOS package suite. The weekly sibling-main run is a
-separate diagnostic of floating upstream branches.
+Pull requests target the four package suites, independently runnable
+integration families, applicable platform installation smokes, and the active
+documentation build. The hosted `macos-15` workflow runs the functional Metal
+profile; the runner rejects immediately when Metal is unavailable. Local
+real-GPU runs remain useful for hardware-specific investigation. Benchmarks
+remain diagnostic and are run when their measured path changes.
 
-Ordinary CI and documentation use the same default LocalMath and CorePotts
-commit selection. Their manual inputs accept only full lowercase commit SHAs;
-supply the same pair when testing a cross-package change, and inspect the
-printed source revisions. These source selections make a reviewed candidate
-reproducible without narrowing ordinary package compatibility or claiming an
-exact replay guarantee for every resolved dependency environment.
-
-The separate `exact-replay` and `metal` jobs retain their committed upstream
-manifest selections; candidate inputs do not silently replace those profiles.
-Run the real-Metal semantic tests independently from performance measurements:
+Run real-Metal semantic tests independently from performance measurements:
 
 ```sh
-julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
 julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
 ```
 
-Use Julia 1.12.6. Hosted `macos-15` runs require functional Metal and fail when it
-is unavailable. The runner includes Potts-owned extension loading, symbolic
-relationship authoring, lifecycle authoring, and native-component tests in its
-Julia process. CorePotts and LocalMath own their runtime and mathematical tests.
-Local real-GPU runs remain useful for hardware-specific investigation;
-performance campaigns are separate diagnostic measurements.
+The runner covers Potts-owned extension loading, symbolic relationship
+authoring, lifecycle authoring, and native-component execution. Each witness
+runs in a fresh Julia process, and the runner's checked inventory is the sole
+authority for the semantic set. CorePotts and LocalMath qualify their own
+runtime and mathematical semantics in their standalone repositories.
+Performance campaigns remain separate. Use Julia 1.12.6 for this command; do
+not invoke the Metal environment through a different Julia release channel.
 
 Dispatch `Ecosystem integration` with full commit SHAs for LocalMath, CorePotts,
 Potts, and MakiePotts to test a cross-repository candidate together. To include
@@ -258,6 +243,30 @@ workflow does not merge repositories or make a multi-repository change atomic.
 It does not impose release-version inventories, spelling scans, or additional
 qualification paperwork.
 
+## Investigating compound-model compilation
+
+Run `benchmark/compound_compilation.jl` in an environment that develops the
+checkout being measured. Run each combination in a fresh Julia process:
+
+```sh
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model checkerboard
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site checkerboard
+```
+
+Replace `ENV` with the actual package environment. The diagnostic separates
+authoring, structural compilation, scheduled problem construction,
+initialization, first and subsequent steps, and repeated initialization. Julia's
+`@time` reports compilation time and cumulative allocations; allocations are
+not peak memory. Package loading occurs before the measured sections. Numerical
+swap, ownership, and clock checks run outside the timed sections.
+
+Record Julia/package versions and machine load with the output. Use an idle
+machine and repeated fresh processes for comparisons; concurrent test runs can
+distort timings. These measurements guide profiling, not pass/fail thresholds.
+
 Current specifications and decisions live under `spec/`. Historical interviews
-and evidence under `design/audits/`, and retired scripts under
-`scripts/archive/`, describe earlier states, not active development gates.
+and evidence under `design/audits/`, and retired qualification scripts under
+`scripts/archive/`, document earlier repository states but are not active
+development gates.
