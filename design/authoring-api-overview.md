@@ -27,6 +27,19 @@ values are illustrative nondimensional choices, not a validated biological model
 The amount of commentary in the long file is tutorial material, not required
 authoring ceremony.
 
+The [model-class API atlas](model-class-api-atlas.md) maps the fourteen discussed
+model families onto these contracts and the existing MethodOfLines/native APIs.
+It distinguishes established syntax, planned extensions and unresolved interfaces;
+it does not add a second authoring API or claim complete paper reproductions.
+
+The [composition-first model roadmap](composition-first-model-roadmap.md)
+provides the researched scientific corrections, accepted existing-PR changes,
+additional deliveries and final owners for all fourteen witnesses. The user
+accepted this amendment on 2026-09-10 and confirmed COBREXA.jl. The canonical map
+now allocates 62 identified PRs, including R51–R54 and eight demonstrated
+companions; API spellings below remain
+prospective wherever their implementation has not been demonstrated.
+
 ## Ergonomic target: the long file is a semantic walkthrough
 
 The strengthened [ideal spec](../spec/ideal_api_vision.md) and

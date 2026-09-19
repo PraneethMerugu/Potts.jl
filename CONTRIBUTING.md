@@ -75,6 +75,56 @@ Before handing off a change, check:
 
 Resolve any affirmative answer as part of the same change.
 
+## Compiler tractability
+
+Every pull request declares its compiler impact as `none`, `host-only`, or
+`device-reachable`. Classify the reachable execution changed by the pull
+request, not merely the repository or source file: a model composition can be
+device-reachable even when it does not edit compiler source.
+
+- `none` means the change cannot alter executable construction,
+  specialization, or a device-compiled path. State the reason briefly.
+- `host-only` means changed execution ends at a named host boundary. Primary
+  Kaimon before/after evidence is required when the change affects lowering,
+  generated execution types, specialization-heavy generic code, or compiler
+  preparation.
+- `device-reachable` means a changed method, value, payload, lowering, or
+  authored composition can participate in device specialization. Primary Kaimon
+  before/after evidence and the applicable real-device execution are required,
+  subject to the exact-candidate fallback below.
+
+Kaimon is the primary probe. When it cannot attach to the exact candidate
+worktree, optimized `code_typed` or KernelAbstractions typed-code output is an
+accepted fallback only when the reason, exact tuple, unchanged control, common
+metric schema and checked-in reproducible runner are recorded.
+
+Compiler evidence records the exact source and dependency revisions, a
+representative changed boundary, and a representative unchanged control. Report
+typed-statement and call counts, inference/result concreteness, specialization
+or generated-code growth, root versus propagated type erasure, boundary payload
+size and field provenance, and relevant compilation allocation/time where
+practical. State which semantic decision moved into normalization/preparation,
+which recipe family and narrow state view execute it, and which broad authority
+or path was deleted. Record the observable scientific, allocation,
+rollback/continuation and declared bitwise/replay guarantees preserved. Separate
+construction/preparation, first compilation or launch, and warm execution.
+Kaimon and exact-typed inspection are diagnostic evidence; actual Metal
+execution remains authoritative for the supported Metal path.
+
+An unrelated control that grows materially is a specialization-coupling signal.
+Explain and localize the growth, then remove it or document why the changed
+scientific/execution contract necessarily reaches that control. Do not impose a
+fixed percentage or IR-reduction quota: lost inference, newly reachable host
+work or allocation, a changed specialization class, unexplained cross-kernel
+growth, or compiler resource failure can block a change independently of a raw
+count. Conversely, proportional, localized growth may be justified by a real
+feature.
+
+Use the small canonical compiler probes owned by the current compiler-contract
+plan when they cover the changed boundary. Add a new probe only for a genuinely
+new compiler family or supported conjunction; do not create a parallel test
+inventory, optimizer framework, or policy-gate script.
+
 ## Test
 
 During development, start with the smallest self-contained test file that owns
@@ -113,10 +163,8 @@ julia --project=integration integration/runtests.jl
 
 The normal integration environment exercises functional behavior across its
 declared compatibility ranges. Exact native checkpoint replay is tested
-separately in `integration/replay`; its pinned Julia, dependency graph, and
-ARM macOS platform are part of that stronger replay claim and do not restrict
-ordinary functional execution. Use the qualified platform documented in
-`integration/replay/README.md` for that suite.
+separately in `integration/replay`; its pinned Julia and dependency graph are
+part of that stronger replay claim and do not restrict ordinary execution.
 
 The package suites include Aqua checks. Published stochastic models test both
 exact fixed-seed replay and seed-sensitive, bounded behavior. A random seed is
@@ -149,45 +197,32 @@ julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
 ```
 
-The manual executes bounded authoring and integration examples, including the
-custom-model workflow. PottsModels owns complete scientific model factories and
-tutorials; MakiePotts and backend suites own rendering and device behavior.
+The manual executes bounded serial Wortel, Merks, and OpenVT integration programs. The
+separate Makie package and backend suites exercise rendering; the published-
+model documentation does not claim to render figures or reproduce the papers.
 
 ## Continuous integration
 
-Every PR runs the complete Potts CPU package suite, a macOS public-trajectory
-smoke, and the strict documentation build. Integration, closed-profile replay,
-and Metal tests also run unless the **whole PR diff** changes only top-level
-prose/metadata or Markdown under `spec/` and `design/`. Renames are considered
-as deletion plus addition. Executable documentation, examples, tests, dependency
-files, workflows, and unknown paths select those execution jobs. An unavailable
-diff selects all jobs; a failed or malformed selector fails the selected jobs
-instead of allowing a silent skip. Main and manual runs select all execution
-jobs and the complete macOS package suite. The weekly sibling-main run is a
-separate diagnostic of floating upstream branches.
+Pull requests target the four package suites, independently runnable
+integration families, applicable platform installation smokes, and the active
+documentation build. The hosted `macos-15` workflow runs the functional Metal
+profile; the runner rejects immediately when Metal is unavailable. Local
+real-GPU runs remain useful for hardware-specific investigation. Benchmarks
+remain diagnostic and are run when their measured path changes.
 
-Ordinary CI and documentation use the same default LocalMath and CorePotts
-commit selection. Their manual inputs accept only full lowercase commit SHAs;
-supply the same pair when testing a cross-package change, and inspect the
-printed source revisions. These source selections make a reviewed candidate
-reproducible without narrowing ordinary package compatibility or claiming an
-exact replay guarantee for every resolved dependency environment.
-
-The separate `exact-replay` and `metal` jobs retain their committed upstream
-manifest selections; candidate inputs do not silently replace those profiles.
-Run the real-Metal semantic tests independently from performance measurements:
+Run real-Metal semantic tests independently from performance measurements:
 
 ```sh
-julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
 julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
 ```
 
-Use Julia 1.12.6. Hosted `macos-15` runs require functional Metal and fail when it
-is unavailable. The runner includes Potts-owned extension loading, symbolic
-relationship authoring, lifecycle authoring, and native-component tests in its
-Julia process. CorePotts and LocalMath own their runtime and mathematical tests.
-Local real-GPU runs remain useful for hardware-specific investigation;
-performance campaigns are separate diagnostic measurements.
+The runner covers Potts-owned extension loading, symbolic relationship
+authoring, lifecycle authoring, and native-component execution. Each witness
+runs in a fresh Julia process, and the runner's checked inventory is the sole
+authority for the semantic set. CorePotts and LocalMath qualify their own
+runtime and mathematical semantics in their standalone repositories.
+Performance campaigns remain separate. Use Julia 1.12.6 for this command; do
+not invoke the Metal environment through a different Julia release channel.
 
 Dispatch `Ecosystem integration` with full commit SHAs for LocalMath, CorePotts,
 Potts, and MakiePotts to test a cross-repository candidate together. To include
@@ -232,5 +267,6 @@ machine and repeated fresh processes for comparisons; concurrent test runs can
 distort timings. These measurements guide profiling, not pass/fail thresholds.
 
 Current specifications and decisions live under `spec/`. Historical interviews
-and evidence under `design/audits/`, and retired scripts under
-`scripts/archive/`, describe earlier states, not active development gates.
+and evidence under `design/audits/`, and retired qualification scripts under
+`scripts/archive/`, document earlier repository states but are not active
+development gates.

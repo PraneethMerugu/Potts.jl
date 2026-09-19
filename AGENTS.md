@@ -75,6 +75,99 @@ These instructions apply to the complete repository.
   do CPU and GPU still share the same semantic KernelAbstractions path; and is
   every claimed guarantee directly exercised? Resolve any yes before handoff.
 
+## Ecosystem PR-chain planning
+
+For PR-chain work, read the current shared
+`design/consolidated-pr-dependency-map.md`,
+`design/compiler-contract-chain-amendment.md`,
+`design/composition-first-model-roadmap.md`, and `design/pr-chain-progress.md`
+before selecting work or changing shared compiler contracts. The canonical
+planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
+existing package worktrees may contain older snapshots. The user-approved
+allocation is 69 identified PRs (R01–R54 plus fifteen companions), including G05C
+(R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
+The seventh companion is the demonstrated G07 LocalMath ordered-fold
+step-validation prerequisite before R14 exchange settlement.
+The eighth companion is the demonstrated G05 LocalMath exact keyed-reduction
+prerequisite before Core R10/Potts R11 maintained spatial-query completion.
+The ninth is the demonstrated G05 LocalMath atomic keyed-rebuild publication
+prerequisite for repeated maintained relationship reconstruction on that same
+path; its implementation must ignore prior records as runtime policy and remain
+failure-atomic without adding a second executor.
+The tenth and eleventh are the demonstrated G05 Cartesian-domain pair: C10
+CorePotts owns durable immutable domain owners, fixed-exterior/obstacle relation
+realization and the authoritative mutable-site attempt set; C11 Potts owns the
+typed authoring, initialization validation and lowering direct cutover. They
+precede complete R10/R11 wall/domain spatial-query support. Neither may restore
+the retired parallel Cartesian executor or treat negative medium owners as
+walls. C10 replaces or extends the existing owner-classification authority
+atomically rather than adding a second table/decoder path. C11 deletes
+`FrozenBorder` only after migrating its behavior-preserving consumers to
+`Closed`; it never reinterprets that spelling as `FixedExterior`.
+The twelfth companion, C12 LocalMath, is the demonstrated bounded runtime
+collection-launch cutover: compaction, collection, keyed reduction, ordered fold
+and destination grouping keep extent/capacity as runtime `ndrange` data and
+specialize only on their existing semantic workgroup. It adds no launch cache,
+policy hierarchy or second executor.
+The thirteenth companion, C13 LocalMath, is the direct source-order recurrence
+law: source-ordered folds traverse sparse physical positions directly, while
+canonical folds retain their compacted prefix. Only those two mathematical
+traversal laws specialize recurrence; callback identities and graph contents do
+not. The fourteenth companion, C14 LocalMath, is validation-copy settlement:
+one program-level validation matrix owns host transfer, nonempty blocking copy
+completes the provider prefix, and empty/aliased representations synchronize
+explicitly. Receipt failure caching, lease release and fixed-relation admission
+share this owner. C14 adds no event wrapper, cache, alternate scheduler or
+backend-specific scientific path.
+The fifteenth companion, C15 LocalMath, narrows pointwise segmentation at its
+existing owner: a small graph-aware wrapper extracts the runtime temporary-field
+identity set, while the reusable segmentation law receives only that set. It
+adds no cache, lookup table, second graph representation, alternate executor or
+model-specific kernel, and preserves the single KernelAbstractions CPU/Metal
+path.
+R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
+and tumor corpora. E07 completion additionally depends on E04 for model 14.
+Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and
+removal of privileged model-specific machinery are accepted scope. Preserve
+scientific behavior and active candidates; unresolved law checks remain real.
+These are planning labels,
+not live APIs. Share actual candidate interfaces with affected workers, preserve
+their active changes, and do not treat design approval as implementation or
+qualification. The map owns dependencies/counts; progress notes own status.
+
+## Contributor navigability
+
+Every changed behavior must remain traceable through one clear chain:
+
+```text
+public entrypoint
+→ semantic owner
+→ validation and lowering
+→ execution
+→ inspection and diagnostics
+→ ordinary behavioral tests
+```
+
+- Identify the single production owner of the behavior.
+- Keep declarations, validation, lowering, and execution in files whose names
+  reflect their durable responsibility.
+- Place tests in the owning package and name them after observable behavior.
+- Add brief comments only where a scientific invariant, ordering rule,
+  transaction boundary, or compiler constraint is not evident from the code.
+- Update the nearest user documentation and contributor architecture guide when
+  a public workflow or responsibility boundary changes.
+- Delete obsolete helpers, duplicate explanations, forwarding files, and tests
+  of displaced implementations in the same change.
+- Do not require Git history, milestone specifications, or private
+  implementation knowledge to understand current behavior.
+- A contributor should be able to locate a behavior's owner, purpose, and
+  defending test through repository search and current documentation alone.
+
+Large mixed-responsibility files are not automatically defects. Split a file
+only when the resulting files correspond to durable concepts and make the
+complete behavioral chain easier to locate. Do not reorganize files solely to
+reduce line counts.
+
 The normative project authority is `spec/project-charter.md`; human workflow
 guidance is in `CONTRIBUTING.md`. Historical milestone terminology may remain
 in specifications, design records, audits, and archived development evidence.
