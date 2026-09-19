@@ -133,6 +133,17 @@ struct CompiledRelationshipEndpointPolicy
     kind_b_name::Symbol
 end
 
+struct CompiledDomainOwnerIdentity
+    lattice::QualifiedStatementID
+    local_id::Symbol
+end
+
+struct CompiledDomainOwner
+    identity::CompiledDomainOwnerIdentity
+    kind_identity::QualifiedStatementID
+    metadata::CorePotts.CompilerSPI.DomainOwnerMetadata
+end
+
 struct _PottsExecutionPlan{P, M, S, R, K, O}
     core_program::P
     parameter_manifest::M
@@ -140,6 +151,7 @@ struct _PottsExecutionPlan{P, M, S, R, K, O}
     state_manifest::S
     relationship_manifest::R
     kind_manifest::K
+    domain_owner_manifest::Vector{CompiledDomainOwner}
     observations::O
     fingerprint::ExecutableFingerprint
 end

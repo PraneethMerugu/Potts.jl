@@ -9,11 +9,11 @@ on:
       localmath_ref:
         description: Full LocalMath candidate commit SHA
         type: string
-        default: f41a37da99c31781d4d2b23678a8e729845306a1
+        default: d3d2e5533585de3b16dafbb8ba7c0cb265209254
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: ddb52a9272777f442ab4194c7c16423aee169f28
+        default: b5b63aeda6e927eacc02161f4b365a560cc568ec
   schedule:
     - cron: '23 5 * * 1'
 
@@ -26,8 +26,8 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: ${{ inputs.localmath_ref || 'f41a37da99c31781d4d2b23678a8e729845306a1' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || 'ddb52a9272777f442ab4194c7c16423aee169f28' }}
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'd3d2e5533585de3b16dafbb8ba7c0cb265209254' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || 'b5b63aeda6e927eacc02161f4b365a560cc568ec' }}
 
 jobs:
   changes:
@@ -35,7 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       execution: ${{ steps.diff.outputs.execution }}
-      compiler: ${{ steps.diff.outputs.compiler }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {fetch-depth: 0}
@@ -48,37 +47,24 @@ jobs:
         shell: bash
         run: |
           execution=true
-          compiler=true
           if [[ "$EVENT" == pull_request ]] && git cat-file -e "$BASE^{commit}" && git cat-file -e "$HEAD^{commit}"; then
             git diff --no-renames --name-only -z "$BASE...$HEAD" > "$RUNNER_TEMP/potts-changed-paths"
             execution=false
-            compiler=false
             while IFS= read -r -d '' path; do
               case "$path" in
                 AGENTS.md|CONTRIBUTING.md|README.md|LICENSE|CITATION.cff|spec/*.md|design/*.md) ;;
-                *) execution=true ;;
-              esac
-              case "$path" in
-                .github/workflows/ci.yml|Project.toml|benchmark/Project.toml|benchmark/compiler_contract_schema.jl|benchmark/resolved_aggregate_contract.jl|test/test_resolved_aggregate_compiler_report.jl|src/compiler/*|src/compiler/**|src/completion/*|src/completion/**|src/runtime/problem.jl|src/runtime/integrator.jl|src/runtime/symbolic_indexing.jl|src/symbolics/operations.jl) compiler=true ;;
+                *) execution=true; break ;;
               esac
             done < "$RUNNER_TEMP/potts-changed-paths"
           fi
           printf 'execution=%s\n' "$execution" >> "$GITHUB_OUTPUT"
-          printf 'compiler=%s\n' "$compiler" >> "$GITHUB_OUTPUT"
           git rev-parse HEAD
 
-  package-shard:
+  package:
     if: github.event_name != 'schedule'
-    name: package / ${{ matrix.shard }}
+    name: package (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - declaration_and_structure
-          - quantities_and_publication
-          - execution_and_integration
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -99,21 +85,8 @@ jobs:
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Test Potts shard
-        env:
-          POTTS_TEST_SHARD: ${{ matrix.shard }}
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose", "--shard=$(ENV["POTTS_TEST_SHARD"])"])'
-
-  package:
-    if: always() && github.event_name != 'schedule'
-    needs: package-shard
-    name: package (ubuntu-latest)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every package shard
-        env:
-          PACKAGE_SHARDS_RESULT: ${{ needs.package-shard.result }}
-        run: test "$PACKAGE_SHARDS_RESULT" = success
+      - name: Test Potts
+        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
 
   macos-smoke:
     if: github.event_name == 'pull_request'
@@ -217,52 +190,11 @@ jobs:
       - name: Test exact replay environment
         run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
 
-  compiler-evidence:
-    needs: changes
-    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.compiler != 'false')
-    runs-on: macos-15
-    timeout-minutes: 30
-    steps:
-      - name: Require a valid change selection
-        if: needs.changes.result != 'success' || (needs.changes.outputs.compiler != 'true' && needs.changes.outputs.compiler != 'false')
-        run: exit 1
-      - name: Validate candidate revisions
-        shell: bash
-        run: |
-          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
-            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
-          done
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
-      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
-        with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Resolve compiler-evidence environment
-        run: julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate()'
-      - name: Record resolved aggregate compiler evidence
-        run: julia --project=benchmark --startup-file=no benchmark/resolved_aggregate_contract.jl --revision-label=${{ github.sha }} --evidence-reason=Kaimon-is-not-installed-in-the-CI-evidence-environment --output=resolved-aggregate-compiler.toml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: resolved-aggregate-compiler-${{ github.sha }}
-          path: |
-            resolved-aggregate-compiler.toml
-            benchmark/Manifest.toml
-
-  metal_shards:
+  metal:
     needs: changes
     if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
-    name: metal shard (${{ matrix.semantic_shard }})
     runs-on: macos-15
     timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        semantic_shard:
-          - authoring_and_state
-          - quantities_and_components
     steps:
       - name: Require a valid change selection
         if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
@@ -274,18 +206,7 @@ jobs:
       - name: Instantiate qualified Metal profile
         run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
       - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl ${{ matrix.semantic_shard }}
-
-  metal:
-    needs: [changes, metal_shards]
-    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require every Metal semantic shard
-        env:
-          SHARDS_RESULT: ${{ needs.metal_shards.result }}
-        run: test "$SHARDS_RESULT" = success
+        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
 
   sibling-main:
     if: github.event_name == 'schedule'
