@@ -4,6 +4,8 @@ mutable struct _LifecycleRootCursor
     roots::Dict{Symbol, Vector{Int32}}
     positions::Dict{Symbol, Int}
     operation_abis::Tuple
+    state_layout::CorePotts.CompilerSPI.StateLayout
+    history_descriptors::Tuple
 end
 
 mutable struct _LifecycleEvaluatorAccumulator
@@ -14,7 +16,8 @@ end
 _LifecycleEvaluatorAccumulator() = _LifecycleEvaluatorAccumulator(Any[], Symbol[])
 
 function _LifecycleRootCursor(
-        ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple
+        ir::AnalyzedTermIR, record_index::Integer, operation_abis::Tuple,
+        state_layout, history_descriptors,
     )
     roots = Dict{Symbol, Vector{Int32}}()
     for root in ir.graph.roots
@@ -22,7 +25,7 @@ function _LifecycleRootCursor(
         root.role in _LIFECYCLE_ROOT_ROLES || continue
         push!(get!(roots, root.role, Int32[]), root.node)
     end
-    return _LifecycleRootCursor(roots, Dict{Symbol, Int}(), operation_abis)
+    return _LifecycleRootCursor(roots, Dict{Symbol, Int}(), operation_abis, state_layout, history_descriptors)
 end
 
 function _next_lifecycle_root!(cursor::_LifecycleRootCursor, role::Symbol)
@@ -98,6 +101,7 @@ function _lifecycle_evaluator!(
         draw_handles,
         ;
         always_root::Bool = false,
+        state = nothing,
     ) where {T <: AbstractFloat}
     symbolic = !(SymbolicIndexingInterface.symbolic_type(value) isa
         SymbolicIndexingInterface.NotSymbolic)
@@ -115,9 +119,10 @@ function _lifecycle_evaluator!(
             Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
             role,
             workspace_slices,
+            ; state_layout = cursor.state_layout, history_descriptors = cursor.history_descriptors,
         )
     else
-        _static_literal(value, manifest, T)
+        _static_literal(value, manifest, T; state)
     end
     evaluator = _static_evaluator(
         expression,
@@ -136,19 +141,6 @@ function _lifecycle_hash64(value)
         result = (result << 8) | UInt64(digest[index])
     end
     return result
-end
-
-function _lifecycle_cadence(value)
-    value isa EveryMCS && return (
-        CorePotts.CompilerSPI.EveryMCSLifecycleCadence, Int32(1)
-    )
-    value isa AtMCS && return (
-        CorePotts.CompilerSPI.AtMCSLifecycleCadence, Int32(value.mcs)
-    )
-    value isa Every && return (
-        CorePotts.CompilerSPI.PeriodicLifecycleCadence, Int32(value.cadence)
-    )
-    throw(ArgumentError("unsupported compiled lifecycle cadence $(typeof(value))"))
 end
 
 _lifecycle_disposition(::FilterInadmissible) =
@@ -262,13 +254,19 @@ function _lifecycle_state_rule!(
         ::Type{T},
         state_handles,
         draw_handles,
+        states,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     handle = _stage_state_handle(ir, record, target, state_handles)
+    state = only(entry for entry in states if entry.handle == handle)
     state_record = _resource_record(ir.source, record, :CellState, target)
+    state_record === nothing &&
+        (state_record = _resource_record(ir.source, record, :HistoryState, target))
     state_record === nothing && throw(ArgumentError(
-        "lifecycle state rule does not resolve to a CellState"
+        "lifecycle state rule does not resolve to cell-owned state or history"
     ))
+    source = _state_sample_record(ir.source, state_record)
+    source.kind === :CellState || throw(ArgumentError("cell lifecycle policies require a CellState sample owner"))
     action = CorePotts.CompilerSPI.UnsupportedLifecycleState
     evaluator_a = Int32(0)
     evaluator_b = Int32(0)
@@ -278,13 +276,13 @@ function _lifecycle_state_rule!(
     rounding = CorePotts.CompilerSPI.ExactLifecycleRounding
     parent_distribution = UInt8(0)
     daughter_distribution = UInt8(0)
-    parent_draw = UInt16(0)
-    daughter_draw = UInt16(0)
+    parent_draw = CorePotts.CompilerSPI.RNGOperationKey()
+    daughter_draw = CorePotts.CompilerSPI.RNGOperationKey()
     if policy isa InitializeFrom
         action = CorePotts.CompilerSPI.InitializeLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Unsupported
         action = CorePotts.CompilerSPI.UnsupportedLifecycleState
@@ -292,7 +290,7 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.RetireToLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Preserve
         action = CorePotts.CompilerSPI.PreserveLifecycleState
@@ -300,13 +298,13 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.ResetLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa Transform
         action = CorePotts.CompilerSPI.TransformLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa CopyToDaughters
         action = CorePotts.CompilerSPI.CopyDaughtersLifecycleState
@@ -314,17 +312,17 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.PreserveParentResetDaughterLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa ResetBoth
         action = CorePotts.CompilerSPI.ResetBothLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
         evaluator_b = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa SplitConservatively
         action = CorePotts.CompilerSPI.SplitConservativelyLifecycleState
@@ -337,11 +335,11 @@ function _lifecycle_state_rule!(
         action = CorePotts.CompilerSPI.TransformDaughtersLifecycleState
         evaluator_a = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.parent_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
         evaluator_b = _lifecycle_evaluator!(
             evaluators, ir, record_index, :lifecycle_state_transform,
-            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles,
+            policy.daughter_expression, cursor, manifest, T, state_handles, draw_handles; state,
         )
     elseif policy isa RedrawDaughters
         action = CorePotts.CompilerSPI.RedrawDaughtersLifecycleState
@@ -365,12 +363,8 @@ function _lifecycle_state_rule!(
             evaluators, ir, record_index, :lifecycle_state_transform,
             daughter_parameters[2], cursor, manifest, T, state_handles, draw_handles,
         )
-        parent_draw = _stable_draw_operation(
-            record.identity.path, Symbol(policy.parent_draw)
-        )
-        daughter_draw = _stable_draw_operation(
-            record.identity.path, Symbol(policy.daughter_draw)
-        )
+        parent_draw = draw_handles[(record.identity.path, Symbol(policy.parent_draw))]
+        daughter_draw = draw_handles[(record.identity.path, Symbol(policy.daughter_draw))]
     else
         throw(ArgumentError("unsupported lifecycle state policy $(typeof(policy))"))
     end
@@ -437,26 +431,31 @@ function _lifecycle_effect_code(effect)
     throw(ArgumentError("unsupported lifecycle effect $(typeof(effect))"))
 end
 
-function _lifecycle_ownership_rules(layout, required::Bool)
+function _lifecycle_ownership_rules(source, state_handles, required::Bool)
     required || return ()
-    return Tuple(
-        CorePotts.CompilerSPI.LifecycleOwnershipRule(
-            entry.handle,
-            begin
-                lifecycle = entry.schema.lifecycle
-                declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
-                    lifecycle.declared : nothing
-                declared === :ClearOnOwnershipChange ?
-                    CorePotts.CompilerSPI.ClearLifecycleOwnershipState :
-                    declared === :PreserveOnOwnershipChange ?
-                    CorePotts.CompilerSPI.PreserveLifecycleOwnershipState :
-                    throw(ArgumentError(
-                        "site-owned state has no compiled ownership-change law"
-                    ))
-            end,
+    rules = CorePotts.CompilerSPI.LifecycleOwnershipRule[]
+    for record in source.records
+        record.kind in (:SiteState, :FieldState, :HistoryState) || continue
+        sample = _state_sample_record(source, record)
+        sample.kind in (:SiteState, :FieldState) || continue
+        lifecycle = record.lifecycle
+        declared = lifecycle isa NamedTuple && haskey(lifecycle, :declared) ?
+            lifecycle.declared : nothing
+        # Eulerian fields stay attached to their sites unless explicitly given
+        # an ownership-change law; physical site storage is not cell ownership.
+        sample.kind === :FieldState && declared === nothing && continue
+        action = declared === :ClearOnOwnershipChange ?
+            CorePotts.CompilerSPI.ClearLifecycleOwnershipState :
+            declared === :PreserveOnOwnershipChange ?
+            CorePotts.CompilerSPI.PreserveLifecycleOwnershipState :
+            throw(ArgumentError("site-owned state has no compiled ownership-change law"))
+        push!(
+            rules, CorePotts.CompilerSPI.LifecycleOwnershipRule(
+                state_handles[record.identity], action,
+            )
         )
-        for entry in layout.entries if entry.schema.domain === :site
-    )
+    end
+    return Tuple(rules)
 end
 
 function _lower_lifecycle_plan(
@@ -467,6 +466,8 @@ function _lower_lifecycle_plan(
         draw_handles,
         state_layout,
         relationship_endpoint_policies,
+        states,
+        history_descriptors,
     ) where {T <: AbstractFloat}
     shape = _lattice_shape(ir)
     N = length(shape)
@@ -490,7 +491,7 @@ function _lower_lifecycle_plan(
         effect = only(arguments.effects)
         _cell_lifecycle_effect(effect) || continue
         fact = facts_by_source[record.identity]
-        cursor = _LifecycleRootCursor(ir, record_index, fact.operation_abis)
+        cursor = _LifecycleRootCursor(ir, record_index, fact.operation_abis, state_layout, history_descriptors)
         trigger = _lifecycle_evaluator!(
             evaluators,
             ir,
@@ -508,7 +509,8 @@ function _lower_lifecycle_plan(
             CorePotts.CompilerSPI.ModelLifecycleDomain : CorePotts.CompilerSPI.CellKindLifecycleDomain
         domain_kind = domain === CorePotts.CompilerSPI.CellKindLifecycleDomain ?
             _lifecycle_kind_index(ir, record, arguments.domain.kind) : Int16(0)
-        cadence, cadence_value = _lifecycle_cadence(get(
+        cadence, cadence_value = _completed_mcs_cadence(
+            get(
             _record_options(record), :cadence, EveryMCS()
         ))
         destination_kind = effect isa CreateCell ?
@@ -572,8 +574,8 @@ function _lower_lifecycle_plan(
         point = ntuple(_ -> zero(T), N)
         normal = ntuple(_ -> zero(T), N)
         side = CorePotts.CompilerSPI.CanonicalLifecycleSide
-        geometry_draw = UInt16(0)
-        side_draw = UInt16(0)
+        geometry_draw = CorePotts.CompilerSPI.RNGOperationKey()
+        side_draw = CorePotts.CompilerSPI.RNGOperationKey()
         parent_kind = Int16(0)
         daughter_kind = Int16(0)
         if effect isa Divide
@@ -586,9 +588,7 @@ function _lower_lifecycle_plan(
                 point_from_centroid, point = _lifecycle_point(
                     geometry.point, T, Val(N)
                 )
-                geometry_draw = _stable_draw_operation(
-                    record.identity.path, Symbol(geometry.draw)
-                )
+                geometry_draw = draw_handles[(record.identity.path, Symbol(geometry.draw))]
             elseif geometry isa PrincipalAxisPlane
                 partition = geometry.axis === :major ?
                     CorePotts.CompilerSPI.PrincipalMajorLifecyclePartition :
@@ -611,9 +611,7 @@ function _lower_lifecycle_plan(
             end
             if effect.side isa StableRandomSide
                 side = CorePotts.CompilerSPI.StableRandomLifecycleSide
-                side_draw = _stable_draw_operation(
-                    record.identity.path, Symbol(effect.side.draw_identity)
-                )
+                side_draw = draw_handles[(record.identity.path, Symbol(effect.side.draw_identity))]
             elseif !(effect.side isa CanonicalSide)
                 throw(ArgumentError("unsupported lifecycle side policy"))
             end
@@ -639,6 +637,7 @@ function _lower_lifecycle_plan(
                 T,
                 state_handles,
                 draw_handles,
+                states,
             )
         end
         relationship_offset = Int32(length(relationship_rules) + 1)
@@ -779,7 +778,8 @@ function _lower_lifecycle_plan(
         CorePotts.CompilerSPI.LifecycleStateRuleStorage(state_rules),
         relationship_rules,
         _lifecycle_ownership_rules(
-            state_layout,
+            ir.source,
+            state_handles,
             any(
                 descriptor -> descriptor.effect in (
                     CorePotts.CompilerSPI.CreateCellLifecycleEffect,

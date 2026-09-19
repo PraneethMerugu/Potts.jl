@@ -4,6 +4,7 @@
         Symbol("@named"), Symbol("@mtkcompile"), Symbol("@statements"),
 
         :PottsSystem, :StatementSet, :StatementID, :SourceLocation,
+        :ComponentReference, :replace_component,
         :UnknownSource, :AbstractPottsStatement, :AbstractPottsEffect,
         :AbstractPottsPhase, :CellKind, :MediumKind, :LatticeDomain,
         :SpatialRelation, :SiteState, :CellState, :MediumState, :ModelState,
@@ -43,7 +44,7 @@
         :UnitVector, :DrawKey, :draw, :PureRead, :SynchronousAssign,
         :AcceptedCopyEffect, :OrderedBatchEffect, :Proposal, :AcceptedCopy,
         :AfterMCS, :RelationshipCommit, :Lifecycle, :Before, :After,
-        :EveryMCS, :AtMCS, :Every, :sites, :cells, :model, :contacts, :edges,
+        :EveryMCS, :AtMCS, :Every, :scoped, :sites, :cells, :model, :contacts, :edges,
         :incident_edges, :Assign, :Create, :Remove, :Retune, :CreateCell,
         :RemoveCell, :Transition, :Divide, :Retire, :SeedAt, :SeedStencil,
         :CellCentroid, :RandomPlane, :PrincipalAxisPlane,

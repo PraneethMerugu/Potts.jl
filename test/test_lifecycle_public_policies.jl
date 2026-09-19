@@ -186,6 +186,11 @@ end
     )
     divisions = map(enumerate(variants)) do (cell_id, variant)
         geometry, side = variant
+        geometry = geometry isa RandomPlane ? RandomPlane(
+                point = geometry.point, draw = Symbol(:partition_random_, cell_id)
+            ) : geometry
+        side = side isa StableRandomSide ?
+            StableRandomSide(Symbol(:partition_side_, cell_id)) : side
         LifecycleProcess(
             Symbol(:partition_policy_, cell_id);
             domain = cells(cell),
