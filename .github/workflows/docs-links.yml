@@ -10,7 +10,7 @@ on:
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: ab566034856ba9c3dacf4cec6fa4d0741222d9a8
+        default: 84552135c107019bafb9ac91cc31d3c4ad930932
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ permissions:
 env:
   JULIA_VERSION: '1.12.6'
   LOCALMATH_REF: ${{ inputs.localmath_ref || 'd3d2e5533585de3b16dafbb8ba7c0cb265209254' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || 'ab566034856ba9c3dacf4cec6fa4d0741222d9a8' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '84552135c107019bafb9ac91cc31d3c4ad930932' }}
   JULIA_NUM_PRECOMPILE_TASKS: 2
   JULIA_PKG_PRECOMPILE_AUTO: 0
 
