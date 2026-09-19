@@ -77,6 +77,22 @@ equilibrium claim.
 The project aims to be among the fastest Cellular Potts implementations while remaining
 scientifically auditable. Performance claims require reproducible benchmarks.
 
+Cold compilation and cache reuse are part of performance. Rich author structure
+is lowered before expensive execution into the smallest semantic payload that
+preserves the scientific contract. Author-only identity and numerical values do
+not create deep executor specializations. Representative precompilation,
+sysimages and backend caches may accelerate stable execution signatures; they do
+not substitute for them, define scientific state, or justify a second CPU/GPU
+execution path. Construction, preparation, first compilation or launch, warm
+execution, allocation and transfer costs are measured separately.
+
+The sole lowering path is expressive authoring → rich semantic records →
+validation and dependency/effect analysis → compact operational recipes →
+minimal typed state views → small readable kernels. The recipe derives from the
+scientific owner rather than duplicating it. CPU and qualified GPU backends share
+that semantic execution path; a kernel signature should expose exactly the
+operation and mutable state it needs.
+
 Hardware portability requires more than successful compilation. Each supported backend needs a
 capability policy, conformance tests, numerical expectations, and measured execution evidence.
 Backend-specific code may optimize a shared semantic operation but cannot define that operation.
