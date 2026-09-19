@@ -102,7 +102,7 @@ opaque = CustomOperation.run_custom_operation()
 )
 ```
 
-Each model evaluates four proposals and rejects them through its actual
+Each model evaluates sixteen proposals and rejects them through its actual
 constraint evaluator. Symbolic registration alone is insufficient for an opaque
 operation: completion reports the missing transfer or callable, including the
 captured statement location and available remedies. A contextual operation that

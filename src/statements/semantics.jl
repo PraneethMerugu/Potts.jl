@@ -147,10 +147,67 @@ abstract type AbstractBoundaryPolicy end
 struct Periodic <: AbstractBoundaryPolicy end
 """Closed lattice boundary policy with no wrapped neighbors."""
 struct Closed <: AbstractBoundaryPolicy end
-"""Boundary policy that reserves the border for the supplied cell kind."""
-struct FrozenBorder{K} <: AbstractBoundaryPolicy
+
+"""Supertype for immutable non-finite ownership declared on a Cartesian domain."""
+abstract type AbstractDomainOwner end
+
+"""A stable medium-domain owner whose interaction kind is a declared `MediumKind`."""
+struct MediumDomainOwner{K <: MediumKind} <: AbstractDomainOwner
+    id::StatementID
     kind::K
 end
+
+"""A stable wall-domain owner whose interaction kind is a declared `MediumKind`."""
+struct WallDomainOwner{K <: MediumKind} <: AbstractDomainOwner
+    id::StatementID
+    kind::K
+end
+
+MediumDomainOwner(id::Union{Symbol, StatementID}, kind::MediumKind) =
+    MediumDomainOwner{typeof(kind)}(StatementID(id), kind)
+WallDomainOwner(id::Union{Symbol, StatementID}, kind::MediumKind) =
+    WallDomainOwner{typeof(kind)}(StatementID(id), kind)
+
+"""A Cartesian face backed by one immutable medium- or wall-domain owner."""
+struct FixedExterior{O <: AbstractDomainOwner} <: AbstractBoundaryPolicy
+    owner::O
+end
+
+"""Explicit negative and positive face policies for one Cartesian axis."""
+struct AxisBoundary{L <: AbstractBoundaryPolicy, U <: AbstractBoundaryPolicy}
+    negative::L
+    positive::U
+    function AxisBoundary(; negative, positive)
+        negative isa Union{Periodic, Closed, FixedExterior} || throw(
+            ArgumentError("an axis negative face must be Periodic, Closed, or FixedExterior")
+        )
+        positive isa Union{Periodic, Closed, FixedExterior} || throw(
+            ArgumentError("an axis positive face must be Periodic, Closed, or FixedExterior")
+        )
+        return new{typeof(negative), typeof(positive)}(negative, positive)
+    end
+end
+
+AxisBoundary{L, U}(negative::L, positive::U) where {
+    L <: AbstractBoundaryPolicy, U <: AbstractBoundaryPolicy,
+} = AxisBoundary(; negative, positive)
+AxisBoundary(negative::AbstractBoundaryPolicy, positive::AbstractBoundaryPolicy) =
+    AxisBoundary(; negative, positive)
+AxisBoundary(policy::AbstractBoundaryPolicy) =
+    AxisBoundary(; negative = policy, positive = policy)
+
+"""An immutable owner mask excluded from the mutable Cartesian site set."""
+struct Obstacle{N, O <: AbstractDomainOwner}
+    mask::Array{Bool, N}
+    owner::O
+end
+
+function Obstacle(mask::AbstractArray{Bool, N}; owner::AbstractDomainOwner) where {N}
+    return Obstacle{N, typeof(owner)}(Array(mask), owner)
+end
+
+_obstacle_with_owner(value::Obstacle{N}, owner::AbstractDomainOwner) where {N} =
+    Obstacle{N, typeof(owner)}(value.mask, owner)
 
 abstract type AbstractNeighborhood end
 """Axis-aligned neighborhood of positive Manhattan `radius`."""
@@ -303,7 +360,10 @@ function Lattice(
         shape::Tuple{Vararg{Integer}};
         name::Symbol = :lattice,
         spacing = ntuple(_ -> 1.0, length(shape)),
-        boundary::AbstractBoundaryPolicy = Periodic(),
+        boundary = Periodic(),
+        default_owner = nothing,
+        domain_owners = (),
+        obstacles = (),
         max_cells::Integer = prod(shape),
         relations = NamedTuple(),
     )
@@ -315,11 +375,52 @@ function Lattice(
             "max_cells must be between one and the number of lattice sites"
         )
     )
+    boundary isa AbstractBoundaryPolicy ||
+        boundary isa Tuple && all(value -> value isa AxisBoundary, boundary) ||
+        throw(
+        ArgumentError(
+            "lattice boundary must be one face policy or one AxisBoundary per axis"
+        )
+    )
+    boundary isa Tuple && length(boundary) != length(shape) && throw(
+        ArgumentError("lattice axis-boundary count must match lattice dimensions")
+    )
+    default_owner === nothing || default_owner isa MediumDomainOwner || throw(
+        ArgumentError("lattice default_owner must be a MediumDomainOwner")
+    )
+    owner_values = domain_owners isa AbstractDomainOwner ?
+        (domain_owners,) : try
+            Tuple(domain_owners)
+    catch
+            throw(ArgumentError("lattice domain_owners must be domain-owner values"))
+    end
+    all(value -> value isa AbstractDomainOwner, owner_values) || throw(
+        ArgumentError(
+            "lattice domain_owners must contain only medium- or wall-domain owners"
+        )
+    )
+    supplied_obstacles = obstacles isa Obstacle ? (obstacles,) : try
+            Tuple(obstacles)
+    catch
+            throw(ArgumentError("lattice obstacles must be Obstacle values"))
+    end
+    all(value -> value isa Obstacle, supplied_obstacles) || throw(
+        ArgumentError("lattice obstacles must contain only Obstacle values")
+    )
+    obstacle_values = map(
+        value -> Obstacle(value.mask; owner = value.owner), supplied_obstacles
+    )
+    all(value -> size(value.mask) == Tuple(Int.(shape)), obstacle_values) || throw(
+        ArgumentError("every obstacle mask must match the lattice shape")
+    )
     domain = LatticeDomain(
         name;
         shape = Tuple(Int.(shape)),
         spacing = Tuple(spacing),
         boundary,
+        default_owner,
+        domain_owners = owner_values,
+        obstacles = obstacle_values,
         max_cells = Int(max_cells),
     )
     relation_statements = AbstractPottsStatement[]
@@ -517,6 +618,12 @@ _map_symbolic_payload(f, value::AbstractIterationDomain) =
     _map_symbolic_fields(f, value)
 _map_symbolic_payload(f, value::AbstractBoundaryPolicy) =
     _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::AbstractDomainOwner) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::AxisBoundary) =
+    _map_symbolic_fields(f, value)
+_map_symbolic_payload(f, value::Obstacle) =
+    _obstacle_with_owner(value, _map_symbolic_payload(f, value.owner))
 _map_symbolic_payload(f, value::AbstractRelationshipEndpointPolicy) =
     _map_symbolic_fields(f, value)
 _map_symbolic_payload(f, value::SweepStage) =

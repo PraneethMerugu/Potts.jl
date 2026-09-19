@@ -10,7 +10,8 @@ ReferenceUnits(; kwargs...) = ReferenceUnits((; kwargs...))
 
 function _is_component_symbol(value)
     SymbolicIndexingInterface.symbolic_type(value) isa Union{
-        SymbolicIndexingInterface.ScalarSymbolic, SymbolicIndexingInterface.ArraySymbolic,
+        SymbolicIndexingInterface.ScalarSymbolic,
+        SymbolicIndexingInterface.ArraySymbolic,
     } || return false
     variables = Symbolics.get_variables(value)
     return length(variables) == 1 && isequal(
