@@ -33,9 +33,9 @@ struct CellPlacement{K, S}
     end
 end
 
-"""`MediumPlacement(kind, sites)` assigns explicit sites to the medium."""
-struct MediumPlacement{K, S}
-    kind::K
+"""`MediumPlacement(owner, sites)` assigns explicit sites to a declared medium-domain owner."""
+struct MediumPlacement{O <: MediumDomainOwner, S}
+    owner::O
     sites::S
 end
 
@@ -78,10 +78,22 @@ struct RandomSitePlacement{K} <: AbstractProceduralPlacement
     end
 end
 
-function MediumPlacement(kind, sites::Union{Tuple, AbstractVector})
+function MediumPlacement(
+        owner::MediumDomainOwner, sites::Union{Tuple, AbstractVector}
+    )
     copied = Tuple(Tuple(Int.(site)) for site in sites)
-    return MediumPlacement{typeof(kind), typeof(copied)}(kind, copied)
+    return MediumPlacement{typeof(owner), typeof(copied)}(owner, copied)
 end
+
+MediumPlacement(::WallDomainOwner, ::Union{Tuple, AbstractVector}) = throw(
+    ArgumentError("MediumPlacement requires a MediumDomainOwner")
+)
+MediumPlacement(::MediumKind, ::Union{Tuple, AbstractVector}) = throw(
+    ArgumentError(
+        "MediumPlacement requires a MediumDomainOwner declared by Lattice; " *
+            "a MediumKind alone does not identify a domain owner"
+    )
+)
 
 """Explicit and procedural ownership placements over a fixed lattice shape."""
 struct OwnershipLayout{N, P <: Tuple, M}
@@ -235,55 +247,128 @@ function _kind_indices(executable::_PottsExecutionPlan)
     return result
 end
 
-function _materialize_labelled(
-        executable::_PottsExecutionPlan, labelled::LabelledCells
+_kind_manifest_entry(executable::_PottsExecutionPlan, index::Integer) =
+    executable.kind_manifest[Int(index)]
+_is_medium_kind(executable::_PottsExecutionPlan, index::Integer) =
+    _kind_manifest_entry(executable, index).kind === :MediumKind
+_cartesian_domain(executable::_PottsExecutionPlan) =
+    CorePotts.CompilerSPI.cartesian_domain(executable.core_program)
+_cartesian_shape(executable::_PottsExecutionPlan) =
+    CorePotts.CompilerSPI.cartesian_domain_report(_cartesian_domain(executable)).shape
+_default_domain_kind(executable::_PottsExecutionPlan) =
+    Int(
+    CorePotts.CompilerSPI.owner_kind(
+        _cartesian_domain(executable), Int16[], Int32(0)
     )
-    program = executable.core_program
-    size(labelled.labels) == program.shape ||
-        throw(ArgumentError("initial ownership shape does not match the executable"))
+)
+
+function _initial_domain_owner_metadata(
+        executable::_PottsExecutionPlan, owner::AbstractDomainOwner
+    )
+    entry = _registered_domain_owner(executable.domain_owner_manifest, owner)
+    requested = entry.metadata
+    code = CorePotts.CompilerSPI.domain_owner_code(
+        _cartesian_domain(executable), requested
+    )
+    return (; code, metadata = requested)
+end
+
+function _initial_default_medium(executable::_PottsExecutionPlan, value)
+    if value isa MediumDomainOwner
+        resolved = _initial_domain_owner_metadata(executable, value)
+        code = resolved.code
+        iszero(code) || throw(
+            ArgumentError(
+                "initial default medium owner does not match the lattice default owner"
+            )
+        )
+        index = Int(resolved.metadata.kind)
+        _is_medium_kind(executable, index) || error(
+            "compiled default domain owner does not use a MediumKind"
+        )
+        return index
+    end
+    name = _kind_symbol(value)
+    index = get(_kind_indices(executable), name, nothing)
+    index !== nothing && _is_medium_kind(executable, index) || throw(
+        ArgumentError(
+            "initial default medium is undeclared or ambiguous; pass the " *
+                "lattice's MediumDomainOwner when local kind names repeat"
+        )
+    )
+    index == _default_domain_kind(executable) || throw(
+        ArgumentError(
+            "initial default medium does not match the lattice default domain owner"
+        )
+    )
+    return index
+end
+
+function _validate_obstacle_background(executable, ownership)
+    report = CorePotts.CompilerSPI.cartesian_domain_report(
+        _cartesian_domain(executable)
+    )
+    for obstacle in report.obstacles
+        iszero(@inbounds ownership[obstacle.site]) || throw(
+            ArgumentError(
+                "initial ownership at obstacle site $(obstacle.site) must be zero"
+            )
+        )
+    end
+    return ownership
+end
+
+function _materialize_cell_kinds(executable, cells, maximum_label)
     kinds = _kind_indices(executable)
-    medium_name = _kind_symbol(labelled.medium)
-    medium_index = get(kinds, medium_name, nothing)
-    medium_index !== nothing && program.medium_kinds[medium_index] ||
-        throw(ArgumentError("initial medium is not a declared executable medium"))
-    maximum_label = Int(maximum(labelled.labels; init = Int32(0)))
-    minimum(labelled.labels; init = Int32(0)) >= 0 ||
-        throw(ArgumentError("ownership labels must be nonnegative"))
     cell_kinds = Vector{Int16}(undef, maximum_label)
-    if labelled.cells isa AbstractDict
+    if cells isa AbstractDict
         expected = Set(1:maximum_label)
-        actual = Set(keys(labelled.cells))
+        actual = Set(keys(cells))
         expected == actual || throw(
             ArgumentError(
                 "labelled cells must define exactly labels 1:$maximum_label"
             )
         )
-        for label in 1:maximum_label
-            name = _kind_symbol(labelled.cells[label])
-            index = get(kinds, name, nothing)
-            index === nothing &&
-                throw(ArgumentError("unknown initial cell kind `$name`"))
-            program.medium_kinds[index] &&
-                throw(ArgumentError("a positive cell label cannot use the medium kind"))
-            cell_kinds[label] = Int16(index)
-        end
     else
-        length(labelled.cells) == maximum_label || throw(
+        length(cells) == maximum_label || throw(
             ArgumentError(
                 "cell kind vector length must equal maximum ownership label"
             )
         )
-        for label in 1:maximum_label
-            name = _kind_symbol(labelled.cells[label])
-            index = get(kinds, name, nothing)
-            index === nothing &&
-                throw(ArgumentError("unknown initial cell kind `$name`"))
-            program.medium_kinds[index] &&
-                throw(ArgumentError("a positive cell label cannot use the medium kind"))
-            cell_kinds[label] = Int16(index)
-        end
     end
-    return copy(labelled.labels), cell_kinds
+    for label in 1:maximum_label
+        name = _kind_symbol(cells[label])
+        index = get(kinds, name, nothing)
+        index === nothing && throw(
+            ArgumentError(
+                "unknown initial cell kind `$name`"
+            )
+        )
+        _is_medium_kind(executable, index) && throw(
+            ArgumentError(
+                "a positive cell label cannot use the medium kind"
+            )
+        )
+        cell_kinds[label] = Int16(index)
+    end
+    return cell_kinds
+end
+
+function _materialize_labelled(
+        executable::_PottsExecutionPlan, labelled::LabelledCells
+    )
+    size(labelled.labels) == _cartesian_shape(executable) ||
+        throw(ArgumentError("initial ownership shape does not match the executable"))
+    _initial_default_medium(executable, labelled.medium)
+    maximum_label = Int(maximum(labelled.labels; init = Int32(0)))
+    minimum(labelled.labels; init = Int32(0)) >= 0 ||
+        throw(ArgumentError("ownership labels must be nonnegative"))
+    cell_kinds = _materialize_cell_kinds(
+        executable, labelled.cells, maximum_label
+    )
+    ownership = copy(labelled.labels)
+    _validate_obstacle_background(executable, ownership)
+    return ownership, cell_kinds
 end
 
 function _materialize_layout(
@@ -293,7 +378,7 @@ function _materialize_layout(
         replica::UInt32,
         repeat::UInt32,
     )
-    layout.shape == executable.core_program.shape ||
+    layout.shape == _cartesian_shape(executable) ||
         throw(ArgumentError("ownership layout shape does not match the executable"))
     cell_placements = Tuple(
         placement for placement in layout.placements
@@ -321,33 +406,23 @@ function _materialize_layout(
         init = 0,
     )
     kinds = _kind_indices(executable)
-    default_medium_name = _kind_symbol(layout.medium)
-    default_medium_index = get(kinds, default_medium_name, nothing)
-    default_medium_index !== nothing &&
-        executable.core_program.medium_kinds[default_medium_index] ||
-        throw(
-        ArgumentError(
-            "ownership layout default medium is not a declared medium kind"
-        )
-    )
-    background = default_medium_index == executable.core_program.medium_kind ?
-        Int32(0) : -Int32(default_medium_index)
-    labels = fill(background, layout.shape)
+    _initial_default_medium(executable, layout.medium)
+    labels = zeros(Int32, layout.shape)
     assigned = falses(layout.shape)
+    for obstacle in CorePotts.CompilerSPI.cartesian_domain_report(
+            _cartesian_domain(executable)
+        ).obstacles
+        assigned[obstacle.site] = true
+    end
     cells = Dict{Int, Any}()
     for placement in layout.placements
         placement isa MediumPlacement || continue
-        medium_name = _kind_symbol(placement.kind)
-        medium_index = get(kinds, medium_name, nothing)
-        medium_index !== nothing &&
-            executable.core_program.medium_kinds[medium_index] ||
-            throw(
-            ArgumentError(
-                "medium placement uses undeclared medium kind `$medium_name`"
-            )
+        resolved = _initial_domain_owner_metadata(executable, placement.owner)
+        encoded = resolved.code
+        medium_index = Int(resolved.metadata.kind)
+        _is_medium_kind(executable, medium_index) || error(
+            "compiled medium-domain owner does not use a MediumKind"
         )
-        encoded = medium_index == default_medium_index ?
-            Int32(0) : -Int32(medium_index)
         for coordinates in placement.sites
             length(coordinates) == length(layout.shape) ||
                 throw(ArgumentError("medium placement site has the wrong dimension"))
@@ -410,7 +485,7 @@ function _materialize_layout(
         name = _kind_symbol(placement.kind)
         kind_index = get(kinds, name, nothing)
         kind_index !== nothing &&
-            !executable.core_program.medium_kinds[kind_index] ||
+            !_is_medium_kind(executable, kind_index) ||
             throw(
             ArgumentError(
                 "procedural cell placement uses unknown or medium kind `$name`"
@@ -443,14 +518,7 @@ function _materialize_layout(
             "ownership layout labels must be contiguous from 1"
         )
     )
-    _, cell_kinds = _materialize_labelled(
-        executable,
-        LabelledCells(
-            map(owner -> owner < 0 ? Int32(0) : owner, labels);
-            cells,
-            medium = layout.medium,
-        ),
-    )
+    cell_kinds = _materialize_cell_kinds(executable, cells, maximum_label)
     return labels, cell_kinds
 end
 
@@ -553,12 +621,12 @@ function _normalize_initial_state_entry(
                         result
                 else
                         snapshot isa AbstractArray && size(snapshot) == source_shape ||
-                    throw(
-                        ArgumentError(
-                            "initial history `$(entry.name)` snapshot $index has the wrong shape"
+                        throw(
+                            ArgumentError(
+                                "initial history `$(entry.name)` snapshot $index has the wrong shape"
+                            )
                         )
-                    )
-                    map(item -> _convert_supplied_state_value(entry, item, T), snapshot)
+                        map(item -> _convert_supplied_state_value(entry, item, T), snapshot)
                 end
                 end
                 for index in 1:depth
@@ -797,7 +865,7 @@ function _core_initial_state(
         normalized_states[entry.identity] = _normalize_initial_state_entry(
             entry,
             values,
-            executable.core_program.shape,
+            _cartesian_shape(executable),
             length(cell_kinds),
             storage_capacity,
             T,

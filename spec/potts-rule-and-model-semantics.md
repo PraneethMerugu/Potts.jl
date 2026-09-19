@@ -527,6 +527,14 @@ Each query records its relation, filter, aggregation, metric, empty behavior, an
 semantic model. Equivalent query descriptors are interned and computed once per snapshot when
 profitable. Interning MUST NOT change query meaning or visibility.
 
+The relation is mandatory and independent semantic input, written as
+`over=relation` at the public call. It is never inferred from a privileged name
+or folded into the owner filter. Typed identity, kind, medium-domain,
+wall-domain, owner-category and admitted compiled-predicate filters remain
+distinct. Compiled predicates may publish runtime owner-match masks through the
+ordinary expression/source path; query execution consumes those masks and
+compact handles rather than retaining or interpreting the authored graph.
+
 The compiler derives spatial dependencies from semantic query nodes, not by rediscovering them from
 generated Julia code.
 

@@ -37,12 +37,16 @@ end
         family = ODEComponent(),
         scope = PerCell(),
         time = FixedPhysicalTime(0.0, 0.1),
-        inputs = (NativeInput(
-            cell_ode_drive, drive_state; value_type = Float64
-        ),),
-        outputs = (NativeOutput(
-            cell_ode_x, output_state; value_type = Float64
-        ),),
+        inputs = (
+            NativeInput(
+                cell_ode_drive, drive_state; value_type = Float64
+            ),
+        ),
+        outputs = (
+            NativeOutput(
+                cell_ode_x, output_state; value_type = Float64
+            ),
+        ),
         lifecycle = PerCellNativeLifecycle(
             creation = PreserveNativeInitialization(),
             transition = ResetTo((cell_ode_x => cell_ode_x + 3.0,)),
@@ -56,15 +60,17 @@ end
     medium = MediumKind(:medium)
     source = PottsSystem(
         name = :per_cell_coupled,
-        statements = StatementSet((
-            Lattice((3, 3); boundary = Closed(), max_cells = 4),
-            cell,
-            medium,
-            drive_state,
-            output_state,
-            ProposalConstraint(:freeze_per_cell_native, false),
-            Protocol(Sweep(; temperature = 1.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((3, 3); boundary = Closed(), max_cells = 4),
+                cell,
+                medium,
+                drive_state,
+                output_state,
+                ProposalConstraint(:freeze_per_cell_native, false),
+                Protocol(Sweep(; temperature = 1.0); name = :main),
+            )
+        ),
         unknowns = [potts_cell_drive, potts_cell_output],
         native_components = (component,),
     )
@@ -74,11 +80,13 @@ end
     labels[2, 2] = 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
-        native = (NativeOperatingPoint(
-            path; values = (cell_ode_x => 1.0,)
-        ),),
+        native = (
+            NativeOperatingPoint(
+                path; values = (cell_ode_x => 1.0,)
+            ),
+        ),
     )
-    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x504)
+    problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x0504)
     profile = NativeSolveProfile(
         path,
         Tsit5();
@@ -202,10 +210,14 @@ end
     @test failing.retcode == SciMLBase.ReturnCode.Failure
     @test failing.u.ownership == before_failure.ownership
     @test only(failing.u.native).active == only(before_failure.native).active
-    @test map(value -> value === nothing ? nothing : value.u,
-        only(failing.u.native).states) ==
-        map(value -> value === nothing ? nothing : value.u,
-            only(before_failure.native).states)
+    @test map(
+        value -> value === nothing ? nothing : value.u,
+        only(failing.u.native).states
+    ) ==
+        map(
+        value -> value === nothing ? nothing : value.u,
+        only(before_failure.native).states
+    )
 end
 
 @testset "per-cell lifecycle receipts and slot reuse" begin
@@ -225,9 +237,11 @@ end
         time = FixedPhysicalTime(0.0, 0.1),
         lifecycle = PerCellNativeLifecycle(
             creation = PreserveNativeInitialization(),
-            transition = ResetTo((
-                lifecycle_native_x => lifecycle_native_x + 3.0,
-            )),
+            transition = ResetTo(
+                (
+                    lifecycle_native_x => lifecycle_native_x + 3.0,
+                )
+            ),
             division = TransformDaughters(
                 (lifecycle_native_x => lifecycle_native_x / 2,),
                 (lifecycle_native_x => lifecycle_native_x / 2,),
@@ -239,6 +253,7 @@ end
         :lifecycle_native_daughter; extinction = RetireAtZero()
     )
     medium = MediumKind(:lifecycle_native_medium)
+    medium_owner = MediumDomainOwner(:lifecycle_native_medium_domain, medium)
     relation = SpatialRelation(
         :lifecycle_native_division; neighborhood = VonNeumann()
     )
@@ -249,13 +264,15 @@ end
         :lifecycle_native_create;
         domain = model(),
         expression = true,
-        effects = (CreateCell(
-            cell;
-            placement = SeedStencil(
-                create_site, ((0, 0), (1, 0)); relation
+        effects = (
+            CreateCell(
+                cell;
+                placement = SeedStencil(
+                    create_site, ((0, 0), (1, 0)); relation
+                ),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(1),
     )
     transition = LifecycleProcess(
@@ -263,11 +280,13 @@ end
         domain = cells(cell),
         anchor,
         expression = true,
-        effects = (Transition(
-            anchor,
-            daughter;
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            Transition(
+                anchor,
+                daughter;
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(2),
     )
     divide = LifecycleProcess(
@@ -275,13 +294,15 @@ end
         domain = cells(daughter),
         anchor,
         expression = true,
-        effects = (Divide(
-            anchor;
-            geometry = SpecifiedNormalPlane((1.0, 0.0)),
-            relation,
-            side = CanonicalSide(),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            Divide(
+                anchor;
+                geometry = SpecifiedNormalPlane((1.0, 0.0)),
+                relation,
+                side = CanonicalSide(),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(3),
     )
     remove = LifecycleProcess(
@@ -289,40 +310,46 @@ end
         domain = cells(daughter),
         anchor,
         expression = true,
-        effects = (RemoveCell(
-            anchor;
-            replacement = medium,
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(4),
     )
     reuse = LifecycleProcess(
         :lifecycle_native_reuse;
         domain = model(),
         expression = true,
-        effects = (CreateCell(
-            daughter;
-            placement = SeedAt(reuse_site),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            CreateCell(
+                daughter;
+                placement = SeedAt(reuse_site),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(5),
     )
     source = PottsSystem(
         name = :per_cell_lifecycle_model,
-        statements = StatementSet((
-            Lattice((6, 6); max_cells = 4),
-            cell,
-            daughter,
-            medium,
-            relation,
-            ProposalConstraint(:freeze_native_lifecycle, false),
-            create,
-            transition,
-            divide,
-            remove,
-            reuse,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((6, 6); default_owner = medium_owner, max_cells = 4),
+                cell,
+                daughter,
+                medium,
+                relation,
+                ProposalConstraint(:freeze_native_lifecycle, false),
+                create,
+                transition,
+                divide,
+                remove,
+                reuse,
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
         native_components = (component,),
     )
     scheduled = mtkcompile(source)
@@ -331,14 +358,16 @@ end
     labels[2:5, 4] .= 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
-        native = (NativeOperatingPoint(
-            path; values = (
-                lifecycle_native_x => 1.0,
-                lifecycle_native_rate => 0.0,
-            )
-        ),),
+        native = (
+            NativeOperatingPoint(
+                path; values = (
+                    lifecycle_native_x => 1.0,
+                    lifecycle_native_rate => 0.0,
+                )
+            ),
+        ),
     )
-    problem = PottsProblem(scheduled, initial, (0, 5); seed = 0x505)
+    problem = PottsProblem(scheduled, initial, (0, 5); seed = 0x0505)
     profile = NativeSolveProfile(
         path,
         Tsit5();
@@ -371,8 +400,8 @@ end
         save_everystep = true,
     )
     logical_tuple = value -> value === nothing ? nothing : (
-        value.u, value.p, value.du, value.t, value.retcode
-    )
+            value.u, value.p, value.du, value.t, value.retcode,
+        )
     for index in eachindex(solution.u, batched_solution.u)
         serial_saved = solution.u[index]
         batched_saved = batched_solution.u[index]
@@ -440,13 +469,15 @@ end
     step!(checkpointed)
     step!(checkpointed)
     captured = checkpoint(checkpointed)
-    resumed = solve!(init(
-        problem,
-        SequentialCPM();
-        checkpoint = captured,
-        native_profiles = (batched_profile,),
-        save_everystep = true,
-    ))
+    resumed = solve!(
+        init(
+            problem,
+            SequentialCPM();
+            checkpoint = captured,
+            native_profiles = (batched_profile,),
+            save_everystep = true,
+        )
+    )
     @test last(resumed).ownership == batched_solution(5).ownership
     @test last(resumed).cell_kinds == batched_solution(5).cell_kinds
     @test last(resumed).cell_generations == batched_solution(5).cell_generations
@@ -490,30 +521,36 @@ function _native_runtime_fixture(
         family = native_family,
         time = FixedPhysicalTime(0.0, duration),
         cadence,
-        inputs = (NativeInput(
-            native_input, drive_state; value_type = Float64
-        ),),
-        outputs = (NativeOutput(
-            native_output, output_state; value_type = Float64
-        ),),
+        inputs = (
+            NativeInput(
+                native_input, drive_state; value_type = Float64
+            ),
+        ),
+        outputs = (
+            NativeOutput(
+                native_output, output_state; value_type = Float64
+            ),
+        ),
     )
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     source = PottsSystem(
         name = name,
-        statements = StatementSet((
-            Lattice((3, 3); boundary = Closed()),
-            cell,
-            medium,
-            drive_state,
-            output_state,
-            Synchronous(
-                :raise_native_drive,
-                Assign(potts_drive, potts_drive + potts_output);
-                phase = AfterMCS(),
-            ),
-            Protocol(Sweep(; temperature = 1.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((3, 3); boundary = Closed()),
+                cell,
+                medium,
+                drive_state,
+                output_state,
+                Synchronous(
+                    :raise_native_drive,
+                    Assign(potts_drive, potts_drive + potts_output);
+                    phase = AfterMCS(),
+                ),
+                Protocol(Sweep(; temperature = 1.0); name = :main),
+            )
+        ),
         unknowns = [potts_drive, potts_output],
         native_components = (component,),
     )
@@ -523,9 +560,11 @@ function _native_runtime_fixture(
     labels[2, 2] = 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
-        native = (NativeOperatingPoint(
-            path; values = operating_values, guesses = operating_guesses
-        ),),
+        native = (
+            NativeOperatingPoint(
+                path; values = operating_values, guesses = operating_guesses
+            ),
+        ),
     )
     return (;
         source,
@@ -561,21 +600,25 @@ function _native_output_fixture(
         family = native_family,
         time = FixedPhysicalTime(0.0, duration),
         cadence,
-        outputs = (NativeOutput(
-            native_output, output_state; value_type = Float64
-        ),),
+        outputs = (
+            NativeOutput(
+                native_output, output_state; value_type = Float64
+            ),
+        ),
     )
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
     source = PottsSystem(
         name = name,
-        statements = StatementSet((
-            Lattice((3, 3); boundary = Closed()),
-            cell,
-            medium,
-            output_state,
-            Protocol(Sweep(; temperature = 1.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((3, 3); boundary = Closed()),
+                cell,
+                medium,
+                output_state,
+                Protocol(Sweep(; temperature = 1.0); name = :main),
+            )
+        ),
         unknowns = [potts_output],
         native_components = (component,),
     )
@@ -585,9 +628,11 @@ function _native_output_fixture(
     labels[2, 2] = 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
-        native = (NativeOperatingPoint(
-            path; values = operating_values, guesses = operating_guesses
-        ),),
+        native = (
+            NativeOperatingPoint(
+                path; values = operating_values, guesses = operating_guesses
+            ),
+        ),
     )
     return (;
         source,
@@ -631,7 +676,7 @@ end
     @test Potts.native_source_fingerprint(ode_system) ==
         source_fingerprint
     problem = PottsProblem(
-        fixture.scheduled, fixture.initial, (0, 2); seed = 0x503
+        fixture.scheduled, fixture.initial, (0, 2); seed = 0x0503
     )
     profile = NativeSolveProfile(
         fixture.path,
@@ -701,7 +746,7 @@ end
     @test !functional.capability_report.exact_replay
     @test functional.capability_report.evidence.conjunction === nothing
     step!(functional)
-    @test functional.u[:potts_output] ≈ 3 - 2exp(-0.1) atol = 2e-8
+    @test functional.u[:potts_output] ≈ 3 - 2exp(-0.1) atol = 2.0e-8
     @test_throws ArgumentError checkpoint(functional)
 
     invalid_solver_profile = NativeSolveProfile(
@@ -730,7 +775,7 @@ end
     # The CPM process consumes the previously published native output (1),
     # stages drive 2 -> 3, and that same candidate snapshot drives the island.
     @test integrator.u[:potts_drive] === 3.0
-    @test integrator.u[:potts_output] ≈ 3 - 2exp(-0.1) atol = 2e-8
+    @test integrator.u[:potts_output] ≈ 3 - 2exp(-0.1) atol = 2.0e-8
     @test native_value(integrator, fixture.path, ode_seen) ≈
         2integrator.u[:potts_output]
     saved = integrator.u
@@ -785,7 +830,8 @@ end
     end
     @test custom_checkpoint_error isa ArgumentError
     @test occursin(
-        "exact-replay evidence", sprint(showerror, custom_checkpoint_error))
+        "exact-replay evidence", sprint(showerror, custom_checkpoint_error)
+    )
 
     uninterrupted = init(
         problem, SequentialCPM(); native_profiles = (profile,),
@@ -913,15 +959,19 @@ end
         operating_values = (event_x => 0.0,),
     )
     problem = PottsProblem(
-        fixture.scheduled, fixture.initial, (0, 1); seed = 0x504
+        fixture.scheduled, fixture.initial, (0, 1); seed = 0x0504
     )
     compiled = only(scheduled_native_components(fixture.scheduled))
-    @test length(ModelingToolkitBase.continuous_events(
-        Potts.native_original_system(compiled)
-    )) == 1
-    @test length(ModelingToolkitBase.continuous_events(
-        Potts.native_scheduled_system(compiled)
-    )) == 1
+    @test length(
+        ModelingToolkitBase.continuous_events(
+            Potts.native_original_system(compiled)
+        )
+    ) == 1
+    @test length(
+        ModelingToolkitBase.continuous_events(
+            Potts.native_scheduled_system(compiled)
+        )
+    ) == 1
     profile = NativeSolveProfile(
         fixture.path,
         Tsit5();
@@ -957,7 +1007,7 @@ end
         operating_values = (dae_x => 1.0, dae_D(dae_x) => 1.0),
     )
     problem = PottsProblem(
-        fixture.scheduled, fixture.initial, (0, 2); seed = 0x505
+        fixture.scheduled, fixture.initial, (0, 2); seed = 0x0505
     )
     profile = NativeSolveProfile(
         fixture.path, IDA(); profile_id = "ida-logical-v1"
@@ -1024,10 +1074,12 @@ end
     )
     compiled = only(scheduled_native_components(fixture.scheduled))
     @test Potts.native_original_system(compiled) === native_ode
-    @test !(Potts.native_original_system(compiled) isa
-        Catalyst.ReactionSystem)
+    @test !(
+        Potts.native_original_system(compiled) isa
+            Catalyst.ReactionSystem
+    )
     problem = PottsProblem(
-        fixture.scheduled, fixture.initial, (0, 1); seed = 0x506
+        fixture.scheduled, fixture.initial, (0, 1); seed = 0x0506
     )
     profile = NativeSolveProfile(
         fixture.path,
@@ -1043,7 +1095,7 @@ end
         save_everystep = true,
     )
     step!(integrator)
-    @test integrator.u[:potts_output] ≈ exp(-0.1) atol = 2e-8
+    @test integrator.u[:potts_output] ≈ exp(-0.1) atol = 2.0e-8
 end
 
 @testset "zero-port native island" begin
@@ -1063,12 +1115,14 @@ end
     medium = MediumKind(:medium)
     source = PottsSystem(
         name = :zero_port,
-        statements = StatementSet((
-            Lattice((3, 3); boundary = Closed()),
-            cell,
-            medium,
-            Protocol(Sweep(; temperature = 1.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((3, 3); boundary = Closed()),
+                cell,
+                medium,
+                Protocol(Sweep(; temperature = 1.0); name = :main),
+            )
+        ),
         native_components = (component,),
     )
     scheduled = mtkcompile(source)
@@ -1077,11 +1131,13 @@ end
     labels[2, 2] = 1
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
-        native = (NativeOperatingPoint(
-            path; values = (isolated_x => 1.0,)
-        ),),
+        native = (
+            NativeOperatingPoint(
+                path; values = (isolated_x => 1.0,)
+            ),
+        ),
     )
-    problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x507)
+    problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x0507)
     profile = NativeSolveProfile(
         path,
         Tsit5();
@@ -1096,7 +1152,7 @@ end
         save_everystep = true,
     )
     step!(integrator)
-    @test native_value(integrator, path, isolated_x) ≈ exp(-0.1) atol = 2e-8
+    @test native_value(integrator, path, isolated_x) ≈ exp(-0.1) atol = 2.0e-8
     @test isempty(inspect(scheduled, ExternalIO()))
 end
 
@@ -1123,42 +1179,52 @@ end
         name = :producer,
         family = ODEComponent(),
         time = FixedPhysicalTime(0.0, 0.1),
-        outputs = (NativeOutput(
-            producer_x, bridge_state; value_type = Float64
-        ),),
+        outputs = (
+            NativeOutput(
+                producer_x, bridge_state; value_type = Float64
+            ),
+        ),
     )
     consumer = NativeComponent(
         consumer_system;
         name = :consumer,
         family = ODEComponent(),
         time = FixedPhysicalTime(0.0, 0.1),
-        inputs = (NativeInput(
-            consumer_drive, bridge_state; value_type = Float64
-        ),),
-        outputs = (NativeOutput(
-            consumer_x, result_state; value_type = Float64
-        ),),
+        inputs = (
+            NativeInput(
+                consumer_drive, bridge_state; value_type = Float64
+            ),
+        ),
+        outputs = (
+            NativeOutput(
+                consumer_x, result_state; value_type = Float64
+            ),
+        ),
     )
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
-    statements = StatementSet((
-        Lattice((3, 3); boundary = Closed()),
-        cell,
-        medium,
-        bridge_state,
-        result_state,
-        Protocol(Sweep(; temperature = 1.0); name = :main),
-    ))
+    statements = StatementSet(
+        (
+            Lattice((3, 3); boundary = Closed()),
+            cell,
+            medium,
+            bridge_state,
+            result_state,
+            Protocol(Sweep(; temperature = 1.0); name = :main),
+        )
+    )
     labels = zeros(Int, 3, 3)
     labels[2, 2] = 1
 
     function jacobi_problem(name, components)
-        scheduled = mtkcompile(PottsSystem(
-            name = name,
-            statements = statements,
-            unknowns = [jacobi_bridge, jacobi_result],
-            native_components = components,
-        ))
+        scheduled = mtkcompile(
+            PottsSystem(
+                name = name,
+                statements = statements,
+                unknowns = [jacobi_bridge, jacobi_result],
+                native_components = components,
+            )
+        )
         initial = PottsInitialState(
             ownership = LabelledCells(labels; cells = [cell], medium),
             native = (
@@ -1170,7 +1236,7 @@ end
                 ),
             ),
         )
-        problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x508)
+        problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x0508)
         profiles = (
             NativeSolveProfile(
                 (name, :producer), Tsit5();
@@ -1209,12 +1275,12 @@ end
         save_everystep = true,
     )
     reverse = solve!(reverse_integrator)
-    @test last(forward.u)[:jacobi_bridge] ≈ 2.1 atol = 2e-9
-    @test last(forward.u)[:jacobi_result] ≈ 0.2 atol = 2e-9
+    @test last(forward.u)[:jacobi_bridge] ≈ 2.1 atol = 2.0e-9
+    @test last(forward.u)[:jacobi_result] ≈ 0.2 atol = 2.0e-9
     @test last(reverse.u)[:jacobi_bridge] ≈
-        last(forward.u)[:jacobi_bridge] atol = 2e-9
+        last(forward.u)[:jacobi_bridge] atol = 2.0e-9
     @test last(reverse.u)[:jacobi_result] ≈
-        last(forward.u)[:jacobi_result] atol = 2e-9
+        last(forward.u)[:jacobi_result] atol = 2.0e-9
 end
 
 @testset "registered host functions cannot inherit replay evidence" begin
@@ -1232,7 +1298,7 @@ end
         operating_values = (impure_x => 1.0,),
     )
     problem = PottsProblem(
-        fixture.scheduled, fixture.initial, (0, 1); seed = 0x509
+        fixture.scheduled, fixture.initial, (0, 1); seed = 0x0509
     )
     profile = NativeSolveProfile(
         fixture.path,
