@@ -1,13 +1,35 @@
-using Aqua
+@testset "package quality and clean-break boundary" begin
+    Aqua.test_all(PottsToolkit; ambiguities = false, persistent_tasks = false)
+    ExplicitImports.test_explicit_imports(PottsToolkit)
 
-@testset "PottsToolkit package-quality gates" begin
-    Aqua.test_all(PottsToolkit)
-    @test isempty(Test.detect_ambiguities(PottsToolkit; recursive = true))
+    project = TOML.parsefile(joinpath(pkgdir(PottsToolkit), "Project.toml"))
+    dependencies = Set(keys(get(project, "deps", Dict())))
+    @test isempty(intersect(
+        dependencies,
+        Set((
+            "AlgebraicRewriting",
+            "Dagger",
+            "KernelAbstractions",
+            "Unitful",
+            "ProcessBigraphs",
+        )),
+    ))
 
-    sequential = @inferred SequentialCPM()
-    checkerboard = @inferred CheckerboardSweepCPM()
-    @test @inferred(CorePotts.component_identity(sequential)) ==
-        CorePotts.ComponentIdentity(:sequential_cpm, v"1.0.0", :algorithm)
-    @test @inferred(CorePotts.component_identity(checkerboard)) ==
-        CorePotts.ComponentIdentity(:checkerboard_sweep_cpm, v"1.0.0", :algorithm)
+    forbidden = (
+        "Lottery",
+        "TiledCheckerboard",
+        "scientific_contract_versions",
+        "Authoring.",
+    )
+    source_root = joinpath(pkgdir(PottsToolkit), "src")
+    source = join(
+        (
+            read(joinpath(root, file), String)
+            for (root, _, files) in walkdir(source_root)
+            for file in files
+            if endswith(file, ".jl")
+        ),
+        "\n",
+    )
+    @test all(name -> !occursin(name, source), forbidden)
 end

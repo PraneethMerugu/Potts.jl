@@ -5,6 +5,7 @@ struct PottsProblem{E, I, P} <: SciMLBase.AbstractSciMLProblem
     parameters::P
     seed::UInt64
     replica::UInt32
+    ensemble_repeat::UInt32
 end
 
 function _normalize_seed(seed::Integer)
@@ -17,6 +18,12 @@ function _normalize_replica(replica::Integer)
     1 <= replica <= typemax(UInt32) ||
         throw(ArgumentError("replica must be in 1:$(typemax(UInt32))"))
     return UInt32(replica)
+end
+
+function _normalize_ensemble_repeat(repeat::Integer)
+    1 <= repeat <= typemax(UInt32) ||
+        throw(ArgumentError("ensemble repeat must be in 1:$(typemax(UInt32))"))
+    return UInt32(repeat)
 end
 
 function _normalize_tspan(tspan)
@@ -45,16 +52,64 @@ function PottsProblem(
     )
     normalized_span = _normalize_tspan(tspan)
     normalized_parameters = _normalize_parameters(executable, p)
+    normalized_seed = _normalize_seed(seed)
+    normalized_replica = _normalize_replica(replica)
     # Validate and defensively realize now, before any mutable run exists.
-    _core_initial_state(executable, initial)
+    core_initial = _core_initial_state(
+        executable, initial, normalized_seed, normalized_replica
+    )
+    CorePotts.initialize_program(
+        executable.core_program,
+        core_initial,
+        collect(normalized_parameters.values),
+        normalized_seed,
+        normalized_replica;
+        initial_mcs = normalized_span[1],
+    )
     return PottsProblem(
         executable,
         _defensive_copy(initial),
         normalized_span,
         normalized_parameters,
-        _normalize_seed(seed),
-        _normalize_replica(replica),
+        normalized_seed,
+        normalized_replica,
+        UInt32(1),
     )
+end
+
+function _with_ensemble_context(
+        problem::PottsProblem,
+        replica::Integer,
+        repeat::Integer,
+    )
+    return PottsProblem(
+        problem.executable,
+        _defensive_copy(problem.initial),
+        problem.tspan,
+        problem.parameters,
+        problem.seed,
+        _normalize_replica(replica),
+        _normalize_ensemble_repeat(repeat),
+    )
+end
+
+function _overlay_initial_values(existing, replacements)
+    result = Pair{Any, Any}[
+        _defensive_copy(first(pair)) => _defensive_copy(last(pair))
+        for pair in existing
+    ]
+    for replacement in replacements
+        key = first(replacement)
+        index = findfirst(pair -> isequal(first(pair), key), result)
+        copied = _defensive_copy(key) =>
+                 _defensive_copy(last(replacement))
+        if index === nothing
+            push!(result, copied)
+        else
+            result[index] = copied
+        end
+    end
+    return Tuple(result)
 end
 
 function remake(
@@ -75,13 +130,14 @@ function remake(
         u0
     else
         pairs = _initial_value_pairs(u0)
-        PottsInitialState(ownership = problem.initial.ownership, values = (
-            problem.initial.values..., pairs...
-        ))
+        PottsInitialState(
+            ownership = problem.initial.ownership,
+            values = _overlay_initial_values(problem.initial.values, pairs),
+        )
     end
     parameter_values = if ismissing(p)
         Tuple(
-            entry.variable => problem.parameters.values[entry.index]
+            entry.name => problem.parameters.values[entry.index]
             for entry in problem.executable.parameter_manifest
         )
     else
@@ -109,4 +165,3 @@ function Base.show(io::IO, problem::PottsProblem)
         ")",
     )
 end
-

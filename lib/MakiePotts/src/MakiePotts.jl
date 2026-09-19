@@ -1,10 +1,9 @@
 """
 Native Makie recipes and explicit, visualization-neutral render contracts for
-CorePotts simulations.
+PottsToolkit V1 solutions.
 """
 module MakiePotts
 
-import CorePotts
 import Makie
 import PottsToolkit
 import PrecompileTools

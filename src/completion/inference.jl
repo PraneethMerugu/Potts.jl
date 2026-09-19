@@ -15,11 +15,21 @@ function _collect_symbolics!(found, value)
         for field in fieldnames(typeof(value))
             _collect_symbolics!(found, getfield(value, field))
         end
+    elseif value isa Union{
+            AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            SymmetricPair,
+        }
+        for field in fieldnames(typeof(value))
+            _collect_symbolics!(found, getfield(value, field))
+        end
+    elseif value isa Union{ProposalContext, RelationshipBinding}
+        _collect_symbolics!(found, _binding_token(value))
     elseif value isa AbstractPottsStatement
         # Statement references are semantic identities, not nested declarations.
         return found
-    elseif !(Symbolics.symbolic_type(value) isa
-             SymbolicIndexingInterface.NotSymbolic)
+    elseif !(SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic)
         variables = try
             Symbolics.get_variables(value)
         catch
@@ -144,20 +154,101 @@ function _engine_admission(statement)
     return (sequential, checkerboard)
 end
 
-function _random_operations(statement, identity::QualifiedStatementID)
-    result = RandomOperation[]
-    payload = (_statement_arguments(statement), _statement_options(statement))
-    variables = _collect_symbolics(payload)
-    for variable in variables
-        occursin("__potts_draw__", string(variable)) || continue
-        key = Symbol(replace(string(variable), "__potts_draw__" => ""))
-        push!(result, RandomOperation(key, :explicit, false))
+function _collect_draw_calls!(result, value)
+    if value isa NamedTuple
+        foreach(item -> _collect_draw_calls!(result, item), values(value))
+    elseif value isa Tuple || value isa AbstractArray
+        foreach(item -> _collect_draw_calls!(result, item), value)
+    elseif value isa Pair
+        _collect_draw_calls!(result, first(value))
+        _collect_draw_calls!(result, last(value))
+    elseif value isa AbstractDict
+        for (key, item) in value
+            _collect_draw_calls!(result, key)
+            _collect_draw_calls!(result, item)
+        end
+    elseif value isa AbstractPottsEffect
+        foreach(
+            field -> _collect_draw_calls!(result, getfield(value, field)),
+            fieldnames(typeof(value)),
+        )
+    elseif value isa Union{
+            AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractRelationshipEndpointPolicy, SweepStage, ObserveStage,
+            SymmetricPair,
+        }
+        foreach(
+            field -> _collect_draw_calls!(result, getfield(value, field)),
+            fieldnames(typeof(value)),
+        )
+    elseif !(SymbolicIndexingInterface.symbolic_type(value) isa
+            SymbolicIndexingInterface.NotSymbolic)
+        unwrapped = Symbolics.unwrap(value)
+        Symbolics.iscall(unwrapped) || return result
+        operation = Symbolics.operation(unwrapped)
+        arguments = Tuple(Symbolics.arguments(unwrapped))
+        operation === _potts_draw && push!(result, arguments)
+        foreach(item -> _collect_draw_calls!(result, item), arguments)
     end
-    statement isa Protocol && push!(
-        result,
-        RandomOperation(Symbol(string(identity), "_proposal"), :proposal, true),
-        RandomOperation(Symbol(string(identity), "_acceptance"), :acceptance, true),
-    )
+    return result
+end
+
+_draw_calls(statement) = Tuple(_collect_draw_calls!(
+    Tuple[],
+    (_statement_arguments(statement), _statement_options(statement)),
+))
+
+function _draw_literal(value)
+    unwrapped = Symbolics.unwrap(value)
+    return try
+        Symbolics.value(unwrapped)
+    catch
+        value
+    end
+end
+
+function _draw_key(arguments)
+    token = last(arguments)
+    name = Symbol(SymbolicIndexingInterface.getname(Symbolics.unwrap(token)))
+    prefix = "__potts_draw__"
+    startswith(String(name), prefix) ||
+        throw(ArgumentError("a symbolic draw has an invalid DrawKey token"))
+    return Symbol(String(name)[(length(prefix) + 1):end])
+end
+
+function _draw_family(arguments)
+    code = _draw_literal(first(arguments))
+    code == 1 && return :bernoulli
+    code == 2 && return :uniform
+    code == 3 && return :normal
+    code == 4 && return :unit_vector
+    throw(ArgumentError("a symbolic draw has an unknown distribution family"))
+end
+
+function _random_operations(statement, identity::QualifiedStatementID)
+    result = RandomOperation[
+        RandomOperation(_draw_key(arguments), _draw_family(arguments), false)
+        for arguments in _draw_calls(statement)
+    ]
+    if statement isa Protocol
+        append!(result, (
+            RandomOperation(
+                Symbol(string(identity), "__proposal_recipient"),
+                :proposal_recipient,
+                true,
+            ),
+            RandomOperation(
+                Symbol(string(identity), "__proposal_direction"),
+                :proposal_direction,
+                true,
+            ),
+            RandomOperation(
+                Symbol(string(identity), "__metropolis_acceptance"),
+                :metropolis_acceptance,
+                true,
+            ),
+        ))
+    end
     return Tuple(result)
 end
 
