@@ -12,6 +12,7 @@ const POTTS_TESTS = (
     "test_discrete_field_rhs.jl",
     "test_expression_reference_scales.jl",
     "test_public_api.jl", "test_system_contract.jl",
+    "test_cartesian_domain_authoring.jl",
     "test_declaration_assembly.jl",
     "test_lexical_enrollment.jl",
     "test_declaration_control_flow.jl",

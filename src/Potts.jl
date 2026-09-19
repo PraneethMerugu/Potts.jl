@@ -103,6 +103,7 @@ include("compiler/lowering/stage_plan.jl")
 include("compiler/lowering/constraints.jl")
 include("compiler/lowering/trackers.jl")
 include("compiler/lowering/lifecycle_plan.jl")
+include("compiler/lowering/cartesian_domain.jl")
 include("compiler/execution/boundary.jl")
 include("compiler/lowering/core_program.jl")
 include("compiler/compile.jl")
@@ -177,7 +178,8 @@ export RemoveIncompatible, RejectIncompatible
 export FilterInadmissible, ErrorOnInadmissible
 export RejectLifecycleAmbiguity, StableLifecyclePriority
 export RetireAtZero, ForbidExtinction
-export Periodic, Closed, FrozenBorder, VonNeumann, Moore
+export Periodic, Closed, FixedExterior, AxisBoundary, Obstacle
+export MediumDomainOwner, WallDomainOwner, VonNeumann, Moore
 export ClearOnOwnershipChange, PreserveOnOwnershipChange
 export Undirected, RemoveWithEndpoint, RejectEndpointRetirement
 export DiscreteFieldEuler
