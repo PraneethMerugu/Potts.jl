@@ -1,7 +1,7 @@
 using Dates
 using Pkg
 
-function record_phase(name, action)
+function record_phase(action, name)
     output = get(ENV, "CI_TELEMETRY_FILE", "ci-telemetry/phases.tsv")
     mkpath(dirname(output))
     isfile(output) || open(output, "w") do io
