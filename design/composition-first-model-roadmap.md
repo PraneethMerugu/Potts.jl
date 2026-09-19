@@ -10,8 +10,8 @@ Keep the existing spine and breadth commitments, strengthen their composition
 contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
-The canonical allocation is **68 identified PRs: 54 planned + fourteen companions**.
-The all-in repository totals are Potts 22, CorePotts 17, LocalMath 14,
+The canonical allocation is **69 identified PRs: 54 planned + fifteen companions**.
+The all-in repository totals are Potts 22, CorePotts 17, LocalMath 15,
 MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
 their identities.
 
@@ -22,9 +22,9 @@ the earlier 58-PR bundling alternative is not the selected allocation. Do not ma
 PR count an acceptance criterion.
 
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
-68-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
+69-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
-At review time R01–R07 and twelve completed companions are recorded merged;
+R01–R07 and twelve completed companions are now recorded merged;
 the G07 ordered-fold validation companion C07 is LocalMath
 PR18 and its complete hosted suite passed after merge. The G05 exact
 keyed-reduction companion C08 is LocalMath PR19, merged as `7082ed84`, and
@@ -38,20 +38,31 @@ mutable-site semantics before R10/R11 can claim the accepted wall/domain query
 surface. C10 replaces/extends the existing owner authority rather than adding a
 second decoder; C11 migrates current `FrozenBorder` no-flux consumers to
 `Closed` before deleting that ambiguous spelling, never reinterpreting it as a
-fixed owner. C10 is implemented as a reviewed CorePotts PR35 draft with local
-qualification green; its hosted package and Metal jobs failed and require
-follow-up. C11 remains identified and unimplemented.
+fixed owner. These two companions are identified but not implemented.
 C12 is the merged LocalMath bounded runtime collection-launch cutover at
 `12b3fa98`; it keeps extent/capacity as runtime `ndrange` data across the shared
 collection families and specializes only on their semantic workgroup. It adds no
 model/compiler path and changes none of the composition ownership below.
 C13 is the merged LocalMath direct source-order recurrence law at `dd5d2e0`;
 it removes canonical sorting machinery only where `SourceOrder` does not
-consume it. C14 is the merged, separately demonstrated provider-settlement law
-in LocalMath PR23 (`a26cbfe4`): compact program-level validation payloads, nonempty blocking
-copy completion, explicit empty/alias synchronization and exact receipt failure
-ownership. The [exact KA audit](localmath-kernelabstractions-audit.md) records
-why these are two reusable owner laws rather than model-specific optimizations.
+consume it. C14 is the merged provider-settlement law in LocalMath PR23 at
+`a26cbfe`: compact program-level validation payloads, nonempty blocking copy
+completion, explicit empty/alias synchronization and exact receipt failure
+ownership. C15 is the separately demonstrated pointwise temporary-identity
+segmentation boundary after C14: one small graph-aware wrapper extracts the
+runtime temporary-identity set, and the reusable semantic segmentation law
+receives only that set. It preserves the bounded pointwise laws and one
+KernelAbstractions path without a cache, retained table, second graph
+representation or executor. LocalMath PR24 has now merged as `a1d60d1a`, with
+green Potts 99/99 and
+downstream Metal Core checkerboard 83/83 plus continuation 116/116 canaries.
+At observation, hosted `changes`, `macos-smoke`, `docs` and `scientific` are
+green; `package` and `metal` are pending, and conditional `macos-package` is
+skipped. LocalMath `main` now requires pull requests with zero approving
+reviews, enforces protection for administrators, and uses strict required
+checks `changes`, `package`, `scientific`, `macos-smoke`, `docs` and `metal`.
+The [exact KA audit](localmath-kernelabstractions-audit.md)
+records the earlier C13/C14 owner-law evidence.
 G04 onward is incomplete,
 with active candidates. This amendment does not reopen merged work or
 change another worker's candidate interfaces. Implementation must inspect the
@@ -231,8 +242,8 @@ not GitHub PR numbers or live API names.
 |---|---|---|
 | **R51 / E13 — Potts: COBREXA optimization coupling** | After G07's stable publication/lifecycle boundary. Bind environmental snapshots to a selected upstream FBA model, execute its public solver API, validate result status and publish metabolic outputs. Exercise bound updates, workspace ownership, sampling cadence, division/retirement and failure. Environmental withdrawals reuse G07/E07 accounting. | Optimization has result status, feasibility and alternative optima; pretending it is an ODE misses its real contract. No generic optimizer framework is needed. |
 | **R52 / E14 — Models: FBCA crypt model and metabolic compositions** | After the metabolic bridge, its selected environmental coupling (R35 for the accepted field-integrated delivery), G08's public composition/inspection surface and G09's benchmark workflow. Own #8's scientific formulas, assets, parameters, experiments, tutorial and benchmark. | A solver adapter is not the scientific model. This is a real downstream delivery, not a free compatibility tail. |
-| **R53 / E15 — Models: vascular growth paper corpus** | After R17 and R35. Deliver #1, #5 and #7 with shared mechanical/field building blocks, distinct source laws, scientific tests and experiments. | Keeps three related paper implementations and their validation out of the already broad field-binding PR. Early bounded components may still ship in R17. |
-| **R54 / E16 — Models: multiscale tumor paper corpus** | After R35 and the vascular corpus where its public components are reused. Deliver #6 and #11, Boolean rules, coupled environments, phenotype/lifecycle and treatment experiments. | Separates model transcription/calibration from native infrastructure. No new tumor runtime or signaling framework. |
+| **R53 / E15 — Models: vascular growth paper corpus** | After R17, R35 and G09's shared runner. Deliver #1, #5 and #7 with shared mechanical/field building blocks, distinct source laws, scientific tests, experiments and public compiler-corpus cases. | Keeps three related paper implementations and their validation out of the already broad field-binding PR. Early bounded components may still ship in R17; Models adds cases, not compiler machinery. |
+| **R54 / E16 — Models: multiscale tumor paper corpus** | After R35, G09 and the vascular corpus where its public components are reused. Deliver #6 and #11, Boolean rules, coupled environments, phenotype/lifecycle, treatment experiments and shared-runner cases. | Separates model transcription/calibration from native infrastructure. No new tumor runtime, signaling framework or bespoke benchmark runner. |
 
 The last two are accepted delivery splits, not evidence that existing
 abstractions cannot express the models. Do not duplicate implementations between
@@ -294,17 +305,17 @@ unresolved scientific checks in section 1.
 
 | # | Early reusable delivery | Final paper/reference-model owner | Main prerequisites |
 |---|---|---|---|
-| 1 | R17 bounded chemotaxis/field composition | R53 vascular corpus | R17, R35; selected connectivity law if the variant requires it |
+| 1 | R17 bounded chemotaxis/field composition | R53 vascular corpus | R17, R35; selected connectivity law if the variant requires it; G09 shared runner |
 | 2 | R16 lifecycle components | R17 | G04–G07 |
 | 3 | G04/G06 public motility examples | R17 | G04–G06; chosen OpenVT bias law |
 | 4 | G06 drive and E02 law example | R25 | G06, E02; foam proposal-law resolution |
-| 5 | R35 field/matrix components | R53 vascular corpus | R17, R35 |
-| 6 | R16 regulation/coupling; R35 fields | R54 tumor corpus | E01, R35; paper network/lifecycle transcription |
-| 7 | R35 fields; shared vascular components | R53 vascular corpus | R17, R35 |
+| 5 | R35 field/matrix components | R53 vascular corpus | R17, R35; G09 shared runner |
+| 6 | R16 regulation/coupling; R35 fields | R54 tumor corpus | E01, R35, G09, E15/shared vascular components; paper network/lifecycle transcription |
+| 7 | R35 fields; shared vascular components | R53 vascular corpus | R17, R35; G09 shared runner |
 | 8 | R51 COBREXA integration | R52 FBCA corpus | G07, metabolic bridge, R35, G08, G09; paper model assets |
 | 9 | Existing extracted sorting fixtures | R17 | G06, explicit reference conventions |
 | 10 | R17 mechanical invasion composition | R38 | G06/G08 and selected E08 measurements; final-paper verification |
-| 11 | R16 coupling; R33 reusable intracellular library | R54 tumor corpus | R35, shared vascular components; Boolean and treatment semantics |
+| 11 | R16 coupling; R33 reusable intracellular library | R54 tumor corpus | R35, G09, E15/shared vascular components; Boolean and treatment semantics |
 | 12 | G05 geometry/G06 energy example | R17 | G05C, G06; full anisotropic formula |
 | 13 | E03 public bending example | R30 | E03/E04; correct ordered segment dependencies |
 | 14 | R30 compartment mechanics | R35 | E01, E04, E07; G04 history and actual site conversion |
@@ -317,7 +328,7 @@ Accepted graph changes are small and explicit (the canonical map owns them):
 - Add **G07 → E13/R51**, and **E13 + E07 + G08 + G09 → E14/R52**.
   G08 is also transitively upstream of G09, but remains explicit because E14
   consumes both the authoring/inspection surface and the benchmark workflow.
-- Add **G08 + E07 → E15/R53** and **E07 + E15 → E16/R54**.
+- Add **G08 + E07 + G09 → E15/R53** and **E07 + E15 + G09 → E16/R54**.
 - Conditional law companions precede their named consumer. Preserve all other
   existing edges, including correct G05 → G05C → G06/G07.
 
@@ -348,6 +359,16 @@ Each model delivery includes:
   before/after evidence through the canonical public-model probes and the
   applicable real-device witness. CPU-only native/optimization solvers name
   their host boundary and do not inherit a device claim from CPM execution.
+
+- For deliveries after R20, a repeated-instance control through the canonical
+  G09 public runner. Earlier model PRs provide public fixtures and feature-local
+  evidence that R20 later consumes; they do not depend backward on that runner.
+  Authored spelling and model cardinality must reuse established families. A
+  truly new mathematical, storage, dimension or execution-law family is
+  declared and compared with an unchanged control. PottsModels contributes
+  public models and expected science; it does not inspect private upstream
+  MethodInstances, kernel objects or prepared structs and never owns
+  compiler/executor machinery.
 
 - One public composition/factory and an explicit initializer. No private Core
   state access, cloned numerical solver, biological compiler switch or required
@@ -381,13 +402,14 @@ Each model delivery includes:
   Include an unchanged control when the model adds a new specialization family;
   unexplained growth in that control is specialization coupling, not a model
   cost to hide in the later G09 rollup.
-- A compiler-health workload declaration recording normalized operation/recipe
-  families and counts, prepared payload/state-view summary sizes, first-process
-  stage latency, typed statement/call and root-inference results, specialization/
-  generated-code growth, warmed allocations and throughput. Vary author names,
-  parameter values and bounded repeated components independently so accidental
-  specialization is visible. Later corpus PRs extend the same runner rather than
-  creating paper-specific benchmarks or another execution authority.
+- A public compiler-health workload declaration recording the expected
+  operation families, first/warm public latency, warmed allocations and
+  throughput. Vary author names, parameter values and bounded repeated
+  components independently so accidental coupling is visible. Private recipe,
+  payload, IR and specialization attribution remains in the owning engine
+  package when the workload demonstrates a new family. Later corpus PRs extend
+  the same runner rather than creating paper-specific benchmarks or another
+  execution authority.
 
 The fourteen are a scientific reuse corpus, not exhaustive feature coverage.
 Preserve additional honest witnesses for equilibrium sampling, OU mechanics,

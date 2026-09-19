@@ -3,7 +3,7 @@
 Status: current implementation snapshot. Updated 2026-09-17.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-identified work and dependencies: **68 repository PRs = R01–R54 plus fourteen
+identified work and dependencies: **69 repository PRs = R01–R54 plus fifteen
 demonstrated companions**. The [compiler amendment](compiler-contract-chain-amendment.md)
 owns compiler-tractability expectations, and the
 [composition-first roadmap](composition-first-model-roadmap.md) owns the
@@ -20,12 +20,12 @@ in dependency order. Releases remain unauthorized.
 - R01–R07 are merged across PottsModels, Potts, CorePotts, LocalMath, and
   MakiePotts. Core R08 is also merged as CorePotts PR32 (`7b46e4eb`); its Potts
   consumer R09 remains open.
-- Twelve demonstrated companions are merged: the PottsModels CI correction and
+- Thirteen demonstrated companions are merged: the PottsModels CI correction and
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
   ordered-fold step validation, plus exact keyed reduction, atomic keyed
-  rebuild publication, bounded runtime launch, direct source-order recurrence
-  and validation-copy settlement.
+  rebuild publication, bounded runtime launch, direct source-order recurrence,
+  validation-copy settlement and pointwise temporary-identity segmentation.
 - The seventh identified companion is LocalMath PR18, merged as `9d3e1a24`.
   The eighth is LocalMath PR19, merged as `7082ed84`; both passed their complete
   hosted package, scientific, documentation, macOS, and real-Metal checks.
@@ -33,12 +33,19 @@ in dependency order. Releases remain unauthorized.
   also passed.
 - C12 is merged as LocalMath PR21 (`12b3fa98`), with exact local KCT,
   allocation, full CPU, affected real-Metal, throughput and independent-review
-  evidence and complete hosted suite green.
+  evidence green.
 - C13 is merged as LocalMath PR22 (`dd5d2e0`); its exact KCT/allocation, full
   CPU, full real-Metal, independent review and complete hosted suite are green.
-- C14 is merged as LocalMath PR23 (`a26cbfe4`). Its fresh-session KCT, full
-  CPU/full real-Metal, independent review, complete hosted suite and exact
-  downstream Core/Potts canaries are green.
+- C14 merged as LocalMath PR23 (`a26cbfe`); its fresh-session KCT, full CPU,
+  full real-Metal, independent review and complete hosted suite are green.
+- C15 merged as LocalMath PR24 (`a1d60d1a`), based on merged C14. Fresh KCT,
+  1,942 behavioral CPU assertions, real Metal 592/592, Core
+  17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and
+  continuation 116/116 are green. The one CPU-suite error is the baseline Aqua
+  environment failure resolving KernelAbstractions' optional `EnzymeCore` weak
+  dependency. Hosted `changes`, `macos-smoke`, `docs` and `scientific` are
+  green; `package` and `metal` are pending, and conditional `macos-package` is
+  skipped at observation.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -56,8 +63,9 @@ in dependency order. Releases remain unauthorized.
 | C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `cca004b9` | LocalMath main after PR19 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | C12 LocalMath bounded runtime collection launch | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) | `12b3fa98` | LocalMath main after PR20 | merged; complete local/hosted CPU, real-Metal, KCT/allocation/performance and review green |
 | C13 LocalMath direct source-order recurrence | [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22) | `dd5d2e0` | LocalMath main after PR21 | merged; complete local/hosted CPU, real-Metal, KCT/allocation and review green |
-| C14 LocalMath validation-copy settlement | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) | `a26cbfe4` | LocalMath main after PR22 | merged; fresh-KCT/local+hosted CPU/real-Metal/review and exact downstream canaries green |
-| C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `871c13c1` | Core R08 | draft; local science/compiler/docs/quality and review green; hosted package and Metal failed and require follow-up |
+| C14 LocalMath validation-copy settlement | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) | `a26cbfe` | LocalMath main after PR22 | merged; complete local/hosted CPU, real-Metal, KCT and review green |
+| C15 LocalMath pointwise temporary-identity segmentation | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) | `a1d60d1a` | merged C14 `a26cbfe` | merged; fresh KCT, LocalMath behavioral CPU 1,942 pass with baseline Aqua environment error, real Metal 592/592, Core 17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and continuation 116/116 green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation |
+| C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `871c13c1` | Core R08 | draft; local science/compiler/docs/quality and independent review green; hosted package/docs/macOS/real-Metal running |
 | C11 Potts Cartesian domain authoring | — | — | C10 and Potts R09 | identified; required before R11 can admit wall/exterior/obstacle filters |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
@@ -119,7 +127,9 @@ consume those facts for the complete explicit spatial-query surface. This
 demonstrated pair raised the identified count to 65 before C12 raised it to 66.
 C13 direct source-order recurrence and C14 validation-copy settlement then
 raised the count to 68 after the exact LocalMath–KA audit demonstrated two
-different reusable owner laws.
+different reusable owner laws. The follow-on compiled-artifact reuse
+investigation demonstrated C15's pointwise temporary-identity segmentation
+boundary and raised the count to 69.
 
 CorePotts PR35 now implements C10 on top of merged R08. It owns the complete
 Cartesian executable identity, uses one mutable-site attempt population for
@@ -203,7 +213,7 @@ qualify a later joined package tuple.
 | C08/C09 keyed reduction and rebuild | C08 and C09 are complete at merged LocalMath PR19/PR20 with full hosted qualification. C09 corrected its review blocker and its exact Core checkerboard consumer matches independent pair oracles, including capacity-greater-than-emission duplicate-key folding on real Metal. | Consume merged C09, then rerun the extended Core lifecycle/checkpoint/permanent Metal and affected full-suite witnesses before R10 publication. |
 | G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
 | G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08/C09 tuple. |
-| R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Re-run root-`Any`, boundary-size, one/two/four/eight/sixteen-entry identity, value/name remake, AllocCheck, warmed allocation and actual-device probes on corrected R10. |
+| R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Warm the legitimate family basis; hard-check one versus 64 repeated entries plus rename/value/remake controls at the owner-defined family/signature boundary, AllocCheck, warmed allocation and actual-device probes on corrected R10. Retain the full 1/4/16/64 ladder, 256 and aggregate compiler counts in the dedicated compiler job or merge/nightly evidence. |
 | R50 public lowering identity | The draft candidate has pinned-array CPU/Metal evidence; its parent R11 and downstream interface canary remain open. | Prove package-declared and interactive equivalence, author-name erasure, source diagnostics and the complete public workflow on the exact joined stack. |
 | Retrospective compiler-debt sweep | PR19 supplied its own feature-local comparison; C09 has a policy-specialization probe; no completed cross-merge sweep is recorded for R06, R07 or the LocalMath companion sequence. | Run the bounded before/current comparisons before R49/R50 freeze; correct a measured defect in its open owner or count a targeted companion only if required. |
 | G06/G07 interface canaries | Required by R49/R50; R50 is still recorded as blocked by its downstream canary. | Preserve G05's explicit rejection while proving the normalized boundary distinguishes a periodic/shared-owner/relation conflict from shared read-only and owner-proven commutative/associative compatibility; also exercise one held/native-snapshot case before interface freeze. |
@@ -301,23 +311,42 @@ intermediate broad-catch shape at 235 statements/135 calls/67 `Any` slots; the
 final narrow failure boundary is 130/75/35 versus the 131/76/36 baseline, with
 one MethodInstance per settlement boundary. On the combined PR22/PR23 tip,
 focused CPU passed 443 assertions, full CPU 1,943/1,943, focused real Metal
-137/137 and full real Metal 592/592. Independent review and the complete hosted
-suite are green. Exact downstream results on Core `b4e5bda5` and Potts
-`40b2ddf3` were Core CPU 17,321/17,321, Potts CPU 274/274, six completed Core
-Metal files 429/429 plus inventory 3/3, and five Potts Metal files 131/131. One
-broader Core site-tracker file remains explicitly partial: 228 assertions
-passed before the 20-minute cold-compile cutoff, with no observed failure but
-no clean file exit. The directly affected lifecycle-relationship witness passed
-14/14 separately. The
+137/137 and full real Metal 592/592. Independent review is clean. PR23 merged
+as `a26cbfe` after its complete hosted suite passed. The
 [audit record](localmath-kernelabstractions-audit.md) contains the exact KA
 0.9.42 source contract, complete boundary atlas and rejected hypotheses.
 
-After C14 delivery, the next KCT arc is the compiled-artifact reuse atlas in
-the compiler amendment. It will compare equivalent evaluator/closure and
-payload shapes across LocalMath, Core and Potts, including real-Metal callable
-identity. It is measurement scope only: no fifteenth companion is counted unless
-the atlas demonstrates a reusable owner-level correction that cannot fit an
-active owner PR.
+C15 is the first accepted result of the compiled-artifact reuse investigation.
+Pointwise graph traversal had remained fused with reusable segmentation even
+after the caller knew which publications were temporary. The candidate leaves
+temporary extraction in a small graph-aware wrapper and passes only the runtime
+temporary-identity set to the semantic segmentation law. It preserves bounded
+pointwise segments and the one KernelAbstractions CPU/Metal execution path;
+there is no cache, retained lookup table, second graph representation, alternate
+executor or model-specific kernel. Fresh registered KCT supports the narrower
+boundary. LocalMath behavioral CPU passes 1,942 assertions, with only the
+pre-existing Aqua environment failure resolving KernelAbstractions' optional
+`EnzymeCore` weak dependency; real Metal passes 592/592 with scalar indexing
+disabled; Core passes 17,658/17,658; Potts passes 99/99; and downstream Metal
+Core checkerboard passes 83/83 with continuation at 116/116. LocalMath PR24
+merged as `a1d60d1a`. At observation, hosted `changes`, `macos-smoke`, `docs`
+and `scientific` are green; `package` and `metal` are pending, and conditional
+`macos-package` is skipped.
+
+The subsequent top-down portable compiler investigation is recorded in
+[portable-gpu-compiler-architecture-investigation.md](portable-gpu-compiler-architecture-investigation.md).
+Current C15 reuses execution families across author names, runtime values and
+extents, and the isolated Potts late-lowering boundaries reuse tracker,
+descriptor, stage, lifecycle and Core types across rename and declaration
+reorder. One R50-owned defect is demonstrated: `PottsParameters` currently
+places author-facing NamedTuple keys in problem/integrator type identity. A
+runtime-name-tuple prototype reduces renamed-equivalent `init` inference from
+43 records to the KCT root record while remaining AllocCheck- and JET-clean.
+Ordinary CPU, remake/checkpoint and portable-Metal validation remain in
+progress, so this is not yet merged evidence. The exact Metal 1.10.0 tuple is
+blocked on macOS 27 because it reports no device; Metal 1.11.1 sees the M1 Pro
+and is used only for supplemental behavior evidence pending a normal dependency
+decision. The PR count remains 69.
 
 The Core execution-payload investigation is a formal R49 no-change. Fresh
 step-two decomposition found the proposal/descriptor/tracker/accepted-copy path
@@ -332,6 +361,56 @@ defect or qualifying R49 cut was demonstrated. G09 retains provider-owned
 receipt/task allocation pressure with an R49 consumer canary; it does not
 broaden the launch companion unless that launch change directly improves these
 bytes.
+
+### Three-pass compiler-cardinality audit
+
+The package-by-package audit identifies a new cross-chain requirement but no
+qualified production correction yet. It is recorded as
+**cardinality-independent execution identity**: after warming the bounded set of
+legitimate backend, dimension, scalar/storage, operation, value-shape and
+execution-law families, repeated model instances must not create new
+owner-scoped device execution families or model-sized typed IR. This is not a
+claim of universal constant Julia compilation.
+
+- LocalMath already plateaus across runtime extent in the controlled pointwise
+  case: extent 16→301 kept the same eight law families, with host compilation
+  19.402→19.815 seconds, planning 9.047→9.117 and preparation 8.024→8.352.
+  Stage cardinality does not yet plateau: 1→4→8→32 stages grew host compilation
+  3.725→17.221→21.810→41.422 seconds, planning
+  2.416→7.325→9.412→23.480 and warmed allocation
+  608→8,640→15,552→65,568 bytes. `LocalLaw` stage tuples and global structural
+  binding tuples are the leading investigation boundary; no runtime-row
+  replacement has passed complete planning-through-settlement A/B validation.
+- Minimal Core checkerboard construction reuses an exact repeated program in
+  process, but its operational types remain graph-shaped: the observed
+  `ProgramRuntime` and workspace type renderings were 79,868 and 78,119
+  characters, and fresh initialization produced 78,298 inference records.
+  Rendered length and raw record totals are diagnostic trends, not CI gates.
+  R49 owns repeated tracker/update and maintained/state payloads consumed by its
+  admitted contracts. Later lifecycle and relationship owners define their own
+  families while reusing that law; R12/R13 own checkerboard conflict-closure
+  execution without a prescribed phase or kernel layout.
+- Potts already keeps completion/source graphs as host runtime data and reuses
+  key late-lowering types across author rename, reorder and numerical changes.
+  Remaining risks are graph-shaped operation expressions, alternating stage
+  family grouping, tracker/lifecycle tuple combinations, manifest identity and
+  saved/current state schemas. R50 owns demonstrated normalization and erasure;
+  it must not hide novelty in `Any` storage or introduce an evaluator registry.
+- PottsModels currently supplies valuable scientific factories but not the
+  controlled public scaling matrix. G09/R20 owns the shared runner and minimal
+  variants; R52–R54 extend it with realistic repeated and mixed-family models
+  without inspecting upstream private compiler structures.
+
+Owner-local hard CI warms the family basis and compares one versus 64 repeated
+instances plus rename/value controls at a stable owner-defined signature, with
+narrow JET/AllocCheck contracts. The dedicated compiler job covers 1/4/16/64;
+the 256-instance case, exact MethodInstance/KA/GPUCompiler identities, aggregate
+inference/IR counts, timings and private backend artifacts remain trends. The
+identified total stays **69**. A sixteenth LocalMath companion remains
+conditional and uncounted; it is added only if a direct cold-law/binding
+candidate materially improves the complete
+lifecycle without displacement, deletes the prior representation and cannot
+coherently fit an open owner.
 
 ### Accepted checkerboard conflict-closure scope
 
@@ -378,7 +457,7 @@ the authored graph into device execution. G07 adds held/native snapshot
 pressure; G09 retains compiler/allocation evidence; E01, E03, E08, E11 and E12
 add 3D periodic/shared-owner, opposite-endpoint relationship, exact-global-
 predicate, compound-swap and weighted-graph cases. The identified count is now
-68. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
+69. R10 implementation demonstrated C09, one narrowly owned reusable LocalMath
 keyed-rebuild law that cannot coherently live in Core or Potts. No further
 checkerboard companion is presumed. C10/C11 are separately demonstrated
 Cartesian-domain owners, not checkerboard work.
@@ -397,6 +476,38 @@ requests, historical hardening records and PR-chain labels were not
 misrepresented as issues. A different tracker would require its exact
 repository or link before any reopen action.
 
+### Portable compiler architecture and current dependencies
+
+The top-down portable compiler audit is recorded in
+`design/portable-gpu-compiler-architecture-investigation.md`. KCT demonstrated
+one author-name leak in the audited R50 baseline: renamed runtime parameters
+created 43 additional inference records. R50 base commit `61745a52` already
+owns the direct correction through a runtime parameter schema; the independently
+prepared duplicate PR #62 was closed after that base advance was discovered.
+The corrected path reuses the execution family and adds only the KCT root
+record. Behavioral validation passed 5,085 assertions, package quality passed
+48/48, and the real-Metal vector-parameter witness passed 132/132.
+
+LocalMath C15 passed all 592 assertions in its complete portable-KA Metal suite
+on Metal 1.11.1/GPUCompiler 2.8.1 with scalar indexing disabled. Potts PR #63
+refreshes the reproducible Metal profile to current compatible external
+releases. Its clean precompile took about 76 minutes and its focused Metal
+witness 11 minutes 6 seconds; these remain benchmark evidence rather than CI
+thresholds. Internal source heads are not independently interchangeable:
+CorePotts `main` has the V2 RNG cutover but lacks later R49 SPI consumed by the
+active R50 lineage. The later source join therefore remains a direct cutover,
+without compatibility aliases. This maintenance PR does not change the 69-PR
+identified feature-chain count.
+
+PR #63 also refreshes the exact CPU replay profile to current released SciML
+and MethodOfLines dependencies. An isolated qualification passed 249/249
+checkpoint/restart assertions before the production replay row was advanced.
+Docs and ordinary integration now admit MethodOfLines 1.x. The latest Metal
+native tuple is not granted exact replay yet: its former bounded-failure
+witness now succeeds under DiffEqGPU 3.21.2, so failure atomicity must be
+re-established before that closed evidence row can move. Functional portable
+KA-on-Metal support remains validated on the latest stack.
+
 ## Immediate dependency order
 
 1. Correct, re-review, and qualify the periodic geometry/connectivity candidate;
@@ -410,10 +521,15 @@ repository or link before any reopen action.
 4. Begin G06 R12/R13 conservative energy/drives and G07 R14–R16 native transfer,
    lifecycle, and first complete maintained model.
 5. Continue G08/G09 and the breadth groups E01–E16 according to the canonical
-   graph. R52 additionally depends on G09's benchmark/observation corpus.
+   graph. Final G09/R20 follows joined R49/R50 and R12/R13 phase boundaries;
+   R52–R54 all extend its one public benchmark/observation runner rather than
+   creating paper-specific compiler harnesses.
 
 ## Merge policy
 
+- LocalMath `main` now requires pull requests with zero approving reviews,
+  enforces protection for administrators, and uses strict required checks
+  `changes`, `package`, `scientific`, `macos-smoke`, `docs` and `metal`.
 - Keep incomplete or failed-review PRs draft.
 - Request auto-merge only after the exact current tip has passed applicable
   owning, integration, documentation, replay, and real-device checks plus
@@ -430,4 +546,26 @@ The next milestone is a scientifically correct and joined G05 baseline: R10,
 R11, the exact keyed-reduction companion, and their R49/R50 compiler-contract
 children must all be current-tip green and independently review-clean. It does
 not complete G06–G09 or any breadth group. Full project completion requires all
-68 identified PRs and any later demonstrated owner companions.
+69 identified PRs and any later demonstrated owner companions.
+
+### CI implementation arc and repository reconciliation
+
+The independent CI implementation arc remains outside the 69-feature allocation.
+Its Wave-1 telemetry changes are published as LocalMath PR25, CorePotts PR36,
+Potts PR64, PottsModels PR3 and MakiePotts PR9. They measure environment
+resolution, dependency precompilation, compilation-family fixture cost, cache
+transfer and representative CPU/Metal consumers without changing scientific
+test selection or adding timing thresholds. Wave 2 remains gated on hosted
+fresh/warm evidence from these exact tips.
+
+Potts PR64 is stacked on dependency-refresh PR63. PR63 is mergeable but its
+`metal shard (quantities_and_components)` witness and aggregate `metal` check
+failed on the observed tip, so neither PR is ready to merge or restack.
+
+The 2026-09-18 repository reconciliation preserved previously uncommitted
+implementation work on its owning branches: Core Cartesian ownership on the
+existing PR35 branch, Core maintained spatial-relation integration on
+`codex/relation-measure-sensing`, Potts diagnostic validation on
+`codex/reconcile-diagnostic-validation`, and Potts structured-authoring
+qualification on `codex/structured-authoring-integration`. Publication is a
+recovery action, not implementation qualification or authorization to merge.
