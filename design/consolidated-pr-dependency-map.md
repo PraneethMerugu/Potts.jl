@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified fourteen required additional PRs. `C01`–`C14` are
+Implementation has identified fifteen required additional PRs. `C01`–`C15` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -38,11 +38,12 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C07 Ordered-fold step validation** | LocalMath | G07 | C06 | R14 Core bounded exchange settlement | Merged | [LocalMath PR18](https://github.com/PraneethMerugu/LocalMath.jl/pull/18) |
 | **C08 Exact keyed reduction** | LocalMath | G05 | C07 | R10 Core pair multiplicity, then R11 Potts spatial-query lowering | Merged as `7082ed84`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) |
 | **C09 Atomic keyed rebuild publication** | LocalMath | G05 | C08 | R10 Core maintained relationship rebuild, then R11 Potts spatial-query lowering | Merged as `cca004b9`; complete hosted package/scientific/docs/macOS/real-Metal suite green | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) |
-| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Draft at `871c13c1`; local qualification and review green; hosted package and Metal failed and require follow-up | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) |
+| **C10 Cartesian domain ownership** | CorePotts | G05 | G04 merge gate; implementation base Core R08 | R10 Core spatial-query maintenance and C11 Potts domain lowering | Draft at `871c13c1`; local qualification and independent review green, hosted real-Metal pending | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) |
 | **C11 Cartesian domain authoring** | Potts | G05 | C10, R09 | R11 complete spatial-query authoring and lowering | Identified; implementation not started | — |
 | **C12 Bounded runtime collection launch** | LocalMath | G05C | C09 | R49/R50 qualified compiler boundary and every later collection consumer | Merged as `12b3fa98`; local CPU/real-Metal/performance evidence, independent review and complete hosted suite green | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) |
 | **C13 Direct source-order recurrence** | LocalMath | G05C/G07 | C12 | R14 and every later source-ordered fold consumer | Merged as `dd5d2e0`; local KCT/allocation/full-CPU/full-real-Metal evidence, independent review and complete hosted suite green | [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22) |
-| **C14 Validation-copy settlement** | LocalMath | G05C | C13 | R49/R50 receipt canaries and every later asynchronous LocalMath consumer | Merged as `a26cbfe4`; fresh KCT, local/full CPU and real-Metal, review, hosted and downstream canaries green | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) |
+| **C14 Validation-copy settlement** | LocalMath | G05C | C13 | R49/R50 receipt canaries and every later asynchronous LocalMath consumer | Merged as `a26cbfe`; complete hosted suite green | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) |
+| **C15 Pointwise temporary-identity segmentation** | LocalMath | G05C | C14 | R49/R50 pointwise compiler canaries and every later pointwise-stage consumer | Merged as `a1d60d1a`; local KCT/CPU/Metal and Core/Potts canaries green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) |
 
 The companion scopes are:
 
@@ -207,9 +208,20 @@ The companion scopes are:
   adds no event wrapper, cache, backend-specific scientific path, second status
   store or second scheduling authority. See the
   [exact audit](localmath-kernelabstractions-audit.md).
+- **C15 — the G05C LocalMath pointwise temporary-identity segmentation
+  companion**, ordered after C14 and before R49/R50 completion. The compiled-
+  artifact reuse investigation demonstrated that the pointwise segmentation
+  boundary unnecessarily received graph-aware wrapper state after the caller
+  had already identified temporary publications. Keep graph traversal and
+  extraction in one small graph-aware wrapper; pass only the extracted runtime
+  temporary-identity set to the reusable semantic segmentation law. Temporary
+  identities, authored names and completed graph contents remain runtime data.
+  Preserve the existing bounded pointwise segment laws and the single
+  KernelAbstractions CPU/Metal path. Do not add a cache, retained lookup table,
+  second graph representation, alternate executor or model-specific kernel.
 
-The current identified allocation is therefore **68 repository PRs: the 54 planned
-PRs below plus these fourteen companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **69 repository PRs: the 54 planned
+PRs below plus these fifteen companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -224,10 +236,10 @@ or prescribed branch names; their numbering is not a chronological merge order.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Potts.jl | 8 | 13 | 21 | 1 | **22** |
 | CorePotts.jl | 7 | 9 | 16 | 1 | **17** |
-| LocalMath.jl | 1 | 2 | 3 | 11 | **14** |
+| LocalMath.jl | 1 | 2 | 3 | 12 | **15** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **14** | **68** |
+| **Total** | **22** | **32** | **54** | **15** | **69** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -286,11 +298,11 @@ The compiler amendment owns the detailed acceptance template.
 | G03/R07 | Bind verified geometry/context facts into concrete read views rather than passing broad context stores. | Retrospectively compare proposal/context and geometry entrypoints plus an unchanged control. |
 | G04/R08–R09 | Normalize scoped component identity, structured state/history and compound effects into typed storage and publication recipes. | Prove constructor-equivalent names/compositions reuse execution families; record the structural lifecycle baseline and actual device witness. |
 | G05/C08–C11/R10–R11 | Lower Cartesian owner domains, relation lanes and maintained statistics into compact domain views, contribution, keyed grouping, incremental update, atomic rebuild and publication recipes over handles/scalars/deltas. | Keep owner identities/categories, mutable-site masks, capacity/count/value changes and incremental-versus-rebuild inclusion as data where admitted; measure sampling, sum/minimum, relation/query and lifecycle boundaries, with C08/C09 operation/retention policy confined to its fold boundary and C10/C11 eliminating the missing domain representation rather than adding an executor. |
-| G05C/R49–R50 | Replace broad accepted-update interpretation with canonical recipes and state views, while Potts erases author identity and irregular analyzed structure before Core preparation. | Own the root-`Any`, boundary-size, allocation and entry-count/name/value identity probes, exact measured entrypoints and unchanged controls. |
-| G06/R12–R13 | Normalize energy, drive and transitive dependency meaning into bounded evaluation/arbitration recipes with explicit transition/context inputs. | Reuse established state views; add a family only for distinct semantics and extend the transition/relational canary on CPU and claimed devices. |
+| G05C/R49–R50 | Replace broad accepted-update interpretation with canonical recipes and narrow state views. R49 owns cardinality-independent tracker/update and maintained/state payloads consumed by its admitted contracts; R50 erases author identity and irregular expression/graph structure before Core preparation and normalizes equivalent evaluators into durable operation families where demonstrated. Later lifecycle and relationship owners define their families while reusing the boundary law. | Own the root-`Any`, boundary-size and allocation probes. A small owner-local 1-versus-64 witness plus rename/value controls hard-checks stable owner-defined family/signature reuse; the dedicated compiler job covers 1/4/16/64 and bounded-IR evidence, with 256 benchmark-only. |
+| G06/R12–R13 | Normalize energy, drive and transitive dependency meaning into reusable execution families over runtime proposal, effect, conflict and dependency data without prescribing a phase or kernel layout. | Graph contents and counts change runtime work, not executor identity. Land owner-local compiler and complete semantic tests here; G09 later aggregates their public observations but does not defer correctness. |
 | G07/R14–R16 | Bind cadence, snapshots, settlement, lifecycle and publication into narrow views; external numerical systems stay at their native host boundary. | Distinguish CPM-device from solver-host compilation and extend the held/native-snapshot canary plus full public workflow. |
 | G08/R17–R19 | Reuse public recipe families for the model corpus, observations and inspection; reporting derives from committed state. | Package and interactive equivalents share preparation identity; new device families receive feature-local evidence rather than paper-specific kernels. |
-| G09/R20 | Preserve the canonical public compiler-health corpus and fresh-process stage decomposition; it creates no execution authority. | Record longitudinal latency, specialization, generated code, allocation, transfer and throughput trends without brittle timing gates. |
+| G09/R20 | Preserve the canonical public compiler-health corpus and fresh-process stage decomposition; it creates no execution authority. Its final runner follows joined R49/R50 and R12/R13 boundaries. | Own process-isolated package-load, first-family cold work, subsequent equivalent models, warmed allocation/throughput and portable-KA real-device observations through public workloads and owner-supplied runners. Private SnoopCompile/MethodAnalysis/JET/AllocCheck probes remain in their owning packages. |
 | E01/R21–R22 | Reuse dimension-generic ownership, geometry, lifecycle and field/native families for regular 3D; add only demonstrated dimension semantics. | Dimensionality may specialize as a durable physical fact; compare unchanged 2D and real supported-device 3D witnesses. |
 | E02/R23–R25 | Normalize equilibrium sampling and OU process laws separately into existing proposal/process/state families. | Law/algorithm may distinguish families; paper identity and parameter values do not. Measure the actual foam/proposal path if it is new. |
 | E03/R26–R27 | Lower directed/anchored endpoint, payload and inverse-dependency changes into relationship and transaction recipes with endpoint-focused views. | Test ordered traversal, lifecycle and conflict boundaries; do not specialize on relationship names or pass a relation registry. |
@@ -305,36 +317,55 @@ The compiler amendment owns the detailed acceptance template.
 | E12/R47–R48 | Bind static weighted-graph measures, adjacency, proposals and swaps into graph-domain geometry/transition views. | Domain representation is a durable fact only where measured; graph names, vertex counts within capacity and weights remain data when admitted. |
 | E13/R51 | Keep COBREXA model/solver workspaces and statuses on the host; lower bounded withdrawals/publications through G07 settlement. | Measure host solve/re-solve and CPM settlement separately; no model-name specialization, GPU LP or portable warm-start claim. |
 | E14/R52 | Compose FBCA through R51/R35/G09 public paths with no metabolic executor in Models. | Extend the shared public corpus with finite-resource contention and compare package-declared/interactively equivalent models. |
-| E15/R53 | Compose vascular models from existing mechanical/field families; paper laws remain Models-owned data and equations. | Add evidence only for genuinely new operation conjunctions and retain unchanged corpus controls. |
-| E16/R54 | Compose tumor Boolean, field, phenotype and lifecycle rules through established public families. | Record realistic payload/count/latency growth; paper and pathway names never become hot execution identity. |
+| E15/R53 | Compose vascular models from existing mechanical/field families; paper laws remain Models-owned data and equations. | Extend the shared G09 runner with repeated and mixed-family public cases; add evidence only for genuinely new operation conjunctions and retain unchanged controls. |
+| E16/R54 | Compose tumor Boolean, field, phenotype and lifecycle rules through established public families. | Extend the same runner with realistic payload/count combinations; paper and pathway names never become hot execution identity. |
 
 This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation, C08 exact
 keyed-reduction, C09 atomic keyed-rebuild and C10/C11 Cartesian-domain
 companions plus C12's bounded runtime launch, C13's direct source-order
-recurrence and C14's validation-copy settlement raise the current total to 68
-identified PRs.
+recurrence, C14's validation-copy settlement and C15's pointwise temporary-
+identity segmentation raise the current total to 69 identified PRs.
 
-The earlier three-phase attribution arc changed the count once through C12; the
-follow-on exact LocalMath–KA audit separately demonstrated C13 and C14. Their
-dependency pressure is:
+The initial three-phase attribution arc changed the count exactly once, through
+C12. The follow-on exact LocalMath–KernelAbstractions and compiled-artifact
+reuse investigations separately demonstrated C13–C15. Their combined dependency
+pressure is:
 
 ```text
 C12 LocalMath bounded runtime launch prerequisite
+→ C13 LocalMath direct source-order recurrence
+→ C14 LocalMath validation-copy settlement
+→ C15 LocalMath pointwise temporary-identity segmentation
 → R49 Core operational boundary
 → R50 Potts lowering boundary
 → G06/G07 execution consumers
 → G09 longitudinal corpus
+→ R52–R54 public model-corpus extensions
 ```
+
+The compiler-family target is cardinality-independent execution identity, not
+universal constant Julia compilation. With backend, dimension, scalar/storage
+family, mathematical operation, bounded value shape and sequential/checkerboard
+law fixed and warmed, repeated instances must reuse the same owner-defined
+device execution family/signature classes, and typed IR per family must stay
+bounded. Runtime work and host
+validation may still scale with the amount of model data. Hard CI checks these
+stable owner-defined classes only at named public or owner-private boundaries;
+exact MethodInstance/KA/GPUCompiler identities, global inference totals,
+generated-code counts, compiler timings and private backend artifact
+observations remain fresh-process longitudinal evidence.
 
 LocalMath owns generic KernelAbstractions launch selection, runtime `ndrange`,
 and reusable preparation/publication laws. Core owns scientific payloads,
 runtime extent and transaction/settlement meaning. Potts owns author structure,
 normalization and diagnostics above execution. R49 and R50 absorb demonstrated
 Core/Potts corrections. C12 is the one dense LocalMath execution-boundary
-companion justified by the launch investigation; the preparation and Core
-payload investigations closed with no production change. Failed experiments,
-benchmark harnesses and raw Kaimon evidence do not receive PR identities.
+companion justified by the initial launch investigation; C13–C15 are separately
+demonstrated recurrence, settlement and pointwise-segmentation owner laws from
+the follow-on audits. The preparation and Core payload investigations closed
+with no production change. Failed experiments, benchmark harnesses and raw
+Kaimon evidence do not receive PR identities.
 
 Across those owners, only backend, scalar representation, dimension, genuine
 operation family, small bounded mathematical shape and a justified bounded
@@ -577,6 +608,19 @@ R49/R50 remain the only additional compiler-contract PRs. A post-G08/G09 audit
 may earn a measured, targeted owner follow-up; no third speculative compiler
 PR or cosmetic cleanup is preallocated.
 
+R49 additionally owns the sole Core representations for repeated tracker/update
+and maintained/state payloads consumed by its admitted contracts. Counts,
+handles and rows remain runtime data; mathematical operation, storage/delta ABI
+and a genuinely bounded value shape may specialize. Later lifecycle and
+relationship owners define their own families while reusing this law. Any
+accepted runtime-family cutover deletes the displaced graph-shaped tuple or
+broad operational payload atomically. R50 lowers common equivalent authored
+expressions and evaluators to those durable families while keeping spelling,
+manifests and diagnostics at their host authority. After warming the bounded
+family basis, a small 1-versus-64 owner witness must preserve the declared
+family/signature class. The dedicated compiler job exercises 1/4/16/64 and
+bounded-IR evidence; 256 belongs to the merge/nightly benchmark corpus.
+
 R49's focused ordinary test target applies AllocCheck only to the canonical
 prepared lifecycle/update boundaries and unchanged controls, avoiding a static
 scan of the full package suite. It warms each concrete CPU fixture before
@@ -729,6 +773,20 @@ appropriate open PRs or counted as new owner PRs when warranted. No brittle
 machine-time acceptance threshold or claim that measurements alone optimize code.
 R20 retains the longitudinal compiler records and representative public-model
 corpus; it does not replace feature-local Kaimon and device evidence.
+
+The runner uses five isolated roles: package-load invalidations; first-family
+cold inference/compilation; subsequent equivalent models in the same process;
+warmed allocations/throughput; and the same portable KernelAbstractions path on
+real hardware. It consumes public workloads and owner-supplied compiler-health
+artifacts; SnoopCompileCore/SnoopCompile and MethodAnalysis owner filters and
+focused JET/AllocCheck signatures remain in their owning packages. Chairmarks
+supplies public empirical samples. Exact CPU and device environments may be prepared once and reused by
+warmed fan-out jobs under keys covering Julia, OS/architecture, Manifest,
+package revisions, preferences and CPU target. That reuse is CI infrastructure,
+not qualification evidence; a separate fresh-process merge/nightly job retains
+the cold record. Representative PrecompileTools workloads come only after
+execution identities stabilize and never mask a leak with a combinatorial
+model matrix or project-owned compiler cache.
 It includes the G06 conflict-closure corpus: independent proposals, a direct
 site overlap, periodic aliases, shared logical owners, a transitive maintained-
 quantity dependency and opposite endpoints of one relationship. Record
@@ -754,8 +812,8 @@ backend compilation without turning raw counts or timings into fixed gates.
 | **E12 Static weighted-graph CPM domains** | R47 Core; R48 Potts | G05, G06, G07, E11 | B8 non-Cartesian domain + graph swap |
 | **E13 Metabolic optimization coupling** | R51 Potts | G07 | COBREXA native boundary |
 | **E14 FBCA crypt and metabolic models** | R52 Models | E13, E07, G08, G09 | Model 8 plus executable benchmark-corpus integration |
-| **E15 Vascular growth paper corpus** | R53 Models | G08, E07 | Models 1, 5, 7 |
-| **E16 Multiscale tumor paper corpus** | R54 Models | E07, E15 | Models 6, 11 |
+| **E15 Vascular growth paper corpus** | R53 Models | G08, E07, G09 | Models 1, 5, 7 plus shared compiler-corpus extension |
+| **E16 Multiscale tumor paper corpus** | R54 Models | E07, E15, G09 | Models 6, 11 plus shared compiler-corpus extension |
 
 Dependencies are completion dependencies for the entire group. Some are
 intentional integration joins: E04 combines 3D, mechanics and compartment
@@ -962,6 +1020,7 @@ flowchart TD
   C12["C12: LocalMath bounded runtime collection launch"]
   C13["C13: LocalMath direct source-order recurrence"]
   C14["C14: LocalMath validation-copy settlement"]
+  C15["C15: LocalMath pointwise temporary-identity segmentation"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -994,12 +1053,13 @@ flowchart TD
   C09 --> C12
   C12 --> C13
   C13 --> C14
+  C14 --> C15
   G04 --> C10
   C10 --> C11
   C11 --> G05
   C09 --> G05
   G05 --> G05C
-  C14 --> G05C
+  C15 --> G05C
   G05C --> G06
   G01 --> G07
   G05C --> G07
@@ -1046,8 +1106,10 @@ flowchart TD
   G09 --> E14
   G08 --> E15
   E07 --> E15
+  G09 --> E15
   E07 --> E16
   E15 --> E16
+  G09 --> E16
 ```
 
 
@@ -1085,6 +1147,9 @@ planning workspace, not the package implementation baseline.
 
 ### CI and merge process
 
+- LocalMath `main` now requires pull requests with zero approving reviews,
+  enforces protection for administrators, and uses strict required checks
+  `changes`, `package`, `scientific`, `macos-smoke`, `docs` and `metal`.
 - During edits, use focused owning tests and small public consumers; cancel
   superseded CI. Budget Julia compilation/test workers separately from agent
   slots, and serialize competing jobs on one real device.
@@ -1229,15 +1294,16 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C14 are already identified and counted above; they are not conditional
+C01–C15 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those fourteen companions.
+gaps beyond those fifteen companions.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
 | Later structured storage/gather/publication needs a reusable LocalMath law not supplied by C01–C09 | Add and count a LocalMath companion at its first real consumer |
 | G08 needs failure information not already exposed by G06/G07 | Add a Core companion, or include the fact in its still-open owning PR |
 | Profiling identifies a material Potts/Core defect | Fix in a coherent open owner PR or count a measured optimization PR; G09 measurement alone is insufficient |
+| Repeated-stage/global-binding scaling demonstrates a reusable LocalMath cold-law correction | Count C16 and raise the total to 70 only if a direct candidate improves complete planning through settlement without displacement, deletes the old representation, and cannot coherently fit an open LocalMath owner; scaling evidence alone does not preallocate it |
 | 3D or graph results need a new public rendering protocol | Add Makie; existing 3D support is inspected first, graph rendering is not presumed |
 | OU mechanics cannot use actual prepared process/RNG contracts | Add the real Core/Potts public primitive; no hidden host callback or RNG |
 | Directed, 3D, global or graph traversal requires a missing LocalMath operation | Add the owning reusable law with its first real consumer, not one adapter per model |
@@ -1253,7 +1319,7 @@ gaps beyond those fourteen companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **68 currently identified PRs** add the fourteen demonstrated C01–C14
+The **69 currently identified PRs** add the fifteen demonstrated C01–C15
 companions; future demonstrated discoveries can increase that identified total.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
@@ -1262,7 +1328,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 68 currently
+**not claimed complete by the 54-PR base allocation or the 69 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |
