@@ -1,6 +1,9 @@
 using ParallelTestRunner
 import Potts
 
+const POTTS_TELEMETRY_FILE = joinpath(@__DIR__, "telemetry.jl")
+Base.include(Main, POTTS_TELEMETRY_FILE)
+
 const POTTS_TESTS = (
     "test_fixed_array_scaling.jl",
     "test_scalar_site_aggregates.jl",
@@ -270,11 +273,19 @@ const POTTS_TEST_INIT = quote
     include($(joinpath(@__DIR__, "fixtures", "sciml_lifecycle.jl")))
 end
 
+const POTTS_TEST_WORKER_INIT = quote
+    isdefined(Main, :PottsTestTelemetry) || include($(POTTS_TELEMETRY_FILE))
+end
+
+Core.eval(Main, POTTS_TEST_WORKER_INIT)
+
 ParallelTestRunner.runtests(
     Potts,
     potts_test_args(ARGS);
     testsuite = POTTS_TEST_SUITE,
     init_code = POTTS_TEST_INIT,
+    init_worker_code = POTTS_TEST_WORKER_INIT,
+    RecordType = Main.PottsTestTelemetry.TelemetryRecord,
     serial = ["inventory", "test_package_quality"],
     serial_position = :after,
 )

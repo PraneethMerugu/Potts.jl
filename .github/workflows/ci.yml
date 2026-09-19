@@ -75,6 +75,7 @@ jobs:
     env:
       CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
       CI_CONTEXT_FILE: ci-telemetry/context.tsv
+      POTTS_TEST_TELEMETRY_DIR: ci-telemetry/fixtures
     strategy:
       fail-fast: false
       matrix:
@@ -113,7 +114,12 @@ jobs:
       - name: Test Potts shard
         env:
           POTTS_TEST_SHARD: ${{ matrix.shard }}
-        run: .github/ci/run-phase.sh package-test bash -o pipefail -c 'julia --startup-file=no -e '\''using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose", "--shard=$(ENV["POTTS_TEST_SHARD"])"])'\'' 2>&1 | tee ci-telemetry/test.log'
+        run: .github/ci/run-phase.sh package-test bash -o pipefail -c 'julia --startup-file=no .github/ci/run-package-shard.jl 2>&1 | tee ci-telemetry/test.log'
+      - name: Summarize package shard telemetry
+        if: always()
+        env:
+          POTTS_TEST_SHARD: ${{ matrix.shard }}
+        run: python3 .github/ci/summarize-package-shard.py --shard "$POTTS_TEST_SHARD"
       - name: Upload package telemetry
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -327,6 +333,7 @@ jobs:
       - name: Record resolved aggregate compiler evidence
         run: .github/ci/run-phase.sh compiler-evidence julia --project=benchmark --startup-file=no benchmark/resolved_aggregate_contract.jl --revision-label=${{ github.sha }} --evidence-reason=Kaimon-is-not-installed-in-the-CI-evidence-environment --output=resolved-aggregate-compiler.toml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: resolved-aggregate-compiler-${{ github.sha }}
           path: |
