@@ -79,9 +79,9 @@ end
     for index in eachindex(cpu.u)
         device_ownership = Array(device.u[index].ownership)
         @test device_ownership == cpu.u[index].ownership
-        # The raw mutable ownership array stays untouched at the obstacle; C10's
-        # owner-at view supplies its immutable wall owner to contact evaluation.
-        @test device_ownership[2, 2] == 0
+        # Saved ownership exposes the immutable wall owner, while the internal
+        # mutable-site storage remains outside that obstacle.
+        @test device_ownership[2, 2] == -1
     end
     @test device.stats.candidate_attempts == cpu.stats.candidate_attempts == 60
     @test device.stats.accepted == cpu.stats.accepted
