@@ -7,16 +7,11 @@ Status: Accepted
 This repository develops a scientifically trustworthy, high-performance, and approachable
 Cellular Potts modeling ecosystem for Julia.
 
-The active package family separates these responsibilities:
+The active package family has three responsibilities:
 
 1. Potts is the primary biological and symbolic authoring interface.
 2. CorePotts is the independently usable scientific execution engine and extension boundary.
 3. MakiePotts converts explicit host-owned observations into visualization recipes.
-4. LocalMath owns reusable spatial and publication mathematics and its shared
-   KernelAbstractions execution path, not CPM scientific meaning.
-5. PottsModels owns complete scientific model factories, initializers, tutorials
-   and model-level tests using public upstream interfaces. It is not a runtime
-   dependency of Potts or CorePotts and does not provide another model executor.
 
 The ecosystem must remain architecturally hardware agnostic. Stable scientific features target
 CPU execution and explicitly qualified accelerator backends. Backend availability must never
@@ -81,6 +76,22 @@ equilibrium claim.
 
 The project aims to be among the fastest Cellular Potts implementations while remaining
 scientifically auditable. Performance claims require reproducible benchmarks.
+
+Cold compilation and cache reuse are part of performance. Rich author structure
+is lowered before expensive execution into the smallest semantic payload that
+preserves the scientific contract. Author-only identity and numerical values do
+not create deep executor specializations. Representative precompilation,
+sysimages and backend caches may accelerate stable execution signatures; they do
+not substitute for them, define scientific state, or justify a second CPU/GPU
+execution path. Construction, preparation, first compilation or launch, warm
+execution, allocation and transfer costs are measured separately.
+
+The sole lowering path is expressive authoring → rich semantic records →
+validation and dependency/effect analysis → compact operational recipes →
+minimal typed state views → small readable kernels. The recipe derives from the
+scientific owner rather than duplicating it. CPU and qualified GPU backends share
+that semantic execution path; a kernel signature should expose exactly the
+operation and mutable state it needs.
 
 Hardware portability requires more than successful compilation. Each supported backend needs a
 capability policy, conformance tests, numerical expectations, and measured execution evidence.

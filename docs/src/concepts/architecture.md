@@ -158,6 +158,20 @@ Potts owns the public symbolic and SciML-facing product:
 - structural `mtkcompile` and explicit component IO, time, scope, and coupling schedules;
 - `PottsProblem`, late private lowering, integrator/solution integration, and symbolic indexing.
 
+Cartesian ownership follows one traceable path: `Lattice` owns typed
+`AxisBoundary`, `FixedExterior`, domain-owner, and `Obstacle` declarations;
+completion qualifies their referenced `MediumKind`s; `cartesian_domain.jl`
+validates identities, periodic pairs, masks, and overlaps and lowers one
+`CorePotts.CompilerSPI.CartesianOwnershipDomain`; lifecycle and checkerboard
+lowering consume that same value; CorePotts alone realizes owner-at-site,
+mutable-site scheduling, immutable contacts, execution, checkpoints, and its
+derived domain report. Potts initialization accepts finite labels only at
+mutable sites and resolves explicit medium placements through Core's stable
+domain-owner identity. A compact Potts lookup manifest maps the declaring
+lattice's qualified identity and each local owner name to that Core metadata;
+it is derived during the same lowering and owns no independent category or kind
+fact. There is no negative-kind decoder or second obstacle map.
+
 Source component bindings follow one chain: `PottsSystem(imports=...)` and
 `ComponentReference` declarations in `systems.jl` → the existing source inventory
 and `completion/component_imports.jl` → ordinary MTK-scoped symbols and qualified

@@ -37,7 +37,8 @@ end
 function _hamiltonian_domain_resources(
         ir::AnalyzedTermIR,
         relationship_endpoint_policies,
-    )
+        ::Type{T},
+    ) where {T <: AbstractFloat}
     source_count = length(ir.source.records)
     dimensions = length(_lattice_shape(ir))
     contact_starts = zeros(Int32, source_count)
@@ -72,6 +73,7 @@ function _hamiltonian_domain_resources(
     end
     return CorePotts.CompilerSPI.HamiltonianDomainResources(
         offsets,
+        ones(T, total_offsets),
         contact_starts,
         contact_counts,
         relationship_slots,
