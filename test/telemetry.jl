@@ -19,6 +19,21 @@ function _safe_name(name)
     return replace(string(name), r"[^A-Za-z0-9_.-]" => "-")
 end
 
+function _loaded_extensions()
+    extensions = String[]
+    package_ids = collect(keys(Base.loaded_modules))
+    for extension in package_ids
+        extension.uuid === nothing && continue
+        for parent in package_ids
+            parent.uuid === nothing && continue
+            extension.uuid == Base.uuid5(parent.uuid, extension.name) || continue
+            push!(extensions, "$(parent.name)=>$(extension.name)")
+            break
+        end
+    end
+    return sort!(unique!(extensions))
+end
+
 function record(name, values)
     directory = _directory()
     directory === nothing && return nothing
@@ -43,6 +58,7 @@ function ParallelTestRunner.execute(
         "kind" => "parallel_test_runner_fixture",
         "fixture" => name,
         "status" => counts.fails == 0 && counts.errors == 0 ? "success" : "failure",
+        "loaded_extension_modules" => _loaded_extensions(),
         "worker_total_seconds" => base.time,
         "compilation_seconds" => base.compile_time,
         "scientific_execution_seconds" => max(0.0, base.time - base.compile_time),

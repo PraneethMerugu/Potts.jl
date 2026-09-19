@@ -55,6 +55,11 @@ def main():
         {"dependencies": int(match.group("count")), "duration_seconds": float(match.group("seconds"))}
         for match in PRECOMPILE.finditer(log)
     ]
+    loaded_extensions = sorted({
+        extension
+        for item in fixture_records
+        for extension in item.get("loaded_extension_modules", [])
+    })
     total_seconds = sum(
         item["duration_seconds"] for item in phase_records
         if item["phase"] == "package-test"
@@ -80,6 +85,7 @@ def main():
         ),
         "fixture_count": len(fixture_records),
         "failed_fixture_count": sum(item["status"] != "success" for item in fixture_records),
+        "loaded_extension_modules": loaded_extensions,
         "total_runner_seconds": total_seconds,
         "total_runner_minutes": total_seconds / 60,
     }

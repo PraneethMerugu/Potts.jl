@@ -24,6 +24,9 @@ record julia_cpu_target "${JULIA_CPU_TARGET:-default}"
 record julia_num_threads "${JULIA_NUM_THREADS:-default}"
 record project "${JULIA_PROJECT:-default}"
 
+primary_depot=$(julia --startup-file=no -e 'print(first(DEPOT_PATH))')
+record restored_depot_size_kib "$(du -sk "$primary_depot" | awk '{print $1}')"
+
 for path in Project.toml Manifest.toml benchmark/Project.toml benchmark/Manifest.toml \
   benchmark/backends/metal/Project.toml benchmark/backends/metal/Manifest.toml \
   integration/Project.toml integration/Manifest.toml \
