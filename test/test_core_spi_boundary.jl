@@ -16,7 +16,7 @@
         :initialize_history!,
         :program_snapshot,
         :advance_mcs!,
-        :update_program_parameters!,
+        :update_program_inputs!,
         :program_execution_report,
         :program_capability_report,
         :ProgramCheckpoint,

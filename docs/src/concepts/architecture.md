@@ -14,7 +14,7 @@ No execution path borrows another runtime's storage or clones an imported owner.
 
 Runtime parameter ownership follows `PottsProblem`/SymbolicIndexingInterface →
 the scheduled `ParameterManifest` → parameter normalization and static lowering →
-Core's public scalar parameter publisher → detached logical getters/history.
+Core's public combined input publisher → detached logical getters/history.
 `compiler/host/parameter_manifest.jl` owns canonical parameter identities, fixed
 logical shapes, and contiguous scalar-slot spans. Structural scheduling builds
 this manifest once; late lowering reuses it when choosing numerical precision.
@@ -27,6 +27,72 @@ fixture cover wrapper-independent membership and indexing.
 construction, remakes and setters, and reconstructs immutable logical snapshots
 from Core's flat scalar buffer. Fixed-vector loads use the existing synthesized
 operation closure and fixed-vector constructor, not a parallel evaluator.
+
+Scalar multiplication of declared fixed arrays uses the existing arithmetic
+operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
+in `term_analysis.jl`. Only builtin scalar-times-array or array-times-scalar
+scaling preserves the array shape; matrix multiplication is not reinterpreted
+as componentwise multiplication. Assignment lowering in `accepted_copy_descriptors.jl`
+checks each target/RHS shape and dimension pair before execution; analyzed roots
+own these facts, while unnormalized static literals reuse `unit_analysis.jl`'s
+literal-unit semantics. `test_fixed_array_scaling.jl` owns the public
+scalar, vector and tensor shape/unit regression; execution uses Core's existing
+multiply operation, not a tensor-specific evaluator.
+
+Maintained site quantities follow `aggregate` in `symbolics/operations.jl` →
+scoped source/consumer validation in `compiler/host/quantity_scopes.jl` → the
+node-aligned `AnalyzedSiteAggregate` fact plus normalized unit, shape and result
+facts → `compiler/lowering/trackers.jl` → Core's `SiteSumTracker` or scalar
+`SiteMinimumTracker` and qualified cell read. Analysis validates the scoped cell
+anchor and the complete contribution closure, then retains only the law,
+contribution root, site resource and policy operands needed by lowering.
+Tracker identity, descriptor construction, state retention and evaluator
+lowering consume that fact rather than traversing the authored aggregate again.
+Canonical sums include their numerical comparison
+policy; canonical minima include their empty-owner value and declared
+reconstruction bound. Both share one tracker independently of consuming
+statements or anchors. Lowering discards its canonical identity dictionary and
+retains only a node-aligned qualified-handle table until Core program assembly.
+Physical stage reads use the tracker, while any additional direct state operand
+retains its own compiled state handle. The literal integer-one case reuses
+Core's existing ownership count. Ordinary symbolic composition then combines
+those maintained reads with each other and with direct cell state; it does not introduce an
+aggregate-specific execution path. The derived-quantity fixture computes a
+per-cell average from maintained mass and ownership count, adds a direct cell
+baseline, publishes the result to two consumers, changes both its field and
+parameter sources, and continues from a checkpoint under both CPU algorithms.
+`test_scalar_site_aggregates.jl` defends that workflow together with sharing,
+separate contributions, resolved fact ownership, execution-type reuse across
+author renaming and numerical parameter defaults, source/parameter refresh,
+mixed publication, units and continuation. It also publishes a maintained sum
+into ordinary cell state, samples that state through `HistoryState`, and proves
+that a retained consumer observes the stage-entry sample while a source edit
+changes the current maintained value. Numerical defaults remain runtime
+values: changing one changes the result without creating another Core program,
+tracker plan or tracker-instance specialization family.
+`benchmark/resolved_aggregate_contract.jl` separates public authoring, problem
+construction, Core preparation, first execution and warmed execution. It also
+reports the warmed public step beside the already-lowered Core step. Neither
+whole-MCS boundary has a zero-allocation guarantee; the fixed-capacity prepared
+update and contribution leaves defended by Core own that narrower contract.
+The same model builder, independent owner-sum oracle and maintenance contract in
+`test/fixtures/site_aggregates.jl` serve `test_vector_site_aggregates.jl`;
+`test_scheduled_site_aggregates.jl` separately checks simultaneous source updates.
+`test_tensor_site_aggregates.jl` uses the same owner and oracle for matrix-valued
+contributions, physical units, shape rejection, updates and continuation.
+`test_scalar_site_minimum_authoring.jl` defends the single explicit operation
+vocabulary and preserves additive authoring. `test_scalar_site_minimum.jl`
+defines an independent owner-scan witness that changes the site holding the
+current minimum under both CPU algorithms, checks the declared finite empty
+policy, and distinguishes live owners from unused cell-capacity slots. Its
+accepted-copy witness additionally transfers a negative minimum, retires the
+emptied owner, checks explicit empty finalization in the maintained tracker,
+and continues that settled state from a checkpoint.
+These are ordinary registered test units. Scalar, fixed-vector, fixed-tensor and
+scheduled-source sums use the same CPU implementation and are defended by those
+units. The real-Metal profile runs scalar, vector and tensor sums with evolving
+sources, and runs the bounded scalar minimum, through the same public authoring
+and KernelAbstractions execution path with scalar indexing disabled.
 
 Scalar multiplication of declared fixed arrays uses the existing arithmetic
 operation owner in `compiler/host/operation_analysis.jl` and result/shape facts
@@ -251,6 +317,13 @@ and does not execute an external numerical solver.
 
 CorePotts publishes settled coupling arrays and lifecycle receipts. Potts uses those public
 boundaries to coordinate native component integrators.
+`runtime/integrator.jl` stages a native descriptor-state replacement only when
+native output updates exist. Input-only islands leave maintained Core values
+untouched; held outputs still publish on non-due boundaries through the same
+output-update path.
+`integration/test_native_functional_cpu.jl` checks this with an actual accepted
+copy, a maintained sum distinguishable from canonical recomputation, and native
+ODE evolution for both input-only and no-input islands.
 
 ## LocalMath
 
@@ -304,8 +377,9 @@ published values, pending parameters and the detached current value after an
 ordinary host refresh failure. Initialization and mutation share
 `runtime/initial_state.jl`'s supplied-value normalization and descriptor packing,
 which delegate logical type/unit conversion to the manifest owner above.
-CorePotts' public `update_program_descriptor_state!` validates and publishes the
-candidate through its existing host/device storage boundary. Potts then refreshes
+CorePotts' public `update_program_inputs!` validates the complete combined parameter
+and descriptor-state candidate before publishing either input through its existing
+host/device storage boundary. Potts then refreshes
 the detached current saved value, without mutating earlier snapshots.
 `runtime/integrator.jl` owns rollback of state and parameters across an ordinary
 callback boundary. `test/test_logical_state_mutation.jl` defends conversion

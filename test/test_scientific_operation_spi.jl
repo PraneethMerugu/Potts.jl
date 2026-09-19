@@ -1,6 +1,8 @@
 import LocalMath
 import Statistics
 
+include("fixtures/transition_relation_energy.jl")
+
 @testset "named operation contracts validate at construction" begin
     contract(; kwargs...) = Potts.OperationTransfer(
         :test_numeric_operation;
@@ -262,48 +264,9 @@ end
 end
 
 @testset "relation gather matches an independent ordered energy oracle" begin
-    @variables bounded_oracle_signal bounded_oracle_gate
-    @parameters bounded_oracle_weight = -1.0
-    cell = CellKind(:bounded_oracle_cell; extinction = RetireAtZero())
-    medium = MediumKind(:bounded_oracle_medium)
-    signal = FieldState(
-        bounded_oracle_signal; name = :bounded_oracle_signal, initial = 0.0
-    )
-    gate = FieldState(
-        bounded_oracle_gate; name = :bounded_oracle_gate, initial = 0.0
-    )
-    site = SiteBinding(:bounded_oracle_site)
-    proposal = ProposalContext(:bounded_oracle_proposal)
-    source = PottsSystem(
-        name = :gathered_values_energy_oracle,
-        statements = StatementSet((
-            Lattice((4, 4); relations = (
-                proposal = VonNeumann(), contact = VonNeumann())),
-            cell,
-            medium,
-            signal,
-            gate,
-            HamiltonianTerm(
-                :bounded_ordered_energy;
-                domain = sites(:lattice),
-                anchor = site,
-                expression = bounded_oracle_weight * occupancy(cell, site) *
-                    sum(gather(signal, :contact; at = site)),
-            ),
-            ProposalConstraint(
-                :isolate_bounded_oracle_extension,
-                proposal.is_extension &
-                (field_value(gate, proposal.source_site) == 1) &
-                (field_value(gate, proposal.target_site) == 2),
-            ),
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
-        unknowns = [bounded_oracle_signal, bounded_oracle_gate],
-        parameters = [bounded_oracle_weight],
-    )
-    scheduled = mtkcompile(source)
+    fixture = _transition_relation_energy_fixture(Float64)
     lowered = Potts._lower_scheduled_execution_plan(
-        scheduled, SequentialCPM(), CPUBackend(), Float64)
+        fixture.scheduled, SequentialCPM(), CPUBackend(), Float64)
     descriptor_plan = lowered.core_program.descriptor_plan
     evaluator_values = Any[]
     for group in descriptor_plan.groups, descriptor in group.instances
@@ -316,85 +279,29 @@ end
             !(value isa Potts._GatherReduction) &&
             !_is_symbolic_runtime_value(value)
     end
-    labels = zeros(Int32, 4, 4)
-    labels[2:3, 2:3] .= 1
-    source_site = CartesianIndex(2, 2)
-    target_site = CartesianIndex(1, 2)
-    signal_values = zeros(Float64, 4, 4)
-    signal_values[2, 2] = 1.0e16
-    signal_values[4, 2] = -1.0e16
-    signal_values[1, 3] = 1.0
-    gate_values = zeros(Float64, 4, 4)
-    gate_values[source_site] = 1
-    gate_values[target_site] = 2
-    initial = PottsInitialState(
-        ownership = LabelledCells(labels; cells = [cell], medium),
-        values = (
-            bounded_oracle_signal => signal_values,
-            bounded_oracle_gate => gate_values,
-        ),
-    )
-
-    # Independent full-energy definition. Von Neumann lanes use the declared
-    # dimension/distance/sign order and are folded left without reassociation.
-    offsets = ((1, 0), (-1, 0), (0, 1), (0, -1))
-    function ordered_neighbor_sum(values, center)
-        total = 0.0
-        for offset in offsets
-            neighbor = CartesianIndex(
-                mod1(center[1] + offset[1], size(values, 1)),
-                mod1(center[2] + offset[2], size(values, 2)),
-            )
-            total = total + values[neighbor]
-        end
-        return total
-    end
-    function global_bounded_delta(before, after, values, weight)
-        total = 0.0
-        for center in CartesianIndices(before)
-            local_energy = weight * ordered_neighbor_sum(values, center)
-            total += (after[center] == 1 ? local_energy : 0.0) -
-                     (before[center] == 1 ? local_energy : 0.0)
-        end
-        return total
-    end
-    after_extension = copy(labels)
-    after_extension[target_site] = 1
-    favorable_delta = global_bounded_delta(
-        labels, after_extension, signal_values, -1.0)
-    unfavorable_delta = global_bounded_delta(
-        labels, after_extension, signal_values, 1.0)
-    @test ordered_neighbor_sum(signal_values, target_site) == 1.0
+    # This oracle shares no production evaluator, affected-anchor proof, or
+    # proposal-delta implementation. Its lane order is part of the science.
+    favorable_delta = _independent_transition_relation_energy_delta(
+        fixture.labels, fixture.after_extension, fixture.signal_values, -1.0)
+    unfavorable_delta = _independent_transition_relation_energy_delta(
+        fixture.labels, fixture.after_extension, fixture.signal_values, 1.0)
+    @test _ordered_relation_neighbor_sum(
+        fixture.signal_values, CartesianIndex(1, 2)) == 1.0
     @test favorable_delta == -1.0
     @test unfavorable_delta == 1.0
 
-    run(weight, seed) = solve(
-        PottsProblem(
-            scheduled,
-            initial,
-            (0, 1);
-            p = (bounded_oracle_weight => weight,),
-            seed,
-        ),
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float64,
-        save_everystep = true,
-    )
-    witness = nothing
-    for seed in UInt64(1):UInt64(256)
-        favorable = run(-1.0, seed)
-        last(favorable).ownership == after_extension || continue
-        unfavorable = run(1.0, seed)
-        unfavorable.stats.energy_rejections > 0 || continue
-        witness = (; favorable, unfavorable)
-        break
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        witness = _transition_relation_energy_witness(
+            fixture, algorithm, CPUBackend()
+        )
+        @test witness !== nothing
+        witness === nothing && error(
+            "no relation-gather proposal witness for $(typeof(algorithm))"
+        )
+        @test witness.favorable.stats.accepted == 1
+        @test last(witness.unfavorable).ownership == fixture.labels
+        @test witness.unfavorable.stats.accepted == 0
     end
-    @test witness !== nothing
-    witness === nothing && error("no relation-gather proposal witness found")
-    @test witness.favorable.stats.accepted == 1
-    @test last(witness.unfavorable).ownership == labels
-    @test witness.unfavorable.stats.accepted == 0
 end
 
 _tracker_lane_digits(accumulator, value) =
