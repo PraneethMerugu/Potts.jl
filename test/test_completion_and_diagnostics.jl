@@ -213,6 +213,17 @@ end
     @test Potts._canonical_value(one_based) !=
           Potts._canonical_value(shifted)
 
+    # Hashing materialized bytes must retain the canonical digest for every
+    # admitted array shape and axis, including payloads spanning SHA blocks.
+    for value in (flat, square, shifted, fill(Int32(7), 257),
+            reshape(fill(0.5, 257), 257, 1), ("μ", flat))
+        payload = Potts._canonical_frame("digest", String[
+            Potts._CANONICAL_VALUE_SCHEMA, Potts._canonical_value(value),
+        ])
+        @test Potts._sha256_hex(value) ==
+              bytes2hex(Potts.SHA.sha256(codeunits(payload)))
+    end
+
     delimiter_left = (
         FingerprintDelimiterPayload("x,y"),
         FingerprintDelimiterPayload("z"),
