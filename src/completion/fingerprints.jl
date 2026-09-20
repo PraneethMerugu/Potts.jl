@@ -239,7 +239,8 @@ end
         push!(encoded, _canonical_value(part))
     end
     payload = _canonical_frame("digest", encoded)
-    return bytes2hex(SHA.sha256(codeunits(payload)))
+    # SHA copies 64-byte blocks; a byte vector avoids generic CodeUnits copies.
+    return bytes2hex(SHA.sha256(Vector{UInt8}(codeunits(payload))))
 end
 
 function _native_declaration_fingerprint_payload(
