@@ -92,6 +92,30 @@ end
     end
 end
 
+@testset "checkerboard attempt rounds fit the addressed RNG" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_checkerboard_round_limit;
+        attempts = AttemptsPerSite(256),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 0))
+    @test init(
+        problem, SequentialCPM(); backend = CPUBackend(), scalar_type = Float32
+    ) isa PottsIntegrator
+    rejection = try
+        init(
+            problem, CheckerboardSweepCPM();
+            backend = CPUBackend(), scalar_type = Float32,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test rejection isa ArgumentError
+    @test occursin(
+        "checkerboard attempt rounds", sprint(showerror, rejection)
+    )
+end
+
 @testset "validation-only problem boundary" begin
     fixture = _lifecycle_fixture(:lifecycle_validation)
     @test is_scheduled(fixture.system)
