@@ -2,7 +2,8 @@ using Test
 import Metal
 using Potts
 
-function _cartesian_domain_problem()
+function _cartesian_domain_problem(;
+        attempts = AttemptsPerSite(1), mcs = 4)
     cell = CellKind(:cartesian_domain_cell; extinction = RetireAtZero())
     medium = MediumKind(:cartesian_domain_medium)
     wall_kind = MediumKind(:cartesian_domain_wall_kind)
@@ -42,7 +43,7 @@ function _cartesian_domain_problem()
                     ];
                     relation = :contact,
                 ),
-                Protocol(Sweep(; temperature = 0.0f0); name = :main),
+                Protocol(Sweep(; attempts, temperature = 0.0f0); name = :main),
             )
         ),
     )
@@ -54,7 +55,31 @@ function _cartesian_domain_problem()
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
     )
-    return PottsProblem(mtkcompile(system), initial, (0, 4); seed = 0x0c11)
+    return PottsProblem(mtkcompile(system), initial, (0, mcs); seed = 0x0c11)
+end
+
+@testset "Cartesian attempt budgets preserve CPU/Metal mutable-site parity" begin
+    Metal.allowscalar(false)
+    for budget in (2, 16)
+        problem = _cartesian_domain_problem(
+            ; attempts = AttemptsPerSite(budget), mcs = 1
+        )
+        cpu = solve(
+            problem, CheckerboardSweepCPM();
+            backend = Potts.CPUBackend(), scalar_type = Float32,
+        )
+        device = solve(
+            problem, CheckerboardSweepCPM();
+            backend = Potts.MetalBackend(), scalar_type = Float32,
+        )
+        @test device.retcode == cpu.retcode
+        @test Array(last(device).ownership) == last(cpu).ownership
+        @test device.stats.candidate_attempts ==
+            cpu.stats.candidate_attempts == 15 * budget
+        @test device.stats.accepted == cpu.stats.accepted
+        @test device.stats.rejected == cpu.stats.rejected
+        @test device.stats.null_attempts == cpu.stats.null_attempts
+    end
 end
 
 @testset "typed Cartesian domains execute through one CPU/Metal path" begin

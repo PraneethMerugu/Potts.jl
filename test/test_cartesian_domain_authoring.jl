@@ -29,6 +29,7 @@ end
 function _cartesian_authoring_fixture(
         obstacle_site;
         obstacle_owner = :wall,
+        attempts = AttemptsPerSite(1),
         boundary_builder = (bulk, wall) -> (
             AxisBoundary(
                 negative = FixedExterior(bulk),
@@ -62,11 +63,35 @@ function _cartesian_authoring_fixture(
                 medium,
                 wall_kind,
                 ProposalConstraint(:cartesian_frozen, false),
-                Protocol(Sweep(; temperature = 0.0); name = :main),
+                Protocol(Sweep(; attempts, temperature = 0.0); name = :main),
             )
         ),
     )
     return (; source, cell, medium, wall_kind, bulk, wall, mask)
+end
+
+@testset "Cartesian attempt budgets use the mutable-site population" begin
+    for budget in (1, 2, 16), algorithm in
+            (SequentialCPM(), CheckerboardSweepCPM())
+        fixture = _cartesian_authoring_fixture(
+            CartesianIndex(2, 2); attempts = AttemptsPerSite(budget)
+        )
+        labels = zeros(Int32, 4, 4)
+        labels[1, 1] = 1
+        initial = PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = [fixture.cell], medium = fixture.medium
+            )
+        )
+        solution = solve(
+            PottsProblem(mtkcompile(fixture.source), initial, (0, 1); seed = 0x51),
+            algorithm; backend = CPUBackend(), scalar_type = Float32,
+        )
+        @test solution.stats.candidate_attempts == 15 * budget
+        @test solution.stats.candidate_attempts ==
+            solution.stats.accepted + solution.stats.null_attempts +
+            solution.stats.rejected
+    end
 end
 
 function _lower_cartesian_fixture(fixture; algorithm = SequentialCPM())
