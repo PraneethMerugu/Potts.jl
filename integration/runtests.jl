@@ -4,6 +4,7 @@ const INTEGRATION_TESTS = (
     "test_modelingtoolkit_retention_and_structural_scheduling.jl",
     "test_modelingtoolkit_standard_library.jl",
     "test_native_functional_cpu.jl",
+    "test_native_component_replacement.jl",
     "test_method_of_lines_field.jl",
     "test_ensemble_distributed.jl",
     "test_unitful_extension.jl",
