@@ -79,7 +79,8 @@
         :policy_divide;
         domain = cells(daughter),
         anchor,
-        expression = true,
+        expression = draw(Uniform(0.0, 50.0),
+            DrawKey(:policy_mitotic_delay)) < 50.0,
         effects = (
             Divide(
                 anchor;

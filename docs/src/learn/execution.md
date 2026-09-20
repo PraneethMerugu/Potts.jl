@@ -76,6 +76,13 @@ acceleration mode for the sequential algorithm. `CPUBackend()` is available
 for both. `MetalBackend()` is admitted only for the exact checkerboard
 `Float32` profile in [Capability status](@ref capability-status).
 
+A sweep's positive attempt budget is declared with
+`Sweep(; attempts=AttemptsPerSite(16), temperature=...)`. Both public
+algorithms execute the declared number of copy attempts per lattice site
+before the MCS boundary and its after-step cell events. Keep the attempt
+budget in the model when translating a published MCS definition; changing it
+changes the stochastic trajectory as well as the work per MCS.
+
 For interactive control, call `init`, then `step!` or `solve!`. A failed step
 does not publish partial CPM, lifecycle, relationship, or native-component
 state. `terminate!` stops at the last settled boundary.
