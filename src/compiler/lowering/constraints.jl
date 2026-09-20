@@ -116,6 +116,13 @@ function _draw_domain_constraints(
             _parameter_constraint(upper, 0x03, node, record),
         )
     elseif family == 2
+        if first_parameter isa CorePotts.CompilerSPI.LiteralExpression &&
+                second_parameter isa CorePotts.CompilerSPI.LiteralExpression
+            first_parameter.value < second_parameter.value || throw(
+                ArgumentError("Uniform draw bounds must be ordered")
+            )
+            return ()
+        end
         ordered = _compiler_synthesized_operation_expression(
             ir.graph,
             (<),

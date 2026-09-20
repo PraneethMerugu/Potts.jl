@@ -1,25 +1,22 @@
-@testset "public algorithms retain their qualified attempt budget" begin
-    fixture = _lifecycle_fixture(
-        :lifecycle_nonunit_attempts;
-        attempts = AttemptsPerSite(2),
-    )
-    problem = _lifecycle_problem(fixture; tspan = (0, 1))
-    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
-        error = try
-            solve(
+@testset "public algorithms execute declared attempt budgets" begin
+    for attempts in (2, 16)
+        fixture = _lifecycle_fixture(
+            Symbol(:lifecycle_repeated_attempts_, attempts);
+            attempts = AttemptsPerSite(attempts),
+        )
+        problem = _lifecycle_problem(fixture; tspan = (0, 1))
+        for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+            solution = solve(
                 problem,
                 algorithm;
                 backend = CPUBackend(),
                 scalar_type = Float32,
                 save_start = false,
             )
-            nothing
-        catch thrown
-            thrown
+            @test failure_report(solution) === nothing
+            @test solution.t == [1]
+            @test only(solution.u).mcs == 1
         end
-        @test error isa ArgumentError
-        @test occursin("implements only AttemptsPerSite(1)",
-            sprint(showerror, error))
     end
 end
 

@@ -80,9 +80,12 @@ are CPU and real Metal, not untested CUDA or ROCm claims.
 
 ## Time
 
-The completed integer Monte Carlo step is the master CPM clock and lifecycle boundary. Each native
-time-dependent component declares a physical duration per MCS and a named split policy. MTK clock
-objects are not the master scheduler.
+The completed integer Monte Carlo step is the master CPM clock and lifecycle boundary.
+A `Sweep` declares a positive `AttemptsPerSite` budget; CorePotts executes
+that many copy attempts per lattice site before closing the MCS and running
+its after-step events. Each native time-dependent component declares a
+physical duration per MCS and a named split policy. MTK clock objects are not
+the master scheduler.
 
 ## MakiePotts
 
