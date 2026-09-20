@@ -1,5 +1,7 @@
 @testset "public algorithms execute declared attempt budgets" begin
-    for attempts in (2, 16)
+    @test_throws ArgumentError AttemptsPerSite(0)
+    @test_throws ArgumentError AttemptsPerSite(-1)
+    for attempts in (1, 2, 16)
         fixture = _lifecycle_fixture(
             Symbol(:lifecycle_repeated_attempts_, attempts);
             attempts = AttemptsPerSite(attempts),
@@ -12,11 +14,81 @@
                 backend = CPUBackend(),
                 scalar_type = Float32,
                 save_start = false,
+                observables = (:lifecycle_marker_snapshot,),
             )
             @test failure_report(solution) === nothing
             @test solution.t == [1]
             @test only(solution.u).mcs == 1
+            @test solution.stats.candidate_attempts == 36 * attempts
+            @test solution.stats.candidate_attempts ==
+                  solution.stats.accepted + solution.stats.rejected +
+                  solution.stats.null_attempts
+
+            replay = solve(
+                problem,
+                algorithm;
+                backend = CPUBackend(),
+                scalar_type = Float32,
+                save_start = false,
+                observables = (:lifecycle_marker_snapshot,),
+            )
+            @test _lifecycle_same_state(only(solution.u), only(replay.u))
+            @test solution.stats == replay.stats
         end
+    end
+end
+
+@testset "nonunit attempt budgets resume exactly" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_repeated_attempt_continuation;
+        attempts = AttemptsPerSite(2),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 2))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        reference = solve(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        interrupted = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        step!(interrupted)
+        captured = checkpoint(interrupted)
+        resumed = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            checkpoint = captured,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        continued = solve!(resumed)
+        @test _lifecycle_same_state(last(reference), last(continued))
+        @test reference.stats.candidate_attempts == 2 * 36 * 2
+        @test reference.stats == continued.stats
+    end
+end
+
+@testset "attempt budgets fit the Core execution representation" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_excessive_attempts;
+        attempts = AttemptsPerSite(Int(typemax(Int32)) + 1),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 1))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        @test_throws ArgumentError init(
+            problem,
+            algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
     end
 end
 

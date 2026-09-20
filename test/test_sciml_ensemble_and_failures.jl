@@ -63,6 +63,65 @@
     @test rerun_solution.provenance.repeat == 2
 end
 
+@testset "multi-attempt callbacks observe committed MCS boundaries" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_callback_attempt_budget;
+        attempts = AttemptsPerSite(2),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 2))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        observations = Tuple{Int, UInt64}[]
+        callback = SciMLBase.DiscreteCallback(
+            (_, _, _) -> true,
+            integrator -> push!(observations, (
+                integrator.t,
+                Potts.runtime_statistics(integrator).candidate_attempts,
+            ));
+            save_positions = (false, false),
+        )
+        solution = solve(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            callback,
+        )
+        @test solution.retcode == SciMLBase.ReturnCode.Success
+        @test observations == [(1, UInt64(72)), (2, UInt64(144))]
+
+        mutate = SciMLBase.DiscreteCallback(
+            (_, time, _) -> time == 1,
+            integrator -> LIFECYCLE_SII.setp(
+                integrator, lifecycle_target,
+            )(integrator, 8.0);
+            save_positions = (true, true),
+        )
+        fail = SciMLBase.DiscreteCallback(
+            (_, time, _) -> time == 1,
+            _ -> error("multi-attempt callback failure");
+            save_positions = (false, false),
+        )
+        failing = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            callback = SciMLBase.CallbackSet(mutate, fail),
+            save_start = true,
+            save_end = false,
+        )
+        failure = try
+            solve!(failing)
+            nothing
+        catch caught
+            caught
+        end
+        @test failure isa ErrorException
+        @test failing.retcode == SciMLBase.ReturnCode.Failure
+        @test LIFECYCLE_SII.getp(failing, lifecycle_target)(failing) ==
+              5.0f0
+        @test solve!(failing).t == [0]
+    end
+end
+
 @testset "surfaced callback failure" begin
     fixture = _lifecycle_fixture(:lifecycle_failure)
     problem = _lifecycle_problem(fixture; tspan = (0, 3))
