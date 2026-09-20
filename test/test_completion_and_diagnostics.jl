@@ -510,6 +510,23 @@ end
           :invalid_random_distribution
     @test only(distribution_error.diagnostics).source isa SourceLocation
 
+    @named reversed_uniform = PottsSystem(statements = @statements begin
+        ProposalDrive(
+            :reversed_uniform,
+            draw(Uniform(2.0, 1.0), DrawKey(:reversed_uniform)),
+        )
+    end)
+    uniform_error = try
+        complete(reversed_uniform)
+        nothing
+    catch caught
+        caught
+    end
+    @test uniform_error isa Potts.PottsValidationError
+    @test only(uniform_error.diagnostics).kind ===
+          :invalid_random_distribution
+    @test only(uniform_error.diagnostics).source isa SourceLocation
+
     @named invalid_unit_vector = PottsSystem(statements = @statements begin
         ProposalDrive(
             :vector_noise,

@@ -136,7 +136,9 @@
                 transition,
                 divide,
                 remove,
-                Protocol(Sweep(; temperature = 0.0); name = :main),
+                Protocol(Sweep(
+                    ; temperature = 0.0, attempts = AttemptsPerSite(2)
+                ); name = :main),
             )
         ),
         unknowns = collect(variables),
@@ -164,6 +166,7 @@
         save_everystep = true,
     )
     @test solution.retcode == SciMLBase.ReturnCode.Success
+    @test solution.stats.candidate_attempts == 4 * 25 * 2
     @test solution(1)[state_names[1]][1] == 10
     @test solution(2)[state_names[1]][1] == 10
     @test solution(2)[state_names[2]][1] == 22
