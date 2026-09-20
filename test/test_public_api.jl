@@ -32,6 +32,7 @@
         :DeclaredReferenceUnits, :ReferenceUnits, :SiteBinding, :CellBinding,
         :ContactBinding, :RelationshipBinding, :anchor_value, :ProposalContext,
         :source_site, :target_site, :source_cell, :target_cell, :source_kind,
+        :kind_matches,
         :target_kind, :is_extension, :is_retraction, :new_contact,
         :lost_contact, :cell_volume, :cell_surface, :cell_elongation,
         :cell_center, :unwrapped_center, :distance, :contact_owner_a,

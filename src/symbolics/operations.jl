@@ -168,6 +168,10 @@ end
 
 _kind_token(kind::Union{CellKind, MediumKind}) =
     _potts_token(Symbol("__potts_kind__", Symbol(statement_id(kind))); T = Int)
+
+"""Compare a symbolic proposal kind with a declared cell or medium kind."""
+kind_matches(actual::Symbolics.Num, kind::Union{CellKind, MediumKind}) =
+    actual == _kind_token(kind)
 _relationship_token(relationship::RelationshipState) =
     _potts_token(
         Symbol("__potts_relationship_set__", Symbol(statement_id(relationship)));

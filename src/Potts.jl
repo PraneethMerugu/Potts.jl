@@ -153,6 +153,7 @@ export PottsCheckpoint, checkpoint
 export DeclaredReferenceUnits, ReferenceUnits
 export ProposalContext
 export source_site, target_site, source_cell, target_cell, source_kind, target_kind
+export kind_matches
 export is_extension, is_retraction, new_contact, lost_contact
 export cell_volume, cell_surface, cell_elongation, cell_center, unwrapped_center, distance
 export contact_owner_a, contact_owner_b, contact_kind_a, contact_kind_b
