@@ -43,9 +43,13 @@ env:
 
 jobs:
   cpu-and-documentation:
-    name: CPU, documentation, and rendering
+    name: CPU ${{ matrix.group }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [foundation, potts, models, rendering]
     steps:
       - name: Validate immutable revisions
         env:
@@ -107,6 +111,7 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: Fresh ecosystem load
+        if: matrix.group == 'foundation'
         run: |
           julia --startup-file=no -e '
             using Pkg
@@ -118,31 +123,44 @@ jobs:
             using LocalMath, CorePotts, Potts, MakiePotts
           '
       - name: LocalMath package and scientific tests
+        if: matrix.group == 'foundation'
         run: |
           julia --project=ecosystem/LocalMath --startup-file=no -e 'using Pkg; Pkg.instantiate(); Pkg.test(; test_args=["--jobs=2", "--verbose"])'
           julia --project=ecosystem/LocalMath/test/scientific_witnesses --startup-file=no -e 'using Pkg; Pkg.develop(path="ecosystem/LocalMath"); Pkg.instantiate(); include("ecosystem/LocalMath/test/scientific_witnesses/runtests.jl")'
       - name: CorePotts package tests
+        if: matrix.group == 'foundation'
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts")]); Pkg.test("CorePotts"; test_args=["--jobs=2", "--verbose"])'
       - name: Potts package and integration tests
+        if: matrix.group == 'potts'
         run: |
           julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
           julia --project=ecosystem/Potts/integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(); include("ecosystem/Potts/integration/runtests.jl")'
       - name: PottsModels public-consumer tests and tutorials
-        if: inputs.models_repository != ''
+        if: matrix.group == 'models' && inputs.models_repository != ''
         run: |
           julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/PottsModels")]); Pkg.test("PottsModels")'
           julia --project=ecosystem/PottsModels/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/PottsModels")]); Pkg.instantiate(); include("ecosystem/PottsModels/docs/make.jl")'
       - name: MakiePotts package tests
+        if: matrix.group == 'rendering'
         run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.test("MakiePotts")'
-      - name: Documentation and doctests
+      - name: LocalMath and CorePotts documentation and doctests
+        if: matrix.group == 'foundation'
         run: |
           julia --project=ecosystem/LocalMath/docs --startup-file=no -e 'using Pkg; Pkg.develop(path="ecosystem/LocalMath"); Pkg.instantiate(); include("ecosystem/LocalMath/docs/make.jl")'
           julia --project=ecosystem/CorePotts/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts")]); Pkg.instantiate(); include("ecosystem/CorePotts/docs/make.jl")'
+      - name: Potts documentation and doctests
+        if: matrix.group == 'potts'
+        run: |
           julia --project=ecosystem/Potts/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(); include("ecosystem/Potts/docs/make.jl")'
+      - name: MakiePotts documentation and doctests
+        if: matrix.group == 'rendering'
+        run: |
           julia --project=ecosystem/MakiePotts/docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.instantiate(); include("ecosystem/MakiePotts/docs/make.jl")'
       - name: Prepare Makie backend environment
+        if: matrix.group == 'rendering'
         run: xvfb-run -a julia --project=ecosystem/MakiePotts/test/backends --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts", "ecosystem/MakiePotts")]); Pkg.instantiate(); Pkg.precompile()'
       - name: Makie backend and visual tests
+        if: matrix.group == 'rendering'
         run: |
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/backends/cairo.jl
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/backends/wgl.jl
@@ -151,9 +169,13 @@ jobs:
           julia --project=ecosystem/MakiePotts/test/backends --startup-file=no ecosystem/MakiePotts/test/visual_regression.jl
 
   macos:
-    name: Candidate-tuple Metal and continuation
+    name: Metal ${{ matrix.group }}
     runs-on: macos-15
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [foundation, potts]
     steps:
       - name: Validate immutable revisions
         env:
@@ -189,12 +211,16 @@ jobs:
         with: {version: '${{ env.JULIA_VERSION }}'}
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
       - name: LocalMath Metal tests
+        if: matrix.group == 'foundation'
         run: julia --project=ecosystem/LocalMath/test/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="ecosystem/LocalMath"); Pkg.instantiate(); include("ecosystem/LocalMath/test/metal/runtests.jl")'
       - name: CorePotts Metal tests
+        if: matrix.group == 'foundation'
         run: julia --project=ecosystem/CorePotts/test/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts")]); Pkg.instantiate(); include("ecosystem/CorePotts/test/metal/runtests.jl")'
       - name: Potts Metal tests
+        if: matrix.group == 'potts'
         run: julia --project=ecosystem/Potts/benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/benchmark/backends/metal/runtests.jl")'
       # Selected siblings replace profile pins for this candidate experiment only.
       # The separate CI exact-replay job retains the published closed environment.
       - name: Native continuation at selected commits
+        if: matrix.group == 'potts'
         run: julia --project=ecosystem/Potts/integration/replay --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("ecosystem/LocalMath", "ecosystem/CorePotts", "ecosystem/Potts")]); Pkg.instantiate(; julia_version_strict=true); include("ecosystem/Potts/integration/replay/runtests.jl")'

@@ -1,11 +1,9 @@
-# Complete one source-inventory subtree into immutable semantic data.
-function _complete_inventory_subtree(
-        system::PottsSystem,
+# Qualify the enclosing inventory once, before projecting owned subtree records.
+function _qualified_inventory_records(
         inventory::_PottsSourceInventory,
         normalized_statements,
         reference_units,
         registry::StatementRegistry,
-        parameter_roles,
     )
     records = QualifiedStatement[]
     diagnostics = PottsDiagnostic[]
@@ -14,7 +12,7 @@ function _complete_inventory_subtree(
         normalized_statements,
     )
     root_shape = isempty(domains) ? () :
-                 _statement_option(first(domains), :shape, ())
+        _statement_option(first(domains), :shape, ())
     reference_anchors = _completion_reference_anchors(
         normalized_statements, reference_units
     )
@@ -25,14 +23,31 @@ function _complete_inventory_subtree(
         reference_anchors,
         root_shape,
         registry,
+        inventory,
     )
     _validate_random_key_uniqueness!(diagnostics, records)
+    _validate_synchronous_writers!(diagnostics, records)
     _throw_diagnostics(:completion, diagnostics)
+    _resolve_quantity_effect_bounds!(records)
 
-    qualified_records = _semantic_phase_schedule(records)
+    return _semantic_phase_schedule(records)
+end
+
+# External read dependencies are analysis context, not child declarations.
+function _complete_inventory_subtree(
+        system::PottsSystem,
+        inventory::_PottsSourceInventory,
+        reference_units,
+        registry::StatementRegistry,
+        parameter_roles,
+        context_inventory,
+        context_records,
+    )
+    prefix = inventory.systems[1].path
+    qualified_records = filter(record -> _inventory_path_iswithin(record.identity.path, prefix), context_records)
     schedule = qualified_records
     native_components = _resolve_native_components(
-        inventory, qualified_records
+        inventory, qualified_records; context_inventory
     )
     variables = _completion_variables(inventory, qualified_records)
     capabilities = _completion_capabilities(qualified_records)
@@ -48,13 +63,17 @@ function _complete_inventory_subtree(
     )
     fingerprints = (semantic = semantic, completed = completed)
     source_graph = _freeze_source_graph(
-        inventory, qualified_records, registry
+        inventory, qualified_records, registry; context_inventory, context_records,
     )
     # Completion freezes the complete versioned operation schema, including
     # transfer semantics, serialization identity, and the concrete device tag.
     # Compilation may re-run normalization deterministically, but it may not
     # discover a missing downstream operation implementation for the first time.
     normalized_graph = _normalize_source_graph(source_graph)
+    _validate_quantity_scopes(
+        source_graph, normalized_graph;
+        enclosing_root = inventory.systems[1].system === context_inventory.systems[1].system,
+    )
     # A completed subsystem may be structurally valid without being directly
     # executable (for example, a reusable child that inherits its lattice only
     # after composition).  Freeze its normalized graph now, but run the
@@ -92,25 +111,25 @@ function _complete_inventory_hierarchy(
     inventory.systems[1].system === system || error(
         "source inventory root is not the completion candidate"
     )
+    normalized = _inventory_statements(inventory)
+    _validate_lifecycle_conflicts!(normalized)
+    _validate_completion_reference_units(inventory, reference_units, normalized)
+    context_records = _qualified_inventory_records(inventory, normalized, reference_units, registry)
     children = _inventory_child_indices(inventory)
     completed = Vector{PottsSystem}(undef, length(inventory.systems))
     for index in length(inventory.systems):-1:1
         subtree = _source_subinventory(inventory, index)
         source = subtree.systems[1].system
-        normalized_statements = _inventory_statements(subtree)
-        _validate_lifecycle_conflicts!(normalized_statements)
-        _validate_completion_reference_units(
-            subtree, reference_units, normalized_statements
-        )
         parameter_roles = index == 1 ?
             (structural = structural_parameters,) : (structural = (),)
         completion_data = _complete_inventory_subtree(
             source,
             subtree,
-            normalized_statements,
             reference_units,
             registry,
             parameter_roles,
+            inventory,
+            context_records,
         )
         completed_children = PottsSystem[
             completed[Int(child)] for child in children[index]

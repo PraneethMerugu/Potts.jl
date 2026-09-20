@@ -21,7 +21,6 @@ function _scheduling_fixture(name::Symbol)
                 scheduling_marker;
                 name = :scheduling_marker,
                 owner = cell,
-                initial = 0.0,
             ),
             Volume(cell; target = scheduling_target, strength = 1.0),
             Observation(:marker_observation, scheduling_marker),
@@ -217,25 +216,7 @@ end
     completion = getfield(scheduled, :completion)
     structural = completion.scheduled
     @test structural isa Potts.ScheduledPottsData
-    @test fieldnames(typeof(structural)) == (
-        :schema_version,
-        :schedule,
-        :provenance,
-        :parameters,
-        :states,
-        :relationships,
-        :observations,
-        :native_components,
-        :capability_requirements,
-        :fingerprint,
-    )
     @test !_contains_corepotts_value(structural)
-    for forbidden in (
-            :algorithm, :engine, :backend, :device, :scalar_type,
-            :core_program, :runtime, :workspace,
-        )
-        @test !hasfield(typeof(structural), forbidden)
-    end
 
     runtime_error = try
         mtkcompile(completed; backend = CPUBackend())

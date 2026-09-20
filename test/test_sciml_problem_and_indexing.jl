@@ -1,26 +1,130 @@
-@testset "public algorithms retain their qualified attempt budget" begin
-    fixture = _lifecycle_fixture(
-        :lifecycle_nonunit_attempts;
-        attempts = AttemptsPerSite(2),
-    )
-    problem = _lifecycle_problem(fixture; tspan = (0, 1))
-    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
-        error = try
-            solve(
+@testset "public algorithms execute declared attempt budgets" begin
+    @test_throws ArgumentError AttemptsPerSite(0)
+    @test_throws ArgumentError AttemptsPerSite(-1)
+    for attempts in (1, 2, 16)
+        fixture = _lifecycle_fixture(
+            Symbol(:lifecycle_repeated_attempts_, attempts);
+            attempts = AttemptsPerSite(attempts),
+        )
+        problem = _lifecycle_problem(fixture; tspan = (0, 1))
+        for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+            solution = solve(
                 problem,
                 algorithm;
                 backend = CPUBackend(),
                 scalar_type = Float32,
                 save_start = false,
+                observables = (:lifecycle_marker_snapshot,),
             )
-            nothing
-        catch thrown
-            thrown
+            @test failure_report(solution) === nothing
+            @test solution.t == [1]
+            @test only(solution.u).mcs == 1
+            @test solution.stats.candidate_attempts == 36 * attempts
+            @test solution.stats.candidate_attempts ==
+                  solution.stats.accepted + solution.stats.rejected +
+                  solution.stats.null_attempts
+
+            replay = solve(
+                problem,
+                algorithm;
+                backend = CPUBackend(),
+                scalar_type = Float32,
+                save_start = false,
+                observables = (:lifecycle_marker_snapshot,),
+            )
+            @test _lifecycle_same_state(only(solution.u), only(replay.u))
+            @test solution.stats == replay.stats
         end
-        @test error isa ArgumentError
-        @test occursin("implements only AttemptsPerSite(1)",
-            sprint(showerror, error))
     end
+end
+
+@testset "nonunit attempt budgets resume exactly" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_repeated_attempt_continuation;
+        attempts = AttemptsPerSite(2),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 2))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        reference_integrator = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        reference = solve!(reference_integrator)
+        interrupted = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        step!(interrupted)
+        captured = checkpoint(interrupted)
+        resumed = init(
+            problem, algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            checkpoint = captured,
+            save_start = false,
+            observables = (:lifecycle_marker_snapshot,),
+        )
+        continued = solve!(resumed)
+        @test _lifecycle_same_state(last(reference), last(continued))
+        @test checkpoint(reference_integrator).checksum == checkpoint(resumed).checksum
+        @test reference.stats.candidate_attempts == 2 * 36 * 2
+        # `steps` counts iterations in this solve call, not the checkpointed MCS.
+        @test reference.stats.steps == 2
+        @test continued.stats.steps == 1
+        @test reference.stats.candidate_attempts == continued.stats.candidate_attempts
+        @test reference.stats.accepted == continued.stats.accepted
+        @test reference.stats.rejected == continued.stats.rejected
+        @test reference.stats.null_attempts == continued.stats.null_attempts
+        @test reference.stats.constraint_rejections == continued.stats.constraint_rejections
+        @test reference.stats.energy_rejections == continued.stats.energy_rejections
+        @test reference.stats.retired_cells == continued.stats.retired_cells
+    end
+end
+
+@testset "attempt budgets fit the Core execution representation" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_excessive_attempts;
+        attempts = AttemptsPerSite(Int(typemax(Int32)) + 1),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 1))
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        @test_throws ArgumentError init(
+            problem,
+            algorithm;
+            backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+    end
+end
+
+@testset "checkerboard attempt rounds fit the addressed RNG" begin
+    fixture = _lifecycle_fixture(
+        :lifecycle_checkerboard_round_limit;
+        attempts = AttemptsPerSite(256),
+    )
+    problem = _lifecycle_problem(fixture; tspan = (0, 0))
+    @test init(
+        problem, SequentialCPM(); backend = CPUBackend(), scalar_type = Float32
+    ) isa PottsIntegrator
+    rejection = try
+        init(
+            problem, CheckerboardSweepCPM();
+            backend = CPUBackend(), scalar_type = Float32,
+        )
+        nothing
+    catch error
+        error
+    end
+    @test rejection isa ArgumentError
+    @test occursin(
+        "checkerboard attempt rounds", sprint(showerror, rejection)
+    )
 end
 
 @testset "validation-only problem boundary" begin

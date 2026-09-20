@@ -86,20 +86,37 @@ function _validate_statement_draws!(diagnostics, statement, identity, path)
         ))
         return nothing
     end
-    statement isa Union{
-        ProposalDrive, ProposalConstraint, ProposalModifier,
-        SynchronousProcess, AcceptedCopyProcess, RelationshipProcess,
-        LifecycleProcess, Observation, RegisteredStatement,
-    } || push!(diagnostics, PottsDiagnostic(
-        :illegal_random_operation_context,
-        identity,
-        _statement_expression(statement),
-        path,
-        "a process, proposal, equation, or observation expression",
-        String(statement_kind(statement)),
-        (),
-        statement_source(statement),
-    ))
+    field_rate_process = if statement isa FieldState
+        options = _statement_options(statement)
+        other_draws = _collect_draw_calls!(
+            Tuple[], (
+                _statement_arguments(statement),
+                Tuple(value for (name, value) in pairs(options) if name !== :rhs),
+            )
+        )
+        get(options, :evolution, nothing) isa DiscreteFieldEuler && haskey(options, :rhs) && isempty(other_draws)
+    else
+        false
+    end
+    (
+        field_rate_process || statement isa Union{
+            ProposalDrive, ProposalConstraint, ProposalModifier,
+            SynchronousProcess, AcceptedCopyProcess, RelationshipProcess,
+            LifecycleProcess, Observation, RegisteredStatement,
+        }
+    ) || push!(
+        diagnostics, PottsDiagnostic(
+            :illegal_random_operation_context,
+            identity,
+            _statement_expression(statement),
+            path,
+            statement isa FieldState ? "draws only inside an explicit evolving field rhs" :
+                "a process, proposal, equation, or observation expression",
+            String(statement_kind(statement)),
+            (),
+            statement_source(statement),
+        )
+    )
     for arguments in calls
         if _draw_family(arguments) === :unit_vector && statement isa Union{
                 ProposalDrive, ProposalConstraint, ProposalModifier,
