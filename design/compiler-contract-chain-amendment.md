@@ -399,6 +399,21 @@ unchanged control, common metric schema and checked-in reproducible runner are
 recorded. It is not a universal optimization requirement, and neither tool
 qualifies a backend.
 
+Compiler attribution is a separate developer/benchmark workflow, not part of
+ordinary `Pkg.test`. KCT is a convenient front end, not the sole evidence
+source: use SnoopCompile for inference and invalidation attribution,
+MethodAnalysis for MethodInstance populations and ownership, JET for concrete
+dispatch/inference diagnostics, and AllocCheck for selected stable hot
+signatures directly when their underlying results answer a question that a KCT
+summary cannot. Run these in fresh, isolated processes against an exact
+candidate/dependency tuple, varying one model axis at a time and retaining an
+unchanged control. Attribute Julia inference, KA callable/launch identity,
+GPUCompiler/LLVM work and backend compilation separately where observable;
+never infer one stage's cost from another stage's counts. These libraries and
+KCT remain outside production dependencies and the ordinary package test path.
+Their versions and reports belong to the reproducible diagnostic environment,
+not the scientific API or checkpoint contract.
+
 ### Measured baseline and architectural fitness target
 
 The first canonical accepted-owner-change baseline is retained as a durable
@@ -472,7 +487,8 @@ concrete hot-boundary signatures, including allocation sites, allocating runtime
 calls and dynamic dispatch. Pair it with warmed observed-allocation tests; a
 static result alone does not establish the complete runtime path. Use Chairmarks
 for reproducible time, allocation-count and allocation-byte measurements. Keep
-both packages in test/benchmark environments rather than production dependencies.
+both packages in focused diagnostic/benchmark environments rather than
+production dependencies or the ordinary `Pkg.test` environment.
 TestNoAllocations is not selected because it adds no distinct authority beyond
 the warmed observed-call tests.
 
@@ -546,6 +562,17 @@ machine-readable output. It is evidence infrastructure, not a pass/fail policy
 gate. Add a probe only when a later PR introduces a genuinely new compiler
 family or supported conjunction. Do not create a second IR, compiler registry,
 optimization framework, or policy-gate script.
+
+Ordinary regression tests defend observable, stable contracts: equivalent
+authorings reach the same prepared execution-family type; runtime-only names,
+values, capacities and graph contents do not change that family; declared warmed
+fixed-capacity paths meet their observed-allocation contract; and the same
+scientific KA path compiles and behaves correctly on supported devices. Do not
+assert exact MethodInstance counts, compiler-internal identities, typed-IR
+lengths, generated-code sizes, cache bytes or wall time in `Pkg.test`.
+MethodInstance/kernel/artifact reuse is investigated in the separate diagnostic
+workflow and reviewed against the intended family budget; a regression there
+selects an owning correction, not a brittle numerical test threshold.
 
 ### Cold-compilation and cache-reuse contract
 
@@ -782,8 +809,9 @@ The following work belongs inside their implementation and completion criteria:
   package-cache growth where practical. Record the candidate/dependency profile
   and limitations; use no brittle wall-time gates and infer no speedup merely
   from structural simplification.
-- Require focused AllocCheck success and warmed zero-observed-allocation tests
-  only for the explicitly declared fixed-capacity Core/Potts hot boundaries.
+- Require focused AllocCheck diagnostic success and separate ordinary warmed
+  zero-observed-allocation tests only for the explicitly declared fixed-capacity
+  Core/Potts hot boundaries.
   Preserve Chairmarks samples for those boundaries and their public-model
   consumers. A failure is localized and fixed in its scientific/execution owner;
   it is not waived by a faster median or transformed into a global zero-allocation

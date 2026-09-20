@@ -356,9 +356,10 @@ Each model delivery includes:
 - A compiler-impact declaration (`none`, `host-only`, or `device-reachable`).
   Classification follows the composed execution path, not repository ownership.
   A model that enters a supported device-specialized path supplies Kaimon
-  before/after evidence through the canonical public-model probes and the
-  applicable real-device witness. CPU-only native/optimization solvers name
-  their host boundary and do not inherit a device claim from CPM execution.
+  before/after evidence through separate canonical public-model diagnostics,
+  outside ordinary `Pkg.test`, and the applicable real-device witness. CPU-only
+  native/optimization solvers name their host boundary and do not inherit a
+  device claim from CPM execution.
 
 - For deliveries after R20, a repeated-instance control through the canonical
   G09 public runner. Earlier model PRs provide public fixtures and feature-local
@@ -395,9 +396,10 @@ Each model delivery includes:
 - Reproducible measurements of construction, compilation, warm execution,
   allocations, quantity fan-out, native solves and host/device transfers.
   Neither wall-time gates nor a clean architecture diagram prove performance.
-  Use Chairmarks for comparable runtime/allocation samples. Extend focused
-  AllocCheck coverage only when the model introduces a genuinely new hot
-  execution family; ordinary model variation should reuse the established
+  Use Chairmarks in the separate benchmark environment for comparable
+  runtime/allocation samples. Extend focused diagnostic AllocCheck coverage only
+  when the model introduces a genuinely new hot execution family; ordinary model
+  variation should reuse the established
   R49/R50 payload and allocation contract.
   Include an unchanged control when the model adds a new specialization family;
   unexplained growth in that control is specialization coupling, not a model
