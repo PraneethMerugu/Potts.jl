@@ -380,8 +380,8 @@ function _compose_runtime_capability(
         native_states,
         callbacks,
         policy,
+        core,
     )
-    core = CorePotts.program_capability_report(plan.core_program)
     components = scheduled_native_components(problem.system)
     length(components) == length(profiles) == length(native_states) ||
         error("native capability composition requires aligned components, profiles, and prepared logical states")
