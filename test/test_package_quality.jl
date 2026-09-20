@@ -54,7 +54,7 @@ using ExplicitImports
         upstream_sources = Dict(
             "CorePotts" => (
                 "https://github.com/PraneethMerugu/CorePotts.jl",
-                "b8d443d740f635ab9fd8721098102f9625537cc6",
+                "2ee7c3b661d43b3b5fc8608b532b5accf4c39a2f",
             ),
             "LocalMath" => (
                 "https://github.com/PraneethMerugu/LocalMath.jl",
