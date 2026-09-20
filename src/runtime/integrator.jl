@@ -209,6 +209,10 @@ SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
 
 function _initialize_callbacks!(integrator::PottsIntegrator)
     integrator.callbacks_initialized && return integrator
+    if _callbacks_empty(integrator)
+        integrator.callbacks_initialized = true
+        return integrator
+    end
     for callback in integrator.callbacks.discrete_callbacks
         callback.initialize(callback, integrator.u, integrator.t, integrator)
     end
@@ -504,7 +508,7 @@ function _step_coupled!(integrator::PottsIntegrator)
     return integrator
 end
 
-function step!(integrator::PottsIntegrator)
+function _step!(integrator::PottsIntegrator, materialize_current::Bool)
     integrator.terminated &&
         throw(ArgumentError("cannot step a terminated PottsIntegrator"))
     integrator.retcode == SciMLBase.ReturnCode.Default || throw(ArgumentError(
@@ -532,11 +536,21 @@ function step!(integrator::PottsIntegrator)
     end
     integrator.t = integrator.runtime.mcs
     coupled || (integrator.iterations += 1)
-    integrator.u = _current_saved_state(integrator)
-    _run_callbacks!(integrator)
-    _save_due(integrator) && _save_current!(integrator)
+    if _callbacks_empty(integrator)
+        if _save_due(integrator)
+            _save_current!(integrator)
+        elseif materialize_current
+            integrator.u = _current_saved_state(integrator)
+        end
+    else
+        integrator.u = _current_saved_state(integrator)
+        _run_callbacks!(integrator)
+        _save_due(integrator) && _save_current!(integrator)
+    end
     return integrator
 end
+
+step!(integrator::PottsIntegrator) = _step!(integrator, true)
 
 SciMLBase.check_error(integrator::PottsIntegrator) = integrator.retcode
 
