@@ -358,6 +358,7 @@ function _materialize_integrator(
             prepared_native,
             callbacks,
             policy,
+            capability,
         )
     )
 
